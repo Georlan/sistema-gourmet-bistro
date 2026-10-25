@@ -1,6 +1,8 @@
 import { PasswordRecoveryHelp } from "./PasswordRecoveryHelp";
 import React from 'react';
 import { Sun, Moon } from 'lucide-react';
+import { AuthPage } from './AuthPage';
+import { PasswordInput } from './PasswordInput';
 import { KomaLogo } from '../KomaLogo';
 import type { KomaTheme } from '../../config/theme';
 import { isOperationalAppHost } from '../../domain/komaHost';
@@ -75,116 +77,45 @@ export function OperationalLogin({
     }
   };
 
-  return (
-      <div className="min-h-screen bg-koma-page relative flex items-center justify-center p-4">
-        {/* Quick theme switcher button on login screen */}
-        <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20">
-          <button
-            type="button"
-            onClick={onToggleTheme}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-koma-card border border-koma-border text-koma-secondary hover:text-koma-foreground hover:bg-koma-raised transition-all text-xs font-bold shadow-md cursor-pointer"
-            title={theme === 'dark' ? 'Mudar para Modo Claro' : 'Mudar para Modo Escuro'}
-            aria-label="Alternar tema claro e escuro"
-          >
-            {theme === 'dark' ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} className="text-sky-500" />}
-            <span className="hidden sm:inline">{theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}</span>
-          </button>
-        </div>
-
-        <div className="w-full max-w-sm bg-koma-card border border-emerald-500/10 rounded-2xl p-6 sm:p-8 shadow-2xl animate-scale-in">
-          {/* Logo / Header */}
-          <div className="text-center space-y-3 mb-7">
-            <div className="flex justify-center">
-    <KomaLogo withText size="xl" />
-  </div>
-  <div className="space-y-1">
-              <span className="text-[10px] font-sans font-semibold tracking-wide text-emerald-700 dark:text-emerald-400 block">
-                Se você está com fome, Kôma
-              </span>
-            </div>
-            <p className="text-[10px] text-emerald-700 dark:text-emerald-400 uppercase tracking-widest font-sans font-bold bg-emerald-500/10 px-3 py-1 rounded-full w-fit mx-auto border border-emerald-500/15">
-              {portalLabel}
-            </p>
-            {portal === 'unified' && (
-              <p className="text-[11px] text-koma-subtle leading-relaxed px-2">
-                Entre com sua conta. O KÔMA identifica automaticamente o estabelecimento e o perfil de acesso.
-              </p>
-            )}
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-300 rounded-xl text-xs text-red-800 dark:bg-red-950/40 dark:border-red-900/50 dark:text-red-300 text-center animate-shake">
-                {error}
-              </div>
-            )}
-
-            <div className="space-y-1.5">
-              <label htmlFor="login-username" className="text-[10px] text-koma-subtle font-bold uppercase tracking-wider block">E-MAIL</label>
-              <input
-                id="login-username"
-                type="email"
-                name="email"
-                autoComplete="username"
-                inputMode="email"
-                required
-                value={username}
-                onChange={(e) => onUsernameChange(e.target.value)}
-                placeholder="seu@email.com"
-                className="w-full bg-koma-panel text-koma-foreground border border-koma-border/40 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 placeholder-gray-600"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label htmlFor="login-password" className="text-[10px] text-koma-subtle font-bold uppercase tracking-wider block">Senha</label>
-              <input
-                id="login-password"
-                type="password"
-                name="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => onPasswordChange(e.target.value)}
-                placeholder="••••••"
-                className="w-full bg-koma-panel text-koma-foreground border border-koma-border/40 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50 placeholder-gray-600"
-              />
-            </div>
-
-            <PasswordRecoveryHelp restaurantId={restaurantId} />
-
-            {restaurantOptions.length > 0 && (
-              <div className="space-y-1.5">
-                <label htmlFor="login-restaurant" className="text-[10px] text-koma-subtle font-bold uppercase tracking-wider block">
-                  Estabelecimento
-                </label>
-                <select
-                  id="login-restaurant"
-                  name="restaurante_id"
-                  required
-                  disabled={isLoggingIn}
-                  value={restaurantId}
-                  onChange={(event) => onRestaurantChange?.(event.target.value)}
-                  className="w-full bg-koma-panel text-koma-foreground border border-koma-border/40 rounded-xl px-4 py-3 text-sm font-semibold focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500/50"
-                >
-                  <option value="">Selecione o estabelecimento</option>
-                  {restaurantOptions.map((option) => (
-                    <option key={option.id} value={String(option.id)}>{option.nome}</option>
-                  ))}
-                </select>
-                <p className="text-[10px] text-koma-subtle">Este e-mail está ativo em mais de um estabelecimento.</p>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={isLoggingIn || (restaurantOptions.length > 0 && !restaurantId)}
-              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold uppercase tracking-wider shadow-lg cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 border border-emerald-500/20"
-            >
-              {isLoggingIn ? "Autenticando..." : "Entrar"}
-            </button>
-          </form>
-        </div>
+  return <AuthPage tools={
+    <button type="button" onClick={onToggleTheme} className="k-auth-theme"
+      title={theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'} aria-label="Alternar tema claro e escuro">
+      {theme === 'dark' ? <Sun size={19} aria-hidden="true" /> : <Moon size={19} aria-hidden="true" />}
+      <span>{theme === 'dark' ? 'Modo Claro' : 'Modo Escuro'}</span>
+    </button>
+  }>
+    <h1 className="k-auth-heading">{portalLabel}</h1>
+    <p className="k-auth-intro">Seu e-mail da equipe e sua senha.</p>
+    <form onSubmit={handleSubmit} className="k-auth-form" aria-busy={isLoggingIn}>
+      {error && <p id="login-feedback" role={restaurantOptions.length ? 'status' : 'alert'}
+        className={`k-auth-feedback ${restaurantOptions.length ? 'k-auth-feedback--info' : ''}`}>{error}</p>}
+      <div className="k-auth-field">
+        <label htmlFor="login-username" className="k-auth-label">E-mail</label>
+        <input id="login-username" type="email" autoComplete="username" inputMode="email" required
+          name="email" value={username} disabled={isLoggingIn} autoCapitalize="none" spellCheck={false}
+          onChange={event => onUsernameChange(event.target.value)} placeholder="seu@email.com"
+          className="k-auth-input" aria-describedby={error && !restaurantOptions.length ? 'login-feedback' : undefined} />
       </div>
-  );
+      <div className="k-auth-field">
+        <label htmlFor="login-password" className="k-auth-label">Senha</label>
+        <PasswordInput id="login-password" autoComplete="current-password" required name="password"
+          value={password} disabled={isLoggingIn} onChange={event => onPasswordChange(event.target.value)}
+          aria-describedby={error && !restaurantOptions.length ? 'login-feedback' : undefined} />
+      </div>
+      <PasswordRecoveryHelp initialEmail={username} restaurantId={restaurantId} disabled={isLoggingIn} />
+      {restaurantOptions.length > 0 && <div className="k-auth-field">
+        <label htmlFor="login-restaurant" className="k-auth-label">Estabelecimento</label>
+        <select id="login-restaurant" name="restaurante_id" required autoFocus disabled={isLoggingIn}
+          value={restaurantId} onChange={event => onRestaurantChange?.(event.target.value)}
+          className="k-auth-input" aria-describedby="login-restaurant-hint">
+          <option value="">Selecione o estabelecimento</option>
+          {restaurantOptions.map(option => <option key={option.id} value={String(option.id)}>{option.nome}</option>)}
+        </select>
+        <p id="login-restaurant-hint" className="k-auth-hint">Escolha onde você vai trabalhar.</p>
+      </div>}
+      <button type="submit" disabled={isLoggingIn || (restaurantOptions.length > 0 && !restaurantId)} className="k-auth-action">
+        {isLoggingIn ? 'Autenticando...' : 'Entrar'}
+      </button>
+    </form>
+  </AuthPage>;
 }

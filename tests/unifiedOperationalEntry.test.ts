@@ -111,7 +111,7 @@ test('unified operational entry passes the authenticated portal directly to App 
 
   const login = source('../src/components/auth/OperationalLogin.tsx');
   assert.match(login, /Acesso da equipe/);
-  assert.match(login, /identifica automaticamente o estabelecimento e o perfil de acesso/);
+  assert.match(login, /Seu e-mail da equipe e sua senha/);
 });
 
 test('operational staff links and mockups eliminate legacy URLs in favor of app.komafood.com.br', () => {

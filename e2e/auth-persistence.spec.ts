@@ -37,7 +37,7 @@ async function installOperationalApi(page: Page, loginReply: LoginReply, authori
 
 async function submitLogin(page: Page, email: string, password: string) {
   await page.getByLabel('E-MAIL').fill(email);
-  await page.getByLabel('Senha').fill(password);
+  await page.getByLabel('Senha', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
 }
 
@@ -230,7 +230,7 @@ test('SuperAdmin mantém token na sessão da aba após reload', async ({ page })
 
   await page.goto('/super-admin');
   await page.getByLabel('Usuário').fill('admin-test');
-  await page.getByLabel('Senha').fill('senha-test');
+  await page.getByLabel('Senha', { exact: true }).fill('senha-test');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('koma_super_admin_token'))).toBe('superadmin-persist-token');
   await page.reload();
@@ -341,7 +341,7 @@ test('duas abas de Caixa em restaurantes diferentes e uma de Garçom isolam toke
   // Ações reais da UI enviam o bearer do restaurante da própria aba.
   for (let index=0;index<2;index++) {
     await tabs[index].bringToFront();
-    if (test.info().project.name.startsWith('mobile')) await tabs[index].getByRole('button',{name:'Abrir menu principal'}).click();
+    if ((test.info().project.use.viewport?.width ?? 1366) < 1024) await tabs[index].getByRole('button',{name:'Abrir menu principal'}).click();
     await tabs[index].getByRole('button',{name:'Equipe',exact:true}).click();
     await expect(tabs[index].getByRole('heading',{name:`Pessoa Teste ${index}`})).toBeVisible();
     tabs[index].once('dialog',dialog=>dialog.accept());
@@ -351,7 +351,7 @@ test('duas abas de Caixa em restaurantes diferentes e uma de Garçom isolam toke
   expect(mutations).toEqual(['isolated-token-0','isolated-token-1']);
   // O logout real do painel limpa somente a aba, sem editar storage de outras abas.
   await tabs[1].bringToFront();
-  if (test.info().project.name.startsWith('mobile')) await tabs[1].getByRole('button',{name:'Abrir menu principal'}).click();
+  if ((test.info().project.use.viewport?.width ?? 1366) < 1024) await tabs[1].getByRole('button',{name:'Abrir menu principal'}).click();
   await expect(tabs[1].getByRole('button',{name:'Abrir conta e preferências',exact:true})).toBeVisible();
   await tabs[1].getByRole('button',{name:'Abrir conta e preferências',exact:true}).click();
   await tabs[1].getByRole('button',{name:'Sair / trocar operador'}).click();
@@ -391,7 +391,7 @@ async function seedManagementSession(page: Page, expired = false) {
 }
 
 async function expectLoginWithoutOnboarding(page: Page) {
-  await expect(page.getByLabel('E-MAIL', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('E-mail', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Bem-vindo ao KÔMA/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeEnabled();
 }
@@ -495,7 +495,7 @@ test('liberação canônica mantém revisão pendente e libera painel após refr
   await expect(page.getByText('Aguardando KÔMA', { exact: true })).toBeVisible();
   released = true;
   await page.reload();
-  if (test.info().project.name.startsWith('mobile')) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
+  if ((test.info().project.use.viewport?.width ?? 1366) < 1024) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
   await expect(page.getByRole('button', { name: 'Abrir conta e preferências', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: /Bem-vindo ao KÔMA/ })).toHaveCount(0);
 });

@@ -16,7 +16,10 @@ test('sacola fica acima do cabeçalho sem cobrir identificação ou checkout', (
 
   for (const overlay of ['CardapioAuthModal', 'CardapioDigital']) {
     const content = source(`../src/cardapio/components/${overlay}.tsx`);
-    const layer = Number(content.match(/className="fixed inset-0 z-(\d+)/)?.[1]);
+    const layer = overlay === 'CardapioAuthModal'
+      ? Number(source('../src/components/auth/authPresentation.css').match(/\.k-customer-auth\s*\{[^}]*z-index:\s*(\d+)/)?.[1])
+      : Number(content.match(/className="fixed inset-0 z-(\d+)/)?.[1]);
+    if (overlay === 'CardapioAuthModal') assert.match(content, /createPortal\(/);
     assert.ok(cartLayer < layer, `${overlay} deve ficar acima da sacola`);
   }
 });

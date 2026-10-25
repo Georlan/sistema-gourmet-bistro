@@ -104,9 +104,9 @@ test('login continua utilizável sem overflow horizontal', async ({ page }) => {
   await page.goto('/?view=caixa');
 
   await expect(page.getByLabel('E-MAIL')).toBeVisible();
-  await expect(page.getByLabel('Senha')).toBeVisible();
+  await expect(page.getByLabel('Senha', { exact: true })).toBeVisible();
   await page.getByLabel('E-MAIL').fill('caixa@koma.test');
-  await page.getByLabel('Senha').fill('senha-segura-e2e');
+  await page.getByLabel('Senha', { exact: true }).fill('senha-segura-e2e');
   await expect(page.getByRole('button', { name: 'Entrar' })).toBeEnabled();
   await expectNoHorizontalOverflow(page);
 });

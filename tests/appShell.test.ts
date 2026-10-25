@@ -77,7 +77,7 @@ test('login controlado preserva campos, autocomplete, rótulo do portal e valore
   assert.match(html, /Portal do Garçom/);
   assert.match(html, /id="login-username" type="email" autoComplete="username" inputMode="email" required=""[^>]*name="email"/);
   assert.match(html, /value="garcom@koma.test"/);
-  assert.match(html, /id="login-password" type="password" autoComplete="current-password" required=""[^>]*name="password"/);
+  assert.match(html, /<input(?=[^>]*id="login-password")(?=[^>]*type="password")(?=[^>]*autoComplete="current-password")(?=[^>]*required="")(?=[^>]*name="password")/);
   assert.match(html, /value="fixture-password"/);
   assert.match(html, /Alternar tema claro e escuro/);
   assert.match(html, /Modo Claro/);
