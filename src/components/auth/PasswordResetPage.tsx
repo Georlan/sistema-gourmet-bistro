@@ -2,12 +2,15 @@ import React from 'react';
 import { API_BASE_URL } from '../../config/api';
 import { authFetch, authRequestErrorMessage } from '../../utils/authRequest';
 import { takeRecoveryToken } from './passwordRecoveryToken';
+import { AuthPage } from './AuthPage';
+import { PasswordInput } from './PasswordInput';
 
 export default function PasswordResetPage() {
   const [recoveryToken, setRecoveryToken] = React.useState(() => takeRecoveryToken());
   const [password, setPassword] = React.useState('');
   const [confirmation, setConfirmation] = React.useState('');
   const [busy, setBusy] = React.useState(false);
+  const pending = React.useRef(false);
   const [done, setDone] = React.useState(false);
   const [message, setMessage] = React.useState('');
 
@@ -27,8 +30,10 @@ export default function PasswordResetPage() {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (pending.current) return;
     if (password !== confirmation) { setMessage('As senhas precisam ser iguais.'); return; }
     if (new TextEncoder().encode(password).length > 72) { setMessage('A senha é longa demais. Use até 72 bytes.'); return; }
+    pending.current = true;
     setBusy(true); setMessage('');
     try {
       const response = await authFetch(`${API_BASE_URL}/auth/password-recovery/confirm`, {
@@ -46,23 +51,29 @@ export default function PasswordResetPage() {
       setConfirmation('');
       setMessage(data.message);
     } catch (error) { setMessage(authRequestErrorMessage(error, 'Não foi possível alterar a senha.')); }
-    finally { setBusy(false); }
+    finally { pending.current = false; setBusy(false); }
   };
 
-  return <main className="flex min-h-dvh items-center justify-center bg-koma-page p-4 text-koma-foreground">
-    <section className="w-full max-w-sm space-y-4 rounded-2xl border border-koma-border bg-koma-card p-6">
-      <h1 className="text-xl font-bold">Criar nova senha</h1>
-      {done ? null : !recoveryToken ? <p>Abra o link enviado ao seu e-mail. Se expirou, solicite outro na tela em que você faz login.</p> : <form onSubmit={submit} className="space-y-4">
-        <label className="block text-sm">Nova senha
-          <input type="password" autoComplete="new-password" required minLength={8} maxLength={72} value={password} disabled={busy} onChange={event => setPassword(event.target.value)} className="mt-2 block w-full rounded-lg border border-koma-border bg-koma-panel p-3" />
-        </label>
-        <label className="block text-sm">Confirme a nova senha
-          <input type="password" autoComplete="new-password" required minLength={8} maxLength={72} value={confirmation} disabled={busy} onChange={event => setConfirmation(event.target.value)} className="mt-2 block w-full rounded-lg border border-koma-border bg-koma-panel p-3" />
-        </label>
-        <button type="submit" disabled={busy} className="w-full rounded-xl bg-emerald-500 p-3 font-bold text-black disabled:opacity-50">{busy ? 'Salvando…' : 'Salvar nova senha'}</button>
-      </form>}
-      {message && <p role="status" className="text-sm">{message}</p>}
-      {done && <p className="text-sm">Volte ao cardápio ou à tela de acesso que você estava usando e entre com a nova senha.</p>}
-    </section>
-  </main>;
+  return <AuthPage>
+    <h1 className="k-auth-heading">{done ? 'Senha alterada' : 'Criar nova senha'}</h1>
+    {done ? <div className="k-auth-success">
+      <p>Volte ao acesso e entre com sua nova senha.</p>
+    </div> : !recoveryToken ? <p className="k-auth-intro">Abra o link enviado ao seu e-mail. Se expirou, solicite outro na tela em que você faz login.</p> : <>
+      <p className="k-auth-intro">Use pelo menos 8 caracteres.</p>
+      <form onSubmit={submit} className="k-auth-form" aria-busy={busy}>
+        <div className="k-auth-field">
+          <label htmlFor="reset-password" className="k-auth-label">Nova senha</label>
+          <PasswordInput id="reset-password" name="new-password" autoComplete="new-password" required minLength={8} maxLength={72}
+            value={password} disabled={busy} onChange={event => setPassword(event.target.value)} />
+        </div>
+        <div className="k-auth-field">
+          <label htmlFor="reset-confirmation" className="k-auth-label">Confirme a nova senha</label>
+          <PasswordInput id="reset-confirmation" name="confirmation" autoComplete="new-password" required minLength={8} maxLength={72}
+            value={confirmation} disabled={busy} onChange={event => setConfirmation(event.target.value)} />
+        </div>
+        <button type="submit" disabled={busy} className="k-auth-action">{busy ? 'Salvando…' : 'Salvar nova senha'}</button>
+      </form>
+    </>}
+    {message && <p role="status" className={`k-auth-feedback ${done ? 'k-auth-feedback--info' : ''}`} style={{ marginTop: 20 }}>{message}</p>}
+  </AuthPage>;
 }

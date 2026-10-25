@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { API_BASE_URL } from '../../config/api';
 import {
+  applyKomaTheme,
   KOMA_THEME_CHANGED_EVENT,
   nextKomaTheme,
   persistKomaTheme,
@@ -50,8 +51,12 @@ export default function UnifiedOperationalEntry() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const pendingLogin = useRef(false);
   const [restaurantOptions, setRestaurantOptions] = useState<LoginRestaurantOption[]>([]);
   const [restaurantId, setRestaurantId] = useState('');
+
+  // The local/public entry can initialize a different theme before this owner mounts.
+  useEffect(() => { applyKomaTheme(theme); }, [theme]);
 
   useEffect(() => {
     const syncTheme = () => setTheme(readKomaTheme());
@@ -85,6 +90,8 @@ export default function UnifiedOperationalEntry() {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (pendingLogin.current) return;
+    pendingLogin.current = true;
     setError('');
     setIsLoggingIn(true);
 
@@ -177,6 +184,7 @@ export default function UnifiedOperationalEntry() {
       console.error(loginError);
       setError(authRequestErrorMessage(loginError, 'Erro ao conectar ao servidor do backend.'));
     } finally {
+      pendingLogin.current = false;
       setIsLoggingIn(false);
     }
   };
@@ -202,10 +210,12 @@ export default function UnifiedOperationalEntry() {
       onRestaurantChange={setRestaurantId}
       onToggleTheme={() => setTheme(persistKomaTheme(nextKomaTheme(theme)))}
       onUsernameChange={(value) => {
+        setError('');
         setUsername(value);
         resetRestaurantSelection();
       }}
       onPasswordChange={(value) => {
+        setError('');
         setPassword(value);
         resetRestaurantSelection();
       }}

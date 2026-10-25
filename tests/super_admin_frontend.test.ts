@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { register } from 'node:module';
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+
+register('./helpers/staticAssetsLoader.mjs', import.meta.url);
 
 const storage = new Map<string, string>();
 const events = new EventTarget();

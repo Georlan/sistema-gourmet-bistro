@@ -186,7 +186,7 @@ test('login controlado mantém submit para autenticação real do App e tema ind
   await page.getByRole('button', { name: 'Alternar tema claro e escuro', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-koma-theme', 'light');
   await page.getByLabel('E-MAIL').fill('GARCOM@KOMA.TEST');
-  await page.getByLabel('Senha').fill('shell-password');
+  await page.getByLabel('Senha', { exact: true }).fill('shell-password');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(page.locator('#mesa-card-7')).toBeVisible();
   expect(state.loginBodies).toEqual([{ username: 'garcom@koma.test', password: 'shell-password' }]);
@@ -211,7 +211,7 @@ test('logout seguido de novo login renova sessão, refaz fluxo de dados e persis
   }))).toEqual({ token: null, user: null, name: null, role: null, unrelated: 'preserve-me' });
 
   await page.getByLabel('E-MAIL').fill('GARCOM@KOMA.TEST');
-  await page.getByLabel('Senha').fill('fresh-login-password');
+  await page.getByLabel('Senha', { exact: true }).fill('fresh-login-password');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
 
   await expect(page.locator('#mesa-card-7')).toBeVisible();

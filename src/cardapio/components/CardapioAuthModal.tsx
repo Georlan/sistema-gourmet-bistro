@@ -4,8 +4,12 @@ import { PasswordRecoveryHelp } from "../../components/auth/PasswordRecoveryHelp
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
-import { ArrowRight, Coins, Gift, Lock, Mail, Phone, Sparkles, User, X } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { containModalFocus } from "../../utils/modalFocus";
+import { PasswordInput } from "../../components/auth/PasswordInput";
+import "../../components/auth/authPresentation.css";
+import { X } from "lucide-react";
 import { API_BASE_URL } from "../../config/api";
 import { authFetch, authRequestErrorMessage } from "../../utils/authRequest";
 import {
@@ -43,10 +47,23 @@ export default function CardapioAuthModal({
   const [errorMessage, setErrorMessage] = useState("");
   const [registerStep, setRegisterStep] = useState<"details" | "email_sent">("details");
 
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  const pending = useRef(false);
+  const requestRef = useRef<AbortController | null>(null);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const releaseFocus = containModalFocus(dialog, () => closeRef.current(), dialog.querySelector<HTMLButtonElement>('#auth-close') || dialog);
+    return () => { requestRef.current?.abort(); releaseFocus(); };
+  }, []);
+
   const numericRestaurantId = Number(restaurantId);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (pending.current) return;
     if (!Number.isInteger(numericRestaurantId) || numericRestaurantId <= 0) {
       setErrorMessage("Não foi possível identificar o restaurante.");
       return;
@@ -61,12 +78,16 @@ export default function CardapioAuthModal({
       return;
     }
 
+    pending.current = true;
+    requestRef.current = new AbortController();
+    const signal = requestRef.current.signal;
     setIsSubmitting(true);
     setErrorMessage("");
 
     try {
       const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/login`, {
         method: "POST",
+        signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           restaurante_id: numericRestaurantId,
@@ -76,6 +97,7 @@ export default function CardapioAuthModal({
       });
 
       const data = await response.json().catch(() => null);
+      if (signal.aborted) return;
       if (!response.ok || !data?.access_token || !data?.cliente) {
         throw new Error(data?.detail || "E-mail ou senha incorretos.");
       }
@@ -87,14 +109,17 @@ export default function CardapioAuthModal({
       onLoginSuccess(profile, String(data.access_token));
       onClose();
     } catch (error) {
+      if (signal.aborted) return;
       setErrorMessage(authRequestErrorMessage(error, "Falha ao realizar login."));
     } finally {
-      setIsSubmitting(false);
+      pending.current = false;
+      if (!signal.aborted) setIsSubmitting(false);
     }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (pending.current) return;
     if (!Number.isInteger(numericRestaurantId) || numericRestaurantId <= 0) {
       setErrorMessage("Não foi possível identificar o restaurante.");
       return;
@@ -119,11 +144,15 @@ export default function CardapioAuthModal({
       return;
     }
 
+    pending.current = true;
+    requestRef.current = new AbortController();
+    const signal = requestRef.current.signal;
     setIsSubmitting(true);
     setErrorMessage("");
     try {
       const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/cadastro/solicitar`, {
         method: "POST",
+        signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           restaurante_id: numericRestaurantId,
@@ -135,249 +164,97 @@ export default function CardapioAuthModal({
         }),
       });
       const data = await response.json().catch(() => null);
+      if (signal.aborted) return;
       if (!response.ok) {
         throw new Error(data?.detail || "Não foi possível enviar o e-mail de confirmação.");
       }
       setRegisterStep("email_sent");
     } catch (error) {
+      if (signal.aborted) return;
       setErrorMessage(authRequestErrorMessage(error, "Não foi possível criar sua conta agora."));
     } finally {
-      setIsSubmitting(false);
+      pending.current = false;
+      if (!signal.aborted) setIsSubmitting(false);
     }
   };
 
-  return (
-    <div
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/80 backdrop-blur-sm p-0 sm:items-center sm:p-4 animate-fade-in cursor-pointer"
-      id="auth-modal-overlay"
-    >
-      <div
-        className="relative max-h-[calc(100dvh-0.5rem)] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-[28px] border border-white/10 bg-[#0e1217] px-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-6 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:rounded-[28px] animate-scale-up"
-        id="auth-modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="auth-modal-title"
-        onClick={(event) => event.stopPropagation()}
-      >
-        {/* Fechar */}
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-white/5 text-gray-400 transition hover:bg-white/10 hover:text-white cursor-pointer"
-          aria-label="Fechar"
-        >
-          <X className="h-5 w-5" />
+  return createPortal(
+    <div className="k-customer-auth" id="auth-modal-overlay"
+      onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
+      <div ref={dialogRef} tabIndex={-1} className="k-customer-auth__sheet" id="auth-modal-card"
+        role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
+        <header className="k-customer-auth__header">
+          <button id="auth-close" type="button" onClick={onClose} className="k-customer-auth__close" aria-label="Fechar">
+            <X size={20} aria-hidden="true" />
+          </button>
+          <svg className="k-customer-auth__art" viewBox="0 0 100 100" fill="none" aria-hidden="true" focusable="false">
+            <path d="M4 100V56A36 36 0 0 1 40 20h60v80Z" fill="currentColor" />
+            <circle cx="54" cy="47" r="11" className="k-customer-auth__portrait" />
+            <path d="M32 83v-4a22 22 0 0 1 44 0v4Z" className="k-customer-auth__portrait" />
+            <path d="m4 18 9-9 9 9-9 9Z" fill="currentColor" />
+          </svg>
+          {restaurantName && <p className="k-customer-auth__restaurant">{restaurantName}</p>}
+          <h2 className="k-customer-auth__title" id="auth-modal-title">{tab === 'login' ? 'Entrar na sua conta' : 'Criar sua conta'}</h2>
+        </header>
+        {accountRequired ? <p className="k-auth-intro">Para pedir, entre e confirme o e-mail da sua conta.</p>
+          : hasBenefits ? <p className="k-auth-intro">Entre para acompanhar seus pedidos e benefícios.</p> : null}
+        <div className="k-customer-auth__modes" role="group" aria-label="Acesso do cliente">
+          <button type="button" disabled={isSubmitting} aria-pressed={tab === 'login'}
+            onClick={() => { setTab('login'); setErrorMessage(''); }}>Entrar</button>
+          <button type="button" disabled={isSubmitting} aria-pressed={tab === 'register'}
+            onClick={() => { setTab('register'); setErrorMessage(''); }}>Criar Conta</button>
+        </div>
+        {errorMessage && <p className="k-auth-feedback" role="alert">{errorMessage}</p>}
+        {tab === 'login' ? <form onSubmit={handleLogin} className="k-auth-form" id="auth-login-form" aria-busy={isSubmitting}>
+          <div className="k-auth-field">
+            <label htmlFor="customer-login-email" className="k-auth-label">Seu e-mail</label>
+            <input id="customer-login-email" name="email" type="email" inputMode="email" autoComplete="username"
+              autoCapitalize="none" spellCheck={false} disabled={isSubmitting} placeholder="seu@email.com" required
+              value={email} onChange={event => { setEmail(event.target.value); setErrorMessage(''); }} className="k-auth-input" />
+          </div>
+          <div className="k-auth-field">
+            <label htmlFor="customer-login-password" className="k-auth-label">Sua senha</label>
+            <PasswordInput key="login-password" id="customer-login-password" name="password" autoComplete="current-password"
+              disabled={isSubmitting} required value={password} onChange={event => { setPassword(event.target.value); setErrorMessage(''); }} />
+          </div>
+          <PasswordRecoveryHelp customer restaurantId={restaurantId} initialEmail={email} disabled={isSubmitting} allowGuest={!accountRequired} />
+          <button type="submit" disabled={isSubmitting} className="k-auth-action">{isSubmitting ? 'Entrando...' : 'Entrar'}</button>
+        </form> : <form onSubmit={handleRegister} className="k-auth-form" id="auth-register-form" aria-busy={isSubmitting}>
+          {registerStep === 'details' ? <>
+            <div className="k-auth-field">
+              <label htmlFor="customer-register-name" className="k-auth-label">Nome completo</label>
+              <input id="customer-register-name" name="name" type="text" autoComplete="name" disabled={isSubmitting}
+                required value={name} onChange={event => { setName(event.target.value); setErrorMessage(''); }} className="k-auth-input" />
+            </div>
+            <div className="k-auth-field">
+              <label htmlFor="customer-register-email" className="k-auth-label">E-mail</label>
+              <input id="customer-register-email" name="email" type="email" inputMode="email" autoComplete="email"
+                autoCapitalize="none" spellCheck={false} disabled={isSubmitting} required value={email}
+                onChange={event => { setEmail(event.target.value); setErrorMessage(''); }} className="k-auth-input" />
+            </div>
+            <div className="k-auth-field">
+              <label htmlFor="customer-register-phone" className="k-auth-label">Celular / WhatsApp (com DDD)</label>
+              <input id="customer-register-phone" name="tel" type="tel" inputMode="tel" autoComplete="tel" placeholder="(11) 99999-9999"
+                disabled={isSubmitting} required value={phone} onChange={event => { setPhone(formatBrazilianPhone(event.target.value)); setErrorMessage(''); }} className="k-auth-input" />
+            </div>
+            <div className="k-auth-field">
+              <label htmlFor="customer-register-password" className="k-auth-label">Criar senha</label>
+              <PasswordInput key="register-password" id="customer-register-password" name="new-password" autoComplete="new-password"
+                placeholder="Mínimo 8 caracteres" minLength={8} disabled={isSubmitting} required value={password}
+                onChange={event => { setPassword(event.target.value); setErrorMessage(''); }} />
+            </div>
+            <button type="submit" disabled={isSubmitting} className="k-auth-action">{isSubmitting ? 'Enviando...' : 'Criar conta'}</button>
+          </> : <div className="k-customer-auth__success" role="status">
+            <strong>Confira seu e-mail</strong>
+            <p>Enviamos um link de confirmação para <b>{email.trim().toLowerCase()}</b>.</p>
+            <button type="submit" disabled={isSubmitting} className="k-auth-action">{isSubmitting ? 'Reenviando...' : 'Reenviar e-mail'}</button>
+            <button type="button" className="k-customer-auth__guest" onClick={() => { setRegisterStep('details'); setErrorMessage(''); }}>Alterar dados</button>
+          </div>}
+        </form>}
+        <button type="button" onClick={onClose} className="k-customer-auth__guest">
+          {accountRequired ? 'Voltar ao cardápio' : 'Continuar como visitante'}
         </button>
-
-        {/* Header com Direção Editorial Starbucks / KÔMA */}
-        <div className="flex items-center gap-3.5">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shadow-inner">
-            {hasBenefits ? (
-              <Gift className="h-6 w-6" />
-            ) : tab === "login" ? (
-              <User className="h-6 w-6" />
-            ) : (
-              <Sparkles className="h-6 w-6" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-emerald-400">
-              {hasBenefits
-                ? "Programa de Benefícios & Fidelidade"
-                : restaurantName
-                  ? `Sua Conta · ${restaurantName}`
-                  : "Acesso do Cliente"}
-            </span>
-            <h2 className="font-serif text-xl font-black tracking-tight text-white" id="auth-modal-title">
-              {tab === "login" ? "Entrar na Minha Conta" : "Criar Minha Conta"}
-            </h2>
-          </div>
-        </div>
-
-        <p className="mt-2.5 text-xs leading-relaxed text-gray-300">
-          {accountRequired
-            ? "Para enviar pedidos, entre na sua conta ou crie uma nova e confirme o cadastro pelo e-mail."
-            : hasBenefits
-              ? "Acompanhe seus pedidos em tempo real, resgate cupons e acumule benefícios neste restaurante. Você também pode comprar como visitante."
-              : "Acesse seu histórico, repita pedidos com agilidade e salve seus dados de entrega. Você também pode comprar como visitante."}
-        </p>
-
-        {/* Seletor de Abas (Entrar / Criar Conta) */}
-        <div className="mt-4 flex rounded-xl bg-white/5 p-1 border border-white/10">
-          <button
-            type="button"
-            onClick={() => {
-              setTab("login");
-              setErrorMessage("");
-            }}
-            className={`min-h-11 flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-              tab === "login"
-                ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-950/40"
-                : "text-gray-400 hover:text-white"
-            }`}
-          >
-            Entrar
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setTab("register");
-              setErrorMessage("");
-            }}
-            className={`min-h-11 flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-              tab === "register"
-                ? "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-950/40"
-                : "text-gray-400 hover:text-white"
-            }`}
-          >
-            Criar Conta
-          </button>
-        </div>
-
-        {errorMessage && (
-          <div
-            className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-semibold text-rose-400 animate-fade-in"
-            role="alert"
-          >
-            <p>{errorMessage}</p>
-          </div>
-        )}
-
-        {/* Formulário de Login */}
-        {tab === "login" ? (
-          <form onSubmit={handleLogin} className="mt-4 space-y-3.5" id="auth-login-form">
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-bold text-gray-300">Seu e-mail</span>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="email"
-                  autoComplete="email"
-                  placeholder="exemplo@email.com"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    if (errorMessage) setErrorMessage("");
-                  }}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
-                  required
-                />
-              </div>
-            </label>
-
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-bold text-gray-300">Sua senha</span>
-              <div className="relative">
-                <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    if (errorMessage) setErrorMessage("");
-                  }}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50"
-                  required
-                />
-              </div>
-            </label>
-
-            <PasswordRecoveryHelp customer restaurantId={restaurantId} />
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 text-sm font-bold text-white shadow-lg shadow-emerald-950/40 transition hover:from-emerald-400 hover:to-teal-400 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60 cursor-pointer"
-            >
-              <span>{isSubmitting ? "Entrando..." : "Entrar"}</span>
-              {!isSubmitting && <ArrowRight className="h-4 w-4" />}
-            </button>
-          </form>
-        ) : (
-          /* Formulário de Cadastro */
-          <form onSubmit={handleRegister} className="mt-4 space-y-3" id="auth-register-form">
-            {registerStep === "details" ? (
-              <>
-                <label className="block">
-                  <span className="mb-1 block text-xs font-bold text-gray-300">Nome completo</span>
-                  <div className="relative">
-                    <User className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <input type="text" autoComplete="name" placeholder="Como podemos te chamar?" value={name}
-                      onChange={(e) => { setName(e.target.value); if (errorMessage) setErrorMessage(""); }}
-                      className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50" required />
-                  </div>
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs font-bold text-gray-300">E-mail</span>
-                  <div className="relative">
-                    <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <input type="email" autoComplete="email" placeholder="seu@email.com" value={email}
-                      onChange={(e) => { setEmail(e.target.value); if (errorMessage) setErrorMessage(""); }}
-                      className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50" required />
-                  </div>
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs font-bold text-gray-300">Celular / WhatsApp (com DDD)</span>
-                  <div className="relative">
-                    <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <input type="tel" inputMode="numeric" autoComplete="tel" placeholder="(11) 99999-9999" value={phone}
-                      onChange={(e) => { setPhone(formatBrazilianPhone(e.target.value)); if (errorMessage) setErrorMessage(""); }}
-                      className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50" required />
-                  </div>
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-xs font-bold text-gray-300">Criar senha</span>
-                  <div className="relative">
-                    <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <input type="password" autoComplete="new-password" placeholder="Mínimo 8 caracteres" value={password}
-                      onChange={(e) => { setPassword(e.target.value); if (errorMessage) setErrorMessage(""); }}
-                      className="h-11 w-full rounded-xl border border-white/10 bg-white/5 pl-11 pr-4 text-base sm:text-sm text-white outline-none transition placeholder:text-gray-500 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50" required />
-                  </div>
-                </label>
-                <button type="submit" disabled={isSubmitting}
-                  className="mt-1 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 text-sm font-bold text-white shadow-lg shadow-emerald-950/40 transition hover:from-emerald-400 hover:to-teal-400 active:scale-[0.99] disabled:cursor-wait disabled:opacity-60 cursor-pointer">
-                  <span>{isSubmitting ? "Enviando..." : "Criar conta"}</span>
-                  {!isSubmitting && <ArrowRight className="h-4 w-4" />}
-                </button>
-              </>
-            ) : (
-              <div className="space-y-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4">
-                <div>
-                  <p className="text-sm font-bold text-emerald-300">Confira seu e-mail</p>
-                  <p className="mt-1 text-xs leading-relaxed text-gray-300">
-                    Enviamos um link de confirmação para <strong>{email.trim().toLowerCase()}</strong>.
-                    Abra o link para concluir sua conta no KÔMA.
-                  </p>
-                </div>
-                <button type="submit" disabled={isSubmitting}
-                  className="flex min-h-11 w-full items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 text-xs font-bold text-gray-200 hover:bg-white/10 disabled:opacity-60">
-                  {isSubmitting ? "Reenviando..." : "Reenviar e-mail"}
-                </button>
-                <button type="button" onClick={() => { setRegisterStep("details"); setErrorMessage(""); }}
-                  className="min-h-11 w-full text-xs font-semibold text-gray-400 underline underline-offset-4 hover:text-white">
-                  Alterar dados
-                </button>
-              </div>
-            )}
-          </form>
-        )}
-
-        {/* Continuar como visitante */}
-        <div className="text-center pt-3 mt-1 border-t border-white/5">
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-h-11 w-full text-xs font-semibold text-gray-400 hover:text-gray-200 transition underline underline-offset-4 cursor-pointer"
-          >
-            Continuar como visitante
-          </button>
-        </div>
       </div>
-    </div>
+    </div>, document.body,
   );
 }
