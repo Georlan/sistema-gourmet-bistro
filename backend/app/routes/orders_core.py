@@ -1340,7 +1340,10 @@ def painel_entregador(
         if not motoboy or not motoboy.ativo:
             raise HTTPException(status_code=403, detail="Entregador inativo ou não encontrado.")
 
-        comandas = db.query(Comanda).filter(
+        comandas = db.query(Comanda).options(
+            selectinload(Comanda.itens).joinedload(Item.produto),
+            selectinload(Comanda.lancamentos),
+        ).filter(
             Comanda.restaurante_id == rest_id,
             Comanda.fechada == False,
             Comanda.delivery_status == "transito",
@@ -1348,32 +1351,8 @@ def painel_entregador(
             Comanda.motoboy_id == motoboy_id,
         ).order_by(Comanda.criado_em.desc()).all()
 
-        entregas = []
-        for c in comandas:
-            calc_total = sum(i.preco_unit for i in c.itens) if c.itens else 0.0
-            total_entrega = calc_total + (c.delivery_taxa or 0.0)
-
-            prod_counts = {}
-            for i in c.itens:
-                pname = i.produto.nome if i.produto else "Item"
-                prod_counts[pname] = prod_counts.get(pname, 0) + 1
-
-            itens_str = ", ".join([f"{qty}x {pname}" for pname, qty in prod_counts.items()])
-
-            entregas.append({
-                "id": c.id,
-                "numero_pedido": c.numero_pedido,
-                "requires_delivery_code": bool(c.delivery_receipt_secret),
-                "cliente_nome": c.identificador or "Cliente",
-                "delivery_endereco": c.delivery_endereco,
-                "delivery_taxa": round(c.delivery_taxa or 0.0, 2),
-                "delivery_status": c.delivery_status,
-                "total": round(total_entrega, 2),
-                "valor_pago": round(c.valor_pago or 0.0, 2),
-                "valor_a_cobrar": max(0.0, round(total_entrega - (c.valor_pago or 0.0), 2)),
-                "itens_resumo": itens_str,
-                "criado_em": c.criado_em.isoformat() if c.criado_em else None
-            })
+        from ..services.courier_order_projection import project_courier_orders
+        entregas = project_courier_orders(db, rest_id, comandas)
 
         return {
             "motoboy": {
@@ -1381,5 +1360,6 @@ def painel_entregador(
                 "nome": motoboy.nome,
                 "telefone": motoboy.telefone
             },
-            "entregas": entregas
+            "entregas": entregas,
+            "contract_version": 2,
         }

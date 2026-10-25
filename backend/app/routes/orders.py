@@ -672,6 +672,12 @@ def confirmar_entrega_motoboy(
                 detail="A entrega ainda não saiu pelo Caixa.",
             )
 
+        from ..services.courier_order_projection import load_courier_references, courier_confirmation
+        references = load_courier_references(db, rest_id, [comanda.id]).get(comanda.id, [])
+        confirmation = courier_confirmation(comanda, references)
+        if not confirmation['enabled']:
+            raise HTTPException(status_code=409, detail=confirmation['reason'])
+
         from ..services.delivery_receipts import verify_delivery_receipt
         verify_delivery_receipt(db, comanda, receipt.code if receipt else None)
 

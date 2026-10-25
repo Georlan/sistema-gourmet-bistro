@@ -90,3 +90,15 @@ Validação focal final: 38 testes backend, 26 de navegador (incluindo timeout/r
 Uma tentativa geral concorrente com a validação focal encontrou 500/OperationalError na caracterização de mesas. O conftest do projeto substitui DATABASE_URL por um único backend/.pytest_koma.db, portanto as duas execuções colidiram. O cenário isolado passou (2 testes); a evidência daquela execução concorrente não certifica regressão de produto. Não executar processos pytest simultâneos nesse worktree. Logs gerais e focais ficam separados.
 
 A reexecução geral sem concorrência passou por 302 testes, com um skip de PostgreSQL, antes de ser interrompida para manter esta etapa local limitada ao escopo. Não certifica a suíte completa. Após encerrar essa execução, a validação final focal foi executada sozinha: 38 aprovações, incluindo os dois cenários de mesas que haviam sido afetados pela colisão do banco temporário.
+
+## Handoff de cobrança, conteúdo do pedido e parceiros
+
+Contrato e regras para conectores futuros: `docs/architecture/courier-handoff.md`. A implementação adiciona uma projeção de leitura compartilhada do pedido, sem nova tabela ou endpoint. Origem vem de referência persistida, jamais de texto livre do cliente. Selo textual com ícone identifica a plataforma; logos oficiais não foram improvisados nem baixados de terceiros.
+
+Total passa a usar o cálculo financeiro canônico, excluindo cancelados e considerando descontos/taxa. A tela apresenta cobrança, método, troco ou “Pago · não cobrar”; “Já recebido” foi retirado. Itens ativos, observações, modificadores e referência/complemento do endereço vigente ficam disponíveis no app. Copiar endereço usa feedback no próprio botão. Header ficou mais compacto; ações mantêm alvos de toque e profundidade.
+
+Parceiros são demonstrações locais explicitamente identificadas, com conclusão externa indisponível até existir integração validada. O app não faz chamada a iFood, 99Food ou Keeta. Os exemplos locais atuais incluem dinheiro com troco, Pix aprovado, cartão e os três selos de plataforma.
+
+Comparação de navegação em http://127.0.0.1:4313/navigation.html: Google Maps em outra aba, na mesma aba, Waze e copiar endereço. Mantido o padrão atual do app para posterior decisão. Uso de aplicativos instalados depende do dispositivo e ainda exige prova manual; o ensaio de desktop validou URLs, alvos, endereço e layout de 320 px sem abrir mapas externos.
+
+Validação final deste incremento: 60 testes backend, 32 cenários de navegador principais mais 15 de layout em 360/430/tablet, 1.100 testes unitários, lint e build. O teste de custo de leitura compara uma e treze entregas, com no máximo um SELECT de diferença e teto de vinte consultas. Não existe leitura por card. Capturas reais de cobrança, pago e parceiro foram inspecionadas; somente banco local fictício. Suíte backend completa, CI, homologação externa, teste de navegação nativa e publicação continuam fora da evidência desta rodada.

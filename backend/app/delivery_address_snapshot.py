@@ -298,3 +298,27 @@ def revise_delivery_address_snapshot(
     db.add(revision)
     db.flush()
     return revision
+
+
+def load_delivery_address_snapshots(db: Session, *, restaurante_id: int, comanda_ids: list[str]) -> dict[str, dict[str, Any]]:
+    """Two bounded batch reads: latest operational revision, then missing originals."""
+    if not comanda_ids:
+        return {}
+    from sqlalchemy import func
+    ranked = db.query(
+        ComandaDeliveryAddressRevision.comanda_id,
+        ComandaDeliveryAddressRevision.payload_encrypted,
+        func.row_number().over(partition_by=ComandaDeliveryAddressRevision.comanda_id,
+                               order_by=(ComandaDeliveryAddressRevision.created_at.desc(), ComandaDeliveryAddressRevision.id.desc())).label('position'),
+    ).filter(ComandaDeliveryAddressRevision.restaurante_id == restaurante_id,
+             ComandaDeliveryAddressRevision.comanda_id.in_(comanda_ids)).subquery()
+    latest = db.query(ranked.c.comanda_id, ranked.c.payload_encrypted).filter(ranked.c.position == 1).all()
+    result = {row.comanda_id: json.loads(decrypt_field(row.payload_encrypted)) for row in latest}
+    missing = [key for key in comanda_ids if key not in result]
+    if missing:
+        for row in db.query(ComandaDeliveryAddressSnapshot).filter(
+            ComandaDeliveryAddressSnapshot.restaurante_id == restaurante_id,
+            ComandaDeliveryAddressSnapshot.comanda_id.in_(missing),
+        ).all():
+            result[row.comanda_id] = row.payload
+    return result

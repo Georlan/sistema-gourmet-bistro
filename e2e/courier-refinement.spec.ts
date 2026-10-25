@@ -191,3 +191,46 @@ test('mesmo com resposta antiga, pronto atribuído não aparece nem permite conf
   await expect(page.getByText('Aguardando despacho')).toHaveCount(0);
   await expect(page.getByRole('button',{name:/Para sair/})).toHaveCount(0);
 });
+
+for (const theme of ['dark','light']) test(`handoff ${theme}: cobrança, troco, origem e observações substituem papel`,async({page},info)=>{
+  await page.addInitScript(t=>localStorage.setItem('@koma:theme',t),theme);
+  await page.context().grantPermissions(['clipboard-read','clipboard-write']);
+  await fixture(page,[{...delivery,
+    source:{channel:'caixa',label:'Caixa',references:[]},
+    destination:{label:'Rua dos Ipês, 245, Centro, Fortaleza, CE',complement:'Casa azul · portão lateral',reference:'Em frente à praça',route_query:'Rua dos Ipês, 245, Centro, Fortaleza, CE'},
+    payment:{status:'collect',method:'cash',amount_due:68.9,change_for:100,change_amount:31.1,change_needs_check:false},
+    items:[{name:'Hambúrguer artesanal',quantity:2,notes:'Sem cebola',modifiers:['Queijo extra']},{name:'Suco de laranja',quantity:1,notes:null,modifiers:[]}],
+    confirmation:{mode:'koma_code',enabled:true,code_length:4,reason:null},requires_delivery_code:true,
+  } as any]);
+  await open(page);
+  const payment=page.getByRole('region',{name:'Pagamento da entrega'});
+  await expect(payment).toContainText('68,90');
+  await expect(payment).toContainText('31,10');
+  await expect(payment).toContainText('Cliente paga com');
+  await expect(payment).toContainText('Dinheiro');
+  await expect(page.locator('.k-courier__reference')).toContainText('Em frente à praça');
+  await expect(page.getByText('Casa azul · portão lateral')).toBeVisible();
+  await expect(page.getByText('Já recebido',{exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Copiar endereço de Ana Oliveira'}).click();
+  expect(await page.evaluate(()=>navigator.clipboard.readText())).toContain('Em frente à praça');
+  expect(new URL((await page.getByRole('link',{name:/Abrir rota/}).getAttribute('href'))!).searchParams.get('destination')).not.toContain('praça');
+  await page.locator('summary').click();
+  await expect(page.getByText('Sem cebola',{exact:true})).toBeVisible();
+  await expect(page.getByText('Queijo extra',{exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+  if(process.env.KOMA_COURIER_CAPTURE_DIR){await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:join(process.env.KOMA_COURIER_CAPTURE_DIR,`${info.project.name}-handoff-${theme}.png`),fullPage:true});}
+});
+
+test('pago não cobra de novo; cartão pede maquininha; referência de parceiro não simula conclusão',async({page})=>{
+  const base={status:'paid',method:'pix',amount_due:0,change_for:null,change_amount:null,change_needs_check:false};
+  await fixture(page,[{...delivery,id:'paid-online',payment:base} as any,
+    {...delivery,id:'card',numero_pedido:102,payment:{...base,status:'collect',method:'card',amount_due:68.9}} as any,
+    {...delivery,id:'partner',numero_pedido:103,source:{channel:'ifood',label:'iFood',references:[{provider:'ifood',reference:'external-order-demo'}]},payment:base,confirmation:{mode:'partner_pending',enabled:false,code_length:null,reason:'A conclusão com este parceiro ainda não está conectada. Confira com o Caixa.'}} as any]);
+  await open(page);
+  await expect(page.getByRole('article',{name:'Pedido 101'})).toContainText('Pago · não cobrar');
+  await expect(page.getByRole('article',{name:'Pedido 102'})).toContainText('levar maquininha');
+  const partner=page.getByRole('article',{name:'Pedido 103'});
+  await expect(partner.getByText('iFood',{exact:true})).toBeVisible();
+  await expect(partner.getByRole('button',{name:'Concluir entrega'})).toBeDisabled();
+  await expect(partner).toContainText('ainda não está conectada');
+});
