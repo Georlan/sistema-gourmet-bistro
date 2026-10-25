@@ -744,6 +744,9 @@ class OrderApplicationService:
                     idempotency_fingerprint=cmd.idempotency_fingerprint,
                     idempotency_fingerprint_version=cmd.idempotency_fingerprint_version,
                 )
+                if cmd.channel == OrderChannel.WEB_CARDAPIO and cmd.fulfillment == FulfillmentType.DELIVERY:
+                    from ...services.delivery_receipts import issue_delivery_receipt
+                    issue_delivery_receipt(comanda)
                 db.add(comanda)
                 db.flush()
             else:

@@ -1338,6 +1338,7 @@ def painel_entregador(
             entregas.append({
                 "id": c.id,
                 "numero_pedido": c.numero_pedido,
+                "requires_delivery_code": bool(c.delivery_receipt_secret),
                 "cliente_nome": c.identificador or "Cliente",
                 "delivery_telefone": c.delivery_telefone,
                 "delivery_endereco": c.delivery_endereco,

@@ -31,7 +31,7 @@ A consulta foi corrigida localmente para exigir tipo Delivery/Entrega e vínculo
 
 O canal WebSocket operacional usa identidade de operador; o link de entregador tem credencial própria. Não reutilizar token de funcionário nem assinar eventos de todo o restaurante para simular tempo real. Qualquer canal futuro exige escopo mínimo por tenant/entregador e medições, com autorização própria no backend.
 
-Pendente aprovação: uso de várias entregas por viagem, preferência Maps/Waze, hierarquia visual e etapa de confirmação. Mantido Google Maps como comportamento existente nesta primeira versão, aguardando a preferência do usuário. Sem ordenação falsa de “melhor rota”: ordem do servidor preservada.
+Múltiplas entregas por viagem foram confirmadas pelo usuário. A sequência manual pode ser escolhida e reordenada sem alterar o despacho no Caixa. Google Maps continua externo, sem chave ou serviço pago; não há promessa de melhor rota, trânsito ou otimização automática.
 
 ## Pesquisa aplicada
 
@@ -46,7 +46,7 @@ Skills aplicadas: Frontend Design, UI/UX Pro Max e Vercel React Best Practices. 
 
 ## Validação
 
-Prévia usa frontend real e uma API local simulada fora do repositório, aceitando somente identidades fictícias. Não comprova a integração operacional ponta a ponta. Regressões backend usam SQLite temporário com dotenv de produção desativado. Aprovação e integração real são etapas posteriores.
+A primeira prévia usava uma API simulada. A prévia atual usa o frontend e as rotas FastAPI reais com banco SQLite local e identidades fictícias, em restaurante 99051. Não acessa a operação real nem prova publicação. Regressões backend usam banco temporário com dotenv de produção desativado. Aprovação e publicação são etapas posteriores.
 
 Resultados desta etapa: lint e build aprovados, 1.100 testes unitários, 30 cenários do novo painel em cinco larguras (360/390/430/768/1366), seis regressões de timeout/reload nas duas larguras principais e duas regressões backend aprovadas. Capturas locais de 320/390/768 em ambos os temas foram geradas; revisão visual corrigiu uma colisão entre título e arte em 320 px. Sem certificação da suíte backend completa ou jornada operacional real nesta rodada.
 
@@ -54,3 +54,18 @@ Resultados desta etapa: lint e build aprovados, 1.100 testes unitários, 30 cen�
 ## Ajuste de escopo aprovado pelo usuário
 
 O app conecta somente a entregas por motoboy; pedidos de retirada e mesa não aparecem. “Para sair” corresponde a uma entrega `pronto` já atribuída ao entregador; não é retirada pelo cliente. Filtros: Todas, Em rota e Para sair. Múltiplas entregas por viagem confirmadas pelo usuário; navegação permanece por link externo sem API paga.
+
+## Viagem e código de recebimento — incremento local
+
+- Seleção e reordenação de entregas com controles de toque e teclado. Somente IDs ficam em sessionStorage, sob chave derivada do hash da credencial; não são armazenados endereço, nome ou localização. Pedidos removidos/concluídos saem da sequência. Trocar a credencial limpa a tela e restaura apenas sua própria sequência.
+- Novas entregas criadas pelo Cardápio recebem código de seis dígitos, gerado no backend, criptografado no pedido e mantido em replays idempotentes. Retiradas não recebem código. Entregas antigas continuam compatíveis, sem exigência retroativa.
+- O cliente vê o código no acompanhamento, chat e histórico autorizado. O painel do entregador recebe somente a indicação de que o código é necessário. O código não entra no catálogo público nem na persistência local do histórico.
+- Um único campo numérico aceita colar e confirmar com Enter. O sexto dígito não dispara envio automático. A confirmação verifica atribuição e tenant, bloqueia a linha e usa a transição canônica; cinco erros impõem espera de um minuto. Concluir entrega não quita pagamentos.
+- As leituras existentes carregam o código sem uma consulta adicional. Nenhum SDK, SMS, API paga, timer de GPS ou novo polling foi incluído.
+- Migração f7b8c9d0e1f2 adiciona três campos de recebimento; upgrade e downgrade focais passaram em PostgreSQL 17 local preservando pedido existente. Isso não substitui os gates da futura publicação.
+
+Validação final deste incremento: 1.100 testes unitários, lint e build; 18 cenários de navegador em mobile/desktop; 20 regressões backend, incluindo isolamento, código, idempotência, broadcast de estado e contagem de consultas. Não certifica toda a suíte backend, CI ou entrega em produção. O ensaio de migração foi focal, sem executar toda a cadeia histórica.
+
+Prévia de teste: http://127.0.0.1:4313/ oferece acessos locais ao entregador e aos três clientes fictícios. Abra um cliente, consulte o código e informe no pedido correspondente do entregador. A conclusão altera apenas o banco local. Capturas finais: customer-real-final.png e courier-real-final.png em outputs/courier-refinement.
+
+Pendências deliberadas: homologação real com Caixa aberto, integração iFood, rastreio GPS e roteamento automático. Nenhuma dessas capacidades é simulada como integração pronta. Publicação depende de aprovação posterior.

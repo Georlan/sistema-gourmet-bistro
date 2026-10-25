@@ -1,3 +1,4 @@
+import { DeliveryReceiptCode } from "./DeliveryReceiptCode";
 import PixCopyCode from "./PixCopyCode";
 import { OrderItemComposition } from '../../components/shared/OrderItemComposition';
 /**
@@ -31,6 +32,7 @@ export interface CustomerHistoryItem {
 export interface CustomerHistoryOrder {
   id: string;
   numero_pedido: string | number;
+  delivery_receipt_code?: string | null;
   criado_em?: string | null;
   fechado_em?: string | null;
   tipo: string;
@@ -212,6 +214,7 @@ export default function CardapioCustomerOrderHistory({
 
                 {expanded && (
                   <div className="border-t border-slate-800 px-3 pb-3 pt-2.5">
+                    {!terminal && <DeliveryReceiptCode code={order.delivery_receipt_code} />}
                     <div className="space-y-1.5">
                       {order.itens.map((item, index) => (
                         <div key={`${item.produto_id}-${index}`} className="text-[9px] leading-relaxed text-koma-muted">

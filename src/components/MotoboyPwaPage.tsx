@@ -1,13 +1,15 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Phone, MapPin, CheckCircle2, RefreshCw, Navigation, AlertCircle, ArrowUpRight, Sun, Moon, PackageCheck } from 'lucide-react';
+import { Phone, MapPin, CheckCircle2, RefreshCw, Navigation, AlertCircle, ArrowUpRight, Sun, Moon, PackageCheck, ArrowUp, ArrowDown } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 import { formatWhatsAppPhone } from '../config/whatsappUtils';
 import { KomaLogo } from './KomaLogo';
 import { nextKomaTheme, persistKomaTheme, readKomaTheme, applyKomaTheme } from '../config/theme';
 import './courier/courierPresentation.css';
+import { useCourierTrip } from './courier/useCourierTrip';
 interface EntregaItem {
   id: string;
   numero_pedido: number | null;
+  requires_delivery_code?: boolean;
   cliente_nome: string;
   delivery_telefone: string | null;
   delivery_endereco: string | null;
@@ -57,7 +59,7 @@ const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL
 const formatMoney = (value: number) => money.format(value);
 
 export function MotoboyPwaPage() {
-  const [token] = useState(bootstrapDeliveryToken);
+  const [token, setToken] = useState(bootstrapDeliveryToken);
   const [theme, setTheme] = useState(readKomaTheme);
   const [loading, setLoading] = useState(Boolean(token));
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -65,6 +67,9 @@ export function MotoboyPwaPage() {
   const [motoboy, setMotoboy] = useState<MotoboyProfile | null>(null);
   const [entregas, setEntregas] = useState<EntregaItem[]>([]);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [receiptCode, setReceiptCode] = useState('');
+  const [receiptError, setReceiptError] = useState('');
+  const receiptInputRef = useRef<HTMLInputElement>(null);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [uncertainId, setUncertainId] = useState<string | null>(null);
   const [filter, setFilter] = useState('todas');
@@ -78,9 +83,10 @@ export function MotoboyPwaPage() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reviewConfirmRef = useRef<HTMLButtonElement>(null);
   const previousReviewRef = useRef<string | null>(null);
+  useEffect(() => { if (receiptError) receiptInputRef.current?.focus(); }, [receiptError]);
 
   useEffect(() => {
-    if (reviewId) reviewConfirmRef.current?.focus();
+    if (reviewId) (receiptInputRef.current || reviewConfirmRef.current)?.focus();
     else if (previousReviewRef.current) document.getElementById(`courier-confirm-${previousReviewRef.current}`)?.focus();
     previousReviewRef.current = reviewId;
   }, [reviewId]);
@@ -158,22 +164,28 @@ export function MotoboyPwaPage() {
 
   const handleConfirmarEntrega = async (comandaId: string) => {
     if (!token || isConfirmingRef.current || uncertainId) return;
+    const requiresCode = entregas.find(item => item.id === comandaId)?.requires_delivery_code;
+    if (requiresCode && !/^[0-9]{6}$/.test(receiptCode)) { setReceiptError('Digite os 6 dígitos informados pelo cliente.'); receiptInputRef.current?.focus(); return; }
+    setReceiptError('');
     isConfirmingRef.current = true;
     // A GET started before this mutation must never restore a completed card.
     getRef.current?.abort(); getRef.current = null; setIsRefreshing(false);
     const controller = new AbortController();
     postRef.current = controller;
     const timeoutId = window.setTimeout(() => controller.abort(), CONFIRM_DELIVERY_REQUEST_TIMEOUT_MS);
-    setReviewId(null); setConfirmingId(comandaId);
+    if (!requiresCode) setReviewId(null);
+    setConfirmingId(comandaId);
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/motoboys/pedidos/${comandaId}/confirmar-entrega`, {
-        method: 'POST', headers: { [DELIVERY_TOKEN_HEADER]: token }, signal: controller.signal,
+        method: 'POST', headers: { [DELIVERY_TOKEN_HEADER]: token, ...(requiresCode ? { 'Content-Type': 'application/json' } : {}) }, signal: controller.signal,
+        ...(requiresCode ? { body: JSON.stringify({ code: receiptCode }) } : {}),
       });
       if (postRef.current !== controller) return;
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(typeof body.detail === 'string' ? body.detail : 'Não foi possível confirmar a entrega.');
       }
+      setReviewId(null); setReceiptCode('');
       setEntregas(prev => prev.filter(item => item.id !== comandaId));
       showToast('Entrega confirmada com sucesso.');
     } catch (err: any) {
@@ -182,7 +194,8 @@ export function MotoboyPwaPage() {
         setUncertainId(comandaId);
         showToast('A confirmação demorou demais. Atualizando o painel antes de permitir nova tentativa.', 'error');
         await carregarDadosPainel(token, true);
-      } else showToast(err.message || 'Não foi possível confirmar a entrega.', 'error');
+      } else if (requiresCode) { setReceiptError(err.message || 'Não foi possível conferir o código.'); receiptInputRef.current?.focus(); }
+      else showToast(err.message || 'Não foi possível confirmar a entrega.', 'error');
     } finally {
       window.clearTimeout(timeoutId);
       if (postRef.current === controller) {
@@ -191,8 +204,44 @@ export function MotoboyPwaPage() {
     }
   };
 
+  const trip = useCourierTrip(token, entregas, Boolean(motoboy));
+  const [planning, setPlanning] = useState(false);
+  const [draftTrip, setDraftTrip] = useState<string[]>([]);
+  const planHeadingRef = useRef<HTMLHeadingElement>(null);
+  const tripButtonRef = useRef<HTMLButtonElement>(null);
+  const previousPlanning = useRef(false);
+  useEffect(() => {
+    const switchAccess = () => {
+      const next = bootstrapDeliveryToken();
+      if (next === token) return;
+      getRef.current?.abort(); getRef.current = null;
+      postRef.current?.abort(); postRef.current = null;
+      isConfirmingRef.current = false; profileRef.current = null;
+      setMotoboy(null); setEntregas([]); setReviewId(null); setConfirmingId(null);
+      setUncertainId(null); setPlanning(false); setReceiptCode(''); setReceiptError('');
+      setLoading(Boolean(next)); setErrorMsg(next ? null : 'Abra o link enviado pelo caixa.');
+      setToken(next);
+    };
+    window.addEventListener('hashchange', switchAccess);
+    return () => window.removeEventListener('hashchange', switchAccess);
+  }, [token]);
+  useEffect(() => {
+    if (planning) planHeadingRef.current?.focus();
+    else if (previousPlanning.current) tripButtonRef.current?.focus();
+    previousPlanning.current = planning;
+  }, [planning]);
+  const selectedDraft = draftTrip.filter(id => entregas.some(item => item.id === id));
+  const draftOrders = [...selectedDraft.map(id => entregas.find(item => item.id === id)!), ...entregas.filter(item => !selectedDraft.includes(item.id))];
+  const ordered = [...trip.ids.map(id => entregas.find(item => item.id === id)!), ...entregas.filter(item => !trip.ids.includes(item.id))];
+  const moveDraft = (id: string, direction: number) => setDraftTrip(current => {
+    const copy = current.filter(key => entregas.some(item => item.id === key));
+    const from = copy.indexOf(id), to = from + direction;
+    if (from < 0 || to < 0 || to >= copy.length) return copy;
+    [copy[from], copy[to]] = [copy[to], copy[from]];
+    return copy;
+  });
   const blocked = Boolean(confirmingId) || isRefreshing || Boolean(uncertainId);
-  const visible = entregas.filter(item => filter === 'todas' || item.delivery_status === filter);
+  const visible = ordered.filter(item => filter === 'todas' || item.delivery_status === filter);
   const filters = [['todas', 'Todas'], ['transito', 'Em rota'], ['pronto', 'Para sair']];
 
   return <div className="k-courier">
@@ -220,6 +269,12 @@ export function MotoboyPwaPage() {
           </div>
           <div className="k-courier__sync" role="status">{isRefreshing ? 'Atualizando…' : lastUpdated ? `Conferido às ${new Date(lastUpdated).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}</div>
           {uncertainId && <div className="k-courier__notice" role="alert"><span>Confirmação pendente. Confira o painel antes de tentar de novo.</span><button type="button" className="k-courier__secondary" disabled={isRefreshing || Boolean(confirmingId)} onClick={() => void carregarDadosPainel(token)}>Verificar</button></div>}
+          {entregas.length > 0 && !planning && <div className="k-courier__trip-bar"><span>{trip.ids.length ? `${trip.ids.length} na sua sequência` : 'Organize as entregas da viagem'}</span><button type="button" className="k-courier__secondary" ref={tripButtonRef} disabled={!trip.ready || blocked} onClick={() => { setDraftTrip(trip.ids); setReviewId(null); setPlanning(true); }}>{trip.ids.length ? 'Editar sequência' : 'Organizar viagem'}</button></div>}
+          {planning && <section className="k-courier__planner" aria-label="Organizar viagem"><h2 tabIndex={-1} ref={planHeadingRef}>Sua sequência</h2><p>Selecione os pedidos e ajuste a ordem.</p><div className="k-courier__planner-list">{draftOrders.map(item => {
+            const index = selectedDraft.indexOf(item.id);
+            return <div className="k-courier__plan-row" key={item.id}><label><input type="checkbox" checked={index >= 0} onChange={() => setDraftTrip(current => index >= 0 ? current.filter(id => id !== item.id) : [...current, item.id])} /><span><strong>{index >= 0 ? `${index + 1}. ` : ''}#{item.numero_pedido} · {item.cliente_nome}</strong><small>{item.delivery_endereco || 'Endereço não informado'}</small></span></label>{index >= 0 && <div className="k-courier__plan-move"><button type="button" className="k-courier__icon" aria-label={`Antecipar pedido ${item.numero_pedido}`} disabled={index === 0} onClick={() => moveDraft(item.id, -1)}><ArrowUp size={18} aria-hidden="true" /></button><button type="button" className="k-courier__icon" aria-label={`Adiar pedido ${item.numero_pedido}`} disabled={index === selectedDraft.length - 1} onClick={() => moveDraft(item.id, 1)}><ArrowDown size={18} aria-hidden="true" /></button></div>}</div>;
+          })}</div><div className="k-courier__plan-actions"><button type="button" className="k-courier__secondary" onClick={() => setPlanning(false)}>Cancelar</button><button type="button" className="k-courier__action" onClick={() => { trip.save(selectedDraft); setFilter('todas'); setPlanning(false); }}>{selectedDraft.length ? 'Usar sequência' : 'Limpar sequência'}</button></div>{!trip.persisted && <p role="status">A sequência fica disponível até sair desta tela.</p>}</section>}
+          {!planning && <>
           {entregas.length > 0 && <nav className="k-courier__filters" aria-label="Filtrar entregas">{filters.map(([value, label]) => <button type="button" key={value} aria-pressed={filter === value} onClick={() => { setFilter(value); setReviewId(null); }}>{label}<span>{value === 'todas' ? entregas.length : entregas.filter(item => item.delivery_status === value).length}</span></button>)}</nav>}
           {entregas.length === 0 ? <div className="k-courier__empty"><PackageCheck size={40} aria-hidden="true" /><h2>Tudo entregue</h2><p>Nenhuma entrega pendente no momento.</p></div>
             : visible.length === 0 ? <div className="k-courier__empty"><h2>Nenhuma entrega aqui</h2><button className="k-courier__secondary" type="button" onClick={() => setFilter('todas')}>Ver todas</button></div>
@@ -227,6 +282,7 @@ export function MotoboyPwaPage() {
               const cleanTel = formatWhatsAppPhone(entrega.delivery_telefone);
               const inRoute = entrega.delivery_status === 'transito';
               return <article key={entrega.id} className="k-courier__card" aria-label={`Pedido ${entrega.numero_pedido ?? 'sem número'}`}>
+                {trip.ids[0] === entrega.id && <p className="k-courier__next">Próxima da sua sequência</p>}
                 <div className={`k-courier__card-head ${inRoute ? '' : 'k-courier__card-head--ready'}`}>
                   <div><span className="k-courier__order">{entrega.numero_pedido ? `#${entrega.numero_pedido}` : 'Sem número'}</span><h2>{entrega.cliente_nome}</h2></div>
                   <span className="k-courier__state">{inRoute ? <Navigation size={14} aria-hidden="true" /> : <PackageCheck size={14} aria-hidden="true" />}{inRoute ? 'Em rota' : entrega.delivery_status === 'pronto' ? 'Pronta' : 'A conferir'}</span>
@@ -239,11 +295,12 @@ export function MotoboyPwaPage() {
                   </div>
                   <div className={`k-courier__payment ${entrega.valor_a_cobrar > 0 ? '' : 'k-courier__payment--paid'}`}><span>{entrega.valor_a_cobrar > 0 ? 'Cobrar na entrega' : 'Sem cobrança'}</span><strong>{entrega.valor_a_cobrar > 0 ? formatMoney(entrega.valor_a_cobrar) : <CheckCircle2 size={21} aria-label="Sem valor pendente" />}</strong></div>
                   <details className="k-courier__details"><summary>Ver pedido</summary><p>{entrega.itens_resumo || 'Itens não informados'}</p><dl><div><dt>Total</dt><dd>{formatMoney(entrega.total)}</dd></div><div><dt>Já recebido</dt><dd>{formatMoney(entrega.valor_pago)}</dd></div><div><dt>Taxa de entrega</dt><dd>{formatMoney(entrega.delivery_taxa)}</dd></div></dl></details>
-                  {reviewId === entrega.id ? <div className="k-courier__confirm" onKeyDown={event => { if (event.key === 'Escape') setReviewId(null); }} role="group" aria-label={`Confirmar entrega do pedido ${entrega.numero_pedido ?? 'sem número'}`}><p>Entregou este pedido ao cliente?</p><div><button type="button" className="k-courier__secondary" onClick={() => setReviewId(null)}>Voltar</button><button type="button" className="k-courier__action" ref={reviewConfirmRef} disabled={blocked} onClick={() => void handleConfirmarEntrega(entrega.id)}>Confirmar entrega</button></div></div>
-                    : <button type="button" id={`courier-confirm-${entrega.id}`} className="k-courier__action" disabled={blocked} onClick={() => setReviewId(entrega.id)}>{confirmingId === entrega.id ? <><RefreshCw size={18} className="k-courier__spin" aria-hidden="true" />Confirmando…</> : <><CheckCircle2 size={18} aria-hidden="true" />Concluir entrega</>}</button>}
+                  {reviewId === entrega.id ? <div className="k-courier__confirm" onKeyDown={event => { if (event.key === 'Escape') setReviewId(null); }} role="group" aria-label={`Confirmar entrega do pedido ${entrega.numero_pedido ?? 'sem número'}`}>{entrega.requires_delivery_code ? <div className="k-courier__receipt"><label htmlFor={`receipt-${entrega.id}`}>Código informado pelo cliente</label><input id={`receipt-${entrega.id}`} ref={receiptInputRef} type="text" inputMode="numeric" enterKeyHint="done" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={receiptCode} disabled={Boolean(confirmingId)} onChange={event => { setReceiptCode(event.target.value.replace(/[^0-9]/g, '').slice(0, 6)); setReceiptError(''); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void handleConfirmarEntrega(entrega.id); } }} aria-invalid={Boolean(receiptError)} aria-describedby={receiptError ? `receipt-error-${entrega.id}` : undefined} />{receiptError && <p id={`receipt-error-${entrega.id}`} role="alert">{receiptError}</p>}</div> : <p>Entregou este pedido ao cliente?</p>}<div><button type="button" className="k-courier__secondary" onClick={() => setReviewId(null)}>Voltar</button><button type="button" className="k-courier__action" ref={reviewConfirmRef} disabled={blocked} onClick={() => void handleConfirmarEntrega(entrega.id)}>{confirmingId === entrega.id ? 'Confirmando…' : 'Confirmar entrega'}</button></div></div>
+                    : <button type="button" id={`courier-confirm-${entrega.id}`} className="k-courier__action" disabled={blocked} onClick={() => { setReceiptCode(''); setReceiptError(''); setReviewId(entrega.id); }}>{confirmingId === entrega.id ? <><RefreshCw size={18} className="k-courier__spin" aria-hidden="true" />Confirmando…</> : <><CheckCircle2 size={18} aria-hidden="true" />Concluir entrega</>}</button>}
                 </div>
               </article>;
             })}</div>}
+          </>}
         </>}
     </main>
   </div>;

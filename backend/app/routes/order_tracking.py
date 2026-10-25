@@ -10,6 +10,8 @@ Segurança P0:
 
 from __future__ import annotations
 
+from ..services.delivery_receipts import customer_delivery_receipt
+
 import asyncio
 import datetime
 import json
@@ -302,6 +304,7 @@ def consultar_resumo_pedido_por_token(
                 Comanda.id.label("id"),
                 Comanda.delivery_status.label("delivery_status"),
                 Comanda.tipo.label("tipo"),
+                Comanda.delivery_receipt_secret.label("delivery_receipt_secret"),
                 Comanda.fechada.label("fechada"),
                 OrderConversation.closed_at.label("closed_at"),
                 OrderConversation.customer_last_read_at.label("customer_last_read_at"),
@@ -335,6 +338,7 @@ def consultar_resumo_pedido_por_token(
                 Comanda.id,
                 Comanda.delivery_status,
                 Comanda.tipo,
+                Comanda.delivery_receipt_secret,
                 Comanda.fechada,
                 OrderConversation.closed_at,
                 OrderConversation.customer_last_read_at,
@@ -367,6 +371,7 @@ def consultar_resumo_pedido_por_token(
         )
         return {
             "id": str(row.id),
+            "delivery_receipt_code": customer_delivery_receipt(row),
             "status": effective_status,
             "state": state_contract,
             "tipo": row.tipo or "Delivery",
@@ -458,6 +463,7 @@ def consultar_pedido_por_token(
         )
         return {
             "id": comanda.id,
+            "delivery_receipt_code": customer_delivery_receipt(comanda),
             "numero_pedido": comanda.numero_pedido,
             # Compatibilidade legada. Clientes novos devem consumir `state`.
             "status": effective_status,

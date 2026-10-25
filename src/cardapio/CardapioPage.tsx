@@ -1,3 +1,4 @@
+import { DeliveryReceiptCode } from "./components/DeliveryReceiptCode";
 import PixCopyCode from "./components/PixCopyCode";
 import { QRCodeSVG } from 'qrcode.react';
 /**
@@ -467,7 +468,7 @@ export default function CardapioPage() {
         // acompanhamento/chat sem aumentar o payload público do cardápio.
         if (!background) {
           void restoreDurableStoredOrders(rid)
-            .then((restored) => setStoredOrders(restored))
+            .then((restored) => setStoredOrders(current => restored.map(order => ({ ...order, delivery_receipt_code: current.find(item => item.id === order.id)?.delivery_receipt_code || null }))))
             .catch((resumeError) => {
               console.warn("Falha ao retomar pedidos salvos neste navegador:", resumeError);
             });
@@ -969,6 +970,7 @@ export default function CardapioPage() {
     closedAt: string | null,
     tipo?: string,
     backendState?: OrderStateContract,
+    deliveryReceiptCode?: string | null,
   ) => {
     setStoredOrders((current) => {
       let changed = false;
@@ -986,6 +988,7 @@ export default function CardapioPage() {
           && order.tipo === nextTipo
           && !stateChanged
           && Boolean(order.fechado) === nextClosed
+          && (deliveryReceiptCode === undefined || order.delivery_receipt_code === deliveryReceiptCode)
         ) {
           return order;
         }
@@ -993,6 +996,7 @@ export default function CardapioPage() {
         changed = true;
         const updated: StoredOrder = {
           ...order,
+          delivery_receipt_code: state.terminal ? null : deliveryReceiptCode === undefined ? order.delivery_receipt_code : deliveryReceiptCode,
           status,
           tipo: nextTipo,
           state,
@@ -1238,6 +1242,8 @@ export default function CardapioPage() {
                 )}
               </div>
             </div>
+
+            {!terminal && <DeliveryReceiptCode code={activeOrder.delivery_receipt_code} />}
 
             {!rejected && activeState.phase === "payment_pending" ? (
               <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/[0.08] p-3">

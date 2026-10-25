@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
 from ..models import Comanda, GrupoModificador, Item, ItemModificador, OnlinePaymentIntent, OpcaoModificador
+from ..services.delivery_receipts import customer_delivery_receipt
 from ..services.order_chat_service import compute_comanda_total
 from ..services.order_state_contract import build_order_state_contract
 from ..services.order_item_composition import uses_grouped_composition
@@ -57,6 +58,7 @@ class CustomerOrderPaymentRecovery(BaseModel):
 class CustomerOrderHistoryOrder(BaseModel):
     id: str
     numero_pedido: int | str
+    delivery_receipt_code: str | None = None
     criado_em: str | None = None
     fechado_em: str | None = None
     tipo: str
@@ -285,6 +287,7 @@ def list_customer_orders(
                 CustomerOrderHistoryOrder(
                     id=str(comanda.id),
                     numero_pedido=comanda.numero_pedido,
+                    delivery_receipt_code=customer_delivery_receipt(comanda),
                     criado_em=comanda.criado_em.isoformat() if comanda.criado_em else None,
                     fechado_em=comanda.fechado_em.isoformat() if comanda.fechado_em else None,
                     tipo=comanda.tipo or "Retirada",

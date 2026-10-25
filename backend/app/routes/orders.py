@@ -7,7 +7,7 @@ rotas de delivery/retirada deste módulo não escrevem estado de pedido
 
 from __future__ import annotations
 
-from fastapi import BackgroundTasks, Depends, Header, HTTPException, Request, status
+from fastapi import BackgroundTasks, Body, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -615,11 +615,16 @@ def despachar_delivery(
     return comanda
 
 
+class DeliveryReceiptConfirmation(BaseModel):
+    code: str | None = Field(default=None, max_length=6)
+
+
 @router.post("/motoboys/pedidos/{comanda_id}/confirmar-entrega")
 def confirmar_entrega_motoboy(
     comanda_id: str,
     request: Request,
     background_tasks: BackgroundTasks,
+    receipt: DeliveryReceiptConfirmation | None = Body(default=None),
     token: str = Header(..., alias="X-Koma-Delivery-Token"),
     db: Session = Depends(get_db),
 ):
@@ -660,6 +665,9 @@ def confirmar_entrega_motoboy(
         current_status = normalize_to_order_status(comanda.delivery_status)
         if current_status == OrderStatus.COMPLETED:
             return {"status": "sucesso", "mensagem": "Entrega já estava confirmada."}
+
+        from ..services.delivery_receipts import verify_delivery_receipt
+        verify_delivery_receipt(db, comanda, receipt.code if receipt else None)
 
         status_anterior = to_legacy_order_status(current_status)
         _transition_via_application_or_http(

@@ -1,3 +1,4 @@
+import { DeliveryReceiptCode } from "./DeliveryReceiptCode";
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -28,6 +29,7 @@ import CardapioPushNotifications from "./CardapioPushNotifications";
 import { KomaOrderChatIcon } from "./KomaPublicIcons";
 
 interface TrackingPayload {
+  delivery_receipt_code?: string | null;
   status: string;
   state?: OrderStateContract;
   tipo: string;
@@ -294,6 +296,7 @@ export default function CardapioOrderChatPanel({
               ? data.closed_at
               : current?.closed_at || null;
             return {
+              ...current,
               status: data.status as string,
               tipo,
               state,
@@ -493,6 +496,7 @@ export default function CardapioOrderChatPanel({
         ) : null}
       </div>
 
+      {!state.terminal && <DeliveryReceiptCode compact code={tracking?.delivery_receipt_code !== undefined ? tracking.delivery_receipt_code : order.delivery_receipt_code} />}
       <CardapioPushNotifications order={order} />
 
       <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto p-4 sm:p-5" aria-live="polite">

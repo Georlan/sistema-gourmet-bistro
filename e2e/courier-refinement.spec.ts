@@ -2,6 +2,13 @@ import { test, expect, type Page } from '@playwright/test';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 const API = 'http://127.0.0.1:8000';
+test.beforeEach(async ({ page, baseURL }) => {
+  await page.route('**/*', route => {
+    const origin = new URL(route.request().url()).origin;
+    if (origin !== new URL(baseURL!).origin && origin !== API) return route.abort();
+    return route.fallback();
+  });
+});
 const delivery = {
   id:'courier-test-101', numero_pedido:101, cliente_nome:'Ana Oliveira', delivery_telefone:'85999990001',
   delivery_endereco:'Rua dos Ipês, 245 · Centro — Casa azul, portão branco', delivery_taxa:7,delivery_status:'transito',
@@ -12,7 +19,7 @@ async function fixture(page:Page, deliveries = [delivery]) {
   await page.route(`${API}/**`, route => route.fulfill({json:{motoboy:profile,entregas:deliveries}}));
 }
 async function open(page:Page) {
-  await page.goto('/entregador#token=local-courier-test-secret');
+  await page.goto('/entregador#token=local-courier-test-secret', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading',{name:'Suas entregas'})).toBeVisible();
 }
 test('sessão por aba, links corretos, detalhes sob demanda e confirmação protegida',async({page})=>{
@@ -124,4 +131,55 @@ test('endereço e telefone ausentes não geram links vazios; abrir detalhes por 
   const summary=page.locator('summary');
   await summary.focus();await summary.press('Enter');
   await expect(page.getByText(delivery.itens_resumo)).toBeVisible();
+});
+
+test('viagem: sequência persiste no reload, avança após entrega e outro acesso não herda pedidos', async ({page}) => {
+  let deliveries = [delivery, {...delivery,id:'second',numero_pedido:102,cliente_nome:'Marcos'}];
+  let posts = 0;
+  await page.route(`${API}/**`, route => {
+    if (route.request().method() === 'POST') { posts++; deliveries = deliveries.filter(item=>item.id !== 'second'); return route.fulfill({json:{status:'sucesso'}}); }
+    return route.fulfill({json:{motoboy:profile,entregas:deliveries}});
+  });
+  await open(page);
+  await page.getByRole('button',{name:'Organizar viagem'}).click();
+  await page.getByRole('checkbox',{name:/#101/}).check();
+  await page.getByRole('checkbox',{name:/#102/}).check();
+  await page.getByRole('button',{name:'Antecipar pedido 102'}).click();
+  await page.getByRole('button',{name:'Usar sequência'}).click();
+  await expect(page.getByRole('article').first()).toHaveAttribute('aria-label','Pedido 102');
+  await expect(page.getByRole('article').first()).toContainText('Próxima da sua sequência');
+  expect(posts).toBe(0);
+  await page.reload();
+  await expect(page.getByRole('article').first()).toHaveAttribute('aria-label','Pedido 102');
+  await page.getByRole('article').first().getByRole('button',{name:'Concluir entrega'}).click();
+  await page.getByRole('button',{name:'Confirmar entrega',exact:true}).click();
+  await expect(page.getByRole('article').first()).toHaveAttribute('aria-label','Pedido 101');
+  await expect(page.getByRole('article').first()).toContainText('Próxima da sua sequência');
+  expect(posts).toBe(1);
+  await page.evaluate(()=> { location.hash='token=another-local-courier-secret'; });
+  await expect(page.getByRole('button',{name:'Organizar viagem'})).toBeVisible();
+  await expect(page.getByText('Próxima da sua sequência')).toHaveCount(0);
+  expect(await page.evaluate(()=>JSON.stringify(Object.keys(sessionStorage)))).not.toContain('another-local-courier-secret');
+});
+
+test('recebimento: campo único numérico, zeros iniciais, erro mantém formulário e Enter confirma', async({page}) => {
+  await fixture(page,[{...delivery,requires_delivery_code:true} as any]);
+  const codes:string[]=[];
+  await page.route(`${API}/comandas/motoboys/pedidos/*/confirmar-entrega`,route=>{
+    const code=route.request().postDataJSON().code;codes.push(code);
+    return route.fulfill(code==='001234'?{json:{status:'sucesso'}}:{status:422,json:{detail:'Código incorreto. Confira os 6 dígitos com o cliente.'}});
+  });
+  await open(page);
+  await page.getByRole('button',{name:'Concluir entrega'}).click();
+  const input=page.getByLabel('Código informado pelo cliente');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveAttribute('inputmode','numeric');
+  await input.fill('111111');await input.press('Enter');
+  await expect(page.getByRole('alert')).toContainText('Código incorreto');
+  await expect(input).toBeFocused();
+  await input.fill('001234');
+  expect(codes).toEqual(['111111']);
+  await input.press('Enter');
+  await expect(page.getByRole('heading',{name:'Tudo entregue'})).toBeVisible();
+  expect(codes).toEqual(['111111','001234']);
 });

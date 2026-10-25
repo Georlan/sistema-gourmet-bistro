@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { DeliveryReceiptCode } from './DeliveryReceiptCode';
 import { useActivePromotions } from '../useActivePromotions';
 import { getFulfillmentAvailability } from '../fulfillment';
 import { smartSearchMatch } from '../../domain';
@@ -681,6 +682,8 @@ export function CardapioArtisticExperience({
               )}
             </div>
           </div>
+
+          {!activeState.terminal && <DeliveryReceiptCode code={activeOrder.delivery_receipt_code} />}
 
           {!activeState.rejected && activeState.phase === 'payment_pending' ? (
             <div className="koma-art-tracker-pix-note">

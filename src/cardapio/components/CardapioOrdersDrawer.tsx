@@ -1,3 +1,4 @@
+import { DeliveryReceiptCode } from "./DeliveryReceiptCode";
 import PixCopyCode from "./PixCopyCode";
 /**
  * @license
@@ -41,6 +42,7 @@ interface CardapioOrdersDrawerProps {
     closedAt: string | null,
     tipo?: string,
     state?: OrderStateContract,
+    deliveryReceiptCode?: string | null,
   ) => void;
   onRealtimeRefresh?: () => void;
   isRefreshing?: boolean;
@@ -94,6 +96,7 @@ export default function CardapioOrdersDrawer({
   const [chatOrderId, setChatOrderId] = React.useState<string | null>(null);
   const [pixModalOrder, setPixModalOrder] = React.useState<StoredOrder | null>(null);
   const [floatingOpen, setFloatingOpen] = React.useState(false);
+  const [receiptByOrder, setReceiptByOrder] = React.useState<Record<string, string | null>>({});
   const [unreadByOrder, setUnreadByOrder] = React.useState<Record<string, number>>({});
   const [requestedPushOrder, setRequestedPushOrder] = React.useState<RequestedPushOrder | null>(
     () => requestedPushOrderFromHash(),
@@ -139,12 +142,14 @@ export default function CardapioOrdersDrawer({
           );
           if (!response.ok) return null;
           const payload = await response.json() as {
+            delivery_receipt_code?: string | null;
             status?: string;
             tipo?: string;
             state?: OrderStateContract;
             closed_at?: string | null;
             conversa?: { unread_count?: number };
           };
+          setReceiptByOrder(current => ({ ...current, [order.id]: payload.delivery_receipt_code || null }));
           if (payload.status) {
             onRealtimeStatus?.(
               order.id,
@@ -152,6 +157,7 @@ export default function CardapioOrdersDrawer({
               payload.closed_at || null,
               payload.tipo,
               payload.state,
+              payload.delivery_receipt_code || null,
             );
           }
           return [order.id, Math.max(0, Number(payload?.conversa?.unread_count || 0))] as const;
@@ -676,6 +682,7 @@ export default function CardapioOrdersDrawer({
                           </div>
                         </div>
 
+                        {!state.terminal && <DeliveryReceiptCode code={receiptByOrder[order.id]} />}
                         {Array.isArray(order.itens) && order.itens.length > 0 && (
                           <div className="mt-2.5 space-y-0.5 border-t border-koma-border/60 pt-2 text-[10px] text-koma-muted">
                             {order.itens.slice(0, 3).map((item, idx) => (
