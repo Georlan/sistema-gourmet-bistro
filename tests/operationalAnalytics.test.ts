@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSignalBudget, observeOperationalFetch, operationalEndpoint, type OperationalSignal } from '../src/analytics/operational';
+import { createSignalBudget, observeOperationalFetch, operationalEndpoint, operationalArea, type OperationalSignal } from '../src/analytics/operational';
 
 test('endpoint telemetry removes identifiers, tokens, query strings and third party URLs', () => {
   assert.equal(operationalEndpoint('/api/comandas/private-name/status?token=secret', 'https://api.test', 'https://api.test/'), '/api/comandas/:id/status');
@@ -56,4 +56,28 @@ test('slow signals exclude external requests and streaming responses', async () 
 
 test('SaaS billing endpoints retain diagnostic meaning without contract identifiers', () => {
   assert.equal(operationalEndpoint('https://api.test/api/contracts/KOMA-CTR-private/billing/setup?token=secret', 'https://api.test', 'https://app.test/'), '/api/contracts/:id/billing/setup');
+});
+
+
+test('operational correlation accepts every safe request ID accepted by the backend', async () => {
+  const signals: OperationalSignal[] = [];
+  const response = new Response(null, { status: 422, headers: { 'X-Request-ID': 'req-safe_ID-12' } });
+  const observed = observeOperationalFetch(async () => response, 'https://api.test', 'https://app.test/', signal => signals.push(signal));
+  await observed('https://api.test/cardapio/pedidos');
+  assert.equal(signals[0].request_id, 'req-safe_ID-12');
+});
+
+
+test('shared API signals separate printing, payments, orders and deliveries without personal data', () => {
+  for (const [path, area] of [
+    ['/api/print-agents/private/jobs', 'printing'], ['/api/comandas/private/reimprimir', 'printing'],
+    ['/api/comandas/private/pagamentos', 'payments'], ['/api/contracts/private/billing/setup', 'payments'],
+    ['/cardapio/pedidos', 'orders'], ['/api/entregadores/private', 'delivery'],
+    ['/api/produtos/private', 'catalog'], ['/auth/login', 'auth'], ['/something/private', 'other'],
+  ]) {
+    const endpoint = operationalEndpoint(`https://api.test${path}?token=secret`, 'https://api.test', 'https://app.test/')!;
+    assert.equal(operationalArea(endpoint), area);
+    assert.equal(endpoint.includes('private'), false);
+    assert.equal(endpoint.includes('secret'), false);
+  }
 });

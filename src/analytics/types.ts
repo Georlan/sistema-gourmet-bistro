@@ -61,6 +61,7 @@ export interface PublicOrderSubmittedProps {
 }
 
 export interface AnalyticsEventMap {
+  public_checkout_result: import('./checkoutDiagnostic').CheckoutDiagnosticSignal;
   operational_action: { action: 'cashier_navigation' | 'signup_checkout'; target: string; outcome: 'requested' | 'succeeded' | 'failed' | 'blocked' };
   operational_api_signal: import('./operational').OperationalSignal;
   operational_screen_viewed: { screen: string; sub_screen: string; surface: 'cashier' };
