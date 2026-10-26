@@ -138,3 +138,16 @@ provedor de pagamento e regras locais de formulário precisam de evidência pró
 sucesso HTTP ou ausência de sinal não comprovam esses efeitos. Esta fundação não
 instala um capturador global de payloads ou mensagens de WebSocket. Os registros
 canônicos de fila/PrintJob, pagamentos e reconexão continuam sendo a autoridade.
+
+### Envelope obrigatório de ingestão
+
+O SDK adiciona `properties.token` com a **chave pública do projeto PostHog**.
+Removê-la em `before_send` faz o SDK 1.437 descartar todos os eventos antes da
+rede. O sanitizador de transporte agora repõe exclusivamente a chave configurada
+no inicializador, depois de remover os campos sensíveis. Nunca reutiliza o valor
+`token` recebido do chamador; JWTs, capabilities, tokens aninhados e dados pessoais
+continuam removidos. O buffer de negócio/debug continua sem tokens.
+
+A regressão usa o SDK instalado em um build de produção com chave pública
+fictícia e destino loopback interceptado no Playwright. Verifica aceitação pelo
+SDK, privacidade e chegada ao transporte, sem credenciais ou serviços de produção.

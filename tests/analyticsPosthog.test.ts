@@ -8,6 +8,7 @@ import {
   initAnalytics,
   isAnalyticsActive,
   resetAnalytics,
+  sanitizePostHogProperties,
   setRestaurantGroup,
   trackAnalyticsEvent,
 } from '../src/analytics';
@@ -222,4 +223,21 @@ test('SDK URL metadata never retains public tracking capability tokens', () => {
   assert.equal(p.$current_url, 'https://app.example.test/acompanhar/:id');
   assert.equal(p.$pathname, '/acompanhar/:id');
   assert.equal(p.$referrer, 'https://app.example.test/ativar/:id');
+});
+
+
+test('SDK envelope preserves only its configured public project key while removing application credentials', () => {
+  const properties = sanitizePostHogProperties({
+    token: 'application-jwt', access_token: 'secret-jwt', password: 'secret-password',
+    customer_phone: 'private-phone', nested: { token: 'private-capability', useful: true },
+    request_id: 'req-safe_ID-12', support_code: 'req-safe_ID-',
+  }, 'phc_fixture_public_project');
+  assert.equal(properties.token, 'phc_fixture_public_project');
+  assert.equal(properties.request_id, 'req-safe_ID-12');
+  assert.deepEqual(properties.nested, { useful: true });
+  assert.equal(properties.access_token, undefined);
+  assert.equal(properties.password, undefined);
+  assert.equal(properties.customer_phone, undefined);
+  assert.equal(JSON.stringify(properties).includes('secret-'), false);
+  assert.equal(JSON.stringify(properties).includes('private-'), false);
 });

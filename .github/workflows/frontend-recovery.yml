@@ -6,6 +6,7 @@ on:
       - 'src/analytics/**'
       - 'src/components/auth/AppRecoveryBoundary.tsx'
       - 'e2e/app-recovery.spec.ts'
+      - 'e2e/analytics-ingestion.spec.ts'
       - '.github/workflows/frontend-recovery.yml'
 permissions:
   contents: read
@@ -23,7 +24,10 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run build
-      - run: npm run test:e2e -- e2e/app-recovery.spec.ts --project=mobile-390 --project=desktop-1366 --workers=2
+        env:
+          VITE_POSTHOG_PROJECT_TOKEN: phc_fixture_public_project
+          VITE_POSTHOG_HOST: http://127.0.0.1:7999
+      - run: npm run test:e2e -- e2e/app-recovery.spec.ts e2e/analytics-ingestion.spec.ts --project=mobile-390 --project=desktop-1366 --workers=2
         env:
           KOMA_E2E_PORT: '4297'
           KOMA_E2E_PREVIEW: 'true'

@@ -61,6 +61,11 @@ function sanitizeProperties<T extends Record<string, any>>(props?: T, depth = 0)
   return clean;
 }
 
+/** SDK transport needs its configured public project key; business/tenant tokens stay stripped. */
+export function sanitizePostHogProperties(properties: Record<string, any> | undefined, projectToken: string): Record<string, any> {
+  return { ...sanitizeProperties(properties), token: projectToken };
+}
+
 function cleanCapabilityPath(path: string): string {
   return path.split(/[?#]/, 1)[0].replace(/\/(acompanhar|ativar|recuperar-senha|confirmar-cadastro)(?:\/[^/]+)+/g, '/$1/:id');
 }
@@ -177,7 +182,7 @@ export function initAnalytics(): Promise<boolean> {
           capture_console_errors: false,
         },
         before_send: event => {
-          if (event?.properties) event.properties = sanitizeProperties(event.properties);
+          if (event?.properties) event.properties = sanitizePostHogProperties(event.properties, projectToken);
           return event;
         },
         // Desabilita endpoint /decide e injeção remota de scripts (toolbar/surveys/flags) em conformidade com CSP
