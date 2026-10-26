@@ -97,3 +97,54 @@ for (const missing of ['id', 'nome', 'role']) test(`sessão incompleta sem ${mis
   assert.equal(sessionStorage.getItem('koma_caixa_token'), null);
   useTab(intact); assert.equal(getOperatorAccessToken(), 'intact');
 });
+
+test('consultar uma sessão válida não regrava seu registro ou aliases', () => {
+  saveOperatorSession('read-only', user('reader', 5));
+  const tab = sessionStorage;
+  const original = tab.setItem;
+  let writes = 0;
+  tab.setItem = (...args) => { writes++; original(...args); };
+  for (let i=0;i<30;i++) assert.equal(getOperatorAccessToken(), 'read-only');
+  assert.equal(writes, 0);
+});
+
+test('identidade de garçom não pode restaurar sessão de caixa', () => {
+  saveOperatorSession('scoped', user('waiter', 5, 'garcom'));
+  const snapshot = sessionStorage.getItem('koma_operator_session_garcom')!;
+  sessionStorage.setItem('koma_operator_session_caixa', snapshot);
+  sessionStorage.setItem('koma_caixa_token', 'scoped');
+  sessionStorage.setItem('koma_active_operational_portal', 'caixa');
+  assert.equal(getOperatorSession(), null);
+});
+
+test('armazenamento de aba bloqueado não adota autenticação compartilhada', () => {
+  localStorage.setItem('koma_caixa_token','shared');
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'sessionStorage');
+  Object.defineProperty(globalThis, 'sessionStorage', { configurable:true, get(){throw new Error('blocked');} });
+  try {
+    assert.equal(getOperatorSession(),null);
+    assert.equal(getPersistedOperationalPortal(),null);
+    assert.doesNotThrow(()=>clearOperatorSession());
+    assert.throws(()=>saveOperatorSession('new',user('new',5)),/guardar a sessão nesta aba/);
+  } finally { Object.defineProperty(globalThis, 'sessionStorage', original!); }
+});
+
+test('falha de escrita não deixa registro canônico parcial autenticado', () => {
+  const tab = sessionStorage;
+  tab.setItem = () => { throw new Error('quota'); };
+  assert.throws(()=>saveOperatorSession('new',user('new',5)),/guardar a sessão nesta aba/);
+  assert.equal(getOperatorSession(),null);
+});
+
+test('login e logout notificam somente a janela atual, sem polling', async () => {
+  const {subscribeOperatorSession}=await import('../src/utils/authSession');
+  const beforeWindow=(globalThis as any).window,beforeDocument=(globalThis as any).document;
+  const tabWindow=new EventTarget(),tabDocument=Object.assign(new EventTarget(),{visibilityState:'visible'});
+  (globalThis as any).window=tabWindow;(globalThis as any).document=tabDocument;
+  let notifications=0;const stop=subscribeOperatorSession(()=>notifications++);
+  try {
+    saveOperatorSession('events',user('events',5));assert.equal(notifications,1);
+    clearOperatorSession();assert.equal(notifications,2);
+    stop();tabWindow.dispatchEvent(new Event('focus'));assert.equal(notifications,2);
+  } finally {stop();(globalThis as any).window=beforeWindow;(globalThis as any).document=beforeDocument;}
+});

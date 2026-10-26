@@ -4,6 +4,7 @@
  */
 
 import type { PostHog } from 'posthog-js';
+import { resolveKomaHost } from '../domain/komaHost';
 import { API_BASE_URL } from '../config/api';
 import { observeOperationalFetch } from './operational';
 import type {
@@ -184,6 +185,8 @@ export function initAnalytics(): Promise<boolean> {
         // Permite ingestão de sessões automatizadas e testes de navegador (Headless/WebDriver)
         opt_out_useragent_filter: true,
         persistence: 'localStorage+cookie',
+        // Operator accounts coexist in tabs; never restore or reset a shared identity.
+        disable_persistence: ['caixa', 'garcom', 'entregador'].includes(resolveKomaHost().surface),
       });
       posthog.register({
         frontend_build_sha: import.meta.env.VITE_BUILD_SHA || 'unknown',

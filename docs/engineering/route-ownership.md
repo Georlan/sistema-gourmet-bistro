@@ -13,6 +13,7 @@ as sobreposições HTTP de R06. Não é comprovante de deploy.
 | Mesa, conta, família e compatibilidade de criação | `routes/atendimentos.py`; callbacks explícitos em `orders.py` / `orders_core.py` delegam aos adapters e ao Order Core |
 | Status e despacho delivery | `routes/orders.py`; sem versões concorrentes no core |
 | App do Entregador | Uma apresentação em `MotoboyPwaPage.tsx` para `/entregador` e aliases; GET painel em `routes/orders_core.py`, confirmação em `routes/orders.py`, socket privado em `routes/websocket.py` |
+| Login do Entregador | `UnifiedOperationalEntry` usa `/auth/login` e troca o JWT transitoriamente em `POST /comandas/motoboys/me/acesso` (`orders_core.py`); o backend seleciona somente o perfil ativo vinculado ao usuário e tenant autenticados |
 | Reimpressão de lançamento | `routes/atendimento_printing.py`; impressão física e agente inalterados |
 | Catálogo e categorias | `routes/products.py`; cardápio público importa a ordenação existente |
 | Perfil e compatibilidade | `routes/caixa.py` mantém aliases de escrita; o GET `/caixa/config-cardapio` pertence somente a `cardapio_config_bridge.py` |

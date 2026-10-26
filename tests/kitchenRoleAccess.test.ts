@@ -1,3 +1,4 @@
+import { resolveStaffDestination } from '../src/utils/staffDestination';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -14,10 +15,8 @@ test('kitchen role is invitable and unified login opens the KDS role path', () =
     people,
     /INVITABLE_ROLES = \['garcom', 'atendente', 'caixa', 'cozinha', 'gerente', 'motoboy'\]/,
   );
-  assert.match(entry, /role === 'atendente' \|\| role === 'cozinha' \|\| MANAGEMENT_ROLES\.has\(role\)/);
-  assert.match(
-    authSession,
-    /role === 'admin' \|\| role === 'gerente' \|\| role === 'caixa' \|\| role === 'atendente' \|\| role === 'cozinha'/,
-  );
+  assert.equal(resolveStaffDestination('cozinha'), 'caixa');
+  assert.match(entry, /parseStaffLogin/);
+  assert.match(authSession, /resolveOperationalPortal/);
   assert.match(app, /activeRole === 'cozinha'[\s\S]*<KitchenPanel/);
 });

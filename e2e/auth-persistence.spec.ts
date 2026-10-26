@@ -47,6 +47,7 @@ async function removePortalAlias(page: Page, portal: 'garcom' | 'caixa') {
       ? ['koma_waiter_token', 'koma_waiter_id', 'koma_waiter_name', 'koma_user_role']
       : ['koma_caixa_token', 'koma_caixa_id', 'koma_caixa_name', 'koma_caixa_user_id', 'koma_caixa_user_name', 'koma_caixa_role'];
     for (const key of keys) sessionStorage.removeItem(key);
+    window.dispatchEvent(new Event('focus')); // Revalidation when a legacy tab returns to the foreground.
   }, portal);
 }
 
@@ -590,3 +591,112 @@ test(`401 de ${endpoint} ${replaceCredential ? 'antigo preserva credencial subst
 });
 }
 }
+
+const cashierIdentity = {id:'owner-cashier',nome:'Caixa independente',role:'caixa',restaurante_id:5};
+const cashierReply: LoginReply = route => route.fulfill({json:{access_token:'owner-token',usuario:cashierIdentity}});
+
+test('aba aberta pela autenticada não herda o login e não encerra a original',async({page})=>{
+  await installOperationalApi(page,cashierReply);
+  await page.goto(CANONICAL_OPERATIONAL_PATH); await submitLogin(page,'owner@koma.test','senha');
+  await expect(page.getByLabel('E-MAIL')).toHaveCount(0);
+  const popupPromise=page.waitForEvent('popup');
+  await page.evaluate(()=>window.open('about:blank','_blank'));
+  const popup=await popupPromise;
+  await installOperationalApi(popup,cashierReply);
+  await popup.goto(CANONICAL_OPERATIONAL_PATH);
+  await expect(popup.getByLabel('E-MAIL')).toBeVisible();
+  expect(await popup.evaluate(()=>sessionStorage.getItem('koma_caixa_token'))).toBeNull();
+  expect(await page.evaluate(()=>sessionStorage.getItem('koma_caixa_token'))).toBe('owner-token');
+  await page.reload();
+  await expect(page.getByLabel('E-MAIL')).toHaveCount(0);
+});
+
+test('cópia do armazenamento sem opener pede login e cria identidade de aba independente',async({page,context})=>{
+  await installOperationalApi(page,cashierReply);
+  await page.goto(CANONICAL_OPERATIONAL_PATH); await submitLogin(page,'owner@koma.test','senha');
+  await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem('koma_caixa_token'))).toBe('owner-token');
+  const copied=await page.evaluate(()=>Object.entries(sessionStorage));
+  const duplicate=await context.newPage();
+  await duplicate.addInitScript(values=>{
+    if(sessionStorage.getItem('fixture-clone-seeded'))return;
+    for(const [key,value] of values)sessionStorage.setItem(key,value);
+    sessionStorage.setItem('fixture-clone-seeded','1');
+  },copied);
+  await installOperationalApi(duplicate,async route=>route.fulfill({json:{access_token:'other-token',usuario:{...cashierIdentity,id:'other-cashier',restaurante_id:2}}}));
+  await duplicate.goto(CANONICAL_OPERATIONAL_PATH);
+  await expect(duplicate.getByLabel('E-MAIL')).toBeVisible();
+  await submitLogin(duplicate,'other@koma.test','senha');
+  await expect.poll(()=>duplicate.evaluate(()=>sessionStorage.getItem('koma_caixa_token'))).toBe('other-token');
+  await duplicate.reload();
+  await expect(duplicate.getByLabel('E-MAIL')).toHaveCount(0);
+  expect(await page.evaluate(()=>sessionStorage.getItem('koma_caixa_token'))).toBe('owner-token');
+  expect(await duplicate.evaluate(()=>sessionStorage.getItem('koma_caixa_token'))).toBe('other-token');
+  expect(await duplicate.evaluate(()=>sessionStorage.getItem('koma_auth_tab_id_v1'))).not.toBe(await page.evaluate(()=>sessionStorage.getItem('koma_auth_tab_id_v1')));
+});
+
+test('entregador entra pelo login, recebe acesso restrito e sai somente desta aba',async({page})=>{
+  await installOperationalApi(page,async route=>route.fulfill({json:{access_token:'staff-exchange-only',usuario:{id:'courier-user',nome:'Entregador autenticado',cargo:'motoboy',restaurante_id:5}}}));
+  let exchanges=0;
+  await page.route(`${API_ORIGIN}/comandas/motoboys/me/acesso`,async route=>{
+    exchanges++;expect(route.request().headers().authorization).toBe('Bearer staff-exchange-only');
+    await route.fulfill({json:{token:'delivery-narrow-token'}});
+  });
+  await page.route(`${API_ORIGIN}/comandas/motoboys/painel-entregador`,async route=>{
+    expect(route.request().headers()['x-koma-delivery-token']).toBe('delivery-narrow-token');
+    await route.fulfill({json:{motoboy:{id:10,nome:'Entregador autenticado'},entregas:[]}});
+  });
+  await page.goto(CANONICAL_OPERATIONAL_PATH);await submitLogin(page,'courier@koma.test','senha');
+  await expect(page.getByRole('heading',{name:'Entregas 0'})).toBeVisible();
+  expect(exchanges).toBe(1);
+  expect(await page.evaluate(()=>Object.values(sessionStorage).some(value=>value.includes('staff-exchange-only')))).toBe(false);
+  await page.reload();
+  await expect(page.getByRole('heading',{name:'Entregas 0'})).toBeVisible();
+  await page.getByRole('button',{name:'Sair das entregas'}).click();
+  await expect(page.getByLabel('E-MAIL')).toBeVisible();
+  expect(await page.evaluate(()=>sessionStorage.getItem('koma_entregador_session_token'))).toBeNull();
+});
+
+test('troca negada para entregador não persiste o JWT de equipe nem simula login concluído',async({page})=>{
+  await installOperationalApi(page,async route=>route.fulfill({json:{access_token:'denied-staff',usuario:{id:'courier-user',nome:'Entregador',role:'motoboy',restaurante_id:5}}}));
+  await page.route(`${API_ORIGIN}/comandas/motoboys/me/acesso`,route=>route.fulfill({status:403,json:{detail:'Seu perfil de entregador não está ativo. Consulte o Caixa.'}}));
+  await page.goto(CANONICAL_OPERATIONAL_PATH);await submitLogin(page,'courier@koma.test','senha');
+  await expect(page.getByRole('alert')).toContainText('perfil de entregador não está ativo');
+  expect(await page.evaluate(()=>Object.values(sessionStorage).some(value=>value.includes('denied-staff')))).toBe(false);
+  expect(await page.evaluate(()=>sessionStorage.getItem('koma_entregador_session_token'))).toBeNull();
+});
+
+test('vencimento do JWT retorna ao login sem um intervalo de vigilância',async({page})=>{
+  await page.clock.install();
+  const exp=Math.floor(await page.evaluate(()=>Date.now())/1000)+60;
+  const token='header.'+Buffer.from(JSON.stringify({exp})).toString('base64url')+'.signature';
+  await installOperationalApi(page,async route=>route.fulfill({json:{access_token:token,usuario:{id:'expiry-user',nome:'Garçom temporário',role:'garcom',restaurante_id:5}}}));
+  await page.goto(CANONICAL_OPERATIONAL_PATH);await submitLogin(page,'expiry@koma.test','senha');
+  await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem('koma_waiter_token'))).toBe(token);
+  await page.clock.fastForward(61_000);
+  await expect(page.getByLabel('E-MAIL')).toBeVisible();
+  expect(await page.evaluate(()=>sessionStorage.getItem('koma_waiter_token'))).toBeNull();
+});
+
+test('storage bloqueado apresenta erro de sessão sem simular login persistido',async({page})=>{
+  await page.addInitScript(()=>Object.defineProperty(window,'sessionStorage',{configurable:true,get(){throw new DOMException('blocked','SecurityError');}}));
+  await installOperationalApi(page,cashierReply);
+  await page.goto(CANONICAL_OPERATIONAL_PATH);await submitLogin(page,'owner@koma.test','senha');
+  await expect(page.getByRole('alert')).toContainText('guardar a sessão nesta aba');
+  await expect(page.getByRole('button',{name:'Entrar',exact:true})).toBeEnabled();
+});
+
+test('API de isolamento bloqueada não deixa a entrada em branco nem adota uma cópia de acesso',async({page})=>{
+  const authorization:string[]=[];
+  await page.addInitScript(()=>{
+    Object.defineProperty(navigator,'locks',{configurable:true,get(){throw new DOMException('blocked','SecurityError');}});
+    sessionStorage.setItem('koma_auth_tab_id_v1','copied-id');
+    sessionStorage.setItem('koma_active_operational_portal','caixa');
+    sessionStorage.setItem('koma_caixa_token','copied-token');
+    sessionStorage.setItem('koma_operator_session_caixa',JSON.stringify({token:'copied-token',user:{id:'copied',nome:'Copied',role:'caixa',restaurante_id:5},expiresAt:Date.now()+60000}));
+  });
+  await installOperationalApi(page,cashierReply,authorization);
+  await page.goto(CANONICAL_OPERATIONAL_PATH);
+  await expect(page.getByLabel('E-MAIL')).toBeVisible();
+  expect(await page.evaluate(()=>sessionStorage.getItem('koma_caixa_token'))).toBeNull();
+  expect(authorization).toEqual([]);
+});

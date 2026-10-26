@@ -1,3 +1,6 @@
+import { normalizeStaffRole, resolveOperationalPortal, type OperationalPortal } from './staffDestination';
+export type { OperationalPortal } from './staffDestination';
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -17,7 +20,11 @@ export interface OperatorSession {
   expiresAt: number; // Timestamp de expiração em milissegundos
 }
 
-export type OperationalPortal = 'caixa' | 'garcom';
+export const OPERATOR_SESSION_CHANGED = 'koma-operator-session-changed';
+
+function notifySessionChanged(): void {
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') window.dispatchEvent(new Event(OPERATOR_SESSION_CHANGED));
+}
 
 const LEGACY_SESSION_KEY = 'koma_operator_session';
 const SESSION_KEY_BY_PORTAL: Record<OperationalPortal, string> = {
@@ -53,33 +60,31 @@ function minimalOperatorIdentity(user: any): OperatorIdentitySnapshot {
   return snapshot;
 }
 
-function identityPortal(user: OperatorIdentitySnapshot): OperationalPortal | null {
-  const role = String(user.role || user.cargo || '').trim().toLowerCase();
-  if (role === 'garcom') return 'garcom';
-  if (role === 'admin' || role === 'gerente' || role === 'caixa' || role === 'atendente' || role === 'cozinha') return 'caixa';
-  return null;
-}
-
 function getTabStorage(): Storage | null {
-  return typeof sessionStorage === 'undefined' ? null : sessionStorage;
+  try { return typeof sessionStorage === 'undefined' ? null : sessionStorage; }
+  catch { return null; }
 }
 
 function clearKeys(storage: Storage | null, keys: readonly string[]): void {
-  for (const key of keys) storage?.removeItem(key);
+  for (const key of keys) {
+    try { if (storage?.getItem(key) !== null) storage?.removeItem(key); } catch { /* Storage may be blocked. */ }
+  }
 }
 
 function getTabPortal(): OperationalPortal | null {
-  const value = getTabStorage()?.getItem(ACTIVE_PORTAL_KEY);
+  let value: string | null = null;
+  try { value = getTabStorage()?.getItem(ACTIVE_PORTAL_KEY) ?? null; } catch { return null; }
   return value === 'caixa' || value === 'garcom' ? value : null;
 }
 
 function discardSharedAuthentication(): void {
   // O token compartilhado pode ter sido substituído por outra aba. Não é
   // possível atribuí-lo com segurança à aba antiga: exigir novo login.
-  if (typeof localStorage === 'undefined') return;
-  localStorage.removeItem('token');
-  clearKeys(localStorage, [LEGACY_SESSION_KEY, ...Object.values(SESSION_KEY_BY_PORTAL),
-    'koma_last_operational_portal', ...CAIXA_ALIAS_KEYS, ...WAITER_ALIAS_KEYS]);
+  try {
+    if (typeof localStorage === 'undefined') return;
+    clearKeys(localStorage, ['token', LEGACY_SESSION_KEY, ...Object.values(SESSION_KEY_BY_PORTAL),
+      'koma_last_operational_portal', ...CAIXA_ALIAS_KEYS, ...WAITER_ALIAS_KEYS]);
+  } catch { /* Shared storage is never a source of authentication. */ }
 }
 
 function readJwtExpiryMs(token: string): number | null {
@@ -109,10 +114,11 @@ export function getOperatorSession(portal?: OperationalPortal): OperatorSession 
   discardSharedAuthentication();
   const storage = getTabStorage();
   const selectedPortal = portal || getTabPortal();
-  if (!storage || !selectedPortal || storage.getItem(LOGGED_OUT_TAB_KEY)) return null;
-  const raw = storage.getItem(SESSION_KEY_BY_PORTAL[selectedPortal]);
-  let parsed: OperatorSession;
+  if (!storage || !selectedPortal) return null;
   try {
+    if (storage.getItem(LOGGED_OUT_TAB_KEY)) return null;
+    const raw = storage.getItem(SESSION_KEY_BY_PORTAL[selectedPortal]);
+    let parsed: OperatorSession;
     if (raw) {
       parsed = JSON.parse(raw);
       const aliasKey = selectedPortal === 'garcom' ? 'koma_waiter_token' : 'koma_caixa_token';
@@ -134,12 +140,14 @@ export function getOperatorSession(portal?: OperationalPortal): OperatorSession 
     const user = minimalOperatorIdentity(parsed.user);
     // Sem identidade recuperável o App não consegue carregar seu escopo.
     // A presença do token na aba, sozinha, não restaura uma sessão operacional.
-    if (!user.id || !user.nome?.trim() || !identityPortal(user)) throw new Error('Incomplete session identity');
+    if (!user.id || !user.nome?.trim() || !resolveOperationalPortal(user)) throw new Error('Incomplete session identity');
+    const role = normalizeStaffRole(user);
+    if (resolveOperationalPortal(user) !== selectedPortal && !(selectedPortal === 'garcom' && role === 'admin')) throw new Error('Session portal mismatch');
     const session = { token: parsed.token, user, expiresAt };
-    storage.setItem(SESSION_KEY_BY_PORTAL[selectedPortal], JSON.stringify(session));
+    if (!raw) storage.setItem(SESSION_KEY_BY_PORTAL[selectedPortal], JSON.stringify(session));
     return session;
   } catch {
-    clearOperatorSession(selectedPortal);
+    clearOperatorSession(selectedPortal, false);
     return null;
   }
 }
@@ -148,10 +156,11 @@ export function saveOperatorSession(token: string, user: any, requestedPortal?: 
   discardSharedAuthentication();
   const storage = getTabStorage();
   const minimalUser = minimalOperatorIdentity(user);
-  const defaultPortal = identityPortal(minimalUser);
-  const portal = requestedPortal === 'garcom' && minimalUser.role === 'admin'
+  const defaultPortal = resolveOperationalPortal(minimalUser);
+  const portal = requestedPortal === 'garcom' && normalizeStaffRole(minimalUser) === 'admin'
     ? 'garcom' : defaultPortal;
-  if (!storage || !portal) return;
+  if (!storage) throw new Error('Não foi possível guardar a sessão nesta aba. Permita o armazenamento do site e tente novamente.');
+  if (!portal) throw new Error('Este perfil não possui acesso operacional.');
   const previous = getOperatorSession();
   if (previous && (previous.user.id !== minimalUser.id || previous.user.restaurante_id !== minimalUser.restaurante_id)) {
     clearKeys(storage, ['koma_settings_vFinal_v3', 'koma_restaurant_name_v3',
@@ -160,10 +169,16 @@ export function saveOperatorSession(token: string, user: any, requestedPortal?: 
   // Uma identidade operacional por aba; nenhuma escrita em sessão de outra aba.
   clearKeys(storage, [...Object.values(SESSION_KEY_BY_PORTAL), ...CAIXA_ALIAS_KEYS, ...WAITER_ALIAS_KEYS]);
   const session = { token, user: minimalUser, expiresAt: readJwtExpiryMs(token) ?? Date.now() + FALLBACK_SESSION_MS };
-  storage.setItem(SESSION_KEY_BY_PORTAL[portal], JSON.stringify(session));
-  persistScopedAliases(portal, session);
-  storage.setItem(ACTIVE_PORTAL_KEY, portal);
-  storage.removeItem(LOGGED_OUT_TAB_KEY);
+  try {
+    storage.setItem(SESSION_KEY_BY_PORTAL[portal], JSON.stringify(session));
+    persistScopedAliases(portal, session);
+    storage.setItem(ACTIVE_PORTAL_KEY, portal);
+    storage.removeItem(LOGGED_OUT_TAB_KEY);
+  } catch {
+    clearOperatorSession(undefined, false);
+    throw new Error('Não foi possível guardar a sessão nesta aba. Permita o armazenamento do site e tente novamente.');
+  }
+  notifySessionChanged();
 }
 
 export function getPersistedOperationalPortal(): OperationalPortal | null {
@@ -184,7 +199,7 @@ export function getOperatorAccessToken(): string {
   return portal ? getOperationalAccessToken(portal) : '';
 }
 
-export function clearOperatorSession(portal?: OperationalPortal): void {
+export function clearOperatorSession(portal?: OperationalPortal, notify = true): void {
   discardSharedAuthentication();
   const storage = getTabStorage();
   const selectedPortal = portal || getTabPortal();
@@ -193,6 +208,31 @@ export function clearOperatorSession(portal?: OperationalPortal): void {
     : [...Object.values(SESSION_KEY_BY_PORTAL), ...CAIXA_ALIAS_KEYS, ...WAITER_ALIAS_KEYS]);
   clearKeys(storage, ['koma_settings_vFinal_v3', 'koma_restaurant_name_v3',
     'koma_caixa_selected_table_v3', 'koma_garcom_selected_table_v3', 'koma_onboarding_setup_mode']);
-  storage?.removeItem(ACTIVE_PORTAL_KEY);
-  storage?.setItem(LOGGED_OUT_TAB_KEY, '1');
+  clearKeys(storage, [ACTIVE_PORTAL_KEY]);
+  try { storage?.setItem(LOGGED_OUT_TAB_KEY, '1'); } catch { /* No persistence available. */ }
+  if (notify) notifySessionChanged();
+}
+
+/** Notifications stay in this window: signing out must not sign out other tabs. */
+export function subscribeOperatorSession(listener: () => void): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const scheduleExpiry = () => {
+    clearTimeout(timer);
+    const session = getOperatorSession();
+    if (session) timer = setTimeout(check, Math.min(Math.max(1, session.expiresAt - Date.now() + 1), 2_147_483_647));
+  };
+  const check = () => { listener(); scheduleExpiry(); };
+  const visibility = () => { if (document.visibilityState === 'visible') check(); };
+  window.addEventListener(OPERATOR_SESSION_CHANGED, check);
+  window.addEventListener('focus', check);
+  window.addEventListener('pageshow', check);
+  document.addEventListener('visibilitychange', visibility);
+  scheduleExpiry();
+  return () => {
+    clearTimeout(timer);
+    window.removeEventListener(OPERATOR_SESSION_CHANGED, check);
+    window.removeEventListener('focus', check);
+    window.removeEventListener('pageshow', check);
+    document.removeEventListener('visibilitychange', visibility);
+  };
 }

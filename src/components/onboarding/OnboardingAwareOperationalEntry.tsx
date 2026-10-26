@@ -1,20 +1,12 @@
-import React, { useEffect, useState } from 'react';
-import { getOperatorSession } from '../../utils/authSession';
+import React from 'react';
+import { useOperatorSessionToken } from '../auth/useOperatorSessionToken';
 import { KomaLoading } from '../app/KomaLoading';
 import { OnboardingOperationalBoundary } from './OnboardingOperationalBoundary';
 
 const OperationalApp = React.lazy(() => import('../../App'));
 
 export default function OnboardingAwareOperationalEntry() {
-  const [sessionToken, setSessionToken] = useState(() => getOperatorSession('caixa')?.token || '');
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      const nextToken = getOperatorSession('caixa')?.token || '';
-      setSessionToken((current) => current === nextToken ? current : nextToken);
-    }, 250);
-    return () => window.clearInterval(timer);
-  }, []);
+  const sessionToken = useOperatorSessionToken('caixa');
 
   const app = (
     <React.Suspense fallback={<KomaLoading label="Preparando operação…" />}>

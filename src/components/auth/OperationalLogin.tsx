@@ -59,22 +59,7 @@ export function OperationalLogin({
       : 'Portal do Garçom';
 
   const handleSubmit: React.FormEventHandler<HTMLFormElement> = async (event) => {
-    // O App legado ainda possui um fluxo interno de login que persiste aliases
-    // diretamente. Depois que ele conclui com sucesso, vinculamos explicitamente
-    // esta aba ao portal autenticado. Isso mantém o mesmo isolamento por aba da
-    // entrada unificada e impede que um login em outra guia assuma esta navegação.
     await onSubmit(event);
-
-    if (
-      portal === 'garcom'
-      && (sessionStorage.getItem('koma_waiter_token') || sessionStorage.getItem('authToken'))
-    ) {
-      sessionStorage.setItem('koma_active_operational_portal', 'garcom');
-      sessionStorage.removeItem('koma_operational_logged_out');
-    } else if (portal === 'caixa' && sessionStorage.getItem('koma_caixa_token')) {
-      sessionStorage.setItem('koma_active_operational_portal', 'caixa');
-      sessionStorage.removeItem('koma_operational_logged_out');
-    }
   };
 
   return <AuthPage tools={
