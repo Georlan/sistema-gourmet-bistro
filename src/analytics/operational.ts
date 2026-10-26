@@ -6,13 +6,28 @@ export interface OperationalSignal {
   duration_ms: number;
   outcome: 'http_error' | 'network_error' | 'slow';
   request_id?: string;
+  area?: ReturnType<typeof operationalArea>;
+  surface?: string;
 }
 
 const ROUTE_WORDS = new Set(('api caixa comandas itens lancamentos cardapio pedidos produtos categorias '
   + 'clientes auth login logout refresh turno-atual resumo pagamentos pendentes fechar status '
   + 'print-agents heartbeat jobs claim-batch register configuracoes restaurantes relatorios '
   + 'promocoes dashboard financeiro estoque motoboys entregadores mesas capabilities '
-  + 'contracts payment-methods-v2 subscription billing setup pix select accept activate-free signups current').split(' '));
+  + 'contracts payment-methods-v2 subscription billing setup pix select accept activate-free signups current print-jobs print impressao imprimir reimprimir recibo delivery deliveries entregas payments intents refunds').split(' '));
+
+/** Fixed categories, never inferred from customer text or request bodies. */
+export function operationalArea(endpoint: string): 'printing' | 'payments' | 'orders' | 'delivery' | 'catalog' | 'auth' | 'other' {
+  const parts = new Set(endpoint.split('/'));
+  const has = (...values: string[]) => values.some(value => parts.has(value));
+  if (has('print-agents', 'print-jobs', 'print', 'impressao', 'imprimir', 'reimprimir', 'recibo')) return 'printing';
+  if (has('pagamentos', 'payments', 'billing', 'pix', 'intents', 'refunds')) return 'payments';
+  if (has('motoboys', 'entregadores', 'delivery', 'deliveries', 'entregas')) return 'delivery';
+  if (has('pedidos', 'comandas', 'mesas', 'lancamentos')) return 'orders';
+  if (has('cardapio', 'produtos', 'categorias')) return 'catalog';
+  if (has('auth', 'login', 'logout', 'refresh')) return 'auth';
+  return 'other';
+}
 
 export function operationalEndpoint(input: string, apiOrigin: string, pageUrl: string): string | null {
   try {
@@ -55,7 +70,7 @@ export function observeOperationalFetch(
       if (!endpoint || !accept(`${endpoint}:${method}:${status}:${outcome}`)) return;
       try {
         emit({ endpoint, method, status, outcome, duration_ms: Math.min(120_000, Math.max(0, Math.round(now() - started))),
-          ...(/^[a-f0-9-]{16,64}$/i.test(requestId || '') ? { request_id: requestId! } : {}) });
+          ...(/^[A-Za-z0-9_-]{8,64}$/.test(requestId || '') ? { request_id: requestId! } : {}) });
       } catch { /* Observability must not affect the caller. */ }
     };
     let response: Response;

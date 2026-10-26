@@ -60,3 +60,81 @@ No caminho central, `dead_letter` com motivo de expiração, consentimento revog
 ou canal desativado também é encerramento sem tentativa, quando não há evidência
 de POST ao provedor. Separar essa categoria de recusa HTTP e resposta incerta;
 `attempts` pode incluir reserva/verificação de conexão, não só `sendText`.
+
+## Diagnóstico de envio do Cardápio
+
+`public_checkout_result` complementa o funil existente com **um resultado por
+clique de envio que passou pelas validações locais**, sem um evento por campo.
+Distingue `accepted`, `http_error`, `network_error`, `timeout`, `invalid_response`,
+`catalog_changed`, `ordering_blocked`, `session_expired` e `client_error`.
+Uma rejeição de negócio não equivale a indisponibilidade do sistema; separar
+por resultado, etapa e status ao investigar. Não emitir `$exception` artificial
+para cada 4xx nem ativar replay/autocapture.
+
+Campos permitidos: `restaurant_id` (contexto declarado pelo frontend, não
+credencial/autoridade), `attempt_id` aleatório de 32 caracteres hexadecimais,
+`support_code`, `stage`, `status`, `duration_ms` limitada a 120 s e `request_id`
+validado quando houve resposta. Release e navegador vêm da integração existente.
+Não enviar mensagem da exceção, body, sacola, nome, telefone, endereço,
+idempotency key, token de cliente/tracking ou resposta do pagamento.
+
+O POST usa `X-Request-ID` já aceito pelo backend. Não adiciona endpoint, consulta,
+escrita no banco, worker ou dependência. O GET do catálogo continua sem header
+extra, evitando novo preflight CORS. Cada retry tem outro identificador técnico;
+a **chave de idempotência continua a mesma** quando o conteúdo não mudou. Não
+usar o ID de diagnóstico como autorização ou como chave para criar pedidos.
+
+A falha mostra `Suporte: <código>` copiável junto à orientação existente. O código
+usa o request ID da resposta; se não houve resposta, usa o ID local da tentativa.
+O checkout declara a posse do erro inline usando `fetchWithInlineSupport`
+(um Request marcado somente em memória); o aviso global 5xx não se sobrepõe
+aos erros da atualização do catálogo nem do POST. Não há flag ou header de
+supressão enviado à API. O
+catálogo permanece responsável pelas validações antes do envio. Uma confirmação
+aceita significa pedido confirmado pelo backend, não pagamento aprovado ou
+impressão física.
+
+Limite independente de 20 resultados por 5 minutos por documento. Mesmo acima
+do limite, sem SDK, com bloqueador, ou com falha da coleta, o fluxo e o código de
+suporte continuam funcionando; se não houver gerador criptográfico, omite-se o
+ID local e o evento, preservando o pedido. Não usar essa coleta limitada como
+censo de conversão, total de erros ou SLO. O ring buffer existente guarda somente
+100 eventos em memória; não há fila durável nova nem replay offline.
+
+### Investigar uma reclamação
+
+1. Pedir código de suporte, restaurante e horário aproximado com fuso. Não pedir
+   telefone/documento do consumidor para procurar um erro.
+2. No projeto KÔMA Production (648305), filtrar `public_checkout_result` por
+   `support_code` e período. Conferir etapa, resultado, status, request ID,
+   navegador e release. A ausência do evento não prova ausência de falha.
+3. Consultar `npm run ops:trace -- <código>`; quando houver `request_id`, usar o
+   ID completo também. O comando pesquisa Railway nas últimas 24 h por padrão;
+   ampliar a janela explicitamente quando necessário e houver retenção.
+4. `network_error` pode significar rede, CORS, DNS ou bloqueador: não atribuir
+   causa sem evidência. `timeout` significa confirmação incerta: consultar os
+   registros canônicos, não recriar pedido manualmente. Se o POST não chegou
+   à API ou a resposta se perdeu, pode não existir log correspondente ao código
+   local. Erros na atualização do catálogo usam o ID daquela resposta.
+5. Para erro reproduzível, usar fixture local, nunca pedido sintético no tenant 6.
+   Registrar a correção e comprovar separadamente CI, versão servida e ingestão.
+
+Referências: [OWASP Logging](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet/)
+(interaction identifier e exclusão de dados sensíveis) e
+[PostHog JS](https://posthog.com/docs/libraries/js) (eventos explícitos).
+
+### Cobertura compartilhada entre módulos
+
+Os sinais HTTP existentes agora carregam `surface` (superfície do host) e `area`
+normalizada: `printing`, `payments`, `orders`, `delivery`, `catalog`, `auth` ou
+`other`. A categoria usa somente nomes fixos de rotas, com precedência de
+impressão/pagamentos sobre comandas; segmentos dinâmicos continuam mascarados.
+Isso permite separar falhas de Cardápio, Caixa, Garçom e Entregador sem instalar
+observadores por tela. O budget HTTP existente permanece independente do
+resultado do checkout. Superfície/área ajudam a filtrar; não provam a causa.
+
+Limites: XHR, eventos de WebSocket, falhas físicas de impressora, confirmação do
+provedor de pagamento e regras locais de formulário precisam de evidência própria;
+sucesso HTTP ou ausência de sinal não comprovam esses efeitos. Esta fundação não
+instala um capturador global de payloads ou mensagens de WebSocket. Os registros
+canônicos de fila/PrintJob, pagamentos e reconexão continuam sendo a autoridade.

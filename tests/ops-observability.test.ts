@@ -16,8 +16,8 @@ test("frontend observes API 500 but ignores validation and external responses", 
   const events: Array<{ code: string; requestId: string }> = [];
   const fakeWindow = {
     location: { hostname: "localhost", protocol: "http:", href: "http://localhost:3000/" },
-    fetch: async (input: string) => new Response(null, {
-      status: input.includes("validation") ? 422 : 500,
+    fetch: async (input: RequestInfo | URL, _init?: RequestInit) => new Response(null, {
+      status: String(input).includes("validation") ? 422 : 500,
       headers: { "X-Request-ID": "abcdef1234567890abcdef1234567890" },
     }),
     dispatchEvent: (event: CustomEvent<{ code: string; requestId: string }>) => {
@@ -25,11 +25,17 @@ test("frontend observes API 500 but ignores validation and external responses", 
     },
   };
   Object.assign(globalThis, { window: fakeWindow });
-  const { installSupportCodeObserver } = await import("../src/utils/supportCode");
+  const { installSupportCodeObserver, fetchWithInlineSupport } = await import("../src/utils/supportCode");
   installSupportCodeObserver();
   await fakeWindow.fetch("http://localhost:8000/orders");
   await fakeWindow.fetch("http://localhost:8000/validation");
   await fakeWindow.fetch("https://example.com/error");
+  await fetchWithInlineSupport("http://localhost:8000/cardapio/pedidos", { method: 'POST', headers: { 'X-Request-ID': '1234567890abcdef1234567890abcdef' } });
+  const catalogRequest = new Request('http://localhost:8000/api/cardapio-digital/public', { signal: new AbortController().signal });
+  const catalogResponse = await fetchWithInlineSupport(catalogRequest);
+  assert.equal(catalogRequest.headers.has('X-Request-ID'), false);
+  assert.equal(catalogResponse.status, 500);
+  assert.equal(catalogResponse.bodyUsed, false);
   assert.deepEqual(events, [{ code: "abcdef123456", requestId: "abcdef1234567890abcdef1234567890" }]);
 });
 

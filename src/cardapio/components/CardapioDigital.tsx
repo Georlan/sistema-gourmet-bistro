@@ -42,7 +42,12 @@ import {
   upsertPendingOrderSubmission,
 } from "../orderSubmission";
 import { trackAnalyticsEvent } from "../../analytics";
+import { fetchWithInlineSupport } from "../../utils/supportCode";
 import { startPaymentStatusPolling } from "../paymentStatusPolling";
+
+import { createCheckoutDiagnostics, type CheckoutOutcome } from "../../analytics/checkoutDiagnostic";
+
+const beginCheckoutDiagnostic = createCheckoutDiagnostics(signal => trackAnalyticsEvent('public_checkout_result', signal));
 
 interface CreatedOrder {
   comanda_id: string;
@@ -168,6 +173,8 @@ export default function CardapioDigital({
 }: CardapioDigitalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [supportCode, setSupportCode] = useState("");
+  const [supportCopied, setSupportCopied] = useState(false);
   const [requiresCartReview, setRequiresCartReview] = useState(false);
   const [canCorrectSubmission, setCanCorrectSubmission] = useState(true);
   const [orderingBlocked, setOrderingBlocked] = useState(false);
@@ -310,6 +317,8 @@ export default function CardapioDigital({
 
   const handlePlaceOrder = async () => {
     if (isSubmittingRef.current) return;
+    setSupportCode("");
+    setSupportCopied(false);
     if (paymentError || schedulePaymentError) {
       setErrorMessage(paymentError || schedulePaymentError);
       return;
@@ -415,6 +424,8 @@ export default function CardapioDigital({
     setRequiresCartReview(false);
     setCanCorrectSubmission(false);
 
+    const diagnostic = beginCheckoutDiagnostic(targetRestauranteId);
+    let diagnosticOutcome: CheckoutOutcome | undefined;
     const controller = new AbortController();
     const timeoutId = window.setTimeout(() => controller.abort(), ORDER_REQUEST_TIMEOUT_MS);
 
@@ -422,21 +433,24 @@ export default function CardapioDigital({
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         "X-Idempotency-Key": idempotencyKey,
+        ...diagnostic.headers,
       };
       if (customerToken) headers["X-Koma-Customer-Token"] = customerToken;
 
       // Validate against a fresh public snapshot before attempting to create an order.
       // The cart is a draft; a daily-menu change must not be silently discarded.
-      const catalogResponse = await fetch(
+      const catalogResponse = await fetchWithInlineSupport(
         `${API_BASE_URL}/api/cardapio-digital/public?restaurante_id=${targetRestauranteId}`,
         { cache: "no-store", signal: controller.signal },
       );
+      diagnostic.response(catalogResponse);
       if (!catalogResponse.ok) {
         throw new Error("Não foi possível atualizar o cardápio para confirmar a sacola. Tente novamente.");
       }
       const latestCatalog = await catalogResponse.json();
       const outdatedProducts = findOutdatedCartProducts(cart, latestCatalog);
       if (outdatedProducts.length) {
+        diagnosticOutcome = 'catalog_changed';
         setCanCorrectSubmission(true);
         setRequiresCartReview(true);
         throw new Error(
@@ -446,7 +460,8 @@ export default function CardapioDigital({
         );
       }
 
-      const response = await fetch(`${API_BASE_URL}/cardapio/pedidos`, {
+      diagnostic.setStage('submission');
+      const response = await fetchWithInlineSupport(`${API_BASE_URL}/cardapio/pedidos`, {
         method: "POST",
         headers,
         signal: controller.signal,
@@ -456,11 +471,13 @@ export default function CardapioDigital({
         }),
       });
 
+      diagnostic.response(response);
       const data = await response.json().catch(() => null);
       if (!response.ok) {
         setCanCorrectSubmission([400, 404, 422].includes(response.status));
       }
       if (response.status === 401 && customerToken) {
+        diagnosticOutcome = 'session_expired';
         onSessionExpired?.();
         throw new Error("Sua identificação expirou. Você pode tentar novamente sem perder a sacola.");
       }
@@ -468,6 +485,7 @@ export default function CardapioDigital({
         clearPendingSubmission(idempotencyKey);
         idempotencyKeyRef.current = "";
         idempotencyFingerprintRef.current = null;
+        diagnostic.finish('ordering_blocked');
         setOrderingBlocked(true);
         return;
       }
@@ -494,6 +512,7 @@ export default function CardapioDigital({
         throw new Error("O restaurante confirmou o pedido com uma resposta inválida. Tente consultar novamente.");
       }
 
+      diagnostic.finish('accepted');
       const authoritativeTotal = Number(data.total);
       const orderTotal = Number.isFinite(authoritativeTotal) ? authoritativeTotal : estimatedTotal;
       const confirmedSchedule = String(data.scheduled_for || scheduledForIso || "") || undefined;
@@ -554,7 +573,7 @@ export default function CardapioDigital({
         tracking_url: data.tracking_url,
       });
     } catch (error) {
-      console.warn("Falha ao registrar pedido no backend:", error);
+      setSupportCode(diagnostic.finish(diagnosticOutcome || diagnostic.failure(error)));
       setErrorMessage(
         error instanceof DOMException && error.name === "AbortError"
           ? "A confirmação demorou mais que o esperado. Tente novamente: o Kôma reutiliza a mesma tentativa sem duplicar o pedido."
@@ -796,6 +815,9 @@ export default function CardapioDigital({
               <div className="flex items-start gap-2"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><div>
                 <p className="font-black">Não foi possível confirmar o pedido</p>
                 <p className="mt-1 max-h-[15dvh] overflow-y-auto font-semibold">{errorMessage}</p>
+                {supportCode && <button type="button" className="mt-1 min-h-11 text-left text-koma-foreground underline underline-offset-4" onClick={async () => {
+                  try { await navigator.clipboard.writeText(supportCode); setSupportCopied(true); } catch { setSupportCopied(false); }
+                }} aria-label={`Copiar código de suporte ${supportCode}`}>{supportCopied ? `Copiado: ${supportCode}` : `Suporte: ${supportCode}`}</button>}
               </div></div>
               {canCorrectSubmission && !requiresCartReview && <button type="button" onClick={onEditCart || onClose} className="mt-2 min-h-11 w-full rounded-lg border border-rose-500/30 px-3 font-bold">Voltar à sacola e corrigir</button>}
             </div>}
