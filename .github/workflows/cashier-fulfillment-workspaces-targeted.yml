@@ -13,6 +13,18 @@ on:
       - "src/components/caixa/orders/digitalOrderPresentation.ts"
       - "src/components/caixa/orders/useCashierOrders.ts"
       - "backend/app/routes/orders_core.py"
+      - "backend/app/routes/orders.py"
+      - "backend/app/routes/caixa.py"
+      - "backend/app/services/courier_*.py"
+      - "backend/app/services/delivery_receipts.py"
+      - "src/components/MotoboyPwaPage.tsx"
+      - "src/components/courier/**"
+      - "backend/tests/test_courier_cashier_menu_journey.py"
+      - "backend/tests/test_delivery_receipts.py"
+      - "backend/tests/test_courier_realtime.py"
+      - "backend/tests/test_courier_panel_scope.py"
+      - "e2e/courier-realtime-cache.spec.ts"
+      - "e2e/courier-refinement.spec.ts"
       - "backend/app/application/orders/fulfillment_conversion.py"
       - "backend/tests/test_fulfillment_conversion.py"
       - "backend/tests/test_courier_app_entitlement_and_security.py"
@@ -88,6 +100,10 @@ jobs:
           backend/tests/test_delivery_flow.py
           backend/tests/test_fulfillment_conversion.py
           backend/tests/test_order_lifecycle_authority.py
+          backend/tests/test_courier_cashier_menu_journey.py
+          backend/tests/test_delivery_receipts.py
+          backend/tests/test_courier_realtime.py
+          backend/tests/test_courier_panel_scope.py
 
   browser:
     name: Fulfillment mobile + desktop
@@ -116,5 +132,7 @@ jobs:
           e2e/cashier-fulfillment-workspaces.spec.ts
           e2e/cashier-delivery-stages.spec.ts
           e2e/cashier-fulfillment-conversion.spec.ts
+          e2e/courier-realtime-cache.spec.ts
+          e2e/courier-refinement.spec.ts
           --project=mobile-390
           --project=desktop-1366

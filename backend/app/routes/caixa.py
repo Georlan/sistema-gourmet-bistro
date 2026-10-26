@@ -665,8 +665,8 @@ def _apply_fully_paid_state(comanda: Comanda) -> tuple[bool, bool]:
     """Marca quitação financeira sem encerrar fulfillment digital implicitamente.
 
     Retorna (quitada, fechada_agora). Pedidos digitais permanecem operacionais
-    até a ação explícita de conclusão; comandas tradicionais preservam o
-    fechamento automático histórico após quitação.
+    até a ação explícita de conclusão. Delivery já concluído pode fechar ao
+    quitar o saldo; comandas tradicionais preservam o fechamento histórico.
     """
     total_devido = payable_total(comanda)
     quitada = _valor_monetario(comanda.valor_pago) + _CENTAVO >= total_devido
@@ -677,9 +677,16 @@ def _apply_fully_paid_state(comanda: Comanda) -> tuple[bool, bool]:
         if item.status != "cancelado":
             item.pago = True
 
-    if has_operational_fulfillment(comanda):
+    from ..domain.orders.types import OrderStatus, normalize_to_order_status
+    delivery_completed = (
+        str(comanda.tipo or '').strip().casefold() in {'delivery', 'entrega'}
+        and normalize_to_order_status(comanda.delivery_status) == OrderStatus.COMPLETED
+    )
+    if has_operational_fulfillment(comanda) and not delivery_completed:
         return True, False
 
+    if comanda.fechada:
+        return True, False
     comanda.fechada = True
     comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
     return True, True
