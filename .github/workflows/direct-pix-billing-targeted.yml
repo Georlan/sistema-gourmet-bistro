@@ -14,6 +14,8 @@ on:
       - 'src/components/caixa/settings/*Pix*'
       - 'src/components/caixa/settings/Koma*'
       - 'src/components/CaixaPanel.tsx'
+      - 'src/components/caixa/orders/DirectPixPendingPanel.tsx'
+      - 'src/components/caixa/orders/pendingPixPolling.ts'
       - 'src/super-admin/SuperAdminBillingHistory.tsx'
       - 'e2e/direct-pix.spec.ts'
 permissions:
