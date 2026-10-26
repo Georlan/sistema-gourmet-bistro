@@ -7,12 +7,16 @@ logger = logging.getLogger('koma.product_image_worker')
 
 
 def sweep():
+    # Disabled collection must be idle, rather than running the same expensive
+    # reference checks every hour. Explicit CLI dry-runs remain available.
+    execute = os.getenv('PRODUCT_IMAGE_GC_EXECUTE', 'false').lower() == 'true'
+    if not execute:
+        return
     from ..database import SessionLocal
     from .outbox.worker import discover_active_restaurant_ids
     from .product_image_lifecycle import run_tenant
     with SessionLocal() as db:
         tenants = discover_active_restaurant_ids(db)
-    execute = os.getenv('PRODUCT_IMAGE_GC_EXECUTE', 'false').lower() == 'true'
     for tenant in tenants:
         try:
             result = run_tenant(tenant, execute=execute)

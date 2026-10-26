@@ -3,6 +3,7 @@ import {createPortal} from 'react-dom';
 import {QrCode, X} from 'lucide-react';
 import {authFetch,authRequestErrorMessage} from '../../../utils/authRequest';
 import {formatCurrency} from '../cashierPresentation';
+import {startPendingPixPolling} from './pendingPixPolling';
 type Pending = {id:string;order_number:string;customer:string;amount:string};
 type Props = {apiBaseUrl:string;authHeaders:Record<string,string>;onRefreshOrders:()=>void};
 export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:Props) {
@@ -20,19 +21,24 @@ export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:P
   const [notReceived,setNotReceived] = useState(false);
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState('');
-  const load = useCallback(async()=>{
+  const refreshPendingRef = useRef<(()=>void)|null>(null);
+  const load = useCallback(async(signal:AbortSignal)=>{
     try {
-      const response = await authFetch(`${apiBaseUrl}/payments/direct-pix/pending`,{headers:authHeaders});
+      const response = await authFetch(`${apiBaseUrl}/payments/direct-pix/pending`,{headers:authHeaders,signal});
       if (!response.ok) return;
-      setRows(await response.json());
+      const pending:Pending[] = await response.json();
+      if (signal.aborted) return;
+      setRows(pending);
+      return pending.length;
     } catch { /* Existing operational screens retain their own connectivity feedback. */ }
   },[apiBaseUrl,authHeaders]);
   useEffect(()=>{
-    void load();
-    const refresh = ()=>{if(document.visibilityState==='visible') void load();};
-    const timer=window.setInterval(refresh,15000);
-    document.addEventListener('visibilitychange',refresh);
-    return ()=>{window.clearInterval(timer);document.removeEventListener('visibilitychange',refresh);};
+    const polling=startPendingPixPolling(load);
+    refreshPendingRef.current=polling.invalidate;
+    return ()=>{
+      polling.stop();
+      if(refreshPendingRef.current===polling.invalidate) refreshPendingRef.current=null;
+    };
   },[load]);
   async function resolve(cancel:boolean) {
     if(!selected || busy) return;
@@ -44,7 +50,7 @@ export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:P
       });
       const data=await response.json();
       if(!response.ok) throw new Error(typeof data.detail==='string'?data.detail:'Confira a referência bancária.');
-      setSelected(null);setReference('');setChecked(false);await load();onRefreshOrders();
+      setSelected(null);setReference('');setChecked(false);refreshPendingRef.current?.();onRefreshOrders();
     }catch(err){setError(authRequestErrorMessage(err,'Não foi possível confirmar.'));}
     finally{setBusy(false);}
   }

@@ -38,6 +38,34 @@ test('conferência mantém referência após falha e confirmação exige extrato
   expect(bodies[1]).toEqual(bodies[0]);
 });
 
+test('Caixa vazio reduz consultas Pix e evento financeiro recupera nova pendência imediatamente',async({page})=>{
+  await page.clock.install();
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  let reads=0;
+  let pending=false;
+  await page.route('**/payments/direct-pix/pending',route=>{
+    reads++;
+    return route.fulfill({json:pending?[{id:'idle-recovered',order_number:'47',customer:'Cliente teste',amount:'10.50'}]:[]});
+  });
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
+  await expect.poll(()=>reads).toBeGreaterThan(0);
+  await page.clock.pauseAt(await page.evaluate(()=>Date.now()+1000));
+  const baseline=reads;
+  await page.clock.runFor(45_000);
+  expect(reads).toBe(baseline);
+  // Include response-settlement time; only one empty-list safety read is due.
+  await page.clock.runFor(30_000);
+  await expect.poll(()=>reads).toBe(baseline+1);
+  pending=true;
+  await page.evaluate(()=>window.dispatchEvent(new Event('koma_orders_updated')));
+  await expect(page.getByRole('button',{name:/Conferir Pix/})).toBeVisible();
+  expect(reads).toBe(baseline+2);
+  await page.clock.runFor(15_000);
+  await expect.poll(()=>reads).toBe(baseline+3);
+});
+
 test('SuperAdmin distingue atraso e mantém o histórico das faturas pagas',async({page})=>{
   await page.addInitScript(()=>sessionStorage.setItem('koma_super_admin_token','e2e-token'));
   await page.route('**/api/super-admin/**',async route=>{
