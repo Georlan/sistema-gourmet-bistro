@@ -87,6 +87,7 @@ jobs:
           backend/tests/test_motoboy_pwa_flow.py
           backend/tests/test_delivery_flow.py
           backend/tests/test_fulfillment_conversion.py
+          backend/tests/test_courier_staff_access.py
           backend/tests/test_order_lifecycle_authority.py
 
   browser:

@@ -8,8 +8,10 @@ import {
   readKomaTheme,
   type KomaTheme,
 } from '../../config/theme';
-import type { AppRole } from '../../types';
-import { authFetch, authRequestErrorMessage } from '../../utils/authRequest';
+import { parseStaffLogin } from '../../utils/staffDestination';
+import { useOperatorSessionToken } from './useOperatorSessionToken';
+import { requestCourierAccess, persistCourierAccess, clearCourierAccess } from '../../utils/courierAccessSession';
+import { authFetchJson, authRequestErrorMessage } from '../../utils/authRequest';
 import {
   clearOperatorSession,
   getPersistedOperationalPortal,
@@ -23,14 +25,6 @@ import { OperationalLogin, type LoginRestaurantOption } from './OperationalLogin
 
 const OperationalApp = React.lazy(() => import('../../App'));
 
-const MANAGEMENT_ROLES = new Set<AppRole>(['admin', 'gerente', 'caixa']);
-
-function resolvePortalForRole(role: AppRole): OperationalPortal | null {
-  if (role === 'garcom') return 'garcom';
-  if (role === 'atendente' || role === 'cozinha' || MANAGEMENT_ROLES.has(role)) return 'caixa';
-  return null;
-}
-
 function OperationalAppBridge({ portal }: { portal: OperationalPortal }) {
   return (
     <React.Suspense fallback={<KomaLoading label="Preparando operação…" />}>
@@ -43,9 +37,10 @@ export default function UnifiedOperationalEntry() {
   // A URL continua sendo única, mas a aba guarda qual portal está operando.
   // Caixa e Garçom podem coexistir em abas diferentes sem um login substituir
   // a identidade operacional da outra aba.
-  const [activePortal, setActivePortal] = useState<OperationalPortal | null>(
-    () => getPersistedOperationalPortal(),
-  );
+  useOperatorSessionToken();
+  const activePortal = getPersistedOperationalPortal();
+  const loginRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => { loginRequest.current?.abort(); loginRequest.current = null; }, []);
   const [theme, setTheme] = useState<KomaTheme>(() => readKomaTheme());
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -68,21 +63,6 @@ export default function UnifiedOperationalEntry() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!activePortal) return;
-    const tokenKey = activePortal === 'caixa' ? 'koma_caixa_token' : 'koma_waiter_token';
-    const timer = window.setInterval(() => {
-      if (!sessionStorage.getItem(tokenKey)) {
-        // O App legado ainda remove primeiro o alias do portal atual ao sair.
-        // Finalizamos somente essa sessão, preservando o outro portal em outra aba.
-        clearOperatorSession(activePortal);
-        resetAnalytics();
-        setActivePortal(null);
-      }
-    }, 250);
-    return () => window.clearInterval(timer);
-  }, [activePortal]);
-
   const resetRestaurantSelection = () => {
     setRestaurantOptions([]);
     setRestaurantId('');
@@ -94,6 +74,8 @@ export default function UnifiedOperationalEntry() {
     pendingLogin.current = true;
     setError('');
     setIsLoggingIn(true);
+    const controller = new AbortController();
+    loginRequest.current = controller;
 
     const requestPayload: Record<string, unknown> = {
       username: username.trim().toLowerCase(),
@@ -102,15 +84,16 @@ export default function UnifiedOperationalEntry() {
     if (restaurantId) requestPayload.restaurante_id = Number(restaurantId);
 
     try {
-      const response = await authFetch(`${API_BASE_URL}/auth/login`, {
+      const { response, data } = await authFetchJson(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestPayload),
+        signal: controller.signal,
       });
 
+      if (controller.signal.aborted) return;
       if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        const detail = payload?.detail;
+        const detail = (data as { detail?: unknown } | null)?.detail;
         const detailRecord = detail && typeof detail === 'object'
           ? detail as Record<string, any>
           : null;
@@ -146,46 +129,41 @@ export default function UnifiedOperationalEntry() {
         return;
       }
 
-      const data = await response.json();
-      const role = String(data?.usuario?.role || data?.usuario?.cargo || '').trim().toLowerCase() as AppRole;
-      const portal = resolvePortalForRole(role);
-      const restauranteId = Number(data?.usuario?.restaurante_id);
-
-      if (!portal) {
-        setError('Este perfil ainda não possui uma área operacional disponível neste aplicativo.');
+      const { token, user, destination } = parseStaffLogin(data);
+      if (controller.signal.aborted) return;
+      if (destination === 'entregador') {
+        const access = await requestCourierAccess(API_BASE_URL, token, controller.signal);
+        if (controller.signal.aborted) return;
+        persistCourierAccess(access);
+        clearOperatorSession();
+        resetAnalytics();
+        window.location.replace('/entregador');
         return;
       }
-      if (
-        !data?.access_token
-        || !data?.usuario?.id
-        || !data?.usuario?.nome
-        || !Number.isInteger(restauranteId)
-        || restauranteId <= 0
-      ) {
-        setError('A resposta de autenticação está incompleta. Tente novamente.');
-        return;
-      }
-
       // O login substitui a identidade apenas desta aba e vincula seu portal.
-      saveOperatorSession(data.access_token, { ...data.usuario, role });
+      clearCourierAccess();
+      saveOperatorSession(token, user);
       identifyOperator({
-        id: data.usuario.id,
-        role,
-        cargo: data.usuario.cargo,
-        restaurante_id: restauranteId,
+        id: user.id,
+        role: user.role,
+        cargo: user.cargo,
+        restaurante_id: user.restaurante_id,
       });
 
       setUsername('');
       setPassword('');
       setRestaurantOptions([]);
       setRestaurantId('');
-      setActivePortal(portal);
+
     } catch (loginError) {
-      console.error(loginError);
+      if (controller.signal.aborted) return;
       setError(authRequestErrorMessage(loginError, 'Erro ao conectar ao servidor do backend.'));
     } finally {
-      pendingLogin.current = false;
-      setIsLoggingIn(false);
+      if (loginRequest.current === controller) {
+        loginRequest.current = null;
+        pendingLogin.current = false;
+        setIsLoggingIn(false);
+      }
     }
   };
 

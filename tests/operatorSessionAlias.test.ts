@@ -13,7 +13,7 @@ const mesaDetails = readFileSync('src/components/MesaDetailsModal.tsx', 'utf8');
 
 test('runtime auth no longer persists the generic localStorage token alias', () => {
   assert.doesNotMatch(authSession, /localStorage\.setItem\(['"]token['"]/);
-  assert.match(authSession, /localStorage\.removeItem\(['"]token['"]\)/);
+  assert.match(authSession, /clearKeys\(localStorage, \['token'/);
 });
 
 test('auth session exposes a portal-scoped operational accessor for migration away from browser storage', () => {
@@ -34,4 +34,9 @@ test('high-value operational consumers no longer read Caixa or waiter bearer ali
     assert.doesNotMatch(source, /localStorage\.getItem\([^\n)]*koma_(?:caixa|waiter)_token/);
     assert.doesNotMatch(source, /localStorage\.getItem\(['"]token['"]\)/);
   }
+});
+
+test('operational analytics cannot persist a browser-wide operator identity',()=>{
+  const analytics=readFileSync('src/analytics/posthog.ts','utf8');
+  assert.match(analytics,/disable_persistence: \['caixa', 'garcom', 'entregador'\]\.includes\(resolveKomaHost\(\)\.surface\)/);
 });

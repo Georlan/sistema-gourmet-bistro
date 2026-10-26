@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MapPin, CheckCircle2, RefreshCw, AlertCircle, Sun, Moon, PackageCheck, ArrowUp, ArrowDown, Store, WifiOff, ListOrdered, LocateFixed } from 'lucide-react';
+import { MapPin, CheckCircle2, RefreshCw, AlertCircle, Sun, Moon, PackageCheck, ArrowUp, ArrowDown, Store, WifiOff, ListOrdered, LocateFixed, LogOut } from 'lucide-react';
+import { clearCourierAccess, COURIER_ACCESS_KEY } from '../utils/courierAccessSession';
 import { API_BASE_URL } from '../config/api';
 import { KomaLogo } from './KomaLogo';
 import { nextKomaTheme, persistKomaTheme, readKomaTheme, applyKomaTheme } from '../config/theme';
@@ -28,7 +29,7 @@ interface MotoboyProfile {
   telefone: string;
 }
 
-const DELIVERY_TOKEN_SESSION_KEY = 'koma_entregador_session_token';
+const DELIVERY_TOKEN_SESSION_KEY = COURIER_ACCESS_KEY;
 const DELIVERY_TOKEN_HEADER = 'X-Koma-Delivery-Token';
 const PANEL_REQUEST_TIMEOUT_MS = 12_000;
 const CONFIRM_DELIVERY_REQUEST_TIMEOUT_MS = 12_000;
@@ -336,6 +337,9 @@ export function MotoboyPwaPage() {
         {token && <button type="button" className="k-courier__icon" aria-label="Atualizar Pedidos" disabled={!isOnline || Boolean(confirmingId) || isRefreshing || loading} onClick={() => void carregarDadosPainel(token)}>
           <RefreshCw aria-hidden="true" size={20} className={isRefreshing ? 'k-courier__spin' : ''} />
         </button>}
+        {token && <button type="button" className="k-courier__icon" aria-label="Sair das entregas" disabled={Boolean(confirmingId) || Boolean(uncertainId)} onClick={() => {
+          clearCourierAccess(); revokeAccess(); window.location.replace('/?view=operacional');
+        }}><LogOut aria-hidden="true" size={20} /></button>}
       </div>
     </header>
     {toast && <div className={`k-courier__toast k-courier__toast--${toast.type}`} role={toast.type === 'error' ? 'alert' : 'status'}>

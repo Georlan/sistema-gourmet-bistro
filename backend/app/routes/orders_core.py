@@ -56,13 +56,6 @@ from ..services.plan_entitlements import (
     require_plan_entitlement,
 )
 from ..adapters.orders.pos_adapter import PosAdapter
-from ..application.printing import (
-    PrintAction,
-    PrintIntent,
-    PrintSourceType,
-    PrintingApplicationService,
-    UniversalPrintingError,
-)
 
 logger = logging.getLogger("koma.orders")
 
@@ -1240,8 +1233,12 @@ def _criar_acesso_motoboy(db: Session, motoboy: Motoboy, rest_id: int, *, reuse_
     db.add(novo_token_db)
     db.flush()
 
-    token = create_motoboy_token(motoboy.id, rest_id, new_jti)
-    exp = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=4)).isoformat()
+    created_at = novo_token_db.criado_em
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=datetime.timezone.utc)
+    expires = created_at + datetime.timedelta(hours=4)
+    token = create_motoboy_token(motoboy.id, rest_id, new_jti, expires_at=expires)
+    exp = expires.isoformat()
     return {
         "token": token,
         "link": f"/entregador#token={token}",
@@ -1249,6 +1246,35 @@ def _criar_acesso_motoboy(db: Session, motoboy: Motoboy, rest_id: int, *, reuse_
         "expires_at": exp,
         "motoboy_nome": motoboy.nome
     }
+
+
+@router.post("/motoboys/me/acesso")
+def acessar_app_entregador(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Exchange an authenticated courier identity for its existing scoped access.
+
+    The client cannot choose a courier or tenant. Reusing active access preserves
+    its original deadline and other devices; only the Caixa rotation revokes it.
+    """
+    rest_id = require_tenant_id()
+    if current_user.role != "motoboy":
+        raise HTTPException(status_code=403, detail="Acesso exclusivo do entregador.")
+    require_plan_entitlement(
+        db, rest_id, ENTITLEMENT_COURIER_APP,
+        detail="App do Entregador disponível apenas no plano Premium ou com add-on ativo.",
+    )
+    motoboy = db.query(Motoboy).filter(
+        Motoboy.restaurante_id == rest_id,
+        Motoboy.usuario_id == current_user.id,
+        Motoboy.ativo.is_(True),
+    ).first()
+    if not motoboy:
+        raise HTTPException(status_code=403, detail="Seu perfil de entregador não está ativo. Consulte o Caixa.")
+    acesso = _criar_acesso_motoboy(db, motoboy, rest_id, reuse_active=True)
+    db.commit()
+    return acesso
 
 
 @router.post("/motoboys/{motoboy_id}/gerar-link")

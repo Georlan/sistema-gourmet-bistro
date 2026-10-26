@@ -70,7 +70,8 @@ test('canonical app restores a valid persisted staff session only in the tab tha
   const authSession = source('../src/utils/authSession.ts');
 
   assert.match(entry, /getPersistedOperationalPortal/);
-  assert.match(entry, /useState<OperationalPortal \| null>\([\s\S]*\(\) => getPersistedOperationalPortal\(\)/);
+  assert.match(entry, /useOperatorSessionToken\(\)/);
+  assert.match(entry, /const activePortal = getPersistedOperationalPortal\(\)/);
   assert.match(authSession, /sessionStorage/);
   assert.match(authSession, /koma_active_operational_portal/);
   assert.match(authSession, /if \(tabPortal\) \{/);
@@ -80,8 +81,11 @@ test('logout from resolved portal clears only that portal and returns its tab to
   const entry = source('../src/components/auth/UnifiedOperationalEntry.tsx');
   const login = source('../src/components/auth/OperationalLogin.tsx');
 
-  assert.match(entry, /if \(!sessionStorage\.getItem\(tokenKey\)\) \{[\s\S]*clearOperatorSession\(activePortal\);[\s\S]*setActivePortal\(null\)/);
-  assert.match(entry, /250\)/);
+  assert.match(entry, /useOperatorSessionToken\(\)/);
+  assert.doesNotMatch(entry, /setInterval/);
+  const session = source('../src/utils/authSession.ts');
+  assert.match(session, /OPERATOR_SESSION_CHANGED/);
+  assert.match(session, /window\.addEventListener\('focus', check\)/);
   assert.match(login, /portal !== 'unified' && isOperationalAppHost\(\)/);
   assert.match(login, /Retornando ao acesso da equipe/);
 });
@@ -92,11 +96,9 @@ test('unified login lets backend identity choose restaurant and role choose port
   assert.match(entry, /username:\s*username\.trim\(\)\.toLowerCase\(\)/);
   assert.match(entry, /if \(restaurantId\) requestPayload\.restaurante_id = Number\(restaurantId\)/);
   assert.match(entry, /restaurant_selection_required/);
-  assert.match(entry, /const restauranteId = Number\(data\?\.usuario\?\.restaurante_id\)/);
-  assert.match(entry, /role === 'garcom'/);
-  assert.match(entry, /MANAGEMENT_ROLES\.has\(role\)/);
-  assert.doesNotMatch(entry, /clearOperatorSession\(\);/);
-  assert.match(entry, /saveOperatorSession\(data\.access_token, \{ \.\.\.data\.usuario, role \}\)/);
+  assert.match(entry, /parseStaffLogin\(data\)/);
+  assert.match(entry, /saveOperatorSession\(token, user\)/);
+  assert.match(entry, /requestCourierAccess\(API_BASE_URL, token, controller\.signal\)/);
   assert.doesNotMatch(entry, /localStorage\.setItem\('koma_waiter_token'/);
 });
 

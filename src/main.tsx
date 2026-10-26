@@ -3,6 +3,7 @@ import "./cardapio/whatsappOptOutToken";
 import "./components/auth/passwordRecoveryToken";
 import "./components/auth/customerRegistrationToken";
 import React from "react";
+import { initializeTabSessionOwnership } from "./utils/tabSessionOwnership";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import "./landing/siara-event.css";
@@ -280,7 +281,11 @@ const RouteLoading = () => (pathname === "/recuperar-senha" || pathname === "/co
   )
   : <KomaLoading label="Preparando Kôma…" />;
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
+async function mountApplication() {
+  if (isUnifiedOperationalRoute || isOnboardingAwareManagementRoute || isEmbeddedOperationalPreview || pathname.startsWith("/entregador")) {
+    await initializeTabSessionOwnership();
+  }
+  ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <AnalyticsProvider disabled={isWhatsAppPrivateRoute}>
       <AppRecoveryBoundary>
@@ -295,3 +300,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </AnalyticsProvider>
   </React.StrictMode>,
 );
+
+}
+void mountApplication();

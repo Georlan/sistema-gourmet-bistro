@@ -77,3 +77,24 @@ test('browser network failure does not leak the raw Failed to fetch message', ()
   assert.match(message, /servidor do KÔMA está indisponível/i);
   assert.doesNotMatch(message, /failed to fetch/i);
 });
+
+test('JSON deadline also aborts a stalled body after successful HTTP headers', async () => {
+  const {authFetchJson}=await import('../src/utils/authRequest');
+  const originalFetch=globalThis.fetch;
+  try {
+    globalThis.fetch=(async(_input,init)=>({status:200,ok:true,json:()=>new Promise((_resolve,reject)=>{
+      init?.signal?.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError')),{once:true});
+    })})) as typeof fetch;
+    await assert.rejects(authFetchJson('https://example.test/auth/login',{},5),error=>error instanceof AuthRequestTimeoutError);
+  } finally {globalThis.fetch=originalFetch;}
+});
+
+test('JSON decoder preserves non-JSON error status for an accessible fallback',async()=>{
+  const {authFetchJson}=await import('../src/utils/authRequest');
+  const originalFetch=globalThis.fetch;
+  try {
+    globalThis.fetch=(async()=>new Response('Bad Gateway',{status:502})) as typeof fetch;
+    const {response,data}=await authFetchJson('https://example.test/auth/login');
+    assert.equal(response.status,502);assert.equal(data,null);
+  } finally {globalThis.fetch=originalFetch;}
+});

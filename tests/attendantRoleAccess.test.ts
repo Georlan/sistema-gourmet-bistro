@@ -1,3 +1,4 @@
+import { resolveStaffDestination } from '../src/utils/staffDestination';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
@@ -17,8 +18,9 @@ test('attendant role is invitable and enters the dedicated quick-order workspace
     /INVITABLE_ROLES = \['garcom', 'atendente', 'caixa', 'cozinha', 'gerente', 'motoboy'\]/,
   );
   assert.match(roles, /atendente:[\s\S]*Registra pedidos de balcão, retirada e atendimento rápido/);
-  assert.match(entry, /role === 'atendente' \|\| role === 'cozinha'/);
-  assert.match(authSession, /role === 'atendente'/);
+  assert.equal(resolveStaffDestination('atendente'), 'caixa');
+  assert.match(entry, /parseStaffLogin/);
+  assert.match(authSession, /resolveOperationalPortal/);
   assert.match(app, /activeRole === 'atendente'[\s\S]*<AttendantQuickOrderPanel/);
   assert.match(panel, /ATTENDANT_ORDER_TYPES = \['pickup', 'delivery'\] as const/);
   assert.match(panel, /activeSubTab: 'balcao'/);
