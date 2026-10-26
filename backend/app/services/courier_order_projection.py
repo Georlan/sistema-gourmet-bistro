@@ -31,14 +31,13 @@ def load_courier_references(db, restaurant_id, check_ids):
 
 
 def courier_confirmation(order, references):
-    # Native receipt codes must never be used to pretend that a marketplace acknowledged delivery.
-    unsupported = any(ref['provider'].strip().lower() not in _LOCAL_PROVIDERS for ref in references)
-    if unsupported:
-        return {'mode': 'partner_pending', 'enabled': False, 'code_length': None,
-                'reason': 'A conclusão com este parceiro ainda não está conectada. Confira com o Caixa.'}
-    coded = bool(order.delivery_receipt_secret)
-    return {'mode': 'koma_code' if coded else 'local', 'enabled': True,
-            'code_length': 4 if coded else None, 'reason': None}
+    # Local completion is independent from any acknowledgement by a marketplace.
+    from .delivery_receipts import customer_delivery_receipt
+    code = customer_delivery_receipt(order)
+    external = any(ref['provider'].strip().lower() not in _LOCAL_PROVIDERS for ref in references)
+    return {'mode': 'koma_code' if code else 'local_internal' if external else 'local',
+            'enabled': True, 'code_length': len(code) if code else None,
+            'reason': None}
 
 
 def courier_payment(order):

@@ -148,3 +148,15 @@ O cliente mantém uma conexão enquanto visível e online, com heartbeat, recone
 - Limites de requisição existentes foram preservados. Os testes de entitlement rodam em processo separado para não compartilhar artificialmente o contador IP de toda a suíte; não foi desativado o limitador para obter aprovação. Não se trata de certificação de carga de milhares de restaurantes ou teste físico de celular.
 
 Permanecem pendentes: conectores comerciais/homologação de parceiros, aviso de problema ao Caixa aprovado em bloco anterior, CI/PR/publicação e conferência de dispositivo real. Nenhuma promessa de receber eventos instantaneamente com a aba suspensa ou sem internet.
+
+#### Painéis locais de itens e confirmação (25/10/2026)
+
+`CourierOrderDialog` usa os dados já carregados no painel; não busca cada pedido novamente. O diálogo nativo contém foco e bloqueia o fundo. Seu fechamento é impedido durante envio; remoção/revogação da entrega desmonta o painel. O POST permanece no owner `MotoboyPwaPage`, com os mesmos bloqueios de conexão, reconciliação e unicidade em voo. `CourierPayment` continua apresentando o read model autorizado, sem registrar recebimentos. `CourierGlyph` contém apenas vetores autorais inline. `courierTypes.ts` compartilha o contrato frontend já existente entre apresentação e owner, sem alterar o payload do backend.
+
+### Atualização local — 26/10/2026
+
+- Recibos novos KÔMA usam três dígitos, incluindo zeros iniciais. Recibos já emitidos de quatro dígitos mantêm a validade; comprimento segue a projeção autorizada do pedido.
+- A conferência continua após autenticação do entregador, escopo por tenant, atribuição e despacho, sob lock da comanda e limite de tentativas. Código não é buscado globalmente nem exposto no painel do entregador.
+- Referências externas admitem conclusão interna no KÔMA (`local_internal`), sem alterar códigos do parceiro, simular homologação ou enviar reconhecimento à plataforma.
+- Conclusão pelo entregador não registra recebimento. Se houver saldo (e pagamento online não estiver aprovado), a comanda fica operacionalmente finalizada e financeiramente aberta; o Caixa a mantém na última coluna com a ação Receber pagamento. Pedido integralmente pago continua exigindo seu recibo KÔMA e não gera nova cobrança.
+- Nenhuma chamada nova, polling ou migração de tabela foi introduzida. A atualização usa a projeção e os eventos existentes.

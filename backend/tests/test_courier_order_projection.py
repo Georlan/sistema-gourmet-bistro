@@ -57,7 +57,7 @@ def handoff():
         db.add(Motoboy(id=mid,restaurante_id=rid,nome='Lucas',telefone='85999990000',ativo=True));db.flush()
         first=add_order(db,0)
         db.commit()
-    client=TestClient(app)
+    client=TestClient(app, client=(f'handoff-{suffix}',50000))
     auth={'Authorization':'Bearer '+create_access_token(subject=uid,restaurante_id=rid,role='admin')}
     link=client.post(f'/comandas/motoboys/{mid}/gerar-link',headers=auth)
     assert link.status_code==200,link.text
@@ -92,10 +92,14 @@ def test_real_panel_handoff_has_items_latest_address_and_no_partner_side_effects
     for item in payload['entregas']:
         if item['id']==h.first: continue
         assert item['source']['channel'] in {'ifood','99food','keeta'}
-        assert item['confirmation']['mode']=='partner_pending' and item['confirmation']['enabled'] is False
-        blocked=h.client.post(f"/comandas/motoboys/pedidos/{item['id']}/confirmar-entrega",headers=h.headers)
-        assert blocked.status_code==409,blocked.text
-        with SessionLocal() as db: assert db.get(Comanda,item['id']).delivery_status=='transito'
+        assert item['confirmation']['mode']=='local_internal' and item['confirmation']['enabled'] is True
+        completed=h.client.post(f"/comandas/motoboys/pedidos/{item['id']}/confirmar-entrega",headers=h.headers)
+        assert completed.status_code==200,completed.text
+        with SessionLocal() as db:
+            row=db.get(Comanda,item['id'])
+            assert row.delivery_status=='finalizado' and not row.fechada
+            assert float(row.valor_pago or 0)==0
+            assert db.query(ExternalOrderReference).filter_by(restaurante_id=h.rid,internal_order_id=item['id']).count() <= 1
 
 
 def test_panel_queries_do_not_grow_per_delivery(handoff):
@@ -139,3 +143,32 @@ def test_courier_corrected_address_does_not_reuse_obsolete_coordinates(handoff):
     destination = response.json()['entregas'][0]['destination']
     assert destination['label'].startswith('Rua nova')
     assert destination['latitude'] is None and destination['longitude'] is None
+
+
+def test_code_cannot_confirm_another_tenant_or_another_couriers_order(handoff):
+    from app.crypt import encrypt_field
+    from app.models import MotoboyTokenAtivo
+    from app.security import create_motoboy_token
+    h = handoff
+    with SessionLocal() as db:
+        order = db.get(Comanda, h.first)
+        owner = order.motoboy_id
+        order.delivery_receipt_secret = encrypt_field('007')
+        other_rid, other_mid = h.rid + 1000000, owner + 10000000
+        db.add(Restaurante(id=other_rid,nome='Other isolated restaurant',plano='premium',saas_status='active'))
+        db.flush()
+        for mid, rid, jti in [(other_mid,other_rid,'other-tenant-'+h.first),(owner+1,h.rid,'other-courier-'+h.first)]:
+            db.add(Motoboy(id=mid,restaurante_id=rid,nome='Other courier',ativo=True,telefone='85999990000'))
+            db.flush()
+            db.add(MotoboyTokenAtivo(jti=jti,motoboy_id=mid,restaurante_id=rid,revogado=False))
+        db.commit()
+    endpoint = f'/comandas/motoboys/pedidos/{h.first}/confirmar-entrega'
+    for mid, rid, jti, status in [(other_mid,other_rid,'other-tenant-'+h.first,404),(owner+1,h.rid,'other-courier-'+h.first,409)]:
+        token = create_motoboy_token(mid,rid,jti)
+        response = h.client.post(endpoint,headers={'X-Koma-Delivery-Token':token},json={'code':'007'})
+        assert response.status_code == status, response.text
+    with SessionLocal() as db:
+        row=db.get(Comanda,h.first)
+        assert row.delivery_status == 'transito' and not row.delivery_receipt_failed_attempts
+    ok = h.client.post(endpoint,headers=h.headers,json={'code':'007'})
+    assert ok.status_code == 200, ok.text

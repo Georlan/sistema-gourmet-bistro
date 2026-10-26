@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MapPin, CheckCircle2, RefreshCw, Navigation, AlertCircle, ArrowUpRight, Sun, Moon, PackageCheck, ArrowUp, ArrowDown, Copy, Store, WifiOff, ListOrdered, LocateFixed } from 'lucide-react';
+import { MapPin, CheckCircle2, RefreshCw, AlertCircle, Sun, Moon, PackageCheck, ArrowUp, ArrowDown, Store, WifiOff, ListOrdered, LocateFixed } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 import { KomaLogo } from './KomaLogo';
 import { nextKomaTheme, persistKomaTheme, readKomaTheme, applyKomaTheme } from '../config/theme';
@@ -9,33 +9,18 @@ import { CourierRideArtwork } from './courier/CourierRideArtwork';
 import { useCourierAutoOrder } from './courier/useCourierAutoOrder';
 import { createCourierSnapshotCache } from './courier/courierSnapshotCache';
 import { useCourierRealtime } from './courier/useCourierRealtime';
+import { useCourierThemeTransition } from './courier/useCourierThemeTransition';
 import { useCourierOfflineShell } from './courier/useCourierOfflineShell';
-import { CourierPayment, type CourierPaymentData } from './courier/CourierPayment';
+import { CourierPayment } from './courier/CourierPayment';
+import { courierCodeLength, type CourierOrder } from './courier/courierTypes';
+import { CourierGlyph } from './courier/CourierGlyph';
+import { CourierOrderDialog } from './courier/CourierOrderDialog';
 import ifoodLogo from '../assets/brand/delivery/ifood.png';
 import food99Logo from '../assets/brand/delivery/99food.png';
 import keetaLogo from '../assets/brand/delivery/keeta.png';
 import { KOMA_WORDMARK_ON_DARK_SRC } from '../brand/komaBrand';
 const nativeKomaChannels = new Set(['caixa', 'cardapio', 'koma']);
 const deliveryLogos = new Map([['ifood', ifoodLogo], ['99food', food99Logo], ['keeta', keetaLogo], ...Array.from(nativeKomaChannels, channel => [channel, KOMA_WORDMARK_ON_DARK_SRC] as [string, string])]);
-interface EntregaItem {
-  id: string;
-  numero_pedido: number | null;
-  requires_delivery_code?: boolean;
-  cliente_nome: string;
-  delivery_endereco: string | null;
-  delivery_taxa: number;
-  delivery_status: string;
-  total: number;
-  valor_pago: number;
-  valor_a_cobrar: number;
-  itens_resumo: string;
-  criado_em: string | null;
-  source?: { channel: string; label: string; references: {provider: string; reference: string}[] };
-  destination?: { label: string | null; complement: string | null; reference: string | null; route_query: string | null; latitude?: number | null; longitude?: number | null };
-  payment?: CourierPaymentData;
-  items?: { name: string; quantity: number; notes: string | null; modifiers: string[] }[];
-  confirmation?: { mode: 'koma_code' | 'local' | 'partner_pending'; enabled: boolean; code_length: number | null; reason: string | null };
-}
 
 interface MotoboyProfile {
   id: number;
@@ -55,26 +40,31 @@ function bootstrapDeliveryToken(): string {
   // Compatibilidade temporária para links antigos já enviados. O segredo é removido
   // antes de qualquer chamada de rede e nunca volta para query string da API.
   const legacyQueryToken = queryParams.get('token')?.trim() || '';
-  const token = tokenFromFragment || legacyQueryToken || sessionStorage.getItem(DELIVERY_TOKEN_SESSION_KEY)?.trim() || '';
+  let storedToken = '';
+  try { storedToken = sessionStorage.getItem(DELIVERY_TOKEN_SESSION_KEY)?.trim() || ''; }
+  catch { /* A fresh access link still works in memory when tab storage is blocked. */ }
+  const token = tokenFromFragment || legacyQueryToken || storedToken;
 
-  if (tokenFromFragment || legacyQueryToken) {
-    const canonicalPath = window.location.pathname.startsWith('/entregador')
-      ? window.location.pathname
-      : '/entregador';
-    window.history.replaceState(null, '', canonicalPath);
-  }
   if (token) {
-    sessionStorage.setItem(DELIVERY_TOKEN_SESSION_KEY, token);
+    try { sessionStorage.setItem(DELIVERY_TOKEN_SESSION_KEY, token); }
+    catch { /* Reload requires reopening the access link; never persist it outside this tab. */ }
   }
   return token;
 }
 
+function clearDeliveryTokenFromUrl() {
+  const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const query = new URLSearchParams(window.location.search);
+  if (!fragment.has('token') && !query.has('token')) return;
+  window.history.replaceState(null, '', window.location.pathname.startsWith('/entregador') ? window.location.pathname : '/entregador');
+}
+
 const RESUME_REFRESH_MIN_MS = 15_000;
-const money = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-const formatMoney = (value: number) => money.format(value);
 
 export function MotoboyPwaPage() {
   const [token, setToken] = useState(bootstrapDeliveryToken);
+  // After initialization: StrictMode may read the link twice when tab storage is unavailable.
+  useEffect(clearDeliveryTokenFromUrl, []);
   const [theme, setTheme] = useState(readKomaTheme);
   const cache = useMemo(() => createCourierSnapshotCache(token), [token]);
   const activeCacheRef = useRef(cache); activeCacheRef.current = cache;
@@ -91,16 +81,11 @@ export function MotoboyPwaPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(token ? null : 'Abra o link de acesso enviado pelo caixa.');
   const [motoboy, setMotoboy] = useState<MotoboyProfile | null>(null);
-  const [entregas, setEntregas] = useState<EntregaItem[]>([]);
+  const [entregas, setEntregas] = useState<CourierOrder[]>([]);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [receiptCode, setReceiptCode] = useState('');
   const [receiptError, setReceiptError] = useState('');
-  const [copiedAddressId, setCopiedAddressId] = useState<string | null>(null);
-  useEffect(() => {
-    if (!copiedAddressId) return;
-    const timer = setTimeout(() => setCopiedAddressId(null), 3000);
-    return () => clearTimeout(timer);
-  }, [copiedAddressId]);
+  const [detailsId, setDetailsId] = useState<string | null>(null);
   const receiptInputRef = useRef<HTMLInputElement>(null);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [uncertainId, setUncertainId] = useState<string | null>(null);
@@ -118,8 +103,7 @@ export function MotoboyPwaPage() {
   useEffect(() => { if (receiptError) receiptInputRef.current?.focus(); }, [receiptError]);
 
   useEffect(() => {
-    if (reviewId) (receiptInputRef.current || reviewConfirmRef.current)?.focus();
-    else if (previousReviewRef.current) document.getElementById(`courier-confirm-${previousReviewRef.current}`)?.focus();
+    if (!reviewId && previousReviewRef.current) document.getElementById(`courier-confirm-${previousReviewRef.current}`)?.focus();
     previousReviewRef.current = reviewId;
   }, [reviewId]);
 
@@ -139,7 +123,7 @@ export function MotoboyPwaPage() {
     getRef.current?.abort(); getRef.current = null;
     postRef.current?.abort(); postRef.current = null; isConfirmingRef.current = false;
     profileRef.current = null; setMotoboy(null); setEntregas([]); setLoading(false);
-    setConfirmingId(null); setIsRefreshing(false); setAccessInvalid(true); setReviewId(null);
+    setConfirmingId(null); setIsRefreshing(false); setAccessInvalid(true); setReviewId(null); setDetailsId(null);
     setErrorMsg('Acesso encerrado. Solicite um novo link ao Caixa.');
     void cache.clear();
   }, [cache]);
@@ -172,7 +156,7 @@ export function MotoboyPwaPage() {
       if (!data.motoboy?.id || !Array.isArray(data.entregas)) throw new Error('Não foi possível conferir as entregas. Tente atualizar.');
       profileRef.current = data.motoboy;
       setCacheOnly(false); void persistPanel(data);
-      setMotoboy(data.motoboy); setEntregas(data.entregas.filter((item: EntregaItem) => item.delivery_status === 'transito'));
+      setMotoboy(data.motoboy); setEntregas(data.entregas.filter((item: CourierOrder) => item.delivery_status === 'transito'));
       setErrorMsg(null); setUncertainId(null); setRefreshFailed(false); setLastUpdated(Date.now());
       return true;
     } catch (err: any) {
@@ -200,7 +184,7 @@ export function MotoboyPwaPage() {
       if (!active) return;
       if (saved && !profileRef.current) {
         profileRef.current = saved.motoboy; setMotoboy(saved.motoboy);
-        setEntregas(saved.entregas as unknown as EntregaItem[]); setLastUpdated(saved.at);
+        setEntregas(saved.entregas as unknown as CourierOrder[]); setLastUpdated(saved.at);
         setCacheOnly(true); setLoading(false); setErrorMsg(null);
       }
       setCacheHydrating(false);
@@ -252,7 +236,7 @@ export function MotoboyPwaPage() {
     const current = entregas.find(item => item.id === comandaId);
     if (!current || current.confirmation?.enabled === false) return;
     const requiresCode = current.requires_delivery_code;
-    if (requiresCode && !/^[0-9]{4}$/.test(receiptCode)) { setReceiptError('Digite os 4 dígitos informados pelo cliente.'); receiptInputRef.current?.focus(); return; }
+    if (requiresCode && !(new RegExp(`^[0-9]{${courierCodeLength(current)}}$`)).test(receiptCode)) { setReceiptError(`Digite os ${courierCodeLength(current)} dígitos informados pelo cliente.`); receiptInputRef.current?.focus(); return; }
     setReceiptError('');
     isConfirmingRef.current = true;
     // A GET started before this mutation must never restore a completed card.
@@ -303,13 +287,14 @@ export function MotoboyPwaPage() {
   useEffect(() => {
     const switchAccess = () => {
       const next = bootstrapDeliveryToken();
+      clearDeliveryTokenFromUrl();
       if (next === token) return;
       getRef.current?.abort(); getRef.current = null;
       postRef.current?.abort(); postRef.current = null;
       isConfirmingRef.current = false; profileRef.current = null;
       setMotoboy(null); setEntregas([]); setReviewId(null); setConfirmingId(null);
       setAccessInvalid(false); setCacheOnly(false); setCacheIssue(false); setCacheHydrating(Boolean(next)); setRealtimePending(false);
-      setUncertainId(null); setRefreshFailed(false); setReconnectRequested(false); setLastUpdated(null); setPlanning(false); setReceiptCode(''); setReceiptError(''); setCopiedAddressId(null);
+      setUncertainId(null); setRefreshFailed(false); setReconnectRequested(false); setLastUpdated(null); setPlanning(false); setReceiptCode(''); setReceiptError(''); setDetailsId(null);
       setLoading(Boolean(next)); setErrorMsg(next ? null : 'Abra o link enviado pelo caixa.');
       setToken(next);
     };
@@ -333,13 +318,19 @@ export function MotoboyPwaPage() {
   });
   const blocked = Boolean(confirmingId) || isRefreshing || Boolean(uncertainId);
   const confirmationBlocked = blocked || cacheOnly || !isOnline || reconnectRequested;
+  useEffect(() => {
+    if (reviewId && !entregas.some(item => item.id === reviewId)) setReviewId(null);
+    if (detailsId && !entregas.some(item => item.id === detailsId)) setDetailsId(null);
+  }, [entregas, reviewId, detailsId]);
+  const dialogOrder = entregas.find(item => item.id === (reviewId || detailsId));
+  const themeTransition = useCourierThemeTransition(confirmationBlocked || loading || planning || Boolean(dialogOrder) || entregas.length > 30);
   const automatic = useCourierAutoOrder(token, ordered, blocked || reconnectRequested || !trip.ready, trip.save);
 
   return <div className="k-courier">
     <header className="k-courier__header">
       <KomaLogo withText contextualWordmark={false} size="md" />
       <div className="k-courier__tools">
-        <button type="button" className="k-courier__icon" aria-label={theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'} onClick={() => setTheme(persistKomaTheme(nextKomaTheme(theme)))}>
+        <button type="button" className="k-courier__icon" aria-label={theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'} disabled={themeTransition.animating} onClick={event => themeTransition.change(event.currentTarget, () => setTheme(persistKomaTheme(nextKomaTheme(readKomaTheme()))))}>
           {theme === 'dark' ? <Sun aria-hidden="true" size={20} /> : <Moon aria-hidden="true" size={20} />}
         </button>
         {token && <button type="button" className="k-courier__icon" aria-label="Atualizar Pedidos" disabled={!isOnline || Boolean(confirmingId) || isRefreshing || loading} onClick={() => void carregarDadosPainel(token)}>
@@ -388,27 +379,24 @@ export function MotoboyPwaPage() {
                   <div className="k-courier__origin">{entrega.source && <span className="k-courier__source" data-channel={entrega.source.channel} data-koma-native={isKomaSource || undefined} title={isKomaSource ? `Pedido KÔMA · ${entrega.source.label}` : entrega.source.label}>{sourceLogo ? <img src={sourceLogo} alt={isKomaSource ? 'KÔMA' : entrega.source.label} width={52} height={28} decoding="async" /> : <><Store size={13} aria-hidden="true" />{entrega.source.label}</>}</span>}</div>
                 </div>
                 <div className="k-courier__card-body">
-                  <p className="k-courier__address"><MapPin size={19} aria-hidden="true" /><span>{address || 'Endereço não informado. Confira com o caixa.'}</span></p>
-                  {entrega.destination?.complement && <p className="k-courier__address-note">{entrega.destination.complement}</p>}
-                  {entrega.destination?.reference && <p className="k-courier__reference"><span>Referência</span>{entrega.destination.reference}</p>}
-                  <div className="k-courier__contact">
-                    {routeQuery && <a className="k-courier__secondary" aria-label="Abrir localização no Google Maps" href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(routeQuery)}&dir_action=navigate`} target="_blank" rel="noopener noreferrer"><Navigation size={17} aria-hidden="true" />Maps<ArrowUpRight size={15} aria-hidden="true" /></a>}
-                    {address && <button type="button" className="k-courier__icon" aria-label={`Copiar endereço de ${entrega.cliente_nome}`} onClick={async () => { try { await navigator.clipboard.writeText([address, entrega.destination?.complement, entrega.destination?.reference].filter(Boolean).join(', ')); setCopiedAddressId(entrega.id); } catch { showToast('Não foi possível copiar. O endereço continua na tela.', 'error'); } }}>{copiedAddressId === entrega.id ? <CheckCircle2 size={18} aria-hidden="true" /> : <Copy size={18} aria-hidden="true" />}<span className="sr-only" role="status">{copiedAddressId === entrega.id ? 'Endereço copiado.' : ''}</span></button>}
+                  <div className="k-courier__destination">
+                    <MapPin size={20} aria-hidden="true" />
+                    <div className="k-courier__destination-copy"><p className="k-courier__address">{address || 'Endereço não informado. Confira com o caixa.'}</p>
+                      {entrega.destination?.complement && <p className="k-courier__address-note">{entrega.destination.complement}</p>}
+                      {entrega.destination?.reference && <p className="k-courier__reference"><span>Referência</span>{entrega.destination.reference}</p>}
+                    </div>
+                    {routeQuery && <a className="k-courier__map" aria-label={`Abrir localização no Google Maps de ${entrega.cliente_nome}`} href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(routeQuery)}&dir_action=navigate`} target="_blank" rel="noopener noreferrer"><CourierGlyph kind="route" /><span>Maps</span></a>}
                   </div>
                   <CourierPayment payment={entrega.payment} legacyDue={entrega.valor_a_cobrar} />
-                  <details className="k-courier__details"><summary>{entrega.items?.length ? `${itemCount} ${itemCount === 1 ? 'item' : 'itens'}` : 'Ver pedido'}</summary>
-                    {entrega.items?.length ? <ul className="k-courier__items">{entrega.items.map((item, index) => <li key={index}><strong><span>{item.quantity}×</span> {item.name}</strong>{item.modifiers.length > 0 && <p>{item.modifiers.join(', ')}</p>}{item.notes && <p className="k-courier__item-note">{item.notes}</p>}</li>)}</ul> : <p>{entrega.itens_resumo || 'Itens não informados'}</p>}
-                    <dl><div><dt>Total</dt><dd>{formatMoney(entrega.total)}</dd></div></dl>
-                    {entrega.source?.references.map(ref => <p className="k-courier__external-reference" key={`${ref.provider}:${ref.reference}`}>Referência {entrega.source?.label}: {ref.reference}</p>)}
-                  </details>
+                  <button type="button" className="k-courier__items-action" id={`courier-items-${entrega.id}`} aria-haspopup="dialog" onClick={() => setDetailsId(entrega.id)}><span><CourierGlyph kind="items" />{entrega.items?.length ? `Ver ${itemCount} ${itemCount === 1 ? 'item' : 'itens'}` : 'Ver pedido'}</span><span aria-hidden="true">›</span></button>
                   {!confirmationEnabled && <p className="k-courier__partner-notice">Confirmação: confira no Caixa.</p>}
-                  {reviewId === entrega.id ? <div className="k-courier__confirm" onKeyDown={event => { if (event.key === 'Escape') setReviewId(null); }} role="group" aria-label={`Confirmar entrega do pedido ${entrega.numero_pedido ?? 'sem número'}`}>{entrega.requires_delivery_code ? <div className="k-courier__receipt"><label htmlFor={`receipt-${entrega.id}`}>Código de entrega</label><input id={`receipt-${entrega.id}`} ref={receiptInputRef} type="text" inputMode="numeric" enterKeyHint="done" autoComplete="one-time-code" pattern="[0-9]{4}" maxLength={4} value={receiptCode} disabled={Boolean(confirmingId)} onChange={event => { setReceiptCode(event.target.value.replace(/[^0-9]/g, '').slice(0, 4)); setReceiptError(''); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); void handleConfirmarEntrega(entrega.id); } }} aria-invalid={Boolean(receiptError)} aria-describedby={receiptError ? `receipt-error-${entrega.id}` : undefined} />{receiptError && <p id={`receipt-error-${entrega.id}`} role="alert">{receiptError}</p>}</div> : <p>Pedido entregue?</p>}<div><button type="button" className="k-courier__secondary" onClick={() => setReviewId(null)}>Cancelar</button><button type="button" className="k-courier__action" ref={reviewConfirmRef} disabled={confirmationBlocked || !confirmationEnabled} onClick={() => void handleConfirmarEntrega(entrega.id)}>{confirmingId === entrega.id ? 'Confirmando…' : 'Confirmar'}</button></div></div>
-                    : <button type="button" id={`courier-confirm-${entrega.id}`} className="k-courier__action" disabled={confirmationBlocked || !confirmationEnabled} onClick={() => { setReceiptCode(''); setReceiptError(''); setReviewId(entrega.id); }}>{confirmingId === entrega.id ? <><RefreshCw size={18} className="k-courier__spin" aria-hidden="true" />Confirmando…</> : <><CheckCircle2 size={18} aria-hidden="true" />Concluir entrega</>}</button>}
+                  <button type="button" id={`courier-confirm-${entrega.id}`} className={`k-courier__action${(entrega.payment?.status === 'collect' || (!entrega.payment && entrega.valor_a_cobrar > 0)) ? ' k-courier__action--collect' : ''}`} aria-haspopup="dialog" disabled={confirmationBlocked || !confirmationEnabled} onClick={() => { setDetailsId(null); setReceiptCode(''); setReceiptError(''); setReviewId(entrega.id); }}>{confirmingId === entrega.id ? <><RefreshCw size={18} className="k-courier__spin" aria-hidden="true" />Confirmando…</> : <><CourierGlyph kind="delivery" />{entrega.requires_delivery_code ? 'Confirmar com código' : 'Concluir entrega'}</>}</button>
                 </div>
               </article>;
             })}</div>}
           </>}
         </>}
     </main>
+    {dialogOrder && <CourierOrderDialog key={`${reviewId ? 'confirm' : 'items'}-${dialogOrder.id}`} order={dialogOrder} mode={reviewId ? 'confirm' : 'items'} sourceLogo={dialogOrder.source ? deliveryLogos.get(dialogOrder.source.channel) : undefined} sourceLabel={dialogOrder.source && nativeKomaChannels.has(dialogOrder.source.channel) ? 'KÔMA' : dialogOrder.source?.label} code={receiptCode} error={receiptError} pending={Boolean(confirmingId)} blocked={confirmationBlocked || dialogOrder.confirmation?.enabled === false} inputRef={receiptInputRef} confirmRef={reviewConfirmRef} onCode={value => { setReceiptCode(value); setReceiptError(''); }} onConfirm={() => void handleConfirmarEntrega(dialogOrder.id)} onClose={() => { const id = detailsId; setDetailsId(null); setReviewId(null); if (id) document.getElementById(`courier-items-${id}`)?.focus(); }} />}
   </div>;
 }

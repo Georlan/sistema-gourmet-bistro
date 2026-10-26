@@ -1,5 +1,6 @@
 import datetime
 import uuid
+import pytest
 from decimal import Decimal
 from dataclasses import replace
 from types import SimpleNamespace
@@ -16,10 +17,11 @@ from app.application.orders.commands import CreateOrderCommand, CustomerInput, D
 from app.domain.orders.types import OrderChannel, FulfillmentType
 
 
-def test_customer_receives_code_courier_validates_and_canonical_state_changes(monkeypatch):
-    rid = 99041
+@pytest.mark.parametrize('paid', [False, True])
+def test_customer_receives_code_courier_validates_and_canonical_state_changes(monkeypatch, paid):
+    rid = 99041000 + int(uuid.uuid4().hex[:5], 16)
     uid, pid = f'receipt-u-{uuid.uuid4().hex[:8]}', f'receipt-p-{uuid.uuid4().hex[:8]}'
-    courier_id = 9904101
+    courier_id = rid * 10 + 1
     with SessionLocal() as db:
         db.add(Restaurante(id=rid, nome='Receipt local', plano='premium', saas_status='active'))
         db.flush()
@@ -37,7 +39,7 @@ def test_customer_receives_code_courier_validates_and_canonical_state_changes(mo
         created = OrderApplicationService.create_order(db, command)
         order = db.query(Comanda).filter_by(id=created.comanda_id, restaurante_id=rid).one()
         code = customer_delivery_receipt(order)
-        assert code and len(code) == 4 and code.isdigit()
+        assert code and len(code) == 3 and code.isdigit()
         assert code not in order.delivery_receipt_secret
         original = order.delivery_receipt_secret
         issue_delivery_receipt(order)
@@ -47,12 +49,15 @@ def test_customer_receives_code_courier_validates_and_canonical_state_changes(mo
         replay = OrderApplicationService.create_order(db, command)
         assert replay.comanda_id == created.comanda_id
         assert customer_delivery_receipt(order) == code
+        if paid:
+            order.online_payment_status = 'approved'
+            order.valor_pago = 12.9
         order.motoboy_id = courier_id
         order.delivery_status = 'transito'
         _, tracking_token = create_conversation_for_order(db, rid, order.id)
         db.commit()
         order_id = order.id
-    client = TestClient(app)
+    client = TestClient(app, client=(f'receipt-{rid}', 50000))
     admin_token = create_access_token(subject=uid, restaurante_id=rid, role='admin')
     link = client.post(f'/comandas/motoboys/{courier_id}/gerar-link', headers={'Authorization': f'Bearer {admin_token}'})
     assert link.status_code == 200, link.text
@@ -60,7 +65,8 @@ def test_customer_receives_code_courier_validates_and_canonical_state_changes(mo
     panel = client.get('/comandas/motoboys/painel-entregador', headers=headers)
     assert panel.status_code == 200, panel.text
     assert panel.json()['entregas'][0]['requires_delivery_code'] is True
-    assert code not in panel.text
+    assert 'delivery_receipt_secret' not in panel.text and 'delivery_receipt_code' not in panel.text
+    assert panel.json()['entregas'][0]['confirmation']['code_length'] == 3
     for suffix in ['', '/summary']:
         tracked = client.get(f'/api/cardapio/pedidos/acompanhar/{tracking_token}{suffix}')
         assert tracked.status_code == 200, tracked.text
@@ -68,7 +74,7 @@ def test_customer_receives_code_courier_validates_and_canonical_state_changes(mo
     endpoint = f'/comandas/motoboys/pedidos/{order_id}/confirmar-entrega'
     missing = client.post(endpoint, headers=headers)
     assert missing.status_code == 422
-    wrong = '9999' if code != '9999' else '8888'
+    wrong = '999' if code != '999' else '888'
     for attempt in range(5):
         response = client.post(endpoint, headers=headers, json={'code': wrong})
         assert response.status_code == (429 if attempt == 4 else 422), response.text
@@ -94,8 +100,16 @@ def test_customer_receives_code_courier_validates_and_canonical_state_changes(mo
     with SessionLocal() as db:
         order = db.query(Comanda).filter_by(id=order_id).one()
         assert order.delivery_status == 'finalizado'
+        assert bool(order.fechada) is paid
+        assert float(order.valor_pago or 0) == (12.9 if paid else 0)
         assert customer_delivery_receipt(order) is None
     assert client.get(f'/api/cardapio/pedidos/acompanhar/{tracking_token}/summary').json()['delivery_receipt_code'] is None
+    cashier = client.get('/comandas/delivery/ativos', headers={'Authorization':f'Bearer {admin_token}'})
+    assert cashier.status_code == 200, cashier.text
+    visible = next((row for row in cashier.json() if row['id'] == order_id), None)
+    assert (visible is None) is paid
+    if visible:
+        assert visible['delivery_status'] == 'finalizado' and not visible['fechada']
 
 
 def test_receipt_is_not_exposed_for_terminal_pickup_or_unreadable_ciphertext():
@@ -110,3 +124,26 @@ def test_receipt_is_not_exposed_for_terminal_pickup_or_unreadable_ciphertext():
     row.delivery_status = 'transito'
     row.delivery_receipt_secret = 'gAAAAAcannot-be-decrypted'
     assert customer_delivery_receipt(row) is None
+
+
+def test_three_digit_generation_preserves_leading_zero_and_legacy_codes(monkeypatch):
+    from app.crypt import encrypt_field
+    monkeypatch.setattr('app.services.delivery_receipts.secrets.randbelow', lambda limit: 7)
+    row = SimpleNamespace(fechada=False, delivery_status='transito', tipo='Delivery', delivery_receipt_secret=None)
+    issue_delivery_receipt(row)
+    assert customer_delivery_receipt(row) == '007'
+    row.delivery_receipt_secret = encrypt_field('0012')
+    issue_delivery_receipt(row)
+    assert customer_delivery_receipt(row) == '0012'
+
+
+def test_already_issued_four_digit_receipt_still_validates():
+    from unittest.mock import Mock
+    from app.crypt import encrypt_field
+    from app.services.delivery_receipts import verify_delivery_receipt
+    row = SimpleNamespace(fechada=False,delivery_status='transito',tipo='Delivery',delivery_receipt_secret=encrypt_field('0012'),delivery_receipt_retry_at=None,delivery_receipt_failed_attempts=0)
+    with pytest.raises(Exception) as error:
+        verify_delivery_receipt(Mock(),row,'012')
+    assert error.value.status_code == 422
+    verify_delivery_receipt(Mock(),row,'0012')
+    assert row.delivery_receipt_failed_attempts == 0

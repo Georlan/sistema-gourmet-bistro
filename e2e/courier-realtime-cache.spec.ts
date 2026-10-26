@@ -21,7 +21,7 @@ test('cache cifrado restaura no reload sem API; outra credencial não herda a li
  await page.reload();
  await expect(page.getByRole('article',{name:'Pedido 701'})).toBeVisible();
  await expect(page.getByRole('status').filter({hasText:'Sem conexão'})).toBeVisible();
- await expect(page.getByRole('button',{name:'Concluir entrega'})).toBeDisabled();
+ await expect(page.getByRole('button',{name:/^(Concluir entrega|Confirmar com código)$/})).toBeDisabled();
  await expect(page.getByRole('link',{name:/Google Maps/})).toBeVisible();
  await page.evaluate(()=>{location.hash='token=another-offline-courier';});
  await expect(page.getByRole('article')).toHaveCount(0);
@@ -57,15 +57,15 @@ test('código com rede confirma uma vez, relê evento e não ressuscita a entreg
  const ws=await sockets(page);
  await page.route(`${API}/**`,route=>{
   if(route.request().method()==='POST'){
-   posts++;expect(route.request().postDataJSON()).toEqual({code:'0123'});items=[];
+   posts++;expect(route.request().postDataJSON()).toEqual({code:'012'});items=[];
    for(let i=0;i<10;i++)ws.at(-1)!.send(JSON.stringify({event:'courier_panel_updated'}));
    return route.fulfill({json:{status:'sucesso'}});
   }
   return route.fulfill({json:panel(items)});
  });
  await open(page);await expect.poll(()=>cached(page)).toBe(1);
- await page.getByRole('button',{name:'Concluir entrega'}).click();
- await page.getByLabel('Código de entrega').fill('0123');await page.getByLabel('Código de entrega').press('Enter');
+ await page.getByRole('button',{name:/^(Concluir entrega|Confirmar com código)$/}).click();
+ await page.getByLabel('Código de entrega').fill('012');await page.getByLabel('Código de entrega').press('Enter');
  await expect(page.getByRole('heading',{name:'Nenhuma entrega em rota'})).toBeVisible();expect(posts).toBe(1);
  await expect(page.getByRole('button',{name:'Atualizar Pedidos'})).toBeEnabled();
  await page.addInitScript(()=>Object.defineProperty(navigator,'onLine',{configurable:true,get:()=>false}));

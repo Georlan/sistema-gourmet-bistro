@@ -10,6 +10,7 @@ const ACTIVE_DIGITAL_STATUSES = new Set<DeliveryOrderView['status']>([
   'producao',
   'pronto',
   'transito',
+  'finalizado',
 ]);
 
 const DELIVERY_TYPES = new Set(['delivery', 'entrega']);
@@ -92,6 +93,7 @@ export function projectApiComandaToDeliveryView(c: any): DeliveryOrderView | nul
   const rawAddress = String(c?.delivery_endereco || '').trim();
   const modalidade = readDigitalOrderFulfillment(c?.tipo, rawAddress);
   if (!modalidade) return null;
+  if (status === 'finalizado' && (modalidade !== 'delivery' || c?.fechada || amountDue <= 0 || c?.online_payment_status === 'approved')) return null;
 
   const isQuickSale =
     modalidade === 'retirada' &&
@@ -116,7 +118,7 @@ export function projectApiComandaToDeliveryView(c: any): DeliveryOrderView | nul
     isQuickSale,
     quantidadeItens: activeItems.length,
     modalidade,
-    pago: activeItems.length > 0 && activeItems.every((item: any) => Boolean(item?.pago)),
+    pago: status === 'finalizado' ? amountDue <= 0 : activeItems.length > 0 && activeItems.every((item: any) => Boolean(item?.pago)),
     status,
     endereco: modalidade === 'delivery' ? rawAddress : '',
     paymentMethod: c?.delivery_forma_pagamento || null,
@@ -302,6 +304,7 @@ export function projectDeliveryOrdersFromSharedSnapshot(
     const rawAddress = String(order.deliveryAddress || '').trim();
     const modalidade = readDigitalOrderFulfillment(order.tipo, rawAddress);
     if (!modalidade) return [];
+    if (status === 'finalizado' && (modalidade !== 'delivery' || (order as any).fechada || amountDue <= 0)) return [];
 
     const origemOperacional = order.origemOperacional || 'desconhecida';
     let canal: DeliveryOrderView['canal'] = origemOperacional === 'smartpos' ? 'smartpos' : 'site';
@@ -331,7 +334,7 @@ export function projectDeliveryOrdersFromSharedSnapshot(
       isQuickSale,
       quantidadeItens: activeItems.length,
       modalidade,
-      pago: activeItems.length > 0 && activeItems.every((item) => Boolean(item.pago)),
+      pago: status === 'finalizado' ? amountDue <= 0 : activeItems.length > 0 && activeItems.every((item) => Boolean(item.pago)),
       status,
       endereco: modalidade === 'delivery' ? rawAddress : '',
       paymentMethod: order.paymentMethod ?? null,

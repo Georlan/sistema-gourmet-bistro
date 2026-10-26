@@ -163,7 +163,13 @@ class OrderLifecycleCoordinator:
         if comanda.motoboy_id and str(comanda.tipo or '').casefold() in {'delivery', 'entrega'}:
             from ...services.courier_realtime import queue_courier_refresh
             queue_courier_refresh(db, restaurant_id, comanda.motoboy_id)
-        if target in _TERMINAL_ORDER_STATUSES:
+        from ...services.order_financials import open_balance
+        awaiting_cashier_receipt = (
+            courier_id is not None and target == OrderStatus.COMPLETED
+            and comanda.online_payment_status != 'approved'
+            and open_balance(comanda) > 0
+        )
+        if target in _TERMINAL_ORDER_STATUSES and not awaiting_cashier_receipt:
             comanda.fechada = True
             if comanda.fechado_em is None:
                 comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)

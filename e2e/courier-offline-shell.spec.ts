@@ -20,7 +20,7 @@ for(let install=1;install<=3;install++)test(`instalação nova ${install}: abre 
  await page.reload({waitUntil:'domcontentloaded'});
  await expect(page.getByRole('article',{name:'Pedido 811'})).toBeVisible();
  await expect(page.getByRole('status').filter({hasText:'Sem conexão'})).toBeVisible();
- await expect(page.getByRole('button',{name:'Concluir entrega'})).toBeDisabled();
+ await expect(page.getByRole('button',{name:/^(Concluir entrega|Confirmar com código)$/})).toBeDisabled();
  const cached=await page.evaluate(async()=>{
   const urls:string[]=[];
   for(const name of await caches.keys())if(name.startsWith('koma-courier-shell-v1:'))urls.push(...(await(await caches.open(name)).keys()).map(request=>request.url));

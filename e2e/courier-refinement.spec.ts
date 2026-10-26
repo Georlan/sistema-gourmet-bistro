@@ -42,18 +42,19 @@ test('sessão por aba, links corretos, detalhes sob demanda e confirmação prot
   await expect(page.locator('a[href^="tel:"]')).toHaveCount(0);
   await expect(page.getByText(delivery.delivery_telefone)).toHaveCount(0);
   await expect(card.getByText(delivery.itens_resumo)).toBeHidden();
-  await card.locator('summary').click();
-  await expect(card.getByText(delivery.itens_resumo)).toBeVisible();
-  await card.getByRole('button',{name:'Concluir entrega'}).click();
+  await card.getByRole('button',{name:/Ver pedido|Ver \d+ ite/}).click();
+  await expect(page.getByRole('dialog').getByText(delivery.itens_resumo)).toBeVisible();
+  await page.getByRole('button',{name:'Voltar às entregas'}).click();
+  await card.getByRole('button',{name:/^(Concluir entrega|Confirmar com código)$/}).click();
   expect(posts).toBe(0);
-  await expect(card.getByRole('button',{name:'Confirmar',exact:true})).toBeFocused();
-  await card.getByRole('button',{name:'Confirmar',exact:true}).press('Escape');
-  await expect(card.getByRole('button',{name:'Concluir entrega'})).toBeFocused();
-  await card.getByRole('button',{name:'Concluir entrega'}).click();
-  await card.getByRole('button',{name:'Cancelar'}).click();
+  await expect(page.getByRole('dialog').getByRole('button',{name:'Confirmar',exact:true})).toBeFocused();
+  await page.getByRole('dialog').getByRole('button',{name:'Confirmar',exact:true}).press('Escape');
+  await expect(card.getByRole('button',{name:/^(Concluir entrega|Confirmar com código)$/})).toBeFocused();
+  await card.getByRole('button',{name:/^(Concluir entrega|Confirmar com código)$/}).click();
+  await page.getByRole('dialog').getByRole('button',{name:'Cancelar'}).click();
   expect(posts).toBe(0);
-  await card.getByRole('button',{name:'Concluir entrega'}).click();
-  await card.getByRole('button',{name:'Confirmar',exact:true}).click();
+  await card.getByRole('button',{name:/^(Concluir entrega|Confirmar com código)$/}).click();
+  await page.getByRole('dialog').getByRole('button',{name:'Confirmar',exact:true}).click();
   await expect.poll(()=>posts).toBe(1);
   await expect(page.getByRole('button',{name:'Confirmando…'})).toBeDisabled();
   release();
@@ -94,11 +95,11 @@ test('timeout e reconciliação falha mantêm confirmação bloqueada até confe
   });
   await open(page);
   await page.clock.install();
-  await page.getByRole('button',{name:'Concluir entrega'}).click();
+  await page.getByRole('button',{name:/^(Concluir entrega|Confirmar com código)$/}).click();
   await page.getByRole('button',{name:'Confirmar',exact:true}).click();
   await expect.poll(()=>posts).toBe(1);
   await page.clock.fastForward(12_100);
-  await expect(page.getByRole('button',{name:'Concluir entrega'})).toBeDisabled();
+  await expect(page.getByRole('button',{name:/^(Concluir entrega|Confirmar com código)$/})).toBeDisabled();
   await expect(page.getByText('Confirmação pendente. Toque em Verificar.')).toBeVisible();
   expect(posts).toBe(1);
   recover=true;
@@ -129,7 +130,7 @@ test('endereço e telefone ausentes não geram links vazios; abrir detalhes por 
   await fixture(page,[{...delivery,delivery_endereco:null as any,delivery_telefone:null as any}]);
   await open(page);
   await expect(page.getByRole('link')).toHaveCount(0);
-  const summary=page.locator('summary');
+  const summary=page.getByRole('button',{name:'Ver pedido'});
   await summary.focus();await summary.press('Enter');
   await expect(page.getByText(delivery.itens_resumo)).toBeVisible();
 });
@@ -152,7 +153,7 @@ test('viagem: sequência persiste no reload, avança após entrega e outro acess
   expect(posts).toBe(0);
   await page.reload();
   await expect(page.getByRole('article').first()).toHaveAttribute('aria-label','Pedido 102');
-  await page.getByRole('article').first().getByRole('button',{name:'Concluir entrega'}).click();
+  await page.getByRole('article').first().getByRole('button',{name:/^(Concluir entrega|Confirmar com código)$/}).click();
   await page.getByRole('button',{name:'Confirmar',exact:true}).click();
   await expect(page.getByRole('article').first()).toHaveAttribute('aria-label','Pedido 101');
   await expect(page.getByRole('article').first()).toContainText('Próxima entrega');
@@ -168,21 +169,21 @@ test('recebimento: campo único numérico, zeros iniciais, erro mantém formulá
   const codes:string[]=[];
   await page.route(`${API}/comandas/motoboys/pedidos/*/confirmar-entrega`,route=>{
     const code=route.request().postDataJSON().code;codes.push(code);
-    return route.fulfill(code==='0012'?{json:{status:'sucesso'}}:{status:422,json:{detail:'Código incorreto. Confira os 4 dígitos com o cliente.'}});
+    return route.fulfill(code==='012'?{json:{status:'sucesso'}}:{status:422,json:{detail:'Código incorreto. Confira os 3 dígitos com o cliente.'}});
   });
   await open(page);
-  await page.getByRole('button',{name:'Concluir entrega'}).click();
+  await page.getByRole('button',{name:/^(Concluir entrega|Confirmar com código)$/}).click();
   const input=page.getByLabel('Código de entrega');
   await expect(input).toBeFocused();
   await expect(input).toHaveAttribute('inputmode','numeric');
-  await input.fill('1111');await input.press('Enter');
+  await input.fill('111');await input.press('Enter');
   await expect(page.getByRole('alert')).toContainText('Código incorreto');
   await expect(input).toBeFocused();
-  await input.fill('0012');
-  expect(codes).toEqual(['1111']);
+  await input.fill('012');
+  expect(codes).toEqual(['111']);
   await input.press('Enter');
   await expect(page.getByRole('heading',{name:'Nenhuma entrega em rota'})).toBeVisible();
-  expect(codes).toEqual(['1111','0012']);
+  expect(codes).toEqual(['111','012']);
 });
 
 
@@ -202,38 +203,37 @@ for (const theme of ['dark','light']) test(`handoff ${theme}: cobrança, troco, 
     destination:{label:'Rua dos Ipês, 245, Centro, Fortaleza, CE',complement:'Casa azul · portão lateral',reference:'Em frente à praça',route_query:'Rua dos Ipês, 245, Centro, Fortaleza, CE'},
     payment:{status:'collect',method:'cash',amount_due:68.9,change_for:100,change_amount:31.1,change_needs_check:false},
     items:[{name:'Hambúrguer artesanal',quantity:2,notes:'Sem cebola',modifiers:['Queijo extra']},{name:'Suco de laranja',quantity:1,notes:null,modifiers:[]}],
-    confirmation:{mode:'koma_code',enabled:true,code_length:4,reason:null},requires_delivery_code:true,
+    confirmation:{mode:'koma_code',enabled:true,code_length:3,reason:null},requires_delivery_code:true,
   } as any]);
   await open(page);
   const payment=page.getByRole('region',{name:'Pagamento da entrega'});
   await expect(payment).toContainText('68,90');
   await expect(payment).toContainText('31,10');
   await expect(payment).toContainText('Paga com');
-  await expect(payment).toContainText('Dinheiro');
+  await expect(payment).toContainText('dinheiro');
   await expect(page.locator('.k-courier__reference')).toContainText('Em frente à praça');
   await expect(page.getByText('Casa azul · portão lateral')).toBeVisible();
   await expect(page.getByText('Já recebido',{exact:true})).toHaveCount(0);
-  await page.getByRole('button',{name:'Copiar endereço de Ana Oliveira'}).click();
-  expect(await page.evaluate(()=>navigator.clipboard.readText())).toContain('Em frente à praça');
+  await expect(page.getByRole('button',{name:/Copiar endereço/})).toHaveCount(0);
   expect(new URL((await page.getByRole('link',{name:/Google Maps/}).getAttribute('href'))!).searchParams.get('destination')).not.toContain('praça');
-  await page.locator('summary').click();
+  await page.getByRole('button',{name:/Ver pedido|Ver \d+ ite/}).click();
   await expect(page.getByText('Sem cebola',{exact:true})).toBeVisible();
   await expect(page.getByText('Queijo extra',{exact:true})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   if(process.env.KOMA_COURIER_CAPTURE_DIR){await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:join(process.env.KOMA_COURIER_CAPTURE_DIR,`${info.project.name}-handoff-${theme}.png`),fullPage:true});}
 });
 
-test('pago não cobra de novo; cartão pede maquininha; referência de parceiro não simula conclusão',async({page})=>{
+test('pago não cobra de novo; cartão tem identificação própria; referência de parceiro não simula conclusão',async({page})=>{
   const base={status:'paid',method:'pix',amount_due:0,change_for:null,change_amount:null,change_needs_check:false};
   await fixture(page,[{...delivery,id:'paid-online',payment:base} as any,
     {...delivery,id:'card',numero_pedido:102,payment:{...base,status:'collect',method:'card',amount_due:68.9}} as any,
     {...delivery,id:'partner',numero_pedido:103,source:{channel:'ifood',label:'iFood',references:[{provider:'ifood',reference:'external-order-demo'}]},payment:base,confirmation:{mode:'partner_pending',enabled:false,code_length:null,reason:'A conclusão com este parceiro ainda não está conectada. Confira com o Caixa.'}} as any]);
   await open(page);
-  await expect(page.getByRole('article',{name:'Pedido 101'})).toContainText('Pago · não cobrar');
-  await expect(page.getByRole('article',{name:'Pedido 102'})).toContainText('levar maquininha');
+  await expect(page.getByRole('article',{name:'Pedido 101'})).toContainText('Não cobrar');
+  await expect(page.getByRole('article',{name:'Pedido 102'})).toContainText('Cobrar no cartão');
   const partner=page.getByRole('article',{name:'Pedido 103'});
   await expect(partner.getByRole('img',{name:'iFood',exact:true})).toBeVisible();
-  await expect(partner.getByRole('button',{name:'Concluir entrega'})).toBeDisabled();
+  await expect(partner.getByRole('button',{name:/^(Concluir entrega|Confirmar com código)$/})).toBeDisabled();
   await expect(partner).toContainText('Confirmação: confira no Caixa.');
 });
 
@@ -275,7 +275,7 @@ test('sem rede mantém endereço e sequência; reconecta antes do throttle e nã
     return route.fulfill({ json: { motoboy: profile, entregas: [delivery] } });
   });
   await open(page);
-  await page.getByRole('button', { name: 'Concluir entrega' }).click();
+  await page.getByRole('button', { name: /^(Concluir entrega|Confirmar com código)$/ }).click();
   const initial = gets;
   await page.evaluate(() => {
     Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
@@ -359,18 +359,100 @@ test('Enter no código respeita a conferência em andamento antes de concluir', 
     return route.fulfill({ json: { motoboy: profile, entregas: [{ ...delivery, requires_delivery_code: true }] } });
   });
   await open(page);
-  await page.getByRole('button', { name: 'Concluir entrega' }).click();
+  await page.getByRole('button', { name: /^(Concluir entrega|Confirmar com código)$/ }).click();
   const input = page.getByLabel('Código de entrega');
-  await input.fill('0012');
+  await input.fill('012');
   holdNext = true;
-  await page.getByRole('button', { name: 'Atualizar Pedidos' }).click();
+  await page.clock.install();
+  await page.clock.fastForward(15_100);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page.getByRole('button', { name: 'Confirmar', exact: true })).toBeDisabled();
   await input.press('Enter');
   expect(posts).toBe(0);
   release();
   await expect(page.getByRole('button', { name: 'Confirmar', exact: true })).toBeEnabled();
-  await expect(input).toHaveValue('0012');
+  await expect(input).toHaveValue('012');
   await input.press('Enter');
   await expect.poll(() => posts).toBe(1);
   await expect(page.getByRole('heading', { name: 'Nenhuma entrega em rota' })).toBeVisible();
+});
+
+test('painéis contêm foco, retornam à ação e não fazem leituras extras; pago também exige código', async ({page}) => {
+  let gets = 0, posts = 0;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const paid = {...delivery, requires_delivery_code:true, payment:{status:'paid',method:'pix',amount_due:0,change_for:null,change_amount:null,change_needs_check:false}, items:[{name:'Hambúrguer',quantity:2,notes:'Sem cebola',modifiers:['Queijo extra']}]};
+  await page.route(`${API}/**`, async route => {
+    if (route.request().method() === 'POST') { posts++; expect(route.request().postDataJSON()).toEqual({code:'012'}); await gate; return route.fulfill({json:{status:'sucesso'}}); }
+    gets++; return route.fulfill({json:{motoboy:profile,entregas:[paid]}});
+  });
+  await open(page);
+  const baseline = gets;
+  const items = page.getByRole('button',{name:'Ver 2 itens'});
+  await items.focus(); await items.press('Enter');
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByText('Sem cebola')).toBeVisible();
+  await expect(dialog.getByText('Queijo extra')).toBeVisible();
+  for (let i=0;i<5;i++) { await page.keyboard.press('Tab'); expect(await page.evaluate(()=>document.activeElement?.closest('dialog') !== null)).toBe(true); }
+  await page.keyboard.press('Escape'); await expect(items).toBeFocused();
+  await items.click();
+  await dialog.getByText('Sem cebola').click();
+  await expect(dialog).toBeVisible();
+  const bounds = (await dialog.boundingBox())!;
+  const outside = {x: 2, y: 2};
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(outside.x, outside.y);
+  await page.mouse.up();
+  await expect(dialog).toBeVisible();
+  await page.mouse.click(outside.x, outside.y);
+  await expect(dialog).toHaveCount(0);
+  await expect(items).toBeFocused();
+  expect(posts).toBe(0); expect(gets).toBe(baseline);
+  const confirm = page.getByRole('button',{name:'Confirmar com código'});
+  await confirm.click();
+  const input = page.getByLabel('Código de entrega');
+  await expect(input).toBeFocused(); await expect(dialog.getByText('Não cobrar')).toBeVisible();
+  await expect(dialog.getByRole('button',{name:'Confirmar',exact:true})).toBeDisabled();
+  await input.fill('01'); await input.press('Enter'); expect(posts).toBe(0);
+  await input.fill('012'); expect(posts).toBe(0); expect(gets).toBe(baseline);
+  await input.press('Enter'); await expect.poll(()=>posts).toBe(1);
+  await expect(dialog.getByRole('button', {name:'Confirmando…'})).toBeDisabled();
+  await page.mouse.click(2, 2);
+  await expect(dialog).toBeVisible();
+  expect(posts).toBe(1);
+  release();
+  await expect(page.getByRole('heading',{name:'Nenhuma entrega em rota'})).toBeVisible();
+});
+
+test('pedido antigo conserva quatro números e pedido externo permite conclusão apenas interna', async ({page}) => {
+  await fixture(page, [
+    {...delivery,requires_delivery_code:true,confirmation:{mode:'koma_code',enabled:true,code_length:4,reason:null}} as any,
+    {...delivery,id:'external-local',numero_pedido:105,source:{channel:'keeta',label:'Keeta',references:[]},payment:{status:'paid',method:'pix',amount_due:0},confirmation:{mode:'local_internal',enabled:true,code_length:null,reason:null}} as any,
+  ]);
+  await open(page);
+  await page.getByRole('article',{name:'Pedido 101'}).getByRole('button',{name:'Confirmar com código'}).click();
+  const input=page.getByLabel('Código de entrega');
+  await expect(input).toHaveAttribute('maxlength','4');
+  await input.fill('001');
+  await expect(page.getByRole('button',{name:'Confirmar',exact:true})).toBeDisabled();
+  await input.fill('0012');
+  await expect(page.getByRole('button',{name:'Confirmar',exact:true})).toBeEnabled();
+  await page.keyboard.press('Escape');
+  await page.getByRole('article',{name:'Pedido 105'}).getByRole('button',{name:'Concluir entrega'}).click();
+  await expect(page.getByRole('dialog').getByText('Não cobrar')).toBeVisible();
+  await expect(page.getByRole('button',{name:'Confirmar',exact:true})).toBeEnabled();
+});
+
+test('link abre com armazenamento de sessão bloqueado e não expõe a credencial na URL', async ({page}) => {
+  await page.addInitScript(() => {
+    const get = Storage.prototype.getItem, set = Storage.prototype.setItem;
+    Storage.prototype.getItem = function(key) { if (this === window.sessionStorage) throw new DOMException('Blocked','SecurityError'); return get.call(this,key); };
+    Storage.prototype.setItem = function(key,value) { if (this === window.sessionStorage) throw new DOMException('Blocked','SecurityError'); set.call(this,key,value); };
+  });
+  await fixture(page);
+  await open(page);
+  await expect(page.getByRole('article',{name:'Pedido 101'})).toBeVisible();
+  await expect(page).toHaveURL(/\/entregador$/);
+  expect(await page.evaluate(()=>JSON.stringify(Object.values(localStorage)))).not.toContain('local-courier-test-secret');
 });

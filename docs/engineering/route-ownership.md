@@ -12,6 +12,7 @@ as sobreposições HTTP de R06. Não é comprovante de deploy.
 | SmartPOS autenticado | `routes/auth.py` inclui `smartpos`, `smartpos_provider` e `smartpos_cash_projection` |
 | Mesa, conta, família e compatibilidade de criação | `routes/atendimentos.py`; callbacks explícitos em `orders.py` / `orders_core.py` delegam aos adapters e ao Order Core |
 | Status e despacho delivery | `routes/orders.py`; sem versões concorrentes no core |
+| App do Entregador | Uma apresentação em `MotoboyPwaPage.tsx` para `/entregador` e aliases; GET painel em `routes/orders_core.py`, confirmação em `routes/orders.py`, socket privado em `routes/websocket.py` |
 | Reimpressão de lançamento | `routes/atendimento_printing.py`; impressão física e agente inalterados |
 | Catálogo e categorias | `routes/products.py`; cardápio público importa a ordenação existente |
 | Perfil e compatibilidade | `routes/caixa.py` mantém aliases de escrita; o GET `/caixa/config-cardapio` pertence somente a `cardapio_config_bridge.py` |
