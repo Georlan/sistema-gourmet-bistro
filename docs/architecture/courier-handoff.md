@@ -26,7 +26,7 @@ Dinheiro: troco = valor informado − saldo restante, somente quando esse valor 
 
 ## Conclusão e futuros parceiros
 
-POST `/comandas/motoboys/pedidos/{comanda_id}/confirmar-entrega` preserva tenant, atribuição, bloqueio da linha, idempotência e transição canônica. Pedidos próprios do Cardápio usam código aleatório de quatro dígitos, independente de telefone. O entregador nunca recebe o segredo pelo painel.
+POST `/comandas/motoboys/pedidos/{comanda_id}/confirmar-entrega` preserva tenant, atribuição, bloqueio da linha, idempotência e transição canônica. Pedidos próprios novos do Cardápio usam código aleatório de três dígitos, independente de telefone; códigos já emitidos de quatro dígitos continuam válidos. O entregador nunca recebe o segredo pelo painel.
 
 Referências externas de iFood/99Food/Keeta ou provedor desconhecido recebem `partner_pending` e não podem ser concluídas por esse endpoint até existir um caminho de integração validado. WhatsApp/API próprios permanecem no fluxo local. Não reutilizar código KÔMA como se fosse um código do parceiro, não inventar acknowledgement remoto e não buscar endpoints dos parceiros diretamente no navegador.
 
