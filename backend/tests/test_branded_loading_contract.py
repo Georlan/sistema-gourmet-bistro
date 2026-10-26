@@ -36,7 +36,9 @@ def test_branded_loader_is_reserved_for_blocking_or_fullscreen_waits():
     assert '<KomaLoading label="Preparando operação…" />' in unified_entry
     assert '<KomaLoading label="Preparando operação…" />' in onboarding_entry
     assert 'label="Carregando cardápio"' in cardapio
-    assert 'label="Carregando painel do entregador..."' in motoboy
+    assert "KomaLoading" not in motoboy
+    assert 'role="status"' in motoboy
+    assert "Carregando entregas" in motoboy
 
     # Local/background feedback stays local instead of repeatedly playing the brand animation.
     deferred = source("src/components/caixa/loading/DeferredCashierSection.tsx")
@@ -57,8 +59,9 @@ def test_branded_loader_is_reserved_for_blocking_or_fullscreen_waits():
 def test_delivery_background_refresh_and_confirmation_do_not_trigger_fullscreen_loading():
     motoboy = source("src/components/MotoboyPwaPage.tsx")
 
-    assert "const isBackground = Boolean(motoboy);" in motoboy
-    assert "setIsRefreshing(true);" in motoboy
+    assert "const isBackground = Boolean(profileRef.current);" in motoboy
+    assert "if (isBackground) setIsRefreshing(true);" in motoboy
+    assert "else { setLoading(true);" in motoboy
     assert "setConfirmingId(comandaId);" in motoboy
-    assert 'isRefreshing && "animate-spin"' in motoboy
+    assert "isRefreshing ? 'k-courier__spin' : ''" in motoboy
     assert "confirmingId === entrega.id" in motoboy

@@ -152,11 +152,13 @@ def test_gerar_link_motoboy_flow():
     )
     assert confirm_query_attempt.status_code == 422
 
-    # 6. Verificar comanda fechada e finalizada no banco
+    # 6. Entrega concluída não liquida a conta ainda não paga.
     with SessionLocal() as db:
         c_check = db.query(Comanda).filter(Comanda.id == cmd_id).first()
         assert c_check.delivery_status == "finalizado"
-        assert c_check.fechada is True
+        assert c_check.fechada is False
+        assert float(c_check.valor_pago or 0) == 0
+        assert float(c_check.delivery_taxa) == 7.50
 
     # 7. Testar token inválido
     resp_invalid = client.get(
