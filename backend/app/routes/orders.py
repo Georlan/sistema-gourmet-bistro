@@ -7,7 +7,7 @@ rotas de delivery/retirada deste módulo não escrevem estado de pedido
 
 from __future__ import annotations
 
-from fastapi import BackgroundTasks, Depends, Header, HTTPException, Request, status
+from fastapi import BackgroundTasks, Body, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -44,6 +44,7 @@ from ..services.plan_entitlements import (
 )
 from ..services.shifts import require_open_cash_shift
 from ..websocket_manager import manager
+from ..services.courier_realtime import queue_courier_refresh
 from . import orders_core as _orders_core
 
 # Compatibilidade Python explícita para os adapters e callbacks ainda em migração.
@@ -58,9 +59,9 @@ from .orders_core import (
 )
 
 
-def _criar_acesso_motoboy(db: Session, motoboy: Motoboy, rest_id: int) -> dict:
+def _criar_acesso_motoboy(db: Session, motoboy: Motoboy, rest_id: int, *, reuse_active: bool = False) -> dict:
     """Mantém a emissão legada, mas nunca devolve segredo em query string."""
-    acesso = _legacy_criar_acesso_motoboy(db, motoboy, rest_id)
+    acesso = _legacy_criar_acesso_motoboy(db, motoboy, rest_id, reuse_active=reuse_active)
     token = str(acesso["token"])
     acesso["link"] = f"/entregador#token={token}"
     acesso["link_publico"] = f"{settings.KOMA_PUBLIC_APP_URL}/entregador#token={token}"
@@ -493,7 +494,9 @@ def reatribuir_entregador_em_rota(
         reason=reason,
     )
     db.add(audit)
+    previous_courier_id = comanda.motoboy_id
     comanda.motoboy_id = new_motoboy.id
+    queue_courier_refresh(db, rid, previous_courier_id, new_motoboy.id)
     db.commit()
     db.refresh(comanda)
 
@@ -559,13 +562,14 @@ def despachar_delivery(
             # Reparação logística compatível para registros legados. Não altera
             # o estado do pedido; somente restaura o vínculo com o entregador.
             comanda.motoboy_id = motoboy_id
+            queue_courier_refresh(db, rid, motoboy_id)
             db.commit()
             db.refresh(comanda)
         return comanda
 
     status_anterior = to_legacy_order_status(current_status)
     has_courier_app = has_plan_entitlement(db, rid, ENTITLEMENT_COURIER_APP)
-    acesso_motoboy = _criar_acesso_motoboy(db, motoboy, rid) if has_courier_app else None
+    acesso_motoboy = _criar_acesso_motoboy(db, motoboy, rid, reuse_active=True) if has_courier_app else None
 
     _transition_via_application_or_http(
         db,
@@ -615,11 +619,16 @@ def despachar_delivery(
     return comanda
 
 
+class DeliveryReceiptConfirmation(BaseModel):
+    code: str | None = Field(default=None, max_length=4)
+
+
 @router.post("/motoboys/pedidos/{comanda_id}/confirmar-entrega")
 def confirmar_entrega_motoboy(
     comanda_id: str,
     request: Request,
     background_tasks: BackgroundTasks,
+    receipt: DeliveryReceiptConfirmation | None = Body(default=None),
     token: str = Header(..., alias="X-Koma-Delivery-Token"),
     db: Session = Depends(get_db),
 ):
@@ -660,6 +669,21 @@ def confirmar_entrega_motoboy(
         current_status = normalize_to_order_status(comanda.delivery_status)
         if current_status == OrderStatus.COMPLETED:
             return {"status": "sucesso", "mensagem": "Entrega já estava confirmada."}
+
+        if current_status != OrderStatus.DISPATCHED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A entrega ainda não saiu pelo Caixa.",
+            )
+
+        from ..services.courier_order_projection import load_courier_references, courier_confirmation
+        references = load_courier_references(db, rest_id, [comanda.id]).get(comanda.id, [])
+        confirmation = courier_confirmation(comanda, references)
+        if not confirmation['enabled']:
+            raise HTTPException(status_code=409, detail=confirmation['reason'])
+
+        from ..services.delivery_receipts import verify_delivery_receipt
+        verify_delivery_receipt(db, comanda, receipt.code if receipt else None)
 
         status_anterior = to_legacy_order_status(current_status)
         _transition_via_application_or_http(

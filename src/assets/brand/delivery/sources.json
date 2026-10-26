@@ -1,0 +1,44 @@
+[
+  {
+    "brand": "ifood",
+    "file": "ifood.png",
+    "source_page": "https://institucional.ifood.com.br/",
+    "asset_url": "https://institucional.ifood.com.br/wp-content/uploads/2023/09/cropped-logoifoodbrancoAtivo-1-300x158.png",
+    "retrieved_on": "2026-10-25",
+    "sha256": "f1354e24bb2cbac46d9ea85c810c724512a2058ea9061c562c8b6ac1256689e6",
+    "bytes": 7075,
+    "dimensions": [
+      300,
+      158
+    ],
+    "modified": false
+  },
+  {
+    "brand": "99food",
+    "file": "99food.png",
+    "source_page": "https://restaurantes.99app.com/repositorio/",
+    "asset_url": "https://d9hhrg4mnvzow.cloudfront.net/restaurantes.99app.com/repositorio/c7192100-logo-99food_106e04s000000000000028.png",
+    "retrieved_on": "2026-10-25",
+    "sha256": "fa09f7ed6744f6ef86ad55b2f193f6b46a923af69dd3628d9a3be3668dad07fe",
+    "bytes": 2469,
+    "dimensions": [
+      230,
+      172
+    ],
+    "modified": false
+  },
+  {
+    "brand": "keeta",
+    "file": "keeta.png",
+    "source_page": "https://www.keeta-global.com/BR/pt-BR",
+    "asset_url": "https://s3-ap-hongkong.mykeeta.net/static-prod01/com.sankuai.sailorfe.c.pc/official/images/NewKeetaLogo-4b53c2.png",
+    "retrieved_on": "2026-10-25",
+    "sha256": "fddda5e9f14b774f6d023ce0c2870a66b1c87f22dadf9c7be4f5ac96409a4dea",
+    "bytes": 2156,
+    "dimensions": [
+      80,
+      50
+    ],
+    "modified": false
+  }
+]

@@ -1,0 +1,180 @@
+# Entregador — primeira versão local
+
+Base: origin/main 2fa52fa6. Branch: design/courier-refinement-20261025.
+Sem publicação, serviço pago ou dependência nova. Após a primeira proposta, um ajuste focal no backend restringe o painel a entregas atribuídas ao próprio entregador.
+
+## Direção
+
+Identidade comum KÔMA (Inter/Space Grotesk e tokens existentes), com o perfil de Operação. Uma marca completa, arte vetorial pequena de percurso e hierarquia: pedido/cliente → endereço → rota/ligação → cobrança → concluir. Itens e totais adicionais ficam no disclosure nativo “Ver pedido”. Sem mapa embutido, animações decorativas ou promessas de WhatsApp entregue.
+
+O segundo toque de confirmação é local ao card, cancelável por botão ou Escape. Foco entra na confirmação e volta ao gatilho ao cancelar. É uma proposta para aprovação: evita concluir a entrega ao tentar abrir a rota.
+
+## Contratos preservados
+
+- Entrada `/entregador#token=…`, compatibilidade com query antiga e remoção do segredo da URL antes da primeira consulta.
+- Token somente em sessionStorage da aba e header `X-Koma-Delivery-Token`; nenhum endereço em cache persistente.
+- GET `/comandas/motoboys/painel-entregador` e POST `/comandas/motoboys/pedidos/{comanda_id}/confirmar-entrega`.
+- Tenant, plano, revogação, atribuição e transição pertencem ao backend existente. Número humano recebido do servidor; sem inventar sufixos/identidades no frontend.
+- Confirmar entrega não registra pagamento; valor a cobrar vem do backend. “Sem cobrança” não afirma que houve pagamento pelo aplicativo.
+
+## Economia e resiliência
+
+Sem timer de polling ou conexão nova. Consulta inicial, atualização manual e ao retornar para a aba/recuperar conexão, coalescidas e espaçadas por pelo menos 15 s nos eventos automáticos. A interface não afirma sincronização em tempo real.
+
+GET e POST têm timeout de 12 s. Dados ficam na tela durante atualização, falhas transitórias preservam a lista, revogação apaga os dados exibidos. GET anterior é abortado antes de concluir uma entrega. Resposta de instância desmontada é descartada; listeners e timers são liberados.
+
+Após POST com resultado desconhecido (timeout/rede), consulta a lista, sem repetir mutação. Se a consulta também falhar, bloqueia nova confirmação até uma leitura bem-sucedida. Não existe fila offline de conclusões.
+
+## Pontos para a próxima integração
+
+A consulta foi corrigida localmente para exigir tipo Delivery/Entrega e vínculo com o entregador do token. O teste reproduziu antes da correção a presença indevida de retirada, mesa e entrega sem atribuição; após a correção, somente as duas entregas próprias foram retornadas, preservando isolamento por tenant e excluindo outro entregador. A confirmação continua protegida no backend. O retorno atual também não informa restaurante nem confirmação de notificação WhatsApp, portanto não os inventamos na tela.
+
+O canal WebSocket operacional usa identidade de operador; o link de entregador tem credencial própria. Não reutilizar token de funcionário nem assinar eventos de todo o restaurante para simular tempo real. Qualquer canal futuro exige escopo mínimo por tenant/entregador e medições, com autorização própria no backend.
+
+Múltiplas entregas por viagem foram confirmadas pelo usuário. A sequência manual pode ser escolhida e reordenada sem alterar o despacho no Caixa. Google Maps continua externo, sem chave ou serviço pago; não há promessa de melhor rota, trânsito ou otimização automática.
+
+## Pesquisa aplicada
+
+- NN/g, reconhecimento em vez de memorização: endereço e cobrança visíveis; detalhes opcionais. https://www.nngroup.com/articles/recognition-and-recall/
+- W3C, WCAG 2.2: contraste, foco, estados acessíveis e alvos de toque de 44 px adotados como meta ergonômica (44 px é o critério enhanced, não o mínimo AA de 24 px). https://www.w3.org/TR/WCAG22/
+- Google Maps URLs: navegação externa universal sem chave de API. https://developers.google.com/maps/documentation/urls/get-started
+- MDN, Page Visibility: atualização orientada ao retorno, sem polling em segundo plano. https://developer.mozilla.org/en-US/docs/Web/API/Page_Visibility_API
+- MDN, navigator.onLine não prova conexão com o servidor: evento é um sinal para tentar leitura, nunca bloqueia operações por si só. https://developer.mozilla.org/en-US/docs/Web/API/Navigator/onLine
+- Uber, múltiplas entregas: identificação individual por pedido/cliente/endereço, sem misturar cobranças ou presumir otimização de rota. https://help.uber.com/en/driving-and-delivering/article/how-do-i-handle-multiple-deliveries-from-the-same-place----?nodeId=08189aec-c047-49f2-ba2a-64b216a4c3e5
+
+Skills aplicadas: Frontend Design, UI/UX Pro Max e Vercel React Best Practices. Pesquisa direcionada, sem instalação nem assinatura de ferramentas.
+
+## Validação
+
+A primeira prévia usava uma API simulada. A prévia atual usa o frontend e as rotas FastAPI reais com banco SQLite local e identidades fictícias, em restaurante 99051. Não acessa a operação real nem prova publicação. Regressões backend usam banco temporário com dotenv de produção desativado. Aprovação e publicação são etapas posteriores.
+
+Resultados desta etapa: lint e build aprovados, 1.100 testes unitários, 30 cenários do novo painel em cinco larguras (360/390/430/768/1366), seis regressões de timeout/reload nas duas larguras principais e duas regressões backend aprovadas. Capturas locais de 320/390/768 em ambos os temas foram geradas; revisão visual corrigiu uma colisão entre título e arte em 320 px. Sem certificação da suíte backend completa ou jornada operacional real nesta rodada.
+
+
+## Ajuste de escopo aprovado pelo usuário
+
+O app conecta somente a entregas despachadas pelo Caixa (`transito`) e atribuídas ao entregador da credencial. Pré-atribuir durante preparo/pronto não as coloca no painel. Pedidos de retirada, mesa, sem atribuição e de outro entregador/tenant não aparecem. Os filtros Todas/Em rota/Para sair foram removidos por redundância. Múltiplas entregas por viagem confirmadas pelo usuário; navegação permanece por link externo sem API paga.
+
+## Viagem e código de recebimento — incremento local
+
+- Seleção e reordenação de entregas com controles de toque e teclado. Somente IDs ficam em sessionStorage, sob chave derivada do hash da credencial; não são armazenados endereço, nome ou localização. Pedidos removidos/concluídos saem da sequência. Trocar a credencial limpa a tela e restaura apenas sua própria sequência.
+- Novas entregas criadas pelo Cardápio recebem código de quatro dígitos, gerado no backend, criptografado no pedido e mantido em replays idempotentes. Retiradas não recebem código. Entregas antigas continuam compatíveis, sem exigência retroativa.
+- O cliente vê o código no acompanhamento, chat e histórico autorizado. O painel do entregador recebe somente a indicação de que o código é necessário. O código não entra no catálogo público nem na persistência local do histórico.
+- Um único campo numérico aceita colar e confirmar com Enter. O sexto dígito não dispara envio automático. A confirmação verifica atribuição e tenant, bloqueia a linha e usa a transição canônica; cinco erros impõem espera de um minuto. Concluir entrega não quita pagamentos.
+- As leituras existentes carregam o código sem uma consulta adicional. Nenhum SDK, SMS, API paga, timer de GPS ou novo polling foi incluído.
+- Migração f7b8c9d0e1f2 adiciona três campos de recebimento; upgrade e downgrade focais passaram em PostgreSQL 17 local preservando pedido existente. Isso não substitui os gates da futura publicação.
+
+Validação final deste incremento: 1.100 testes unitários, lint e build; 18 cenários de navegador em mobile/desktop; 20 regressões backend, incluindo isolamento, código, idempotência, broadcast de estado e contagem de consultas. Não certifica toda a suíte backend, CI ou entrega em produção. O ensaio de migração foi focal, sem executar toda a cadeia histórica.
+
+Prévia de teste: http://127.0.0.1:4313/ oferece acessos locais ao entregador e aos três clientes fictícios. Abra um cliente, consulte o código e informe no pedido correspondente do entregador. A conclusão altera apenas o banco local. Capturas finais: customer-real-final.png e courier-real-final.png em outputs/courier-refinement.
+
+Pendências deliberadas: homologação real com Caixa aberto, integração iFood, rastreio GPS e roteamento automático. Nenhuma dessas capacidades é simulada como integração pronta. Publicação depende de aprovação posterior.
+
+## Refinamento aprovado de escopo e privacidade — 25/10/2026
+
+- Código reduzido para quatro dígitos aleatórios por pedido, preservando zeros iniciais, limite de tentativas e idempotência. Não é derivado do telefone e não exige SMS nem API externa. Os dados fictícios da prévia foram atualizados; nenhum pedido real foi alterado.
+- O telefone do cliente foi retirado do contrato JSON do entregador e o link de ligação foi removido da interface. O Caixa mantém o contato autorizado. Isso é uma decisão de minimização de acesso; não uma alegação de que toda ligação do entregador seria proibida pela LGPD.
+- O backend e a interface exigem despacho. Tentativa direta de concluir pedido apenas pronto é rejeitada. O teste percorre pronto → despacho real do Caixa → painel, sem trocar a credencial do entregador.
+- Encontrado e corrigido: despacho revogava o link aberto anteriormente. O despacho agora reutiliza o JTI ativo com a expiração original de quatro horas; não insere outro token a cada pedido e não estende o prazo. A geração explícita de novo link continua revogando o anterior. Criação/reutilização são serializadas pelo entregador no PostgreSQL. Testes cobrem reuso, limite temporal, renovação após expiração, revogação manual e isolamento.
+
+Pesquisa oficial consultada:
+
+- iFood Entregadores: código antes baseado nos quatro últimos números do telefone passou a permitir personalização pelo cliente: https://entregador.ifood.com.br/novidades-no-app/codigo-de-entrega/
+- iFood Parceiros: confirmação de entrega própria usa código de quatro dígitos: https://blog-parceiros.ifood.com.br/confirmacao-de-entrega/
+- iFood Developer: Sob Demanda externo documenta modo com quatro últimos dígitos do telefone; a regra depende do produto e não autoriza presumir um código único para todas as integrações: https://developer.ifood.com.br/en-US/docs/food/guides/modules/shipping/outside
+- LGPD, arts. 6º, III (necessidade), 7º, V (execução de contrato), 46 (segurança): https://www.planalto.gov.br/ccivil_03/_ato2015-2018/2018/lei/l13709.htm
+- ANPD, bases legais: https://www.gov.br/anpd/pt-br/acesso-a-informacao/perguntas-frequentes
+
+Validação focal final: 38 testes backend, 26 de navegador (incluindo timeout/reconciliação e código de quatro dígitos), 1.100 unitários, lint e build. Capturas reais da prévia local revisadas em outputs/courier-refinement/four-digit. A verificação com FastAPI/SQLite reais encontrou somente as duas entregas despachadas, sem link de telefone e com código de quatro dígitos no acompanhamento do cliente. Não concluiu pedidos do cenário manual.
+
+Uma tentativa geral concorrente com a validação focal encontrou 500/OperationalError na caracterização de mesas. O conftest do projeto substitui DATABASE_URL por um único backend/.pytest_koma.db, portanto as duas execuções colidiram. O cenário isolado passou (2 testes); a evidência daquela execução concorrente não certifica regressão de produto. Não executar processos pytest simultâneos nesse worktree. Logs gerais e focais ficam separados.
+
+A reexecução geral sem concorrência passou por 302 testes, com um skip de PostgreSQL, antes de ser interrompida para manter esta etapa local limitada ao escopo. Não certifica a suíte completa. Após encerrar essa execução, a validação final focal foi executada sozinha: 38 aprovações, incluindo os dois cenários de mesas que haviam sido afetados pela colisão do banco temporário.
+
+## Handoff de cobrança, conteúdo do pedido e parceiros
+
+Contrato e regras para conectores futuros: `docs/architecture/courier-handoff.md`. A implementação adiciona uma projeção de leitura compartilhada do pedido, sem nova tabela ou endpoint. Origem vem de referência persistida, jamais de texto livre do cliente. Selo textual com ícone identifica a plataforma; logos oficiais não foram improvisados nem baixados de terceiros.
+
+Total passa a usar o cálculo financeiro canônico, excluindo cancelados e considerando descontos/taxa. A tela apresenta cobrança, método, troco ou “Pago · não cobrar”; “Já recebido” foi retirado. Itens ativos, observações, modificadores e referência/complemento do endereço vigente ficam disponíveis no app. Copiar endereço usa feedback no próprio botão. Header ficou mais compacto; ações mantêm alvos de toque e profundidade.
+
+Parceiros são demonstrações locais explicitamente identificadas, com conclusão externa indisponível até existir integração validada. O app não faz chamada a iFood, 99Food ou Keeta. Os exemplos locais atuais incluem dinheiro com troco, Pix aprovado, cartão e os três selos de plataforma.
+
+Comparação de navegação em http://127.0.0.1:4313/navigation.html: Google Maps em outra aba, na mesma aba, Waze e copiar endereço. Mantido o padrão atual do app para posterior decisão. Uso de aplicativos instalados depende do dispositivo e ainda exige prova manual; o ensaio de desktop validou URLs, alvos, endereço e layout de 320 px sem abrir mapas externos.
+
+Validação final deste incremento: 60 testes backend, 32 cenários de navegador principais mais 15 de layout em 360/430/tablet, 1.100 testes unitários, lint e build. O teste de custo de leitura compara uma e treze entregas, com no máximo um SELECT de diferença e teto de vinte consultas. Não existe leitura por card. Capturas reais de cobrança, pago e parceiro foram inspecionadas; somente banco local fictício. Suíte backend completa, CI, homologação externa, teste de navegação nativa e publicação continuam fora da evidência desta rodada.
+
+## Texto essencial, marcas oficiais e Maps — 25/10/2026
+
+Aplicada a decisão de abrir Google Maps em outra aba apenas ao tocar em Maps. A sequência e o painel continuam na aba do KÔMA. A comparação de alternativas é histórica e saiu do acesso principal de revisão.
+
+Removidas instruções repetidas de viagem, status “Em rota” de cada card e explicações redundantes de carregamento/tela vazia. Rótulos compactos: Entregas, Próxima entrega, Cobrar, Código de entrega, Confirmar/Cancelar e contagem de itens. Mantidas instruções necessárias de cobrança, troco, maquininha, erros, acesso revogado e resultado desconhecido de confirmação.
+
+Logos oficiais intactos de iFood, 99Food e Keeta substituem o ícone genérico nessas origens. Servidos localmente; total de 11.700 bytes. Catálogo e URLs/hash: `src/assets/brand/delivery/sources.json`. Sem mudanças backend, de dados ou de segurança nesta rodada.
+
+Pedidos próprios (`caixa`, `cardapio`, `koma`) usam selo KÔMA com o wordmark oficial já existente. O canal específico permanece no contrato e no título acessível; o logo não foi redesenhado. Após revisão do usuário, o selo recebeu fundo #061c15, borda mais visível e marca de 74×30 px (antes 52×28), preservando proporção, contraste e leitura em ambos os temas.
+
+Validação final desta rodada: lint, build e 1.100 unitários; 36 execuções funcionais do navegador e 30 verificações adicionais de layout/marcas em 360/390/430/tablet/desktop. Capturas do backend local real também revisadas em 320px, tema claro e escuro. Google Maps mantém nova aba e proteção de opener/referrer. Nenhum backend, dado real ou integração foi alterado nesta rodada; sem publicação.
+
+### Pesquisa cruzada e recuperação de conexão — 25/10/2026
+
+Fontes e decisões consolidadas em `docs/architecture/courier-handoff.md`: Uber (vários pedidos), iFood (cliente ausente), DoorDash (ajuda contextual) e NN/g (reconhecimento, divulgação progressiva, estado do sistema). Reutilizadas as skills de logística e interface; adicionada a análise focal UX Heuristics. Não foi instalada dependência nem contratado serviço.
+
+Implementado localmente: aviso offline de uma linha, endereços carregados mantidos, conclusão bloqueada enquanto offline, reconexão sem esperar o throttle de foco, leitura adicional serializada quando a rede cai durante uma leitura antiga, erro de atualização persistente e proteção do Enter durante conferência. Não existe fila de confirmação offline; nenhum POST é repetido automaticamente. Continuam sem persistência de endereços no navegador e sem garantia de abrir/recarregar a lista offline.
+
+Aprovado pelo usuário: problema de endereço/cliente/pagamento deve avisar o Caixa e manter a entrega. Registrado contrato de autoria, isolamento, idempotência e exibição durável no Caixa. Esse fluxo não foi implementado nesta fatia; não há botão simulando envio. Canal realtime dedicado e conectores comerciais também permanecem pendentes.
+
+Validação deste incremento: 1.100 testes unitários, lint e build aprovados; 15 testes backend focais de projeção, atribuição, escopo e pré-atribuição aprovados. Suite focal de interface: 36 testes mobile/desktop e mais 8 testes de integração do recebimento/confirmação aprovados no código final (44 no total), incluindo teclado/Enter, reconexão concorrente, resposta perdida e revogação. Capturas de claro/escuro e estado offline em `outputs/courier-refinement/research/` no diretório desta conversa; estado offline mobile inspecionado visualmente. A API real local respondeu com seis entregas fictícias em rota e sem telefone de cliente no contrato. Não houve escrita em produção, PR, CI, merge ou publicação.
+
+### Asset do entregador — 25/10/2026
+
+Substituída a seta do cabeçalho por `courier/CourierRideArtwork.tsx`, ilustração vetorial original de entregador com capacete, scooter e bag. Usa a mesma família de verdes, recortes planos e contornos da bandeja em `WaiterServiceArtwork`, sem imagem remota, biblioteca ou animação. O SVG é decorativo, fora da navegação por teclado e da leitura assistiva. Encaixe reduzido em 320px para manter título e contagem na mesma linha.
+
+Validação: seis capturas/testes visuais em 360px, 390px e desktop, nos temas claro/escuro; leitura real da prévia local em 320px e 390px, sem overflow, com inspeção das capturas. Lint, 1.100 testes unitários e build aprovados. Evidências em `outputs/courier-refinement/ride-art/` no diretório da conversa. Alteração somente local, sem publicação.
+
+### Faixa de viagem compacta — 25/10/2026
+
+Horário/status de atualização e botão de organizar/editar sequência passam à mesma linha. Removido o contador redundante de sequência dessa faixa, preservados os pedidos e o marcador de próxima entrega. Inspeção em 320px antes/depois de salvar sequência, sem overflow; 18 testes visuais/viagem/reconexão em 360px, 390px e desktop, 1.100 unitários, lint e build aprovados. Capturas em `outputs/courier-refinement/compact-trip/` no diretório da conversa.
+
+Investigação da sequência automática (ainda não implementada): `DeliveryAddressInput` e snapshots já aceitam latitude/longitude, e Restaurante também tem coordenadas; a projeção do entregador ainda não as expõe. Uma sugestão geográfica pode ser calculada localmente a partir desses dados, com fallback explícito para destinos sem coordenadas, ajuste manual e sequência estável durante a viagem. Não equivale a otimizar tempo em ruas/trânsito; o link Google Maps respeita a ordem de paradas fornecida, não calcula a melhor ordem automaticamente. Fonte: https://developers.google.com/maps/documentation/urls/get-started . Não iniciar geocodificação em massa em serviço público nem introduzir fornecedor pago por conta desta investigação.
+
+### Ordenação automática pelo celular — 25/10/2026
+
+Implementado o botão “Ordenar automático” ao lado do status, com ajuste manual em ícone de lista. Consulta pontual de localização só após toque, ordenação local por proximidade e manutenção de destinos sem coordenadas, com aviso. Sem rastreamento contínuo ou envio de GPS ao servidor. Coordenadas de destino passam no contrato já autorizado do painel, usando a revisão vigente do endereço, sem consultas adicionais. Detalhes e limites em `docs/architecture/courier-handoff.md`.
+
+Evidências em `outputs/courier-refinement/automatic/` no diretório da conversa. API real local com coordenadas fictícias de destinos e posição emulada do navegador; teste físico do celular pendente. Não houve publicação ou alteração do tenant 6.
+
+Validação final desta fatia: 50 testes de navegador, 1.104 unitários e 25 backend aprovados, além de lint e build. Cobertura inclui não disparar consulta GPS antes do toque, persistir só IDs, permissão negada, precisão ruim, timeout, callback tardio, troca de acesso, reatribuição, revisão de endereço sem pin antigo, empates, coordenadas inválidas e ausência de aumento de consultas por entrega.
+
+### Última lista offline e sincronização dedicada — 25/10/2026
+
+Implementados cache cifrado por credencial, hidratação antes da leitura de rede, limpeza ao revogar e persistência da remoção antes do sucesso de conclusão. O build de produção possui um worker isolado em `/entregador` para abrir/atualizar o app sem rede após preparo inicial online; não cacheia API, POST ou dados de outros módulos. Falta de armazenamento mostra aviso. O acesso mantém o prazo original de quatro horas; código/GPS do entregador não são persistidos.
+
+WebSocket privado `/ws/entregador` autentica o token dedicado no subprotocolo, usa grupo de tenant + entregador e entrega apenas hints mínimos. Reutiliza o bus PostgreSQL existente, com eventos após commit, releitura coalescida, backoff, suspensão quando invisível/offline e reconciliação ao voltar. Despacho, conclusão, cancelamento, reatribuição e revogação estão ligados aos caminhos existentes. Código continua sendo confirmado no backend canônico e dispara a atualização já consumida pelo Caixa.
+
+Validação: 64 testes de navegador do app/recebimento/realtime/cache, 6 testes com instalações novas do shell em produção simulada, 9 verificações adicionais visuais/reconexão em mobile/desktop, 1.107 unitários, 55 backend focais (47 + 8 em processos sequenciais para não misturar buckets do limitador IP), lint e build aprovados. Um teste com dois processos reais e PostgreSQL local também passou; o container temporário foi removido.
+
+Prova operacional adicional com API local real e restaurante fictício 99051: F5 totalmente offline restaurou a lista; despacho apareceu no browser por WebSocket sem refresh; código digitado na UI concluiu o pedido; socket do Caixa recebeu `tables_updated` e leitura posterior confirmou `finalizado`/fechado. O estado final servido em 4310 foi conferido de novo com a quantidade atual de entregas do backend (sem assumir que os pedidos da fixture continuavam ativos após o teste de conclusão). Capturas e logs em `outputs/courier-refinement/realtime-offline/` no diretório da conversa.
+
+Encontrada e corrigida uma falha real de boot offline: `Vary: Origin` impedia encontrar assets apesar de estarem no Cache Storage, deixando a página em branco. O lookup ignora essa variação apenas para arquivos estáticos locais permitidos; testes repetiram a instalação nova, não só o cache HTTP incidental. O worker e a rota têm headers de revalidação, com escopo máximo explícito em `/entregador`.
+
+A prévia 4310 passou de Vite dev para o build de produção, permitindo testar offline de verdade. Reabrir online uma vez antes do teste. Não houve publicação, merge, CI remoto ou escrita no tenant 6. Teste de aparelho físico permanece pendente; uma aba suspensa pelo sistema operacional reconcilia ao voltar, sem promessa de execução contínua em segundo plano. Próxima funcionalidade separada: aviso de problema ao Caixa já aprovado; conectores comerciais seguem pendentes.
+
+Verificação adicional dos headers/tema/CSP: 17 testes aprovados. Prévia final em 4310 usa o build com as regras de escopo/revalidação preparadas em `_headers`; aplicação dessas regras no host público depende de publicação futura.
+
+### Aplicação local da revisão aprovada de cards e painéis — 25/10/2026
+
+A comparação em `outputs/courier-refinement/card-review/` foi incorporada ao aplicativo real local, na branch existente. Mobile mantém uma coluna; desktop mantém a grade existente. Endereço completo aparece com maior peso e Maps lateral; o controle de cópia foi removido. Faixa verde com relevo para “Não cobrar”, azul para cobrar/troco, sem “Levar maquininha”. Assets vetoriais próprios para dinheiro, cartão, destino, sacola e confirmação; marcas de parceiros preservadas com o fundo oficial também nos detalhes.
+
+“Ver itens” tem superfície secundária, abre painel nativo com quantidade, produto, modificadores, observações, total e referência comercial. Código abre painel com pedido/cliente/pagamento e campo numérico único, preservando zeros iniciais. Ação inicial “Confirmar com código” apenas quando o contrato exige código; pedidos legados sem código preservam o caminho “Concluir entrega”. Pagos também exigem o código quando previsto. Parceiros sem confirmação homologada continuam bloqueados. Nenhum endpoint, pagamento, geração/validação de código, contrato de cache ou websocket foi alterado.
+
+Painéis contêm o foco por teclado, restauram a ação de origem, bloqueiam envio incompleto, contêm erro e respeitam leitura/reconciliação em andamento, perda de rede e revogação. Abrir itens ou código não acrescenta consultas. Sem avisos de protótipo dentro dos painéis operacionais. Teste de foco inicialmente identificou saída do ciclo para o navegador; o ciclo Tab/Shift+Tab foi corrigido e o teste passou.
+
+Evidências desta rodada: 1.107 unitários, lint e build; 64 testes funcionais em mobile/desktop, 6 instalações novas com recarga realmente offline e reconciliação, mais 4 testes focais após ajuste do fundo das marcas nos painéis. App servido em 4310 contra FastAPI/SQLite isolados em 4315, com cinco entregas fictícias disponíveis no momento da captura. Inspeção em 320/360/390/430/1366 px e dois temas, itens e código, sem overflow ou erro de JavaScript. Capturas `approved-local-*` no diretório de artefatos desta conversa; logs `/tmp/koma-courier-approved-*`. Sem teste em tenant real, deploy, PR ou merge. Aprovação operacional do usuário ainda pendente.
+
+### Troca de tema com preenchimento — 25/10/2026
+
+Teste local de efeito semelhante a tinta espalhando a partir do botão: View Transition nativa com recorte elíptico de 420 ms, sem canvas, filtros, vídeos, bibliotecas ou loop permanente. Não altera a fundação de temas nem outras superfícies; somente o clique no botão do entregador usa o efeito. Preferência por movimento reduzido, economia de dados, sinal de memória <= 2 GB/CPU <= 2 núcleos, lista > 30 pedidos, estado operacional ocupado, aba não visível ou ausência de suporte mantêm a troca imediata. Falha síncrona da API também faz a troca uma única vez. Propriedades transitórias são removidas ao terminar/desmontar e o owner impede limpar a transição de outra instância.
+
+14 testes mobile/desktop (transição, persistência, ausência de requisição adicional, movimento reduzido, navegador sem suporte, economia de dados, pouca memória, lista grande e falha nativa) passaram. Lint, 1.107 unitários e build aprovados. Aumento medido do chunk JS: 1.555 bytes, 604 bytes gzip; CSS adicional somente para o recorte. Medição em Chromium desktop com viewport mobile: 1 e 30 pedidos, CPU normal e limitada a 4x; 459–528 ms do início ao fim, sem long tasks >= 50 ms observadas e sem requisições extras. É evidência local, não garantia de fluidez/consumo em celular físico. Há custo gráfico breve de capturas/composição; não é custo zero. Antes de universalizar a outras telas, validar aparelho real.
+
+Captura de meio da animação: `outputs/courier-refinement/theme-fill-midpoint.png`; métricas em `theme-performance.json`. Fonte técnica consultada: https://developer.mozilla.org/en-US/docs/Web/API/Document/startViewTransition . Sem publicação.

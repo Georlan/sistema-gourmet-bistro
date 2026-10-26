@@ -556,9 +556,9 @@ def require_active_subscription(
     return current_user
 
 
-def create_motoboy_token(motoboy_id: int, restaurante_id: int, jti: str) -> str:
+def create_motoboy_token(motoboy_id: int, restaurante_id: int, jti: str, *, expires_at: Optional[datetime] = None) -> str:
     """Cria um token JWT temporário seguro para o PWA do Motoboy com TTL de 4 horas e JTI de controle."""
-    expire = datetime.now(timezone.utc) + timedelta(hours=4)
+    expire = expires_at if expires_at is not None else datetime.now(timezone.utc) + timedelta(hours=4)
     to_encode = {
         "sub": f"motoboy_{motoboy_id}",
         "motoboy_id": motoboy_id,

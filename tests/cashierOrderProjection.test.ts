@@ -354,3 +354,14 @@ test('latest card preserves the calendar date and seconds of digital orders', ()
     { key: 'digital:today-z', timestamps: ['2026-10-09T10:00:59-03:00'] },
   ]), 'digital:today-z');
 });
+
+test('entrega concluída pelo entregador permanece em fechamento para recebimento', () => {
+  const state = projectCashierDeliveryState('finalizado', 'delivery');
+  assert.equal(state.inProduction, false);
+  assert.equal(state.inFinalization, true);
+  assert.equal(state.label, 'Entregue · receber');
+  const action = getDigitalOrderActionCapability({id:'delivered-unpaid',status:'finalizado',modalidade:'delivery',pago:false});
+  assert.equal(action.action, 'finalize');
+  assert.equal(action.label, 'Receber pagamento');
+  assert.equal(action.isAllowed, true);
+});

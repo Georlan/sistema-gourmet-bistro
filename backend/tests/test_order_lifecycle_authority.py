@@ -70,6 +70,7 @@ def test_aggregate_lifecycle_preserves_each_launch_status_and_skips_replays():
 def test_aggregate_target_still_advances_a_lagging_launch():
     comanda = SimpleNamespace(
         id="check-mixed",
+        motoboy_id=None,
         delivery_status="pronto",
         tipo="retirada",
         lancamentos=[
@@ -113,6 +114,7 @@ def test_aggregate_target_still_advances_a_lagging_launch():
 def test_aggregate_target_advances_comanda_status_when_all_launches_already_at_target():
     comanda = SimpleNamespace(
         id="check-all-preparing",
+        motoboy_id=None,
         delivery_status="pendente",
         tipo="Delivery",
         fechada=False,

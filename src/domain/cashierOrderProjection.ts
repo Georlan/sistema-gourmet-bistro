@@ -10,13 +10,14 @@ export function projectCashierDeliveryState(status?: string, modalidade?: string
   return {
     awaitingAcceptance: status === 'pendente' || status === 'analise',
     inProduction: status === 'aceito' || status === 'producao',
-    inFinalization: status === 'pronto' || ['transito', 'saiu_para_entrega'].includes(status || ''),
+    inFinalization: (status === 'finalizado' && modalidade === 'delivery') || status === 'pronto' || ['transito', 'saiu_para_entrega'].includes(status || ''),
     active: ['pendente', 'analise', 'aceito', 'producao', 'pronto', 'transito'].includes(status || ''),
     label: getCashierDeliveryStatusLabel(status, modalidade),
   };
 }
 
 export function getCashierDeliveryStatusLabel(status?: string, modalidade?: string): string {
+  if (status === 'finalizado' && modalidade === 'delivery') return 'Entregue · receber';
   if (status === 'aceito') return 'Aceito · aguardando preparo';
   if (status === 'producao') return 'Em preparo';
   if (status === 'pronto') {
@@ -467,6 +468,10 @@ export function getDigitalOrderActionCapability(
       isAllowed: !isPending,
       disabledReason: isPending ? 'Finalizando pedido…' : undefined,
     };
+  }
+
+  if (status === 'finalizado' && isDelivery) {
+    return { action: 'finalize', targetStatus: 'finalizado', label: isPending ? 'Abrindo recebimento…' : 'Receber pagamento', isAllowed: !isPending };
   }
 
   if (status === 'transito' || status === 'saiu_para_entrega') {

@@ -475,6 +475,11 @@ class Comanda(Base):
     fechado_em = Column(DateTime, nullable=True)
     valor_pago = Column(Numeric(14, 2, asdecimal=False), default=0.0, nullable=False)  # Sum of generic partial payments made
     
+    # Only customer tracking may disclose the decrypted receipt code.
+    delivery_receipt_secret = Column(String, nullable=True)
+    delivery_receipt_failed_attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    delivery_receipt_retry_at = Column(DateTime, nullable=True)
+
     # Delivery operational fields
     delivery_status = Column(String, nullable=True)  # analise | pendente | producao | pronto | transito | finalizado
     delivery_taxa = Column(Numeric(14, 2, asdecimal=False), default=0.0)

@@ -82,7 +82,7 @@ test('ignora salão e pedidos digitais já encerrados no snapshot inicial', () =
     deliveryStatus: null,
     origemOperacional: 'garcom',
   });
-  const finalized = baseOrder({ id: 'delivery-finalized', deliveryStatus: 'finalizado' });
+  const finalized = baseOrder({ id: 'delivery-finalized', deliveryStatus: 'finalizado', valorPago: 13 });
   const rejected = baseOrder({ id: 'delivery-rejected', deliveryStatus: 'recusado' });
   const active = baseOrder({ id: 'delivery-active', deliveryStatus: 'pendente' });
 
@@ -308,4 +308,12 @@ test('workspace de retiradas deriva pendentes, prontas e atrasadas do fluxo can�
       .some((order) => order.id === 'pickup-quick-sale' || order.id === 'delivery-ready'),
     false,
   );
+});
+
+
+test('entregue com saldo continua no Caixa e não é tratado como recebido', () => {
+  const [row] = projectDeliveryOrdersFromSharedSnapshot([baseOrder({deliveryStatus:'finalizado',valorPago:5})]);
+  assert.equal(row.status, 'finalizado');
+  assert.equal(row.amountDue, 8);
+  assert.equal(row.pago, false);
 });

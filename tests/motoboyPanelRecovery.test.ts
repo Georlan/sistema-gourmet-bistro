@@ -24,7 +24,7 @@ test('confirmação de entrega abandona POST travado sem repetir a mutação', (
 
   const confirmation = source.slice(
     source.indexOf('const handleConfirmarEntrega'),
-    source.indexOf('if (loading)'),
+    source.indexOf('const blocked ='),
   );
 
   assert.match(confirmation, /const controller = new AbortController\(\);/);
@@ -35,7 +35,7 @@ test('confirmação de entrega abandona POST travado sem repetir a mutação', (
   assert.match(confirmation, /signal: controller\.signal/);
   assert.match(confirmation, /err\?\.name === 'AbortError'/);
   assert.match(confirmation, /Atualizando o painel antes de permitir nova tentativa/);
-  assert.match(confirmation, /await carregarDadosPainel\(token\)/);
+  assert.match(confirmation, /await carregarDadosPainel\(token, true\)/);
   assert.match(confirmation, /window\.clearTimeout\(timeoutId\)/);
   assert.doesNotMatch(confirmation, /await handleConfirmarEntrega\(comandaId\)/);
 });

@@ -68,6 +68,7 @@ export interface StoredOrderItem {
 export interface StoredOrder {
   id: string; // comanda_id
   numero_pedido: string | number;
+  delivery_receipt_code?: string | null;
   timestamp: number;
   restaurante_id: number;
   cliente_nome?: string;
@@ -524,6 +525,7 @@ export async function fetchOrderLiveStatus(
     ...order,
     id: String(data.id || order.id),
     numero_pedido: data.numero_pedido ?? order.numero_pedido,
+    delivery_receipt_code: typeof data.delivery_receipt_code === "string" ? data.delivery_receipt_code : null,
     status: finalStatus,
     state: finalState,
     tipo,

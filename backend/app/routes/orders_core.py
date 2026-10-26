@@ -973,6 +973,8 @@ def converter_delivery_para_retirada(
     # Endereço e telefone permanecem no registro histórico; a projeção de
     # retirada não os usa para logística. Pagamento/troco também permanecem,
     # pois método de pagamento é uma dimensão independente do fulfillment.
+    from ..services.courier_realtime import queue_courier_refresh
+    queue_courier_refresh(db, rid, previous_courier_id)
     comanda.tipo = "Retirada"
     comanda.motoboy_id = None
     comanda.delivery_taxa = 0.0
@@ -1191,8 +1193,35 @@ def cadastrar_motoboy(
     return novo_motoboy
 
 
-def _criar_acesso_motoboy(db: Session, motoboy: Motoboy, rest_id: int) -> dict:
-    """Cria o acesso temporário dentro da transação do chamador."""
+def _criar_acesso_motoboy(db: Session, motoboy: Motoboy, rest_id: int, *, reuse_active: bool = False) -> dict:
+    """Dispatch reuses an unexpired access; explicit link generation rotates it."""
+    # Serialize concurrent dispatch/link generation for this courier only.
+    db.query(Motoboy).filter(Motoboy.id == motoboy.id, Motoboy.restaurante_id == rest_id).with_for_update().one()
+    now = datetime.datetime.now(datetime.timezone.utc)
+    active = None
+    if reuse_active:
+        active = db.query(MotoboyTokenAtivo).filter(
+            MotoboyTokenAtivo.motoboy_id == motoboy.id,
+            MotoboyTokenAtivo.restaurante_id == rest_id,
+            MotoboyTokenAtivo.revogado.is_(False),
+            MotoboyTokenAtivo.criado_em > now - datetime.timedelta(hours=4),
+        ).order_by(MotoboyTokenAtivo.criado_em.desc()).first()
+    if active:
+        # Preserve the original four-hour deadline, never renew on dispatch.
+        created_at = active.criado_em
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=datetime.timezone.utc)
+        expires = created_at + datetime.timedelta(hours=4)
+        token = create_motoboy_token(motoboy.id, rest_id, active.jti, expires_at=expires)
+        return {
+            "token": token,
+            "link": f"/entregador#token={token}",
+            "link_publico": f"{settings.KOMA_PUBLIC_APP_URL}/entregador#token={token}",
+            "expires_at": expires.isoformat(),
+            "motoboy_nome": motoboy.nome,
+        }
+    from ..services.courier_realtime import queue_courier_revocation
+    queue_courier_revocation(db, rest_id, motoboy.id)
     # 1. Revogar tokens ativos prévios deste motoboy
     db.query(MotoboyTokenAtivo).filter(
         MotoboyTokenAtivo.motoboy_id == motoboy.id,
@@ -1283,6 +1312,8 @@ def revogar_link_motoboy(
     ).update({MotoboyTokenAtivo.revogado: True})
     db.commit()
 
+    from ..websocket_manager import manager as courier_manager
+    courier_manager.revoke(rest_id, f"courier:{motoboy.id}")
     return {"status": "sucesso", "mensagem": f"Acesso do entregador '{motoboy.nome}' revogado com sucesso."}
 
 
@@ -1315,39 +1346,19 @@ def painel_entregador(
         if not motoboy or not motoboy.ativo:
             raise HTTPException(status_code=403, detail="Entregador inativo ou não encontrado.")
 
-        comandas = db.query(Comanda).filter(
+        comandas = db.query(Comanda).options(
+            selectinload(Comanda.itens).joinedload(Item.produto),
+            selectinload(Comanda.lancamentos),
+        ).filter(
             Comanda.restaurante_id == rest_id,
             Comanda.fechada == False,
-            Comanda.delivery_status.in_(["pronto", "transito"]),
-            (Comanda.motoboy_id == motoboy_id) | (Comanda.motoboy_id == None)
+            Comanda.delivery_status == "transito",
+            Comanda.tipo.in_(["Delivery", "Entrega"]),
+            Comanda.motoboy_id == motoboy_id,
         ).order_by(Comanda.criado_em.desc()).all()
 
-        entregas = []
-        for c in comandas:
-            calc_total = sum(i.preco_unit for i in c.itens) if c.itens else 0.0
-            total_entrega = calc_total + (c.delivery_taxa or 0.0)
-
-            prod_counts = {}
-            for i in c.itens:
-                pname = i.produto.nome if i.produto else "Item"
-                prod_counts[pname] = prod_counts.get(pname, 0) + 1
-
-            itens_str = ", ".join([f"{qty}x {pname}" for pname, qty in prod_counts.items()])
-
-            entregas.append({
-                "id": c.id,
-                "numero_pedido": c.numero_pedido,
-                "cliente_nome": c.identificador or "Cliente",
-                "delivery_telefone": c.delivery_telefone,
-                "delivery_endereco": c.delivery_endereco,
-                "delivery_taxa": round(c.delivery_taxa or 0.0, 2),
-                "delivery_status": c.delivery_status,
-                "total": round(total_entrega, 2),
-                "valor_pago": round(c.valor_pago or 0.0, 2),
-                "valor_a_cobrar": max(0.0, round(total_entrega - (c.valor_pago or 0.0), 2)),
-                "itens_resumo": itens_str,
-                "criado_em": c.criado_em.isoformat() if c.criado_em else None
-            })
+        from ..services.courier_order_projection import project_courier_orders
+        entregas = project_courier_orders(db, rest_id, comandas)
 
         return {
             "motoboy": {
@@ -1355,5 +1366,6 @@ def painel_entregador(
                 "nome": motoboy.nome,
                 "telefone": motoboy.telefone
             },
-            "entregas": entregas
+            "entregas": entregas,
+            "contract_version": 2,
         }
