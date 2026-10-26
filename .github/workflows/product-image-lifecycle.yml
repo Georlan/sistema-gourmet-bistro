@@ -47,6 +47,7 @@ jobs:
       - run: python -m pip install -r backend/requirements-dev.txt
       - run: >-
           python -m pytest -q -ra
+          backend/tests/test_product_image_worker.py
           backend/tests/test_product_image_lifecycle.py
           backend/tests/test_product_image_lifecycle_postgres.py
           backend/tests/test_product_image_asset_contract.py
