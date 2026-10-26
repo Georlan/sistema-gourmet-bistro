@@ -64,5 +64,7 @@ def test_public_menu_config_sync_is_tenant_scoped_and_refetches_source_of_truth(
 
     assert '"config_updated"' in manager
     assert '"catalog_updated"' in manager
-    assert '"client": [WebSocket...]' in manager
+    # Verify the public channel implementation, not a descriptive comment.
+    assert 'self.active_connections[restaurante_id] = {"internal": [], "client": []}' in manager
+    assert 'sockets_to_send = list(ctype_dict.get("client", []))' in manager
     assert "self.active_connections[restaurante_id]" in manager
