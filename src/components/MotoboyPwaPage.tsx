@@ -1,6 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MapPin, CheckCircle2, RefreshCw, AlertCircle, Sun, Moon, PackageCheck, ArrowUp, ArrowDown, Store, WifiOff, ListOrdered, LocateFixed, LogOut } from 'lucide-react';
-import { clearCourierAccess, COURIER_ACCESS_KEY } from '../utils/courierAccessSession';
+import {
+  classifyCourierAuthError,
+  clearCourierAccess,
+  COURIER_ACCESS_KEY,
+  describeCourierRecoveryReason,
+  isCourierTokenExpired,
+  persistCourierAccess,
+  readCourierTokenExpiryMs,
+  type CourierAccessRecoveryReason,
+  type CourierAccessState,
+} from '../utils/courierAccessSession';
+import {
+  COURIER_COPIED_SESSION_DISCARDED_KEY,
+  releaseTabSessionOwnershipForNavigation,
+} from '../utils/tabSessionOwnership';
 import { API_BASE_URL } from '../config/api';
 import { KomaLogo } from './KomaLogo';
 import { nextKomaTheme, persistKomaTheme, readKomaTheme, applyKomaTheme } from '../config/theme';
@@ -8,7 +22,7 @@ import './courier/courierPresentation.css';
 import { useCourierTrip } from './courier/useCourierTrip';
 import { CourierRideArtwork } from './courier/CourierRideArtwork';
 import { useCourierAutoOrder } from './courier/useCourierAutoOrder';
-import { createCourierSnapshotCache } from './courier/courierSnapshotCache';
+import { createCourierSnapshotCache, hasActiveCourierSnapshot } from './courier/courierSnapshotCache';
 import { useCourierRealtime } from './courier/useCourierRealtime';
 import { useCourierThemeTransition } from './courier/useCourierThemeTransition';
 import { useCourierOfflineShell } from './courier/useCourierOfflineShell';
@@ -33,24 +47,62 @@ const DELIVERY_TOKEN_SESSION_KEY = COURIER_ACCESS_KEY;
 const DELIVERY_TOKEN_HEADER = 'X-Koma-Delivery-Token';
 const PANEL_REQUEST_TIMEOUT_MS = 12_000;
 const CONFIRM_DELIVERY_REQUEST_TIMEOUT_MS = 12_000;
+const COURIER_LOGIN_PATH = '/?view=operacional';
 
-function bootstrapDeliveryToken(): string {
+function hasCopiedSessionDiscardedFlag(): boolean {
+  try {
+    return sessionStorage.getItem(COURIER_COPIED_SESSION_DISCARDED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function clearCopiedSessionDiscardedFlag(): void {
+  try {
+    sessionStorage.removeItem(COURIER_COPIED_SESSION_DISCARDED_KEY);
+  } catch { /* Ignore storage errors. */ }
+}
+
+function bootstrapDeliveryAccess(): CourierAccessState {
   const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
   const queryParams = new URLSearchParams(window.location.search);
   const tokenFromFragment = hashParams.get('token')?.trim() || '';
   // Compatibilidade temporária para links antigos já enviados. O segredo é removido
   // antes de qualquer chamada de rede e nunca volta para query string da API.
   const legacyQueryToken = queryParams.get('token')?.trim() || '';
+  const urlToken = tokenFromFragment || legacyQueryToken;
+
   let storedToken = '';
   try { storedToken = sessionStorage.getItem(DELIVERY_TOKEN_SESSION_KEY)?.trim() || ''; }
   catch { /* A fresh access link still works in memory when tab storage is blocked. */ }
-  const token = tokenFromFragment || legacyQueryToken || storedToken;
 
-  if (token) {
-    try { sessionStorage.setItem(DELIVERY_TOKEN_SESSION_KEY, token); }
+  const copiedDiscarded = hasCopiedSessionDiscardedFlag();
+  const candidate = urlToken || storedToken;
+
+  if (candidate) {
+    clearCopiedSessionDiscardedFlag();
+    if (isCourierTokenExpired(candidate)) {
+      clearCourierAccess();
+      return { token: '', reason: 'expired', expiresAt: null };
+    }
+    try { persistCourierAccess(candidate, urlToken ? 'link' : 'login'); }
     catch { /* Reload requires reopening the access link; never persist it outside this tab. */ }
+    return {
+      token: candidate,
+      reason: null,
+      expiresAt: readCourierTokenExpiryMs(candidate),
+    };
   }
-  return token;
+
+  if (copiedDiscarded) {
+    return { token: '', reason: 'replaced', expiresAt: null };
+  }
+
+  if (hasActiveCourierSnapshot()) {
+    return { token: '', reason: 'session_lost', expiresAt: null };
+  }
+
+  return { token: '', reason: 'missing', expiresAt: null };
 }
 
 function clearDeliveryTokenFromUrl() {
@@ -63,7 +115,9 @@ function clearDeliveryTokenFromUrl() {
 const RESUME_REFRESH_MIN_MS = 15_000;
 
 export function MotoboyPwaPage() {
-  const [token, setToken] = useState(bootstrapDeliveryToken);
+  const initialAccess = useMemo(bootstrapDeliveryAccess, []);
+  const [token, setToken] = useState(initialAccess.token);
+  const [recoveryReason, setRecoveryReason] = useState<CourierAccessRecoveryReason | null>(initialAccess.reason);
   // After initialization: StrictMode may read the link twice when tab storage is unavailable.
   useEffect(clearDeliveryTokenFromUrl, []);
   const [theme, setTheme] = useState(readKomaTheme);
@@ -80,7 +134,11 @@ export function MotoboyPwaPage() {
   const [refreshFailed, setRefreshFailed] = useState(false);
   const [loading, setLoading] = useState(Boolean(token));
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(token ? null : 'Abra o link de acesso enviado pelo caixa.');
+  const [errorMsg, setErrorMsg] = useState<string | null>(() => (
+    initialAccess.token
+      ? null
+      : describeCourierRecoveryReason(initialAccess.reason || 'missing').message
+  ));
   const [motoboy, setMotoboy] = useState<MotoboyProfile | null>(null);
   const [entregas, setEntregas] = useState<CourierOrder[]>([]);
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -134,14 +192,43 @@ export function MotoboyPwaPage() {
     return true;
   }, []);
 
-  const revokeAccess = useCallback(() => {
+  const invalidateCourierSession = useCallback((reason: 'expired' | 'revoked' | 'replaced', customMessage?: string) => {
     getRef.current?.abort(); getRef.current = null; suspendedReadRef.current = false;
     postRef.current?.abort(); postRef.current = null; isConfirmingRef.current = false;
     profileRef.current = null; setMotoboy(null); setEntregas([]); setLoading(false);
     setConfirmingId(null); setIsRefreshing(false); setAccessInvalid(true); setReviewId(null); setDetailsId(null);
-    setErrorMsg('Acesso encerrado. Solicite um novo link ao Caixa.');
+    setRecoveryReason(reason);
+    clearCourierAccess();
+    setErrorMsg(customMessage || describeCourierRecoveryReason(reason).message);
     void cache.clear();
   }, [cache]);
+
+  const revokeAccess = useCallback(() => {
+    const reason = token && isCourierTokenExpired(token) ? 'expired' : 'revoked';
+    invalidateCourierSession(
+      reason,
+      reason === 'expired'
+        ? describeCourierRecoveryReason('expired').message
+        : 'Acesso encerrado. Solicite um novo link ao Caixa ou entre novamente.',
+    );
+  }, [invalidateCourierSession, token]);
+
+  useEffect(() => {
+    if (!token || accessInvalid) return;
+    const expiresAt = readCourierTokenExpiryMs(token);
+    if (expiresAt === null) return;
+    const remainingMs = expiresAt - Date.now();
+    if (remainingMs <= 0) {
+      invalidateCourierSession('expired');
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      if (isCourierTokenExpired(token)) {
+        invalidateCourierSession('expired');
+      }
+    }, Math.min(Math.max(1, remainingMs + 50), 2_147_483_647));
+    return () => window.clearTimeout(timer);
+  }, [token, accessInvalid, invalidateCourierSession]);
 
   const handleRealtimeInvalidate = useCallback((reason: 'ready' | 'updated') => {
     if (reason === 'ready' && (getRef.current || Date.now() - lastResumeFetchRef.current < 2_000)) return;
@@ -150,6 +237,10 @@ export function MotoboyPwaPage() {
   useCourierRealtime(accessInvalid ? '' : token, handleRealtimeInvalidate, revokeAccess);
 
   const carregarDadosPainel = useCallback(async (authToken: string, reconcile = false): Promise<boolean> => {
+    if (isCourierTokenExpired(authToken)) {
+      invalidateCourierSession('expired');
+      return false;
+    }
     if (getRef.current || (isConfirmingRef.current && !reconcile)) return false;
     if (!reconcile && document.visibilityState === 'hidden') {
       suspendedReadRef.current = true;
@@ -172,11 +263,15 @@ export function MotoboyPwaPage() {
       });
       if (getRef.current !== controller) return false;
       if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
-          profileRef.current = null; setMotoboy(null); setEntregas([]); setAccessInvalid(true);
-          void cache.clear();
-        }
         const body = await res.json().catch(() => ({}));
+        if (res.status === 401 || res.status === 403) {
+          const reason = classifyCourierAuthError(body?.detail, authToken);
+          const detailText = typeof body?.detail === 'string' && body.detail.trim()
+            ? body.detail
+            : describeCourierRecoveryReason(reason).message;
+          invalidateCourierSession(reason, detailText);
+          return false;
+        }
         throw new Error(typeof body.detail === 'string' ? body.detail : 'Não foi possível atualizar as entregas.');
       }
       const data = await res.json();
@@ -185,6 +280,7 @@ export function MotoboyPwaPage() {
       profileRef.current = data.motoboy;
       setCacheOnly(false); void persistPanel(data);
       setMotoboy(data.motoboy); setEntregas(data.entregas.filter((item: CourierOrder) => item.delivery_status === 'transito'));
+      setRecoveryReason(null);
       setErrorMsg(null); setUncertainId(null); setRefreshFailed(false); setLastUpdated(Date.now());
       return true;
     } catch (err: any) {
@@ -205,7 +301,7 @@ export function MotoboyPwaPage() {
         getRef.current = null; setLoading(false); setIsRefreshing(false);
       }
     }
-  }, [showToast, cache, persistPanel]);
+  }, [showToast, cache, persistPanel, invalidateCourierSession]);
 
   useEffect(() => {
     if (!token) return;
@@ -226,6 +322,7 @@ export function MotoboyPwaPage() {
     const suspend = () => { cancelPendingGet(true); };
     const resume = () => {
       if (document.visibilityState === 'hidden') { suspend(); return; }
+      if (isCourierTokenExpired(token)) { invalidateCourierSession('expired'); return; }
       if (!navigator.onLine || document.visibilityState !== 'visible') return;
       if (getRef.current && Date.now() - getStartRef.current >= PANEL_REQUEST_TIMEOUT_MS) {
         cancelPendingGet(true);
@@ -259,7 +356,7 @@ export function MotoboyPwaPage() {
       postRef.current?.abort(); postRef.current = null;
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
-  }, [token, cache, carregarDadosPainel, cancelPendingGet]);
+  }, [token, cache, carregarDadosPainel, cancelPendingGet, invalidateCourierSession]);
 
   // Reconnection bypasses the focus throttle, but waits for the active operation.
   // Read the server once; never queue or replay a delivery confirmation.
@@ -276,7 +373,11 @@ export function MotoboyPwaPage() {
   }, [realtimePending, token, isOnline, accessInvalid, cacheHydrating, loading, isRefreshing, confirmingId, carregarDadosPainel]);
 
   const handleConfirmarEntrega = async (comandaId: string) => {
-    if (!token || cacheOnly || !isOnline || !navigator.onLine || reconnectRequested || getRef.current || isConfirmingRef.current || uncertainId) return;
+    if (!token || accessInvalid || cacheOnly || !isOnline || !navigator.onLine || reconnectRequested || getRef.current || isConfirmingRef.current || uncertainId) return;
+    if (isCourierTokenExpired(token)) {
+      invalidateCourierSession('expired');
+      return;
+    }
     const current = entregas.find(item => item.id === comandaId);
     if (!current || current.confirmation?.enabled === false) return;
     const requiresCode = current.requires_delivery_code;
@@ -298,6 +399,14 @@ export function MotoboyPwaPage() {
       if (postRef.current !== controller) return;
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
+        if (res.status === 401 || res.status === 403) {
+          const reason = classifyCourierAuthError(body?.detail, token);
+          const detailText = typeof body?.detail === 'string' && body.detail.trim()
+            ? body.detail
+            : describeCourierRecoveryReason(reason).message;
+          invalidateCourierSession(reason, detailText);
+          return;
+        }
         throw new Error(typeof body.detail === 'string' ? body.detail : 'Não foi possível confirmar a entrega.');
       }
       setReviewId(null); setReceiptCode('');
@@ -330,21 +439,24 @@ export function MotoboyPwaPage() {
   const previousPlanning = useRef(false);
   useEffect(() => {
     const switchAccess = () => {
-      const next = bootstrapDeliveryToken();
+      const nextAccess = bootstrapDeliveryAccess();
       clearDeliveryTokenFromUrl();
-      if (next === token) return;
+      if (nextAccess.token === token && nextAccess.reason === recoveryReason) return;
       getRef.current?.abort(); getRef.current = null;
       postRef.current?.abort(); postRef.current = null;
       isConfirmingRef.current = false; profileRef.current = null;
       setMotoboy(null); setEntregas([]); setReviewId(null); setConfirmingId(null);
-      setAccessInvalid(false); setCacheOnly(false); setCacheIssue(false); setCacheHydrating(Boolean(next)); setRealtimePending(false);
+      setAccessInvalid(!nextAccess.token && nextAccess.reason === 'expired');
+      setRecoveryReason(nextAccess.reason);
+      setCacheOnly(false); setCacheIssue(false); setCacheHydrating(Boolean(nextAccess.token)); setRealtimePending(false);
       setUncertainId(null); setRefreshFailed(false); setReconnectRequested(false); setLastUpdated(null); setPlanning(false); setReceiptCode(''); setReceiptError(''); setDetailsId(null);
-      setLoading(Boolean(next)); setErrorMsg(next ? null : 'Abra o link enviado pelo caixa.');
-      setToken(next);
+      setLoading(Boolean(nextAccess.token));
+      setErrorMsg(nextAccess.token ? null : describeCourierRecoveryReason(nextAccess.reason || 'missing').message);
+      setToken(nextAccess.token);
     };
     window.addEventListener('hashchange', switchAccess);
     return () => window.removeEventListener('hashchange', switchAccess);
-  }, [token]);
+  }, [token, recoveryReason]);
   useEffect(() => {
     if (planning) planHeadingRef.current?.focus();
     else if (previousPlanning.current) tripButtonRef.current?.focus();
@@ -369,6 +481,10 @@ export function MotoboyPwaPage() {
   const dialogOrder = entregas.find(item => item.id === (reviewId || detailsId));
   const themeTransition = useCourierThemeTransition(confirmationBlocked || loading || planning || Boolean(dialogOrder) || entregas.length > 30);
   const automatic = useCourierAutoOrder(token, ordered, blocked || reconnectRequested || !trip.ready, trip.save);
+  const needsReauth = !token || accessInvalid;
+  const emptyTitle = needsReauth
+    ? describeCourierRecoveryReason(recoveryReason || 'missing').title
+    : 'Não foi possível abrir o painel';
 
   return <div className="k-courier">
     <header className="k-courier__header">
@@ -377,11 +493,11 @@ export function MotoboyPwaPage() {
         <button type="button" className="k-courier__icon" aria-label={theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'} disabled={themeTransition.animating} onClick={event => themeTransition.change(event.currentTarget, () => setTheme(persistKomaTheme(nextKomaTheme(readKomaTheme()))))}>
           {theme === 'dark' ? <Sun aria-hidden="true" size={20} /> : <Moon aria-hidden="true" size={20} />}
         </button>
-        {token && <button type="button" className="k-courier__icon" aria-label="Atualizar Pedidos" disabled={!isOnline || Boolean(confirmingId) || isRefreshing || loading} onClick={() => void carregarDadosPainel(token)}>
+        {token && !accessInvalid && <button type="button" className="k-courier__icon" aria-label="Atualizar Pedidos" disabled={!isOnline || Boolean(confirmingId) || isRefreshing || loading} onClick={() => void carregarDadosPainel(token)}>
           <RefreshCw aria-hidden="true" size={20} className={isRefreshing ? 'k-courier__spin' : ''} />
         </button>}
-        {token && <button type="button" className="k-courier__icon" aria-label="Sair das entregas" disabled={Boolean(confirmingId) || Boolean(uncertainId)} onClick={() => {
-          clearCourierAccess(); revokeAccess(); window.location.replace('/?view=operacional');
+        {token && !accessInvalid && <button type="button" className="k-courier__icon" aria-label="Sair das entregas" disabled={Boolean(confirmingId) || Boolean(uncertainId)} onClick={() => {
+          clearCourierAccess(); revokeAccess(); releaseTabSessionOwnershipForNavigation(); window.location.replace(COURIER_LOGIN_PATH);
         }}><LogOut aria-hidden="true" size={20} /></button>}
       </div>
     </header>
@@ -390,7 +506,20 @@ export function MotoboyPwaPage() {
     </div>}
     <main className="k-courier__main">
       {loading ? <div className="k-courier__empty" role="status"><RefreshCw size={26} className="k-courier__spin" aria-hidden="true" /><h1>Carregando entregas</h1></div>
-        : errorMsg ? <div className="k-courier__empty"><AlertCircle size={32} aria-hidden="true" /><h1>{token ? 'Não foi possível abrir o painel' : 'Seu acesso às entregas'}</h1><p role="alert">{errorMsg}</p>{token && <button type="button" className="k-courier__action" onClick={() => void carregarDadosPainel(token)}>Tentar Novamente</button>}</div>
+        : errorMsg ? <div className="k-courier__empty">
+          <AlertCircle size={32} aria-hidden="true" />
+          <h1>{emptyTitle}</h1>
+          <p role="alert">{errorMsg}</p>
+          {needsReauth ? (
+            <button type="button" className="k-courier__action" onClick={() => { clearCourierAccess(); releaseTabSessionOwnershipForNavigation(); window.location.assign(COURIER_LOGIN_PATH); }}>
+              Entrar como entregador
+            </button>
+          ) : (
+            <button type="button" className="k-courier__action" onClick={() => void carregarDadosPainel(token)}>
+              Tentar Novamente
+            </button>
+          )}
+        </div>
         : <>
           <div className="k-courier__intro">
             <div><p className="k-courier__name">{motoboy?.nome}</p><h1>Entregas <span>{entregas.length}</span></h1></div>

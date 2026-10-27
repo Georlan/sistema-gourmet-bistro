@@ -70,3 +70,23 @@ export function createCourierSnapshotCache(token: string) {
     },
   };
 }
+
+/** Checks if a non-expired encrypted snapshot record exists on this device without decrypting it. */
+export function hasActiveCourierSnapshot(now = Date.now()): boolean {
+  try {
+    if (typeof localStorage === 'undefined') return false;
+    for (const storageKey of Object.keys(localStorage)) {
+      if (!storageKey.startsWith(COURIER_CACHE_PREFIX)) continue;
+      try {
+        const record = JSON.parse(localStorage.getItem(storageKey) || 'null');
+        if (record && Number.isFinite(record.at) && record.at <= now + 60_000 && now < record.at + MAX_AGE) {
+          return true;
+        }
+      } catch { /* Ignore malformed entries. */ }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+

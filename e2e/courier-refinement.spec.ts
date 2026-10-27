@@ -597,3 +597,223 @@ test('suspensão e retorno durante confirmação de entrega em voo nunca repete 
   expect(posts).toBe(1);
 });
 
+function buildCourierTestJwt(expSeconds: number, jti = 'courier-jti-test') {
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({
+    sub: 'motoboy_99021',
+    motoboy_id: 99021,
+    restaurante_id: 5,
+    type: 'motoboy_pwa',
+    jti,
+    exp: expSeconds,
+  })).toString('base64url');
+  return `${header}.${payload}.test-signature`;
+}
+
+test('login legítimo -> suspensão prolongada e restauração de aba simulando descarte pelo Chrome Android preserva sessão válida', async ({ page, context }) => {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const courierJwt = buildCourierTestJwt(nowSec + 4 * 3600);
+
+  await page.routeWebSocket(/\/ws\//, socket => {
+    socket.onMessage(msg => {
+      if (msg === 'ping') socket.send(JSON.stringify({ event: 'pong' }));
+    });
+    socket.send(JSON.stringify({ event: 'courier_ready' }));
+  });
+
+  await page.route(`${API}/**`, async route => {
+    const req = route.request();
+    const url = new URL(req.url());
+    if (req.method() === 'POST' && url.pathname === '/auth/login') {
+      return route.fulfill({
+        json: {
+          access_token: 'staff-ephemeral-jwt',
+          usuario: { id: 'courier-user-1', nome: 'Lucas', role: 'motoboy', cargo: 'motoboy', restaurante_id: 5 },
+        },
+      });
+    }
+    if (req.method() === 'POST' && url.pathname === '/comandas/motoboys/me/acesso') {
+      expect(req.headers().authorization).toBe('Bearer staff-ephemeral-jwt');
+      return route.fulfill({ json: { token: courierJwt, expires_at: new Date((nowSec + 4 * 3600) * 1000).toISOString() } });
+    }
+    if (req.method() === 'GET' && url.pathname === '/comandas/motoboys/painel-entregador') {
+      expect(req.headers()['x-koma-delivery-token']).toBe(courierJwt);
+      return route.fulfill({ json: { motoboy: profile, entregas: [delivery] } });
+    }
+    return route.fulfill({ json: {} });
+  });
+
+  // 1. Login legítimo pelo fluxo unificado
+  await page.goto('/?view=operacional');
+  await page.getByLabel('E-MAIL').fill('lucas@koma.test');
+  await page.getByLabel('Senha', { exact: true }).fill('senha-valida');
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click();
+
+  await expect(page).toHaveURL(/\/entregador$/);
+  await expect(page.getByRole('article', { name: 'Pedido 101' })).toBeVisible();
+  const originalTabId = await page.evaluate(() => sessionStorage.getItem('koma_auth_tab_id_v1'));
+  expect(originalTabId).toBeTruthy();
+
+  // 2. Entregador vai para o Google Maps por longo período (>12s): aba fica oculta/suspensa
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+
+  // Enquanto a aba original está oculta/suspensa, uma aba duplicada tenta herdar o sessionStorage copiado
+  const copiedWhileHidden = await page.evaluate(() => Object.entries(sessionStorage));
+  const duplicateWhileHidden = await context.newPage();
+  await duplicateWhileHidden.addInitScript(entries => {
+    if (sessionStorage.getItem('duplicate-while-hidden-seeded')) return;
+    for (const [k, v] of entries) sessionStorage.setItem(k, v);
+    sessionStorage.setItem('duplicate-while-hidden-seeded', '1');
+  }, copiedWhileHidden);
+  await duplicateWhileHidden.route(`${API}/**`, route => route.fulfill({ json: { motoboy: profile, entregas: [delivery] } }));
+  await duplicateWhileHidden.goto('/entregador', { waitUntil: 'domcontentloaded' });
+  await expect(duplicateWhileHidden.getByRole('heading', { name: 'Aba sem sessão ativa' })).toBeVisible();
+  expect(await duplicateWhileHidden.evaluate(() => sessionStorage.getItem('koma_entregador_session_token'))).toBeNull();
+  await duplicateWhileHidden.close();
+
+  // 3. Simula ciclo de BFCache (pagehide persisted=true -> pageshow persisted=true) e retorno à aba original
+  await page.evaluate(() => {
+    window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(page.getByRole('article', { name: 'Pedido 101' })).toBeVisible();
+
+  // 4. Simula descarte completo do processo da aba pelo navegador e restauração mantendo o sessionStorage da própria aba
+  await page.reload();
+
+  // A aba restaurada recupera o mesmo tabId e o token sem cair em "Abra o link de acesso enviado pelo caixa."
+  await expect(page.getByRole('article', { name: 'Pedido 101' })).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem('koma_auth_tab_id_v1'))).toBe(originalTabId);
+  expect(await page.evaluate(() => sessionStorage.getItem('koma_entregador_session_token'))).toBe(courierJwt);
+});
+
+test('duplicação de aba do entregador com sessionStorage copiado descarta credencial na cópia, preserva a aba original e isola abas de entregadores/tenants distintos', async ({ page, context }) => {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const courierJwtA = buildCourierTestJwt(nowSec + 4 * 3600, 'jti-tenant-a');
+  const courierJwtB = buildCourierTestJwt(nowSec + 4 * 3600, 'jti-tenant-b');
+  await fixture(page);
+  await page.goto(`/entregador#token=${courierJwtA}`, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('article', { name: 'Pedido 101' })).toBeVisible();
+
+  const copiedEntries = await page.evaluate(() => Object.entries(sessionStorage));
+  const duplicateTab = await context.newPage();
+  await duplicateTab.addInitScript(entries => {
+    if (sessionStorage.getItem('duplicate-courier-seeded')) return;
+    for (const [k, v] of entries) sessionStorage.setItem(k, v);
+    sessionStorage.setItem('duplicate-courier-seeded', '1');
+  }, copiedEntries);
+  await fixture(duplicateTab);
+
+  await duplicateTab.goto('/entregador', { waitUntil: 'domcontentloaded' });
+
+  // A aba duplicada não herda o acesso e exibe diagnóstico de aba duplicada com botão para login
+  await expect(duplicateTab.getByRole('heading', { name: 'Aba sem sessão ativa' })).toBeVisible();
+  await expect(duplicateTab.getByRole('alert')).toContainText('Esta aba foi duplicada de outro acesso.');
+  await expect(duplicateTab.getByRole('button', { name: 'Entrar como entregador' })).toBeVisible();
+  expect(await duplicateTab.evaluate(() => sessionStorage.getItem('koma_entregador_session_token'))).toBeNull();
+
+  // Segunda aba abre acesso próprio de outro entregador/tenant sem interferir na primeira aba
+  await duplicateTab.route(`${API}/**`, route => {
+    const req = route.request();
+    expect(req.headers()['x-koma-delivery-token']).toBe(courierJwtB);
+    return route.fulfill({
+      json: {
+        motoboy: { id: 22, nome: 'Marcos Outro Tenant', telefone: '11988887777' },
+        entregas: [{ ...delivery, id: 'c202', numero_pedido: 202, cliente_nome: 'Cliente Restaurante B' }],
+      },
+    });
+  });
+  await duplicateTab.goto(`/entregador#token=${courierJwtB}`, { waitUntil: 'domcontentloaded' });
+  await expect(duplicateTab.getByRole('article', { name: 'Pedido 202' })).toBeVisible();
+  expect(await duplicateTab.evaluate(() => sessionStorage.getItem('koma_entregador_session_token'))).toBe(courierJwtB);
+
+  // A aba original permanece autenticada com seu próprio entregador/tenant após recarregar
+  await page.reload();
+  await expect(page.getByRole('article', { name: 'Pedido 101' })).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem('koma_entregador_session_token'))).toBe(courierJwtA);
+  await duplicateTab.close();
+});
+
+test('expiração de 4 horas, revogação pelo Caixa, ausência de Web Locks e perda total de sessionStorage exibem diagnósticos distintos e levam ao login operacional', async ({ page, context }) => {
+  await page.clock.install();
+  const startMs = await page.evaluate(() => Date.now());
+  const fourHoursSec = Math.floor(startMs / 1000) + 4 * 3600;
+  const courierJwt = buildCourierTestJwt(fourHoursSec);
+
+  await fixture(page);
+  await page.goto(`/entregador#token=${courierJwt}`, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('article', { name: 'Pedido 101' })).toBeVisible();
+
+  // 1. Avança 4 horas: a sessão expira localmente sem precisar de polling e exibe mensagem de expiração + botão de login
+  await page.clock.fastForward(4 * 3600 * 1000 + 500);
+  await expect(page.getByRole('heading', { name: 'Sessão de entregas expirada' })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('Seu acesso de 4 horas terminou.');
+  await expect(page.getByRole('button', { name: 'Entrar como entregador' })).toBeVisible();
+  expect(await page.evaluate(() => sessionStorage.getItem('koma_entregador_session_token'))).toBeNull();
+
+  // 2. Novo acesso que posteriormente é revogado explicitamente pelo Caixa (401 de revogação)
+  const freshJwt = buildCourierTestJwt(fourHoursSec + 7200, 'jti-2');
+  let revokedByCashier = false;
+  await page.route(`${API}/**`, route => {
+    if (revokedByCashier) {
+      return route.fulfill({
+        status: 401,
+        json: { detail: 'Link do entregador foi revogado ou é inválido. Solicite um novo link no Caixa.' },
+      });
+    }
+    return route.fulfill({ json: { motoboy: profile, entregas: [delivery] } });
+  });
+
+  await page.goto(`/entregador#token=${freshJwt}`, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('article', { name: 'Pedido 101' })).toBeVisible();
+
+  revokedByCashier = true;
+  await page.getByRole('button', { name: 'Atualizar Pedidos' }).click();
+  await expect(page.getByRole('heading', { name: 'Acesso encerrado' })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('revogado');
+  await expect(page.getByRole('button', { name: 'Entrar como entregador' })).toBeVisible();
+
+  // 3. Simula perda do sessionStorage pelo navegador enquanto ainda existe snapshot criptografado recente no aparelho
+  const thirdJwt = buildCourierTestJwt(fourHoursSec + 10_800, 'jti-3');
+  revokedByCashier = false;
+  await page.goto(`/entregador#token=${thirdJwt}`, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('article', { name: 'Pedido 101' })).toBeVisible();
+  // Aguarda gravação do snapshot criptografado no localStorage
+  await expect.poll(() => page.evaluate(() => Object.keys(localStorage).some(k => k.startsWith('koma_courier_snapshot_v1:')))).toBe(true);
+
+  // Simula o Chrome Android limpando o sessionStorage após descarte severo da aba
+  await page.evaluate(() => sessionStorage.clear());
+  await page.reload();
+
+  await expect(page.getByRole('heading', { name: 'Retome seu acesso às entregas' })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('O navegador encerrou a sessão local após longo período em segundo plano.');
+
+  // 4. Navegador sem suporte a Web Locks descarta sessão pré-existente no sessionStorage de forma segura
+  const noLocksTab = await context.newPage();
+  await noLocksTab.addInitScript(jwt => {
+    Object.defineProperty(Navigator.prototype, 'locks', { configurable: true, get: () => undefined });
+    if (sessionStorage.getItem('no-locks-seeded')) return;
+    sessionStorage.setItem('no-locks-seeded', '1');
+    sessionStorage.setItem('koma_auth_tab_id_v1', 'legacy-tab-id');
+    sessionStorage.setItem('koma_entregador_session_token', jwt);
+  }, thirdJwt);
+  await fixture(noLocksTab);
+  await noLocksTab.goto('/entregador', { waitUntil: 'domcontentloaded' });
+  await expect(noLocksTab.getByRole('heading', { name: 'Aba sem sessão ativa' })).toBeVisible();
+  await expect(noLocksTab.getByRole('button', { name: 'Entrar como entregador' })).toBeVisible();
+  await noLocksTab.close();
+
+  // Botão na aba principal leva ao login operacional
+  await page.getByRole('button', { name: 'Entrar como entregador' }).click();
+  await expect(page.getByLabel('E-MAIL')).toBeVisible();
+});
+
+
+
