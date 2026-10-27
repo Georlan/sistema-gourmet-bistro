@@ -92,6 +92,7 @@ async def lifespan(app: FastAPI):
     signup_task = None
     image_gc_task = None
     billing_task = None
+    online_reconciliation_task = None
     if worker_enabled:
         from .services.outbox import default_outbox_worker
         outbox_task = default_outbox_worker.start()
@@ -102,6 +103,8 @@ async def lifespan(app: FastAPI):
         image_gc_task = asyncio.create_task(run_image_gc())
         from .services.direct_pix_billing_worker import run_worker as run_billing
         billing_task = asyncio.create_task(run_billing())
+        from .services.online_payments.reconciliation_worker import run_worker as run_online_reconciliation
+        online_reconciliation_task = asyncio.create_task(run_online_reconciliation())
         print("[OUTBOX] Worker de integração assíncrona iniciado no lifespan.", flush=True)
 
     from .services.order_chat_hub import order_chat_hub
@@ -114,6 +117,11 @@ async def lifespan(app: FastAPI):
         import asyncio
         await asyncio.to_thread(order_chat_hub.stop)
         await asyncio.to_thread(manager.stop)
+        if online_reconciliation_task:
+            import contextlib
+            online_reconciliation_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await online_reconciliation_task
         if image_gc_task:
             import contextlib
             image_gc_task.cancel()

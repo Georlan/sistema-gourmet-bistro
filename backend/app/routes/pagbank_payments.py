@@ -4,8 +4,9 @@ import datetime
 import hashlib
 import hmac
 import json
-import uuid
 import logging
+import os
+import uuid
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
@@ -22,6 +23,7 @@ from ..security import ensure_permission, require_permission
 from ..services.online_payments import OnlinePaymentService, OnlinePaymentValidationError
 from ..services.online_payments.account_connection import _expires_at, guard_receiver_change, MercadoPagoAccountConnectionError
 from ..services.online_payments.pagbank import oauth
+from ..services.online_payments.pagbank.webhook import extract_webhook_identifiers, verify_pagbank_signature
 from ..websocket_manager import manager
 from .online_payments import _resolve_account_tenant
 
@@ -213,16 +215,50 @@ async def webhook(account_id: str, request: Request, tasks: BackgroundTasks, db:
     raw = await request.body()
     if len(raw) > 262144:
         raise HTTPException(413, 'Notificação muito grande.')
+
+    authenticity_token = (
+        request.headers.get('x-authenticity-token')
+        or request.headers.get('x-authenticity-signature')
+        or ''
+    ).strip()
+    payload_signature = request.headers.get('x-payload-signature', '').strip()
+
+    if not authenticity_token and not payload_signature:
+        logger.warning('PagBank webhook rejeitado: assinatura ausente para conta %s', account_id)
+        raise HTTPException(401, 'Assinatura ausente.')
+
     try:
-        payload = json.loads(raw)
-        payment_id = payload['id']
-    except (ValueError, KeyError, TypeError):
+        payload = json.loads(raw) if raw else {}
+    except (ValueError, TypeError):
         raise HTTPException(400, 'Notificação inválida.')
-    return await run_in_threadpool(_process_webhook, account_id, payment_id, raw,
-                                   request.headers.get('x-authenticity-token', ''), tasks, db)
+
+    payment_id, reference_id = extract_webhook_identifiers(payload)
+    if not payment_id and not reference_id:
+        raise HTTPException(400, 'Notificação inválida.')
+
+    return await run_in_threadpool(
+        _process_webhook,
+        account_id,
+        payment_id,
+        raw,
+        authenticity_token,
+        tasks,
+        db,
+        reference_id=reference_id,
+        payload_signature=payload_signature,
+    )
 
 
-def _process_webhook(account_id: str, payment_id: str, raw: bytes, signature: str, tasks: BackgroundTasks, db: Session):
+def _process_webhook(
+    account_id: str,
+    payment_id: str | None,
+    raw: bytes,
+    signature: str,
+    tasks: BackgroundTasks,
+    db: Session,
+    reference_id: str | None = None,
+    payload_signature: str = "",
+):
     rid = _resolve_account_tenant(db, account_id)
     if rid is None:
         raise HTTPException(404, 'Conta não encontrada.')
@@ -231,25 +267,44 @@ def _process_webhook(account_id: str, payment_id: str, raw: bytes, signature: st
         if not account or account.id != account_id or account.status != 'active' or account.provider_environment not in {'sandbox', 'production'}:
             raise HTTPException(404, 'Conta não encontrada.')
 
-        candidate_tokens = [t for t in (account.access_token, account.webhook_secret) if t]
+        app_token = oauth.credential('APP_TOKEN', account.provider_environment)
+        client_secret = oauth.credential('CLIENT_SECRET', account.provider_environment)
+        candidate_tokens = [t for t in (account.access_token, account.webhook_secret, app_token, client_secret) if t]
 
-        if not signature:
-            logger.warning('PagBank webhook rejeitado: assinatura ausente para conta %s', account_id)
-            raise HTTPException(401, 'Assinatura ausente.')
+        public_key = account.public_key or os.getenv('PAGBANK_WEBHOOK_PUBLIC_KEY', '')
 
-        is_valid = any(
-            hmac.compare_digest(signature, hashlib.sha256(token.encode() + b'-' + raw).hexdigest())
-            for token in candidate_tokens
+        is_valid = verify_pagbank_signature(
+            raw_body=raw,
+            authenticity_token=signature,
+            payload_signature=payload_signature,
+            candidate_tokens=candidate_tokens,
+            public_key_b64=public_key,
         )
+
         if not is_valid:
             logger.warning('PagBank webhook rejeitado: assinatura divergente para conta %s', account_id)
             raise HTTPException(401, 'Assinatura divergente.')
 
-        known = db.query(OnlinePaymentIntent.id).filter(OnlinePaymentIntent.restaurante_id == rid,
-            OnlinePaymentIntent.provider == 'pagbank', OnlinePaymentIntent.external_payment_id == payment_id).first()
-        if known is None:
+        # Resolve intent by external_payment_id OR reference_id (which is intent.id)
+        intent = None
+        if payment_id:
+            intent = db.query(OnlinePaymentIntent).filter(
+                OnlinePaymentIntent.restaurante_id == rid,
+                OnlinePaymentIntent.provider == 'pagbank',
+                OnlinePaymentIntent.external_payment_id == payment_id,
+            ).first()
+        if intent is None and reference_id:
+            intent = db.query(OnlinePaymentIntent).filter(
+                OnlinePaymentIntent.restaurante_id == rid,
+                OnlinePaymentIntent.provider == 'pagbank',
+                OnlinePaymentIntent.id == reference_id,
+            ).first()
+
+        if intent is None:
             # Retry: a notification can arrive before the create response commits.
             raise HTTPException(503, 'Pagamento ainda não registrado.')
+
+        external_id_to_reconcile = intent.external_payment_id or payment_id
 
         event_key = hashlib.sha256(account_id.encode() + raw).hexdigest()
         event = db.query(OnlinePaymentWebhookEvent).filter(
@@ -261,8 +316,13 @@ def _process_webhook(account_id: str, payment_id: str, raw: bytes, signature: st
             return {'status': 'already_processed'}
 
         if event is None:
-            event = OnlinePaymentWebhookEvent(restaurante_id=rid, provider='pagbank', request_id=event_key,
-                external_payment_id=payment_id, raw_payload={'id': payment_id})
+            event = OnlinePaymentWebhookEvent(
+                restaurante_id=rid,
+                provider='pagbank',
+                request_id=event_key,
+                external_payment_id=external_id_to_reconcile,
+                raw_payload={'id': payment_id, 'reference_id': reference_id},
+            )
             db.add(event)
             try:
                 db.commit()
@@ -283,7 +343,11 @@ def _process_webhook(account_id: str, payment_id: str, raw: bytes, signature: st
             db.commit()
 
         try:
-            intent, approved = OnlinePaymentService.reconcile_provider_payment(db, account=account, external_payment_id=payment_id)
+            settled_intent, approved = OnlinePaymentService.reconcile_provider_payment(
+                db,
+                account=account,
+                external_payment_id=external_id_to_reconcile,
+            )
         except OnlinePaymentValidationError as exc:
             db.rollback()
             event.status = 'failed'
@@ -302,11 +366,15 @@ def _process_webhook(account_id: str, payment_id: str, raw: bytes, signature: st
             OnlinePaymentWebhookEvent.id == event.id,
         ).first()
         if event is not None:
-            event.status = 'processed' if intent else 'ignored'
+            event.status = 'processed' if settled_intent else 'ignored'
             event.processed_at = datetime.datetime.now(datetime.timezone.utc)
             db.commit()
 
-        if approved and intent is not None:
+        if approved and settled_intent is not None:
             tasks.add_task(manager.broadcast, {'event': 'tables_updated'}, int(rid))
-            tasks.add_task(manager.broadcast, {'event': 'new_delivery_order', 'message': 'Novo pedido online pago recebido!'}, int(rid))
+            tasks.add_task(
+                manager.broadcast,
+                {'event': 'new_delivery_order', 'message': 'Novo pedido online pago recebido!'},
+                int(rid),
+            )
         return {'status': 'processed'}
