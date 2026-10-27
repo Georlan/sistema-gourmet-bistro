@@ -484,7 +484,10 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
         onPrintKitchenLaunch={onPrintKitchenLaunch ? handleKitchenPrint : undefined}
       />}
 
-      {editingItem && canEditItems && (
+      {editingItem && canEditItems && (() => {
+        const liveItem = orders.flatMap(o => o.itens).find(it => it.id === editingItem.id);
+        const canEditObservation = !liveItem || (liveItem.status === 'preparando' && !liveItem.pago);
+        return (
         <div
           onClick={(e) => {
             if (e.target === e.currentTarget) {
@@ -533,11 +536,17 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                 <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Observações de Preparo:</label>
                 <input
                   type="text"
+                  disabled={!canEditObservation}
                   value={editingItem.observacao}
                   onChange={(e) => setEditingItem({ ...editingItem, observacao: e.target.value })}
-                  className="w-full px-3.5 py-2 text-xs bg-koma-input border border-koma-border rounded-xl focus:outline-none focus:border-emerald-400/30 text-koma-foreground"
+                  className="w-full px-3.5 py-2 text-xs bg-koma-input border border-koma-border rounded-xl focus:outline-none focus:border-emerald-400/30 text-koma-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Ex: Sem cebola, Bem frito, etc."
                 />
+                {!canEditObservation && (
+                  <p className="text-[10px] text-amber-400">
+                    A observação de preparo só pode ser alterada enquanto o item está na cozinha.
+                  </p>
+                )}
               </div>
 
               {/* Customer Name Input */}
@@ -573,7 +582,8 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
     </div>
   );

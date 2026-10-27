@@ -87,6 +87,16 @@ export function MesaConsumptionPanel({
   const allUnpaidItems = orders.flatMap(o => (o.itens || []).filter((item: any) => !item.pago));
   const readyCount = allUnpaidItems.filter(item => item.status === 'pronto').length;
   const preparingCount = allUnpaidItems.filter(item => item.status === 'preparando').length;
+  const activeItemCountByCheck = new Map<string, number>();
+  const hasPaymentByCheck = new Map<string, boolean>();
+  orders.forEach((o) => {
+    const checkKey = String(o.checkId || o.id || '');
+    const activeInLot = (o.itens || []).filter((it: any) => it.status !== 'cancelado').length;
+    activeItemCountByCheck.set(checkKey, (activeItemCountByCheck.get(checkKey) || 0) + activeInLot);
+    if (Number(o.valorPago || 0) > 0 || (o.itens || []).some((it: any) => Boolean(it.pago))) {
+      hasPaymentByCheck.set(checkKey, true);
+    }
+  });
 
   return (
     <div className="kw-consumption p-3 sm:p-5 space-y-4 sm:space-y-6">
@@ -490,21 +500,49 @@ export function MesaConsumptionPanel({
                               </button>
                             )}
 
-                            {((activeRole !== 'garcom' || restauranteConfig?.perm_garcom_cancelar)) && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  if (confirm(`Tem certeza que deseja cancelar "${item.nome}"?`)) {
-                                    onCancelItem(item.id);
-                                  }
-                                }}
-                                className="p-1 text-koma-subtle hover:text-red-400 transition-colors cursor-pointer"
-                                title="Cancelar este item"
-                                aria-label={`Cancelar ${item.nome}`}
-                              >
-                                <Trash2 size={11} />
-                              </button>
-                            )}
+                            {((activeRole !== 'garcom' || restauranteConfig?.perm_garcom_cancelar)) && (() => {
+                              const checkKey = String(order.checkId || order.id || '');
+                              const isLastActiveItemOnCheck = (activeItemCountByCheck.get(checkKey) || 0) <= 1;
+                              const checkHasPayment = Boolean(hasPaymentByCheck.get(checkKey));
+                              const cancelRestrictionReason = checkHasPayment
+                                ? 'Há pagamento registrado nesta comanda. Solicite o cancelamento ou estorno no Caixa.'
+                                : isLastActiveItemOnCheck
+                                  ? 'Último item ativo da comanda — solicite o cancelamento do pedido ou liberação da mesa no Caixa.'
+                                  : null;
+
+                              if (cancelRestrictionReason) {
+                                return (
+                                  <button
+                                    type="button"
+                                    id={`cancel-item-btn-${item.id}`}
+                                    disabled
+                                    aria-disabled="true"
+                                    className="p-1 text-koma-muted/40 cursor-not-allowed"
+                                    title={cancelRestrictionReason}
+                                    aria-label={`Cancelamento bloqueado para ${item.nome}: ${cancelRestrictionReason}`}
+                                  >
+                                    <Trash2 size={11} />
+                                  </button>
+                                );
+                              }
+
+                              return (
+                                <button
+                                  type="button"
+                                  id={`cancel-item-btn-${item.id}`}
+                                  onClick={() => {
+                                    if (confirm(`Tem certeza que deseja cancelar "${item.nome}"?`)) {
+                                      onCancelItem(item.id);
+                                    }
+                                  }}
+                                  className="p-1 text-koma-subtle hover:text-red-400 transition-colors cursor-pointer"
+                                  title="Cancelar este item"
+                                  aria-label={`Cancelar ${item.nome}`}
+                                >
+                                  <Trash2 size={11} />
+                                </button>
+                              );
+                            })()}
                           </div>
                           </div>}
                         </div>

@@ -3,9 +3,11 @@ import { operationalFetch } from '../../../utils/operationalRequest';
 
 type AuthHeadersFactory = (contentType?: string) => Record<string, string>;
 
-export type CloseOperationalComandasResult =
+export type OperationalCommandResult =
   | { ok: true; message?: never }
   | { ok: false; message: string };
+
+export type CloseOperationalComandasResult = OperationalCommandResult;
 
 const readErrorMessage = async (response: Response): Promise<string> => {
   const payload = await response.json().catch(() => null);
@@ -46,3 +48,108 @@ export async function closeOperationalComandas(
 
   return { ok: true };
 }
+
+/**
+ * Cancels a single item only after backend validation succeeds.
+ * Does not mutate local state optimistically before the server responds.
+ */
+export async function cancelOperationalItem(
+  itemId: string,
+  getAuthHeaders: AuthHeadersFactory,
+): Promise<OperationalCommandResult> {
+  const cleanId = String(itemId ?? '').trim();
+  if (!cleanId) {
+    return { ok: false, message: 'Item inválido para cancelamento.' };
+  }
+
+  const response = await operationalFetch(
+    `${API_BASE_URL}/comandas/itens/${encodeURIComponent(cleanId)}/cancelar`,
+    {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+    },
+  );
+
+  if (!response.ok) {
+    return { ok: false, message: await readErrorMessage(response) };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Updates item observation, customer name, or additional quantity only after backend confirmation.
+ */
+export async function updateOperationalItemDetails(
+  params: {
+    itemId: string;
+    observacao?: string;
+    clienteNome: string;
+    quantidadeAdicional?: number;
+  },
+  getAuthHeaders: AuthHeadersFactory,
+): Promise<OperationalCommandResult> {
+  const cleanId = String(params.itemId ?? '').trim();
+  if (!cleanId) {
+    return { ok: false, message: 'Item inválido para edição.' };
+  }
+
+  const body: Record<string, unknown> = {
+    cliente_nome: params.clienteNome,
+    quantidade_adicional: params.quantidadeAdicional || undefined,
+  };
+  if (params.observacao !== undefined) {
+    body.observacao = params.observacao;
+  }
+
+  const response = await operationalFetch(
+    `${API_BASE_URL}/comandas/itens/${encodeURIComponent(cleanId)}`,
+    {
+      method: 'PUT',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    },
+  );
+
+  if (!response.ok) {
+    return { ok: false, message: await readErrorMessage(response) };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Transfers one or more items to a target table, preserving compatibility with both
+ * batch transfer and legacy per-item transfer routes.
+ */
+export async function transferOperationalItems(
+  rawItemIds: readonly string[],
+  targetTableId: number,
+  getAuthHeaders: AuthHeadersFactory,
+): Promise<OperationalCommandResult> {
+  const itemIds = Array.from(
+    new Set(rawItemIds.map((id) => String(id ?? '').trim()).filter(Boolean)),
+  );
+  if (itemIds.length === 0) {
+    return { ok: false, message: 'Selecione ao menos um item para transferir.' };
+  }
+
+  for (const itemId of itemIds) {
+    const response = await operationalFetch(
+      `${API_BASE_URL}/comandas/itens/${encodeURIComponent(itemId)}/transferir/${targetTableId}`,
+      {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      },
+    );
+    if (!response.ok) {
+      return { ok: false, message: await readErrorMessage(response) };
+    }
+  }
+
+  return { ok: true };
+}
+

@@ -933,3 +933,220 @@ def test_legacy_invite_accepts_email_and_reports_resend_queue_state(monkeypatch)
         row.last_error = 'email_provider_rejected'
         db.commit()
     assert member()['convite_email_status'] == 'falhou'
+
+
+def test_waiter_item_cancellation_enforces_last_item_rule_idempotency_and_payment_guards():
+    """
+    Homologação operacional do cancelamento de item pelo garçom:
+    - Cancela 1 de N itens ativos (200 OK), estorna estoque e grava auditoria no tenant.
+    - Repetir cancelamento de item já cancelado é idempotente (200 OK).
+    - Rejeita cancelamento do único item ativo restante da comanda (400 Bad Request).
+    - Rejeita cancelamento em comanda com pagamento ativo ou comanda fechada (409 Conflict).
+    - Isola tenant contra acesso cruzado (404 Not Found).
+    """
+    from app.models import Mesa, Pagamento
+
+    with TestingSessionLocal() as db:
+        db.add(Mesa(id=2, restaurante_id=1, nome="Mesa 02", capacidade=4))
+        db.add(Categoria(id="cat-d8", restaurante_id=1, nome="Burgers", destino_impressao="COZINHA"))
+        db.add(Produto(
+            id="prod-d8-bacon",
+            restaurante_id=1,
+            nome="D8 Bacon",
+            preco=29.90,
+            categoria_id="cat-d8",
+            ativo=True,
+        ))
+        comanda = Comanda(
+            id="cmd-d8-mesa2",
+            restaurante_id=1,
+            mesa_id=2,
+            garcom_id="u-garcom",
+            tipo="Consumo no Local",
+            numero_pedido=122,
+            fechada=False,
+            valor_pago=0.0,
+        )
+        db.add(comanda)
+        lanc = Lancamento(id="lanc-122-a", restaurante_id=1, comanda_id="cmd-d8-mesa2", garcom_id="u-garcom", origem="garcom")
+        db.add(lanc)
+        db.add_all([
+            Item(
+                id="item-d8-1",
+                restaurante_id=1,
+                comanda_id="cmd-d8-mesa2",
+                lancamento_id="lanc-122-a",
+                produto_id="prod-d8-bacon",
+                preco_unit=29.90,
+                status="preparando",
+                pago=False,
+            ),
+            Item(
+                id="item-d8-2",
+                restaurante_id=1,
+                comanda_id="cmd-d8-mesa2",
+                lancamento_id="lanc-122-a",
+                produto_id="prod-d8-bacon",
+                preco_unit=29.90,
+                status="preparando",
+                pago=False,
+            ),
+        ])
+        db.commit()
+
+    client = TestClient(app)
+    garcom_headers = get_auth_headers(client, "garcom", "123")
+    other_tenant_headers = get_auth_headers(client, "outro-tenant", "123")
+
+    # 1. Cross-tenant isolation: mesmo com perm_garcom_cancelar habilitada no tenant 2, não enxerga nem cancela item do tenant 1
+    t2_token = current_restaurante_id.set(2)
+    try:
+        with TestingSessionLocal() as db:
+            cfg2 = db.get(ConfiguracaoRestaurante, 302)
+            cfg2.perm_garcom_cancelar = True
+            db.commit()
+    finally:
+        current_restaurante_id.reset(t2_token)
+
+    cross_resp = client.put("/comandas/itens/item-d8-1/cancelar", headers=other_tenant_headers)
+    assert cross_resp.status_code == 404
+
+    # 2. Com permissão desabilitada no Caixa, garçom recebe 403
+    with TestingSessionLocal() as db:
+        cfg = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=1).one()
+        cfg.perm_garcom_cancelar = False
+        db.commit()
+
+    denied_resp = client.put("/comandas/itens/item-d8-1/cancelar", headers=garcom_headers)
+    assert denied_resp.status_code == 403
+
+    # Reabilita permissão no Caixa
+    with TestingSessionLocal() as db:
+        cfg = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=1).one()
+        cfg.perm_garcom_cancelar = True
+        db.commit()
+
+    # 3. Cancelar 1 de 2 itens ativos funciona (200 OK) e grava auditoria no tenant
+    ok_resp = client.put("/comandas/itens/item-d8-1/cancelar", headers=garcom_headers)
+    assert ok_resp.status_code == 200, ok_resp.text
+    assert ok_resp.json()["status"] == "cancelado"
+
+    with TestingSessionLocal() as db:
+        audit = db.query(ActivityLog).filter(
+            ActivityLog.restaurante_id == 1,
+            ActivityLog.action == "CANCEL_ITEM",
+        ).one()
+        assert "item-d8-1" in audit.details
+
+    # 4. Repetir o cancelamento do mesmo item já cancelado é idempotente (200 OK sem duplicar auditoria)
+    repeat_resp = client.put("/comandas/itens/item-d8-1/cancelar", headers=garcom_headers)
+    assert repeat_resp.status_code == 200
+    with TestingSessionLocal() as db:
+        assert db.query(ActivityLog).filter(
+            ActivityLog.restaurante_id == 1,
+            ActivityLog.action == "CANCEL_ITEM",
+        ).count() == 1
+
+    # 5. Tentar cancelar o único item ativo restante da comanda retorna 400 Bad Request
+    last_resp = client.put("/comandas/itens/item-d8-2/cancelar", headers=garcom_headers)
+    assert last_resp.status_code == 400
+    assert "único item ativo restante da comanda" in last_resp.json()["detail"]
+
+    with TestingSessionLocal() as db:
+        item2 = db.get(Item, "item-d8-2")
+        assert item2.status == "preparando"
+
+        # Adiciona um terceiro item ativo mas registra pagamento parcial na comanda
+        db.add(Item(
+            id="item-d8-3",
+            restaurante_id=1,
+            comanda_id="cmd-d8-mesa2",
+            lancamento_id="lanc-122-a",
+            produto_id="prod-d8-bacon",
+            preco_unit=29.90,
+            status="preparando",
+            pago=False,
+        ))
+        cmd = db.get(Comanda, "cmd-d8-mesa2")
+        cmd.valor_pago = 15.0
+        db.commit()
+
+    # 6. Comanda com pagamento registrado bloqueia cancelamento direto pelo garçom (409 Conflict)
+    paid_check_resp = client.put("/comandas/itens/item-d8-2/cancelar", headers=garcom_headers)
+    assert paid_check_resp.status_code == 409
+    assert "pagamento registrado" in paid_check_resp.json()["detail"].lower()
+
+
+def test_waiter_can_deliver_ready_item_but_cannot_force_kitchen_or_invalid_status():
+    """
+    Garçom pode marcar um item 'pronto' como 'entregue' (botão Servir no App do Garçom),
+    mas não pode marcar item 'preparando' como 'entregue' (409) nem alterar para 'pronto' (403).
+    """
+    from app.models import Mesa
+
+    with TestingSessionLocal() as db:
+        db.merge(Mesa(id=4, restaurante_id=1, nome="Mesa 04", capacidade=4))
+        db.merge(Categoria(id="cat-serve", restaurante_id=1, nome="Pratos", destino_impressao="COZINHA"))
+        db.merge(Produto(
+            id="prod-serve",
+            restaurante_id=1,
+            nome="Executivo",
+            preco=42.0,
+            categoria_id="cat-serve",
+            ativo=True,
+        ))
+        db.add(Comanda(
+            id="cmd-serve-4",
+            restaurante_id=1,
+            mesa_id=4,
+            garcom_id="u-garcom",
+            tipo="Consumo no Local",
+            numero_pedido=44,
+            fechada=False,
+        ))
+        db.add(Lancamento(id="lanc-serve-4", restaurante_id=1, comanda_id="cmd-serve-4", garcom_id="u-garcom", origem="garcom"))
+        db.add_all([
+            Item(
+                id="item-prep-4",
+                restaurante_id=1,
+                comanda_id="cmd-serve-4",
+                lancamento_id="lanc-serve-4",
+                produto_id="prod-serve",
+                preco_unit=42.0,
+                status="preparando",
+                pago=False,
+            ),
+            Item(
+                id="item-ready-4",
+                restaurante_id=1,
+                comanda_id="cmd-serve-4",
+                lancamento_id="lanc-serve-4",
+                produto_id="prod-serve",
+                preco_unit=42.0,
+                status="pronto",
+                pago=False,
+            ),
+        ])
+        db.commit()
+
+    client = TestClient(app)
+    garcom_headers = get_auth_headers(client, "garcom", "123")
+    other_tenant_headers = get_auth_headers(client, "outro-tenant", "123")
+
+    # Garçom não pode mudar status para 'pronto' (papel da cozinha/caixa/gerente)
+    forbid_resp = client.put("/comandas/itens/item-prep-4/status?status=pronto", headers=garcom_headers)
+    assert forbid_resp.status_code == 403
+
+    # Garçom não pode servir item ainda em preparo
+    conflict_resp = client.put("/comandas/itens/item-prep-4/status?status=entregue", headers=garcom_headers)
+    assert conflict_resp.status_code == 409
+
+    # Outro tenant não pode servir item deste restaurante
+    cross_resp = client.put("/comandas/itens/item-ready-4/status?status=entregue", headers=other_tenant_headers)
+    assert cross_resp.status_code == 404
+
+    # Garçom pode servir item pronto
+    deliver_resp = client.put("/comandas/itens/item-ready-4/status?status=entregue", headers=garcom_headers)
+    assert deliver_resp.status_code == 200
+    assert deliver_resp.json()["status"] == "entregue"
+

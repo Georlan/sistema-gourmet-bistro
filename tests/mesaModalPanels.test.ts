@@ -200,3 +200,43 @@ test('editor recebe cliente e quantidade válida antes da confirmação', () => 
   assert.deepEqual(calls, [{ id: 'technical-item-0', produtoId: 'product-0', nome: 'Prato 0',
     observacao: '', clienteNome: 'Consumo Geral', quantidade: 1, orderId: 'technical-check-124' }]);
 });
+
+test('cancelamento no painel de consumo desabilita lixeira no último item ativo da comanda ou quando há pagamento', () => {
+  const singleOrder: Order[] = [{
+    ...orders[0],
+    itens: [orders[0].itens[0]],
+  }];
+  const singleHtml = renderToStaticMarkup(createElement(MesaConsumptionPanel, consumptionProps({
+    orders: singleOrder,
+    restauranteConfig: { perm_garcom_cancelar: true },
+  })));
+  assert.match(singleHtml, /id="cancel-item-btn-technical-item-0"[^>]*disabled=""/);
+  assert.match(singleHtml, /Último item ativo da comanda — solicite o cancelamento do pedido ou liberação da mesa no Caixa\./);
+
+  const multiCalls: unknown[] = [];
+  const multiProps = consumptionProps({
+    orders,
+    restauranteConfig: { perm_garcom_cancelar: true },
+    onCancelItem: (itemId) => { multiCalls.push(itemId); },
+  });
+  const multiNodes = elements(MesaConsumptionPanel(multiProps));
+  const cancelBtn0 = multiNodes.find(node => node.props.id === 'cancel-item-btn-technical-item-0')!;
+  assert.equal(Boolean(cancelBtn0.props.disabled), false);
+  const prevConfirm = globalThis.confirm;
+  globalThis.confirm = () => true;
+  try {
+    cancelBtn0.props.onClick!();
+  } finally {
+    globalThis.confirm = prevConfirm;
+  }
+  assert.deepEqual(multiCalls, ['technical-item-0']);
+
+  const paidOrders: Order[] = orders.map((order, idx) => idx === 0 ? { ...order, valorPago: 20 } : order);
+  const paidHtml = renderToStaticMarkup(createElement(MesaConsumptionPanel, consumptionProps({
+    orders: paidOrders,
+    restauranteConfig: { perm_garcom_cancelar: true },
+  })));
+  assert.match(paidHtml, /id="cancel-item-btn-technical-item-0"[^>]*disabled=""/);
+  assert.match(paidHtml, /Há pagamento registrado nesta comanda\. Solicite o cancelamento ou estorno no Caixa\./);
+});
+

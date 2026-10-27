@@ -8,7 +8,12 @@ import { snapshotFetch } from './utils/snapshotFetch';
 import { SlidersHorizontal } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOperationalCatalog } from './components/app/data/useOperationalCatalog';
-import { closeOperationalComandas } from './components/app/data/operationalOrderCommands';
+import {
+  cancelOperationalItem,
+  closeOperationalComandas,
+  transferOperationalItems,
+  updateOperationalItemDetails,
+} from './components/app/data/operationalOrderCommands';
 import { useCashierBootstrap } from './components/app/data/useCashierBootstrap';
 import { useOperationalOrders } from './components/app/data/useOperationalOrders';
 import { useOperationalTables } from './components/app/data/useOperationalTables';
@@ -1304,32 +1309,34 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     const opKey = `merge-${sourceMesaId}-${targetMesaId}`;
     if (inflightTableOpsRef.current.has(opKey)) return;
     inflightTableOpsRef.current.add(opKey);
-    // 0ms Optimistic UI update: merge itens da mesa origem na mesa destino
-    handleTransferTableOptimistic(sourceMesaId, targetMesaId);
-    setSelectedTableId(null);
     try {
       const res = await operationalFetch(`${API_BASE_URL}/comandas/mesclar?mesa_origem_id=${sourceMesaId}&mesa_destino_id=${targetMesaId}`, {
         method: "POST",
         headers: getAuthHeaders()
       });
       if (res.ok) {
+        handleTransferTableOptimistic(sourceMesaId, targetMesaId);
+        setSelectedTableId(null);
+        await fetchOrdersFromAPI();
         showToast(`Mesa ${sourceMesaId} mesclada na Mesa ${targetMesaId} com sucesso!`);
-        fetchOrdersFromAPI();
       } else {
-        const errData = await res.json();
-        showToast(`Erro ao mesclar mesas: ${errData.detail}`, 'error');
-        fetchOrdersFromAPI();
+        const errData = await res.json().catch(() => null);
+        showToast(`Erro ao mesclar mesas: ${errData?.detail || 'Operação não permitida.'}`, 'error');
+        await fetchOrdersFromAPI();
       }
     } catch (err) {
       console.error(err);
       showToast("Erro de conexão ao mesclar mesas.", 'error');
-      fetchOrdersFromAPI();
+      await fetchOrdersFromAPI();
     } finally {
       inflightTableOpsRef.current.delete(opKey);
     }
   };
 
   const handleUnmergeTable = async (comandaId: string) => {
+    const opKey = `unmerge-${comandaId}`;
+    if (inflightTableOpsRef.current.has(opKey)) return;
+    inflightTableOpsRef.current.add(opKey);
     try {
       const res = await operationalFetch(`${API_BASE_URL}/comandas/desmesclar?comanda_id=${comandaId}`, {
         method: "POST",
@@ -1338,22 +1345,26 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       if (res.ok) {
         showToast("Mesa desmembrada com sucesso!");
         setSelectedTableId(null);
-        fetchOrdersFromAPI();
+        await fetchOrdersFromAPI();
       } else {
-        const errData = await res.json();
-        showToast(`Erro ao desmembrar mesa: ${errData.detail}`, 'error');
+        const errData = await res.json().catch(() => null);
+        showToast(`Erro ao desmembrar mesa: ${errData?.detail || 'Operação não permitida.'}`, 'error');
       }
     } catch (err) {
       console.error(err);
       showToast("Erro de conexão ao desmembrar mesa.", 'error');
+    } finally {
+      inflightTableOpsRef.current.delete(opKey);
     }
   };
 
-  // 9. Close Table (Settle whole balance) - Management roles authorized by backend
+  // 9. Close Table (Settle whole balance) - Management roles or Waiter with perm_garcom_fechar
   const handleCloseTable = async (mesaId: number) => {
     if (!isManagementRole(activeRole)) {
-      showToast('Apenas operadores de gestão podem encerrar contas.', 'error');
-      return;
+      if (!restauranteConfig?.perm_garcom_fechar) {
+        showToast('Apenas operadores autorizados podem encerrar contas.', 'error');
+        return;
+      }
     }
 
     const opKey = `close-${mesaId}`;
@@ -1531,117 +1542,112 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
   // 13. Transfer single item to a different table
   const handleTransferItem = async (itemId: string, targetTableId: number) => {
-    // 0ms: remove item da mesa origem imediatamente
-    setOrders(prev => prev.map(o => ({ ...o, itens: o.itens.filter(it => it.id !== itemId) })));
-    showToast(`Item transferido para a Mesa ${targetTableId}.`, 'success');
-
+    if (inflightItemIdsRef.current.has(itemId)) return;
+    const requestScopeKey = operationalScopeKey;
+    inflightItemIdsRef.current.add(itemId);
     try {
-      const res = await operationalFetch(`${API_BASE_URL}/comandas/itens/${itemId}/transferir/${targetTableId}`, {
-        method: "POST",
-        headers: getAuthHeaders()
-      });
-      if (!res.ok) {
-        const errData = await res.json();
-        showToast(`Erro ao transferir item: ${errData.detail}`, 'error');
-        fetchOrdersFromAPI(); // Rollback
+      const result = await transferOperationalItems([itemId], targetTableId, getAuthHeaders);
+      if (requestScopeKey !== operationalScopeKeyRef.current) return;
+      if (!result.ok) {
+        showToast(`Erro ao transferir item: ${result.message}`, 'error');
+        await fetchOrdersFromAPI();
         return;
       }
-      fetchOrdersFromAPI();
+      await fetchOrdersFromAPI();
+      showToast(`Item transferido para a Mesa ${targetTableId}.`, 'success');
     } catch (err) {
+      if (requestScopeKey !== operationalScopeKeyRef.current) return;
       console.error(err);
       showToast("Erro de conexão ao transferir item.", 'error');
-      fetchOrdersFromAPI(); // Rollback
+      await fetchOrdersFromAPI();
+    } finally {
+      if (requestScopeKey === operationalScopeKeyRef.current) inflightItemIdsRef.current.delete(itemId);
     }
   };
 
   const handleTransferItems = async (itemIds: string[], targetTableId: number) => {
-    // 0ms: remove itens da mesa origem imediatamente
-    const idSet = new Set(itemIds);
-    setOrders(prev => prev.map(o => ({ ...o, itens: o.itens.filter(it => !idSet.has(it.id)) })));
-    showToast(`${itemIds.length} itens transferidos para a Mesa ${targetTableId}.`, 'success');
-
+    const cleanIds = itemIds.filter(id => !inflightItemIdsRef.current.has(id));
+    if (cleanIds.length === 0) return;
+    const requestScopeKey = operationalScopeKey;
+    cleanIds.forEach(id => inflightItemIdsRef.current.add(id));
     try {
-      let failMessage = "";
-      for (const itemId of itemIds) {
-        const res = await operationalFetch(`${API_BASE_URL}/comandas/itens/${itemId}/transferir/${targetTableId}`, {
-          method: "POST",
-          headers: getAuthHeaders()
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          failMessage = errData.detail || "Erro desconhecido";
-        }
+      const result = await transferOperationalItems(cleanIds, targetTableId, getAuthHeaders);
+      if (requestScopeKey !== operationalScopeKeyRef.current) return;
+      if (!result.ok) {
+        showToast(`Falha ao transferir alguns itens: ${result.message}`, 'error');
+        await fetchOrdersFromAPI();
+        return;
       }
-      if (failMessage) {
-        showToast(`Falha ao transferir alguns itens: ${failMessage}`, 'error');
-      }
-      fetchOrdersFromAPI();
+      await fetchOrdersFromAPI();
+      showToast(`${cleanIds.length} ${cleanIds.length === 1 ? 'item transferido' : 'itens transferidos'} para a Mesa ${targetTableId}.`, 'success');
     } catch (err) {
+      if (requestScopeKey !== operationalScopeKeyRef.current) return;
       console.error(err);
       showToast("Erro de conexão ao transferir itens.", 'error');
-      fetchOrdersFromAPI(); // Rollback
+      await fetchOrdersFromAPI();
+    } finally {
+      if (requestScopeKey === operationalScopeKeyRef.current) {
+        cleanIds.forEach(id => inflightItemIdsRef.current.delete(id));
+      }
     }
   };
 
-  // 14. Cancel single item
+  // 14. Cancel single item (confirmed by backend before mutating state or showing success)
   const handleCancelItem = async (itemId: string) => {
-    // 0ms: remove item do estado local imediatamente
-    setOrders(prev => prev.map(o => ({ ...o, itens: o.itens.filter(it => it.id !== itemId) })));
-    showToast('Item cancelado.', 'success');
-
+    if (inflightItemIdsRef.current.has(itemId)) return;
+    const requestScopeKey = operationalScopeKey;
+    inflightItemIdsRef.current.add(itemId);
     try {
-      const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/cancelar`, {
-        method: "PUT",
-        headers: getAuthHeaders()
-      });
-      if (!res.ok) {
-        const errData = await res.json();
-        showToast(`Erro ao cancelar item: ${errData.detail}`, 'error');
-        fetchOrdersFromAPI(); // Rollback
+      const result = await cancelOperationalItem(itemId, getAuthHeaders);
+      if (requestScopeKey !== operationalScopeKeyRef.current) return;
+      if (!result.ok) {
+        showToast(`Erro ao cancelar item: ${result.message}`, 'error');
+        await fetchOrdersFromAPI();
         return;
       }
-      fetchOrdersFromAPI();
+      await fetchOrdersFromAPI();
+      showToast('Item cancelado.', 'success');
     } catch (err) {
+      if (requestScopeKey !== operationalScopeKeyRef.current) return;
       console.error(err);
       showToast("Erro de conexão ao cancelar item.", 'error');
-      fetchOrdersFromAPI(); // Rollback
+      await fetchOrdersFromAPI();
+    } finally {
+      if (requestScopeKey === operationalScopeKeyRef.current) inflightItemIdsRef.current.delete(itemId);
     }
   };
 
   const handleUpdateItemDetails = async (itemId: string, observacao: string, clienteNome: string, quantidadeAdicional?: number) => {
-    // 0ms: atualiza observação e nome do cliente localmente
-    setOrders(prev => prev.map(o => ({
-      ...o,
-      itens: o.itens.map(it =>
-        it.id === itemId ? { ...it, observacao, clienteNome } : it
-      )
-    })));
-    showToast('Item atualizado.', 'success');
-
+    if (inflightItemIdsRef.current.has(itemId)) return;
+    const requestScopeKey = operationalScopeKey;
+    inflightItemIdsRef.current.add(itemId);
+    const currentItem = ordersRef.current.flatMap(o => o.itens).find(it => it.id === itemId);
+    const canSendObservacao = !currentItem || (currentItem.status === 'preparando' && !currentItem.pago);
     try {
-      const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}`, {
-        method: "PUT",
-        headers: {
-          ...getAuthHeaders(),
-          "Content-Type": "application/json"
+      const result = await updateOperationalItemDetails(
+        {
+          itemId,
+          observacao: canSendObservacao ? observacao : undefined,
+          clienteNome,
+          quantidadeAdicional,
         },
-        body: JSON.stringify({
-          observacao,
-          cliente_nome: clienteNome,
-          quantidade_adicional: quantidadeAdicional || undefined
-        })
-      });
-      if (!res.ok) {
-        const errData = await res.json();
-        showToast(`Erro ao editar item: ${errData.detail}`, 'error');
-        fetchOrdersFromAPI(); // Rollback
+        getAuthHeaders,
+      );
+      if (requestScopeKey !== operationalScopeKeyRef.current) return;
+      if (!result.ok) {
+        showToast(`Erro ao editar item: ${result.message}`, 'error');
+        await fetchOrdersFromAPI();
         return;
       }
-      fetchOrdersFromAPI();
+      await fetchOrdersFromAPI();
+      showToast('Item atualizado.', 'success');
     } catch (err) {
+      if (requestScopeKey !== operationalScopeKeyRef.current) return;
       console.error(err);
       showToast("Erro de conexão ao atualizar item.", 'error');
-      fetchOrdersFromAPI(); // Rollback
+      await fetchOrdersFromAPI();
+    } finally {
+      if (requestScopeKey === operationalScopeKeyRef.current) inflightItemIdsRef.current.delete(itemId);
     }
   };
 
@@ -1766,6 +1772,31 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   return (
     <div className={`waiter-shell min-h-screen bg-koma-page text-koma-foreground flex flex-col font-sans ${fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''} ${activeRole === 'garcom' ? 'kw-salon-shell' : ''}`}>
       <SupportSessionBanner />
+      {toasts.length > 0 && (
+        <div
+          role="region"
+          aria-label="Notificações operacionais"
+          aria-live="polite"
+          className="fixed bottom-4 right-4 z-[70] flex max-w-sm flex-col gap-2 pointer-events-none"
+        >
+          {toasts.map(toast => (
+            <div
+              key={toast.id}
+              role={toast.type === 'error' ? 'alert' : 'status'}
+              data-testid={`operational-toast-${toast.type}`}
+              className={`pointer-events-auto rounded-xl border px-3.5 py-2.5 text-xs font-semibold shadow-xl backdrop-blur-md transition-all ${
+                toast.type === 'error'
+                  ? 'border-rose-500/40 bg-rose-950/90 text-rose-200'
+                  : toast.type === 'info'
+                    ? 'border-cyan-500/40 bg-cyan-950/90 text-cyan-200'
+                    : 'border-emerald-500/40 bg-emerald-950/90 text-emerald-200'
+              }`}
+            >
+              {toast.message}
+            </div>
+          ))}
+        </div>
+      )}
       {/* GLOBAL TOP HEADER */}
       <header className="kw-header sticky top-0 z-30">
         {portal === 'garcom' && <WaiterServiceArtwork className="kw-header-art" />}
