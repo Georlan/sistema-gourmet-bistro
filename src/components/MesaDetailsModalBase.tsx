@@ -47,8 +47,8 @@ interface MesaDetailsModalProps {
   onSubmitDraft: (orderType: 'Consumo no Local' | 'Retirada' | 'Entrega') => void;
   otherWaitersServing?: string[];
   onTransferTable: (targetTableId: number) => void;
-  onTransferItem: (itemId: string, targetTableId: number) => void;
-  onTransferItems: (itemIds: string[], targetTableId: number) => void;
+  onTransferItem: (itemId: string, targetTableId: number) => boolean | void | Promise<boolean | void>;
+  onTransferItems: (itemIds: string[], targetTableId: number) => boolean | void | Promise<boolean | void>;
   onCancelItem: (itemId: string) => void;
   onCloseTable: () => void;
   onSettleCustomer?: (customerName: string) => void;
@@ -63,7 +63,12 @@ interface MesaDetailsModalProps {
   liveCategorias?: CatalogCategory[];
   catalogReady?: boolean;
   restauranteConfig?: any;
-  onUpdateItemDetails?: (itemId: string, observacao: string, clienteNome: string, quantidadeAdicional?: number) => void | Promise<void>;
+  onUpdateItemDetails?: (
+    itemId: string,
+    observacao: string,
+    clienteNome: string,
+    quantidadeAdicional?: number,
+  ) => boolean | void | Promise<boolean | void>;
   isSubmitting?: boolean;
   onMergeTables?: (sourceTableId: number, targetTableId: number) => void;
   onUnmergeTable?: (comandaId: string) => void;
@@ -125,6 +130,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   const [selectedOrderToPrint, setSelectedOrderToPrint] = useState<Order | null>(null);
   const [confirmTransferTo, setConfirmTransferTo] = useState<number | null>(null);
   const [selectedItemsForTransfer, setSelectedItemsForTransfer] = useState<string[]>([]);
+  const [isTransferringItems, setIsTransferringItems] = useState<boolean>(false);
   const [transferType, setTransferType] = useState<'total' | 'parcial' | 'mesclar'>('total');
   const [printSuccess, setPrintSuccess] = useState<boolean>(false);
   const [isPrintingDirect, setIsPrintingDirect] = useState<boolean>(false);
@@ -451,9 +457,11 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
             transferType={transferType}
             selectedItemsForTransfer={selectedItemsForTransfer}
             confirmTransferTo={confirmTransferTo}
+            isTransferringItems={isTransferringItems}
             setTransferType={setTransferType}
             setSelectedItemsForTransfer={setSelectedItemsForTransfer}
             setConfirmTransferTo={setConfirmTransferTo}
+            setIsTransferringItems={setIsTransferringItems}
             onTransferTable={onTransferTable}
             onTransferItems={onTransferItems}
             onMergeTables={onMergeTables}
@@ -487,10 +495,12 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
       {editingItem && canEditItems && (() => {
         const liveItem = orders.flatMap(o => o.itens).find(it => it.id === editingItem.id);
         const canEditObservation = !liveItem || (liveItem.status === 'preparando' && !liveItem.pago);
+        const isSavingEdit = Boolean(editingItem.isSaving);
         return (
         <div
+          id="edit-item-modal-overlay"
           onClick={(e) => {
-            if (e.target === e.currentTarget) {
+            if (e.target === e.currentTarget && !isSavingEdit) {
               setEditingItem(null);
             }
           }}
@@ -501,8 +511,11 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               <h3 className="font-serif text-sm font-bold text-koma-foreground">Editar Item: {editingItem.nome}</h3>
               <button 
                 type="button"
-                onClick={() => setEditingItem(null)} 
-                className="p-1 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer"
+                disabled={isSavingEdit}
+                onClick={() => {
+                  if (!isSavingEdit) setEditingItem(null);
+                }} 
+                className="p-1 text-koma-subtle hover:text-koma-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
                 <X size={16} />
               </button>
@@ -515,16 +528,18 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
+                    disabled={isSavingEdit}
                     onClick={() => setEditingItem({ ...editingItem, quantidade: Math.max(1, editingItem.quantidade - 1) })}
-                    className="w-8 h-8 rounded-xl bg-koma-raised hover:bg-koma-card border border-koma-border flex items-center justify-center text-koma-foreground font-bold cursor-pointer transition-colors"
+                    className="w-8 h-8 rounded-xl bg-koma-raised hover:bg-koma-card border border-koma-border flex items-center justify-center text-koma-foreground font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     -
                   </button>
                   <span className="text-sm font-bold text-koma-foreground font-mono w-6 text-center">{editingItem.quantidade}</span>
                   <button
                     type="button"
+                    disabled={isSavingEdit}
                     onClick={() => setEditingItem({ ...editingItem, quantidade: editingItem.quantidade + 1 })}
-                    className="w-8 h-8 rounded-xl bg-koma-raised hover:bg-koma-card border border-koma-border flex items-center justify-center text-koma-foreground font-bold cursor-pointer transition-colors"
+                    className="w-8 h-8 rounded-xl bg-koma-raised hover:bg-koma-card border border-koma-border flex items-center justify-center text-koma-foreground font-bold cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     +
                   </button>
@@ -535,8 +550,9 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Observações de Preparo:</label>
                 <input
+                  id="edit-item-observacao-input"
                   type="text"
-                  disabled={!canEditObservation}
+                  disabled={!canEditObservation || isSavingEdit}
                   value={editingItem.observacao}
                   onChange={(e) => setEditingItem({ ...editingItem, observacao: e.target.value })}
                   className="w-full px-3.5 py-2 text-xs bg-koma-input border border-koma-border rounded-xl focus:outline-none focus:border-emerald-400/30 text-koma-foreground disabled:opacity-50 disabled:cursor-not-allowed"
@@ -553,29 +569,36 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Nome do Cliente:</label>
                 <input
+                  id="edit-item-cliente-input"
                   type="text"
+                  disabled={isSavingEdit}
                   value={editingItem.clienteNome === 'Consumo Geral' ? '' : editingItem.clienteNome}
                   onChange={(e) => setEditingItem({ ...editingItem, clienteNome: e.target.value })}
-                  className="w-full px-3.5 py-2 text-xs bg-koma-input border border-koma-border rounded-xl focus:outline-none focus:border-emerald-400/30 text-koma-foreground"
+                  className="w-full px-3.5 py-2 text-xs bg-koma-input border border-koma-border rounded-xl focus:outline-none focus:border-emerald-400/30 text-koma-foreground disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Ex: Maria (Opcional)"
                 />
               </div>
 
               <button
+                id="confirm-edit-item-btn"
                 type="button"
-                disabled={Boolean(editingItem.isSaving)}
+                disabled={isSavingEdit}
                 onClick={async () => {
                   if (editingItem.isSaving) return;
                   const finalClient = editingItem.clienteNome.trim() || 'Consumo Geral';
                   setEditingItem((prev: any) => prev ? { ...prev, isSaving: true } : prev);
                   try {
-                    if (onUpdateItemDetails) {
-                      await onUpdateItemDetails(
-                        editingItem.id, 
-                        editingItem.observacao, 
-                        finalClient,
-                        editingItem.quantidade
-                      );
+                    const updated = onUpdateItemDetails
+                      ? await onUpdateItemDetails(
+                          editingItem.id, 
+                          editingItem.observacao, 
+                          finalClient,
+                          editingItem.quantidade
+                        )
+                      : true;
+                    if (updated === false) {
+                      setEditingItem((prev: any) => prev ? { ...prev, isSaving: false } : prev);
+                      return;
                     }
                     setEditingItem(null);
                   } catch {
@@ -584,7 +607,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
                 }}
                 className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-60 disabled:cursor-not-allowed text-zinc-950 font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center shadow-sm"
               >
-                {editingItem.isSaving ? 'Salvando...' : 'Confirmar Alterações'}
+                {isSavingEdit ? 'Salvando...' : 'Confirmar Alterações'}
               </button>
             </div>
           </div>

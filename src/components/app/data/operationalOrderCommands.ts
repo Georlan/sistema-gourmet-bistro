@@ -122,8 +122,8 @@ export async function updateOperationalItemDetails(
 }
 
 /**
- * Transfers one or more items to a target table, preserving compatibility with both
- * batch transfer and legacy per-item transfer routes.
+ * Transfers one or more items to a target table in a single atomic transaction
+ * via `/comandas/itens/transferir-lote/{nova_mesa_id}`.
  */
 export async function transferOperationalItems(
   rawItemIds: readonly string[],
@@ -137,17 +137,19 @@ export async function transferOperationalItems(
     return { ok: false, message: 'Selecione ao menos um item para transferir.' };
   }
 
-  for (const itemId of itemIds) {
-    const response = await operationalFetch(
-      `${API_BASE_URL}/comandas/itens/${encodeURIComponent(itemId)}/transferir/${targetTableId}`,
-      {
-        method: 'POST',
-        headers: getAuthHeaders(),
+  const response = await operationalFetch(
+    `${API_BASE_URL}/comandas/itens/transferir-lote/${targetTableId}`,
+    {
+      method: 'POST',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
       },
-    );
-    if (!response.ok) {
-      return { ok: false, message: await readErrorMessage(response) };
-    }
+      body: JSON.stringify({ item_ids: itemIds }),
+    },
+  );
+  if (!response.ok) {
+    return { ok: false, message: await readErrorMessage(response) };
   }
 
   return { ok: true };

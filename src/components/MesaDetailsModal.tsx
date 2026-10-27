@@ -130,29 +130,6 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = (props) => {
       }
     : undefined;
 
-  const handleTransferItems = onTransferItems
-    ? async (itemIds: string[], targetTableId: number) => {
-        const token = currentAuthToken();
-        if (token) {
-          // A mutação real acontece em UMA transação no backend. O callback
-          // é executado depois para atualizar a UI ou exibir o diagnóstico;
-          // seus retries individuais são idempotentes no backend novo.
-          await fetch(
-            `${API_BASE_URL}/comandas/itens/transferir-lote/${targetTableId}`,
-            {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ item_ids: itemIds }),
-            },
-          ).catch(() => null);
-        }
-        await onTransferItems(itemIds, targetTableId);
-      }
-    : undefined;
-
   return (
     <MesaDetailsModalBase
       {...props}
@@ -161,7 +138,7 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = (props) => {
       onDeliverItem={handleDeliverItem}
       onUnmergeTable={handleUnmergeTable}
       onPrintKitchenLaunch={handlePrintLaunch}
-      onTransferItems={handleTransferItems}
+      onTransferItems={onTransferItems}
     />
   );
 };

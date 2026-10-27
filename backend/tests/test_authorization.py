@@ -1269,3 +1269,187 @@ def test_waiter_item_edit_and_check_closing_financial_and_lifecycle_guards():
     assert closed_edit.status_code == 400
 
 
+def test_waiter_batch_item_transfer_atomicity_and_financial_guards():
+    """
+    Homologação P1 — Transferência atômica de itens em lote (/comandas/itens/transferir-lote/{nova_mesa_id}):
+    - Bloqueia garçom quando perm_garcom_transferir_item=False (403 Forbidden).
+    - Isola tenant contra transferência cruzada (404 Not Found).
+    - Se um dos itens do lote for inválido/inexistente (404) ou cancelado/pago/comanda com pagamento (409),
+      NENHUM item do lote é transferido (rollback transacional completo).
+    - Transfere múltiplos itens de forma atômica para mesa livre ou ocupada, mantendo contagens,
+      totais e vínculo da comanda de origem íntegros.
+    """
+    from app.models import Mesa
+
+    with TestingSessionLocal() as db:
+        db.merge(Mesa(id=10, restaurante_id=1, nome="Mesa 10", capacidade=4))
+        db.merge(Mesa(id=11, restaurante_id=1, nome="Mesa 11", capacidade=4))
+        db.merge(Mesa(id=12, restaurante_id=1, nome="Mesa 12", capacidade=4))
+        db.merge(Categoria(id="cat-xfer", restaurante_id=1, nome="Pratos", destino_impressao="COZINHA"))
+        db.merge(Produto(
+            id="prod-xfer",
+            restaurante_id=1,
+            nome="Filé Mignon",
+            preco=55.0,
+            categoria_id="cat-xfer",
+            ativo=True,
+        ))
+        db.add(Comanda(
+            id="cmd-xfer-src",
+            restaurante_id=1,
+            mesa_id=10,
+            garcom_id="u-garcom",
+            tipo="Consumo no Local",
+            numero_pedido=110,
+            fechada=False,
+            valor_pago=0.0,
+        ))
+        db.add(Lancamento(id="lanc-xfer-src", restaurante_id=1, comanda_id="cmd-xfer-src", garcom_id="u-garcom", origem="garcom"))
+        db.add_all([
+            Item(
+                id="item-xfer-1",
+                restaurante_id=1,
+                comanda_id="cmd-xfer-src",
+                lancamento_id="lanc-xfer-src",
+                produto_id="prod-xfer",
+                preco_unit=55.0,
+                status="preparando",
+                pago=False,
+            ),
+            Item(
+                id="item-xfer-2",
+                restaurante_id=1,
+                comanda_id="cmd-xfer-src",
+                lancamento_id="lanc-xfer-src",
+                produto_id="prod-xfer",
+                preco_unit=55.0,
+                status="pronto",
+                pago=False,
+            ),
+            Item(
+                id="item-xfer-3",
+                restaurante_id=1,
+                comanda_id="cmd-xfer-src",
+                lancamento_id="lanc-xfer-src",
+                produto_id="prod-xfer",
+                preco_unit=55.0,
+                status="preparando",
+                pago=False,
+            ),
+        ])
+        cfg = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=1).one()
+        cfg.perm_garcom_transferir_item = False
+        db.commit()
+
+    client = TestClient(app)
+    garcom_headers = get_auth_headers(client, "garcom", "123")
+    other_tenant_headers = get_auth_headers(client, "outro-tenant", "123")
+
+    # 1. Permissão revogada bloqueia transferência em lote (403)
+    denied = client.post(
+        "/comandas/itens/transferir-lote/11",
+        headers=garcom_headers,
+        json={"item_ids": ["item-xfer-1", "item-xfer-2"]},
+    )
+    assert denied.status_code == 403
+
+    # Habilita permissão no tenant 1 e tenant 2
+    with TestingSessionLocal() as db:
+        cfg = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=1).one()
+        cfg.perm_garcom_transferir_item = True
+        db.commit()
+    t2_token = current_restaurante_id.set(2)
+    try:
+        with TestingSessionLocal() as db:
+            cfg2 = db.get(ConfiguracaoRestaurante, 302)
+            cfg2.perm_garcom_transferir_item = True
+            db.commit()
+    finally:
+        current_restaurante_id.reset(t2_token)
+
+    # 2. Isolamento multi-tenant: outro restaurante não consegue transferir itens do tenant 1 (404)
+    cross_tenant = client.post(
+        "/comandas/itens/transferir-lote/11",
+        headers=other_tenant_headers,
+        json={"item_ids": ["item-xfer-1"]},
+    )
+    assert cross_tenant.status_code == 404
+
+    # 3. Atomicidade contra item inexistente no lote: item-xfer-1 NÃO pode ser movido se o segundo item não existir
+    missing_batch = client.post(
+        "/comandas/itens/transferir-lote/11",
+        headers=garcom_headers,
+        json={"item_ids": ["item-xfer-1", "item-inexistente"]},
+    )
+    assert missing_batch.status_code == 404
+    with TestingSessionLocal() as db:
+        assert db.get(Item, "item-xfer-1").comanda_id == "cmd-xfer-src"
+
+    # 4. Atomicidade contra item pago no lote: se item-xfer-2 estiver pago, nem item-xfer-1 nem item-xfer-2 são movidos (409)
+    with TestingSessionLocal() as db:
+        it2 = db.get(Item, "item-xfer-2")
+        it2.pago = True
+        db.commit()
+
+    paid_item_batch = client.post(
+        "/comandas/itens/transferir-lote/11",
+        headers=garcom_headers,
+        json={"item_ids": ["item-xfer-1", "item-xfer-2"]},
+    )
+    assert paid_item_batch.status_code == 409
+    assert "itens pagos" in paid_item_batch.json()["detail"].lower()
+    with TestingSessionLocal() as db:
+        assert db.get(Item, "item-xfer-1").comanda_id == "cmd-xfer-src"
+        assert db.get(Item, "item-xfer-2").comanda_id == "cmd-xfer-src"
+        db.get(Item, "item-xfer-2").pago = False
+        db.get(Comanda, "cmd-xfer-src").valor_pago = 10.0
+        db.commit()
+
+    # 5. Comanda com pagamento registrado bloqueia transferência parcial (409)
+    paid_check_batch = client.post(
+        "/comandas/itens/transferir-lote/11",
+        headers=garcom_headers,
+        json={"item_ids": ["item-xfer-1"]},
+    )
+    assert paid_check_batch.status_code == 409
+    assert "pagamento registrado" in paid_check_batch.json()["detail"].lower()
+    with TestingSessionLocal() as db:
+        db.get(Comanda, "cmd-xfer-src").valor_pago = 0.0
+        db.commit()
+
+    # 6. Transferência atômica de 2 itens para mesa livre (Mesa 11) move ambos na mesma transação e mantém 1 item na Mesa 10
+    ok_batch = client.post(
+        "/comandas/itens/transferir-lote/11",
+        headers=garcom_headers,
+        json={"item_ids": ["item-xfer-1", "item-xfer-2"]},
+    )
+    assert ok_batch.status_code == 200, ok_batch.text
+    moved_payload = ok_batch.json()
+    assert {row["id"] for row in moved_payload} == {"item-xfer-1", "item-xfer-2"}
+
+    with TestingSessionLocal() as db:
+        it1 = db.get(Item, "item-xfer-1")
+        it2 = db.get(Item, "item-xfer-2")
+        it3 = db.get(Item, "item-xfer-3")
+        src_cmd = db.get(Comanda, "cmd-xfer-src")
+        assert it1.comanda_id == it2.comanda_id
+        assert it1.comanda_id != "cmd-xfer-src"
+        assert it1.comanda.mesa_id == 11
+        assert it3.comanda_id == "cmd-xfer-src"
+        assert src_cmd.fechada is False
+
+    # 7. Transferência de item restante para mesa já ocupada (Mesa 11) incorpora na comanda aberta do destino e fecha a origem vazia
+    ok_occupied = client.post(
+        "/comandas/itens/transferir-lote/11",
+        headers=garcom_headers,
+        json={"item_ids": ["item-xfer-3"]},
+    )
+    assert ok_occupied.status_code == 200, ok_occupied.text
+    with TestingSessionLocal() as db:
+        it3 = db.get(Item, "item-xfer-3")
+        src_cmd = db.get(Comanda, "cmd-xfer-src")
+        assert it3.comanda.mesa_id == 11
+        assert src_cmd.fechada is True
+
+
+

@@ -21,19 +21,21 @@ interface MesaTransferMergePanelProps {
   transferType: 'total' | 'parcial' | 'mesclar';
   selectedItemsForTransfer: string[];
   confirmTransferTo: number | null;
+  isTransferringItems?: boolean;
   setTransferType: React.Dispatch<React.SetStateAction<'total' | 'parcial' | 'mesclar'>>;
   setSelectedItemsForTransfer: React.Dispatch<React.SetStateAction<string[]>>;
   setConfirmTransferTo: React.Dispatch<React.SetStateAction<number | null>>;
+  setIsTransferringItems?: React.Dispatch<React.SetStateAction<boolean>>;
   onTransferTable: (targetTableId: number) => void;
-  onTransferItems: (itemIds: string[], targetTableId: number) => void;
+  onTransferItems: (itemIds: string[], targetTableId: number) => boolean | void | Promise<boolean | void>;
   onMergeTables?: (sourceTableId: number, targetTableId: number) => void;
 }
 
 /** Both movement tabs share selection and confirmation state held by the modal. */
 export function MesaTransferMergePanel({
   compact = false, activeTab, table, orders, allOrders, salonTables, originIds, canTransferTables, canTransferItems,
-  transferType, selectedItemsForTransfer, confirmTransferTo,
-  setTransferType, setSelectedItemsForTransfer, setConfirmTransferTo,
+  transferType, selectedItemsForTransfer, confirmTransferTo, isTransferringItems = false,
+  setTransferType, setSelectedItemsForTransfer, setConfirmTransferTo, setIsTransferringItems,
   onTransferTable, onTransferItems, onMergeTables,
 }: MesaTransferMergePanelProps) {
   const tablesList = salonTables || [];
@@ -68,11 +70,13 @@ export function MesaTransferMergePanel({
             {canTransferTables && (
             <button
               type="button"
+              disabled={isTransferringItems}
               onClick={() => {
+                if (isTransferringItems) return;
                 setTransferType('total');
                 setSelectedItemsForTransfer([]);
               }}
-              className={`flex-1 py-2 rounded-lg font-bold transition-all cursor-pointer ${
+              className={`flex-1 py-2 rounded-lg font-bold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                 transferType === 'total' ? 'bg-emerald-500/15 border border-emerald-500/35 text-emerald-700 dark:text-emerald-300 shadow-sm' : 'text-koma-subtle hover:text-koma-foreground'
               }`}
             >
@@ -82,8 +86,12 @@ export function MesaTransferMergePanel({
             {canTransferItems && (
             <button
               type="button"
-              onClick={() => setTransferType('parcial')}
-              className={`flex-1 py-2 rounded-lg font-bold transition-all cursor-pointer ${
+              disabled={isTransferringItems}
+              onClick={() => {
+                if (isTransferringItems) return;
+                setTransferType('parcial');
+              }}
+              className={`flex-1 py-2 rounded-lg font-bold transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                 transferType === 'parcial' ? 'bg-emerald-500/15 border border-emerald-500/35 text-emerald-700 dark:text-emerald-300 shadow-sm' : 'text-koma-subtle hover:text-koma-foreground'
               }`}
             >
@@ -104,20 +112,24 @@ export function MesaTransferMergePanel({
                   return (
                     <label
                       key={item.id}
-                      className="flex items-center justify-between p-2 rounded-lg border border-koma-border hover:bg-koma-raised/50 transition-all cursor-pointer text-xs"
+                      className={`flex items-center justify-between p-2 rounded-lg border border-koma-border hover:bg-koma-raised/50 transition-all text-xs ${
+                        isTransferringItems ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                      }`}
                     >
                       <div className="flex items-center gap-2.5 text-koma-foreground">
                         <input
                           type="checkbox"
+                          disabled={isTransferringItems}
                           checked={isChecked}
                           onChange={() => {
+                            if (isTransferringItems) return;
                             if (isChecked) {
                               setSelectedItemsForTransfer(prev => prev.filter(id => id !== item.id));
                             } else {
                               setSelectedItemsForTransfer(prev => [...prev, item.id]);
                             }
                           }}
-                          className="rounded border-koma-border text-emerald-500 focus:ring-emerald-500 h-3.5 w-3.5 bg-koma-input"
+                          className="rounded border-koma-border text-emerald-500 focus:ring-emerald-500 h-3.5 w-3.5 bg-koma-input disabled:cursor-not-allowed"
                         />
                         <span>{item.nome}</span>
                         {item.clienteNome && <span className="text-[9px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1 rounded">Para: {item.clienteNome}</span>}
@@ -141,50 +153,80 @@ export function MesaTransferMergePanel({
               ) : (
                 availableTablesForTransfer.map((t) => {
                   const isConfirming = confirmTransferTo === t.id;
+                  const isTransferringToThis = isTransferringItems && isConfirming;
                   const isOccupied = occupiedTableIds.has(t.id);
                   const hasSelected = transferType === 'total' || selectedItemsForTransfer.length > 0;
+                  const isDisabled = !hasSelected || isTransferringItems;
                   return (
                     <button
                       key={t.id}
                       type="button"
-                      disabled={!hasSelected}
+                      disabled={isDisabled}
                       id={`transfer-target-mesa-${t.id}`}
-                      aria-label={`${compact ? t.nome?.trim() || `Mesa ${t.id}` : `Mesa ${t.id}`} · ${isOccupied ? 'Ocupada' : 'Livre'}${isConfirming ? ' · Confirmar?' : ''}`}
+                      aria-label={`${compact ? t.nome?.trim() || `Mesa ${t.id}` : `Mesa ${t.id}`} · ${isOccupied ? 'Ocupada' : 'Livre'}${isTransferringToThis ? ' · Transferindo...' : isConfirming ? ' · Confirmar?' : ''}`}
                       data-table-status={isOccupied ? 'occupied' : 'free'}
                       onClick={() => {
-                        if (!hasSelected) return;
+                        if (isDisabled) return;
                         if (isConfirming) {
                           if (transferType === 'total') {
                             onTransferTable(t.id);
+                            setConfirmTransferTo(null);
                           } else {
-                            // Transfer multiple items!
-                            onTransferItems(selectedItemsForTransfer, t.id);
-                            setSelectedItemsForTransfer([]);
+                            let result: boolean | void | Promise<boolean | void>;
+                            try {
+                              result = onTransferItems(selectedItemsForTransfer, t.id);
+                            } catch {
+                              setConfirmTransferTo(null);
+                              return;
+                            }
+                            if (result && typeof (result as Promise<boolean | void>).then === 'function') {
+                              setIsTransferringItems?.(true);
+                              void (result as Promise<boolean | void>)
+                                .then((ok) => {
+                                  if (ok !== false) {
+                                    setSelectedItemsForTransfer([]);
+                                  }
+                                })
+                                .catch(() => {})
+                                .finally(() => {
+                                  setIsTransferringItems?.(false);
+                                  setConfirmTransferTo(null);
+                                });
+                            } else {
+                              if (result !== false) {
+                                setSelectedItemsForTransfer([]);
+                              }
+                              setConfirmTransferTo(null);
+                            }
                           }
-                          setConfirmTransferTo(null);
                         } else {
                           setConfirmTransferTo(t.id);
                         }
                       }}
                       onMouseLeave={() => {
-                        if (isConfirming) setConfirmTransferTo(null);
+                        if (isConfirming && !isTransferringItems) setConfirmTransferTo(null);
                       }}
                       className={`p-4 border rounded-2xl text-center transition-all flex flex-col items-center justify-center gap-1 group ${
-                        !hasSelected
+                        isDisabled
                           ? 'bg-koma-panel/40 border-koma-border/40 text-gray-600 cursor-not-allowed'
                           : isConfirming
                             ? 'bg-cyan-500/20 border border-cyan-500/40 animate-pulse text-cyan-300 cursor-pointer hover:scale-102 font-bold'
                             : 'bg-koma-panel hover:bg-emerald-500/15 border border-koma-border hover:border-emerald-500/40 text-koma-foreground cursor-pointer hover:scale-102'
                       }`}
                     >
-                      <span className={`text-base font-bold ${hasSelected ? 'text-koma-foreground group-hover:text-emerald-700 dark:text-emerald-400' : 'text-gray-600'}`}>
-                        {compact ? t.nome?.trim() || `Mesa ${t.id}` : `Mesa ${t.id}`}{isConfirming && ' · Confirmar?'}
+                      <span className={`text-base font-bold ${!isDisabled ? 'text-koma-foreground group-hover:text-emerald-700 dark:text-emerald-400' : 'text-gray-600'}`}>
+                        {compact ? t.nome?.trim() || `Mesa ${t.id}` : `Mesa ${t.id}`}
+                        {isTransferringToThis ? ' · Transferindo...' : isConfirming ? ' · Confirmar?' : ''}
                       </span>
                       <span className={`text-[10px] font-bold ${isOccupied ? 'text-rose-700 dark:text-rose-300' : 'text-emerald-700 dark:text-emerald-300'}`}>
                         {isOccupied ? '● Ocupada' : '○ Livre'}
                       </span>
                       {isConfirming && (
-                        !compact && <span className="text-[9px] text-koma-muted font-sans">Toque para confirmar</span>
+                        !compact && (
+                          <span className="text-[9px] text-koma-muted font-sans">
+                            {isTransferringToThis ? 'Aguardando confirmação...' : 'Toque para confirmar'}
+                          </span>
+                        )
                       )}
                     </button>
                   );

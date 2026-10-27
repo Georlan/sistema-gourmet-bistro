@@ -133,7 +133,7 @@ test('transferência parcial exige seleção e deixa confirmação/mutação com
   const props = movementProps({
     setConfirmTransferTo: destination => calls.push(['confirm', destination]),
     setSelectedItemsForTransfer: selection => calls.push(['selection', selection]),
-    onTransferItems: (ids, destination) => calls.push(['transfer', ids, destination]),
+    onTransferItems: (ids, destination) => { calls.push(['transfer', ids, destination]); },
   });
   const target = (overrides = {}) => elements(MesaTransferMergePanel({ ...props, ...overrides }))
     .find(node => node.props.id === 'transfer-target-mesa-8')!;
@@ -147,6 +147,66 @@ test('transferência parcial exige seleção e deixa confirmação/mutação com
   target({ ...selection, confirmTransferTo: 8 }).props.onClick!();
   assert.deepEqual(calls, [
     ['confirm', 8], ['transfer', ['technical-item-1'], 8], ['selection', []], ['confirm', null],
+  ]);
+});
+
+test('transferência parcial assíncrona preserva seleção durante processamento e em caso de falha, limpando apenas após sucesso', async () => {
+  const events: unknown[] = [];
+  let resolveTransfer!: (ok: boolean) => void;
+  const baseProps = movementProps({
+    selectedItemsForTransfer: ['technical-item-0', 'technical-item-1'],
+    confirmTransferTo: 8,
+    setIsTransferringItems: value => events.push(['transferring', value]),
+    setSelectedItemsForTransfer: selection => events.push(['selection', selection]),
+    setConfirmTransferTo: destination => events.push(['confirm', destination]),
+    onTransferItems: (ids, destination) => {
+      events.push(['transfer', ids, destination]);
+      return new Promise<boolean>(resolve => { resolveTransfer = resolve; });
+    },
+  });
+
+  // 1. Clique confirma o envio mas não limpa a seleção enquanto a Promise está pendente
+  const targetBtn = elements(MesaTransferMergePanel(baseProps))
+    .find(node => node.props.id === 'transfer-target-mesa-8')!;
+  targetBtn.props.onClick!();
+  assert.deepEqual(events, [
+    ['transfer', ['technical-item-0', 'technical-item-1'], 8],
+    ['transferring', true],
+  ]);
+
+  // Enquanto isTransferringItems=true, o botão de destino mostra estado de processamento e fica desabilitado contra duplo clique
+  const pendingHtml = renderToStaticMarkup(createElement(MesaTransferMergePanel, {
+    ...baseProps,
+    isTransferringItems: true,
+  }));
+  assert.match(pendingHtml, /Transferindo\.\.\./);
+  const pendingTarget = elements(MesaTransferMergePanel({ ...baseProps, isTransferringItems: true }))
+    .find(node => node.props.id === 'transfer-target-mesa-8')!;
+  assert.equal(pendingTarget.props.disabled, true);
+  pendingTarget.props.onClick!();
+  assert.equal(events.filter(e => Array.isArray(e) && e[0] === 'transfer').length, 1);
+
+  // 2. Se o servidor rejeitar (resolve(false)), a seleção de itens é preservada para nova tentativa
+  resolveTransfer(false);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(events, [
+    ['transfer', ['technical-item-0', 'technical-item-1'], 8],
+    ['transferring', true],
+    ['transferring', false],
+    ['confirm', null],
+  ]);
+
+  // 3. Em nova tentativa bem-sucedida (resolve(true)), a seleção e a confirmação são limpas após confirmação do servidor
+  events.length = 0;
+  targetBtn.props.onClick!();
+  resolveTransfer(true);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.deepEqual(events, [
+    ['transfer', ['technical-item-0', 'technical-item-1'], 8],
+    ['transferring', true],
+    ['selection', []],
+    ['transferring', false],
+    ['confirm', null],
   ]);
 });
 

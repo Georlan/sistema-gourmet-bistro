@@ -59,3 +59,77 @@ test('item cancellation, edit, and transfer wait for backend confirmation before
   assert.match(commandSource, /export async function transferOperationalItems/);
 });
 
+test('transferOperationalItems uses a single atomic batch request and MesaDetailsModal does not duplicate the fetch', async () => {
+  const { transferOperationalItems, updateOperationalItemDetails } = await import(
+    '../src/components/app/data/operationalOrderCommands'
+  );
+  const modalAdapterSource = readFileSync(new URL('../src/components/MesaDetailsModal.tsx', import.meta.url), 'utf8');
+  const modalBaseSource = readFileSync(new URL('../src/components/MesaDetailsModalBase.tsx', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(
+    modalAdapterSource,
+    /\/comandas\/itens\/transferir-lote\//,
+    'MesaDetailsModal não deve disparar requisição duplicada sem validar resposta antes de onTransferItems',
+  );
+  assert.doesNotMatch(
+    commandSource,
+    /\/comandas\/itens\/\$\{encodeURIComponent\(itemId\)\}\/transferir\//,
+    'transferOperationalItems não deve fazer loop item a item não-atômico',
+  );
+  assert.match(
+    commandSource,
+    /\/comandas\/itens\/transferir-lote\/\$\{targetTableId\}/,
+    'transferOperationalItems deve usar o endpoint transacional em lote',
+  );
+  assert.match(
+    modalBaseSource,
+    /if \(updated === false\) \{[\s\S]*?setEditingItem\(\(prev: any\) => prev \? \{ \.\.\.prev, isSaving: false \} : prev\);\s*return;\s*\}/,
+    'MesaDetailsModalBase deve manter o modal aberto e preservar os campos digitados quando onUpdateItemDetails retorna false',
+  );
+
+  const originalFetch = globalThis.fetch;
+  const calls: Array<{ url: string; method?: string; body?: string }> = [];
+  try {
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      calls.push({ url, method: init?.method, body: typeof init?.body === 'string' ? init.body : undefined });
+      if (url.includes('/transferir-lote/9')) {
+        return new Response(JSON.stringify({ detail: 'Itens pagos não podem ser transferidos' }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      if (url.includes('/comandas/itens/item-err')) {
+        return new Response(JSON.stringify({ detail: 'A observação não pode ser alterada após o preparo' }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify([{ id: 'item-1' }, { id: 'item-2' }]), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }) as typeof fetch;
+
+    const okBatch = await transferOperationalItems(['item-1', 'item-2', 'item-1'], 8, () => ({ Authorization: 'Bearer t' }));
+    assert.deepEqual(okBatch, { ok: true });
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].url, /\/comandas\/itens\/transferir-lote\/8$/);
+    assert.equal(calls[0].method, 'POST');
+    assert.deepEqual(JSON.parse(calls[0].body!), { item_ids: ['item-1', 'item-2'] });
+
+    const failBatch = await transferOperationalItems(['item-1', 'item-2'], 9, () => ({ Authorization: 'Bearer t' }));
+    assert.deepEqual(failBatch, { ok: false, message: 'Itens pagos não podem ser transferidos' });
+    assert.equal(calls.length, 2);
+
+    const failEdit = await updateOperationalItemDetails(
+      { itemId: 'item-err', observacao: 'Sem sal', clienteNome: 'Maria', quantidadeAdicional: 2 },
+      () => ({ Authorization: 'Bearer t' }),
+    );
+    assert.deepEqual(failEdit, { ok: false, message: 'A observação não pode ser alterada após o preparo' });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
