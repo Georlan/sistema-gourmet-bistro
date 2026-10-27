@@ -94,6 +94,9 @@ export function MotoboyPwaPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const profileRef = useRef<MotoboyProfile | null>(null);
   const getRef = useRef<AbortController | null>(null);
+  const getStartRef = useRef(0);
+  const lastResumeFetchRef = useRef(0);
+  const suspendedReadRef = useRef(false);
   const interruptedReadRef = useRef(false);
   const postRef = useRef<AbortController | null>(null);
   const isConfirmingRef = useRef(false);
@@ -120,21 +123,45 @@ export function MotoboyPwaPage() {
     if (activeCacheRef.current === cache && profileRef.current) setCacheIssue(!saved);
   }, [cache]);
 
+  const cancelPendingGet = useCallback((markSuspended = false) => {
+    const activeGet = getRef.current;
+    if (!activeGet) return false;
+    getRef.current = null;
+    if (markSuspended) suspendedReadRef.current = true;
+    activeGet.abort();
+    setIsRefreshing(false);
+    if (!profileRef.current) setLoading(false);
+    return true;
+  }, []);
+
   const revokeAccess = useCallback(() => {
-    getRef.current?.abort(); getRef.current = null;
+    getRef.current?.abort(); getRef.current = null; suspendedReadRef.current = false;
     postRef.current?.abort(); postRef.current = null; isConfirmingRef.current = false;
     profileRef.current = null; setMotoboy(null); setEntregas([]); setLoading(false);
     setConfirmingId(null); setIsRefreshing(false); setAccessInvalid(true); setReviewId(null); setDetailsId(null);
     setErrorMsg('Acesso encerrado. Solicite um novo link ao Caixa.');
     void cache.clear();
   }, [cache]);
-  useCourierRealtime(accessInvalid ? '' : token, () => setRealtimePending(true), revokeAccess);
+
+  const handleRealtimeInvalidate = useCallback((reason: 'ready' | 'updated') => {
+    if (reason === 'ready' && (getRef.current || Date.now() - lastResumeFetchRef.current < 2_000)) return;
+    setRealtimePending(true);
+  }, []);
+  useCourierRealtime(accessInvalid ? '' : token, handleRealtimeInvalidate, revokeAccess);
 
   const carregarDadosPainel = useCallback(async (authToken: string, reconcile = false): Promise<boolean> => {
     if (getRef.current || (isConfirmingRef.current && !reconcile)) return false;
+    if (!reconcile && document.visibilityState === 'hidden') {
+      suspendedReadRef.current = true;
+      return false;
+    }
     const controller = new AbortController();
     getRef.current = controller;
-    lastAttemptRef.current = Date.now();
+    suspendedReadRef.current = false;
+    const startedAt = Date.now();
+    getStartRef.current = startedAt;
+    lastAttemptRef.current = startedAt;
+    setRealtimePending(false);
     const timeoutId = window.setTimeout(() => controller.abort(), PANEL_REQUEST_TIMEOUT_MS);
     const isBackground = Boolean(profileRef.current);
     if (isBackground) setIsRefreshing(true);
@@ -162,6 +189,10 @@ export function MotoboyPwaPage() {
       return true;
     } catch (err: any) {
       if (getRef.current !== controller) return false;
+      if (document.visibilityState === 'hidden') {
+        suspendedReadRef.current = true;
+        return false;
+      }
       const message = err?.name === 'AbortError'
         ? 'O painel demorou demais para responder. Tente novamente.'
         : err instanceof TypeError ? 'Sem conexão com o servidor. Tente atualizar.' : err.message || 'Não foi possível carregar as entregas.';
@@ -192,16 +223,26 @@ export function MotoboyPwaPage() {
       if (navigator.onLine) void carregarDadosPainel(token);
       else { setLoading(false); if (!saved) setErrorMsg('Sem conexão e sem entregas salvas neste acesso.'); }
     })();
+    const suspend = () => { cancelPendingGet(true); };
     const resume = () => {
-      if (!navigator.onLine || document.visibilityState !== 'visible' || Date.now() - lastAttemptRef.current < RESUME_REFRESH_MIN_MS) return;
+      if (document.visibilityState === 'hidden') { suspend(); return; }
+      if (!navigator.onLine || document.visibilityState !== 'visible') return;
+      if (getRef.current && Date.now() - getStartRef.current >= PANEL_REQUEST_TIMEOUT_MS) {
+        cancelPendingGet(true);
+      }
+      const needsImmediateRefresh = suspendedReadRef.current || !profileRef.current;
+      if (!needsImmediateRefresh && Date.now() - lastAttemptRef.current < RESUME_REFRESH_MIN_MS) return;
+      lastResumeFetchRef.current = Date.now();
       void carregarDadosPainel(token);
     };
     document.addEventListener('visibilitychange', resume);
+    window.addEventListener('pageshow', resume);
+    window.addEventListener('pagehide', suspend);
     window.addEventListener('focus', resume);
-    const offline = () => { interruptedReadRef.current = Boolean(getRef.current); setIsOnline(false); };
+    const offline = () => { interruptedReadRef.current = Boolean(getRef.current); cancelPendingGet(true); setIsOnline(false); };
     const online = () => {
       setIsOnline(true);
-      if (!getRef.current || interruptedReadRef.current || isConfirmingRef.current) setReconnectRequested(true);
+      if (!getRef.current || interruptedReadRef.current || suspendedReadRef.current || isConfirmingRef.current) setReconnectRequested(true);
       interruptedReadRef.current = false;
     };
     window.addEventListener('offline', offline);
@@ -209,6 +250,8 @@ export function MotoboyPwaPage() {
     return () => {
       active = false;
       document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('pageshow', resume);
+      window.removeEventListener('pagehide', suspend);
       window.removeEventListener('focus', resume);
       window.removeEventListener('offline', offline);
       window.removeEventListener('online', online);
@@ -216,7 +259,7 @@ export function MotoboyPwaPage() {
       postRef.current?.abort(); postRef.current = null;
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
-  }, [token, cache, carregarDadosPainel]);
+  }, [token, cache, carregarDadosPainel, cancelPendingGet]);
 
   // Reconnection bypasses the focus throttle, but waits for the active operation.
   // Read the server once; never queue or replay a delivery confirmation.
