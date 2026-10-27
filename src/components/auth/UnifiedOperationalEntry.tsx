@@ -11,6 +11,7 @@ import {
 import { parseStaffLogin } from '../../utils/staffDestination';
 import { useOperatorSessionToken } from './useOperatorSessionToken';
 import { requestCourierAccess, persistCourierAccess, clearCourierAccess } from '../../utils/courierAccessSession';
+import { releaseTabSessionOwnershipForNavigation } from '../../utils/tabSessionOwnership';
 import { authFetchJson, authRequestErrorMessage } from '../../utils/authRequest';
 import {
   clearOperatorSession,
@@ -137,6 +138,7 @@ export default function UnifiedOperationalEntry() {
         persistCourierAccess(access);
         clearOperatorSession();
         resetAnalytics();
+        releaseTabSessionOwnershipForNavigation();
         window.location.replace('/entregador');
         return;
       }
