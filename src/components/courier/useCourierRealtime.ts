@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { WS_BASE_URL } from '../../config/api';
 
 /** One scoped socket while visible/online; retry only the connection, never a mutation. */
-export function useCourierRealtime(token: string, invalidate: () => void, revoked: () => void) {
+export function useCourierRealtime(token: string, invalidate: (reason: 'ready' | 'updated') => void, revoked: () => void) {
   const callbacks=useRef({token,invalidate,revoked}); callbacks.current={token,invalidate,revoked};
   useEffect(()=>{
     if (!token) return;
@@ -10,8 +10,9 @@ export function useCourierRealtime(token: string, invalidate: () => void, revoke
     let retry: ReturnType<typeof setTimeout> | null=null, ping: ReturnType<typeof setInterval> | null=null;
     let lastPong=0;
     let hint: ReturnType<typeof setTimeout> | null=null;
-    const invalidate=()=>{if(hint)clearTimeout(hint);hint=setTimeout(()=>{hint=null;if(callbacks.current.token===token)callbacks.current.invalidate();},200);};
-    const cleanup=()=>{ if(hint)clearTimeout(hint); hint=null; if(retry)clearTimeout(retry); if(ping)clearInterval(ping); retry=null;ping=null; const old=socket;socket=null;old?.close(); };
+    let pendingReason: 'ready' | 'updated' = 'ready';
+    const invalidate=(reason: 'ready' | 'updated')=>{if(reason==='updated')pendingReason='updated';if(hint)clearTimeout(hint);hint=setTimeout(()=>{const nextReason=pendingReason;pendingReason='ready';hint=null;if(callbacks.current.token===token)callbacks.current.invalidate(nextReason);},200);};
+    const cleanup=()=>{ if(hint)clearTimeout(hint); hint=null; pendingReason='ready'; if(retry)clearTimeout(retry); if(ping)clearInterval(ping); retry=null;ping=null; const old=socket;socket=null;old?.close(); };
     const connect=()=>{
       if(disposed || denied || socket || !navigator.onLine || document.hidden)return;
       let current: WebSocket;
@@ -22,8 +23,8 @@ export function useCourierRealtime(token: string, invalidate: () => void, revoke
         try{
           const data=JSON.parse(event.data);
           if(data.event==='pong')lastPong=Date.now();
-          if(data.event==='courier_ready'){attempt=0;lastPong=Date.now();invalidate();}
-          if(data.event==='courier_panel_updated')invalidate();
+          if(data.event==='courier_ready'){attempt=0;lastPong=Date.now();invalidate('ready');}
+          if(data.event==='courier_panel_updated')invalidate('updated');
         }catch{/* A malformed hint is not order data. */}
       };
       current.onopen=()=>{

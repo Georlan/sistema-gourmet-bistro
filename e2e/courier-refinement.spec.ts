@@ -456,3 +456,144 @@ test('link abre com armazenamento de sessão bloqueado e não expõe a credencia
   await expect(page).toHaveURL(/\/entregador$/);
   expect(await page.evaluate(()=>JSON.stringify(Object.values(localStorage)))).not.toContain('local-courier-test-secret');
 });
+
+test('retorno do Google Maps após >12s com GET pendente na suspensão não exibe falso timeout, coalesce eventos + WebSocket e reconcilia entregas', async ({ page }) => {
+  let gets = 0;
+  let holdPendingGet = false;
+  let updatedAfterMaps = false;
+  const activeSockets: any[] = [];
+
+  await page.routeWebSocket('**/ws/entregador', ws => {
+    activeSockets.push(ws);
+    ws.onMessage(message => {
+      if (message === 'ping') ws.send(JSON.stringify({ event: 'pong' }));
+    });
+    ws.send(JSON.stringify({ event: 'courier_ready' }));
+  });
+
+  await page.route(`${API}/**`, async route => {
+    gets++;
+    if (holdPendingGet) {
+      // Simula GET que ficou pendurada exatamente quando o usuário tocou em Maps e o Chrome foi suspenso
+      await new Promise<void>(() => {});
+      return;
+    }
+    const items = updatedAfterMaps
+      ? [{ ...delivery, cliente_nome: 'Georlan (Atualizado)', valor_a_cobrar: 35.9 }]
+      : [delivery];
+    return route.fulfill({ json: { motoboy: profile, entregas: items } });
+  });
+
+  await open(page);
+  await page.clock.install();
+  // Aguarda estabilizar a leitura inicial e o handshake inicial do WebSocket
+  await page.clock.fastForward(300);
+  await expect(page.getByRole('button', { name: 'Atualizar Pedidos' })).toBeEnabled();
+
+  // 1. Dispara uma consulta GET que fica pendente no exato momento em que o entregador abre o Maps
+  holdPendingGet = true;
+  await page.getByRole('button', { name: 'Atualizar Pedidos' }).click();
+  const getsAtSuspend = gets;
+
+  // 2. Simula ida para o app do Google Maps (visibilityState = 'hidden' + pagehide)
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('pagehide'));
+  });
+
+  // 3. Permanece mais de 12 segundos no Google Maps (ex.: 25 segundos)
+  await page.clock.fastForward(25_000);
+
+  // Nenhum alerta falso de timeout deve aparecer por causa do cancelamento intencional na suspensão
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByText('O painel demorou demais para responder. Tente novamente.')).toHaveCount(0);
+
+  // 4. Ao retornar do Maps para o Chrome Android, múltiplos eventos disparam simultaneamente junto à reconexão do WebSocket
+  holdPendingGet = false;
+  updatedAfterMaps = true;
+  const socketsBeforeResume = activeSockets.length;
+
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('pageshow'));
+    window.dispatchEvent(new Event('focus'));
+    window.dispatchEvent(new Event('focus'));
+  });
+
+  // Avança o debounce de 200ms do courier_ready da reconexão do WebSocket
+  await page.clock.fastForward(350);
+
+  // O WebSocket reconectou ao voltar para o primeiro plano, mas o retorno fez exatamente 1 GET consolidada
+  expect(activeSockets.length).toBeGreaterThan(socketsBeforeResume);
+  await expect(page.getByText('Georlan (Atualizado)')).toBeVisible();
+  expect(gets).toBe(getsAtSuspend + 1);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('timeout real de 12s em primeiro plano exibe alerta apropriado e preserva entregas visíveis', async ({ page }) => {
+  let hangRefresh = false;
+  await page.route(`${API}/**`, async route => {
+    if (hangRefresh) {
+      await new Promise<void>(() => {});
+      return;
+    }
+    return route.fulfill({ json: { motoboy: profile, entregas: [delivery] } });
+  });
+
+  await open(page);
+  await page.clock.install();
+  hangRefresh = true;
+  await page.getByRole('button', { name: 'Atualizar Pedidos' }).click();
+
+  await page.clock.fastForward(12_100);
+  await expect(page.getByRole('alert')).toContainText('O painel demorou demais para responder. Tente novamente.');
+  await expect(page.getByRole('article', { name: 'Pedido 101' })).toBeVisible();
+});
+
+test('suspensão e retorno durante confirmação de entrega em voo nunca repete o POST automaticamente', async ({ page }) => {
+  let posts = 0;
+  let releasePost!: () => void;
+  const postGate = new Promise<void>(resolve => { releasePost = resolve; });
+  let delivered = false;
+
+  await page.route(`${API}/**`, async route => {
+    if (route.request().method() === 'POST') {
+      posts++;
+      await postGate;
+      delivered = true;
+      return route.fulfill({ json: { status: 'sucesso' } });
+    }
+    return route.fulfill({ json: { motoboy: profile, entregas: delivered ? [] : [delivery] } });
+  });
+
+  await open(page);
+  await page.clock.install();
+  await page.getByRole('button', { name: /^(Concluir entrega|Confirmar com código)$/ }).click();
+  await page.getByRole('button', { name: 'Confirmar', exact: true }).click();
+  await expect.poll(() => posts).toBe(1);
+
+  // Usuário alterna para outro app e retorna enquanto o POST ainda está em andamento
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.clock.fastForward(5_000);
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => false });
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('pageshow'));
+    window.dispatchEvent(new Event('focus'));
+  });
+
+  expect(posts).toBe(1);
+  releasePost();
+  await expect(page.getByRole('heading', { name: 'Nenhuma entrega em rota' })).toBeVisible();
+  expect(posts).toBe(1);
+});
+

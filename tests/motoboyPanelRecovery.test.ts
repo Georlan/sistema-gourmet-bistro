@@ -39,3 +39,11 @@ test('confirmação de entrega abandona POST travado sem repetir a mutação', (
   assert.match(confirmation, /window\.clearTimeout\(timeoutId\)/);
   assert.doesNotMatch(confirmation, /await handleConfirmarEntrega\(comandaId\)/);
 });
+
+test('suspensão em segundo plano cancela GET pendente sem falso alerta de timeout e retoma no primeiro plano', () => {
+  assert.match(source, /const cancelPendingGet = useCallback\(\(markSuspended = false\) =>/);
+  assert.match(source, /getRef\.current = null;\s*if \(markSuspended\) suspendedReadRef\.current = true;\s*activeGet\.abort\(\);/);
+  assert.match(source, /if \(document\.visibilityState === 'hidden'\)\s*\{\s*suspendedReadRef\.current = true;\s*return false;\s*\}/);
+  assert.match(source, /window\.addEventListener\('pageshow', resume\);/);
+  assert.match(source, /window\.addEventListener\('pagehide', suspend\);/);
+});
