@@ -342,7 +342,11 @@ def pedir_conta(
     Garçom solicita a conta para a mesa. Altera status_comanda para 'aguardando_pagamento',
     movendo a mesa para a coluna 3 do Kanban (Fechar Conta) sem passar pela coluna 2.
     """
-    comanda = db.query(Comanda).filter(Comanda.id == comanda_id).first()
+    rest_id = require_tenant_id()
+    comanda = db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id,
+        Comanda.id == comanda_id,
+    ).with_for_update().first()
     if not comanda:
         raise HTTPException(status_code=404, detail="Comanda não encontrada")
     if comanda.fechada:
@@ -350,7 +354,7 @@ def pedir_conta(
     comanda.status_comanda = "aguardando_pagamento"
     db.commit()
     db.refresh(comanda)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
     return comanda
 
 def lancar_itens(
@@ -383,9 +387,13 @@ def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: s
         current_user,
         "perm_garcom_transferir_item",
     )
+    rest_id = require_tenant_id()
 
     # 1. Validar comanda original
-    comanda_origem = db.query(Comanda).filter(Comanda.id == comanda_id).first()
+    comanda_origem = db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id,
+        Comanda.id == comanda_id,
+    ).with_for_update().first()
     if not comanda_origem:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -399,9 +407,10 @@ def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: s
 
     # 2. Validar se os itens pertencem à comanda
     itens = db.query(Item).filter(
+        Item.restaurante_id == rest_id,
         Item.id.in_(itens_ids),
-        Item.comanda_id == comanda_id
-    ).all()
+        Item.comanda_id == comanda_id,
+    ).with_for_update().all()
 
     if len(itens) != len(itens_ids):
         raise HTTPException(
@@ -420,7 +429,7 @@ def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: s
         # 3. Criar a nova comanda compartilhando o mesmo numero_pedido e mesa
         nova_comanda = Comanda(
             id=f"c-{uuid.uuid4().hex[:8]}",
-            restaurante_id=current_restaurante_id.get(),
+            restaurante_id=rest_id,
             mesa_id=comanda_origem.mesa_id,
             garcom_id=comanda_origem.garcom_id,
             tipo=comanda_origem.tipo,
@@ -450,7 +459,7 @@ def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: s
         )
     db.refresh(comanda_origem)
     db.refresh(nova_comanda)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
     return [comanda_origem, nova_comanda]
 
 @router.put("/{comanda_id}/fechar", response_model=ComandaResponse)
@@ -558,13 +567,38 @@ def cancelar_item(
     Cancela um item específico de uma comanda (requer autenticação do garçom).
     Se for o único item ativo da comanda, o garçom não pode cancelar.
     """
+    from ..models import Pagamento
 
     require_waiter_permission(
         db,
         current_garcom,
         "perm_garcom_cancelar",
     )
-    item = db.query(Item).filter(Item.id == item_id).first()
+    rest_id = require_tenant_id()
+    item = db.query(Item).filter(
+        Item.restaurante_id == rest_id,
+        Item.id == item_id,
+    ).first()
+    if not item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Item não encontrado"
+        )
+
+    comanda = db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id,
+        Comanda.id == item.comanda_id,
+    ).with_for_update().first()
+    if not comanda:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Comanda associada ao item não encontrada"
+        )
+
+    item = db.query(Item).filter(
+        Item.restaurante_id == rest_id,
+        Item.id == item_id,
+    ).with_for_update().populate_existing().first()
     if not item:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -574,15 +608,32 @@ def cancelar_item(
     if item.status == "cancelado":
         return item
 
-    comanda = db.query(Comanda).filter(Comanda.id == item.comanda_id).first()
-    if not comanda:
+    if comanda.fechada:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Comanda associada ao item não encontrada"
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Não é possível cancelar itens de uma comanda já fechada."
+        )
+
+    if item.pago:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Não é possível cancelar um item já pago. Solicite o estorno no Caixa."
+        )
+
+    pagamento_ativo = db.query(Pagamento.id).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.comanda_id == comanda.id,
+        or_(Pagamento.status.is_(None), Pagamento.status != "cancelado"),
+    ).first()
+    if pagamento_ativo or float(comanda.valor_pago or 0) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Há pagamento registrado nesta comanda. Solicite o cancelamento ou estorno no Caixa."
         )
 
     # Contar itens ativos restantes na comanda
     active_items_count = db.query(Item).filter(
+        Item.restaurante_id == rest_id,
         Item.comanda_id == item.comanda_id,
         Item.status != "cancelado"
     ).count()
@@ -599,7 +650,7 @@ def cancelar_item(
 
     # Audit log
     audit = ActivityLog(
-        restaurante_id=current_restaurante_id.get(),
+        restaurante_id=rest_id,
         garcom_id=current_garcom.id,
         action="CANCEL_ITEM",
         details=f"Item ID {item_id} (Produto {item.produto_id}) cancelado na comanda {item.comanda_id}."
@@ -607,7 +658,7 @@ def cancelar_item(
     db.add(audit)
     db.commit()
     db.refresh(item)
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
     return item
 
 @router.put("/itens/{item_id}", response_model=ItemResponse)
@@ -743,12 +794,22 @@ def update_item_status(
     status: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_garcom: Usuario = Depends(require_permission("pedidos:alterar_status"))
+    current_garcom: Usuario = Depends(get_current_user)
 ):
     """
-    Atualiza o status de um item (requer autenticação do garçom).
+    Atualiza o status de um item.
+    Operadores com 'pedidos:alterar_status' (admin, gerente, caixa, cozinha) podem alterar
+    o status de preparo. O garçom pode marcar um item pronto como 'entregue' (Servir).
     """
-    item = db.query(Item).filter(Item.id == item_id).first()
+    user_role = (current_garcom.role or current_garcom.cargo or "garcom").lower().strip()
+    if not (user_role == "garcom" and status == "entregue"):
+        ensure_permission(current_garcom, "pedidos:alterar_status")
+
+    rest_id = require_tenant_id()
+    item = db.query(Item).filter(
+        Item.restaurante_id == rest_id,
+        Item.id == item_id,
+    ).with_for_update().first()
     if not item:
         raise HTTPException(
             status_code=404,
@@ -759,6 +820,11 @@ def update_item_status(
             status_code=400,
             detail="Status inválido"
         )
+    if user_role == "garcom" and item.status not in ("pronto", "entregue"):
+        raise HTTPException(
+            status_code=409,
+            detail="Somente itens prontos podem ser marcados como servidos pelo garçom."
+        )
     item.status = status
     db.commit()
     db.refresh(item)
@@ -766,7 +832,7 @@ def update_item_status(
     # Item readiness is a production signal only. Customer-facing "ready" status
     # belongs to the canonical order lifecycle and is emitted only when the
     # operator explicitly advances the order to `pronto`.
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
+    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
     return item
 
 

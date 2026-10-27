@@ -27,15 +27,19 @@ type WaiterScenario = {
   displayNumbers?: [string, string];
   sequences?: [number, number];
   emptySession?: boolean;
+  singleItem?: boolean;
   occupancyTargets?: boolean;
   withoutCheck?: boolean;
   withoutLaunchIdentity?: boolean;
   canCloseTable?: boolean;
+  canCancelItems?: boolean;
   canTransferTables?: boolean;
   canTransferItems?: boolean;
   printingEntitled?: boolean;
   deferPrinting?: boolean;
   printFails?: boolean;
+  deferCancel?: boolean;
+  cancelFails?: boolean;
   identity?: { id: string; name: string };
   socketHandler?: (socket: WebSocketRoute) => void;
 };
@@ -49,7 +53,8 @@ async function openWaiterScenario(
   const checkNumber = scenario.checkNumber ?? 24;
   const displayNumbers = scenario.displayNumbers ?? ['24-A', '24-B'];
   const sequences = scenario.sequences ?? [1, 2];
-  const items = (scenario.emptySession ? [] : statuses).map((status, index) => ({
+  const baseStatuses = scenario.emptySession ? [] : scenario.singleItem ? [statuses[0]] : statuses;
+  const items = baseStatuses.map((status, index) => ({
     id: index === 0 ? ITEM_A : ITEM_B,
     lancamento_id: index === 0 ? LAUNCH_A : LAUNCH_B,
     produto_id: `product-waiter-phase7-${index + 1}`,
@@ -104,6 +109,10 @@ async function openWaiterScenario(
   const printResponse = scenario.deferPrinting
     ? new Promise<void>(resolve => { releasePrint = resolve; })
     : Promise.resolve();
+  let releaseCancel: () => void = () => {};
+  const cancelResponse = scenario.deferCancel
+    ? new Promise<void>(resolve => { releaseCancel = resolve; })
+    : Promise.resolve();
 
   await page.clock.setFixedTime(NOW);
   await page.addInitScript((identity) => {
@@ -149,10 +158,14 @@ async function openWaiterScenario(
       body = {
         familias: [{
           numero_conta: checkNumber,
-          lancamentos: scenario.emptySession || scenario.withoutLaunchIdentity ? [] : [
-            { lancamento_id: LAUNCH_A, pedido_id: displayNumbers[0], sequencia: sequences[0] },
-            { lancamento_id: LAUNCH_B, pedido_id: displayNumbers[1], sequencia: sequences[1] },
-          ],
+          lancamentos: scenario.emptySession || scenario.withoutLaunchIdentity ? [] : (
+            scenario.singleItem
+              ? [{ lancamento_id: LAUNCH_A, pedido_id: displayNumbers[0], sequencia: sequences[0] }]
+              : [
+                  { lancamento_id: LAUNCH_A, pedido_id: displayNumbers[0], sequencia: sequences[0] },
+                  { lancamento_id: LAUNCH_B, pedido_id: displayNumbers[1], sequencia: sequences[1] },
+                ]
+          ),
         }],
       };
     } else if (method === 'GET' && (path === '/produtos/catalogo' || path === '/produtos/categorias')) {
@@ -172,7 +185,8 @@ async function openWaiterScenario(
         perm_garcom_print: true,
         perm_garcom_fechar: scenario.canCloseTable ?? false,
         perm_garcom_editar: true,
-        perm_garcom_cancelar_item: true,
+        perm_garcom_cancelar: scenario.canCancelItems ?? true,
+        perm_garcom_cancelar_item: scenario.canCancelItems ?? true,
         perm_garcom_transferir_mesa: scenario.canTransferTables ?? true,
         perm_garcom_transferir_item: scenario.canTransferItems ?? true,
         perm_garcom_delivery: false,
@@ -217,6 +231,17 @@ async function openWaiterScenario(
       writes.push({ method, path, status: 'entregue', tableId: null });
       items[1].status = 'entregue';
       body = { ok: true };
+    } else if (method === 'PUT' && [ITEM_A, ITEM_B].some(id => path === `/comandas/itens/${id}/cancelar`)) {
+      const targetId = path.includes(ITEM_A) ? ITEM_A : ITEM_B;
+      writes.push({ method, path, status: 'cancelado', tableId: null });
+      await cancelResponse;
+      if (scenario.cancelFails) {
+        responseStatus = 400;
+        body = { detail: 'O garçom não pode cancelar o único item ativo restante da comanda.' };
+      } else {
+        check.itens = check.itens.filter(item => item.id !== targetId);
+        body = { id: targetId, status: 'cancelado' };
+      }
     } else {
       unexpectedApiRequests.push(`${method} ${path}${url.search}`);
       await route.fulfill({
@@ -232,8 +257,10 @@ async function openWaiterScenario(
 
   await page.goto('/?view=garcom');
   await expect(page.locator('#mesa-card-7')).toBeVisible();
-  if (!scenario.emptySession) await expect(page.locator('#mesa-card-7')).toContainText(/R\$\s*160/);
-  return { check, writes, unexpectedApiRequests, releasePrint };
+  if (!scenario.emptySession) {
+    await expect(page.locator('#mesa-card-7')).toContainText(scenario.singleItem ? /R\$\s*112/ : /R\$\s*160/);
+  }
+  return { check, writes, unexpectedApiRequests, releasePrint, releaseCancel };
 }
 
 test('mapa do Garçom preserva mesa livre, ocupada e pronta nos filtros', async ({ page }) => {
@@ -719,3 +746,74 @@ test('111-A e 111-B reimprimem só seu lançamento; barra inferior imprime a mes
   ]);
   expect(state.check.fechada).toBe(false);
 });
+
+test('incidente D8 Burger: único item ativo da comanda exibe lixeira desabilitada com orientação ao Caixa sem requisição fadada a 400', async ({ page }) => {
+  const state = await openWaiterScenario(page, ['preparando', 'pronto'], {
+    singleItem: true,
+    checkNumber: 122,
+    displayNumbers: ['122-A', '122-B'],
+  });
+  await page.locator('#mesa-card-7').click();
+  const cancelBtn = page.locator(`#cancel-item-btn-${ITEM_A}`);
+  await expect(cancelBtn).toBeVisible();
+  await expect(cancelBtn).toBeDisabled();
+  await expect(cancelBtn).toHaveAttribute(
+    'title',
+    /Último item ativo da comanda — solicite o cancelamento do pedido ou liberação da mesa no Caixa/,
+  );
+  await expect(page.locator(`#cancel-restriction-note-${ITEM_A}`)).toContainText(
+    'Último item ativo da comanda: solicite o cancelamento do pedido no Caixa.',
+  );
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  expect(state.writes).toEqual([]);
+  expect(state.unexpectedApiRequests).toEqual([]);
+});
+
+test('cancelamento de 1 entre vários itens aguarda confirmação do backend antes de remover o item e protege o último item restante', async ({ page }) => {
+  const state = await openWaiterScenario(page, ['preparando', 'pronto'], { deferCancel: true });
+  page.on('dialog', dialog => dialog.accept());
+  await page.locator('#mesa-card-7').click();
+
+  const cancelBtnA = page.locator(`#cancel-item-btn-${ITEM_A}`);
+  const cancelBtnB = page.locator(`#cancel-item-btn-${ITEM_B}`);
+  await expect(cancelBtnA).toBeEnabled();
+  await expect(cancelBtnB).toBeEnabled();
+  await expect(page.locator(`#cancel-restriction-note-${ITEM_B}`)).toHaveCount(0);
+
+  await cancelBtnA.click();
+  await expect.poll(() => state.writes).toEqual([
+    { method: 'PUT', path: `/comandas/itens/${ITEM_A}/cancelar`, status: 'cancelado', tableId: null },
+  ]);
+
+  // Enquanto o backend não responde, o item não desaparece prematuramente nem exibe sucesso falso.
+  await expect(page.getByText('Prato da primeira rodada', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('operational-toast-success')).toHaveCount(0);
+
+  state.releaseCancel();
+  await expect(page.getByTestId('operational-toast-success')).toContainText('Item cancelado.');
+  await expect(page.getByText('Prato da primeira rodada', { exact: true })).toHaveCount(0);
+
+  // O item B agora passou a ser o único item ativo restante da comanda e sua lixeira fica bloqueada com aviso visível no mobile.
+  await expect(cancelBtnB).toBeDisabled();
+  await expect(page.locator(`#cancel-restriction-note-${ITEM_B}`)).toContainText(
+    'Último item ativo da comanda: solicite o cancelamento do pedido no Caixa.',
+  );
+  expect(state.unexpectedApiRequests).toEqual([]);
+});
+
+test('erro do backend no cancelamento preserva o item visível e exibe toast de erro no App do Garçom', async ({ page }) => {
+  const state = await openWaiterScenario(page, ['preparando', 'pronto'], { cancelFails: true });
+  page.on('dialog', dialog => dialog.accept());
+  await page.locator('#mesa-card-7').click();
+
+  await page.locator(`#cancel-item-btn-${ITEM_A}`).click();
+  await expect.poll(() => state.writes).toEqual([
+    { method: 'PUT', path: `/comandas/itens/${ITEM_A}/cancelar`, status: 'cancelado', tableId: null },
+  ]);
+  await expect(page.getByTestId('operational-toast-error')).toContainText(
+    'O garçom não pode cancelar o único item ativo restante da comanda.',
+  );
+  await expect(page.getByText('Prato da primeira rodada', { exact: true })).toBeVisible();
+  expect(state.unexpectedApiRequests).toEqual([]);
+});
+

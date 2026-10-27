@@ -45,7 +45,8 @@ test('reload espera mesas, comandas e configuração sem mostrar cards livres pr
 test('config_updated retira edição, cancelamento e transferência durante o uso sem perder rascunho', async ({ page }) => {
   const { state, send } = await setup(page);await page.goto('/?view=garcom');
   await page.locator('#mesa-card-7').click();
-  await expect(page.getByRole('button', { name: 'Cancelar Risoto da casa' })).toBeVisible();
+  await expect(page.locator('#cancel-item-btn-sync-item')).toBeVisible();
+  await expect(page.locator('#cancel-item-btn-sync-item')).toBeDisabled();
   await page.locator('#tab-lancamento-btn').click();await page.locator('#add-product-btn-101').click();
   await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)||'{}')[7]?.length, draftKey)).toBe(1);
   state.config = { ...state.config, perm_garcom_editar: false, perm_garcom_cancelar: false, perm_garcom_transferir_mesa: false, perm_garcom_transferir_item: false, perm_garcom_fechar: false };
@@ -53,7 +54,7 @@ test('config_updated retira edição, cancelamento e transferência durante o us
   await expect(page.locator('#tab-lancamento-btn')).toHaveCount(0);
   await expect(page.locator('.kw-consumption')).toBeVisible();
   await expect(page.locator('#tab-transferir-btn')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Cancelar Risoto da casa' })).toHaveCount(0);
+  await expect(page.locator('#cancel-item-btn-sync-item')).toHaveCount(0);
   await expect(page.getByText('Adicionar Itens', { exact: true })).toHaveCount(0);
   expect(await page.evaluate(key => JSON.parse(localStorage.getItem(key)!)[7].length, draftKey)).toBe(1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);

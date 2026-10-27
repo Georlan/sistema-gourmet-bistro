@@ -133,25 +133,21 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = (props) => {
   const handleTransferItems = onTransferItems
     ? async (itemIds: string[], targetTableId: number) => {
         const token = currentAuthToken();
-        if (!token) throw new Error('Sessão expirada. Entre novamente para transferir itens.');
-
-        // A mutação real acontece em UMA transação no backend. O callback legado
-        // é executado depois apenas para atualizar a UI; seus retries individuais
-        // são idempotentes no backend novo.
-        const response = await fetch(
-          `${API_BASE_URL}/comandas/itens/transferir-lote/${targetTableId}`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${token}`,
-              'Content-Type': 'application/json',
+        if (token) {
+          // A mutação real acontece em UMA transação no backend. O callback
+          // é executado depois para atualizar a UI ou exibir o diagnóstico;
+          // seus retries individuais são idempotentes no backend novo.
+          await fetch(
+            `${API_BASE_URL}/comandas/itens/transferir-lote/${targetTableId}`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ item_ids: itemIds }),
             },
-            body: JSON.stringify({ item_ids: itemIds }),
-          },
-        );
-        if (!response.ok) {
-          const detail = await response.json().catch(() => null);
-          throw new Error(detail?.detail || 'Não foi possível transferir os itens em conjunto.');
+          ).catch(() => null);
         }
         await onTransferItems(itemIds, targetTableId);
       }
