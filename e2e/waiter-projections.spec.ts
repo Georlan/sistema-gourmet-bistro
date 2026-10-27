@@ -761,6 +761,10 @@ test('incidente D8 Burger: único item ativo da comanda exibe lixeira desabilita
     'title',
     /Último item ativo da comanda — solicite o cancelamento do pedido ou liberação da mesa no Caixa/,
   );
+  await expect(page.locator(`#cancel-restriction-note-${ITEM_A}`)).toContainText(
+    'Último item ativo da comanda: solicite o cancelamento do pedido no Caixa.',
+  );
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   expect(state.writes).toEqual([]);
   expect(state.unexpectedApiRequests).toEqual([]);
 });
@@ -774,6 +778,7 @@ test('cancelamento de 1 entre vários itens aguarda confirmação do backend ant
   const cancelBtnB = page.locator(`#cancel-item-btn-${ITEM_B}`);
   await expect(cancelBtnA).toBeEnabled();
   await expect(cancelBtnB).toBeEnabled();
+  await expect(page.locator(`#cancel-restriction-note-${ITEM_B}`)).toHaveCount(0);
 
   await cancelBtnA.click();
   await expect.poll(() => state.writes).toEqual([
@@ -788,8 +793,11 @@ test('cancelamento de 1 entre vários itens aguarda confirmação do backend ant
   await expect(page.getByTestId('operational-toast-success')).toContainText('Item cancelado.');
   await expect(page.getByText('Prato da primeira rodada', { exact: true })).toHaveCount(0);
 
-  // O item B agora passou a ser o único item ativo restante da comanda e sua lixeira fica bloqueada.
+  // O item B agora passou a ser o único item ativo restante da comanda e sua lixeira fica bloqueada com aviso visível no mobile.
   await expect(cancelBtnB).toBeDisabled();
+  await expect(page.locator(`#cancel-restriction-note-${ITEM_B}`)).toContainText(
+    'Último item ativo da comanda: solicite o cancelamento do pedido no Caixa.',
+  );
   expect(state.unexpectedApiRequests).toEqual([]);
 });
 

@@ -430,6 +430,27 @@ export function MesaConsumptionPanel({
                               Obs: "{item.observacao}"
                             </p>
                           ) : null}
+
+                          {!readyOnly && (activeRole !== 'garcom' || restauranteConfig?.perm_garcom_cancelar) && (() => {
+                            const checkKey = String(order.checkId || order.id || '');
+                            const isLastActiveItemOnCheck = (activeItemCountByCheck.get(checkKey) || 0) <= 1;
+                            const checkHasPayment = Boolean(hasPaymentByCheck.get(checkKey));
+                            const restrictionNote = checkHasPayment
+                              ? 'Comanda com pagamento: solicite estorno ou cancelamento no Caixa.'
+                              : isLastActiveItemOnCheck
+                                ? 'Último item ativo da comanda: solicite o cancelamento do pedido no Caixa.'
+                                : null;
+                            if (!restrictionNote) return null;
+                            return (
+                              <p
+                                id={`cancel-restriction-note-${item.id}`}
+                                data-testid={`cancel-restriction-note-${item.id}`}
+                                className="text-[10px] text-amber-400/90 font-medium leading-snug"
+                              >
+                                {restrictionNote}
+                              </p>
+                            );
+                          })()}
                         </div>
 
                         <div className="kw-consumption-actions flex items-center gap-2 shrink-0">

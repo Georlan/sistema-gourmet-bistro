@@ -1150,3 +1150,122 @@ def test_waiter_can_deliver_ready_item_but_cannot_force_kitchen_or_invalid_statu
     assert deliver_resp.status_code == 200
     assert deliver_resp.json()["status"] == "entregue"
 
+
+def test_waiter_item_edit_and_check_closing_financial_and_lifecycle_guards():
+    """
+    Auditoria B, E e H — Edição de item e fechamento de comanda pelo garçom:
+    - Garçom com perm_garcom_editar=True edita observação e cliente enquanto item está 'preparando'.
+    - Quando item avança para 'pronto' (ou 'entregue'), tentar alterar 'observacao' retorna 409 Conflict,
+      mas enviar apenas 'cliente_nome' ou 'quantidade_adicional' funciona (200 OK).
+    - Garçom não pode fechar comanda com saldo devedor em aberto (400 Bad Request), mesmo com perm_garcom_fechar=True.
+    - Quando o saldo é integralmente pago, garçom com perm_garcom_fechar=True fecha a comanda (200 OK).
+    """
+    from app.models import Mesa
+
+    with TestingSessionLocal() as db:
+        db.merge(Mesa(id=6, restaurante_id=1, nome="Mesa 06", capacidade=4))
+        db.merge(Categoria(id="cat-edit", restaurante_id=1, nome="Lanches", destino_impressao="COZINHA"))
+        db.merge(Produto(
+            id="prod-edit",
+            restaurante_id=1,
+            nome="D8 Smash",
+            preco=30.0,
+            categoria_id="cat-edit",
+            ativo=True,
+        ))
+        db.add(Comanda(
+            id="cmd-edit-6",
+            restaurante_id=1,
+            mesa_id=6,
+            garcom_id="u-garcom",
+            tipo="Consumo no Local",
+            numero_pedido=66,
+            fechada=False,
+            valor_pago=0.0,
+        ))
+        db.add(Lancamento(id="lanc-edit-6", restaurante_id=1, comanda_id="cmd-edit-6", garcom_id="u-garcom", origem="garcom"))
+        db.add(Item(
+            id="item-edit-6",
+            restaurante_id=1,
+            comanda_id="cmd-edit-6",
+            lancamento_id="lanc-edit-6",
+            produto_id="prod-edit",
+            preco_unit=30.0,
+            observacao="Com picles",
+            cliente_nome="Consumo Geral",
+            status="preparando",
+            pago=False,
+        ))
+        cfg = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=1).one()
+        cfg.perm_garcom_editar = True
+        cfg.perm_garcom_fechar = True
+        db.commit()
+
+    client = TestClient(app)
+    garcom_headers = get_auth_headers(client, "garcom", "123")
+    admin_headers = get_auth_headers(client, "admin", "123")
+
+    # 1. Enquanto está 'preparando', garçom consegue editar observação e cliente
+    prep_edit = client.put(
+        "/comandas/itens/item-edit-6",
+        headers=garcom_headers,
+        json={"observacao": "Sem picles, bem passado", "cliente_nome": "Carlos"},
+    )
+    assert prep_edit.status_code == 200, prep_edit.text
+    assert prep_edit.json()["observacao"] == "Sem picles, bem passado"
+    assert prep_edit.json()["cliente_nome"] == "Carlos"
+
+    # 2. Cozinha/Caixa marca item como 'pronto'
+    ready_resp = client.put("/comandas/itens/item-edit-6/status?status=pronto", headers=admin_headers)
+    assert ready_resp.status_code == 200
+
+    # 3. Tentar alterar 'observacao' de item 'pronto' retorna 409 Conflict
+    obs_conflict = client.put(
+        "/comandas/itens/item-edit-6",
+        headers=garcom_headers,
+        json={"observacao": "Tentativa tardia", "cliente_nome": "Carlos"},
+    )
+    assert obs_conflict.status_code == 409
+
+    # 4. Atualizar apenas 'cliente_nome' (sem enviar 'observacao') de item 'pronto' funciona (200 OK)
+    client_only_edit = client.put(
+        "/comandas/itens/item-edit-6",
+        headers=garcom_headers,
+        json={"cliente_nome": "Carlos Silva"},
+    )
+    assert client_only_edit.status_code == 200, client_only_edit.text
+    assert client_only_edit.json()["cliente_nome"] == "Carlos Silva"
+
+    # 5. Garçom solicita conta (pedir-conta)
+    bill_resp = client.put("/comandas/cmd-edit-6/pedir-conta", headers=garcom_headers)
+    assert bill_resp.status_code == 200
+    assert bill_resp.json()["status_comanda"] == "aguardando_pagamento"
+
+    # 6. Mesmo com perm_garcom_fechar=True, garçom não pode fechar comanda com saldo em aberto (400)
+    unpaid_close = client.put("/comandas/cmd-edit-6/fechar", headers=garcom_headers)
+    assert unpaid_close.status_code == 400
+    assert "saldo em aberto" in unpaid_close.json()["detail"].lower()
+
+    # 7. Nem forçar fechamento de comanda isolada com saldo em aberto
+    force_close = client.put("/comandas/cmd-edit-6/fechar?force=true", headers=garcom_headers)
+    assert force_close.status_code in (403, 409)
+
+    # 8. Após quitação do saldo, fechamento é permitido quando perm_garcom_fechar=True
+    with TestingSessionLocal() as db:
+        cmd = db.get(Comanda, "cmd-edit-6")
+        cmd.valor_pago = 30.0
+        db.commit()
+
+    paid_close = client.put("/comandas/cmd-edit-6/fechar", headers=garcom_headers)
+    assert paid_close.status_code == 200
+    assert paid_close.json()["fechada"] is True
+
+    # 9. Editar item de comanda já fechada retorna 400
+    closed_edit = client.put(
+        "/comandas/itens/item-edit-6",
+        headers=garcom_headers,
+        json={"cliente_nome": "Outro Nome"},
+    )
+    assert closed_edit.status_code == 400
+
+

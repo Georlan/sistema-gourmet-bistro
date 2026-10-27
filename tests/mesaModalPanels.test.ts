@@ -212,6 +212,8 @@ test('cancelamento no painel de consumo desabilita lixeira no último item ativo
   })));
   assert.match(singleHtml, /id="cancel-item-btn-technical-item-0"[^>]*disabled=""/);
   assert.match(singleHtml, /Último item ativo da comanda — solicite o cancelamento do pedido ou liberação da mesa no Caixa\./);
+  assert.match(singleHtml, /id="cancel-restriction-note-technical-item-0"/);
+  assert.match(singleHtml, /Último item ativo da comanda: solicite o cancelamento do pedido no Caixa\./);
 
   const multiCalls: unknown[] = [];
   const multiProps = consumptionProps({
@@ -219,6 +221,8 @@ test('cancelamento no painel de consumo desabilita lixeira no último item ativo
     restauranteConfig: { perm_garcom_cancelar: true },
     onCancelItem: (itemId) => { multiCalls.push(itemId); },
   });
+  const multiHtml = renderToStaticMarkup(createElement(MesaConsumptionPanel, multiProps));
+  assert.doesNotMatch(multiHtml, /id="cancel-restriction-note-/);
   const multiNodes = elements(MesaConsumptionPanel(multiProps));
   const cancelBtn0 = multiNodes.find(node => node.props.id === 'cancel-item-btn-technical-item-0')!;
   assert.equal(Boolean(cancelBtn0.props.disabled), false);
@@ -238,5 +242,7 @@ test('cancelamento no painel de consumo desabilita lixeira no último item ativo
   })));
   assert.match(paidHtml, /id="cancel-item-btn-technical-item-0"[^>]*disabled=""/);
   assert.match(paidHtml, /Há pagamento registrado nesta comanda\. Solicite o cancelamento ou estorno no Caixa\./);
+  assert.match(paidHtml, /id="cancel-restriction-note-technical-item-0"/);
+  assert.match(paidHtml, /Comanda com pagamento: solicite estorno ou cancelamento no Caixa\./);
 });
 
