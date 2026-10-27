@@ -20,7 +20,7 @@ type Write = {
   tableId: string | null;
   sourceTableId?: string | null;
   valuesOnly?: string | null;
-  payload?: { item_ids: string[] };
+  payload?: unknown;
 };
 type WaiterScenario = {
   checkNumber?: number;
@@ -40,6 +40,10 @@ type WaiterScenario = {
   printFails?: boolean;
   deferCancel?: boolean;
   cancelFails?: boolean;
+  deferBatchTransfer?: boolean;
+  batchTransferFails?: boolean | number | 'network';
+  deferEdit?: boolean;
+  editFails?: boolean | number | 'network';
   identity?: { id: string; name: string };
   socketHandler?: (socket: WebSocketRoute) => void;
 };
@@ -113,6 +117,15 @@ async function openWaiterScenario(
   const cancelResponse = scenario.deferCancel
     ? new Promise<void>(resolve => { releaseCancel = resolve; })
     : Promise.resolve();
+  let releaseBatchTransfer: () => void = () => {};
+  const batchTransferResponse = scenario.deferBatchTransfer
+    ? new Promise<void>(resolve => { releaseBatchTransfer = resolve; })
+    : Promise.resolve();
+  let releaseEdit: () => void = () => {};
+  const editResponse = scenario.deferEdit
+    ? new Promise<void>(resolve => { releaseEdit = resolve; })
+    : Promise.resolve();
+  const mutableScenario = { ...scenario };
 
   await page.clock.setFixedTime(NOW);
   await page.addInitScript((identity) => {
@@ -206,13 +219,22 @@ async function openWaiterScenario(
     } else if (method === 'POST' && path === '/comandas/itens/transferir-lote/8') {
       const payload = request.postDataJSON() as { item_ids: string[] };
       writes.push({ method, path, status: null, tableId: '8', payload });
-      const movedItems = check.itens.filter(item => payload.item_ids.includes(item.id));
-      check.itens = check.itens.filter(item => !payload.item_ids.includes(item.id));
-      checks.push({ ...check, id: 'check-waiter-phase7-destination', mesa_id: 8, itens: movedItems });
-      tables[1].status = 'ocupada';
-      body = { ok: true };
+      await batchTransferResponse;
+      if (mutableScenario.batchTransferFails === 'network') {
+        await route.abort('failed');
+        return;
+      }
+      if (mutableScenario.batchTransferFails) {
+        responseStatus = typeof mutableScenario.batchTransferFails === 'number' ? mutableScenario.batchTransferFails : 409;
+        body = { detail: 'Itens pagos não podem ser transferidos.' };
+      } else {
+        const movedItems = check.itens.filter(item => payload.item_ids.includes(item.id));
+        check.itens = check.itens.filter(item => !payload.item_ids.includes(item.id));
+        checks.push({ ...check, id: 'check-waiter-phase7-destination', mesa_id: 8, itens: movedItems });
+        tables[1].status = 'ocupada';
+        body = movedItems;
+      }
     } else if (method === 'POST' && [ITEM_A, ITEM_B].some(id => path === `/comandas/itens/${id}/transferir/8`)) {
-      // The adapter invokes these legacy idempotent callbacks only after the batch succeeds.
       writes.push({ method, path, status: null, tableId: '8' });
       body = { ok: true };
     } else if (method === 'POST' && path === `/comandas/${CHECK_ID}/transferir/8`) {
@@ -227,6 +249,26 @@ async function openWaiterScenario(
       tables[0].status = 'livre';
       tables[1].status = 'ocupada';
       body = { ok: true };
+    } else if (method === 'PUT' && [ITEM_A, ITEM_B].some(id => path === `/comandas/itens/${id}`)) {
+      const targetId = path.includes(ITEM_A) ? ITEM_A : ITEM_B;
+      const payload = request.postDataJSON() as { observacao?: string; cliente_nome?: string; quantidade_adicional?: number };
+      writes.push({ method, path, status: null, tableId: null, payload });
+      await editResponse;
+      if (mutableScenario.editFails === 'network') {
+        await route.abort('failed');
+        return;
+      }
+      if (mutableScenario.editFails) {
+        responseStatus = typeof mutableScenario.editFails === 'number' ? mutableScenario.editFails : 409;
+        body = { detail: 'Não foi possível salvar a edição deste item.' };
+      } else {
+        const targetItem = check.itens.find(item => item.id === targetId);
+        if (targetItem) {
+          if (payload.observacao !== undefined) targetItem.observacao = payload.observacao;
+          if (payload.cliente_nome !== undefined) targetItem.cliente_nome = payload.cliente_nome;
+        }
+        body = targetItem ?? { ok: true };
+      }
     } else if (method === 'PUT' && path === `/comandas/itens/${ITEM_B}/status` && url.searchParams.get('status') === 'entregue') {
       writes.push({ method, path, status: 'entregue', tableId: null });
       items[1].status = 'entregue';
@@ -260,7 +302,16 @@ async function openWaiterScenario(
   if (!scenario.emptySession) {
     await expect(page.locator('#mesa-card-7')).toContainText(scenario.singleItem ? /R\$\s*112/ : /R\$\s*160/);
   }
-  return { check, writes, unexpectedApiRequests, releasePrint, releaseCancel };
+  return {
+    check,
+    writes,
+    unexpectedApiRequests,
+    releasePrint,
+    releaseCancel,
+    releaseBatchTransfer,
+    releaseEdit,
+    mutableScenario,
+  };
 }
 
 test('mapa do Garçom preserva mesa livre, ocupada e pronta nos filtros', async ({ page }) => {
@@ -477,7 +528,6 @@ test('transferência parcial conserva seleção entre abas e exige confirmação
   await target.click();
   await expect.poll(() => state.writes).toEqual([
     { method: 'POST', path: '/comandas/itens/transferir-lote/8', status: null, tableId: '8', payload: { item_ids: [ITEM_A] } },
-    { method: 'POST', path: `/comandas/itens/${ITEM_A}/transferir/8`, status: null, tableId: '8' },
   ]);
   await expect(target).toBeDisabled();
   await page.locator('#tab-consumo-btn').click();
@@ -816,4 +866,141 @@ test('erro do backend no cancelamento preserva o item visível e exibe toast de 
   await expect(page.getByText('Prato da primeira rodada', { exact: true })).toBeVisible();
   expect(state.unexpectedApiRequests).toEqual([]);
 });
+
+test('modal de edição de item permanece aberto e preserva valores digitados em falhas HTTP/rede, fechando apenas após sucesso', async ({ page }) => {
+  const state = await openWaiterScenario(page, ['preparando', 'pronto'], {
+    deferEdit: true,
+    editFails: 409,
+  });
+  await page.locator('#mesa-card-7').click();
+
+  const firstLot = page.locator('[id^="placed-order-"]').filter({ hasText: 'Prato da primeira rodada' });
+  await firstLot.getByTitle('Editar observação do item').click();
+
+  const editOverlay = page.locator('#edit-item-modal-overlay');
+  const obsInput = page.locator('#edit-item-observacao-input');
+  const clientInput = page.locator('#edit-item-cliente-input');
+  const confirmBtn = page.locator('#confirm-edit-item-btn');
+
+  await expect(editOverlay).toBeVisible();
+  await expect(obsInput).toBeEnabled();
+  await obsInput.fill('Sem cebola, ponto médio');
+  await clientInput.fill('Georlan');
+
+  await confirmBtn.click();
+  await expect(confirmBtn).toContainText('Salvando...');
+  await expect(confirmBtn).toBeDisabled();
+  await expect.poll(() => state.writes).toEqual([
+    {
+      method: 'PUT',
+      path: `/comandas/itens/${ITEM_A}`,
+      status: null,
+      tableId: null,
+      payload: {
+        cliente_nome: 'Georlan',
+        observacao: 'Sem cebola, ponto médio',
+        quantidade_adicional: 1,
+      },
+    },
+  ]);
+
+  // Libera resposta com erro HTTP 409: modal NÃO deve fechar e valores digitados devem permanecer
+  state.releaseEdit();
+  await expect(page.getByTestId('operational-toast-error')).toContainText(
+    'Não foi possível salvar a edição deste item.',
+  );
+  await expect(editOverlay).toBeVisible();
+  await expect(obsInput).toHaveValue('Sem cebola, ponto médio');
+  await expect(clientInput).toHaveValue('Georlan');
+  await expect(confirmBtn).toBeEnabled();
+  await expect(confirmBtn).toContainText('Confirmar Alterações');
+
+  // Nova tentativa com falha de rede: modal continua aberto e valores intactos
+  state.mutableScenario.editFails = 'network';
+  await confirmBtn.click();
+  await expect.poll(() => state.writes.length).toBe(2);
+  await expect(page.getByTestId('operational-toast-error').last()).toContainText(
+    'Erro de conexão ao atualizar item.',
+  );
+  await expect(editOverlay).toBeVisible();
+  await expect(obsInput).toHaveValue('Sem cebola, ponto médio');
+  await expect(clientInput).toHaveValue('Georlan');
+
+  // Nova tentativa com sucesso (200 OK): modal fecha e item exibe os dados confirmados pelo servidor
+  state.mutableScenario.editFails = false;
+  await confirmBtn.click();
+  await expect.poll(() => state.writes.length).toBe(3);
+  await expect(editOverlay).toHaveCount(0);
+  await expect(page.getByTestId('operational-toast-success')).toContainText('Item atualizado.');
+  await expect(firstLot).toContainText('Sem cebola, ponto médio');
+  await expect(firstLot).toContainText('Georlan');
+  expect(state.unexpectedApiRequests).toEqual([]);
+});
+
+test('transferência parcial executa comando único em lote, preserva seleção durante envio e falha, e só limpa após confirmação do servidor', async ({ page }) => {
+  const state = await openWaiterScenario(page, ['preparando', 'pronto'], {
+    deferBatchTransfer: true,
+    batchTransferFails: 409,
+  });
+  await page.locator('#mesa-card-7').click();
+  await page.locator('#tab-transferir-btn').click();
+  await page.getByRole('button', { name: 'Selecionar Itens', exact: true }).click();
+
+  const itemACheckbox = page.getByRole('checkbox', { name: /Prato da primeira rodada/ });
+  const itemBCheckbox = page.getByRole('checkbox', { name: /Prato da segunda rodada/ });
+  await itemACheckbox.check();
+  await itemBCheckbox.check();
+
+  const target = page.locator('#transfer-target-mesa-8');
+  await target.click();
+  await expect(target).toContainText('Confirmar?');
+
+  // Confirma envio: seleção é mantida enquanto aguarda resposta e o botão indica processamento
+  await target.click();
+  await expect(target).toContainText('Transferindo...');
+  await expect(target).toBeDisabled();
+  await expect(itemACheckbox).toBeChecked();
+  await expect(itemBCheckbox).toBeChecked();
+  await expect.poll(() => state.writes).toEqual([
+    {
+      method: 'POST',
+      path: '/comandas/itens/transferir-lote/8',
+      status: null,
+      tableId: '8',
+      payload: { item_ids: [ITEM_A, ITEM_B] },
+    },
+  ]);
+
+  // Libera resposta com erro HTTP 409: seleção de ambos os itens é preservada para permitir nova tentativa segura
+  state.releaseBatchTransfer();
+  await expect(page.getByTestId('operational-toast-error')).toContainText(
+    'Itens pagos não podem ser transferidos.',
+  );
+  await expect(itemACheckbox).toBeChecked();
+  await expect(itemBCheckbox).toBeChecked();
+  await expect(target).toBeEnabled();
+
+  // Desmarca o item B e reenvia apenas o item A com sucesso (200 OK)
+  await itemBCheckbox.uncheck();
+  state.mutableScenario.batchTransferFails = false;
+  await target.click();
+  await expect(target).toContainText('Confirmar?');
+  await target.click();
+
+  await expect.poll(() => state.writes.length).toBe(2);
+  expect(state.writes[1]).toEqual({
+    method: 'POST',
+    path: '/comandas/itens/transferir-lote/8',
+    status: null,
+    tableId: '8',
+    payload: { item_ids: [ITEM_A] },
+  });
+  await expect(page.getByTestId('operational-toast-success')).toContainText(
+    '1 item transferido para a Mesa 8.',
+  );
+  await expect(target).toBeDisabled();
+  expect(state.check.itens.map(it => it.id)).toEqual([ITEM_B]);
+  expect(state.unexpectedApiRequests).toEqual([]);
+});
+
 

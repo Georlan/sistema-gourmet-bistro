@@ -1245,6 +1245,12 @@ def transfer_items_batch(
         raise AtendimentoError("Itens cancelados não podem ser transferidos", status_code=409)
     if any(item.comanda is None for item in items):
         raise AtendimentoError("Há item sem comanda válida", status_code=409)
+    if any(bool(item.comanda.fechada) for item in items):
+        raise AtendimentoError("Não é possível transferir itens de uma comanda fechada", status_code=409)
+    if any(bool(item.pago) for item in items):
+        raise AtendimentoError("Itens pagos não podem ser transferidos", status_code=409)
+    if any(float(item.comanda.valor_pago or 0) > 0 for item in items):
+        raise AtendimentoError("Comanda com pagamento registrado não permite transferência de itens", status_code=409)
 
     source_commands = {item.comanda_id: item.comanda for item in items}
     source_accounts = {

@@ -441,6 +441,12 @@ def transferir_itens_em_lote(
     except AtendimentoError as exc:
         db.rollback()
         _raise_domain(exc)
+    except DBAPIError as exc:
+        db.rollback()
+        sqlstate = getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None)
+        if sqlstate in {"40P01", "40001"}:
+            raise HTTPException(status_code=409, detail="Outra operação alterou as mesas. Atualize e selecione novamente.") from None
+        raise
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rid)
     return items
 
@@ -470,6 +476,12 @@ def transferir_item_compativel(
     except AtendimentoError as exc:
         db.rollback()
         _raise_domain(exc)
+    except DBAPIError as exc:
+        db.rollback()
+        sqlstate = getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None)
+        if sqlstate in {"40P01", "40001"}:
+            raise HTTPException(status_code=409, detail="Outra operação alterou as mesas. Atualize e selecione novamente.") from None
+        raise
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rid)
     return item
 

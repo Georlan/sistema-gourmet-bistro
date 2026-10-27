@@ -1541,50 +1541,54 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   };
 
   // 13. Transfer single item to a different table
-  const handleTransferItem = async (itemId: string, targetTableId: number) => {
-    if (inflightItemIdsRef.current.has(itemId)) return;
+  const handleTransferItem = async (itemId: string, targetTableId: number): Promise<boolean> => {
+    if (inflightItemIdsRef.current.has(itemId)) return false;
     const requestScopeKey = operationalScopeKey;
     inflightItemIdsRef.current.add(itemId);
     try {
       const result = await transferOperationalItems([itemId], targetTableId, getAuthHeaders);
-      if (requestScopeKey !== operationalScopeKeyRef.current) return;
+      if (requestScopeKey !== operationalScopeKeyRef.current) return false;
       if (!result.ok) {
         showToast(`Erro ao transferir item: ${result.message}`, 'error');
         await fetchOrdersFromAPI();
-        return;
+        return false;
       }
       await fetchOrdersFromAPI();
       showToast(`Item transferido para a Mesa ${targetTableId}.`, 'success');
+      return true;
     } catch (err) {
-      if (requestScopeKey !== operationalScopeKeyRef.current) return;
+      if (requestScopeKey !== operationalScopeKeyRef.current) return false;
       console.error(err);
       showToast("Erro de conexão ao transferir item.", 'error');
       await fetchOrdersFromAPI();
+      return false;
     } finally {
       if (requestScopeKey === operationalScopeKeyRef.current) inflightItemIdsRef.current.delete(itemId);
     }
   };
 
-  const handleTransferItems = async (itemIds: string[], targetTableId: number) => {
+  const handleTransferItems = async (itemIds: string[], targetTableId: number): Promise<boolean> => {
     const cleanIds = itemIds.filter(id => !inflightItemIdsRef.current.has(id));
-    if (cleanIds.length === 0) return;
+    if (cleanIds.length === 0) return false;
     const requestScopeKey = operationalScopeKey;
     cleanIds.forEach(id => inflightItemIdsRef.current.add(id));
     try {
       const result = await transferOperationalItems(cleanIds, targetTableId, getAuthHeaders);
-      if (requestScopeKey !== operationalScopeKeyRef.current) return;
+      if (requestScopeKey !== operationalScopeKeyRef.current) return false;
       if (!result.ok) {
-        showToast(`Falha ao transferir alguns itens: ${result.message}`, 'error');
+        showToast(`Erro ao transferir itens: ${result.message}`, 'error');
         await fetchOrdersFromAPI();
-        return;
+        return false;
       }
       await fetchOrdersFromAPI();
       showToast(`${cleanIds.length} ${cleanIds.length === 1 ? 'item transferido' : 'itens transferidos'} para a Mesa ${targetTableId}.`, 'success');
+      return true;
     } catch (err) {
-      if (requestScopeKey !== operationalScopeKeyRef.current) return;
+      if (requestScopeKey !== operationalScopeKeyRef.current) return false;
       console.error(err);
       showToast("Erro de conexão ao transferir itens.", 'error');
       await fetchOrdersFromAPI();
+      return false;
     } finally {
       if (requestScopeKey === operationalScopeKeyRef.current) {
         cleanIds.forEach(id => inflightItemIdsRef.current.delete(id));
@@ -1617,8 +1621,13 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     }
   };
 
-  const handleUpdateItemDetails = async (itemId: string, observacao: string, clienteNome: string, quantidadeAdicional?: number) => {
-    if (inflightItemIdsRef.current.has(itemId)) return;
+  const handleUpdateItemDetails = async (
+    itemId: string,
+    observacao: string,
+    clienteNome: string,
+    quantidadeAdicional?: number,
+  ): Promise<boolean> => {
+    if (inflightItemIdsRef.current.has(itemId)) return false;
     const requestScopeKey = operationalScopeKey;
     inflightItemIdsRef.current.add(itemId);
     const currentItem = ordersRef.current.flatMap(o => o.itens).find(it => it.id === itemId);
@@ -1633,19 +1642,21 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         },
         getAuthHeaders,
       );
-      if (requestScopeKey !== operationalScopeKeyRef.current) return;
+      if (requestScopeKey !== operationalScopeKeyRef.current) return false;
       if (!result.ok) {
         showToast(`Erro ao editar item: ${result.message}`, 'error');
         await fetchOrdersFromAPI();
-        return;
+        return false;
       }
       await fetchOrdersFromAPI();
       showToast('Item atualizado.', 'success');
+      return true;
     } catch (err) {
-      if (requestScopeKey !== operationalScopeKeyRef.current) return;
+      if (requestScopeKey !== operationalScopeKeyRef.current) return false;
       console.error(err);
       showToast("Erro de conexão ao atualizar item.", 'error');
       await fetchOrdersFromAPI();
+      return false;
     } finally {
       if (requestScopeKey === operationalScopeKeyRef.current) inflightItemIdsRef.current.delete(itemId);
     }
