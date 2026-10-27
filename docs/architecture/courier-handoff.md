@@ -1,5 +1,55 @@
 # Contrato de entrega: Caixa → Pedido → Entregador
 
+## Fatia de integração — recuperação e saldo, 26/10/2026
+
+Dependência: PR #1204 (`design/courier-refinement-20261025`, `b8a34dde`). A
+main consultada foi `2fa52fa6`; o PR ainda estava aberto. O checkout desta
+fatia nasceu dessa main e incorporou a dependência por fast-forward local,
+sem modificar a branch original. O PR incremental deve usar a branch do
+#1204 como base enquanto a substituição não estiver integrada.
+
+Responsabilidades preservadas:
+
+- Cardápio usa o adapter web e o Order Core para criar a mesma identidade
+  persistida. Tracking divulga o recibo somente ao cliente autorizado.
+- Caixa atribui/despacha em `routes/orders.py`; lifecycle é a autoridade das
+  transições. Conclusão do entregador emite os eventos existentes após commit.
+- Projeção e socket dedicados fornecem somente a lista autorizada. O owner
+  `MotoboyPwaPage` reconcilia essa lista; diálogos não enviam comandos próprios.
+- `routes/caixa.py::_apply_fully_paid_state` aplica a quitação tanto ao
+  recebimento direto quanto à aprovação de recebimentos pendentes.
+
+Falhas reproduzidas e corrigidas:
+
+- Releitura falha após reconexão não pode reabilitar confirmação na lista antiga.
+  `refreshFailed` bloqueia botão e handler até GET válido; Maps/lista continuam.
+- HTTP 408/5xx pode chegar após commit: tem o mesmo tratamento de resultado
+  incerto da perda de rede. O diálogo fecha, o código digitado é limpo e a lista
+  é reconciliada. Se a leitura falhar, “Verificar” permanece acessível. Nenhum
+  POST é repetido automaticamente; só uma ação explícita após conferência pode
+  iniciar outra tentativa.
+- Receber o saldo de uma entrega já concluída precisa fechar financeiramente
+  a comanda. A regra compartilhada agora permite esse fechamento somente para
+  delivery/entrega concluído e quitado. Pagamento parcial mantém a conta aberta;
+  pagamento em preparo/trânsito não conclui a operação. Nenhum pagamento nasce
+  da confirmação do entregador.
+
+Prova local reproduzível: `test_courier_cashier_menu_journey.py` usa HTTP e
+WebSockets reais do TestClient e SQLite isolado, criando via `/cardapio/pedidos`,
+repetindo criação, atribuindo sem expor antes do despacho, preparando, despachando,
+recebendo hints, consultando recibo pelo token de tracking, confirmando/repetindo,
+consultando o Caixa e recebendo saldo parcial/final com retry idempotente.
+O caso online usa aprovação persistida como fixture: não é homologação de
+provedor. Testes de navegador usam respostas/socket controlados e verificam
+recuperação visual; não são uma jornada multitelas conectada a backend vivo.
+As novas regressões entram no workflow de fulfillment existente.
+
+Pendências: exceção de código autorizada pelo Caixa com permissão/motivo/autoria;
+ocorrência durável e resolução pelo Caixa; jornada multitelas em dispositivo;
+concorrência financeira PostgreSQL no SHA final; conectores/homologações e
+acknowledgement de marketplaces. Esta fatia não comprova merge, deploy, pagamento
+externo ou entrega física. Nenhuma escrita em tenants reais 6/8 foi usada.
+
 Estado: implementação local, branch `design/courier-refinement-20261025`. Não certifica integrações comerciais nem publicação.
 
 ## Fonte de verdade e entrada
