@@ -8,19 +8,53 @@ export interface OperationalSignal {
   request_id?: string;
   area?: ReturnType<typeof operationalArea>;
   surface?: string;
+  is_diagnostic?: boolean;
 }
 
 const ROUTE_WORDS = new Set(('api caixa comandas itens lancamentos cardapio pedidos produtos categorias '
   + 'clientes auth login logout refresh turno-atual resumo pagamentos pendentes fechar status '
   + 'print-agents heartbeat jobs claim-batch register configuracoes restaurantes relatorios '
   + 'promocoes dashboard financeiro estoque motoboys entregadores mesas capabilities '
-  + 'contracts payment-methods-v2 subscription billing setup pix select accept activate-free signups current print-jobs print impressao imprimir reimprimir recibo delivery deliveries entregas payments intents refunds').split(' '));
+  + 'contracts payment-methods-v2 subscription billing setup pix select accept activate-free signups current print-jobs print impressao imprimir reimprimir recibo delivery deliveries entregas payments intents refunds simulator').split(' '));
+
+/** Identifies diagnostic or simulation endpoints that should not distort commercial error metrics. */
+export function isDiagnosticEndpoint(endpoint: string): boolean {
+  return /simulator|simulador|teste_extremo|health|ping/i.test(endpoint);
+}
+
+/** Differentiates intentional client aborts/unloads from real backend transport failures. */
+export function isAbortOrCancellation(
+  error: unknown,
+  signal?: AbortSignal | null,
+  input?: RequestInfo | URL,
+): boolean {
+  if (signal?.aborted) return true;
+  if (input instanceof Request && input.signal?.aborted) return true;
+  if (error && typeof error === 'object') {
+    const err = error as { name?: string; message?: string };
+    if (
+      err.name === 'AbortError' ||
+      err.name === 'TimeoutError' ||
+      err.name === 'CanceledError' ||
+      err.name === 'CancelledError'
+    ) {
+      return true;
+    }
+    if (typeof err.message === 'string' && /abort|canceled|cancelled/i.test(err.message)) {
+      return true;
+    }
+  }
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    return true;
+  }
+  return false;
+}
 
 /** Fixed categories, never inferred from customer text or request bodies. */
 export function operationalArea(endpoint: string): 'printing' | 'payments' | 'orders' | 'delivery' | 'catalog' | 'auth' | 'other' {
   const parts = new Set(endpoint.split('/'));
   const has = (...values: string[]) => values.some(value => parts.has(value));
-  if (has('print-agents', 'print-jobs', 'print', 'impressao', 'imprimir', 'reimprimir', 'recibo')) return 'printing';
+  if (has('print-agents', 'print-jobs', 'print', 'impressao', 'imprimir', 'reimprimir', 'recibo', 'simulator')) return 'printing';
   if (has('pagamentos', 'payments', 'billing', 'pix', 'intents', 'refunds')) return 'payments';
   if (has('motoboys', 'entregadores', 'delivery', 'deliveries', 'entregas')) return 'delivery';
   if (has('pedidos', 'comandas', 'mesas', 'lancamentos')) return 'orders';
@@ -69,14 +103,24 @@ export function observeOperationalFetch(
     const report = (status: number, outcome: OperationalSignal['outcome'], requestId?: string | null) => {
       if (!endpoint || !accept(`${endpoint}:${method}:${status}:${outcome}`)) return;
       try {
-        emit({ endpoint, method, status, outcome, duration_ms: Math.min(120_000, Math.max(0, Math.round(now() - started))),
-          ...(/^[A-Za-z0-9_-]{8,64}$/.test(requestId || '') ? { request_id: requestId! } : {}) });
+        emit({
+          endpoint,
+          method,
+          status,
+          outcome,
+          duration_ms: Math.min(120_000, Math.max(0, Math.round(now() - started))),
+          ...(isDiagnosticEndpoint(endpoint) ? { is_diagnostic: true } : {}),
+          ...(/^[A-Za-z0-9_-]{8,64}$/.test(requestId || '') ? { request_id: requestId! } : {}),
+        });
       } catch { /* Observability must not affect the caller. */ }
     };
     let response: Response;
     try { response = await original(input, init); }
     catch (error) {
-      if (!(error && typeof error === 'object' && 'name' in error && error.name === 'AbortError')) report(0, 'network_error');
+      const signal = init?.signal || (input instanceof Request ? input.signal : null);
+      if (!isAbortOrCancellation(error, signal, input)) {
+        report(0, 'network_error');
+      }
       throw error;
     }
     if (response.status >= 400) report(response.status, 'http_error', response.headers.get('X-Request-ID'));

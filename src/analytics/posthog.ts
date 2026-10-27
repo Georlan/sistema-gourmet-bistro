@@ -7,6 +7,7 @@ import type { PostHog } from 'posthog-js';
 import { resolveKomaHost } from '../domain/komaHost';
 import { API_BASE_URL } from '../config/api';
 import { observeOperationalFetch, operationalArea } from './operational';
+import { initWebVitals } from './webVitals';
 import type {
   AnalyticsEventMap,
   AnalyticsEventName,
@@ -203,6 +204,7 @@ export function initAnalytics(): Promise<boolean> {
       window.fetch = observeOperationalFetch(window.fetch.bind(window), new URL(API_BASE_URL, window.location.href).origin,
         window.location.href, signal => trackAnalyticsEvent('operational_api_signal', { ...signal, area: operationalArea(signal.endpoint), surface: resolveKomaHost().surface }));
       flushPendingQueue();
+      initWebVitals(metric => trackAnalyticsEvent('web_vitals_metric', { ...metric, surface: resolveKomaHost().surface }));
       return true;
     } catch (error) {
       console.warn('[analytics] Falha ao inicializar PostHog:', error);

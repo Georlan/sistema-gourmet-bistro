@@ -70,6 +70,12 @@ export interface AnalyticsEventMap {
   public_cart_item_added: PublicCartItemAddedProps;
   public_checkout_initiated: PublicCheckoutInitiatedProps;
   public_order_submitted: PublicOrderSubmittedProps;
+  web_vitals_metric: {
+    name: 'LCP' | 'INP' | 'CLS';
+    value: number;
+    rating: 'good' | 'needs-improvement' | 'poor';
+    surface?: string;
+  };
 }
 
 export type AnalyticsEventName = keyof AnalyticsEventMap;

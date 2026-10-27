@@ -198,11 +198,13 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
   };
 
   const handleSidebarNavigation = (navigationId: string, closeMobile = false) => {
-    if (getCashierNavigationTarget(navigationId)) trackOperationalAction('cashier_navigation', navigationId);
+    const target = getCashierNavigationTarget(navigationId);
+    if (target) trackOperationalAction('cashier_navigation', navigationId, 'requested');
     if (closeMobile) setIsMobileSidebarOpen(false);
 
     if (navigationId === 'cardapio_digital' && !hasOnlineMenu) {
       if (setupMode) {
+        if (target) trackOperationalAction('cashier_navigation', navigationId, 'blocked');
         showToast('O cardápio online precisa estar disponível para concluir a implantação.', 'info');
         return;
       }
@@ -210,6 +212,7 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
       if (subscription) {
         setActiveTab(subscription.tab);
         setActiveSubTab(subscription.subTab);
+        if (target) trackOperationalAction('cashier_navigation', navigationId, 'succeeded');
       }
       showToast(
         'O cardápio digital está incluído em todos os planos. Consulte a ativação com o suporte.',
@@ -218,26 +221,50 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
       return;
     }
 
-    if (navigationId === 'operacao' && activeTab === 'operacao') return;
-    if (navigationId === 'financeiro' && activeTab === 'financeiro') return;
-    if (navigationId === 'cardapio' && activeTab === 'cardapio') return;
-    if (navigationId === 'estoque' && activeTab === 'estoque') return;
-    if (navigationId === 'clientes' && activeTab === 'clientes') return;
-    if (navigationId === 'relatorios' && (activeTab === 'relatorios' || activeTab === 'dashboard')) {
-      if (setupMode) return;
-      setActiveTab('relatorios');
+    if (navigationId === 'operacao' && activeTab === 'operacao') {
+      if (target) trackOperationalAction('cashier_navigation', navigationId, 'succeeded');
       return;
     }
-    if (navigationId === 'permissoes_cargos' && activeTab === 'permissoes_cargos') return;
+    if (navigationId === 'financeiro' && activeTab === 'financeiro') {
+      if (target) trackOperationalAction('cashier_navigation', navigationId, 'succeeded');
+      return;
+    }
+    if (navigationId === 'cardapio' && activeTab === 'cardapio') {
+      if (target) trackOperationalAction('cashier_navigation', navigationId, 'succeeded');
+      return;
+    }
+    if (navigationId === 'estoque' && activeTab === 'estoque') {
+      if (target) trackOperationalAction('cashier_navigation', navigationId, 'succeeded');
+      return;
+    }
+    if (navigationId === 'clientes' && activeTab === 'clientes') {
+      if (target) trackOperationalAction('cashier_navigation', navigationId, 'succeeded');
+      return;
+    }
+    if (navigationId === 'relatorios' && (activeTab === 'relatorios' || activeTab === 'dashboard')) {
+      if (setupMode) {
+        if (target) trackOperationalAction('cashier_navigation', navigationId, 'blocked');
+        return;
+      }
+      setActiveTab('relatorios');
+      if (target) trackOperationalAction('cashier_navigation', navigationId, 'succeeded');
+      return;
+    }
+    if (navigationId === 'permissoes_cargos' && activeTab === 'permissoes_cargos') {
+      if (target) trackOperationalAction('cashier_navigation', navigationId, 'succeeded');
+      return;
+    }
 
     if (getCashierNavigationAction(navigationId) === 'open-counter') {
       if (setupMode) {
+        if (target) trackOperationalAction('cashier_navigation', navigationId, 'blocked');
         showToast('O Caixa será liberado depois dos 4 itens essenciais e do início do período grátis.', 'info');
         return;
       }
       window.dispatchEvent(new Event('koma-navigation-open-counter'));
     }
     applyNavigationTarget(navigationId);
+    if (target) trackOperationalAction('cashier_navigation', navigationId, 'succeeded');
   };
 
   return {

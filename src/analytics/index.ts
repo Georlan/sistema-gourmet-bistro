@@ -6,3 +6,4 @@
 export * from './types';
 export * from './posthog';
 export * from './AnalyticsProvider';
+export * from './webVitals';
