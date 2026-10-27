@@ -15,38 +15,48 @@ const ROUTE_WORDS = new Set(('api caixa comandas itens lancamentos cardapio pedi
   + 'clientes auth login logout refresh turno-atual resumo pagamentos pendentes fechar status '
   + 'print-agents heartbeat jobs claim-batch register configuracoes restaurantes relatorios '
   + 'promocoes dashboard financeiro estoque motoboys entregadores mesas capabilities '
-  + 'contracts payment-methods-v2 subscription billing setup pix select accept activate-free signups current print-jobs print impressao imprimir reimprimir recibo delivery deliveries entregas payments intents refunds simulator').split(' '));
+  + 'contracts payment-methods-v2 subscription billing setup pix select accept activate-free signups current print-jobs print impressao imprimir reimprimir recibo delivery deliveries entregas payments intents refunds simulator '
+  + 'teste_extremo health ping simulador sources diagnostico diagnostic').split(' '));
 
 /** Identifies diagnostic or simulation endpoints that should not distort commercial error metrics. */
 export function isDiagnosticEndpoint(endpoint: string): boolean {
-  return /simulator|simulador|teste_extremo|health|ping/i.test(endpoint);
+  return /simulator|simulador|teste_extremo|health|ping|diagnostic|diagnostico/i.test(endpoint);
 }
 
-/** Differentiates intentional client aborts/unloads from real backend transport failures. */
+function isTimeoutReason(reason: unknown): boolean {
+  if (!reason || typeof reason !== 'object') return false;
+  const name = (reason as { name?: string }).name;
+  if (name === 'TimeoutError') return true;
+  const msg = (reason as { message?: string }).message;
+  return typeof msg === 'string' && /\b(timed?\s*out|timeout)\b/i.test(msg);
+}
+
+/** Differentiates intentional client aborts/unloads from real backend transport failures and timeouts. */
 export function isAbortOrCancellation(
   error: unknown,
   signal?: AbortSignal | null,
   input?: RequestInfo | URL,
 ): boolean {
+  // If the error itself or the abort reason was a timeout, it is a legitimate failure, NOT an intentional abort.
+  if (isTimeoutReason(error)) return false;
+  if (signal?.aborted && isTimeoutReason(signal.reason)) return false;
+  if (input instanceof Request && input.signal?.aborted && isTimeoutReason(input.signal.reason)) return false;
+
+  // Intentional aborts via signal
   if (signal?.aborted) return true;
   if (input instanceof Request && input.signal?.aborted) return true;
+
+  // Intentional abort errors (e.g. DOMException AbortError, Axios CanceledError)
   if (error && typeof error === 'object') {
     const err = error as { name?: string; message?: string };
-    if (
-      err.name === 'AbortError' ||
-      err.name === 'TimeoutError' ||
-      err.name === 'CanceledError' ||
-      err.name === 'CancelledError'
-    ) {
+    if (err.name === 'AbortError' || err.name === 'CanceledError' || err.name === 'CancelledError') {
       return true;
     }
-    if (typeof err.message === 'string' && /abort|canceled|cancelled/i.test(err.message)) {
+    if (typeof err.message === 'string' && /\b(aborted|canceled|cancelled)\b/i.test(err.message)) {
       return true;
     }
   }
-  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-    return true;
-  }
+
   return false;
 }
 
