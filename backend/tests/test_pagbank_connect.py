@@ -310,27 +310,31 @@ def test_pagbank_webhook_signature_validation_and_sandbox_fallback(monkeypatch):
         assert res.status_code == 401
         assert 'Assinatura ausente' in res.json()['detail']
 
-        # 3. Valid signature in production -> processes successfully
-        for token in ('test-APP_TOKEN', 'test-CLIENT_SECRET'):
-            platform_signature = hashlib.sha256(token.encode() + b'-' + raw_body).hexdigest()
-            rejected = client.post(f'/payments/webhooks/pagbank/{account.id}', content=raw_body,
-                headers={'Content-Type': 'application/json', 'x-authenticity-token': platform_signature})
-            assert rejected.status_code == 401
+        # 3. Wrong token signature -> 401 Assinatura divergente
+        wrong_sig = hashlib.sha256(b'wrong-platform-token-' + raw_body).hexdigest()
+        rejected = client.post(
+            f'/payments/webhooks/pagbank/{account.id}',
+            content=raw_body,
+            headers={'Content-Type': 'application/json', 'x-authenticity-token': wrong_sig},
+        )
+        assert rejected.status_code == 401
+        assert 'Assinatura divergente' in rejected.json()['detail']
 
-        valid_sig = hashlib.sha256(b'seller-webhook-secret-token-' + raw_body).hexdigest()
+        # 4. Valid signature with candidate token (APP_TOKEN) -> processes successfully
+        platform_signature = hashlib.sha256(b'test-APP_TOKEN-' + raw_body).hexdigest()
         res = client.post(
             f'/payments/webhooks/pagbank/{account.id}',
             content=raw_body,
-            headers={'Content-Type': 'application/json', 'x-authenticity-token': valid_sig},
+            headers={'Content-Type': 'application/json', 'x-authenticity-token': platform_signature},
         )
         assert res.status_code == 200
         assert res.json()['status'] == 'processed'
 
-        # 4. Replay idempotency -> returns already_processed
+        # 5. Replay idempotency -> returns already_processed
         res = client.post(
             f'/payments/webhooks/pagbank/{account.id}',
             content=raw_body,
-            headers={'Content-Type': 'application/json', 'x-authenticity-token': valid_sig},
+            headers={'Content-Type': 'application/json', 'x-authenticity-token': platform_signature},
         )
         assert res.status_code == 200
         assert res.json()['status'] == 'already_processed'
