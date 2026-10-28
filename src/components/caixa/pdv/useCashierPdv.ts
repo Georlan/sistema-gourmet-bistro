@@ -516,8 +516,10 @@ export function useCashierPdv({
   const sellableProducts = useMemo(() => {
     return dynamicMenu.filter((product) => {
       if (product.ativo === false) return false;
-      if (cardapioAtivoId && product.cardapio_id && product.cardapio_id !== cardapioAtivoId) {
-        return false;
+      if (cardapioAtivoId) {
+        if (!product.cardapio_id || product.cardapio_id !== cardapioAtivoId) {
+          return false;
+        }
       }
       return true;
     });

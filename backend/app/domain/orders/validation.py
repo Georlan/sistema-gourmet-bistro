@@ -23,6 +23,7 @@ from .errors import (
     ProductInactiveError,
     ProductMenuInactiveError,
     ProductNotFoundError,
+    ProductPriceInvalidError,
     ProductTenantMismatchError,
 )
 from .pricing import (
@@ -240,10 +241,14 @@ class OrderValidationService:
             if not prod.is_active:
                 raise ProductInactiveError(raw_item.product_id)
 
-            if context.active_cardapio_id is not None and prod.cardapio_id != context.active_cardapio_id:
-                raise ProductMenuInactiveError(raw_item.product_id, prod.name)
+            if context.active_cardapio_id is not None:
+                prod_menu = str(prod.cardapio_id).strip() if prod.cardapio_id else None
+                if not prod_menu or prod_menu != context.active_cardapio_id:
+                    raise ProductMenuInactiveError(raw_item.product_id, prod.name)
 
             base_price = to_money_decimal(prod.price)
+            if base_price <= Decimal("0.00"):
+                raise ProductPriceInvalidError(raw_item.product_id, prod.name)
 
             # Validar Modificadores
             validated_modifiers: list[ValidatedModifier] = []

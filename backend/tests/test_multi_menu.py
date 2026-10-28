@@ -284,7 +284,25 @@ def test_digital_menu_and_order_validation():
             preco=22.0,
             ativo=True,
         )
-        db.add_all([p1, p2])
+        p3 = Produto(
+            id="prod-sem-cardapio-885",
+            restaurante_id=885,
+            categoria_id="cat-manha-885",
+            cardapio_id=None,
+            nome="Item Sem Cardápio",
+            preco=15.0,
+            ativo=True,
+        )
+        p4 = Produto(
+            id="prod-cafe-pendente-885",
+            restaurante_id=885,
+            categoria_id="cat-manha-885",
+            cardapio_id=m1_id,
+            nome="Café Pendente",
+            preco=0.0,
+            ativo=True,
+        )
+        db.add_all([p1, p2, p3, p4])
         db.commit()
 
         # Publica Manhã
@@ -297,6 +315,7 @@ def test_digital_menu_and_order_validation():
         prod_ids = [p["id"] for p in prods]
         assert "prod-cuscuz-885" in prod_ids
         assert "prod-quentinha-885" not in prod_ids
+        assert "prod-sem-cardapio-885" not in prod_ids
 
         cats = res_digital.json()["categorias"]
         cat_ids = [c["id"] for c in cats]
@@ -317,7 +336,35 @@ def test_digital_menu_and_order_validation():
         assert res_order_bad.status_code == 400
         assert "pertence a um cardápio inativo no momento" in res_order_bad.json()["detail"]
 
-        # 3. Checkout: Pedir Cuscuz (cardápio Manhã, ativo) deve ter SUCESSO (201)
+        # 2b. Checkout: Tentar pedir Item Sem Cardápio (cardapio_id=None) quando multi-cardápio está ativo deve ser REJEITADO (400)
+        order_payload_sem_cardapio = {
+            "restaurante_id": 885,
+            "itens": [{"produto_id": "prod-sem-cardapio-885", "quantidade": 1}],
+            "cliente_nome": "Cliente Teste",
+            "cliente_telefone": "11988887777",
+            "endereco_entrega": "Rua Teste, 100",
+            "forma_pagamento": "na_entrega",
+            "tipo_pedido": "delivery",
+        }
+        res_order_sem_cardapio = client.post("/cardapio/pedidos", json=order_payload_sem_cardapio)
+        assert res_order_sem_cardapio.status_code == 400
+        assert "pertence a um cardápio inativo no momento" in res_order_sem_cardapio.json()["detail"]
+
+        # 2c. Checkout: Tentar pedir Bebida/Item com preco=0.00 deve ser REJEITADO (400)
+        order_payload_cafe_zero = {
+            "restaurante_id": 885,
+            "itens": [{"produto_id": "prod-cafe-pendente-885", "quantidade": 1}],
+            "cliente_nome": "Cliente Teste",
+            "cliente_telefone": "11988887777",
+            "endereco_entrega": "Rua Teste, 100",
+            "forma_pagamento": "na_entrega",
+            "tipo_pedido": "delivery",
+        }
+        res_order_cafe_zero = client.post("/cardapio/pedidos", json=order_payload_cafe_zero)
+        assert res_order_cafe_zero.status_code == 400
+        assert "possui preço pendente ou inválido" in res_order_cafe_zero.json()["detail"]
+
+        # 3. Checkout: Pedir Cuscuz (cardápio Manhã, ativo, com preço válido) deve ter SUCESSO (201)
         order_payload_valid = {
             "restaurante_id": 885,
             "itens": [{"produto_id": "prod-cuscuz-885", "quantidade": 1}],
@@ -427,3 +474,152 @@ def test_prepare_id6_tool_safety_and_idempotence():
     assert res_apply2["cardapio_manha"]["created"] is False
     assert res_apply2["cardapio_meio_dia"]["created"] is False
     assert len(res_apply2["products_created_morning"]) == 0
+
+
+def test_complete_operational_flow_with_cashier_and_switch():
+    """Valida o fluxo operacional completo de 9 etapas:
+    1. Publicar Manhã
+    2. Visualizar somente produtos da Manhã no cardápio digital
+    3. Criar pedido de teste usando o checkout canônico
+    4. Confirmar que o pedido chega ao Caixa
+    5. Publicar Meio-Dia
+    6. Confirmar que o PDV e o cardápio digital exibem somente Meio-Dia
+    7. Confirmar que o pedido anterior da Manhã continua íntegro no Caixa
+    8. Bloquear checkout com produto do cardápio anterior
+    9. Confirmar que outros restaurantes não sofrem alterações
+    """
+    db = SessionLocal()
+    token_var = current_restaurante_id.set(883)
+    try:
+        rest883, _, config883, token883 = _ensure_tenant(db, 883, "Restaurante 883", "restaurante-883")
+        headers883 = {"Authorization": f"Bearer {token883}"}
+
+        # Tenant de controle 882
+        current_restaurante_id.set(882)
+        rest882, _, config882, token882 = _ensure_tenant(db, 882, "Restaurante Controle 882", "restaurante-882")
+        headers882 = {"Authorization": f"Bearer {token882}"}
+        cat882 = Categoria(id="cat-882", restaurante_id=882, nome="Controle")
+        prod882 = Produto(id="prod-882", restaurante_id=882, categoria_id="cat-882", nome="Item Controle", preco=50.0, ativo=True)
+        db.add_all([cat882, prod882])
+        db.commit()
+
+        # Volta para 883
+        current_restaurante_id.set(883)
+
+        # Categorias de 883
+        cat_manha = Categoria(id="cat-manha-883", restaurante_id=883, nome="Matinal 883")
+        cat_almoco = Categoria(id="cat-almoco-883", restaurante_id=883, nome="Almoço 883")
+        db.add_all([cat_manha, cat_almoco])
+        db.commit()
+
+        # Cria Manhã e Meio-Dia
+        res_m1 = client.post("/produtos/menus", json={"nome": "Manhã", "identificador": "manha", "ordem_exibicao": 1}, headers=headers883)
+        assert res_m1.status_code == 201
+        m1_id = res_m1.json()["id"]
+
+        res_m2 = client.post("/produtos/menus", json={"nome": "Meio-Dia", "identificador": "meio-dia", "ordem_exibicao": 2}, headers=headers883)
+        assert res_m2.status_code == 201
+        m2_id = res_m2.json()["id"]
+
+        p_manha = Produto(
+            id="prod-tapioca-883",
+            restaurante_id=883,
+            categoria_id="cat-manha-883",
+            cardapio_id=m1_id,
+            nome="Tapioca Amanteigada",
+            preco=8.0,
+            ativo=True,
+        )
+        p_almoco = Produto(
+            id="prod-feijoada-883",
+            restaurante_id=883,
+            categoria_id="cat-almoco-883",
+            cardapio_id=m2_id,
+            nome="Feijoada Completa",
+            preco=28.0,
+            ativo=True,
+        )
+        db.add_all([p_manha, p_almoco])
+        db.commit()
+
+        # 1. Publicar Manhã
+        res_pub1 = client.post(f"/produtos/menus/{m1_id}/publicar", headers=headers883)
+        assert res_pub1.status_code == 200
+        assert res_pub1.json()["cardapio_ativo_id"] == m1_id
+
+        # 2. Visualizar somente produtos da Manhã no cardápio digital
+        res_dig1 = client.get(f"/api/cardapio-digital/public?slug={rest883.slug}")
+        assert res_dig1.status_code == 200
+        prods_dig1 = [p["id"] for p in res_dig1.json()["produtos"]]
+        assert "prod-tapioca-883" in prods_dig1
+        assert "prod-feijoada-883" not in prods_dig1
+
+        # 3. Criar pedido de teste usando o checkout canônico
+        order_manha = {
+            "restaurante_id": 883,
+            "itens": [{"produto_id": "prod-tapioca-883", "quantidade": 2}],
+            "cliente_nome": "Cliente Matinal",
+            "cliente_telefone": "11988881234",
+            "endereco_entrega": "Av. Brasil, 500",
+            "forma_pagamento": "na_entrega",
+            "tipo_pedido": "delivery",
+        }
+        res_order1 = client.post("/cardapio/pedidos", json=order_manha)
+        assert res_order1.status_code == 201
+        order1_id = res_order1.json()["comanda_id"]
+
+        # 4. Confirmar que o pedido chega ao Caixa
+        res_caixa1 = client.get("/comandas/detalhes/todos?fechada=false", headers=headers883)
+        assert res_caixa1.status_code == 200
+        caixa_order_ids1 = [c["id"] for c in res_caixa1.json()]
+        assert order1_id in caixa_order_ids1
+
+        # 5. Publicar Meio-Dia
+        res_pub2 = client.post(f"/produtos/menus/{m2_id}/publicar", headers=headers883)
+        assert res_pub2.status_code == 200
+        assert res_pub2.json()["cardapio_ativo_id"] == m2_id
+
+        # 6. Confirmar que o PDV e o cardápio digital exibem somente Meio-Dia
+        res_dig2 = client.get(f"/api/cardapio-digital/public?slug={rest883.slug}")
+        assert res_dig2.status_code == 200
+        prods_dig2 = [p["id"] for p in res_dig2.json()["produtos"]]
+        assert "prod-feijoada-883" in prods_dig2
+        assert "prod-tapioca-883" not in prods_dig2
+
+        res_cat = client.get("/produtos/catalogo", headers=headers883)
+        assert res_cat.status_code == 200
+        assert res_cat.json()["cardapio_ativo_id"] == m2_id
+
+        # 7. Confirmar que o pedido anterior da Manhã continua no Caixa
+        res_caixa2 = client.get("/comandas/detalhes/todos?fechada=false", headers=headers883)
+        assert res_caixa2.status_code == 200
+        caixa_order_ids2 = [c["id"] for c in res_caixa2.json()]
+        assert order1_id in caixa_order_ids2
+
+        # 8. Bloquear checkout com produto do cardápio anterior (Tapioca / Manhã)
+        res_order_blocked = client.post("/cardapio/pedidos", json=order_manha)
+        assert res_order_blocked.status_code == 400
+        assert "pertence a um cardápio inativo no momento" in res_order_blocked.json()["detail"]
+
+        # 9. Confirmar que outros restaurantes (tenant 882) não sofreram alterações
+        res_dig882 = client.get(f"/api/cardapio-digital/public?slug={rest882.slug}")
+        assert res_dig882.status_code == 200
+        prods_dig882 = [p["id"] for p in res_dig882.json()["produtos"]]
+        assert "prod-882" in prods_dig882
+
+        order_882 = {
+            "restaurante_id": 882,
+            "itens": [{"produto_id": "prod-882", "quantidade": 1}],
+            "cliente_nome": "Cliente 882",
+            "cliente_telefone": "11977770000",
+            "endereco_entrega": "Rua 882, 10",
+            "forma_pagamento": "na_entrega",
+            "tipo_pedido": "delivery",
+        }
+        res_order_882 = client.post("/cardapio/pedidos", json=order_882)
+        assert res_order_882.status_code == 201
+        assert res_order_882.json()["status"] == "success"
+    finally:
+        current_restaurante_id.reset(token_var)
+        db.close()
+

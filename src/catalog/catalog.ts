@@ -141,6 +141,14 @@ export function normalizeCatalogSnapshot(payload: unknown): CatalogSnapshot {
   };
 }
 
-export function getSellableProducts(products: CatalogProduct[]): CatalogProduct[] {
-  return products.filter((product) => product.ativo);
+export function getSellableProducts(products: CatalogProduct[], activeCardapioId?: string | null): CatalogProduct[] {
+  return products.filter((product) => {
+    if (!product.ativo) return false;
+    if (activeCardapioId) {
+      if (!product.cardapio_id || product.cardapio_id !== activeCardapioId) {
+        return false;
+      }
+    }
+    return true;
+  });
 }

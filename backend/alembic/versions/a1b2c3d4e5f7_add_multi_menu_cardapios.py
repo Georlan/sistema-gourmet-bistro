@@ -57,12 +57,20 @@ def upgrade():
         op.create_index('ix_produtos_tenant_cardapio_fk', 'produtos', ['restaurante_id', 'cardapio_id'], unique=False)
         op.execute('ALTER TABLE public.cardapios ENABLE ROW LEVEL SECURITY')
         op.execute('ALTER TABLE public.cardapios FORCE ROW LEVEL SECURITY')
-        op.execute("""CREATE POLICY tenant_isolation ON public.cardapios
-            FOR ALL TO koma_app
-            USING (restaurante_id = NULLIF(current_setting('app.current_restaurante_id', true), '')::integer)
-            WITH CHECK (restaurante_id = NULLIF(current_setting('app.current_restaurante_id', true), '')::integer)""")
+        op.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'koma_app') THEN
+                    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.cardapios TO koma_app';
+                    EXECUTE 'DROP POLICY IF EXISTS tenant_isolation ON public.cardapios';
+                    EXECUTE 'CREATE POLICY tenant_isolation ON public.cardapios AS PERMISSIVE FOR ALL TO koma_app USING (restaurante_id = NULLIF(current_setting(''app.current_restaurante_id'', true), '''')::integer) WITH CHECK (restaurante_id = NULLIF(current_setting(''app.current_restaurante_id'', true), '''')::integer)';
+                ELSE
+                    EXECUTE 'DROP POLICY IF EXISTS tenant_isolation ON public.cardapios';
+                    EXECUTE 'CREATE POLICY tenant_isolation ON public.cardapios AS PERMISSIVE FOR ALL USING (restaurante_id = NULLIF(current_setting(''app.current_restaurante_id'', true), '''')::integer) WITH CHECK (restaurante_id = NULLIF(current_setting(''app.current_restaurante_id'', true), '''')::integer)';
+                END IF;
+            END $$;
+        """)
         op.execute('REVOKE ALL ON TABLE public.cardapios FROM PUBLIC')
-        op.execute('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.cardapios TO koma_app')
         for role in ('anon', 'authenticated'):
             op.execute(f"""DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{role}') THEN
                 REVOKE ALL ON TABLE public.cardapios FROM {role}; END IF; END $$""")

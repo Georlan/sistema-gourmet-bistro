@@ -88,6 +88,16 @@ class ProductMenuInactiveError(OrderValidationError):
         super().__init__(f"O produto{nome_str} pertence a um cardápio inativo no momento.")
 
 
+class ProductPriceInvalidError(OrderValidationError):
+    """Produto possui preço pendente ou zero e não pode ser comercializado."""
+
+    def __init__(self, product_id: str | int, product_name: str | None = None) -> None:
+        self.product_id = product_id
+        self.product_name = product_name
+        nome_str = f" '{product_name}'" if product_name else f" '{product_id}'"
+        super().__init__(f"O produto{nome_str} possui preço pendente ou inválido e não pode ser vendido.")
+
+
 class ProductTenantMismatchError(OrderValidationError):
     """Produto pertence a outro estabelecimento comercial (violação multi-tenant)."""
 
