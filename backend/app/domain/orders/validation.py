@@ -105,6 +105,7 @@ class ValidationContext:
     available_cashback: Decimal = Decimal("0.00")
     apply_cashback: bool = False
     active_cardapio_id: str | None = None
+    additional_cardapio_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -243,7 +244,7 @@ class OrderValidationService:
 
             if context.active_cardapio_id is not None:
                 prod_menu = str(prod.cardapio_id).strip() if prod.cardapio_id else None
-                if not prod_menu or prod_menu != context.active_cardapio_id:
+                if not prod_menu or prod_menu not in (context.active_cardapio_id, *context.additional_cardapio_ids):
                     raise ProductMenuInactiveError(raw_item.product_id, prod.name)
 
             base_price = to_money_decimal(prod.price)

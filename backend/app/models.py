@@ -1084,6 +1084,7 @@ class ConfiguracaoRestaurante(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
     cardapio_ativo_id = Column(String(36), nullable=True)
+    cardapios_adicionais_ids = Column(JSON, nullable=True)
     nicho = Column(String, default="hamburgueria")  # "hamburgueria" | "pizzaria" | "doceria" | "alacarte" | "selfservice"
     mapa_mesas_ativo = Column(Boolean, default=True)
     delivery_ativo = Column(Boolean, default=True)

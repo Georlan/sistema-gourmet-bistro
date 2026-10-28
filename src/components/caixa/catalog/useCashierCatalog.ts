@@ -7,6 +7,7 @@ type Props = Pick<
   | 'liveCategorias'
   | 'onRefreshCategorias'
   | 'cardapio_ativo_id'
+  | 'cardapios_ativos_ids'
   | 'cardapio_ativo_nome'
   | 'cardapios'
 >;
@@ -17,6 +18,7 @@ export function useCashierCatalog({
   liveCategorias = [],
   onRefreshCategorias,
   cardapio_ativo_id,
+  cardapios_ativos_ids,
   cardapio_ativo_nome,
   cardapios,
 }: Props) {
@@ -35,6 +37,7 @@ export function useCashierCatalog({
     apiCategorias: liveCategorias,
     dynamicMenu: liveProdutos,
     cardapio_ativo_id,
+    cardapios_ativos_ids,
     cardapio_ativo_nome,
     cardapios,
     suggestedProductCode,

@@ -34,6 +34,7 @@ interface Props {
   fetchCategorias: () => Promise<void>;
   cardapios?: CardapioMenu[];
   cardapioAtivoId?: string | null;
+  cardapiosAtivosIds?: string[];
   cardapioAtivoNome?: string | null;
 }
 
@@ -59,6 +60,7 @@ export default function CashierCatalog({
   onRefreshCategorias,
   cardapios,
   cardapioAtivoId,
+  cardapiosAtivosIds,
   cardapioAtivoNome,
 }: Props) {
   const isMarmitaria = restauranteConfig?.operation_profile === 'marmitaria';
@@ -135,6 +137,21 @@ export default function CashierCatalog({
     }
   };
 
+  const activeMenuIds = cardapiosAtivosIds?.length ? cardapiosAtivosIds : cardapioAtivoId ? [cardapioAtivoId] : [];
+  const toggleAdditionalMenu = async (id: string) => {
+    if (isPublishingMenu) return;
+    const next = activeMenuIds.includes(id) ? activeMenuIds.filter((value) => value !== id) : [...activeMenuIds, id];
+    if (!next.length) { showToast('Mantenha ao menos um cardápio ativo.', 'error'); return; }
+    setIsPublishingMenu(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/produtos/menus/ativos`, { method: 'PUT', headers: { ...authHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify(next) });
+      if (!response.ok) throw new Error('Não foi possível atualizar os cardápios ativos.');
+      await fetchProdutos();
+      showToast('Cardápios ativos atualizados.');
+    } catch (err) { showToast(err instanceof Error ? err.message : 'Erro ao atualizar cardápios.', 'error'); }
+    finally { setIsPublishingMenu(false); }
+  };
+
   const displayedProdutos = useMemo(() => {
     if (!cardapios || cardapios.length === 0 || !selectedCardapioId) {
       return apiProdutos;
@@ -144,7 +161,7 @@ export default function CashierCatalog({
 
   const activeSelectedMenu = cardapios?.find((c) => c.id === selectedCardapioId);
   const isSelectedMenuPublished = Boolean(
-    selectedCardapioId && cardapioAtivoId && selectedCardapioId === cardapioAtivoId,
+    selectedCardapioId && activeMenuIds.includes(selectedCardapioId),
   );
 
   const resetProductImageState = (url = '') => {
@@ -255,7 +272,7 @@ export default function CashierCatalog({
                 </span>
                 {cardapios.map((menu) => {
                   const isSelected = menu.id === selectedCardapioId;
-                  const isPublished = menu.id === cardapioAtivoId;
+                  const isPublished = activeMenuIds.includes(menu.id);
                   const itemCount = apiProdutos.filter((p) => p.cardapio_id === menu.id).length;
                   return (
                     <button
@@ -284,6 +301,11 @@ export default function CashierCatalog({
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
+                {activeSelectedMenu && activeMenuIds.length > 0 && (!isSelectedMenuPublished || activeMenuIds.length > 1) && (
+                  <button type="button" disabled={isPublishingMenu} onClick={() => toggleAdditionalMenu(activeSelectedMenu.id)} className="rounded-xl border border-koma-border px-3 py-2 text-xs font-semibold">
+                    {isSelectedMenuPublished ? `Retirar ${activeSelectedMenu.nome} dos ativos` : `Ativar ${activeSelectedMenu.nome} junto`}
+                  </button>
+                )}
                 {activeSelectedMenu && (
                   isSelectedMenuPublished ? (
                     <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-700 dark:text-emerald-400 text-xs font-semibold">

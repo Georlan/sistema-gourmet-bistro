@@ -627,6 +627,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     liveProdutos,
     liveCategorias,
     cardapio_ativo_id,
+    cardapios_ativos_ids,
     cardapio_ativo_nome,
     cardapios,
     fetchLiveCatalog,
@@ -1775,6 +1776,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
             onRefreshTurnoResumo={fetchTurnoResumo}
             liveProdutos={liveProdutos}
             liveCategorias={liveCategorias}
+            cardapios_ativos_ids={cardapios_ativos_ids}
             cardapio_ativo_id={cardapio_ativo_id}
             cardapio_ativo_nome={cardapio_ativo_nome}
             cardapios={cardapios}
@@ -1916,6 +1918,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
               onRefreshTurnoResumo={fetchTurnoResumo}
               liveProdutos={liveProdutos}
               liveCategorias={liveCategorias}
+              cardapios_ativos_ids={cardapios_ativos_ids}
               cardapio_ativo_id={cardapio_ativo_id}
               cardapio_ativo_nome={cardapio_ativo_nome}
               cardapios={cardapios}

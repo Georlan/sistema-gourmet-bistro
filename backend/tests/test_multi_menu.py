@@ -542,6 +542,26 @@ def test_complete_operational_flow_with_cashier_and_switch():
         db.add_all([p_manha, p_almoco])
         db.commit()
 
+        # Ativação conjunta é explícita e não pode incluir outro tenant.
+        both = client.put("/produtos/menus/ativos", json=[m1_id, m2_id], headers=headers883)
+        assert both.status_code == 200, both.text
+        assert both.json()["cardapios_ativos_ids"] == [m1_id, m2_id]
+        catalog = client.get("/produtos/catalogo", headers=headers883).json()
+        assert catalog["cardapios_ativos_ids"] == [m1_id, m2_id]
+        public = client.get(f"/api/cardapio-digital/public?slug={rest883.slug}")
+        assert {"prod-tapioca-883", "prod-feijoada-883"} <= {p["id"] for p in public.json()["produtos"]}
+        mixed = client.post("/cardapio/pedidos", json={
+            "restaurante_id": 883,
+            "itens": [{"produto_id": "prod-tapioca-883", "quantidade": 1}, {"produto_id": "prod-feijoada-883", "quantidade": 1}],
+            "cliente_nome": "Teste", "cliente_telefone": "11988881234",
+            "endereco_entrega": "Rua de teste", "forma_pagamento": "na_entrega", "tipo_pedido": "delivery",
+        })
+        assert mixed.status_code == 201, mixed.text
+        assert client.put("/produtos/menus/ativos", json=[], headers=headers883).status_code == 400
+        assert client.put("/produtos/menus/ativos", json=[m1_id, m1_id], headers=headers883).status_code == 400
+        assert client.put("/produtos/menus/ativos", json=[m1_id, "outro-tenant"], headers=headers883).status_code == 404
+        assert client.get("/produtos/catalogo", headers=headers883).json()["cardapios_ativos_ids"] == [m1_id, m2_id]
+
         # 1. Publicar Manhã
         res_pub1 = client.post(f"/produtos/menus/{m1_id}/publicar", headers=headers883)
         assert res_pub1.status_code == 200
@@ -600,6 +620,24 @@ def test_complete_operational_flow_with_cashier_and_switch():
         res_order_blocked = client.post("/cardapio/pedidos", json=order_manha)
         assert res_order_blocked.status_code == 400
         assert "pertence a um cardápio inativo no momento" in res_order_blocked.json()["detail"]
+
+        # Meio-Dia também precisa aceitar pedidos e preservar ambos ao voltar à Manhã.
+        order_almoco = {
+            **order_manha,
+            "itens": [{"produto_id": "prod-feijoada-883", "quantidade": 1}],
+        }
+        res_order2 = client.post("/cardapio/pedidos", json=order_almoco)
+        assert res_order2.status_code == 201, res_order2.text
+        order2_id = res_order2.json()["comanda_id"]
+        assert client.post(f"/produtos/menus/{m1_id}/publicar", headers=headers883).status_code == 200
+        res_dig3 = client.get(f"/api/cardapio-digital/public?slug={rest883.slug}")
+        assert res_dig3.status_code == 200
+        ids3 = {p["id"] for p in res_dig3.json()["produtos"]}
+        assert "prod-tapioca-883" in ids3 and "prod-feijoada-883" not in ids3
+        assert client.post("/cardapio/pedidos", json=order_almoco).status_code == 400
+        res_caixa3 = client.get("/comandas/detalhes/todos?fechada=false", headers=headers883)
+        assert res_caixa3.status_code == 200
+        assert {order1_id, order2_id} <= {c["id"] for c in res_caixa3.json()}
 
         # 9. Confirmar que outros restaurantes (tenant 882) não sofreram alterações
         res_dig882 = client.get(f"/api/cardapio-digital/public?slug={rest882.slug}")

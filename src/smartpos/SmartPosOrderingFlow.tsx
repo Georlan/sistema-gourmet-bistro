@@ -215,8 +215,8 @@ export default function SmartPosOrderingFlow({
   }, [isRealtimeConnected, loadCatalog]);
 
   const sellableProducts = useMemo(
-    () => getSellableProducts(catalog.produtos, catalog.cardapio_ativo_id),
-    [catalog.produtos, catalog.cardapio_ativo_id],
+    () => getSellableProducts(catalog.produtos, catalog.cardapio_ativo_id, catalog.cardapios_ativos_ids),
+    [catalog.produtos, catalog.cardapio_ativo_id, catalog.cardapios_ativos_ids],
   );
 
   const productById = useMemo(

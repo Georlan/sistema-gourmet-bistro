@@ -234,6 +234,7 @@ def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoResta
         ConfiguracaoRestaurante.tabela_taxas_km,
         ConfiguracaoRestaurante.promocoes,
         ConfiguracaoRestaurante.cardapio_ativo_id,
+        ConfiguracaoRestaurante.cardapios_adicionais_ids,
     )
     # Public capability depends only on the explicit customer-notice consent.
     # Never load private operator phone/session into public menu projections.
@@ -382,7 +383,7 @@ def obter_categorias_cardapio_digital(
             Produto.somente_promocao.is_(False),
         )
         if configuracao and configuracao.cardapio_ativo_id:
-            cat_query = cat_query.filter(Produto.cardapio_id == configuracao.cardapio_ativo_id)
+            cat_query = cat_query.filter(Produto.cardapio_id.in_([configuracao.cardapio_ativo_id, *(configuracao.cardapios_adicionais_ids or [])]))
         active_category_ids = {row[0] for row in cat_query.distinct().all()}
         categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
         categorias_com_produtos = [category for category in categorias if category.id in active_category_ids]
@@ -405,7 +406,7 @@ def obter_produtos_cardapio_digital(
             Produto.somente_promocao.is_(False),
         )
         if configuracao and configuracao.cardapio_ativo_id:
-            prod_query = prod_query.filter(Produto.cardapio_id == configuracao.cardapio_ativo_id)
+            prod_query = prod_query.filter(Produto.cardapio_id.in_([configuracao.cardapio_ativo_id, *(configuracao.cardapios_adicionais_ids or [])]))
         produtos = prod_query.all()
         produtos = _ordered_products(produtos)
         modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
@@ -464,7 +465,7 @@ def obter_cardapio_publico(
             Produto.ativo.is_(True),
         )
         if configuracao and configuracao.cardapio_ativo_id:
-            prod_query = prod_query.filter(Produto.cardapio_id == configuracao.cardapio_ativo_id)
+            prod_query = prod_query.filter(Produto.cardapio_id.in_([configuracao.cardapio_ativo_id, *(configuracao.cardapios_adicionais_ids or [])]))
 
         produtos = prod_query.all()
         produtos = _ordered_products(produtos)
