@@ -4,9 +4,40 @@ import base64
 import hashlib
 import hmac
 import logging
+import os
 from typing import Any
 
 logger = logging.getLogger("koma.pagbank.webhook")
+
+
+def safe_product_origin(value: str | None) -> str:
+    """Only retain the provider's documented product category, never raw headers."""
+    value = value.strip().upper() if isinstance(value, str) else ''
+    return value if value in {'ORDER', 'CHECKOUT'} else 'unknown'
+
+
+def authenticity_signature_format(value: str | None) -> str:
+    """Classify an untrusted header without returning any signature content."""
+    if not isinstance(value, str) or not value.strip():
+        return 'absent'
+    normalized = value.strip().strip('"').strip("'").lower()
+    if len(normalized) == 64 and all(char in '0123456789abcdef' for char in normalized):
+        return 'sha256_hex'
+    return 'other'
+
+
+def pilot8_ibanking_webhook_token(
+    *, restaurant_id: int, environment: str, owner_receiver_pilot_enabled: bool,
+) -> str | None:
+    """Optional *seller's* iBanking token for legacy Order webhook verification.
+
+    The PagBank Order documentation signs with the receiving account token.
+    This credential must never be used for OAuth exchange or payment creation,
+    and is intentionally opt-in for the single authorized production pilot.
+    """
+    if restaurant_id != 8 or environment != 'production' or not owner_receiver_pilot_enabled:
+        return None
+    return os.getenv('PAGBANK_PRODUCTION_PILOT8_WEBHOOK_IBANKING_TOKEN', '').strip() or None
 
 
 def extract_webhook_identifiers(payload: Any) -> tuple[str | None, str | None]:
