@@ -8,7 +8,7 @@ import pytest
 
 from app.services.online_payments.pagbank import oauth
 from app.services.online_payments.pagbank.provider import PagBankProvider, PagBankError, cents
-from app.schemas import CardapioPedidoCreate
+from app.services.online_payments.pagbank.provider import valid_order_payer_email
 
 
 @pytest.fixture(autouse=True)
@@ -36,21 +36,7 @@ def snapshot(status='WAITING', value=4590):
     ('x @example.com', False),
 ])
 def test_online_pix_email_validated_before_pagbank_api(email, accepted):
-    payload = {
-        'restaurante_id': 8,
-        'itens': [{'produto_id': 'p1', 'quantidade': 1}],
-        'cliente_nome': 'Comprador Teste',
-        'cliente_telefone': '85999999999',
-        'tipo_pedido': 'retirada',
-        'forma_pagamento': 'online',
-        'forma_pagamento_detalhe': 'pix',
-        'cliente_email': email,
-    }
-    if accepted:
-        assert CardapioPedidoCreate.model_validate(payload).cliente_email == email.strip().lower()
-    else:
-        with pytest.raises(ValueError):
-            CardapioPedidoCreate.model_validate(payload)
+    assert valid_order_payer_email(email) is accepted
 
 
 def test_pagbank_provider_never_requests_invalid_payer_email():
