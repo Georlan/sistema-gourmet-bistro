@@ -66,6 +66,49 @@ class TestCardapioWebAdapter:
             assert len(cmd.items) == 1
             assert cmd.items[0].product_id == "prod-char-simples"
 
+    def test_web_adapter_maps_pagbank_email_rejection_to_422(self, char_client, char_setup):
+        from app.services.online_payments.pagbank.provider import PagBankError
+
+        payload = {
+            "restaurante_id": CHAR_RESTAURANT_ID,
+            "cliente_nome": "Adapter Email Test",
+            "cliente_telefone": "11999990001",
+            "tipo_pedido": "retirada",
+            "itens": [
+                {
+                    "produto_id": "prod-char-simples",
+                    "quantidade": 1,
+                    "modificador_ids": [],
+                }
+            ],
+            "forma_pagamento": "online",
+            "forma_pagamento_detalhe": "pix",
+            "cliente_email": "buyer@example.test",
+            "cliente_documento": "12345678909",
+            "idempotency_key": "idem-12345",
+        }
+
+        from app.services.online_payments.service import OnlinePaymentService
+        with patch.object(OnlinePaymentService, "active_account", return_value=MagicMock(provider="pagbank")), \
+             patch.object(OnlinePaymentService, "open_shift", return_value=MagicMock(id="shift-1")):
+            with patch.object(
+                OrderApplicationService,
+                "create_order",
+                side_effect=PagBankError("E-mail rejeitado", reason="customer_email_rejected", status_code=400),
+            ):
+                res = char_client.post("/cardapio/pedidos", json=payload)
+                assert res.status_code == 422
+                assert "outro e-mail válido" in res.json()["detail"]
+
+            with patch.object(
+                OrderApplicationService,
+                "create_order",
+                side_effect=PagBankError("Informe um e-mail válido para gerar a cobrança Pix.", status_code=400),
+            ):
+                res = char_client.post("/cardapio/pedidos", json=payload)
+                assert res.status_code == 422
+                assert "Informe um e-mail válido" in res.json()["detail"]
+
     def test_web_adapter_requires_customer_session_when_gate_enabled(
         self,
         char_client,

@@ -287,9 +287,9 @@ def _process_webhook(
                 int(rid), environment=account.provider_environment,
             ),
         )
-        candidate_tokens = [
+        candidate_tokens = list(dict.fromkeys(
             t for t in (account.access_token, account.webhook_secret, app_token, seller_ibanking_token) if t
-        ]
+        ))
         # Seller's iBanking token is never reused as an OAuth bearer or application credential.
         # Card encryption keys are not webhook verification keys.
         public_key = os.getenv('PAGBANK_WEBHOOK_PUBLIC_KEY', '')

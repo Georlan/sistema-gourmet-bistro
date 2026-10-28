@@ -30,7 +30,9 @@ def snapshot(status='WAITING', value=4590):
 @pytest.mark.parametrize('email,accepted', [
     ('cliente@email.com', True),
     (' Comprador+teste@Email.com.br ', True),
-    ('a@b.co', False),
+    ('a@b.co', True),
+    ('a@usp.br', True),
+    ('a@b.c', False),
     ('user@example.c', False),
     ('sem-arroba', False),
     ('x @example.com', False),
@@ -45,7 +47,7 @@ def test_pagbank_provider_never_requests_invalid_payer_email():
         with pytest.raises(PagBankError, match='e-mail válido'):
             provider.create_pix(
                 amount=Decimal('4.50'), marketplace_fee=Decimal('0'),
-                payer_email='a@b.co', payer_name='Comprador Teste',
+                payer_email='sem-arroba', payer_name='Comprador Teste',
                 payer_tax_id='12345678909', external_reference='intent-test',
                 idempotency_key='idem-valid', notification_url='https://api.example.test/webhook',
                 expires_at=datetime.datetime.now(datetime.timezone.utc),
@@ -127,13 +129,14 @@ def test_incomplete_connect_response_is_classified_without_tokens(caplog):
     assert 'private-access-token' not in caplog.text
 
 
-def test_provider_maps_bank_customer_email_rejection_without_leaking_pii(caplog):
+@pytest.mark.parametrize('error_code', ['40001', '40002'])
+def test_provider_maps_bank_customer_email_rejection_without_leaking_pii(caplog, error_code):
     requests = []
 
     def handler(req):
         requests.append(req)
         return httpx.Response(400, json={'error_messages': [{
-            'code': '40002',
+            'code': error_code,
             'parameter_name': 'customer.email',
             'description': 'buyer email must not be equals to merchant email private@example.test',
         }]})
@@ -155,7 +158,7 @@ def test_provider_maps_bank_customer_email_rejection_without_leaking_pii(caplog)
         assert len(requests) == 1
         assert 'private@example.test' not in caplog.text
         assert 'seller-token' not in caplog.text
-        assert '40002' in caplog.text
+        assert error_code in caplog.text
         assert 'customer.email' in caplog.text
     finally:
         provider._client.close()
@@ -970,3 +973,59 @@ def test_pagbank_pix_expiration_is_utc_rfc3339_seconds():
         assert received[0]['charges'][0]['amount']['value'] == 450
     finally:
         provider._client.close()
+
+
+def test_pilot8_webhook_logs_deduplicated_candidate_count_without_tokens(monkeypatch, caplog):
+    from fastapi.testclient import TestClient
+    from app.main import app
+    from app.database import SessionLocal, current_restaurante_id
+    from app.models import Restaurante, Usuario, RestaurantPaymentAccount
+
+    rid = 8
+    context = current_restaurante_id.set(rid)
+    db = SessionLocal()
+    try:
+        if not db.query(Restaurante).filter_by(id=rid).first():
+            db.add(Restaurante(id=rid, nome='Pilot 8 Store', plano='pro'))
+            db.flush()
+        if not db.query(Usuario).filter_by(id='admin-p8').first():
+            db.add(Usuario(id='admin-p8', restaurante_id=rid, nome='Admin', email='admin-p8@koma.test',
+                           senha_hash='unused', role='admin', cargo='admin', status='ativo'))
+            db.flush()
+        account = RestaurantPaymentAccount(
+            id='acc-pg-pilot8-test',
+            restaurante_id=rid,
+            provider='pagbank',
+            provider_environment='production',
+            provider_user_id='ACCO_P8_TEST',
+            status='active',
+            access_token='pilot8-token',
+            webhook_secret='pilot8-token',  # identical to access_token
+        )
+        db.add(account)
+        db.commit()
+
+        monkeypatch.setenv('PAGBANK_PRODUCTION_RESTAURANT_IDS', '8')
+        monkeypatch.setenv('PAGBANK_PRODUCTION_OWNER_RECEIVER_PILOT8', 'true')
+        monkeypatch.setenv('PAGBANK_PRODUCTION_APP_TOKEN', 'pilot8-app-token')
+        # Without seller_ibanking_token: candidates are 'pilot8-token' and 'pilot8-app-token' -> count 2
+        client = TestClient(app, base_url='https://testserver')
+        raw = b'{"id":"ORDE_P8"}'
+        res = client.post(
+            f'/payments/webhooks/pagbank/{account.id}',
+            content=raw,
+            headers={'Content-Type': 'application/json', 'x-authenticity-token': 'bad-sig', 'x-product-origin': 'ORDER'},
+        )
+        assert res.status_code == 401
+        assert 'PagBank webhook authentication rejected tenant=8' in caplog.text
+        assert 'candidate_count=2' in caplog.text
+        assert 'origin=ORDER' in caplog.text
+        assert 'pilot8-token' not in caplog.text
+        assert 'pilot8-app-token' not in caplog.text
+    finally:
+        db.rollback()
+        db.query(RestaurantPaymentAccount).filter_by(id='acc-pg-pilot8-test').delete()
+        db.commit()
+        db.close()
+        current_restaurante_id.reset(context)
+

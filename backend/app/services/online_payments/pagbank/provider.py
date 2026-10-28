@@ -60,7 +60,7 @@ class PagBankError(MercadoPagoError):
 
 
 def _customer_email_rejected(response: httpx.Response) -> bool:
-    """Classify only the bank's allowlisted 40002/customer.email error.
+    """Classify only the bank's allowlisted 40001/40002 customer.email error.
 
     Never consume or expose its free-form descriptions, buyer address or payload.
     The provider might reject a merchant's own email even when syntactically valid.
@@ -78,7 +78,7 @@ def _customer_email_rejected(response: httpx.Response) -> bool:
         return False
     return any(
         isinstance(item, dict)
-        and str(item.get('code') or '') == '40002'
+        and str(item.get('code') or '') in {'40001', '40002'}
         and item.get('parameter_name') == 'customer.email'
         for item in errors[:5]
     )
@@ -103,7 +103,7 @@ def valid_order_payer_email(value: str | None) -> bool:
         return False
     email = value.strip()
     return (
-        10 <= len(email) <= 255
+        6 <= len(email) <= 255
         and re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]{2,}', email) is not None
     )
 
