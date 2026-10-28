@@ -135,10 +135,11 @@ def test_pix_uses_current_charge_contract_integer_cents_and_no_split():
     provider = PagBankProvider('seller-token')
     provider._client.close()
     provider._client = httpx.Client(base_url=oauth.api_url(), transport=httpx.MockTransport(handle))
-    payment = provider.create_pix(amount=Decimal('45.90'), marketplace_fee=Decimal(0), payer_email='buyer@example.test',
+    payment = provider.create_pix(amount=Decimal('45.90'), marketplace_fee=Decimal(0), payer_email=' buyer@example.test ',
         payer_name='Buyer', payer_tax_id='12345678909', external_reference='intent-test', idempotency_key='idem-key',
         notification_url='https://api.example.test/webhook', expires_at=datetime.datetime.now(datetime.timezone.utc))
     payload = json.loads(requests[0].content)
+    assert payload['customer']['email'] == 'buyer@example.test'
     assert payload['charges'][0]['amount'] == {'value': 4590, 'currency': 'BRL'}
     assert payload['charges'][0]['payment_method']['type'] == 'PIX'
     assert 'splits' not in payload and 'application_fee' not in payload
