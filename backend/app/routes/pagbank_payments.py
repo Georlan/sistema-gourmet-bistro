@@ -23,7 +23,10 @@ from ..security import ensure_permission, require_permission
 from ..services.online_payments import OnlinePaymentService, OnlinePaymentValidationError
 from ..services.online_payments.account_connection import _expires_at, guard_receiver_change, MercadoPagoAccountConnectionError
 from ..services.online_payments.pagbank import oauth
-from ..services.online_payments.pagbank.webhook import extract_webhook_identifiers, verify_pagbank_signature
+from ..services.online_payments.pagbank.webhook import (
+    extract_webhook_identifiers, verify_pagbank_signature,
+    safe_product_origin, authenticity_signature_format,
+)
 from ..websocket_manager import manager
 from .online_payments import _resolve_account_tenant
 
@@ -235,14 +238,18 @@ async def webhook(account_id: str, request: Request, tasks: BackgroundTasks, db:
     authenticity_token = request.headers.get('x-authenticity-token', '').strip()
     payload_signature = request.headers.get('x-payload-signature', '').strip()
 
+    product_origin = safe_product_origin(request.headers.get('x-product-origin'))
     if not authenticity_token and not payload_signature:
-        logger.warning('PagBank webhook rejeitado: assinatura ausente para conta %s', account_id)
+        logger.warning(
+            'PagBank webhook rejected missing_signature account=%s product_origin=%s',
+            account_id, product_origin,
+        )
         raise HTTPException(401, 'Assinatura ausente.')
 
     # Authenticate exact raw bytes before attempting to parse notification data.
     return await run_in_threadpool(
         _process_webhook, account_id, None, raw, authenticity_token,
-        tasks, db, payload_signature=payload_signature,
+        tasks, db, payload_signature=payload_signature, product_origin=product_origin,
     )
 
 
@@ -255,6 +262,7 @@ def _process_webhook(
     db: Session,
     reference_id: str | None = None,
     payload_signature: str = "",
+    product_origin: str = "unknown",
 ):
     rid = _resolve_account_tenant(db, account_id)
     if rid is None:
@@ -285,7 +293,19 @@ def _process_webhook(
         )
 
         if not is_valid:
-            logger.warning('PagBank webhook rejeitado: assinatura divergente para conta %s', account_id)
+            # Pilot-only, bounded diagnostic metadata. Do not log header values,
+            # payload bytes, signatures, tokens, or untrusted bank descriptions.
+            if int(rid) == 8 and account.provider_environment == 'production':
+                logger.warning(
+                    'PagBank webhook authentication rejected tenant=8 origin=%s '
+                    'authenticity_format=%s ecdsa_present=%s webhook_public_key_configured=%s '
+                    'candidate_count=%d',
+                    safe_product_origin(product_origin),
+                    authenticity_signature_format(signature),
+                    bool(payload_signature), bool(public_key), len(candidate_tokens),
+                )
+            else:
+                logger.warning('PagBank webhook rejected: signature mismatch for account %s', account_id)
             raise HTTPException(401, 'Assinatura divergente.')
 
         try:
