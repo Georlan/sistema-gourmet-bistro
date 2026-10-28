@@ -118,6 +118,12 @@ class PagBankProvider:
             raise PagBankError('PagBank no KÔMA não cobra taxa de plataforma.')
         if not payer_name or not (is_valid_cpf(payer_tax_id) or is_valid_cnpj(payer_tax_id)):
             raise PagBankError('Informe nome e CPF/CNPJ do comprador para gerar o Pix PagBank.')
+        # Defense in depth: do not send malformed email to the provider or log buyer PII.
+        if not isinstance(payer_email, str) or not (
+            10 <= len(payer_email.strip()) <= 255
+            and re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]{2,}', payer_email.strip())
+        ):
+            raise PagBankError('Informe um e-mail válido para gerar o Pix PagBank.')
         expiration_date = expires_at.astimezone(datetime.timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
         data = self._request('POST', '/orders', headers={'x-idempotency-key': idempotency_key}, json={
             'reference_id': external_reference,
