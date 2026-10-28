@@ -57,6 +57,7 @@ def test_refresh_headers_endpoint_and_rotation():
 @pytest.mark.parametrize('payload, expected_reason', [
     ({'error': 'invalid_grant'}, 'invalid_grant'),
     ({'errors': [{'code': '41004'}]}, '41004'),
+    ({'error_messages': [{'code': '41004', 'description': 'invalid_grant'}]}, '41004'),
     ({'error': 'buyer@private.example', 'description': 'secret-value'}, 'unknown'),
 ])
 def test_connect_rejection_logs_only_allowlisted_metadata(payload, expected_reason, caplog):
