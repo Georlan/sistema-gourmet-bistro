@@ -130,6 +130,12 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
             oauth.log_sandbox_oauth_evidence('connection_completed', restaurant_id=rid, state=state)
     except oauth.PagBankOAuthError as exc:
         db.rollback()
+        # Authorization codes are single-use and expire. This is a recoverable
+        # client conflict, not a gateway outage. Never disclose OAuth secrets.
+        if exc.reason in {'invalid_grant', '41004'}:
+            raise HTTPException(
+                409, 'Autorização PagBank expirada ou já utilizada. Inicie uma nova conexão.'
+            ) from exc
         raise HTTPException(502, 'Não foi possível concluir a conexão PagBank.') from exc
     except IntegrityError as exc:
         db.rollback()
