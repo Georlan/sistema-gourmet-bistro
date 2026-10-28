@@ -28,11 +28,46 @@ from app.services.online_payments.pagbank.provider import PagBankProvider
 from app.services.online_payments.pagbank.webhook import (
     extract_webhook_identifiers,
     verify_pagbank_signature,
+    authenticity_signature_format,
+    safe_product_origin,
+    pilot8_ibanking_webhook_token,
 )
 from app.services.online_payments.reconciliation_worker import (
     discover_active_tenant_ids,
     reconcile_pending_intents,
 )
+
+
+def test_pilot8_merchant_signing_token_is_opt_in_and_tenant_scoped(monkeypatch):
+    monkeypatch.setenv('PAGBANK_PRODUCTION_PILOT8_WEBHOOK_IBANKING_TOKEN', 'seller-test-signing-token')
+    assert pilot8_ibanking_webhook_token(
+        restaurant_id=8, environment='production', owner_receiver_pilot_enabled=True,
+    ) == 'seller-test-signing-token'
+    assert pilot8_ibanking_webhook_token(
+        restaurant_id=8, environment='sandbox', owner_receiver_pilot_enabled=True,
+    ) is None
+    assert pilot8_ibanking_webhook_token(
+        restaurant_id=9, environment='production', owner_receiver_pilot_enabled=True,
+    ) is None
+    assert pilot8_ibanking_webhook_token(
+        restaurant_id=8, environment='production', owner_receiver_pilot_enabled=False,
+    ) is None
+    monkeypatch.delenv('PAGBANK_PRODUCTION_PILOT8_WEBHOOK_IBANKING_TOKEN')
+    assert pilot8_ibanking_webhook_token(
+        restaurant_id=8, environment='production', owner_receiver_pilot_enabled=True,
+    ) is None
+
+
+def test_webhook_rejection_diagnostics_do_not_return_untrusted_header_data():
+    assert safe_product_origin(' ORDER ') == 'ORDER'
+    assert safe_product_origin('checkout') == 'CHECKOUT'
+    assert safe_product_origin('ORDER buyer@private.test') == 'unknown'
+    assert safe_product_origin('token-secret') == 'unknown'
+    assert authenticity_signature_format(None) == 'absent'
+    assert authenticity_signature_format('  ') == 'absent'
+    assert authenticity_signature_format('a' * 64) == 'sha256_hex'
+    assert authenticity_signature_format('"A"') == 'other'
+    assert authenticity_signature_format('private-token-or-email@example.com') == 'other'
 
 
 def test_extract_webhook_identifiers():

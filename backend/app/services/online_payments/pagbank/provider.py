@@ -53,6 +53,36 @@ def _failure_reference(response: httpx.Response) -> str:
 class PagBankError(MercadoPagoError):
     """Compatible with existing payment-boundary error handling."""
 
+    def __init__(self, message: str, *, reason: str | None = None,
+                 status_code: int | None = None, retryable: bool = False):
+        super().__init__(message, status_code=status_code, retryable=retryable)
+        self.reason = reason
+
+
+def _customer_email_rejected(response: httpx.Response) -> bool:
+    """Classify only the bank's allowlisted 40002/customer.email error.
+
+    Never consume or expose its free-form descriptions, buyer address or payload.
+    The provider might reject a merchant's own email even when syntactically valid.
+    """
+    if response.status_code != 400:
+        return False
+    try:
+        data = response.json()
+    except (ValueError, TypeError):
+        return False
+    if not isinstance(data, dict):
+        return False
+    errors = data.get('error_messages')
+    if not isinstance(errors, list):
+        return False
+    return any(
+        isinstance(item, dict)
+        and str(item.get('code') or '') == '40002'
+        and item.get('parameter_name') == 'customer.email'
+        for item in errors[:5]
+    )
+
 
 def cents(amount: Decimal) -> int:
     value = Decimal(str(amount))
@@ -89,6 +119,11 @@ class PagBankProvider:
         try:
             response = self._client.request(method, path, **kwargs)
             reference = _failure_reference(response) if response.is_error else ''
+            if method == 'POST' and path == '/orders' and _customer_email_rejected(response):
+                raise PagBankError(
+                    'E-mail do comprador rejeitado pelo PagBank.',
+                    reason='customer_email_rejected', status_code=400,
+                )
             if response.status_code == 403:
                 raise PagBankError('PagBank recusou a criação/consulta da cobrança (HTTP 403). Verifique a liberação da API Order/Pix e as permissões da aplicação e da conta conectada.' + reference, status_code=403)
             if response.is_error:
