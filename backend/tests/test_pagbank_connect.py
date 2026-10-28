@@ -8,6 +8,7 @@ import pytest
 
 from app.services.online_payments.pagbank import oauth
 from app.services.online_payments.pagbank.provider import PagBankProvider, PagBankError, cents
+from app.schemas import CardapioPedidoCreate
 
 
 @pytest.fixture(autouse=True)
@@ -24,6 +25,47 @@ def snapshot(status='WAITING', value=4590):
         'payment_method': {'type': 'PIX', 'pix': {'expiration_date': '2026-10-10T12:00:00Z'}},
         'qr_code': {'text': '000201-test-code'},
     }]}
+
+
+@pytest.mark.parametrize('email,accepted', [
+    ('cliente@email.com', True),
+    (' Comprador+teste@Email.com.br ', True),
+    ('a@b.co', False),
+    ('user@example.c', False),
+    ('sem-arroba', False),
+    ('x @example.com', False),
+])
+def test_online_pix_email_validated_before_pagbank_api(email, accepted):
+    payload = {
+        'restaurante_id': 8,
+        'itens': [{'produto_id': 'p1', 'quantidade': 1}],
+        'cliente_nome': 'Comprador Teste',
+        'cliente_telefone': '85999999999',
+        'tipo_pedido': 'retirada',
+        'forma_pagamento': 'online',
+        'forma_pagamento_detalhe': 'pix',
+        'cliente_email': email,
+    }
+    if accepted:
+        assert CardapioPedidoCreate.model_validate(payload).cliente_email == email.strip().lower()
+    else:
+        with pytest.raises(ValueError):
+            CardapioPedidoCreate.model_validate(payload)
+
+
+def test_pagbank_provider_never_requests_invalid_payer_email():
+    provider = PagBankProvider('seller-token')
+    try:
+        with pytest.raises(PagBankError, match='e-mail válido'):
+            provider.create_pix(
+                amount=Decimal('4.50'), marketplace_fee=Decimal('0'),
+                payer_email='a@b.co', payer_name='Comprador Teste',
+                payer_tax_id='12345678909', external_reference='intent-test',
+                idempotency_key='idem-valid', notification_url='https://api.example.test/webhook',
+                expires_at=datetime.datetime.now(datetime.timezone.utc),
+            )
+    finally:
+        provider._client.close()
 
 
 def test_state_limit_signature_browser_binding_and_expiry(monkeypatch):
