@@ -678,8 +678,17 @@ export default function CardapioCartDrawer({
       reportValidationError("Informe o CPF ou CNPJ do comprador para gerar o Pix PagBank.", "input-customer-document");
       return;
     }
-    if (paymentDetail === "pix" && !isValidPixPayerEmail(guestEmail)) {
-      reportValidationError("Informe um e-mail válido com pelo menos 10 caracteres para gerar o Pix.", "input-customer-email");
+    if (paymentDetail === "pix" && (
+      brandConfig?.pixPayerDocumentRequired
+        ? !isValidPixPayerEmail(guestEmail)
+        : !/^\S+@\S+\.\S+$/.test(guestEmail.trim())
+    )) {
+      reportValidationError(
+        brandConfig?.pixPayerDocumentRequired
+          ? "Informe um e-mail válido com pelo menos 10 caracteres para gerar o Pix."
+          : "Informe um e-mail válido para gerar o pagamento Pix.",
+        "input-customer-email",
+      );
       return;
     }
 
