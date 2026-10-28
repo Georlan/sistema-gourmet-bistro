@@ -71,41 +71,19 @@ def verify_pagbank_signature(
     """
     candidate_tokens = candidate_tokens or []
 
-    # 1. Validação via header x-authenticity-token (SHA-256)
+    # API Order: SHA256(token + b"-" + EXACT raw HTTP body).
+    # Never accept speculative HMAC/no-hyphen algorithms or normalize the
+    # signed body; an altered payload must fail authentication.
     if authenticity_token:
         sig = authenticity_token.strip().strip('"').strip("'").lower()
-        raw_stripped = raw_body.rstrip(b"\r\n")
-
-        for token in candidate_tokens:
-            if not token:
-                continue
-            tok_bytes = token.encode("utf-8")
-
-            # Formato oficial documentado: {token}-{payload}
-            h1 = hashlib.sha256(tok_bytes + b"-" + raw_body).hexdigest().lower()
-            if hmac.compare_digest(sig, h1):
-                return True
-            if raw_stripped != raw_body:
-                h1_strip = hashlib.sha256(tok_bytes + b"-" + raw_stripped).hexdigest().lower()
-                if hmac.compare_digest(sig, h1_strip):
-                    return True
-
-            # Formato sem hífen: {token}{payload}
-            h2 = hashlib.sha256(tok_bytes + raw_body).hexdigest().lower()
-            if hmac.compare_digest(sig, h2):
-                return True
-            if raw_stripped != raw_body:
-                h2_strip = hashlib.sha256(tok_bytes + raw_stripped).hexdigest().lower()
-                if hmac.compare_digest(sig, h2_strip):
-                    return True
-
-            # Formato HMAC-SHA256
-            hm = hmac.new(tok_bytes, raw_body, hashlib.sha256).hexdigest().lower()
-            if hmac.compare_digest(sig, hm):
-                return True
-            if raw_stripped != raw_body:
-                hm_strip = hmac.new(tok_bytes, raw_stripped, hashlib.sha256).hexdigest().lower()
-                if hmac.compare_digest(sig, hm_strip):
+        if len(sig) == 64 and all(char in "0123456789abcdef" for char in sig):
+            for token in candidate_tokens:
+                if not token:
+                    continue
+                expected = hashlib.sha256(
+                    token.encode("utf-8") + b"-" + raw_body
+                ).hexdigest()
+                if hmac.compare_digest(sig, expected):
                     return True
 
     # 2. Validação via header x-payload-signature (ECDSA com SHA-256)
@@ -116,8 +94,7 @@ def verify_pagbank_signature(
             from cryptography.hazmat.primitives.serialization import load_der_public_key, load_pem_public_key
 
             key_clean = public_key_b64.strip()
-            raw_stripped = raw_body.rstrip(b"\r\n")
-            key_bytes = base64.b64decode(key_clean)
+            key_bytes = base64.b64decode(key_clean, validate=True)
             try:
                 public_key = load_der_public_key(key_bytes)
             except Exception:
@@ -125,18 +102,12 @@ def verify_pagbank_signature(
 
             signatures = [s.strip() for s in payload_signature.split(",") if s.strip()]
             for s in signatures:
-                sig_bytes = base64.b64decode(s)
+                sig_bytes = base64.b64decode(s, validate=True)
                 try:
                     public_key.verify(sig_bytes, raw_body, ec.ECDSA(hashes.SHA256()))
                     return True
                 except Exception:
                     pass
-                if raw_stripped != raw_body:
-                    try:
-                        public_key.verify(sig_bytes, raw_stripped, ec.ECDSA(hashes.SHA256()))
-                        return True
-                    except Exception:
-                        pass
         except Exception:
             logger.warning("Falha ao verificar assinatura assimétrica x-payload-signature PagBank", exc_info=True)
 
