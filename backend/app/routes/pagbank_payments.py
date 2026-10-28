@@ -216,36 +216,17 @@ async def webhook(account_id: str, request: Request, tasks: BackgroundTasks, db:
     if len(raw) > 262144:
         raise HTTPException(413, 'Notificação muito grande.')
 
-    authenticity_token = (
-        request.headers.get('x-authenticity-token')
-        or request.headers.get('x-authenticity-signature')
-        or ''
-    ).strip()
+    authenticity_token = request.headers.get('x-authenticity-token', '').strip()
     payload_signature = request.headers.get('x-payload-signature', '').strip()
 
     if not authenticity_token and not payload_signature:
         logger.warning('PagBank webhook rejeitado: assinatura ausente para conta %s', account_id)
         raise HTTPException(401, 'Assinatura ausente.')
 
-    try:
-        payload = json.loads(raw) if raw else {}
-    except (ValueError, TypeError):
-        raise HTTPException(400, 'Notificação inválida.')
-
-    payment_id, reference_id = extract_webhook_identifiers(payload)
-    if not payment_id and not reference_id:
-        raise HTTPException(400, 'Notificação inválida.')
-
+    # Authenticate exact raw bytes before attempting to parse notification data.
     return await run_in_threadpool(
-        _process_webhook,
-        account_id,
-        payment_id,
-        raw,
-        authenticity_token,
-        tasks,
-        db,
-        reference_id=reference_id,
-        payload_signature=payload_signature,
+        _process_webhook, account_id, None, raw, authenticity_token,
+        tasks, db, payload_signature=payload_signature,
     )
 
 
@@ -267,11 +248,17 @@ def _process_webhook(
         if not account or account.id != account_id or account.status != 'active' or account.provider_environment not in {'sandbox', 'production'}:
             raise HTTPException(404, 'Conta não encontrada.')
 
-        app_token = oauth.credential('APP_TOKEN', account.provider_environment)
-        client_secret = oauth.credential('CLIENT_SECRET', account.provider_environment)
-        candidate_tokens = [t for t in (account.access_token, account.webhook_secret, app_token, client_secret) if t]
-
-        public_key = account.public_key or os.getenv('PAGBANK_WEBHOOK_PUBLIC_KEY', '')
+        # Only the production owner-receiver pilot (tenant 8) may consider
+        # the platform's app token. Do not extend shared signing authorities
+        # to independently connected restaurants without provider evidence.
+        app_token = (
+            oauth.credential('APP_TOKEN', account.provider_environment)
+            if oauth.owner_receiver_pilot_enabled(int(rid), environment=account.provider_environment)
+            else None
+        )
+        candidate_tokens = [t for t in (account.access_token, account.webhook_secret, app_token) if t]
+        # Card encryption keys are not webhook verification keys.
+        public_key = os.getenv('PAGBANK_WEBHOOK_PUBLIC_KEY', '')
 
         is_valid = verify_pagbank_signature(
             raw_body=raw,
@@ -284,6 +271,14 @@ def _process_webhook(
         if not is_valid:
             logger.warning('PagBank webhook rejeitado: assinatura divergente para conta %s', account_id)
             raise HTTPException(401, 'Assinatura divergente.')
+
+        try:
+            payload = json.loads(raw) if raw else {}
+        except (ValueError, TypeError):
+            raise HTTPException(400, 'Notificação inválida.')
+        payment_id, reference_id = extract_webhook_identifiers(payload)
+        if not payment_id and not reference_id:
+            raise HTTPException(400, 'Notificação inválida.')
 
         # Resolve intent by external_payment_id OR reference_id (which is intent.id)
         intent = None
@@ -304,7 +299,10 @@ def _process_webhook(
             # Retry: a notification can arrive before the create response commits.
             raise HTTPException(503, 'Pagamento ainda não registrado.')
 
-        external_id_to_reconcile = intent.external_payment_id or payment_id
+        external_id_to_reconcile = intent.external_payment_id
+        if not external_id_to_reconcile:
+            # Order creation may still be committing; never query /orders/CHAR_*.
+            raise HTTPException(503, 'Cobrança ainda não registrada.')
 
         event_key = hashlib.sha256(account_id.encode() + raw).hexdigest()
         event = db.query(OnlinePaymentWebhookEvent).filter(
