@@ -41,7 +41,10 @@ from app.models import (
     Cardapio,
     Categoria,
     ConfiguracaoRestaurante,
+    GrupoModificador,
+    OpcaoModificador,
     Produto,
+    ProdutoGrupoModificador,
     Restaurante,
     SuperAdminAuditLog,
 )
@@ -165,10 +168,10 @@ MORNING_CATALOG_SPEC = [
         "categoria": "Sucos",
         "ordem": 9,
         "produtos": [
-            {"nome": "Suco de Laranja", "preco": Decimal("0.00"), "descricao": "Suco natural de laranja (Preço pendente de conferência)"},
-            {"nome": "Suco de Morango", "preco": Decimal("0.00"), "descricao": "Suco natural de morango (Preço pendente de conferência)"},
-            {"nome": "Suco de Abacaxi", "preco": Decimal("0.00"), "descricao": "Suco natural de abacaxi (Preço pendente de conferência)"},
-            {"nome": "Suco de Maracujá", "preco": Decimal("0.00"), "descricao": "Suco natural de maracujá (Preço pendente de conferência)"},
+            {"nome": "Suco de Laranja", "preco": Decimal("7.00"), "descricao": "Suco natural de laranja gelado"},
+            {"nome": "Suco de Morango", "preco": Decimal("7.00"), "descricao": "Suco natural de morango gelado"},
+            {"nome": "Suco de Abacaxi", "preco": Decimal("7.00"), "descricao": "Suco natural de abacaxi gelado"},
+            {"nome": "Suco de Maracujá", "preco": Decimal("7.00"), "descricao": "Suco natural de maracujá gelado"},
         ],
     },
 ]
@@ -313,7 +316,7 @@ def prepare_id6_multi_menu(
                         nome=prod_name,
                         preco=prod_spec["preco"],
                         descricao=prod_spec["descricao"],
-                        ativo=False,  # Obrigatoriamente pausado para ativação manual
+                        ativo=(cat_norm in {"cuscuz", "bolos", "panelada", "sanduíches", "sanduiches"}),
                     )
                     db.add(new_prod)
                     created_products.append(prod_name)
@@ -324,6 +327,193 @@ def prepare_id6_multi_menu(
                     existing_morning_products.append(prod_name)
 
         db.flush()
+
+        # 4. Modificadores e Adicionais Matinais
+        grupo_tapioca = (
+            db.query(GrupoModificador)
+            .filter(GrupoModificador.restaurante_id == tenant_id, GrupoModificador.nome == "Recheios da Tapioca")
+            .first()
+        )
+        if not grupo_tapioca:
+            grupo_tapioca = GrupoModificador(
+                id=str(uuid.uuid4()),
+                restaurante_id=tenant_id,
+                nome="Recheios da Tapioca",
+                tipo="opcional",
+                min_selecoes=0,
+                max_selecoes=12,
+            )
+            db.add(grupo_tapioca)
+            db.flush()
+
+        recheios_spec = [
+            ("Ovo", Decimal("3.00")),
+            ("Carne de sol", Decimal("8.00")),
+            ("Cupim", Decimal("10.00")),
+            ("Frango", Decimal("5.00")),
+            ("Carne moída", Decimal("7.00")),
+            ("Calabresa", Decimal("4.00")),
+            ("Bacon", Decimal("4.00")),
+            ("Queijo coalho", Decimal("4.00")),
+            ("Mussarela", Decimal("6.00")),
+            ("Presunto", Decimal("4.00")),
+            ("Cream cheese", Decimal("6.00")),
+            ("Catupiry", Decimal("6.00")),
+        ]
+        for nome, preco in recheios_spec:
+            op = (
+                db.query(OpcaoModificador)
+                .filter(
+                    OpcaoModificador.restaurante_id == tenant_id,
+                    OpcaoModificador.grupo_id == grupo_tapioca.id,
+                    OpcaoModificador.nome == nome,
+                )
+                .first()
+            )
+            if not op:
+                db.add(
+                    OpcaoModificador(
+                        id=str(uuid.uuid4()),
+                        restaurante_id=tenant_id,
+                        grupo_id=grupo_tapioca.id,
+                        nome=nome,
+                        preco_adicional=preco,
+                        ativo=True,
+                    )
+                )
+
+        p_tapioca = (
+            db.query(Produto)
+            .filter(Produto.restaurante_id == tenant_id, Produto.nome == "Tapioca recheada (Monte a sua)")
+            .first()
+        )
+        if p_tapioca:
+            link_tap = (
+                db.query(ProdutoGrupoModificador)
+                .filter(
+                    ProdutoGrupoModificador.restaurante_id == tenant_id,
+                    ProdutoGrupoModificador.produto_id == p_tapioca.id,
+                    ProdutoGrupoModificador.grupo_id == grupo_tapioca.id,
+                )
+                .first()
+            )
+            if not link_tap:
+                db.add(
+                    ProdutoGrupoModificador(
+                        restaurante_id=tenant_id,
+                        produto_id=p_tapioca.id,
+                        grupo_id=grupo_tapioca.id,
+                        min_selecoes=0,
+                        max_selecoes=12,
+                    )
+                )
+
+        grupo_pao = (
+            db.query(GrupoModificador)
+            .filter(GrupoModificador.restaurante_id == tenant_id, GrupoModificador.nome == "Escolha o Pão")
+            .first()
+        )
+        if not grupo_pao:
+            grupo_pao = GrupoModificador(
+                id=str(uuid.uuid4()),
+                restaurante_id=tenant_id,
+                nome="Escolha o Pão",
+                tipo="obrigatorio",
+                min_selecoes=1,
+                max_selecoes=1,
+            )
+            db.add(grupo_pao)
+            db.flush()
+
+        for p_nome in ["Pão de Hambúrguer", "Pão Carioca"]:
+            op = (
+                db.query(OpcaoModificador)
+                .filter(
+                    OpcaoModificador.restaurante_id == tenant_id,
+                    OpcaoModificador.grupo_id == grupo_pao.id,
+                    OpcaoModificador.nome == p_nome,
+                )
+                .first()
+            )
+            if not op:
+                db.add(
+                    OpcaoModificador(
+                        id=str(uuid.uuid4()),
+                        restaurante_id=tenant_id,
+                        grupo_id=grupo_pao.id,
+                        nome=p_nome,
+                        preco_adicional=Decimal("0.00"),
+                        ativo=True,
+                    )
+                )
+
+        grupo_salada = (
+            db.query(GrupoModificador)
+            .filter(GrupoModificador.restaurante_id == tenant_id, GrupoModificador.nome == "Salada")
+            .first()
+        )
+        if not grupo_salada:
+            grupo_salada = GrupoModificador(
+                id=str(uuid.uuid4()),
+                restaurante_id=tenant_id,
+                nome="Salada",
+                tipo="opcional",
+                min_selecoes=0,
+                max_selecoes=1,
+            )
+            db.add(grupo_salada)
+            db.flush()
+
+        for s_nome in ["Com salada", "Sem salada"]:
+            op = (
+                db.query(OpcaoModificador)
+                .filter(
+                    OpcaoModificador.restaurante_id == tenant_id,
+                    OpcaoModificador.grupo_id == grupo_salada.id,
+                    OpcaoModificador.nome == s_nome,
+                )
+                .first()
+            )
+            if not op:
+                db.add(
+                    OpcaoModificador(
+                        id=str(uuid.uuid4()),
+                        restaurante_id=tenant_id,
+                        grupo_id=grupo_salada.id,
+                        nome=s_nome,
+                        preco_adicional=Decimal("0.00"),
+                        ativo=True,
+                    )
+                )
+
+        db.flush()
+
+        sanduiches = (
+            db.query(Produto)
+            .filter(Produto.restaurante_id == tenant_id, Produto.nome.ilike("Sanduíche%"))
+            .all()
+        )
+        for sand in sanduiches:
+            for grp, min_s, max_s in [(grupo_pao, 1, 1), (grupo_salada, 0, 1)]:
+                link_sand = (
+                    db.query(ProdutoGrupoModificador)
+                    .filter(
+                        ProdutoGrupoModificador.restaurante_id == tenant_id,
+                        ProdutoGrupoModificador.produto_id == sand.id,
+                        ProdutoGrupoModificador.grupo_id == grp.id,
+                    )
+                    .first()
+                )
+                if not link_sand:
+                    db.add(
+                        ProdutoGrupoModificador(
+                            restaurante_id=tenant_id,
+                            produto_id=sand.id,
+                            grupo_id=grp.id,
+                            min_selecoes=min_s,
+                            max_selecoes=max_s,
+                        )
+                    )
 
         summary = {
             "tenant_id": tenant_id,
