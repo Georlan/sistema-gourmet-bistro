@@ -244,6 +244,57 @@ def test_webhook_resolves_by_reference_id_when_charge_received(monkeypatch):
         assert intent.status == "approved"
         assert comanda.online_payment_status == "approved"
 
+        # Regression: with a batch size of one, a pending older Pix must not
+        # prevent a newer Pix from being queried on the next sweep.
+        for suffix, age in (("OLDER", 5), ("NEWER", 1)):
+            extra_order = Comanda(
+                id=f"comanda-fair-{suffix.lower()}",
+                restaurante_id=rid,
+                garcom_id=user.id,
+                numero_pedido=400 if suffix == "OLDER" else 401,
+                identificador=f"Fairness {suffix}",
+                tipo="Consumo no Local",
+                delivery_status="pendente",
+                online_payment_status="pending",
+            )
+            db.add(extra_order)
+            db.flush()
+            db.add(
+                OnlinePaymentIntent(
+                    id=f"intent-fair-{suffix.lower()}",
+                    restaurante_id=rid,
+                    comanda_id=extra_order.id,
+                    turno_id=shift.id,
+                    provider="pagbank",
+                    method="pix",
+                    status="pending",
+                    amount=50.00,
+                    marketplace_fee=0.00,
+                    fee_settlement="none",
+                    idempotency_key=f"idem-fair-{suffix.lower()}",
+                    external_payment_id=f"ORDE_FAIR_{suffix}",
+                    created_at=datetime.datetime.now(datetime.timezone.utc)
+                    - datetime.timedelta(minutes=age),
+                )
+            )
+        db.commit()
+
+        def fair_payment(_self, payment_id):
+            is_older = payment_id == "ORDE_FAIR_OLDER"
+            return ProviderPayment(
+                external_id=payment_id,
+                status="pending" if is_older else "approved",
+                amount=Decimal("50.00"),
+                external_reference="intent-fair-older" if is_older else "intent-fair-newer",
+            )
+
+        monkeypatch.setattr(PagBankProvider, "get_payment", fair_payment)
+        assert reconcile_pending_intents(max_per_tenant=1) == 0
+        assert reconcile_pending_intents(max_per_tenant=1) == 1
+        db.expire_all()
+        newer = db.query(OnlinePaymentIntent).filter_by(id="intent-fair-newer").one()
+        assert newer.status == "approved"
+
     finally:
         db.close()
 
