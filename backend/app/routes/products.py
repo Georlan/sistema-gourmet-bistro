@@ -492,7 +492,7 @@ def publish_cardapio(
 
     query = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == rest_id)
     if db.bind and db.bind.dialect.name == "postgresql":
-        query = query.with_for_update()
+        query = query.with_for_update(of=ConfiguracaoRestaurante)
     config = query.first()
 
     if not config:
