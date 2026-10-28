@@ -257,19 +257,23 @@ export default function CardapioProductModal({
     });
   };
 
-  const handleAdd = () => {
-    const unsatisfied = allModifiers.filter((modifier) => {
+  const unsatisfiedModifiers = useMemo(() => {
+    return allModifiers.filter((modifier) => {
       const selections = selectedOptions[modifier.id] || [];
       return !selectionWithinRules(
         rulesForModifier(modifier),
         selections.map((selection) => selection.id),
       );
     });
+  }, [allModifiers, selectedOptions]);
 
-    if (unsatisfied.length > 0) {
-      setFeedback(`Confira as escolhas em ${unsatisfied.map((m) => m.title).join(", ")} antes de ${compositionStep ? "continuar" : initialItem ? "salvar" : "adicionar"}.`);
-      setExpandedExtras(current => ({ ...current, [unsatisfied[0].id]: true }));
-      const group = groupRefs.current.get(unsatisfied[0].id);
+  const hasUnsatisfied = unsatisfiedModifiers.length > 0;
+
+  const handleAdd = () => {
+    if (unsatisfiedModifiers.length > 0) {
+      setFeedback(`Confira as escolhas em ${unsatisfiedModifiers.map((m) => m.title).join(", ")} antes de ${compositionStep ? "continuar" : initialItem ? "salvar" : "adicionar"}.`);
+      setExpandedExtras(current => ({ ...current, [unsatisfiedModifiers[0].id]: true }));
+      const group = groupRefs.current.get(unsatisfiedModifiers[0].id);
       group?.scrollIntoView({ block: "center", behavior: "smooth" });
       group?.focus({ preventScroll: true });
       return;
@@ -432,7 +436,7 @@ export default function CardapioProductModal({
                 const simpleSelection = modifier.selectionMode === "tipos" || max === 1;
                 const complete = modifier.required && selectionWithinRules(rules, selectedIds);
                 const collapsible = min === 0 && modifier.options.length > 0 && modifier.options.every(option => option.extraPrice > 0);
-                const expanded = !collapsible || expandedExtras[modifier.id] === true;
+                const expanded = !collapsible || expandedExtras[modifier.id] !== false;
                 const surcharge = selections.reduce((total, option) => total + option.extraPrice, 0);
                 const Heading = collapsible ? "button" : "div";
 
@@ -444,7 +448,7 @@ export default function CardapioProductModal({
                     >
                       <div>
                         <h3 className="text-sm font-black text-koma-foreground">{modifier.title}</h3>
-                        {collapsible && <p className="mt-1 text-xs font-bold text-emerald-400">{selections.length === 0 ? "Nenhum selecionado · Sem acréscimo" : `${selections.length} ${selections.length === 1 ? "adicional" : "adicionais"} · + ${formatPrice(surcharge)} por item`}</p>}
+                        {collapsible && !expanded && <p className="mt-1 text-xs font-bold text-emerald-400">{selections.length === 0 ? "Nenhum selecionado · Sem acréscimo" : `${selections.length} ${selections.length === 1 ? "adicional" : "adicionais"} · + ${formatPrice(surcharge)} por item`}</p>}
                         <p className="mt-0.5 text-xs text-koma-muted">
                           {instruction}
                           {modifier.selectionMode === "porcoes" && max > 1 && " · Pode repetir"}
@@ -520,7 +524,9 @@ export default function CardapioProductModal({
                             <span className={`relative min-w-0 ${optionalSalad && !simpleSelection ? "pointer-events-none" : ""}`}>
                               <span className={`block text-sm font-bold ${optionalSalad && !selected && selections.length === 0 ? "text-koma-muted" : "text-koma-foreground"}`}>{option.name}</span>
                               {option.extraPrice > 0 && (
-                                <span className="mt-0.5 block text-xs font-bold text-emerald-400">+ {formatPrice(option.extraPrice)} cada</span>
+                                <span className="mt-0.5 block text-xs font-bold text-emerald-400">
+                                  + {formatPrice(option.extraPrice)}{modifier.selectionMode === "porcoes" && max > 1 ? " cada" : ""}
+                                </span>
                               )}
                             </span>
                             {simpleSelection ? (
@@ -611,15 +617,26 @@ export default function CardapioProductModal({
               <button
                 type="button"
                 onClick={handleAdd}
-                className="min-h-12 min-w-0 flex-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-6 text-sm font-black text-white hover:from-emerald-400 hover:to-teal-400 shadow-lg shadow-emerald-950/40 transition-all cursor-pointer"
-                aria-label={compositionStep.actionLabel}
+                className={`min-h-12 min-w-0 flex-1 rounded-full px-6 text-sm font-black transition-all cursor-pointer ${
+                  hasUnsatisfied
+                    ? "bg-stone-800/90 border border-amber-500/50 text-amber-200 hover:bg-stone-800 shadow-lg shadow-black/40"
+                    : "bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-400 hover:to-teal-400 shadow-lg shadow-emerald-950/40"
+                }`}
+                aria-label={hasUnsatisfied ? `Escolha ${unsatisfiedModifiers.map((m) => m.title).join(", ")}` : compositionStep.actionLabel}
               >
-                {compositionStep.actionLabel}
+                {hasUnsatisfied ? `Escolha ${unsatisfiedModifiers.length === 1 ? unsatisfiedModifiers[0].title : "opções obrigatórias"}` : compositionStep.actionLabel}
               </button>
             </div>
           ) : (
           <>
-          <p className="mb-2 text-xs text-koma-muted">Quantidade de itens{quantity > 1 ? " · Mesma montagem para todas as unidades" : ""}</p>
+          {hasUnsatisfied ? (
+            <p className="mb-2 text-xs font-bold text-amber-400 flex items-center gap-1.5 animate-pulse" role="status">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              Escolha {unsatisfiedModifiers.map((m) => m.title).join(", ")} para continuar
+            </p>
+          ) : (
+            <p className="mb-2 text-xs text-koma-muted">Quantidade de itens{quantity > 1 ? " · Mesma montagem para todas as unidades" : ""}</p>
+          )}
           <div className="flex items-center gap-3">
           <div className="flex shrink-0 items-center koma-art-stepper-pill">
             <button
@@ -647,12 +664,30 @@ export default function CardapioProductModal({
           <button
             type="button"
             onClick={handleAdd}
-            className="koma-action-primary flex min-h-12 min-w-0 touch-manipulation flex-1 items-center justify-between gap-3 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-5 text-white shadow-lg shadow-emerald-950/40 transition hover:from-emerald-400 hover:to-teal-400 active:scale-[0.99] cursor-pointer"
+            className={`koma-action-primary flex min-h-12 min-w-0 touch-manipulation flex-1 items-center justify-between gap-3 rounded-full px-5 transition active:scale-[0.99] cursor-pointer ${
+              hasUnsatisfied
+                ? "bg-stone-800/90 border border-amber-500/50 text-amber-200 hover:bg-stone-800 hover:border-amber-400 shadow-lg shadow-black/40"
+                : "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-950/40 hover:from-emerald-400 hover:to-teal-400"
+            }`}
             id="btn-add-to-cart-action"
-            aria-label={`${initialItem ? "Salvar" : "Adicionar"} ${quantity} × ${product.name} · ${formatPrice(totalPrice)}`}
+            aria-label={
+              hasUnsatisfied
+                ? `Escolha ${unsatisfiedModifiers.map((m) => m.title).join(", ")} antes de adicionar`
+                : `${initialItem ? "Salvar" : "Adicionar"} ${quantity} × ${product.name} · ${formatPrice(totalPrice)}`
+            }
           >
             <span className="flex items-center gap-2 text-xs font-black">
-              <ShoppingBag className="h-4 w-4 shrink-0" /> {initialItem ? "Salvar" : "Adicionar"} {quantity}×
+              {hasUnsatisfied ? (
+                <>
+                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
+                  <span>Escolha {unsatisfiedModifiers.length === 1 ? unsatisfiedModifiers[0].title : "opções obrigatórias"}</span>
+                </>
+              ) : (
+                <>
+                  <ShoppingBag className="h-4 w-4 shrink-0" />
+                  <span>{initialItem ? "Salvar" : "Adicionar"} {quantity}×</span>
+                </>
+              )}
             </span>
             <strong className="text-sm font-black">{formatPrice(totalPrice)}</strong>
           </button>
