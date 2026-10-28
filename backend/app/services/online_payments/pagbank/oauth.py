@@ -285,6 +285,11 @@ def _post(path: str, payload: dict, *, client=None, environment: str | None = No
                 reason=reason,
             )
         data = response.json() if response.content else {}
+        if not isinstance(data, dict):
+            logger.warning('PagBank Connect unexpected token response type endpoint=%s', path)
+            raise PagBankOAuthError(
+                'PagBank retornou resposta de autorização inválida.', reason='invalid_response',
+            )
         if capture:
             log_sandbox_oauth_evidence('token_exchange', restaurant_id=evidence_restaurant_id,
                 state=evidence_state, http_status=response.status_code, token_response=data,
