@@ -127,6 +127,63 @@ def test_incomplete_connect_response_is_classified_without_tokens(caplog):
     assert 'private-access-token' not in caplog.text
 
 
+def test_provider_maps_bank_customer_email_rejection_without_leaking_pii(caplog):
+    requests = []
+
+    def handler(req):
+        requests.append(req)
+        return httpx.Response(400, json={'error_messages': [{
+            'code': '40002',
+            'parameter_name': 'customer.email',
+            'description': 'buyer email must not be equals to merchant email private@example.test',
+        }]})
+    provider = PagBankProvider('seller-token')
+    provider._client.close()
+    provider._client = httpx.Client(base_url=oauth.api_url(), transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(PagBankError) as failure:
+            provider.create_pix(
+                amount=Decimal('6'), marketplace_fee=Decimal('0'),
+                payer_email='private@example.test', payer_name='Buyer',
+                payer_tax_id='12345678909', external_reference='intent-test',
+                idempotency_key='idem-email', notification_url='https://api.example.test/webhook',
+                expires_at=datetime.datetime.now(datetime.timezone.utc),
+            )
+        assert failure.value.reason == 'customer_email_rejected'
+        assert failure.value.status_code == 400
+        assert not failure.value.retryable
+        assert len(requests) == 1
+        assert 'private@example.test' not in caplog.text
+        assert 'seller-token' not in caplog.text
+        assert '40002' in caplog.text
+        assert 'customer.email' in caplog.text
+    finally:
+        provider._client.close()
+
+
+def test_provider_does_not_classify_unrelated_40002_as_customer_email():
+    def handler(req):
+        return httpx.Response(400, json={'error_messages': [{
+            'code': '40002', 'parameter_name': 'items[0].quantity',
+        }]})
+    provider = PagBankProvider('seller-token')
+    provider._client.close()
+    provider._client = httpx.Client(base_url=oauth.api_url(), transport=httpx.MockTransport(handler))
+    try:
+        with pytest.raises(PagBankError) as failure:
+            provider.create_pix(
+                amount=Decimal('6'), marketplace_fee=Decimal('0'),
+                payer_email='buyer@example.test', payer_name='Buyer',
+                payer_tax_id='12345678909', external_reference='intent-test',
+                idempotency_key='idem-other', notification_url='https://api.example.test/webhook',
+                expires_at=datetime.datetime.now(datetime.timezone.utc),
+            )
+        assert failure.value.reason is None
+        assert failure.value.status_code == 400
+    finally:
+        provider._client.close()
+
+
 def test_pix_uses_current_charge_contract_integer_cents_and_no_split():
     requests = []
     def handle(req):
@@ -222,6 +279,21 @@ def test_callback_connects_seller_in_state_tenant_and_revokes_before_disconnect(
             )
         assert invalid_grant.value.status_code == 409
         assert 'nova conexão' in invalid_grant.value.detail
+        db.refresh(account)
+        assert account.status == 'active'
+        assert account.access_token == 'seller-token'
+
+        def inactive_app_exchange(code, **kwargs):
+            raise oauth.PagBankOAuthError('inactive token', reason='41012')
+        monkeypatch.setattr(oauth, 'exchange', inactive_app_exchange)
+        with pytest.raises(HTTPException) as inactive_app:
+            pagbank_payments.complete(
+                pagbank_payments.AuthorizationCompletion(code='fresh-code', state=state),
+                db=db, user=user,
+            )
+        assert inactive_app.value.status_code == 503
+        assert 'suporte KÔMA' in inactive_app.value.detail
+        assert 'preservada' in inactive_app.value.detail
         db.refresh(account)
         assert account.status == 'active'
         assert account.access_token == 'seller-token'
