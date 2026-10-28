@@ -3,6 +3,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from typing import Any, List, Literal, Optional, Union
 from datetime import datetime
 import uuid
+import re
 from .services.operational_modes import normalize_active_order_types
 
 # ----------------- AUTHENTICATION -----------------
@@ -1214,6 +1215,16 @@ class CardapioPedidoCreate(BaseModel):
         if not email or email.count("@") != 1 or "." not in email.split("@", 1)[1]:
             raise ValueError("E-mail do cliente inválido.")
         return email
+
+    @model_validator(mode="after")
+    def require_valid_online_pix_email(self):
+        # PagBank Order customer.email requires 10-255 characters. Reject at the
+        # request boundary instead of converting an invalid buyer input into HTTP 502.
+        if self.forma_pagamento == "online" and self.forma_pagamento_detalhe == "pix":
+            email = self.cliente_email or ""
+            if len(email) < 10 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]{2,}", email):
+                raise ValueError("Informe um e-mail válido com pelo menos 10 caracteres para gerar o Pix.")
+        return self
 
     model_config = ConfigDict(extra="forbid")
 
