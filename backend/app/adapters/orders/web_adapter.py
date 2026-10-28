@@ -507,6 +507,9 @@ class CardapioWebAdapter:
                 payment_account = OnlinePaymentService.active_account(db, rest_id)
                 if payment_account.provider == "pagbank":
                     from ...tax_ids import is_valid_cpf, is_valid_cnpj
+                    from ...services.online_payments.pagbank.provider import valid_order_payer_email
+                    if not valid_order_payer_email(payload.cliente_email):
+                        raise HTTPException(422, "Informe um e-mail válido com pelo menos 10 caracteres para gerar o Pix.")
                     if not (is_valid_cpf(payload.cliente_documento) or is_valid_cnpj(payload.cliente_documento)):
                         raise HTTPException(422, "Informe um CPF/CNPJ válido do comprador para gerar o Pix PagBank.")
                 payment_shift = OnlinePaymentService.open_shift(db, rest_id)
