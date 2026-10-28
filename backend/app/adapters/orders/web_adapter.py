@@ -509,7 +509,7 @@ class CardapioWebAdapter:
                     from ...tax_ids import is_valid_cpf, is_valid_cnpj
                     from ...services.online_payments.pagbank.provider import valid_order_payer_email
                     if not valid_order_payer_email(payload.cliente_email):
-                        raise HTTPException(422, "Informe um e-mail válido com pelo menos 10 caracteres para gerar o Pix.")
+                        raise HTTPException(422, "Informe um e-mail válido para gerar o Pix.")
                     if not (is_valid_cpf(payload.cliente_documento) or is_valid_cnpj(payload.cliente_documento)):
                         raise HTTPException(422, "Informe um CPF/CNPJ válido do comprador para gerar o Pix PagBank.")
                 payment_shift = OnlinePaymentService.open_shift(db, rest_id)
@@ -700,6 +700,11 @@ class CardapioWebAdapter:
                         "O PagBank rejeitou este e-mail para o Pix. Use outro e-mail válido "
                         "do comprador, diferente do cadastrado na conta PagBank do restaurante."
                     ),
+                ) from exc
+            if isinstance(exc, PagBankError) and 'e-mail' in str(exc).lower():
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Informe um e-mail válido para gerar o Pix PagBank.",
                 ) from exc
             if isinstance(exc, PagBankError) and exc.status_code == 403:
                 raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

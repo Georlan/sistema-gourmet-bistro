@@ -172,6 +172,13 @@ def test_verify_pagbank_signature():
         candidate_tokens=[],
     ) is False
 
+    # 6. Duplicate tokens in candidate list do not affect correctness
+    assert verify_pagbank_signature(
+        raw_body=body,
+        authenticity_token=valid_sig,
+        candidate_tokens=list(dict.fromkeys([token, token, "other", "other"])),
+    ) is True
+
 
 def test_webhook_resolves_by_reference_id_when_charge_received(monkeypatch):
     """Testa que o webhook com id de cobrança e reference_id consegue encontrar o intent pela chave de referência."""
