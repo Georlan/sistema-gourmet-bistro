@@ -140,13 +140,12 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
                 409, 'Autorização PagBank expirada ou já utilizada. Inicie uma nova conexão.'
             ) from exc
         if exc.reason in {'41012', 'token_is_no_longer_active', '41008', 'invalid_token'}:
-            # OAuth token exchange authenticates with the KOMA app bearer.
-            # Repeating Connect cannot repair a revoked/inactive app credential.
-            # Keep the previously connected seller account unchanged.
+            # The provider code alone does not identify which credential or
+            # account relationship is at fault. Preserve the existing account.
             raise HTTPException(
                 503,
-                'Token da integração PagBank inativo ou inválido. '
-                'O suporte KÔMA precisa revisar a credencial da aplicação; '
+                'O PagBank recusou a autorização por um problema de credencial. '
+                'O suporte KÔMA precisa verificar a integração; '
                 'sua conexão anterior foi preservada.',
             ) from exc
         raise HTTPException(502, 'Não foi possível concluir a conexão PagBank.') from exc
