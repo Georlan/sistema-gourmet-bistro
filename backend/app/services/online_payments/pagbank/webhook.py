@@ -9,6 +9,22 @@ from typing import Any
 logger = logging.getLogger("koma.pagbank.webhook")
 
 
+def safe_product_origin(value: str | None) -> str:
+    """Only retain the provider's documented product category, never raw headers."""
+    value = value.strip().upper() if isinstance(value, str) else ''
+    return value if value in {'ORDER', 'CHECKOUT'} else 'unknown'
+
+
+def authenticity_signature_format(value: str | None) -> str:
+    """Classify an untrusted header without returning any signature content."""
+    if not isinstance(value, str) or not value.strip():
+        return 'absent'
+    normalized = value.strip().strip('"').strip("'").lower()
+    if len(normalized) == 64 and all(char in '0123456789abcdef' for char in normalized):
+        return 'sha256_hex'
+    return 'other'
+
+
 def extract_webhook_identifiers(payload: Any) -> tuple[str | None, str | None]:
     """Extrai (payment_id, reference_id) de payloads de notificação do PagBank.
 
