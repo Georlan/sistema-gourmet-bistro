@@ -28,11 +28,25 @@ from app.services.online_payments.pagbank.provider import PagBankProvider
 from app.services.online_payments.pagbank.webhook import (
     extract_webhook_identifiers,
     verify_pagbank_signature,
+    authenticity_signature_format,
+    safe_product_origin,
 )
 from app.services.online_payments.reconciliation_worker import (
     discover_active_tenant_ids,
     reconcile_pending_intents,
 )
+
+
+def test_webhook_rejection_diagnostics_do_not_return_untrusted_header_data():
+    assert safe_product_origin(' ORDER ') == 'ORDER'
+    assert safe_product_origin('checkout') == 'CHECKOUT'
+    assert safe_product_origin('ORDER buyer@private.test') == 'unknown'
+    assert safe_product_origin('token-secret') == 'unknown'
+    assert authenticity_signature_format(None) == 'absent'
+    assert authenticity_signature_format('  ') == 'absent'
+    assert authenticity_signature_format('a' * 64) == 'sha256_hex'
+    assert authenticity_signature_format('"A"') == 'other'
+    assert authenticity_signature_format('private-token-or-email@example.com') == 'other'
 
 
 def test_extract_webhook_identifiers():
