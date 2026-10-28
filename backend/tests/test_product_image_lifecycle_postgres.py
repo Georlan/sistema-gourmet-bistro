@@ -15,7 +15,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.database import TenantSession, tenant_session_scope
-from app.models import Restaurante, Categoria, Produto, ProductImageRetirement
+from app.models import Restaurante, Categoria, Cardapio, Produto, ProductImageRetirement
 from app.services.product_image_lifecycle import collect, reconcile
 
 NOW = datetime(2026, 10, 4, 12)
@@ -37,7 +37,7 @@ def pg():
     engine = create_engine(url.set(database=name))
     try:
         metadata = MetaData()
-        for model in (Restaurante, Categoria, Produto):
+        for model in (Restaurante, Categoria, Cardapio, Produto):
             model.__table__.to_metadata(metadata)
         metadata.create_all(engine)
         spec = importlib.util.spec_from_file_location('retention_migration', Path(__file__).parents[1] / 'alembic/versions/82c7a941d5ef_product_image_retention.py')
