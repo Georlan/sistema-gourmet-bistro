@@ -30,11 +30,32 @@ from app.services.online_payments.pagbank.webhook import (
     verify_pagbank_signature,
     authenticity_signature_format,
     safe_product_origin,
+    pilot8_ibanking_webhook_token,
 )
 from app.services.online_payments.reconciliation_worker import (
     discover_active_tenant_ids,
     reconcile_pending_intents,
 )
+
+
+def test_pilot8_merchant_signing_token_is_opt_in_and_tenant_scoped(monkeypatch):
+    monkeypatch.setenv('PAGBANK_PRODUCTION_PILOT8_WEBHOOK_IBANKING_TOKEN', 'seller-test-signing-token')
+    assert pilot8_ibanking_webhook_token(
+        restaurant_id=8, environment='production', owner_receiver_pilot_enabled=True,
+    ) == 'seller-test-signing-token'
+    assert pilot8_ibanking_webhook_token(
+        restaurant_id=8, environment='sandbox', owner_receiver_pilot_enabled=True,
+    ) is None
+    assert pilot8_ibanking_webhook_token(
+        restaurant_id=9, environment='production', owner_receiver_pilot_enabled=True,
+    ) is None
+    assert pilot8_ibanking_webhook_token(
+        restaurant_id=8, environment='production', owner_receiver_pilot_enabled=False,
+    ) is None
+    monkeypatch.delenv('PAGBANK_PRODUCTION_PILOT8_WEBHOOK_IBANKING_TOKEN')
+    assert pilot8_ibanking_webhook_token(
+        restaurant_id=8, environment='production', owner_receiver_pilot_enabled=True,
+    ) is None
 
 
 def test_webhook_rejection_diagnostics_do_not_return_untrusted_header_data():
