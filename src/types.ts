@@ -16,6 +16,15 @@ export interface Product {
   imagens_galeria?: string[];
   ativo?: boolean;
   ordem_exibicao?: number | null;
+  cardapio_id?: string | null;
+}
+
+export interface CardapioMenu {
+  id: string;
+  nome: string;
+  identificador: string;
+  descricao?: string;
+  ordem_exibicao: number;
 }
 
 export interface DraftItem {

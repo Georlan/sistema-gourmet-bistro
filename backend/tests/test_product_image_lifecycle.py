@@ -13,7 +13,7 @@ from starlette.datastructures import Headers
 
 from app.config import settings
 from app.database import current_restaurante_id
-from app.models import Restaurante, Categoria, Produto, ProductImageRetirement
+from app.models import Restaurante, Categoria, Cardapio, Produto, ProductImageRetirement
 from app.services.product_image_lifecycle import collect, enqueue, reconcile, list_product_objects
 from app.services.storage_paths import storage_object_path
 
@@ -25,7 +25,7 @@ def db(monkeypatch):
     monkeypatch.setattr(settings, 'SUPABASE_URL', 'https://test.supabase.co')
     engine = create_engine('sqlite://')
     metadata = MetaData()
-    for model in (Restaurante, Categoria, Produto, ProductImageRetirement):
+    for model in (Restaurante, Categoria, Cardapio, Produto, ProductImageRetirement):
         model.__table__.to_metadata(metadata)
     metadata.create_all(engine)
     with Session(engine, expire_on_commit=False) as session:

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session, load_only, raiseload, lazyload
 
 from ..promotions import active_promotions, money, promotion_status
 from ..catalog_addons import effective_modifier_payloads_by_product
-from ..marmitaria_catalog import enabled as marmitaria_enabled
+from ..marmitaria_catalog import enabled as marmitaria_enabled, size_category
 from ..restaurant_profile_models import RestauranteOperationProfile
 from ..services.customer_whatsapp_dispatch import customer_notices_enabled, customer_notice_transport_config
 from ..config import settings
@@ -29,6 +29,7 @@ from ..database import (
     tenant_session_scope,
 )
 from ..models import (
+    Cardapio,
     Categoria,
     ConfiguracaoRestaurante,
     Produto,
@@ -232,6 +233,7 @@ def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoResta
         ConfiguracaoRestaurante.tabela_taxas_bairros,
         ConfiguracaoRestaurante.tabela_taxas_km,
         ConfiguracaoRestaurante.promocoes,
+        ConfiguracaoRestaurante.cardapio_ativo_id,
     )
     # Public capability depends only on the explicit customer-notice consent.
     # Never load private operator phone/session into public menu projections.
@@ -245,6 +247,7 @@ def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoResta
     return db.query(ConfiguracaoRestaurante).options(
         load_only(*public_columns, raiseload=True),
         raiseload(ConfiguracaoRestaurante.restaurante),
+        raiseload(ConfiguracaoRestaurante.cardapio_ativo),
     ).filter(ConfiguracaoRestaurante.restaurante_id == restaurante_id).first()
 
 
@@ -254,6 +257,8 @@ def _public_restaurant_payload(
     pagamento_online_ativo: bool = False,
     beneficios: Optional[dict[str, bool]] = None,
     documento_pix_obrigatorio: bool = False,
+    cardapio_ativo_id: Optional[str] = None,
+    cardapio_ativo_nome: Optional[str] = None,
 ) -> dict:
     policy = evaluate_online_order_policy(restaurante, configuracao)
     next_opening = (
@@ -302,6 +307,8 @@ def _public_restaurant_payload(
         "tabela_taxas_bairros": configuracao.tabela_taxas_bairros if configuracao and configuracao.tabela_taxas_bairros else [],
         "tabela_taxas_km": configuracao.tabela_taxas_km if configuracao and configuracao.tabela_taxas_km else [],
         "taxa_entrega_padrao": float(configuracao.taxa_entrega_fixa) if configuracao and configuracao.taxa_entrega_fixa is not None else None,
+        "cardapio_ativo_id": cardapio_ativo_id or (getattr(configuracao, "cardapio_ativo_id", None) if configuracao else None),
+        "cardapio_ativo_nome": cardapio_ativo_nome,
     }
 
 
@@ -322,6 +329,7 @@ def _public_product_payload(product: Produto, modifier_groups: Optional[list[dic
         "imagem_url": product.imagem or "",
         "imagens_galeria": product.imagens_galeria or [],
         "categoria_id": product.categoria_id,
+        "cardapio_id": product.cardapio_id,
         "grupos_modificadores": modifier_groups or [],
         "marmitaria": marmitaria,
         "ordem_exibicao": product.ordem_exibicao,
@@ -343,10 +351,19 @@ def obter_config_cardapio_digital(
             raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
         configuracao = _public_configuration(db, rest_id)
         pagamento_online_ativo, documento_pix_obrigatorio = OnlinePaymentService.public_payment_capabilities(db, rest_id)
+        cardapio_ativo_id = getattr(configuracao, "cardapio_ativo_id", None) if configuracao else None
+        cardapio_ativo_nome = None
+        if cardapio_ativo_id:
+            cardapio_ativo_nome = db.query(Cardapio.nome).filter(
+                Cardapio.restaurante_id == rest_id,
+                Cardapio.id == cardapio_ativo_id,
+            ).scalar()
         return _public_restaurant_payload(
             restaurante, configuracao, pagamento_online_ativo,
             _public_benefit_capabilities(db, rest_id, restaurante.plano),
             documento_pix_obrigatorio=documento_pix_obrigatorio,
+            cardapio_ativo_id=cardapio_ativo_id,
+            cardapio_ativo_nome=cardapio_ativo_nome,
         )
 
 
@@ -358,13 +375,15 @@ def obter_categorias_cardapio_digital(
 ):
     """Retorna as categorias ativas do tenant para o cardápio digital."""
     with public_tenant_scope(restaurante_id, slug, db) as rest_id:
-        active_category_ids = {
-            row[0]
-            for row in db.query(Produto.categoria_id)
-            .filter(Produto.restaurante_id == rest_id, Produto.ativo.is_(True), Produto.somente_promocao.is_(False))
-            .distinct()
-            .all()
-        }
+        configuracao = _public_configuration(db, rest_id)
+        cat_query = db.query(Produto.categoria_id).filter(
+            Produto.restaurante_id == rest_id,
+            Produto.ativo.is_(True),
+            Produto.somente_promocao.is_(False),
+        )
+        if configuracao and configuracao.cardapio_ativo_id:
+            cat_query = cat_query.filter(Produto.cardapio_id == configuracao.cardapio_ativo_id)
+        active_category_ids = {row[0] for row in cat_query.distinct().all()}
         categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
         categorias_com_produtos = [category for category in categorias if category.id in active_category_ids]
         niche = resolve_restaurant_niche(db, rest_id)
@@ -379,20 +398,35 @@ def obter_produtos_cardapio_digital(
 ):
     """Retorna produtos ativos vendidos avulsos, não componentes exclusivos."""
     with public_tenant_scope(restaurante_id, slug, db) as rest_id:
-        produtos = db.query(Produto).filter(
+        configuracao = _public_configuration(db, rest_id)
+        prod_query = db.query(Produto).filter(
             Produto.restaurante_id == rest_id,
             Produto.ativo.is_(True),
             Produto.somente_promocao.is_(False),
-        ).all()
+        )
+        if configuracao and configuracao.cardapio_ativo_id:
+            prod_query = prod_query.filter(Produto.cardapio_id == configuracao.cardapio_ativo_id)
+        produtos = prod_query.all()
         produtos = _ordered_products(produtos)
         modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
-        is_marmitaria = marmitaria_enabled(db, rest_id)
+        is_marmitaria_tenant = marmitaria_enabled(db, rest_id)
+        categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
+        categories_by_id = {cat.id: cat for cat in categorias}
+
+        def is_product_marmita(p: Produto) -> bool:
+            if not is_marmitaria_tenant:
+                return False
+            if configuracao and configuracao.cardapio_ativo_id:
+                cat = categories_by_id.get(p.categoria_id)
+                return bool(p.marmitaria_tamanho or (cat and size_category(cat)))
+            return True
+
         return [
             {
                 **_public_product_payload(
                     product,
                     modifier_payloads.get(str(product.id), []),
-                    marmitaria=is_marmitaria,
+                    marmitaria=is_product_marmita(product),
                 ),
                 "ativo": True,
             }
@@ -415,17 +449,38 @@ def obter_cardapio_publico(
 
         configuracao = _public_configuration(db, rest_id)
         pagamento_online_ativo, documento_pix_obrigatorio = OnlinePaymentService.public_payment_capabilities(db, rest_id)
+        cardapio_ativo_id = getattr(configuracao, "cardapio_ativo_id", None) if configuracao else None
+        cardapio_ativo_nome = None
+        if cardapio_ativo_id:
+            cardapio_ativo_nome = db.query(Cardapio.nome).filter(
+                Cardapio.restaurante_id == rest_id,
+                Cardapio.id == cardapio_ativo_id,
+            ).scalar()
         categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
-        produtos = db.query(Produto).filter(
+        categories_by_id = {cat.id: cat for cat in categorias}
+
+        prod_query = db.query(Produto).filter(
             Produto.restaurante_id == rest_id,
             Produto.ativo.is_(True),
-        ).all()
+        )
+        if configuracao and configuracao.cardapio_ativo_id:
+            prod_query = prod_query.filter(Produto.cardapio_id == configuracao.cardapio_ativo_id)
+
+        produtos = prod_query.all()
         produtos = _ordered_products(produtos)
         modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
         profile_key = db.query(RestauranteOperationProfile.profile_key).filter(
             RestauranteOperationProfile.restaurante_id == rest_id,
         ).scalar()
-        is_marmitaria = profile_key == "marmitaria"
+        is_marmitaria_tenant = profile_key == "marmitaria"
+
+        def is_product_marmita(p: Produto) -> bool:
+            if not is_marmitaria_tenant:
+                return False
+            if configuracao and configuracao.cardapio_ativo_id:
+                cat = categories_by_id.get(p.categoria_id)
+                return bool(p.marmitaria_tamanho or (cat and size_category(cat)))
+            return True
 
         # Os produtos exclusivos só são disponibilizados às etapas de ofertas ativas.
         products_regular = [product for product in produtos if not product.somente_promocao]
@@ -453,6 +508,8 @@ def obter_cardapio_publico(
                 pagamento_online_ativo,
                 _public_benefit_capabilities(db, rest_id, restaurante.plano),
                 documento_pix_obrigatorio=documento_pix_obrigatorio,
+                cardapio_ativo_id=cardapio_ativo_id,
+                cardapio_ativo_nome=cardapio_ativo_nome,
             ),
             "categorias": [
                 _public_category_payload(category)
@@ -462,13 +519,15 @@ def obter_cardapio_publico(
                 _public_product_payload(
                     product,
                     modifier_payloads.get(str(product.id), []),
-                    marmitaria=is_marmitaria,
+                    marmitaria=is_product_marmita(product),
                 )
                 for product in products_regular
             ],
             "produtos_promocionais": [
                 _public_product_payload(
-                    product, modifier_payloads.get(str(product.id), []), marmitaria=is_marmitaria,
+                    product,
+                    modifier_payloads.get(str(product.id), []),
+                    marmitaria=is_product_marmita(product),
                 ) for product in exclusive_parts
             ],
             "promocoes": active_offers,

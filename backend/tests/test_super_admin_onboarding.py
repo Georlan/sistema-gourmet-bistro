@@ -196,8 +196,13 @@ def test_onboarding_cria_tenant_defaults_admin_auditoria_e_login():
             "/produtos/catalogo",
             headers={"Authorization": f"Bearer {login_body['access_token']}"},
         )
-        assert catalog.status_code == 200, catalog.text
-        assert catalog.json() == {"categorias": [], "produtos": []}
+        assert catalog.json() == {
+            "categorias": [],
+            "produtos": [],
+            "cardapio_ativo_id": None,
+            "cardapio_ativo_nome": None,
+            "cardapios": [],
+        }
     finally:
         _cleanup_tenant(tenant_id)
 
