@@ -8,11 +8,11 @@ test('CardapioProductModal - modificadores e adicionais visíveis e validação 
     'utf8',
   );
 
-  // 1. Modificadores devem ser abertos por padrão para visibilidade imediata
+  // 1. Modificadores obrigatórios devem ser abertos por padrão para visibilidade imediata
   assert.match(
     modalSource,
-    /const expanded = !collapsible \|\| expandedExtras\[modifier\.id\] !== false;/,
-    'Modificadores devem ser abertos por padrão (!== false) em vez de ocultos em accordion fechado',
+    /const expanded = !collapsible \|\| expandedExtras\[modifier\.id\] === true;/,
+    'Modificadores obrigatórios não-colapsáveis (!collapsible) ficam sempre abertos por padrão',
   );
 
   // 2. Deve calcular unsatisfiedModifiers e hasUnsatisfied

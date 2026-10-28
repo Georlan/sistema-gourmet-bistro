@@ -436,7 +436,7 @@ export default function CardapioProductModal({
                 const simpleSelection = modifier.selectionMode === "tipos" || max === 1;
                 const complete = modifier.required && selectionWithinRules(rules, selectedIds);
                 const collapsible = min === 0 && modifier.options.length > 0 && modifier.options.every(option => option.extraPrice > 0);
-                const expanded = !collapsible || expandedExtras[modifier.id] !== false;
+                const expanded = !collapsible || expandedExtras[modifier.id] === true;
                 const surcharge = selections.reduce((total, option) => total + option.extraPrice, 0);
                 const Heading = collapsible ? "button" : "div";
 
@@ -617,14 +617,10 @@ export default function CardapioProductModal({
               <button
                 type="button"
                 onClick={handleAdd}
-                className={`min-h-12 min-w-0 flex-1 rounded-full px-6 text-sm font-black transition-all cursor-pointer ${
-                  hasUnsatisfied
-                    ? "bg-stone-800/90 border border-amber-500/50 text-amber-200 hover:bg-stone-800 shadow-lg shadow-black/40"
-                    : "bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-400 hover:to-teal-400 shadow-lg shadow-emerald-950/40"
-                }`}
-                aria-label={hasUnsatisfied ? `Escolha ${unsatisfiedModifiers.map((m) => m.title).join(", ")}` : compositionStep.actionLabel}
+                className="min-h-12 min-w-0 flex-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-6 text-sm font-black text-white hover:from-emerald-400 hover:to-teal-400 shadow-lg shadow-emerald-950/40 transition-all cursor-pointer"
+                aria-label={compositionStep.actionLabel}
               >
-                {hasUnsatisfied ? `Escolha ${unsatisfiedModifiers.length === 1 ? unsatisfiedModifiers[0].title : "opções obrigatórias"}` : compositionStep.actionLabel}
+                {compositionStep.actionLabel}
               </button>
             </div>
           ) : (
@@ -670,24 +666,11 @@ export default function CardapioProductModal({
                 : "bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-950/40 hover:from-emerald-400 hover:to-teal-400"
             }`}
             id="btn-add-to-cart-action"
-            aria-label={
-              hasUnsatisfied
-                ? `Escolha ${unsatisfiedModifiers.map((m) => m.title).join(", ")} antes de adicionar`
-                : `${initialItem ? "Salvar" : "Adicionar"} ${quantity} × ${product.name} · ${formatPrice(totalPrice)}`
-            }
+            aria-label={`${initialItem ? "Salvar" : "Adicionar"} ${quantity} × ${product.name} · ${formatPrice(totalPrice)}`}
           >
             <span className="flex items-center gap-2 text-xs font-black">
-              {hasUnsatisfied ? (
-                <>
-                  <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
-                  <span>Escolha {unsatisfiedModifiers.length === 1 ? unsatisfiedModifiers[0].title : "opções obrigatórias"}</span>
-                </>
-              ) : (
-                <>
-                  <ShoppingBag className="h-4 w-4 shrink-0" />
-                  <span>{initialItem ? "Salvar" : "Adicionar"} {quantity}×</span>
-                </>
-              )}
+              <ShoppingBag className="h-4 w-4 shrink-0" />
+              <span>{initialItem ? "Salvar" : "Adicionar"} {quantity}×</span>
             </span>
             <strong className="text-sm font-black">{formatPrice(totalPrice)}</strong>
           </button>
