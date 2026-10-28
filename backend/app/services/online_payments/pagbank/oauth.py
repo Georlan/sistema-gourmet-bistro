@@ -19,7 +19,9 @@ from ..oauth import MercadoPagoOAuthTokens
 
 
 class PagBankOAuthError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, reason: str = 'unknown') -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 logger = logging.getLogger('koma.pagbank')
@@ -227,6 +229,38 @@ def decode_state(state: str, cookie: str) -> tuple[int, str]:
         raise PagBankOAuthError('Autorização inválida ou expirada. Inicie a conexão novamente.') from exc
 
 
+_SAFE_CONNECT_ERROR_CODES = frozenset({
+    '41001', '41002', '41003', '41004', '41005', '41006', '41007',
+    '41008', '41012', '41013', '41014', '41015', '41016',
+    'invalid_request', 'invalid_redirect_uri', 'invalid_client',
+    'invalid_grant', 'unsupported_grant_type', 'unauthorized_client',
+    'invalid_token', 'token_is_no_longer_active',
+})
+
+
+def _safe_connect_failure_reason(response: httpx.Response) -> str:
+    """Only return documented, allowlisted error codes; never log bank response text."""
+    try:
+        data = response.json()
+    except (ValueError, TypeError):
+        return 'unknown'
+    if not isinstance(data, dict):
+        return 'unknown'
+    candidates = [data.get('error'), data.get('error_code'), data.get('code')]
+    # PagBank Connect frequently returns {"error_messages": [{"code": "41004"}]}.
+    # Never include a provider-supplied description or message in diagnostics.
+    for field in ('errors', 'error_messages'):
+        errors = data.get(field)
+        if isinstance(errors, list):
+            candidates.extend(item.get('code') for item in errors[:3] if isinstance(item, dict))
+    for candidate in candidates:
+        if isinstance(candidate, (str, int)):
+            safe_code = str(candidate).strip().lower()
+            if safe_code in _SAFE_CONNECT_ERROR_CODES:
+                return safe_code
+    return 'unknown'
+
+
 def _post(path: str, payload: dict, *, client=None, environment: str | None = None,
           evidence_restaurant_id: int | None = None, evidence_state: str | None = None) -> dict:
     if not configured(environment):
@@ -244,8 +278,21 @@ def _post(path: str, payload: dict, *, client=None, environment: str | None = No
                 log_sandbox_oauth_evidence('token_exchange', restaurant_id=evidence_restaurant_id,
                     state=evidence_state, http_status=response.status_code,
                     request_id=response.headers.get('x-request-id'))
-            raise PagBankOAuthError(f'PagBank recusou a autorização (HTTP {response.status_code}).')
+            reason = _safe_connect_failure_reason(response)
+            logger.warning(
+                'PagBank Connect request rejected endpoint=%s environment=%s http_status=%s error_code=%s',
+                path, environment or default_environment(), response.status_code, reason,
+            )
+            raise PagBankOAuthError(
+                f'PagBank recusou a autorização (HTTP {response.status_code}).',
+                reason=reason,
+            )
         data = response.json() if response.content else {}
+        if not isinstance(data, dict):
+            logger.warning('PagBank Connect unexpected token response type endpoint=%s', path)
+            raise PagBankOAuthError(
+                'PagBank retornou resposta de autorização inválida.', reason='invalid_response',
+            )
         if capture:
             log_sandbox_oauth_evidence('token_exchange', restaurant_id=evidence_restaurant_id,
                 state=evidence_state, http_status=response.status_code, token_response=data,
@@ -263,7 +310,13 @@ def _post(path: str, payload: dict, *, client=None, environment: str | None = No
 
 def _tokens(data: dict) -> MercadoPagoOAuthTokens:
     if not data.get('access_token') or not data.get('account_id'):
-        raise PagBankOAuthError('PagBank retornou credenciais incompletas.')
+        logger.warning(
+            'PagBank Connect incomplete token response access_token_present=%s account_id_present=%s',
+            bool(data.get('access_token')), bool(data.get('account_id')),
+        )
+        raise PagBankOAuthError(
+            'PagBank retornou credenciais incompletas.', reason='incomplete_response',
+        )
     return MercadoPagoOAuthTokens(access_token=data['access_token'], refresh_token=data.get('refresh_token'),
                                  provider_user_id=data['account_id'], public_key=None, expires_in=int(data.get('expires_in') or 0))
 

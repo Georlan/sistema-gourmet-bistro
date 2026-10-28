@@ -8,6 +8,7 @@ import pytest
 
 from app.services.online_payments.pagbank import oauth
 from app.services.online_payments.pagbank.provider import PagBankProvider, PagBankError, cents
+from app.services.online_payments.pagbank.provider import valid_order_payer_email
 
 
 @pytest.fixture(autouse=True)
@@ -24,6 +25,33 @@ def snapshot(status='WAITING', value=4590):
         'payment_method': {'type': 'PIX', 'pix': {'expiration_date': '2026-10-10T12:00:00Z'}},
         'qr_code': {'text': '000201-test-code'},
     }]}
+
+
+@pytest.mark.parametrize('email,accepted', [
+    ('cliente@email.com', True),
+    (' Comprador+teste@Email.com.br ', True),
+    ('a@b.co', False),
+    ('user@example.c', False),
+    ('sem-arroba', False),
+    ('x @example.com', False),
+])
+def test_online_pix_email_validated_before_pagbank_api(email, accepted):
+    assert valid_order_payer_email(email) is accepted
+
+
+def test_pagbank_provider_never_requests_invalid_payer_email():
+    provider = PagBankProvider('seller-token')
+    try:
+        with pytest.raises(PagBankError, match='e-mail válido'):
+            provider.create_pix(
+                amount=Decimal('4.50'), marketplace_fee=Decimal('0'),
+                payer_email='a@b.co', payer_name='Comprador Teste',
+                payer_tax_id='12345678909', external_reference='intent-test',
+                idempotency_key='idem-valid', notification_url='https://api.example.test/webhook',
+                expires_at=datetime.datetime.now(datetime.timezone.utc),
+            )
+    finally:
+        provider._client.close()
 
 
 def test_state_limit_signature_browser_binding_and_expiry(monkeypatch):
@@ -54,6 +82,51 @@ def test_refresh_headers_endpoint_and_rotation():
     assert requests[0].url.path == '/oauth2/refresh'
 
 
+@pytest.mark.parametrize('payload, expected_reason', [
+    ({'error': 'invalid_grant'}, 'invalid_grant'),
+    ({'errors': [{'code': '41004'}]}, '41004'),
+    ({'error_messages': [{'code': '41004', 'description': 'invalid_grant'}]}, '41004'),
+    ({'error': 'buyer@private.example', 'description': 'secret-value'}, 'unknown'),
+])
+def test_connect_rejection_logs_only_allowlisted_metadata(payload, expected_reason, caplog):
+    def handle(req):
+        return httpx.Response(400, json=payload)
+
+    with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+        with pytest.raises(oauth.PagBankOAuthError) as failure:
+            oauth._post('/oauth2/token', {'grant_type': 'authorization_code', 'code': 'private-code'}, client=client)
+    assert failure.value.reason == expected_reason
+    assert 'http_status=400' in caplog.text
+    assert f'error_code={expected_reason}' in caplog.text
+    assert 'buyer@private.example' not in caplog.text
+    assert 'secret-value' not in caplog.text
+    assert 'private-code' not in caplog.text
+
+
+def test_connect_rejects_non_object_token_response_without_leaking_body(caplog):
+    def handle(req):
+        return httpx.Response(200, json=['secret-value'])
+
+    with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+        with pytest.raises(oauth.PagBankOAuthError) as failure:
+            oauth._post(
+                '/oauth2/token',
+                {'grant_type': 'authorization_code', 'code': 'do-not-log'},
+                client=client,
+            )
+    assert failure.value.reason == 'invalid_response'
+    assert 'secret-value' not in caplog.text
+    assert 'do-not-log' not in caplog.text
+
+
+def test_incomplete_connect_response_is_classified_without_tokens(caplog):
+    with pytest.raises(oauth.PagBankOAuthError) as failure:
+        oauth._tokens({'access_token': 'private-access-token'})
+    assert failure.value.reason == 'incomplete_response'
+    assert 'account_id_present=False' in caplog.text
+    assert 'private-access-token' not in caplog.text
+
+
 def test_pix_uses_current_charge_contract_integer_cents_and_no_split():
     requests = []
     def handle(req):
@@ -62,10 +135,11 @@ def test_pix_uses_current_charge_contract_integer_cents_and_no_split():
     provider = PagBankProvider('seller-token')
     provider._client.close()
     provider._client = httpx.Client(base_url=oauth.api_url(), transport=httpx.MockTransport(handle))
-    payment = provider.create_pix(amount=Decimal('45.90'), marketplace_fee=Decimal(0), payer_email='buyer@example.test',
+    payment = provider.create_pix(amount=Decimal('45.90'), marketplace_fee=Decimal(0), payer_email=' buyer@example.test ',
         payer_name='Buyer', payer_tax_id='12345678909', external_reference='intent-test', idempotency_key='idem-key',
         notification_url='https://api.example.test/webhook', expires_at=datetime.datetime.now(datetime.timezone.utc))
     payload = json.loads(requests[0].content)
+    assert payload['customer']['email'] == 'buyer@example.test'
     assert payload['charges'][0]['amount'] == {'value': 4590, 'currency': 'BRL'}
     assert payload['charges'][0]['payment_method']['type'] == 'PIX'
     assert 'splits' not in payload and 'application_fee' not in payload
@@ -136,6 +210,21 @@ def test_callback_connects_seller_in_state_tenant_and_revokes_before_disconnect(
         assert account._access_token != account.access_token
         assert account.provider_user_id == 'ACCO_seller'
         assert account.status == 'active'
+        # A failed reconnection must preserve the already connected receiver.
+        def expired_exchange(code, **kwargs):
+            raise oauth.PagBankOAuthError('Authorization rejected', reason='invalid_grant')
+        monkeypatch.setattr(oauth, 'exchange', expired_exchange)
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as invalid_grant:
+            pagbank_payments.complete(
+                pagbank_payments.AuthorizationCompletion(code='used-code', state=state),
+                db=db, user=user,
+            )
+        assert invalid_grant.value.status_code == 409
+        assert 'nova conexão' in invalid_grant.value.detail
+        db.refresh(account)
+        assert account.status == 'active'
+        assert account.access_token == 'seller-token'
         revoked = []
         monkeypatch.setattr(oauth, 'revoke', lambda token, **kwargs: revoked.append((token, kwargs['environment'])))
         result = pagbank_payments.disconnect(db=db, user=user)

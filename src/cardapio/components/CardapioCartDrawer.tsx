@@ -61,6 +61,13 @@ import { getCheckoutPaymentMethods, getPaymentSelectionError, resolvePaymentSele
 import { getPairingRecommendations, classifyProduct } from "../pairingRecommendations";
 import { KomaPrimaryAction } from "./KomaActionPrimitives";
 
+/** PagBank Order requires a payer email of 10-255 characters; this checkout caps input at 254. */
+export function isValidPixPayerEmail(value: string): boolean {
+  const email = value.trim();
+  return email.length >= 10 && email.length <= 254
+    && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
+}
+
 export interface CartItem {
   id: string;
   product: Product;
@@ -671,8 +678,17 @@ export default function CardapioCartDrawer({
       reportValidationError("Informe o CPF ou CNPJ do comprador para gerar o Pix PagBank.", "input-customer-document");
       return;
     }
-    if (paymentDetail === "pix" && !/^\S+@\S+\.\S+$/.test(guestEmail.trim())) {
-      reportValidationError("Informe um e-mail válido para gerar o pagamento Pix.", "input-customer-email");
+    if (paymentDetail === "pix" && (
+      brandConfig?.pixPayerDocumentRequired
+        ? !isValidPixPayerEmail(guestEmail)
+        : !/^\S+@\S+\.\S+$/.test(guestEmail.trim())
+    )) {
+      reportValidationError(
+        brandConfig?.pixPayerDocumentRequired
+          ? "Informe um e-mail válido com pelo menos 10 caracteres para gerar o Pix."
+          : "Informe um e-mail válido para gerar o pagamento Pix.",
+        "input-customer-email",
+      );
       return;
     }
 
