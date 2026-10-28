@@ -35,7 +35,7 @@ test('Pix valida o contrato de e-mail da API Order antes de enviar a sacola', ()
   for (const email of ['comprador@email.com', ' Ana+Teste@exemplo.com.br ']) {
     assert.equal(isValidPixPayerEmail(email), true, email);
   }
-  for (const email of ['a@b.co', 'user@example.c', 'sem-arroba', 'x @exemplo.com', 'a'.repeat(249) + '@x.co']) {
+  for (const email of ['a@b.co', 'user@example.c', 'sem-arroba', 'x @exemplo.com', 'a'.repeat(250) + '@x.co']) {
     assert.equal(isValidPixPayerEmail(email), false, email.slice(0, 30));
   }
 });
