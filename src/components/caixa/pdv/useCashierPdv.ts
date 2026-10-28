@@ -56,6 +56,7 @@ type Props = {
   dynamicMenu: Product[];
   pdvTableOptions: Array<ReturnType<typeof projectCashierSalonTables>[number] & { label: string }>;
   allowedOrderTypes?: readonly PdvOrderType[];
+  cardapioAtivoId?: string | null;
 };
 
 const emptyDeliveryAddress = (): DeliveryAddressDraft => ({ ...EMPTY_DELIVERY_ADDRESS });
@@ -77,6 +78,7 @@ export function useCashierPdv({
   dynamicMenu,
   pdvTableOptions,
   allowedOrderTypes = DEFAULT_PDV_ORDER_TYPES,
+  cardapioAtivoId,
 }: Props) {
   const [balcaoMobileView, setBalcaoMobileView] = useState<'produtos' | 'carrinho'>('produtos');
 
@@ -511,7 +513,17 @@ export function useCashierPdv({
     }
   };
 
-  const sellableProducts = useMemo(() => dynamicMenu.filter((product) => product.ativo !== false), [dynamicMenu]);
+  const sellableProducts = useMemo(() => {
+    return dynamicMenu.filter((product) => {
+      if (product.ativo === false) return false;
+      if (cardapioAtivoId) {
+        if (!product.cardapio_id || product.cardapio_id !== cardapioAtivoId) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [dynamicMenu, cardapioAtivoId]);
 
   const pdvCategories = useMemo(() => {
     const activeCategoryIds = new Set(sellableProducts.map((product) => product.categoria_id).filter(Boolean));

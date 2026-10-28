@@ -141,6 +141,9 @@ export function useOperationalCatalog({
     isProductsLoaded: catalog !== null,
     liveProdutos: data.produtos,
     liveCategorias: data.categorias,
+    cardapio_ativo_id: data.cardapio_ativo_id,
+    cardapio_ativo_nome: data.cardapio_ativo_nome,
+    cardapios: data.cardapios,
     fetchLiveCatalog, isOnline,
   };
 }

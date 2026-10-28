@@ -18,8 +18,8 @@ class CloudflareService:
     Automates dynamic CNAME domain routing.
     """
     def __init__(self, api_token: str = None, zone_id: str = None):
-        self.api_token = api_token or os.getenv("CLOUDFLARE_API_TOKEN", "")
-        self.zone_id = zone_id or os.getenv("CLOUDFLARE_ZONE_ID", "")
+        self.api_token = api_token if api_token is not None else os.getenv("CLOUDFLARE_API_TOKEN", "")
+        self.zone_id = zone_id if zone_id is not None else os.getenv("CLOUDFLARE_ZONE_ID", "")
         self.base_url = f"https://api.cloudflare.com/client/v4/zones/{self.zone_id}/dns_records" if self.zone_id else ""
 
     async def create_cname_record(self, subdomain: str, target: str = "k-ingress-prod.railway.app") -> Dict[str, Any]:
@@ -87,8 +87,8 @@ class RailwayService:
     Monitors host container resource usage and executes container management.
     """
     def __init__(self, api_token: str = None, project_id: str = None):
-        self.api_token = api_token or os.getenv("RAILWAY_API_TOKEN", "")
-        self.project_id = project_id or os.getenv("RAILWAY_PROJECT_ID", "")
+        self.api_token = api_token if api_token is not None else os.getenv("RAILWAY_API_TOKEN", "")
+        self.project_id = project_id if project_id is not None else os.getenv("RAILWAY_PROJECT_ID", "")
 
     async def get_service_metrics(self) -> Dict[str, Any]:
         if not self.api_token or not self.project_id:
@@ -160,8 +160,8 @@ class TelegramService:
     Instant alert engine for system events.
     """
     def __init__(self, bot_token: str = None, chat_id: str = None):
-        self.bot_token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN", "")
-        self.chat_id = chat_id or os.getenv("TELEGRAM_CHAT_ID", "")
+        self.bot_token = bot_token if bot_token is not None else os.getenv("TELEGRAM_BOT_TOKEN", "")
+        self.chat_id = chat_id if chat_id is not None else os.getenv("TELEGRAM_CHAT_ID", "")
         self.base_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage" if self.bot_token else ""
 
     async def get_health(self) -> Dict[str, Any]:

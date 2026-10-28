@@ -21,7 +21,9 @@ from .errors import (
     ModifierInactiveError,
     ModifierNotFoundError,
     ProductInactiveError,
+    ProductMenuInactiveError,
     ProductNotFoundError,
+    ProductPriceInvalidError,
     ProductTenantMismatchError,
 )
 from .pricing import (
@@ -44,6 +46,7 @@ class ValidationProduct:
     name: str
     price: Decimal
     is_active: bool
+    cardapio_id: str | None = None
     allowed_modifier_group_ids: tuple[str, ...] = ()
     modifier_selection_limits: tuple[tuple[str, int, int, str], ...] = ()
 
@@ -101,6 +104,7 @@ class ValidationContext:
     coupon: ValidationCoupon | None = None
     available_cashback: Decimal = Decimal("0.00")
     apply_cashback: bool = False
+    active_cardapio_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -237,7 +241,14 @@ class OrderValidationService:
             if not prod.is_active:
                 raise ProductInactiveError(raw_item.product_id)
 
+            if context.active_cardapio_id is not None:
+                prod_menu = str(prod.cardapio_id).strip() if prod.cardapio_id else None
+                if not prod_menu or prod_menu != context.active_cardapio_id:
+                    raise ProductMenuInactiveError(raw_item.product_id, prod.name)
+
             base_price = to_money_decimal(prod.price)
+            if base_price <= Decimal("0.00"):
+                raise ProductPriceInvalidError(raw_item.product_id, prod.name)
 
             # Validar Modificadores
             validated_modifiers: list[ValidatedModifier] = []

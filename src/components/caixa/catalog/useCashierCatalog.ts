@@ -1,10 +1,25 @@
 import { useMemo } from 'react';
 import type { CaixaPanelProps } from '../cashierContracts';
 
-type Props = Pick<CaixaPanelProps, 'liveProdutos' | 'liveCategorias' | 'onRefreshCategorias'>;
+type Props = Pick<
+  CaixaPanelProps,
+  | 'liveProdutos'
+  | 'liveCategorias'
+  | 'onRefreshCategorias'
+  | 'cardapio_ativo_id'
+  | 'cardapio_ativo_nome'
+  | 'cardapios'
+>;
 
 /** Cashier selectors over the operational catalog; no second snapshot or HTTP owner. */
-export function useCashierCatalog({ liveProdutos = [], liveCategorias = [], onRefreshCategorias }: Props) {
+export function useCashierCatalog({
+  liveProdutos = [],
+  liveCategorias = [],
+  onRefreshCategorias,
+  cardapio_ativo_id,
+  cardapio_ativo_nome,
+  cardapios,
+}: Props) {
   const apiProdutos = liveProdutos;
   const suggestedProductCode = useMemo(() => {
     const numericCodes = apiProdutos
@@ -15,11 +30,13 @@ export function useCashierCatalog({ liveProdutos = [], liveCategorias = [], onRe
     return String(nextNumber).padStart(width, '0');
   }, [apiProdutos]);
 
-
   return {
     apiProdutos,
     apiCategorias: liveCategorias,
     dynamicMenu: liveProdutos,
+    cardapio_ativo_id,
+    cardapio_ativo_nome,
+    cardapios,
     suggestedProductCode,
     fetchProdutos: onRefreshCategorias,
     fetchCategorias: onRefreshCategorias,

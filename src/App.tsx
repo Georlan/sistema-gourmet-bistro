@@ -622,7 +622,15 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   }, [restauranteConfig?.perm_garcom_status, tableFilter]);
 
   // Pre-loading states for smooth intro transition
-  const { isProductsLoaded, liveProdutos, liveCategorias, fetchLiveCatalog } = useOperationalCatalog({ portal, handleLogout, isAuthenticated, isWsConnected });
+  const {
+    isProductsLoaded,
+    liveProdutos,
+    liveCategorias,
+    cardapio_ativo_id,
+    cardapio_ativo_nome,
+    cardapios,
+    fetchLiveCatalog,
+  } = useOperationalCatalog({ portal, handleLogout, isAuthenticated, isWsConnected });
 
 
 
@@ -1767,6 +1775,9 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
             onRefreshTurnoResumo={fetchTurnoResumo}
             liveProdutos={liveProdutos}
             liveCategorias={liveCategorias}
+            cardapio_ativo_id={cardapio_ativo_id}
+            cardapio_ativo_nome={cardapio_ativo_nome}
+            cardapios={cardapios}
             catalogReady={isProductsLoaded}
             onRefreshCategorias={fetchLiveCatalog}
             restauranteConfig={restauranteConfig}
@@ -1905,6 +1916,9 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
               onRefreshTurnoResumo={fetchTurnoResumo}
               liveProdutos={liveProdutos}
               liveCategorias={liveCategorias}
+              cardapio_ativo_id={cardapio_ativo_id}
+              cardapio_ativo_nome={cardapio_ativo_nome}
+              cardapios={cardapios}
               catalogReady={isProductsLoaded}
               onRefreshCategorias={fetchLiveCatalog}
               restauranteConfig={restauranteConfig}

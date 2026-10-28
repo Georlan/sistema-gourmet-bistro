@@ -181,6 +181,33 @@ class RestaurantNetworkAccess(Base):
     network_id = Column(String(36), ForeignKey('restaurant_networks.id', ondelete='RESTRICT'), nullable=False)
 
 
+class Cardapio(Base):
+    __tablename__ = "cardapios"
+    __table_args__ = (
+        UniqueConstraint('restaurante_id', 'identificador', name='uq_cardapios_restaurante_identificador'),
+        UniqueConstraint('restaurante_id', 'id', name='uq_cardapios_restaurante_id'),
+        Index('ix_cardapios_tenant', 'restaurante_id'),
+    )
+
+    id = Column(String(36), primary_key=True)
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    nome = Column(String(64), nullable=False)
+    identificador = Column(String(32), nullable=False)
+    descricao = Column(String(255), nullable=True, default="")
+    ordem_exibicao = Column(Integer, nullable=False, default=0)
+    criado_em = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    atualizado_em = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
+
+    # Relationships
+    produtos = relationship("Produto", back_populates="cardapio", overlaps="categoria,produtos")
+
+
 class Categoria(Base):
     __tablename__ = "categorias"
     __table_args__ = (
@@ -212,6 +239,12 @@ class Produto(Base):
             name='fk_produtos_categoria_tenant',
             ondelete='RESTRICT',
         ),
+        ForeignKeyConstraint(
+            ['restaurante_id', 'cardapio_id'],
+            ['cardapios.restaurante_id', 'cardapios.id'],
+            name='fk_produtos_cardapio_tenant',
+            ondelete='SET NULL',
+        ),
         CheckConstraint(
             "preco >= 0",
             name="ck_produtos_preco_nonnegative_finite",
@@ -221,11 +254,17 @@ class Produto(Base):
             "restaurante_id",
             "categoria_id",
         ).ddl_if(dialect="postgresql"),
+        Index(
+            "ix_produtos_tenant_cardapio_fk",
+            "restaurante_id",
+            "cardapio_id",
+        ).ddl_if(dialect="postgresql"),
     )
 
     pk = Column(Integer, primary_key=True, autoincrement=True)
     id = Column(String, nullable=False, index=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
+    cardapio_id = Column(String(36), nullable=True, index=True)
     nome = Column(String, nullable=False)
     categoria_id = Column(String, nullable=False)
     preco = Column(Numeric(14, 2, asdecimal=False), nullable=False)
@@ -238,6 +277,7 @@ class Produto(Base):
     
     # Relationships
     categoria = relationship("Categoria", back_populates="produtos")
+    cardapio = relationship("Cardapio", back_populates="produtos", foreign_keys=[restaurante_id, cardapio_id], overlaps="categoria,produtos")
     marmitaria_tamanho = Column(String(100), nullable=True)
     ficha_tecnica = relationship(
         "ProdutoInsumo",
@@ -1033,10 +1073,17 @@ class ConfiguracaoRestaurante(Base):
             "impressao_nome_posicao IN ('cabecalho', 'rodape', 'oculto')",
             name="ck_config_restaurante_impressao_nome_posicao",
         ),
+        ForeignKeyConstraint(
+            ['restaurante_id', 'cardapio_ativo_id'],
+            ['cardapios.restaurante_id', 'cardapios.id'],
+            name='fk_config_cardapio_ativo_tenant',
+            ondelete='SET NULL',
+        ),
     )
     
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), default=lambda: current_restaurante_id.get(), nullable=False)
+    cardapio_ativo_id = Column(String(36), nullable=True)
     nicho = Column(String, default="hamburgueria")  # "hamburgueria" | "pizzaria" | "doceria" | "alacarte" | "selfservice"
     mapa_mesas_ativo = Column(Boolean, default=True)
     delivery_ativo = Column(Boolean, default=True)
@@ -1102,6 +1149,7 @@ class ConfiguracaoRestaurante(Base):
     whatsapp_circuit_open_until = Column(DateTime(timezone=True), nullable=True)
 
     restaurante = relationship("Restaurante", lazy="joined")
+    cardapio_ativo = relationship("Cardapio", foreign_keys=[restaurante_id, cardapio_ativo_id], overlaps="restaurante")
 
     @property
     def plano(self):

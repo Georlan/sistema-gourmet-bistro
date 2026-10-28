@@ -10,10 +10,20 @@ from ..catalog_ordering import (
     resolve_restaurant_niche,
 )
 from ..marmitaria_catalog import enabled as marmitaria_enabled, size_category, size_key
+import uuid
 from ..database import get_db, require_tenant_id
-from ..models import Produto, Categoria, ObservacaoPredefinida, Usuario
+from ..models import Produto, Categoria, ObservacaoPredefinida, Usuario, Cardapio, ConfiguracaoRestaurante
 from ..security import get_current_user, require_permission
-from ..schemas import ProdutoResponse, ProdutoCreate, ProdutoUpdate, CategoriaResponse
+from ..schemas import (
+    ProdutoResponse,
+    ProdutoCreate,
+    ProdutoUpdate,
+    CategoriaResponse,
+    CardapioResponse,
+    CardapioCreate,
+    CardapioUpdate,
+    CardapiosListResponse,
+)
 from ..websocket_manager import manager
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 import re
@@ -96,6 +106,13 @@ class CatalogoResponse(BaseModel):
     # Mantém o contrato de produto existente e permite anexar grupos efetivos
     # sem duplicar ProdutoResponse entre os canais operacionais.
     produtos: List[dict]
+    cardapio_ativo_id: Optional[str] = None
+    cardapio_ativo_nome: Optional[str] = None
+    cardapios: List[CardapioResponse] = Field(default_factory=list)
+
+
+class MoverProdutoCardapioRequest(BaseModel):
+    cardapio_id: Optional[str] = None
 
 
 class DisponibilidadeLoteRequest(BaseModel):
@@ -365,13 +382,178 @@ def get_catalogo(
     )
     products = ordered_products(products)
     modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, products)
+    config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == rest_id).first()
+    cardapios = (
+        db.query(Cardapio)
+        .filter(Cardapio.restaurante_id == rest_id)
+        .order_by(Cardapio.ordem_exibicao.asc(), Cardapio.criado_em.asc())
+        .all()
+    )
+    cardapio_ativo_id = config.cardapio_ativo_id if config else None
+    cardapio_ativo_nome = next((c.nome for c in cardapios if c.id == cardapio_ativo_id), None) if cardapio_ativo_id else None
+
     return {
         "categorias": categorias,
         "produtos": [
             _serialize_product_with_modifiers(product, modifier_payloads)
             for product in products
         ],
+        "cardapio_ativo_id": cardapio_ativo_id,
+        "cardapio_ativo_nome": cardapio_ativo_nome,
+        "cardapios": cardapios,
     }
+
+
+# ─── MULTI-MENU ENDPOINTS ───────────────────────────────────────────────────
+@router.get("/menus", response_model=CardapiosListResponse)
+def list_cardapios(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Lista todos os cardápios operacionais do tenant e identifica o ativo."""
+    del current_user
+    rest_id = require_tenant_id()
+    config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == rest_id).first()
+    cardapios = (
+        db.query(Cardapio)
+        .filter(Cardapio.restaurante_id == rest_id)
+        .order_by(Cardapio.ordem_exibicao.asc(), Cardapio.criado_em.asc())
+        .all()
+    )
+    cardapio_ativo_id = config.cardapio_ativo_id if config else None
+    cardapio_ativo_nome = next((c.nome for c in cardapios if c.id == cardapio_ativo_id), None) if cardapio_ativo_id else None
+
+    return {
+        "cardapio_ativo_id": cardapio_ativo_id,
+        "cardapio_ativo_nome": cardapio_ativo_nome,
+        "multi_cardapio_enabled": bool(cardapio_ativo_id or cardapios),
+        "cardapios": cardapios,
+    }
+
+
+@router.post("/menus", response_model=CardapioResponse, status_code=status.HTTP_201_CREATED)
+def create_cardapio(
+    data: CardapioCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Cadastra um novo cardápio para o estabelecimento."""
+    del current_user
+    rest_id = require_tenant_id()
+    identificador = data.identificador.strip().lower()
+    if not identificador:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Identificador não pode ser vazio.")
+
+    existente = db.query(Cardapio).filter(
+        Cardapio.restaurante_id == rest_id,
+        Cardapio.identificador == identificador,
+    ).first()
+    if existente:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Já existe um cardápio com este identificador.")
+
+    novo_cardapio = Cardapio(
+        id=str(uuid.uuid4()),
+        restaurante_id=rest_id,
+        nome=data.nome.strip(),
+        identificador=identificador,
+        descricao=data.descricao or "",
+        ordem_exibicao=data.ordem_exibicao,
+    )
+    db.add(novo_cardapio)
+
+    config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == rest_id).first()
+    if config and not config.cardapio_ativo_id:
+        config.cardapio_ativo_id = novo_cardapio.id
+
+    db.commit()
+    db.refresh(novo_cardapio)
+    notify_catalog_update(background_tasks, f"Cardápio {novo_cardapio.nome} criado", rest_id)
+    return novo_cardapio
+
+
+@router.post("/menus/{cardapio_id}/publicar")
+def publish_cardapio(
+    cardapio_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Ativa/publica um cardápio operacional em uma única transação atômica."""
+    del current_user
+    rest_id = require_tenant_id()
+
+    cardapio = db.query(Cardapio).filter(
+        Cardapio.restaurante_id == rest_id,
+        Cardapio.id == cardapio_id,
+    ).first()
+    if not cardapio:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cardápio não encontrado.")
+
+    query = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == rest_id)
+    if db.bind and db.bind.dialect.name == "postgresql":
+        query = query.with_for_update()
+    config = query.first()
+
+    if not config:
+        config = ConfiguracaoRestaurante(
+            restaurante_id=rest_id,
+            cardapio_ativo_id=cardapio.id,
+        )
+        db.add(config)
+    else:
+        config.cardapio_ativo_id = cardapio.id
+
+    db.commit()
+
+    notify_catalog_update(
+        background_tasks,
+        f"Cardápio '{cardapio.nome}' publicado com sucesso",
+        rest_id,
+    )
+
+    return {
+        "status": "publicado",
+        "cardapio_ativo_id": cardapio.id,
+        "cardapio_ativo_nome": cardapio.nome,
+    }
+
+
+@router.patch("/{produto_id}/cardapio", response_model=ProdutoResponse)
+def move_produto_cardapio(
+    produto_id: str,
+    data: MoverProdutoCardapioRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Move um produto para outro cardápio do estabelecimento mantendo seu ID e histórico."""
+    del current_user
+    rest_id = require_tenant_id()
+
+    produto = db.query(Produto).filter(
+        Produto.restaurante_id == rest_id,
+        Produto.id == produto_id,
+    ).first()
+    if not produto:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Produto não encontrado.")
+
+    if data.cardapio_id:
+        cardapio = db.query(Cardapio).filter(
+            Cardapio.restaurante_id == rest_id,
+            Cardapio.id == data.cardapio_id,
+        ).first()
+        if not cardapio:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cardápio de destino não encontrado.")
+        produto.cardapio_id = cardapio.id
+    else:
+        produto.cardapio_id = None
+
+    db.commit()
+    db.refresh(produto)
+    notify_catalog_update(background_tasks, "Produto movido de cardápio", rest_id)
+    return produto
+
 
 @router.get("/{produto_id}", response_model=ProdutoResponse)
 def get_produto(produto_id: str, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
@@ -528,6 +710,17 @@ def create_produto(
         )
 
     payload = produto_data.model_dump()
+    if payload.get("cardapio_id"):
+        cardapio = db.query(Cardapio).filter(
+            Cardapio.restaurante_id == rest_id,
+            Cardapio.id == payload["cardapio_id"],
+        ).first()
+        if not cardapio:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="O cardápio informado não existe",
+            )
+
     if payload.get("ordem_exibicao") is None:
         existing_orders = [
             p.ordem_exibicao
@@ -571,6 +764,17 @@ def update_produto(
         )
 
     data = update_data.model_dump(exclude_unset=True)
+
+    if "cardapio_id" in data and data["cardapio_id"]:
+        cardapio = db.query(Cardapio).filter(
+            Cardapio.restaurante_id == rest_id,
+            Cardapio.id == data["cardapio_id"],
+        ).first()
+        if not cardapio:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="O cardápio informado não existe",
+            )
 
     if "categoria_id" in data:
         categoria = db.query(Categoria).filter(

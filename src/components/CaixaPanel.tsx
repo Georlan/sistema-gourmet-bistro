@@ -114,6 +114,9 @@ export function CaixaPanel({
   onRefreshTurnoResumo,
   liveProdutos = [],
   liveCategorias = [],
+  cardapio_ativo_id,
+  cardapio_ativo_nome,
+  cardapios,
   catalogReady = false,
   onRefreshCategorias,
   restauranteConfig,
@@ -358,7 +361,14 @@ export function CaixaPanel({
     [orders, salonTables],
   );
 
-  const catalog = useCashierCatalog({ liveProdutos, liveCategorias, onRefreshCategorias });
+  const catalog = useCashierCatalog({
+    liveProdutos,
+    liveCategorias,
+    onRefreshCategorias,
+    cardapio_ativo_id,
+    cardapio_ativo_nome,
+    cardapios,
+  });
   const { apiProdutos, apiCategorias, dynamicMenu, suggestedProductCode, fetchProdutos, fetchCategorias } =
     catalog;
   const customers = useCashierCustomers({ apiBaseUrl, authHeaders });
@@ -513,6 +523,7 @@ export function CaixaPanel({
     apiCategorias,
     dynamicMenu,
     pdvTableOptions,
+    cardapioAtivoId: catalog.cardapio_ativo_id,
   });
   const { setBalcaoMobileView, setPdvOrderType, setPdvTargetMesaId } = pdv;
 
@@ -1017,7 +1028,27 @@ export function CaixaPanel({
               active={activeTab === 'cardapio'}
               label="Cardápio"
               load={loadCashierCatalog}
-              sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, apiProdutos, apiCategorias, suggestedProductCode, hasOnlineMenu, hasPrinting, fetchProdutos, fetchCategorias, catalogReady, restauranteConfig, onRefreshCategorias }}
+              sectionProps={{
+                apiBaseUrl,
+                authHeaders,
+                activeTab,
+                activeSubTab,
+                setActiveSubTab,
+                showToast,
+                apiProdutos,
+                apiCategorias,
+                suggestedProductCode,
+                hasOnlineMenu,
+                hasPrinting,
+                fetchProdutos,
+                fetchCategorias,
+                catalogReady,
+                restauranteConfig,
+                onRefreshCategorias,
+                cardapios: catalog.cardapios,
+                cardapioAtivoId: catalog.cardapio_ativo_id,
+                cardapioAtivoNome: catalog.cardapio_ativo_nome,
+              }}
             />
 
             <DeferredCashierSection active={hasInventory && activeTab === 'estoque'} label="Estoque" load={loadCashierInventory} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, apiProdutos, isLoading }} />

@@ -73,9 +73,29 @@ class ProductNotFoundError(OrderValidationError):
 class ProductInactiveError(OrderValidationError):
     """Produto está desativado no cardápio."""
 
-    def __init__(self, product_id: str | int) -> None:
+    def __init__(self, product_id: str | int, detail: str | None = None) -> None:
         self.product_id = product_id
-        super().__init__(f"Produto '{product_id}' está inativo no momento.")
+        super().__init__(detail or f"Produto '{product_id}' está inativo no momento.")
+
+
+class ProductMenuInactiveError(OrderValidationError):
+    """Produto pertence a um cardápio inativo no momento."""
+
+    def __init__(self, product_id: str | int, product_name: str | None = None) -> None:
+        self.product_id = product_id
+        self.product_name = product_name
+        nome_str = f" '{product_name}'" if product_name else f" '{product_id}'"
+        super().__init__(f"O produto{nome_str} pertence a um cardápio inativo no momento.")
+
+
+class ProductPriceInvalidError(OrderValidationError):
+    """Produto possui preço pendente ou zero e não pode ser comercializado."""
+
+    def __init__(self, product_id: str | int, product_name: str | None = None) -> None:
+        self.product_id = product_id
+        self.product_name = product_name
+        nome_str = f" '{product_name}'" if product_name else f" '{product_id}'"
+        super().__init__(f"O produto{nome_str} possui preço pendente ou inválido e não pode ser vendido.")
 
 
 class ProductTenantMismatchError(OrderValidationError):

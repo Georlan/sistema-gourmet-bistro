@@ -34,11 +34,15 @@ export interface CatalogProduct extends Product {
   imagens_galeria?: string[];
   grupos_modificadores?: CatalogModifierGroup[];
   ativo: boolean;
+  cardapio_id?: string | null;
 }
 
 export interface CatalogSnapshot {
   categorias: CatalogCategory[];
   produtos: CatalogProduct[];
+  cardapio_ativo_id?: string | null;
+  cardapio_ativo_nome?: string | null;
+  cardapios?: import('../types').CardapioMenu[];
 }
 
 const byBusinessId = (a: { id: string }, b: { id: string }) =>
@@ -122,14 +126,29 @@ export function normalizeCatalogSnapshot(payload: unknown): CatalogSnapshot {
           : [],
         grupos_modificadores: normalizeModifierGroups(item.grupos_modificadores),
         ativo: item.ativo !== false,
+        cardapio_id: typeof item.cardapio_id === 'string' ? item.cardapio_id : null,
       } satisfies CatalogProduct;
     })
     .filter((item) => item.id && item.nome && item.categoria_id && Number.isFinite(item.preco))
     .sort(byBusinessId);
 
-  return { categorias, produtos };
+  return {
+    categorias,
+    produtos,
+    cardapio_ativo_id: typeof source.cardapio_ativo_id === 'string' ? source.cardapio_ativo_id : null,
+    cardapio_ativo_nome: typeof source.cardapio_ativo_nome === 'string' ? source.cardapio_ativo_nome : null,
+    cardapios: Array.isArray(source.cardapios) ? (source.cardapios as import('../types').CardapioMenu[]) : [],
+  };
 }
 
-export function getSellableProducts(products: CatalogProduct[]): CatalogProduct[] {
-  return products.filter((product) => product.ativo);
+export function getSellableProducts(products: CatalogProduct[], activeCardapioId?: string | null): CatalogProduct[] {
+  return products.filter((product) => {
+    if (!product.ativo) return false;
+    if (activeCardapioId) {
+      if (!product.cardapio_id || product.cardapio_id !== activeCardapioId) {
+        return false;
+      }
+    }
+    return true;
+  });
 }

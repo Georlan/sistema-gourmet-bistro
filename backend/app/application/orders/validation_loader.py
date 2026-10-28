@@ -55,21 +55,29 @@ class ValidationDataLoader:
         """Carrega e mapeia entidades do banco para o ValidationContext puro."""
         canonical_fulfillment = normalize_to_fulfillment(fulfillment)
 
-        # 1. Carregar Configuração de Pedido Mínimo
+        # 1. Carregar Configuração de Pedido Mínimo e Cardápio Ativo
         min_delivery_subtotal = Decimal("0.00")
         enforce_minimum_pickup = False
+        active_cardapio_id: str | None = None
         config = (
             db.query(ConfiguracaoRestaurante)
             .options(
-                load_only(ConfiguracaoRestaurante.pedido_minimo, ConfiguracaoRestaurante.pedido_minimo_retirada, raiseload=True),
+                load_only(
+                    ConfiguracaoRestaurante.pedido_minimo,
+                    ConfiguracaoRestaurante.pedido_minimo_retirada,
+                    ConfiguracaoRestaurante.cardapio_ativo_id,
+                    raiseload=True,
+                ),
                 raiseload(ConfiguracaoRestaurante.restaurante),
             )
             .filter(ConfiguracaoRestaurante.restaurante_id == restaurante_id)
             .first()
         )
-        if config and config.pedido_minimo:
-            min_delivery_subtotal = to_money_decimal(config.pedido_minimo)
+        if config:
+            if config.pedido_minimo:
+                min_delivery_subtotal = to_money_decimal(config.pedido_minimo)
             enforce_minimum_pickup = bool(getattr(config, "pedido_minimo_retirada", False))
+            active_cardapio_id = getattr(config, "cardapio_ativo_id", None)
 
         # 2. Carregar Produtos e os grupos efetivos (produto + categoria + ancestrais)
         prod_ids = {str(it.get("produto_id")) for it in itens_solicitados if it.get("produto_id")}
@@ -89,6 +97,7 @@ class ValidationDataLoader:
                     name=p.nome,
                     price=to_money_decimal(p.preco),
                     is_active=bool(p.ativo),
+                    cardapio_id=p.cardapio_id,
                     allowed_modifier_group_ids=tuple(grupos_by_prod.get(str(p.id), ())),
                     modifier_selection_limits=tuple((group, *limits) for group, limits in limits_by_product.get(str(p.id), {}).items()),
                 )
@@ -216,6 +225,7 @@ class ValidationDataLoader:
             coupon=coupon_input,
             available_cashback=available_cashback,
             apply_cashback=usar_cashback and available_cashback > Decimal("0.00"),
+            active_cardapio_id=active_cardapio_id,
         )
 
     @classmethod

@@ -119,11 +119,45 @@ class ObservacaoPredefinidaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+# ----------------- CARDAPIOS (MULTI-MENU) -----------------
+class CardapioResponse(BaseModel):
+    id: str
+    nome: str
+    identificador: str
+    descricao: Optional[str] = ""
+    ordem_exibicao: int = 0
+    criado_em: Optional[datetime] = None
+    atualizado_em: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CardapioCreate(BaseModel):
+    nome: str = Field(min_length=1, max_length=64)
+    identificador: str = Field(min_length=1, max_length=32)
+    descricao: Optional[str] = Field(default="", max_length=255)
+    ordem_exibicao: int = 0
+
+
+class CardapioUpdate(BaseModel):
+    nome: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    descricao: Optional[str] = Field(default=None, max_length=255)
+    ordem_exibicao: Optional[int] = None
+
+
+class CardapiosListResponse(BaseModel):
+    cardapio_ativo_id: Optional[str] = None
+    cardapio_ativo_nome: Optional[str] = None
+    multi_cardapio_enabled: bool = False
+    cardapios: List[CardapioResponse]
+
+
 # ----------------- PRODUCT -----------------
 class ProdutoBase(BaseModel):
     id: str
     nome: str
     categoria_id: str
+    cardapio_id: Optional[str] = None
     preco: float
     descricao: Optional[str] = ""
     imagem: Optional[str] = ""
@@ -152,6 +186,7 @@ class ProdutoCreate(ProdutoBase):
 class ProdutoUpdate(BaseModel):
     nome: Optional[str] = None
     categoria_id: Optional[str] = None
+    cardapio_id: Optional[str] = None
     preco: Optional[float] = None
     descricao: Optional[str] = None
     imagem: Optional[str] = None
@@ -962,6 +997,8 @@ class CardapioPublicRestaurantResponse(BaseModel):
     tabela_taxas_bairros: Optional[Any] = []
     tabela_taxas_km: Optional[Any] = []
     taxa_entrega_padrao: Optional[float] = None
+    cardapio_ativo_id: Optional[str] = None
+    cardapio_ativo_nome: Optional[str] = None
 
 
 class CardapioPublicCategoryResponse(BaseModel):
@@ -978,6 +1015,7 @@ class CardapioPublicProductResponse(BaseModel):
     imagem_url: str = ""
     imagens_galeria: List[str] = Field(default_factory=list)
     categoria_id: str
+    cardapio_id: Optional[str] = None
     grupos_modificadores: Optional[List[Any]] = Field(default_factory=list)
 
 

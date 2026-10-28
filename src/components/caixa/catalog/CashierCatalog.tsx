@@ -1,10 +1,10 @@
 import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 
 import { MAX_IMAGE_UPLOAD_SOURCE_BYTES, prepareImageUpload } from '../../../utils/imageUpload';
-import { Image as ImageIcon, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { CheckCircle2, Image as ImageIcon, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CatalogCategory } from '../../../catalog/catalog';
-import { Product } from '../../../types';
+import { Product, CardapioMenu } from '../../../types';
 import { CardapioCategoriasTab } from '../../cardapio/CardapioCategoriasTab';
 import { CardapioProdutosTab } from '../../cardapio/CardapioProdutosTab';
 import { CategoriaModal } from '../../cardapio/CategoriaModal';
@@ -32,6 +32,9 @@ interface Props {
   hasPrinting: boolean;
   fetchProdutos: () => Promise<void>;
   fetchCategorias: () => Promise<void>;
+  cardapios?: CardapioMenu[];
+  cardapioAtivoId?: string | null;
+  cardapioAtivoNome?: string | null;
 }
 
 const PRODUCT_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
@@ -54,6 +57,9 @@ export default function CashierCatalog({
   catalogReady,
   restauranteConfig,
   onRefreshCategorias,
+  cardapios,
+  cardapioAtivoId,
+  cardapioAtivoNome,
 }: Props) {
   const isMarmitaria = restauranteConfig?.operation_profile === 'marmitaria';
   const authorization = authHeaders.Authorization || authHeaders.authorization;
@@ -93,6 +99,53 @@ export default function CashierCatalog({
   const [prodFormAtivo, setProdFormAtivo] = useState(true);
   const [prodFormSomentePromocao, setProdFormSomentePromocao] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  const [selectedCardapioId, setSelectedCardapioId] = useState<string | null>(
+    () => cardapioAtivoId || (cardapios && cardapios.length > 0 ? cardapios[0].id : null),
+  );
+  const [isPublishingMenu, setIsPublishingMenu] = useState(false);
+  const [prodFormCardapioId, setProdFormCardapioId] = useState<string>('');
+
+  useEffect(() => {
+    if (cardapios && cardapios.length > 0) {
+      if (!selectedCardapioId || !cardapios.some((c) => c.id === selectedCardapioId)) {
+        setSelectedCardapioId(cardapioAtivoId || cardapios[0].id);
+      }
+    }
+  }, [cardapios, cardapioAtivoId]);
+
+  const handlePublishCardapio = async (targetMenuId: string, targetMenuNome: string) => {
+    if (isPublishingMenu) return;
+    setIsPublishingMenu(true);
+    try {
+      const response = await fetch(`${apiBaseUrl}/produtos/menus/${targetMenuId}/publicar`, {
+        method: 'POST',
+        headers: authHeaders,
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Não foi possível publicar o cardápio.');
+      }
+      showToast(`Cardápio "${targetMenuNome}" publicado com sucesso! Agora ativo no PDV e Cardápio Digital.`);
+      await fetchProdutos();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Erro ao publicar cardápio.', 'error');
+    } finally {
+      setIsPublishingMenu(false);
+    }
+  };
+
+  const displayedProdutos = useMemo(() => {
+    if (!cardapios || cardapios.length === 0 || !selectedCardapioId) {
+      return apiProdutos;
+    }
+    return apiProdutos.filter((p) => p.cardapio_id === selectedCardapioId);
+  }, [apiProdutos, cardapios, selectedCardapioId]);
+
+  const activeSelectedMenu = cardapios?.find((c) => c.id === selectedCardapioId);
+  const isSelectedMenuPublished = Boolean(
+    selectedCardapioId && cardapioAtivoId && selectedCardapioId === cardapioAtivoId,
+  );
 
   const resetProductImageState = (url = '') => {
     setProdFormImagem(url);
@@ -152,21 +205,23 @@ export default function CashierCatalog({
     resetProductImageState('');
     setProdFormAtivo(true);
     setProdFormSomentePromocao(false);
+    setProdFormCardapioId(selectedCardapioId || cardapios?.[0]?.id || '');
     setShowProductModal(true);
   };
 
   const editProductDetails = (product: Product) => {
-              setEditingProduct(product);
-              setProdFormId(product.id);
-              setProdFormNome(product.nome);
-              setProdFormPreco(Number(product.preco) || 0);
-              setProdFormCategoriaId(product.categoria_id || '');
-              setProdFormDescricao(product.descricao || '');
-              const gallery = product.imagens_galeria || [];
-              resetProductImageState(product.imagem || gallery[0] || '');
-              setProdFormAtivo(product.ativo !== false);
-              setProdFormSomentePromocao(product.somente_promocao === true);
-              setShowProductModal(true);
+    setEditingProduct(product);
+    setProdFormId(product.id);
+    setProdFormNome(product.nome);
+    setProdFormPreco(Number(product.preco) || 0);
+    setProdFormCategoriaId(product.categoria_id || '');
+    setProdFormDescricao(product.descricao || '');
+    const gallery = product.imagens_galeria || [];
+    resetProductImageState(product.imagem || gallery[0] || '');
+    setProdFormAtivo(product.ativo !== false);
+    setProdFormSomentePromocao(product.somente_promocao === true);
+    setProdFormCardapioId(product.cardapio_id || selectedCardapioId || cardapios?.[0]?.id || '');
+    setShowProductModal(true);
   };
 
   return (
@@ -180,20 +235,82 @@ export default function CashierCatalog({
             accent="fáceis de controlar"
             description="Selecione produtos para pausar, reajustar preços ou mover de categoria sem abrir item por item."
             metrics={[
-              { label: 'produtos', value: apiProdutos.length },
-              { label: 'disponíveis', value: apiProdutos.filter((item) => item.ativo !== false).length },
+              { label: 'produtos', value: displayedProdutos.length },
+              { label: 'disponíveis', value: displayedProdutos.filter((item) => item.ativo !== false).length },
               {
-                label: apiProdutos.filter((item) => item.ativo === false).length === 1 ? 'pausado' : 'pausados',
-                value: apiProdutos.filter((item) => item.ativo === false).length,
-                valueClassName: apiProdutos.some((item) => item.ativo === false)
+                label: displayedProdutos.filter((item) => item.ativo === false).length === 1 ? 'pausado' : 'pausados',
+                value: displayedProdutos.filter((item) => item.ativo === false).length,
+                valueClassName: displayedProdutos.some((item) => item.ativo === false)
                   ? 'text-rose-600 dark:text-rose-300'
                   : undefined,
               },
               { label: 'categorias', value: apiCategorias.length },
             ]}
           />
+          {cardapios && cardapios.length > 0 && (
+            <div className="rounded-2xl border border-koma-border bg-koma-card p-3 sm:p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+                <span className="text-[11px] font-bold text-koma-secondary uppercase tracking-wider shrink-0 mr-1">
+                  Cardápios:
+                </span>
+                {cardapios.map((menu) => {
+                  const isSelected = menu.id === selectedCardapioId;
+                  const isPublished = menu.id === cardapioAtivoId;
+                  const itemCount = apiProdutos.filter((p) => p.cardapio_id === menu.id).length;
+                  return (
+                    <button
+                      key={menu.id}
+                      type="button"
+                      onClick={() => setSelectedCardapioId(menu.id)}
+                      className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
+                        isSelected
+                          ? 'bg-koma-panel border-koma-border text-koma-foreground shadow-sm ring-2 ring-[#10b981]/30'
+                          : 'bg-koma-card/50 border-transparent text-koma-secondary hover:text-koma-foreground hover:bg-koma-panel/60'
+                      }`}
+                    >
+                      <span>{menu.nome}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-koma-panel/80 font-mono text-koma-muted">
+                        {itemCount}
+                      </span>
+                      {isPublished && (
+                        <span
+                          className="flex h-2 w-2 rounded-full bg-emerald-500"
+                          title="Cardápio ativo no momento"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {activeSelectedMenu && (
+                  isSelectedMenuPublished ? (
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-700 dark:text-emerald-400 text-xs font-semibold">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>{activeSelectedMenu.nome} está ativo</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isPublishingMenu}
+                      onClick={() => handlePublishCardapio(activeSelectedMenu.id, activeSelectedMenu.nome)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                    >
+                      {isPublishingMenu ? (
+                        <RefreshCw size={13} className="animate-spin" />
+                      ) : (
+                        <CheckCircle2 size={13} />
+                      )}
+                      <span>Publicar {activeSelectedMenu.nome}</span>
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+          )}
           <CardapioProdutosTab
-            produtos={apiProdutos}
+            produtos={displayedProdutos}
             categorias={apiCategorias}
             promotionsConfig={{ apiBaseUrl, authHeaders }}
             catalogReady={catalogReady || apiProdutos.length > 0 || apiCategorias.length > 0}
@@ -216,7 +333,8 @@ export default function CashierCatalog({
               setProdFormDescricao(product.descricao || '');
               resetProductImageState('');
               setProdFormAtivo(true);
-    setProdFormSomentePromocao(false);
+              setProdFormSomentePromocao(false);
+              setProdFormCardapioId(product.cardapio_id || selectedCardapioId || cardapios?.[0]?.id || '');
               setShowProductModal(true);
             }}
             onRemoveProduct={async (product) => {
@@ -424,6 +542,7 @@ export default function CashierCatalog({
                     imagens_galeria: [],
                     ativo: prodFormAtivo,
                     somente_promocao: prodFormSomentePromocao,
+                    cardapio_id: prodFormCardapioId || null,
                   };
 
                   let res;
@@ -634,6 +753,32 @@ export default function CashierCatalog({
                   </div>
                 </div>
               </div>
+
+              {cardapios && cardapios.length > 0 && (
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="product-cardapio"
+                    className="text-[10px] font-bold text-koma-secondary block"
+                  >
+                    Cardápio Operacional
+                  </label>
+                  <select
+                    id="product-cardapio"
+                    value={prodFormCardapioId}
+                    onChange={(e) => setProdFormCardapioId(e.target.value)}
+                    className="w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"
+                  >
+                    {cardapios.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome} {c.id === cardapioAtivoId ? '★ (Ativo no momento)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[9px] text-koma-muted">
+                    Cada produto pertence exclusivamente a um cardápio (Manhã ou Meio-Dia).
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-1.5">
                 <label

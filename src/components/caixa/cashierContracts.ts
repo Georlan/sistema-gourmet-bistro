@@ -1,4 +1,4 @@
-import type { Order, Table, Product, CaixaTurnoResumo } from '../../types';
+import type { Order, Table, Product, CaixaTurnoResumo, CardapioMenu } from '../../types';
 import type { CatalogCategory } from '../../catalog/catalog';
 
 export interface CaixaPanelProps {
@@ -22,6 +22,9 @@ export interface CaixaPanelProps {
   onRefreshTurnoResumo: () => Promise<void>;
   liveProdutos?: Product[];
   liveCategorias?: CatalogCategory[];
+  cardapio_ativo_id?: string | null;
+  cardapio_ativo_nome?: string | null;
+  cardapios?: CardapioMenu[];
   catalogReady?: boolean;
   onRefreshCategorias: () => Promise<void>;
   restauranteConfig?: any;
