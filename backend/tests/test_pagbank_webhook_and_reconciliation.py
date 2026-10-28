@@ -141,6 +141,7 @@ def test_verify_pagbank_signature():
 def test_webhook_resolves_by_reference_id_when_charge_received(monkeypatch):
     """Testa que o webhook com id de cobrança e reference_id consegue encontrar o intent pela chave de referência."""
     rid = 9971
+    monkeypatch.setenv("ONLINE_PAYMENT_RECONCILIATION_TENANT_IDS", str(rid))
     current_restaurante_id.set(rid)
     db = SessionLocal()
     try:
