@@ -247,9 +247,12 @@ def _safe_connect_failure_reason(response: httpx.Response) -> str:
     if not isinstance(data, dict):
         return 'unknown'
     candidates = [data.get('error'), data.get('error_code'), data.get('code')]
-    errors = data.get('errors')
-    if isinstance(errors, list):
-        candidates.extend(item.get('code') for item in errors[:3] if isinstance(item, dict))
+    # PagBank Connect frequently returns {"error_messages": [{"code": "41004"}]}.
+    # Never include a provider-supplied description or message in diagnostics.
+    for field in ('errors', 'error_messages'):
+        errors = data.get(field)
+        if isinstance(errors, list):
+            candidates.extend(item.get('code') for item in errors[:3] if isinstance(item, dict))
     for candidate in candidates:
         if isinstance(candidate, (str, int)):
             safe_code = str(candidate).strip().lower()
