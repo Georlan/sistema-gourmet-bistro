@@ -13,7 +13,7 @@ Object.defineProperty(globalThis, 'window', {
   configurable: true,
   value: { location: { hostname: 'localhost', protocol: 'http:' } },
 });
-const { default: CardapioCartDrawer } = await import('../src/cardapio/components/CardapioCartDrawer');
+const { default: CardapioCartDrawer, isValidPixPayerEmail } = await import('../src/cardapio/components/CardapioCartDrawer');
 const { default: CardapioDigital } = await import('../src/cardapio/components/CardapioDigital');
 
 const groups = (...names: string[]) => names.map(type => ({ type, accepted: [] }));
@@ -30,6 +30,15 @@ const renderReview = (names: string[], method?: PaymentMethod, trocoPara?: numbe
   activeBrand: brand(names), cart, deliveryFee: 0, deliveryMethod: 'pickup', address: '', customerName: 'Teste local', customerPhone: '00000000000',
   paymentMethodDetail: method, trocoPara, onClose() {}, onOrderSuccess() {},
 }));
+
+test('Pix valida o contrato de e-mail da API Order antes de enviar a sacola', () => {
+  for (const email of ['comprador@email.com', ' Ana+Teste@exemplo.com.br ']) {
+    assert.equal(isValidPixPayerEmail(email), true, email);
+  }
+  for (const email of ['a@b.co', 'user@example.c', 'sem-arroba', 'x @exemplo.com', 'a'.repeat(249) + '@x.co']) {
+    assert.equal(isValidPixPayerEmail(email), false, email.slice(0, 30));
+  }
+});
 
 test('normaliza quatro formas cadastradas, acentos, caixa, espaços e códigos legados', () => {
   assert.deepEqual(getAvailablePaymentMethods(groups(' Pix ', 'DINHEIRO', 'Cartão de Crédito', 'Cartão de Débito')), ['pix', 'dinheiro', 'cartao_credito', 'cartao_debito']);
