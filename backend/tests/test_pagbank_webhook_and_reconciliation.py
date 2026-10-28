@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import base64
 import datetime
 from decimal import Decimal
 import hashlib
+import hmac
 import json
 from unittest.mock import MagicMock
 
@@ -83,21 +85,33 @@ def test_verify_pagbank_signature():
         candidate_tokens=candidate_tokens,
     ) is True
 
-    # 2. Whitespace / CRLF normalization
+    # 2. Byte-exact verification: adding CRLF must invalidate the signature.
     body_with_crlf = body + b"\r\n"
     assert verify_pagbank_signature(
         raw_body=body_with_crlf,
         authenticity_token=valid_sig,
         candidate_tokens=candidate_tokens,
+    ) is False
+    signed_with_crlf = hashlib.sha256(token.encode() + b"-" + body_with_crlf).hexdigest()
+    assert verify_pagbank_signature(
+        raw_body=body_with_crlf,
+        authenticity_token=signed_with_crlf,
+        candidate_tokens=candidate_tokens,
     ) is True
 
-    # 3. Format without hyphen: sha256(token + raw)
+    # 3. Undocumented no-hyphen and HMAC variants must never authenticate.
     no_hyphen_sig = hashlib.sha256(token.encode() + body).hexdigest()
     assert verify_pagbank_signature(
         raw_body=body,
         authenticity_token=no_hyphen_sig,
         candidate_tokens=candidate_tokens,
-    ) is True
+    ) is False
+    hmac_sig = hmac.new(token.encode(), body, hashlib.sha256).hexdigest()
+    assert verify_pagbank_signature(
+        raw_body=body,
+        authenticity_token=hmac_sig,
+        candidate_tokens=candidate_tokens,
+    ) is False
 
     # 4. Tampered body or invalid signature -> False
     assert verify_pagbank_signature(
@@ -127,6 +141,7 @@ def test_verify_pagbank_signature():
 def test_webhook_resolves_by_reference_id_when_charge_received(monkeypatch):
     """Testa que o webhook com id de cobrança e reference_id consegue encontrar o intent pela chave de referência."""
     rid = 9971
+    monkeypatch.setenv("ONLINE_PAYMENT_RECONCILIATION_TENANT_IDS", str(rid))
     current_restaurante_id.set(rid)
     db = SessionLocal()
     try:
@@ -230,6 +245,57 @@ def test_webhook_resolves_by_reference_id_when_charge_received(monkeypatch):
         assert intent.status == "approved"
         assert comanda.online_payment_status == "approved"
 
+        # Regression: with a batch size of one, a pending older Pix must not
+        # prevent a newer Pix from being queried on the next sweep.
+        for suffix, age in (("OLDER", 5), ("NEWER", 1)):
+            extra_order = Comanda(
+                id=f"comanda-fair-{suffix.lower()}",
+                restaurante_id=rid,
+                garcom_id=user.id,
+                numero_pedido=400 if suffix == "OLDER" else 401,
+                identificador=f"Fairness {suffix}",
+                tipo="Consumo no Local",
+                delivery_status="pendente",
+                online_payment_status="pending",
+            )
+            db.add(extra_order)
+            db.flush()
+            db.add(
+                OnlinePaymentIntent(
+                    id=f"intent-fair-{suffix.lower()}",
+                    restaurante_id=rid,
+                    comanda_id=extra_order.id,
+                    turno_id=shift.id,
+                    provider="pagbank",
+                    method="pix",
+                    status="pending",
+                    amount=50.00,
+                    marketplace_fee=0.00,
+                    fee_settlement="none",
+                    idempotency_key=f"idem-fair-{suffix.lower()}",
+                    external_payment_id=f"ORDE_FAIR_{suffix}",
+                    created_at=datetime.datetime.now(datetime.timezone.utc)
+                    - datetime.timedelta(minutes=age),
+                )
+            )
+        db.commit()
+
+        def fair_payment(_self, payment_id):
+            is_older = payment_id == "ORDE_FAIR_OLDER"
+            return ProviderPayment(
+                external_id=payment_id,
+                status="pending" if is_older else "approved",
+                amount=Decimal("50.00"),
+                external_reference="intent-fair-older" if is_older else "intent-fair-newer",
+            )
+
+        monkeypatch.setattr(PagBankProvider, "get_payment", fair_payment)
+        assert reconcile_pending_intents(max_per_tenant=1) == 0
+        assert reconcile_pending_intents(max_per_tenant=1) == 1
+        db.expire_all()
+        newer = db.query(OnlinePaymentIntent).filter_by(id="intent-fair-newer").one()
+        assert newer.status == "approved"
+
     finally:
         db.close()
 
@@ -286,6 +352,7 @@ def test_webhook_returns_503_for_uncommitted_intent(monkeypatch):
 def test_autonomous_reconciliation_worker_sweep(monkeypatch):
     """Testa que o worker de reconciliação varre intents pendentes de tenants ativos com segurança."""
     rid = 9973
+    monkeypatch.setenv("ONLINE_PAYMENT_RECONCILIATION_TENANT_IDS", str(rid))
     current_restaurante_id.set(rid)
     db = SessionLocal()
     try:
@@ -380,3 +447,167 @@ def test_autonomous_reconciliation_worker_sweep(monkeypatch):
 
     finally:
         db.close()
+
+
+
+def test_autonomous_reconciliation_is_disabled_without_tenant_opt_in(monkeypatch):
+    from app.services.online_payments import reconciliation_worker as worker
+
+    monkeypatch.delenv("ONLINE_PAYMENT_RECONCILIATION_TENANT_IDS", raising=False)
+    monkeypatch.setattr(
+        worker,
+        "discover_active_tenant_ids",
+        lambda _: pytest.fail("An unapproved sweep must not inspect tenants"),
+    )
+    assert worker.reconcile_pending_intents() == 0
+
+    monkeypatch.setenv("ONLINE_PAYMENT_RECONCILIATION_TENANT_IDS", "8,not-an-id")
+    assert worker.reconcile_pending_intents() == 0
+
+
+def test_pagbank_ecdsa_signature_rejects_changed_raw_body():
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    original = b'{"id":"ORDE_123","reference_id":"intent-123"}'
+    signature = base64.b64encode(
+        key.sign(original, ec.ECDSA(hashes.SHA256()))
+    ).decode("ascii")
+    public_key = base64.b64encode(
+        key.public_key().public_bytes(
+            serialization.Encoding.DER,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+    ).decode("ascii")
+
+    assert verify_pagbank_signature(
+        raw_body=original, payload_signature=signature, public_key_b64=public_key,
+    )
+    assert not verify_pagbank_signature(
+        raw_body=original + b"\r\n",
+        payload_signature=signature,
+        public_key_b64=public_key,
+    )
+
+
+
+def test_autonomous_worker_rotates_across_tenants_without_touching_unlisted_store(monkeypatch):
+    """Two opted-in sellers are reconciled; an unlisted tenant is untouched."""
+    from app.models import Pagamento
+    from app.services.online_payments import reconciliation_worker as worker
+
+    allowed = (9981, 9982)
+    disallowed = 9983
+    monkeypatch.setenv(
+        "ONLINE_PAYMENT_RECONCILIATION_TENANT_IDS",
+        ",".join(str(rid) for rid in allowed),
+    )
+
+    for rid in (*allowed, disallowed):
+        current_restaurante_id.set(rid)
+        with SessionLocal() as db:
+            db.add(Restaurante(id=rid, nome=f"Parallel Store {rid}", plano="pro"))
+            db.flush()
+            user = Usuario(
+                id=f"admin-multi-{rid}",
+                restaurante_id=rid,
+                nome=f"Admin {rid}",
+                email=f"admin-multi-{rid}@example.test",
+                senha_hash="x",
+                role="admin",
+                cargo="admin",
+                status="ativo",
+            )
+            db.add(user)
+            db.flush()
+            shift = CaixaTurno(
+                restaurante_id=rid,
+                aberto_por_id=user.id,
+                status="aberto",
+                saldo_inicial=0.0,
+            )
+            db.add(shift)
+            db.flush()
+            order = Comanda(
+                id=f"comanda-multi-{rid}",
+                restaurante_id=rid,
+                garcom_id=user.id,
+                numero_pedido=rid,
+                identificador=f"Checkout Store {rid}",
+                tipo="Delivery",
+                delivery_status="pendente",
+                online_payment_status="pending",
+            )
+            db.add(order)
+            db.flush()
+            db.add(
+                OnlinePaymentIntent(
+                    id=f"intent-multi-{rid}",
+                    restaurante_id=rid,
+                    comanda_id=order.id,
+                    turno_id=shift.id,
+                    provider="pagbank",
+                    method="pix",
+                    status="pending",
+                    amount=4.50,
+                    marketplace_fee=0.00,
+                    fee_settlement="none",
+                    idempotency_key=f"idem-multi-{rid}",
+                    external_payment_id=f"ORDE_MULTI_{rid}",
+                )
+            )
+            db.add(
+                RestaurantPaymentAccount(
+                    id=f"account-multi-{rid}",
+                    restaurante_id=rid,
+                    provider="pagbank",
+                    provider_environment="production",
+                    provider_user_id=f"ACCO_MULTI_{rid}",
+                    status="active",
+                    access_token=f"test-token-for-{rid}",
+                    webhook_secret=f"test-token-for-{rid}",
+                )
+            )
+            db.commit()
+
+    monkeypatch.setattr(
+        worker, "discover_active_tenant_ids",
+        lambda _db: [*allowed, disallowed],
+    )
+
+    def confirmed_payment(_provider, external_id):
+        rid = int(external_id.rsplit("_", 1)[1])
+        return ProviderPayment(
+            external_id=external_id,
+            status="approved",
+            amount=Decimal("4.50"),
+            external_reference=f"intent-multi-{rid}",
+        )
+
+    monkeypatch.setattr(PagBankProvider, "get_payment", confirmed_payment)
+
+    # Per-cycle tenant budget=1; each sweep must move to the next seller.
+    assert worker.reconcile_pending_intents(
+        max_per_tenant=1, max_tenants_per_sweep=1
+    ) == 1
+    assert worker.reconcile_pending_intents(
+        max_per_tenant=1, max_tenants_per_sweep=1
+    ) == 1
+
+    for rid in (*allowed, disallowed):
+        with SessionLocal() as db:
+            with tenant_session_scope(db, rid):
+                intent = db.query(OnlinePaymentIntent).filter_by(
+                    id=f"intent-multi-{rid}"
+                ).one()
+                payments = db.query(Pagamento).filter_by(
+                    comanda_id=f"comanda-multi-{rid}"
+                ).all()
+                if rid in allowed:
+                    assert intent.status == "approved"
+                    assert len(payments) == 1
+                    assert payments[0].valor == 4.50
+                else:
+                    assert intent.status == "pending"
+                    assert len(payments) == 0

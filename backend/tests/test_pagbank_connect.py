@@ -320,21 +320,31 @@ def test_pagbank_webhook_signature_validation_and_sandbox_fallback(monkeypatch):
         assert rejected.status_code == 401
         assert 'Assinatura divergente' in rejected.json()['detail']
 
-        # 4. Valid signature with candidate token (APP_TOKEN) -> processes successfully
+        # 4. A shared app-token signature is NOT authorized for a
+        # third-party seller, even when its Connect account is active.
         platform_signature = hashlib.sha256(b'test-APP_TOKEN-' + raw_body).hexdigest()
-        res = client.post(
+        rejected_platform = client.post(
             f'/payments/webhooks/pagbank/{account.id}',
             content=raw_body,
             headers={'Content-Type': 'application/json', 'x-authenticity-token': platform_signature},
         )
-        assert res.status_code == 200
-        assert res.json()['status'] == 'processed'
+        assert rejected_platform.status_code == 401
 
-        # 5. Replay idempotency -> returns already_processed
+        # The scoped seller's token can authenticate its own webhook.
+        seller_signature = hashlib.sha256(b'seller-webhook-secret-token-' + raw_body).hexdigest()
         res = client.post(
             f'/payments/webhooks/pagbank/{account.id}',
             content=raw_body,
-            headers={'Content-Type': 'application/json', 'x-authenticity-token': platform_signature},
+            headers={'Content-Type': 'application/json', 'x-authenticity-token': seller_signature},
+        )
+        assert res.status_code == 200
+        assert res.json()['status'] == 'processed'
+
+        # 5. Replay remains idempotent.
+        res = client.post(
+            f'/payments/webhooks/pagbank/{account.id}',
+            content=raw_body,
+            headers={'Content-Type': 'application/json', 'x-authenticity-token': seller_signature},
         )
         assert res.status_code == 200
         assert res.json()['status'] == 'already_processed'

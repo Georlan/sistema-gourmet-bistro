@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
+import os
 from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
@@ -28,16 +29,58 @@ def discover_active_tenant_ids(db: Session) -> list[int]:
     return [int(rid) for rid in result if rid is not None and int(rid) > 0]
 
 
-def reconcile_pending_intents(*, max_per_tenant: int = 10) -> int:
-    """Realiza a varredura e conciliação de intenções online pendentes sob escopo RLS de cada tenant."""
+# Process-local pagination cursor. Cross-instance financial deduplication remains
+# authoritative in claim_poll_reconciliation's atomic database update.
+_last_scanned_tenant_id = 0
+
+
+def _allowed_reconciliation_tenants() -> set[int]:
+    """Fail closed: new autonomous reconciliation needs explicit tenant opt-in."""
+    raw = os.getenv("ONLINE_PAYMENT_RECONCILIATION_TENANT_IDS", "")
+    values = [part.strip() for part in raw.split(",") if part.strip()]
+    if any(not value.isdecimal() or int(value) < 1 for value in values):
+        logger.error("Invalid ONLINE_PAYMENT_RECONCILIATION_TENANT_IDS; sweep disabled")
+        return set()
+    return {int(value) for value in values}
+
+
+def reconcile_pending_intents(
+    *, max_per_tenant: int = 3, max_tenants_per_sweep: int = 8
+) -> int:
+    """Bounded, fair, tenant-scoped payment recovery independent of the browser.
+
+    A tenant must opt in explicitly. Repeatedly selecting the oldest 10 intents
+    starves newer orders, so prioritize those not yet queried and rotate both
+    tenants and pending intents on each pass.
+    """
+    global _last_scanned_tenant_id
+    if max_per_tenant < 1 or max_tenants_per_sweep < 1:
+        raise ValueError("Reconciliation sweep limits must be positive")
+
+    allowed_tenants = _allowed_reconciliation_tenants()
+    if not allowed_tenants:
+        return 0
+
     now = datetime.datetime.now(datetime.timezone.utc)
-    cutoff_created = now - datetime.timedelta(hours=24)
+    cutoff_created = now - datetime.timedelta(hours=72)
     total_reconciled = 0
 
     with SessionLocal() as scan_db:
-        tenant_ids = discover_active_tenant_ids(scan_db)
+        available_ids = discover_active_tenant_ids(scan_db)
+    tenant_ids = sorted({rid for rid in available_ids if rid in allowed_tenants})
+    if not tenant_ids:
+        return 0
 
-    for rid in tenant_ids:
+    # Round-robin avoids starving later restaurants when the number of
+    # connected stores exceeds the per-cycle budget.
+    ordered_ids = (
+        [rid for rid in tenant_ids if rid > _last_scanned_tenant_id]
+        + [rid for rid in tenant_ids if rid <= _last_scanned_tenant_id]
+    )
+    selected_ids = ordered_ids[:max_tenants_per_sweep]
+    _last_scanned_tenant_id = selected_ids[-1]
+
+    for rid in selected_ids:
         try:
             with SessionLocal() as db:
                 with tenant_session_scope(db, rid):
@@ -57,20 +100,23 @@ def reconcile_pending_intents(*, max_per_tenant: int = 10) -> int:
                             OnlinePaymentIntent.external_payment_id.isnot(None),
                             OnlinePaymentIntent.created_at >= cutoff_created,
                         )
-                        .order_by(OnlinePaymentIntent.created_at.asc())
+                        .order_by(
+                            OnlinePaymentIntent.reconciliation_attempted_at.asc().nullsfirst(),
+                            OnlinePaymentIntent.created_at.asc(),
+                            OnlinePaymentIntent.id.asc(),
+                        )
                         .limit(max_per_tenant)
                         .all()
                     )
 
                     for intent in intents:
-                        if not OnlinePaymentService.claim_poll_reconciliation(db, intent):
-                            continue
-
-                        account = OnlinePaymentService.account_for_intent(db, intent)
-                        if not account or account.status != "active":
-                            continue
-
                         try:
+                            if not OnlinePaymentService.claim_poll_reconciliation(db, intent):
+                                continue
+                            account = OnlinePaymentService.account_for_intent(db, intent)
+                            if account is None or account.status != "active":
+                                continue
+
                             result, approved = OnlinePaymentService.reconcile_provider_payment(
                                 db,
                                 account=account,
@@ -78,10 +124,15 @@ def reconcile_pending_intents(*, max_per_tenant: int = 10) -> int:
                             )
                             if approved:
                                 total_reconciled += 1
-                                manager.queue_committed_broadcast(db, {"event": "tables_updated"}, int(rid))
+                                manager.queue_committed_broadcast(
+                                    db, {"event": "tables_updated"}, int(rid)
+                                )
                                 manager.queue_committed_broadcast(
                                     db,
-                                    {"event": "new_delivery_order", "message": "Novo pedido online pago recebido!"},
+                                    {
+                                        "event": "new_delivery_order",
+                                        "message": "Novo pedido online pago recebido!",
+                                    },
                                     int(rid),
                                 )
                                 db.commit()
@@ -90,21 +141,26 @@ def reconcile_pending_intents(*, max_per_tenant: int = 10) -> int:
                                     intent.id,
                                     rid,
                                 )
-                        except Exception:
+                        except Exception as exc:
+                            db.rollback()
                             logger.warning(
-                                "Autonomous reconciliation query failed for intent=%s tenant=%s",
-                                intent.id,
-                                rid,
-                                exc_info=True,
+                                "Autonomous reconciliation failed intent=%s tenant=%s type=%s",
+                                intent.id, rid, type(exc).__name__,
                             )
-        except Exception:
-            logger.exception("Error during online payment reconciliation for tenant=%s", rid)
+        except Exception as exc:
+            logger.warning(
+                "Autonomous reconciliation tenant scan failed tenant=%s type=%s",
+                rid, type(exc).__name__,
+            )
 
     return total_reconciled
 
-
 async def run_worker(poll_interval_seconds: float = 20.0) -> None:
     """Loop assíncrono em background para conciliação automática."""
+    logger.info(
+        "Autonomous reconciliation worker started; enabled_tenants=%d",
+        len(_allowed_reconciliation_tenants()),
+    )
     while True:
         try:
             await asyncio.to_thread(reconcile_pending_intents)
