@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import base64
 import datetime
 from decimal import Decimal
 import hashlib
+import hmac
 import json
 from unittest.mock import MagicMock
 
@@ -83,21 +85,33 @@ def test_verify_pagbank_signature():
         candidate_tokens=candidate_tokens,
     ) is True
 
-    # 2. Whitespace / CRLF normalization
+    # 2. Byte-exact verification: adding CRLF must invalidate the signature.
     body_with_crlf = body + b"\r\n"
     assert verify_pagbank_signature(
         raw_body=body_with_crlf,
         authenticity_token=valid_sig,
         candidate_tokens=candidate_tokens,
+    ) is False
+    signed_with_crlf = hashlib.sha256(token.encode() + b"-" + body_with_crlf).hexdigest()
+    assert verify_pagbank_signature(
+        raw_body=body_with_crlf,
+        authenticity_token=signed_with_crlf,
+        candidate_tokens=candidate_tokens,
     ) is True
 
-    # 3. Format without hyphen: sha256(token + raw)
+    # 3. Undocumented no-hyphen and HMAC variants must never authenticate.
     no_hyphen_sig = hashlib.sha256(token.encode() + body).hexdigest()
     assert verify_pagbank_signature(
         raw_body=body,
         authenticity_token=no_hyphen_sig,
         candidate_tokens=candidate_tokens,
-    ) is True
+    ) is False
+    hmac_sig = hmac.new(token.encode(), body, hashlib.sha256).hexdigest()
+    assert verify_pagbank_signature(
+        raw_body=body,
+        authenticity_token=hmac_sig,
+        candidate_tokens=candidate_tokens,
+    ) is False
 
     # 4. Tampered body or invalid signature -> False
     assert verify_pagbank_signature(
@@ -286,6 +300,7 @@ def test_webhook_returns_503_for_uncommitted_intent(monkeypatch):
 def test_autonomous_reconciliation_worker_sweep(monkeypatch):
     """Testa que o worker de reconciliação varre intents pendentes de tenants ativos com segurança."""
     rid = 9973
+    monkeypatch.setenv("ONLINE_PAYMENT_RECONCILIATION_TENANT_IDS", str(rid))
     current_restaurante_id.set(rid)
     db = SessionLocal()
     try:
@@ -380,3 +395,45 @@ def test_autonomous_reconciliation_worker_sweep(monkeypatch):
 
     finally:
         db.close()
+
+
+
+def test_autonomous_reconciliation_is_disabled_without_tenant_opt_in(monkeypatch):
+    from app.services.online_payments import reconciliation_worker as worker
+
+    monkeypatch.delenv("ONLINE_PAYMENT_RECONCILIATION_TENANT_IDS", raising=False)
+    monkeypatch.setattr(
+        worker,
+        "discover_active_tenant_ids",
+        lambda _: pytest.fail("An unapproved sweep must not inspect tenants"),
+    )
+    assert worker.reconcile_pending_intents() == 0
+
+    monkeypatch.setenv("ONLINE_PAYMENT_RECONCILIATION_TENANT_IDS", "8,not-an-id")
+    assert worker.reconcile_pending_intents() == 0
+
+
+def test_pagbank_ecdsa_signature_rejects_changed_raw_body():
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    original = b'{"id":"ORDE_123","reference_id":"intent-123"}'
+    signature = base64.b64encode(
+        key.sign(original, ec.ECDSA(hashes.SHA256()))
+    ).decode("ascii")
+    public_key = base64.b64encode(
+        key.public_key().public_bytes(
+            serialization.Encoding.DER,
+            serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+    ).decode("ascii")
+
+    assert verify_pagbank_signature(
+        raw_body=original, payload_signature=signature, public_key_b64=public_key,
+    )
+    assert not verify_pagbank_signature(
+        raw_body=original + b"\r\n",
+        payload_signature=signature,
+        public_key_b64=public_key,
+    )
