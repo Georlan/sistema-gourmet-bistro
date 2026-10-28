@@ -25,7 +25,7 @@ from ..services.online_payments.account_connection import _expires_at, guard_rec
 from ..services.online_payments.pagbank import oauth
 from ..services.online_payments.pagbank.webhook import (
     extract_webhook_identifiers, verify_pagbank_signature,
-    safe_product_origin, authenticity_signature_format,
+    safe_product_origin, authenticity_signature_format, pilot8_ibanking_webhook_token,
 )
 from ..websocket_manager import manager
 from .online_payments import _resolve_account_tenant
@@ -280,7 +280,17 @@ def _process_webhook(
             if oauth.owner_receiver_pilot_enabled(int(rid), environment=account.provider_environment)
             else None
         )
-        candidate_tokens = [t for t in (account.access_token, account.webhook_secret, app_token) if t]
+        seller_ibanking_token = pilot8_ibanking_webhook_token(
+            restaurant_id=int(rid),
+            environment=account.provider_environment,
+            owner_receiver_pilot_enabled=oauth.owner_receiver_pilot_enabled(
+                int(rid), environment=account.provider_environment,
+            ),
+        )
+        candidate_tokens = [
+            t for t in (account.access_token, account.webhook_secret, app_token, seller_ibanking_token) if t
+        ]
+        # Seller's iBanking token is never reused as an OAuth bearer or application credential.
         # Card encryption keys are not webhook verification keys.
         public_key = os.getenv('PAGBANK_WEBHOOK_PUBLIC_KEY', '')
 
