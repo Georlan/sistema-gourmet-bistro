@@ -74,6 +74,22 @@ def test_connect_rejection_logs_only_allowlisted_metadata(payload, expected_reas
     assert 'private-code' not in caplog.text
 
 
+def test_connect_rejects_non_object_token_response_without_leaking_body(caplog):
+    def handle(req):
+        return httpx.Response(200, json=['secret-value'])
+
+    with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+        with pytest.raises(oauth.PagBankOAuthError) as failure:
+            oauth._post(
+                '/oauth2/token',
+                {'grant_type': 'authorization_code', 'code': 'do-not-log'},
+                client=client,
+            )
+    assert failure.value.reason == 'invalid_response'
+    assert 'secret-value' not in caplog.text
+    assert 'do-not-log' not in caplog.text
+
+
 def test_incomplete_connect_response_is_classified_without_tokens(caplog):
     with pytest.raises(oauth.PagBankOAuthError) as failure:
         oauth._tokens({'access_token': 'private-access-token'})
