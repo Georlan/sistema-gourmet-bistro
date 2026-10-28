@@ -67,6 +67,17 @@ def identifier(value: str, prefix='ORDE') -> str:
     return value
 
 
+def valid_order_payer_email(value: str | None) -> bool:
+    """Validate the documented PagBank Order customer.email contract without logging PII."""
+    if not isinstance(value, str):
+        return False
+    email = value.strip()
+    return (
+        10 <= len(email) <= 255
+        and re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]{2,}', email) is not None
+    )
+
+
 class PagBankProvider:
     def __init__(self, access_token: str, *, environment: str | None = None):
         if not access_token:
@@ -119,10 +130,7 @@ class PagBankProvider:
         if not payer_name or not (is_valid_cpf(payer_tax_id) or is_valid_cnpj(payer_tax_id)):
             raise PagBankError('Informe nome e CPF/CNPJ do comprador para gerar o Pix PagBank.')
         # Defense in depth: do not send malformed email to the provider or log buyer PII.
-        if not isinstance(payer_email, str) or not (
-            10 <= len(payer_email.strip()) <= 255
-            and re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]{2,}', payer_email.strip())
-        ):
+        if not valid_order_payer_email(payer_email):
             raise PagBankError('Informe um e-mail válido para gerar o Pix PagBank.')
         expiration_date = expires_at.astimezone(datetime.timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
         data = self._request('POST', '/orders', headers={'x-idempotency-key': idempotency_key}, json={
