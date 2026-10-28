@@ -339,12 +339,16 @@ def prepare_id6_multi_menu(
                 id=str(uuid.uuid4()),
                 restaurante_id=tenant_id,
                 nome="Recheios da Tapioca",
-                tipo="opcional",
-                min_selecoes=0,
+                tipo="obrigatorio",
+                min_selecoes=1,
                 max_selecoes=12,
             )
             db.add(grupo_tapioca)
             db.flush()
+        else:
+            grupo_tapioca.tipo = "obrigatorio"
+            grupo_tapioca.min_selecoes = 1
+            grupo_tapioca.max_selecoes = 12
 
         recheios_spec = [
             ("Ovo", Decimal("3.00")),
@@ -403,10 +407,15 @@ def prepare_id6_multi_menu(
                         restaurante_id=tenant_id,
                         produto_id=p_tapioca.id,
                         grupo_id=grupo_tapioca.id,
-                        min_selecoes=0,
+                        min_selecoes=1,
                         max_selecoes=12,
+                        modo_selecao="tipos",
                     )
                 )
+            else:
+                link_tap.min_selecoes = 1
+                link_tap.max_selecoes = 12
+                link_tap.modo_selecao = "tipos"
 
         grupo_pao = (
             db.query(GrupoModificador)
@@ -512,8 +521,13 @@ def prepare_id6_multi_menu(
                             grupo_id=grp.id,
                             min_selecoes=min_s,
                             max_selecoes=max_s,
+                            modo_selecao="tipos",
                         )
                     )
+                else:
+                    link_sand.min_selecoes = min_s
+                    link_sand.max_selecoes = max_s
+                    link_sand.modo_selecao = "tipos"
 
         summary = {
             "tenant_id": tenant_id,
