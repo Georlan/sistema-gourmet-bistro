@@ -115,6 +115,7 @@ export function CaixaPanel({
   liveProdutos = [],
   liveCategorias = [],
   cardapio_ativo_id,
+  cardapios_ativos_ids,
   cardapio_ativo_nome,
   cardapios,
   catalogReady = false,
@@ -366,6 +367,7 @@ export function CaixaPanel({
     liveCategorias,
     onRefreshCategorias,
     cardapio_ativo_id,
+    cardapios_ativos_ids,
     cardapio_ativo_nome,
     cardapios,
   });
@@ -524,6 +526,7 @@ export function CaixaPanel({
     dynamicMenu,
     pdvTableOptions,
     cardapioAtivoId: catalog.cardapio_ativo_id,
+    cardapiosAtivosIds: catalog.cardapios_ativos_ids,
   });
   const { setBalcaoMobileView, setPdvOrderType, setPdvTargetMesaId } = pdv;
 
@@ -1047,6 +1050,7 @@ export function CaixaPanel({
                 onRefreshCategorias,
                 cardapios: catalog.cardapios,
                 cardapioAtivoId: catalog.cardapio_ativo_id,
+                cardapiosAtivosIds: catalog.cardapios_ativos_ids,
                 cardapioAtivoNome: catalog.cardapio_ativo_nome,
               }}
             />

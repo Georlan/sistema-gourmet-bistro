@@ -201,6 +201,7 @@ def test_onboarding_cria_tenant_defaults_admin_auditoria_e_login():
             "produtos": [],
             "cardapio_ativo_id": None,
             "cardapio_ativo_nome": None,
+            "cardapios_ativos_ids": [],
             "cardapios": [],
         }
     finally:

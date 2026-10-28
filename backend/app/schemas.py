@@ -146,6 +146,7 @@ class CardapioUpdate(BaseModel):
 
 
 class CardapiosListResponse(BaseModel):
+    cardapios_ativos_ids: List[str] = Field(default_factory=list)
     cardapio_ativo_id: Optional[str] = None
     cardapio_ativo_nome: Optional[str] = None
     multi_cardapio_enabled: bool = False

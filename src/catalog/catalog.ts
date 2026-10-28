@@ -41,6 +41,7 @@ export interface CatalogSnapshot {
   categorias: CatalogCategory[];
   produtos: CatalogProduct[];
   cardapio_ativo_id?: string | null;
+  cardapios_ativos_ids?: string[];
   cardapio_ativo_nome?: string | null;
   cardapios?: import('../types').CardapioMenu[];
 }
@@ -136,16 +137,18 @@ export function normalizeCatalogSnapshot(payload: unknown): CatalogSnapshot {
     categorias,
     produtos,
     cardapio_ativo_id: typeof source.cardapio_ativo_id === 'string' ? source.cardapio_ativo_id : null,
+    cardapios_ativos_ids: Array.isArray(source.cardapios_ativos_ids) ? source.cardapios_ativos_ids.filter((id): id is string => typeof id === 'string') : [],
     cardapio_ativo_nome: typeof source.cardapio_ativo_nome === 'string' ? source.cardapio_ativo_nome : null,
     cardapios: Array.isArray(source.cardapios) ? (source.cardapios as import('../types').CardapioMenu[]) : [],
   };
 }
 
-export function getSellableProducts(products: CatalogProduct[], activeCardapioId?: string | null): CatalogProduct[] {
+export function getSellableProducts(products: CatalogProduct[], activeCardapioId?: string | null, activeIds?: string[]): CatalogProduct[] {
+  const ids = activeIds?.length ? activeIds : activeCardapioId ? [activeCardapioId] : [];
   return products.filter((product) => {
     if (!product.ativo) return false;
-    if (activeCardapioId) {
-      if (!product.cardapio_id || product.cardapio_id !== activeCardapioId) {
+    if (ids.length) {
+      if (!product.cardapio_id || !ids.includes(product.cardapio_id)) {
         return false;
       }
     }

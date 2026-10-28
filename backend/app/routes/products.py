@@ -108,6 +108,7 @@ class CatalogoResponse(BaseModel):
     produtos: List[dict]
     cardapio_ativo_id: Optional[str] = None
     cardapio_ativo_nome: Optional[str] = None
+    cardapios_ativos_ids: List[str] = Field(default_factory=list)
     cardapios: List[CardapioResponse] = Field(default_factory=list)
 
 
@@ -399,6 +400,7 @@ def get_catalogo(
             for product in products
         ],
         "cardapio_ativo_id": cardapio_ativo_id,
+        "cardapios_ativos_ids": ([cardapio_ativo_id] + list(config.cardapios_adicionais_ids or [])) if cardapio_ativo_id and config else [],
         "cardapio_ativo_nome": cardapio_ativo_nome,
         "cardapios": cardapios,
     }
@@ -425,6 +427,7 @@ def list_cardapios(
 
     return {
         "cardapio_ativo_id": cardapio_ativo_id,
+        "cardapios_ativos_ids": ([cardapio_ativo_id] + list(config.cardapios_adicionais_ids or [])) if cardapio_ativo_id and config else [],
         "cardapio_ativo_nome": cardapio_ativo_nome,
         "multi_cardapio_enabled": bool(cardapio_ativo_id or cardapios),
         "cardapios": cardapios,
@@ -503,6 +506,7 @@ def publish_cardapio(
         db.add(config)
     else:
         config.cardapio_ativo_id = cardapio.id
+        config.cardapios_adicionais_ids = []
 
     db.commit()
 
@@ -517,6 +521,36 @@ def publish_cardapio(
         "cardapio_ativo_id": cardapio.id,
         "cardapio_ativo_nome": cardapio.nome,
     }
+
+
+@router.put("/menus/ativos")
+def set_active_cardapios(
+    data: list[str],
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Replace the active set atomically; all IDs must belong to this tenant."""
+    del current_user
+    rest_id = require_tenant_id()
+    ids = list(dict.fromkeys(data))
+    if not ids or len(ids) > 50 or len(ids) != len(data):
+        raise HTTPException(status_code=400, detail="Selecione ao menos um cardápio, sem duplicações.")
+    query = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == rest_id)
+    if db.bind and db.bind.dialect.name == "postgresql":
+        query = query.with_for_update(of=ConfiguracaoRestaurante)
+    config = query.first()
+    menus = db.query(Cardapio.id).filter(Cardapio.restaurante_id == rest_id, Cardapio.id.in_(ids)).all()
+    if len(menus) != len(ids):
+        raise HTTPException(status_code=404, detail="Cardápio não encontrado.")
+    if not config:
+        config = ConfiguracaoRestaurante(restaurante_id=rest_id)
+        db.add(config)
+    config.cardapio_ativo_id = ids[0]
+    config.cardapios_adicionais_ids = ids[1:]
+    db.commit()
+    notify_catalog_update(background_tasks, "Cardápios ativos atualizados", rest_id)
+    return {"cardapios_ativos_ids": ids}
 
 
 @router.patch("/{produto_id}/cardapio", response_model=ProdutoResponse)

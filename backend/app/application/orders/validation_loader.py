@@ -66,6 +66,7 @@ class ValidationDataLoader:
                     ConfiguracaoRestaurante.pedido_minimo,
                     ConfiguracaoRestaurante.pedido_minimo_retirada,
                     ConfiguracaoRestaurante.cardapio_ativo_id,
+                    ConfiguracaoRestaurante.cardapios_adicionais_ids,
                     raiseload=True,
                 ),
                 raiseload(ConfiguracaoRestaurante.restaurante),
@@ -226,6 +227,7 @@ class ValidationDataLoader:
             available_cashback=available_cashback,
             apply_cashback=usar_cashback and available_cashback > Decimal("0.00"),
             active_cardapio_id=active_cardapio_id,
+            additional_cardapio_ids=tuple(config.cardapios_adicionais_ids or ()) if config else (),
         )
 
     @classmethod

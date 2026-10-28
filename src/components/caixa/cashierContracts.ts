@@ -23,6 +23,7 @@ export interface CaixaPanelProps {
   liveProdutos?: Product[];
   liveCategorias?: CatalogCategory[];
   cardapio_ativo_id?: string | null;
+  cardapios_ativos_ids?: string[];
   cardapio_ativo_nome?: string | null;
   cardapios?: CardapioMenu[];
   catalogReady?: boolean;
