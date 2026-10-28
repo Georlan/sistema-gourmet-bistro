@@ -132,6 +132,8 @@ class PagBankProvider:
         # Defense in depth: do not send malformed email to the provider or log buyer PII.
         if not valid_order_payer_email(payer_email):
             raise PagBankError('Informe um e-mail válido para gerar o Pix PagBank.')
+        # Validation trims surrounding whitespace; send the same canonical value.
+        payer_email = payer_email.strip()
         expiration_date = expires_at.astimezone(datetime.timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
         data = self._request('POST', '/orders', headers={'x-idempotency-key': idempotency_key}, json={
             'reference_id': external_reference,
