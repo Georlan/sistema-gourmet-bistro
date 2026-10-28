@@ -54,7 +54,12 @@ export function createCheckoutDiagnostics(
         return supportCode;
       },
       failure(error: unknown): CheckoutOutcome {
-        if (error instanceof Error && error.name === 'AbortError') return 'timeout';
+        if (
+          error instanceof Error &&
+          (error.name === 'AbortError' || error.name === 'TimeoutError' || /abort|timeout/i.test(error.message))
+        ) {
+          return 'timeout';
+        }
         if (status >= 400) return 'http_error';
         if (error instanceof SyntaxError || status > 0) return 'invalid_response';
         return error instanceof TypeError ? 'network_error' : 'client_error';
