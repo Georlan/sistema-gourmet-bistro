@@ -54,6 +54,34 @@ def test_refresh_headers_endpoint_and_rotation():
     assert requests[0].url.path == '/oauth2/refresh'
 
 
+@pytest.mark.parametrize('payload, expected_reason', [
+    ({'error': 'invalid_grant'}, 'invalid_grant'),
+    ({'errors': [{'code': '41004'}]}, '41004'),
+    ({'error': 'buyer@private.example', 'description': 'secret-value'}, 'unknown'),
+])
+def test_connect_rejection_logs_only_allowlisted_metadata(payload, expected_reason, caplog):
+    def handle(req):
+        return httpx.Response(400, json=payload)
+
+    with httpx.Client(transport=httpx.MockTransport(handle)) as client:
+        with pytest.raises(oauth.PagBankOAuthError) as failure:
+            oauth._post('/oauth2/token', {'grant_type': 'authorization_code', 'code': 'private-code'}, client=client)
+    assert failure.value.reason == expected_reason
+    assert 'http_status=400' in caplog.text
+    assert f'error_code={expected_reason}' in caplog.text
+    assert 'buyer@private.example' not in caplog.text
+    assert 'secret-value' not in caplog.text
+    assert 'private-code' not in caplog.text
+
+
+def test_incomplete_connect_response_is_classified_without_tokens(caplog):
+    with pytest.raises(oauth.PagBankOAuthError) as failure:
+        oauth._tokens({'access_token': 'private-access-token'})
+    assert failure.value.reason == 'incomplete_response'
+    assert 'account_id_present=False' in caplog.text
+    assert 'private-access-token' not in caplog.text
+
+
 def test_pix_uses_current_charge_contract_integer_cents_and_no_split():
     requests = []
     def handle(req):
@@ -136,6 +164,21 @@ def test_callback_connects_seller_in_state_tenant_and_revokes_before_disconnect(
         assert account._access_token != account.access_token
         assert account.provider_user_id == 'ACCO_seller'
         assert account.status == 'active'
+        # A failed reconnection must preserve the already connected receiver.
+        def expired_exchange(code, **kwargs):
+            raise oauth.PagBankOAuthError('Authorization rejected', reason='invalid_grant')
+        monkeypatch.setattr(oauth, 'exchange', expired_exchange)
+        from fastapi import HTTPException
+        with pytest.raises(HTTPException) as invalid_grant:
+            pagbank_payments.complete(
+                pagbank_payments.AuthorizationCompletion(code='used-code', state=state),
+                db=db, user=user,
+            )
+        assert invalid_grant.value.status_code == 409
+        assert 'nova conexão' in invalid_grant.value.detail
+        db.refresh(account)
+        assert account.status == 'active'
+        assert account.access_token == 'seller-token'
         revoked = []
         monkeypatch.setattr(oauth, 'revoke', lambda token, **kwargs: revoked.append((token, kwargs['environment'])))
         result = pagbank_payments.disconnect(db=db, user=user)
