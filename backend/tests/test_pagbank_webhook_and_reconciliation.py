@@ -488,3 +488,125 @@ def test_pagbank_ecdsa_signature_rejects_changed_raw_body():
         payload_signature=signature,
         public_key_b64=public_key,
     )
+
+
+
+def test_autonomous_worker_rotates_across_tenants_without_touching_unlisted_store(monkeypatch):
+    """Two opted-in sellers are reconciled; an unlisted tenant is untouched."""
+    from app.models import Pagamento
+    from app.services.online_payments import reconciliation_worker as worker
+
+    allowed = (9981, 9982)
+    disallowed = 9983
+    monkeypatch.setenv(
+        "ONLINE_PAYMENT_RECONCILIATION_TENANT_IDS",
+        ",".join(str(rid) for rid in allowed),
+    )
+
+    for rid in (*allowed, disallowed):
+        current_restaurante_id.set(rid)
+        with SessionLocal() as db:
+            db.add(Restaurante(id=rid, nome=f"Parallel Store {rid}", plano="pro"))
+            db.flush()
+            user = Usuario(
+                id=f"admin-multi-{rid}",
+                restaurante_id=rid,
+                nome=f"Admin {rid}",
+                email=f"admin-multi-{rid}@example.test",
+                senha_hash="x",
+                role="admin",
+                cargo="admin",
+                status="ativo",
+            )
+            db.add(user)
+            db.flush()
+            shift = CaixaTurno(
+                restaurante_id=rid,
+                aberto_por_id=user.id,
+                status="aberto",
+                saldo_inicial=0.0,
+            )
+            db.add(shift)
+            db.flush()
+            order = Comanda(
+                id=f"comanda-multi-{rid}",
+                restaurante_id=rid,
+                garcom_id=user.id,
+                numero_pedido=rid,
+                identificador=f"Checkout Store {rid}",
+                tipo="Delivery",
+                delivery_status="pendente",
+                online_payment_status="pending",
+            )
+            db.add(order)
+            db.flush()
+            db.add(
+                OnlinePaymentIntent(
+                    id=f"intent-multi-{rid}",
+                    restaurante_id=rid,
+                    comanda_id=order.id,
+                    turno_id=shift.id,
+                    provider="pagbank",
+                    method="pix",
+                    status="pending",
+                    amount=4.50,
+                    marketplace_fee=0.00,
+                    fee_settlement="none",
+                    idempotency_key=f"idem-multi-{rid}",
+                    external_payment_id=f"ORDE_MULTI_{rid}",
+                )
+            )
+            db.add(
+                RestaurantPaymentAccount(
+                    id=f"account-multi-{rid}",
+                    restaurante_id=rid,
+                    provider="pagbank",
+                    provider_environment="production",
+                    provider_user_id=f"ACCO_MULTI_{rid}",
+                    status="active",
+                    access_token=f"test-token-for-{rid}",
+                    webhook_secret=f"test-token-for-{rid}",
+                )
+            )
+            db.commit()
+
+    monkeypatch.setattr(
+        worker, "discover_active_tenant_ids",
+        lambda _db: [*allowed, disallowed],
+    )
+
+    def confirmed_payment(_provider, external_id):
+        rid = int(external_id.rsplit("_", 1)[1])
+        return ProviderPayment(
+            external_id=external_id,
+            status="approved",
+            amount=Decimal("4.50"),
+            external_reference=f"intent-multi-{rid}",
+        )
+
+    monkeypatch.setattr(PagBankProvider, "get_payment", confirmed_payment)
+
+    # Per-cycle tenant budget=1; each sweep must move to the next seller.
+    assert worker.reconcile_pending_intents(
+        max_per_tenant=1, max_tenants_per_sweep=1
+    ) == 1
+    assert worker.reconcile_pending_intents(
+        max_per_tenant=1, max_tenants_per_sweep=1
+    ) == 1
+
+    for rid in (*allowed, disallowed):
+        with SessionLocal() as db:
+            with tenant_session_scope(db, rid):
+                intent = db.query(OnlinePaymentIntent).filter_by(
+                    id=f"intent-multi-{rid}"
+                ).one()
+                payments = db.query(Pagamento).filter_by(
+                    comanda_id=f"comanda-multi-{rid}"
+                ).all()
+                if rid in allowed:
+                    assert intent.status == "approved"
+                    assert len(payments) == 1
+                    assert payments[0].valor == 4.50
+                else:
+                    assert intent.status == "pending"
+                    assert len(payments) == 0
