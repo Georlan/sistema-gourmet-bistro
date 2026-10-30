@@ -20,7 +20,7 @@ export function usePublicMenuSlug(apiBaseUrl: string, authorization: string | un
     return () => controller.abort();
   }, [apiBaseUrl, authorization, restaurantId, enabled]);
 
-  return enabled && menuIdentity?.authorization === authorization && menuIdentity.restaurantId === restaurantId
+  return enabled && menuIdentity && menuIdentity.authorization === authorization && menuIdentity.restaurantId === restaurantId
     ? menuIdentity.slug
     : null;
 }

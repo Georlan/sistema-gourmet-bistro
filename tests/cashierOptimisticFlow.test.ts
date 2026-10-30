@@ -211,5 +211,5 @@ test('PDV keeps payment optional at launch and persists it when informed', () =>
   assert.match(view, /Pagamento/);
   assert.match(view, /opcional agora/);
   assert.match(view, /PAYMENT_LABELS/);
-  assert.match(view, /disabled=\{pdvCart\.length === 0 \|\| isLoading\}/);
+  assert.match(view, /disabled=\{pdvCart\.length === 0 \|\| isLoading \|\| cartHasUnavailableItems\}/);
 });

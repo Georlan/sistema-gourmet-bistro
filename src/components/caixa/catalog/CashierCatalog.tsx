@@ -222,7 +222,7 @@ export default function CashierCatalog({
     resetProductImageState('');
     setProdFormAtivo(true);
     setProdFormSomentePromocao(false);
-    setProdFormCardapioId(selectedCardapioId || cardapios?.[0]?.id || '');
+    setProdFormCardapioId(selectedCardapioId || activeMenuIds[0] || cardapios?.[0]?.id || '');
     setShowProductModal(true);
   };
 
@@ -792,12 +792,12 @@ export default function CashierCatalog({
                   >
                     {cardapios.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.nome} {c.id === cardapioAtivoId ? '★ (Ativo no momento)' : ''}
+                        {c.nome} {activeMenuIds.includes(c.id) ? '★ (Ativo no momento)' : ''}
                       </option>
                     ))}
                   </select>
                   <p className="text-[9px] text-koma-muted">
-                    Cada produto pertence exclusivamente a um cardápio (Manhã ou Meio-Dia).
+                    Cada produto pertence exclusivamente a um cardápio operacional.
                   </p>
                 </div>
               )}
