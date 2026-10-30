@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { PaymentMethod } from '../../../cardapio/paymentMethods';
 import type { CatalogCategory } from '../../../catalog/catalog';
-import { getSellableProducts } from '../../../catalog/catalog';
+import { getSellableProducts, isProductSellable } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import {
   EMPTY_DELIVERY_ADDRESS,
@@ -276,6 +276,33 @@ export function useCashierPdv({
     setPdvCart((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  const cartUnavailableItemNames = useMemo(() => {
+    const names = new Set<string>();
+    pdvCart.forEach((item) => {
+      const fresh = dynamicMenu.find((p) => p.id === item.product.id) || item.product;
+      if (!isProductSellable(fresh, cardapioAtivoId, cardapiosAtivosIds)) {
+        names.add(fresh.nome || item.product.nome);
+      }
+    });
+    return Array.from(names);
+  }, [pdvCart, dynamicMenu, cardapioAtivoId, cardapiosAtivosIds]);
+
+  const cartHasUnavailableItems = cartUnavailableItemNames.length > 0;
+
+  const checkCartItemAvailability = React.useCallback(
+    (item: PdvCartItem) => {
+      const fresh = dynamicMenu.find((p) => p.id === item.product.id) || item.product;
+      if (fresh.ativo === false) {
+        return { unavailable: true, reason: 'paused' as const };
+      }
+      if (!isProductSellable(fresh, cardapioAtivoId, cardapiosAtivosIds)) {
+        return { unavailable: true, reason: 'menu_inactive' as const };
+      }
+      return { unavailable: false, reason: null };
+    },
+    [dynamicMenu, cardapioAtivoId, cardapiosAtivosIds],
+  );
+
   const isPdvSubmittingRef = React.useRef(false);
 
   const pdvPendingOperationRef = React.useRef<{ fingerprint: string; key: string } | null>(null);
@@ -285,6 +312,13 @@ export function useCashierPdv({
     if (isPdvSubmittingRef.current) return; // Sync ref guard (faster than isLoading state check)
     if (pdvCart.length === 0) {
       showToast('Seu carrinho de vendas está vazio.', 'info');
+      return;
+    }
+    if (cartHasUnavailableItems) {
+      showToast(
+        `O carrinho contém itens indisponíveis no momento (${cartUnavailableItemNames.join(', ')}). Remova-os para continuar.`,
+        'error',
+      );
       return;
     }
     const normalizedCustomerPhone = pdvCustomerPhone.replace(/\D/g, '');
@@ -565,6 +599,16 @@ export function useCashierPdv({
     [apiCategorias, pdvSearch, pdvSelectedCategory, sellableProducts],
   );
 
+  const unavailableSearchMatches = useMemo(() => {
+    const query = pdvSearch.trim();
+    if (!query) return [];
+    return dynamicMenu.filter((product) => {
+      const matchesSearch = smartSearchMatch(`${product.nome} ${product.descricao || ''}`, query);
+      if (!matchesSearch) return false;
+      return product.ativo === false || !isProductSellable(product, cardapioAtivoId, cardapiosAtivosIds);
+    });
+  }, [dynamicMenu, pdvSearch, cardapioAtivoId, cardapiosAtivosIds]);
+
   useEffect(() => {
     if (pdvSelectedCategory !== 'todos' && !pdvCategories.some((category) => category.nome === pdvSelectedCategory)) {
       setPdvSelectedCategory('todos');
@@ -630,5 +674,9 @@ export function useCashierPdv({
     pdvCategories,
     pdvMenuInsights,
     filteredProducts,
+    cartHasUnavailableItems,
+    cartUnavailableItemNames,
+    checkCartItemAvailability,
+    unavailableSearchMatches,
   };
 }

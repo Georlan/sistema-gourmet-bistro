@@ -7,7 +7,11 @@ import { getSellableProducts, isProductSellable, normalizeCatalogSnapshot, type 
 import { planWaiterRepeat } from '../src/domain/waiterRepeatItem';
 import { MenuPanel } from '../src/components/MenuPanel';
 import { MesaConsumptionPanel } from '../src/components/mesas/MesaConsumptionPanel';
-import type { AppSettings, DraftItem, Order, Product } from '../src/types';
+import CashierPdvView from '../src/components/caixa/pdv/CashierPdvView';
+import CashierCatalog from '../src/components/caixa/catalog/CashierCatalog';
+import type { useCashierPdv, PdvCartItem } from '../src/components/caixa/pdv/useCashierPdv';
+import { EMPTY_DELIVERY_ADDRESS } from '../src/domain/deliveryAddress';
+import type { AppSettings, CardapioMenu, DraftItem, Order, Product } from '../src/types';
 import { getCustomerSubtotals, getTableTotal } from '../src/domain';
 
 const defaultSettings: AppSettings = {
@@ -284,4 +288,171 @@ test('MesaConsumptionPanel preserves historical items and disables repeat for in
   // 3. O item cujo cardápio agora está inativo tem o botão desabilitado com o título correspondente
   assert.match(html, /id="repeat-item-btn-item-inactive"[^>]*disabled/);
   assert.match(html, /title="Cardápio indisponível"/);
+});
+
+const createMockPdv = (overrides: Partial<ReturnType<typeof useCashierPdv>> = {}): ReturnType<typeof useCashierPdv> => ({
+  openCounter: () => {},
+  balcaoMobileView: 'carrinho',
+  setBalcaoMobileView: () => {},
+  pdvProductDetailId: null,
+  setPdvProductDetailId: () => {},
+  pdvOccupiedTableCount: 0,
+  pdvSearch: '',
+  setPdvSearch: () => {},
+  pdvSelectedCategory: 'todos',
+  setPdvSelectedCategory: () => {},
+  pdvCart: [],
+  setPdvCart: () => {},
+  pdvCustomerName: '',
+  setPdvCustomerName: () => {},
+  pdvCustomerPhone: '',
+  setPdvCustomerPhone: () => {},
+  setPdvCustomerId: null,
+  pdvCustomerLookup: 'idle',
+  pdvOrderType: 'pickup',
+  setPdvOrderType: () => {},
+  allowedPdvOrderTypes: ['pickup', 'delivery', 'dine_in'],
+  pdvPaymentMethod: null,
+  setPdvPaymentMethod: () => {},
+  pdvDeliveryAddress: '',
+  pdvDeliveryAddressDraft: EMPTY_DELIVERY_ADDRESS,
+  pdvDeliveryAddressLegacyHint: '',
+  handlePdvDeliveryAddressChange: () => {},
+  pdvTargetMesaId: 0,
+  setPdvTargetMesaId: () => {},
+  selectedPdvTableOption: null,
+  pdvCartItemCount: 0,
+  handlePdvAddToCart: () => {},
+  handlePdvUpdateCartQty: () => {},
+  handlePdvRemoveCartItem: () => {},
+  handlePdvSubmitOrder: async () => {},
+  sellableProducts: [],
+  pdvCategories: [],
+  pdvMenuInsights: { destination: 'Retirada', itemCount: 0, total: 'R$ 0,00', pausedCount: 0 },
+  filteredProducts: [],
+  cartHasUnavailableItems: false,
+  cartUnavailableItemNames: [],
+  checkCartItemAvailability: () => ({ unavailable: false, reason: null }),
+  unavailableSearchMatches: [],
+  ...overrides,
+});
+
+test('CashierPdvView blocks submitting order when cart has items from an inactive menu or paused items', () => {
+  const activeProduct = createProduct({ id: 'p-almoco', nome: 'Feijoada', preco: 35, categoria: 'Comidas', cardapio_id: 'almoco' });
+  const inactiveMenuProduct = createProduct({ id: 'p-noite', nome: 'Sopa Noturna', preco: 25, categoria: 'Comidas', cardapio_id: 'noite' });
+
+  const pdvCart: PdvCartItem[] = [
+    { product: activeProduct, quantity: 1, obs: '', client: 'Balcão' },
+    { product: inactiveMenuProduct, quantity: 1, obs: '', client: 'Balcão' },
+  ];
+
+  const mockPdv = createMockPdv({
+    pdvCart,
+    pdvCartItemCount: 2,
+    cartHasUnavailableItems: true,
+    cartUnavailableItemNames: ['Sopa Noturna'],
+    checkCartItemAvailability: (item) => {
+      if (item.product.id === 'p-noite') return { unavailable: true, reason: 'menu_inactive' };
+      return { unavailable: false, reason: null };
+    },
+  });
+
+  const html = renderToStaticMarkup(
+    createElement(CashierPdvView, {
+      activeSubTab: 'balcao',
+      catalogReady: true,
+      isLoading: false,
+      pdvTableOptions: [],
+      pdv: mockPdv,
+    }),
+  );
+
+  // 1. O item do cardápio inativo exibe o indicador no carrinho
+  assert.match(html, /id="pdv-cart-item-unavailable-1"/);
+  assert.match(html, /Indisponível no cardápio ativo/);
+
+  // 2. O alerta geral de bloqueio do carrinho do PDV é exibido
+  assert.match(html, /id="pdv-cart-unavailable-warning"/);
+  assert.match(html, /Há itens indisponíveis no carrinho\. Remova-os para continuar\./);
+
+  // 3. O botão de lançar pedido do PDV fica desabilitado
+  assert.match(html, /id="pdv-submit-btn"[^>]*disabled/);
+  assert.match(html, /title="Remova os itens indisponíveis antes de lançar o pedido"/);
+});
+
+test('CashierPdvView renders unavailable search matches with active menu status during search', () => {
+  const pausedProduct = createProduct({ id: 'p-pausado', nome: 'Bolo Pausado', preco: 12, categoria: 'Doces', ativo: false, cardapio_id: 'almoco' });
+  const inactiveMenuProduct = createProduct({ id: 'p-manha', nome: 'Bolo de Milho Manhã', preco: 10, categoria: 'Doces', ativo: true, cardapio_id: 'manha' });
+
+  const mockPdv = createMockPdv({
+    pdvSearch: 'Bolo',
+    unavailableSearchMatches: [pausedProduct, inactiveMenuProduct],
+  });
+
+  const html = renderToStaticMarkup(
+    createElement(CashierPdvView, {
+      activeSubTab: 'balcao',
+      catalogReady: true,
+      isLoading: false,
+      pdvTableOptions: [],
+      pdv: mockPdv,
+    }),
+  );
+
+  // 1. Renderiza a seção de itens indisponíveis na busca
+  assert.match(html, /id="pdv-unavailable-search-results"/);
+  assert.match(html, /Itens indisponíveis na operação atual/);
+
+  // 2. Exibe o produto pausado com o badge "Pausado"
+  assert.match(html, /id="pdv-unavailable-product-p-pausado"/);
+  assert.match(html, /Bolo Pausado/);
+  assert.match(html, /Pausado/);
+
+  // 3. Exibe o produto do cardápio inativo com o badge "Cardápio inativo"
+  assert.match(html, /id="pdv-unavailable-product-p-manha"/);
+  assert.match(html, /Bolo de Milho Manhã/);
+  assert.match(html, /Cardápio inativo/);
+});
+
+test('CashierCatalog marks all active simultaneous menus with indicator in cardapio tabs', () => {
+  const menus: CardapioMenu[] = [
+    { id: 'menu-manha', nome: 'Manhã', identificador: 'manha', ordem_exibicao: 1 },
+    { id: 'menu-almoco', nome: 'Meio-Dia', identificador: 'almoco', ordem_exibicao: 2 },
+    { id: 'menu-noite', nome: 'Noite', identificador: 'noite', ordem_exibicao: 3 },
+  ];
+
+  const html = renderToStaticMarkup(
+    createElement(CashierCatalog, {
+      apiBaseUrl: '',
+      authHeaders: {},
+      activeTab: 'cardapio',
+      activeSubTab: 'produtos',
+      setActiveSubTab: () => {},
+      showToast: () => {},
+      apiProdutos: [],
+      apiCategorias: [],
+      suggestedProductCode: '001',
+      hasOnlineMenu: true,
+      hasPrinting: true,
+      fetchProdutos: async () => {},
+      fetchCategorias: async () => {},
+      catalogReady: true,
+      restauranteConfig: {},
+      onRefreshCategorias: async () => {},
+      cardapios: menus,
+      cardapioAtivoId: 'menu-manha',
+      cardapiosAtivosIds: ['menu-manha', 'menu-almoco'],
+      cardapioAtivoNome: 'Manhã',
+    }),
+  );
+
+  // 1. Ambos os cardápios operacionais ativos (Manhã e Meio-Dia) exibem o indicador visual de ativo
+  assert.match(html, /<span>Manhã<\/span>[^<]*<span[^>]*>[^<]*<\/span>[^<]*<span[^>]*title="Cardápio ativo no momento"/);
+  assert.match(html, /<span>Meio-Dia<\/span>[^<]*<span[^>]*>[^<]*<\/span>[^<]*<span[^>]*title="Cardápio ativo no momento"/);
+
+  // 2. O cardápio 'Noite' (inativo) não tem o indicador visual de ativo
+  assert.doesNotMatch(html, /<span>Noite<\/span>[^<]*<span[^>]*>[^<]*<\/span>[^<]*<span[^>]*title="Cardápio ativo no momento"/);
+
+  // 3. O botão de gestão de cardápios adicionais ativos reflete o estado
+  assert.match(html, /Retirar Manhã dos ativos/);
 });

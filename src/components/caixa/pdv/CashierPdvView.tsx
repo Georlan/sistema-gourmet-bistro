@@ -107,6 +107,10 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     pdvCategories,
     pdvMenuInsights,
     filteredProducts,
+    cartHasUnavailableItems,
+    cartUnavailableItemNames,
+    checkCartItemAvailability,
+    unavailableSearchMatches,
   } = pdv;
   const {
     pdvCategoryScrollRef,
@@ -528,6 +532,56 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                     </span>
                   </div>
                 )}
+
+                {unavailableSearchMatches.length > 0 && (
+                  <section
+                    id="pdv-unavailable-search-results"
+                    data-testid="pdv-unavailable-search-results"
+                    className="mt-4 pt-3 border-t border-koma-border/60 space-y-2 pb-4"
+                  >
+                    <div className="flex items-center justify-between gap-3 pb-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2 w-2 rounded-full bg-koma-muted" />
+                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-koma-muted">
+                          Itens indisponíveis na operação atual ({unavailableSearchMatches.length})
+                        </h4>
+                      </div>
+                      <span className="text-[9px] text-koma-muted">somente consulta</span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-4 gap-2 sm:gap-2.5">
+                      {unavailableSearchMatches.map((p) => {
+                        const isPaused = p.ativo === false;
+                        return (
+                          <article
+                            key={p.id}
+                            id={`pdv-unavailable-product-${p.id}`}
+                            data-testid={`pdv-unavailable-product-${p.id}`}
+                            aria-disabled="true"
+                            className="flex flex-col justify-between rounded-xl sm:rounded-2xl border border-dashed border-koma-border bg-koma-card/40 p-2.5 sm:p-3 opacity-70 cursor-not-allowed text-left"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-start justify-between gap-1.5">
+                                <h4 className="font-bold text-xs text-koma-secondary truncate">{p.nome}</h4>
+                                <span className="whitespace-nowrap font-mono text-[10px] text-koma-muted">
+                                  {formatCurrency(Number(p.preco) || 0)}
+                                </span>
+                              </div>
+                              <span className="inline-flex rounded-md border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider text-rose-400">
+                                {isPaused ? 'Pausado' : 'Cardápio inativo'}
+                              </span>
+                              {p.descricao && (
+                                <p className="line-clamp-1 text-[9px] text-koma-muted">{p.descricao}</p>
+                              )}
+                            </div>
+                            <p className="mt-2 border-t border-koma-border/60 pt-1 text-[9px] font-semibold text-koma-muted">
+                              Indisponível no momento
+                            </p>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </section>
+                )}
               </div>
             </div>
 
@@ -572,9 +626,22 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           <strong className={"text-koma-foreground text-xs block truncate max-w-48"}>
                             {item.product.nome}
                           </strong>
-                          <span className={"text-[9px] text-[#4fe0bc] font-mono"}>
+                          <span className={"text-[9px] text-[#4fe0bc] font-mono block"}>
                             {formatCurrency(pdvCartItemUnitPrice(item))} / un.
                           </span>
+                          {(() => {
+                            const unav = checkCartItemAvailability(item);
+                            if (!unav.unavailable) return null;
+                            return (
+                              <div
+                                id={`pdv-cart-item-unavailable-${idx}`}
+                                data-testid={`pdv-cart-item-unavailable-${idx}`}
+                                className="mt-0.5 inline-flex items-center gap-1 text-[9px] font-bold text-rose-400 bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 rounded-md"
+                              >
+                                <span>{unav.reason === 'paused' ? 'Produto pausado' : 'Indisponível no cardápio ativo'}</span>
+                              </div>
+                            );
+                          })()}
                         </div>
                         <div className="flex shrink-0 items-center gap-1">
                           <button
@@ -961,10 +1028,21 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                     <span>Total pedido</span>
                     <span className="text-sm text-emerald-700 dark:text-emerald-400">{formatCurrency(cartTotal)}</span>
                   </div>
+                  {cartHasUnavailableItems && (
+                    <div
+                      id="pdv-cart-unavailable-warning"
+                      data-testid="pdv-cart-unavailable-warning"
+                      className="p-2 mb-2 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-400 text-[10px] font-semibold text-center"
+                    >
+                      Há itens indisponíveis no carrinho. Remova-os para continuar.
+                    </div>
+                  )}
                   <button
                     id="pdv-submit-btn"
                     type="submit"
-                    disabled={pdvCart.length === 0 || isLoading}
+                    disabled={pdvCart.length === 0 || isLoading || cartHasUnavailableItems}
+                    title={cartHasUnavailableItems ? 'Remova os itens indisponíveis antes de lançar o pedido' : undefined}
+                    aria-label={cartHasUnavailableItems ? 'Remova os itens indisponíveis para lançar' : undefined}
                     className="w-full min-h-11 py-2 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] rounded-xl border border-transparent font-bold text-[10px] uppercase tracking-wider transition-colors cursor-pointer flex flex-col items-center justify-center gap-0.5 disabled:cursor-not-allowed disabled:border-[#272c29] disabled:bg-koma-card disabled:text-zinc-600"
                   >
                     <div className="flex items-center gap-1">
