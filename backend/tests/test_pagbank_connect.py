@@ -297,6 +297,7 @@ def test_callback_connects_seller_in_state_tenant_and_revokes_before_disconnect(
         assert inactive_app.value.status_code == 503
         assert 'suporte KÔMA' in inactive_app.value.detail
         assert 'preservada' in inactive_app.value.detail
+        assert 'inativo' not in inactive_app.value.detail
         db.refresh(account)
         assert account.status == 'active'
         assert account.access_token == 'seller-token'
