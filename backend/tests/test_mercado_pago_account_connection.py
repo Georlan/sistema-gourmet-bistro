@@ -36,11 +36,12 @@ class _FakeQuery:
 class _FakeSession:
     def __init__(self, existing=None):
         self.existing = existing
+        self.restaurant = Restaurante(id=8, nome='Internal test', formas_pagamento_aceitas=['Dinheiro'])
         self.added = []
         self.flush_count = 0
 
     def query(self, _model):
-        return _FakeQuery(object() if _model is Restaurante else self.existing if _model is RestaurantPaymentAccount else None)
+        return _FakeQuery(self.restaurant if _model is Restaurante else self.existing if _model is RestaurantPaymentAccount else None)
 
     def add(self, value):
         self.added.append(value)

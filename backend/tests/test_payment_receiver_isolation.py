@@ -136,7 +136,7 @@ def test_same_seller_cannot_be_bound_to_two_restaurants(db):
 
 @pytest.mark.parametrize('target', ['mercado_pago', 'direct_pix'])
 def test_pending_receiver_switch_rejected_without_changing_other_tenant(db, target):
-    with pytest.raises(MercadoPagoAccountConnectionError, match='pendentes'):
+    with pytest.raises(MercadoPagoAccountConnectionError, match='Desconecte'):
         guard_receiver_change(db, restaurant_id=A, provider=target, provider_user_id='new-seller')
     assert account(db, A).status == account(db, B).status == 'active'
     assert intent(db, A).status == intent(db, B).status == 'pending'
@@ -156,6 +156,10 @@ def test_switch_keeps_original_account_and_history_for_reconciliation(db):
     old.status = 'approved'
     db.commit()
     original_token = account(db, A).access_token
+    # Explicitly disconnect before switching; preserve the original credentials
+    # for the historical intent instead of silently replacing its receiver.
+    account(db, A).status = 'disconnected'
+    db.commit()
     upsert_mercado_pago_account(db, restaurant_id=A,
         tokens=MercadoPagoOAuthTokens('new-mp-token', 'new-mp-refresh', None, 'mp-seller-A', 3600), webhook_secret='mp-hook')
     db.commit()

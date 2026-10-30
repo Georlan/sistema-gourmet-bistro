@@ -74,6 +74,15 @@ Tratar `PAGBANK_APP_TOKEN`, `PAGBANK_CLIENT_ID`, `PAGBANK_CLIENT_SECRET`, access
 
 ### Piloto de produção por restaurante
 
+Esse é o modo padrão restrito. A liberação geral posterior usa
+`PAGBANK_PRODUCTION_ONBOARDING_ENABLED`, preservando contas de QA explicitamente
+em `PAGBANK_SANDBOX_RESTAURANT_IDS`. Conexão bem-sucedida habilita Pix no cardápio
+na mesma transação; outra conta ativa exige desconexão prévia. Consulte o
+[contrato de onboarding e plano de publicação](../operations/pix-onboarding-2026-10-30.md).
+O ID 6 pode seguir o onboarding real após autorização do titular; continua
+proibido utilizá-lo como piloto de testes ou escrever configuração manual para
+simular sua conexão.
+
 Com `PAGBANK_ENV=sandbox`, o backend pode selecionar produção somente para os IDs explicitamente listados em `PAGBANK_PRODUCTION_RESTAURANT_IDS` (lista separada por vírgulas). Os demais restaurantes continuam usando as credenciais e o host Sandbox. O piloto exige `PAGBANK_PRODUCTION_CLIENT_ID`, `PAGBANK_PRODUCTION_CLIENT_SECRET` e `PAGBANK_PRODUCTION_APP_TOKEN`; nenhuma dessas credenciais usa fallback para as de Sandbox. `PAGBANK_PRODUCTION_OAUTH_REDIRECT_URI` deve coincidir com o cadastro da aplicação; se omitida, usa o callback HTTPS já configurado.
 
 O estado OAuth é vinculado ao ambiente selecionado do restaurante: alterar a seleção invalida autorizações em andamento. A nova conexão exige autorização do titular em produção e continua bloqueada se houver pagamentos pendentes de uma conta/ambiente anterior. A criação de novas cobranças exige conta autorizada no ambiente selecionado. Consultas de intenções anteriores, webhooks, renovação e revogação usam o ambiente persistido da conta original, permitindo reconciliar Sandbox antes da troca sem enviar tokens de vendedores ao outro host.

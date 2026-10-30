@@ -1,9 +1,9 @@
-import { PaymentConnectionCard } from './PaymentConnectionCard';
+import { PaymentConnectionCard, type ReceiverCoordinationProps } from './PaymentConnectionCard';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { authFetch, authRequestErrorMessage } from '../../../utils/authRequest';
 import { forgetPagBankState, matchesPagBankState, rememberPagBankState } from '../../../utils/pagbankOAuthState';
 
-interface Props {
+interface Props extends ReceiverCoordinationProps {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
 }
@@ -31,15 +31,20 @@ const disconnectedStatus: PaymentAccountStatus = {
   token_expires_at: null,
 };
 
-export function PagBankConnectionCard({ apiBaseUrl, authHeaders }: Props) {
+export function PagBankConnectionCard({ apiBaseUrl, authHeaders, connectBlockedReason, refreshKey, onStatusChange, onBusyChange, onConnectionChange }: Props) {
   const [account, setAccount] = useState<PaymentAccountStatus>(disconnectedStatus);
   const [isLoading, setIsLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const completionStarted = useRef(false);
+  const setConnecting = useCallback((value: boolean) => {
+    setIsConnecting(value);
+    onBusyChange?.(value);
+  }, [onBusyChange]);
 
   const loadStatus = useCallback(async () => {
     setIsLoading(true);
+    onStatusChange?.(null);
     try {
       const response = await authFetch(`${apiBaseUrl}/payments/pagbank/status`, {
         headers: authHeaders,
@@ -48,6 +53,11 @@ export function PagBankConnectionCard({ apiBaseUrl, authHeaders }: Props) {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(response.status === 404 ? 'A conexão PagBank está temporariamente indisponível. Tente atualizar mais tarde.' : 'Não foi possível consultar o PagBank. Tente novamente.');
+      }
+      if (typeof payload.connected !== 'boolean'
+        || (payload.receiver_provider != null && typeof payload.receiver_provider !== 'string')
+        || (payload.connection_blocked !== undefined && typeof payload.connection_blocked !== 'boolean')) {
+        throw new Error('Não foi possível consultar o PagBank. Tente novamente.');
       }
       setFeedback(current => current?.text === 'A conexão PagBank está temporariamente indisponível. Tente atualizar mais tarde.' || current?.text === 'Não foi possível consultar o PagBank. Tente novamente.' ? null : current);
       setAccount({
@@ -61,6 +71,7 @@ export function PagBankConnectionCard({ apiBaseUrl, authHeaders }: Props) {
         token_expires_at:
           typeof payload.token_expires_at === 'string' ? payload.token_expires_at : null,
       });
+      onStatusChange?.({ connected: payload.connected === true, receiverProvider: typeof payload.receiver_provider === 'string' ? payload.receiver_provider : payload.connected === true ? 'pagbank' : null, connectionBlocked: payload.connection_blocked === true });
     } catch (error) {
       setAccount(current => ({ ...current, configured: false, connected: false }));
       setFeedback({
@@ -70,7 +81,7 @@ export function PagBankConnectionCard({ apiBaseUrl, authHeaders }: Props) {
     } finally {
       setIsLoading(false);
     }
-  }, [apiBaseUrl, authHeaders]);
+  }, [apiBaseUrl, authHeaders, onStatusChange]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -93,25 +104,30 @@ export function PagBankConnectionCard({ apiBaseUrl, authHeaders }: Props) {
         void loadStatus();
         return;
       }
-      setIsConnecting(true);
+      setConnecting(true);
       void (async () => {
+        let changed = false;
         try {
           const response = await authFetch(`${apiBaseUrl}/payments/pagbank/complete`, {
             method: 'POST', headers: { ...authHeaders, 'Content-Type': 'application/json' }, body: JSON.stringify({ code, state }),
           });
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(payload.detail || 'Não foi possível concluir a conexão PagBank.');
+          changed = payload.status === 'connected';
           if (payload.status === 'sandbox_evidence_captured') {
             setFeedback({ type: 'success', text: 'OAuth Sandbox validado e evidência registrada. Nenhuma conta foi conectada para receber Pix.' });
           } else {
-            setFeedback({ type: 'success', text: 'PagBank conectado. A conta do restaurante receberá os novos Pix.' });
+            setFeedback({ type: 'success', text: payload.environment === 'sandbox'
+              ? 'PagBank conectado em ambiente de testes. Pix de teste habilitado no cardápio online.'
+              : 'PagBank conectado. Pix habilitado no cardápio online.' });
           }
         } catch (error) {
           setFeedback({ type: 'error', text: authRequestErrorMessage(error, 'Não foi possível concluir a conexão PagBank.') });
         } finally {
           forgetPagBankState(state);
-          setIsConnecting(false);
+          setConnecting(false);
           await loadStatus();
+          if (changed) onConnectionChange?.();
         }
       })();
       return;
@@ -121,11 +137,12 @@ export function PagBankConnectionCard({ apiBaseUrl, authHeaders }: Props) {
       setFeedback({ type: 'info', text: 'Conexão com PagBank cancelada. Nenhuma conta foi alterada.' });
     }
     void loadStatus();
-  }, [loadStatus, apiBaseUrl, authHeaders]);
+  }, [loadStatus, apiBaseUrl, authHeaders, setConnecting, onConnectionChange, refreshKey]);
 
 
   const connect = async () => {
-    setIsConnecting(true);
+    if (connectBlockedReason) return;
+    setConnecting(true);
     setFeedback(null);
     try {
       const response = await authFetch(`${apiBaseUrl}/payments/pagbank/connect`, {
@@ -153,27 +170,29 @@ export function PagBankConnectionCard({ apiBaseUrl, authHeaders }: Props) {
         type: 'error',
         text: authRequestErrorMessage(error, 'Não foi possível conectar o PagBank.'),
       });
-      setIsConnecting(false);
+      setConnecting(false);
     }
   };
 
   const disconnect = async () => {
-    setIsConnecting(true);
+    setConnecting(true);
     try {
       const response = await authFetch(`${apiBaseUrl}/payments/pagbank/disconnect`, { method: 'POST', headers: authHeaders });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.detail || 'Não foi possível desconectar o PagBank.');
       setFeedback({ type: 'info', text: 'PagBank desconectado. Novos Pix não serão gerados nessa conta.' });
       await loadStatus();
+      onConnectionChange?.();
     } catch (error) {
       setFeedback({ type: 'error', text: authRequestErrorMessage(error, 'Não foi possível desconectar o PagBank.') });
     } finally {
-      setIsConnecting(false);
+      setConnecting(false);
     }
   };
 
   return <PaymentConnectionCard name="PagBank" headingId="pagbank-heading" connected={account.connected}
     loading={isLoading} busy={isConnecting} available={account.configured === true}
+    connectBlockedReason={connectBlockedReason}
     onConnect={() => void connect()} onRefresh={() => void loadStatus()} onDisconnect={() => void disconnect()} feedback={feedback}>
     {!isLoading && !account.configured && <p className="mt-3 text-xs text-koma-muted">A conexão estará disponível em breve.</p>}
     {!isLoading && account.configured && account.environment === 'sandbox' && <p className="mt-3 text-xs text-amber-600 dark:text-amber-300">Ambiente de testes: esta conexão não recebe dinheiro real.</p>}

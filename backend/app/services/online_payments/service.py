@@ -199,12 +199,20 @@ class OnlinePaymentService:
             RestaurantPaymentAccount.provider == "pagbank",
             RestaurantPaymentAccount.provider_environment == environment,
             RestaurantPaymentAccount.status == "active",
+            RestaurantPaymentAccount._access_token.isnot(None),
+            RestaurantPaymentAccount._access_token != '',
             RestaurantPaymentAccount.provider_user_id != application_owner if (application_owner and not owner_allowed) else True,
         ).exists()
         mercado_pago = db.query(RestaurantPaymentAccount.id).filter(
             RestaurantPaymentAccount.restaurante_id == restaurant_id,
             RestaurantPaymentAccount.provider == "mercado_pago",
             RestaurantPaymentAccount.status == "active",
+            RestaurantPaymentAccount._access_token.isnot(None),
+            RestaurantPaymentAccount._access_token != '',
+            RestaurantPaymentAccount._webhook_secret.isnot(None),
+            RestaurantPaymentAccount._webhook_secret != '',
+            RestaurantPaymentAccount.provider_user_id != settings.MERCADO_PAGO_MARKETPLACE_USER_ID.strip()
+                if settings.MERCADO_PAGO_MARKETPLACE_USER_ID.strip() else True,
         ).exists()
         automatic_count = db.query(func.count(RestaurantPaymentAccount.id)).filter(
             RestaurantPaymentAccount.restaurante_id == restaurant_id,

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import json
 import os
 import uuid
 
@@ -15,11 +16,53 @@ class MercadoPagoAccountConnectionError(RuntimeError):
     """Raised when a connected seller account cannot be persisted safely."""
 
 
+def receiver_connection_status(db: Session, *, restaurant_id: int, provider: str) -> dict[str, object]:
+    providers = [row[0] for row in db.query(RestaurantPaymentAccount.provider).filter(
+        RestaurantPaymentAccount.restaurante_id == restaurant_id,
+        RestaurantPaymentAccount.status == 'active').all()]
+    if db.query(RestaurantDirectPixConfig.restaurante_id).filter(
+        RestaurantDirectPixConfig.restaurante_id == restaurant_id,
+        RestaurantDirectPixConfig.enabled.is_(True)).first():
+        providers.append('direct_pix')
+    return {
+        'receiver_provider': providers[0] if len(providers) == 1 else 'multiple' if providers else None,
+        'connection_blocked': len(providers) > 1 or any(value != provider for value in providers),
+    }
+
+
+def ensure_receiver_available(db: Session, *, restaurant_id: int, provider: str) -> None:
+    # All receiver writers and order creation lock this same tenant row. Recheck
+    # at completion, even if the OAuth link was issued before another connection.
+    db.query(Restaurante).filter(Restaurante.id == restaurant_id).with_for_update().one()
+    if receiver_connection_status(db, restaurant_id=restaurant_id, provider=provider)['connection_blocked']:
+        raise MercadoPagoAccountConnectionError(
+            'Desconecte o recebedor atual antes de conectar outro banco. Só é permitido um recebedor por restaurante.'
+        )
+
+
+def enable_menu_pix(db: Session, *, restaurant_id: int) -> None:
+    """Publish Pix in the same transaction as a successful receiver connection."""
+    restaurant = db.query(Restaurante).filter(Restaurante.id == restaurant_id).with_for_update().one()
+    methods = restaurant.formas_pagamento_aceitas
+    if isinstance(methods, str):
+        try:
+            methods = json.loads(methods)
+        except (ValueError, TypeError) as exc:
+            raise MercadoPagoAccountConnectionError('Revise as formas de pagamento do cardápio antes de conectar o banco.') from exc
+    if methods is None:
+        # Preserve the legacy cash method when materializing its first list.
+        methods = ['Dinheiro']
+    if not isinstance(methods, list):
+        raise MercadoPagoAccountConnectionError('Revise as formas de pagamento do cardápio antes de conectar o banco.')
+    if not any(isinstance(value, str) and value.strip().lower() == 'pix' for value in methods):
+        restaurant.formas_pagamento_aceitas = [*methods, 'Pix']
+
+
 def guard_receiver_change(db: Session, *, restaurant_id: int, provider: str,
                           provider_user_id: str | None = None, environment: str | None = None,
                           force_change: bool = False) -> None:
     """Serialize every receiver writer with order creation, before any mutation."""
-    db.query(Restaurante).filter(Restaurante.id == restaurant_id).with_for_update().one()
+    ensure_receiver_available(db, restaurant_id=restaurant_id, provider=provider)
     accounts = db.query(RestaurantPaymentAccount).filter(
         RestaurantPaymentAccount.restaurante_id == restaurant_id).all()
     target = next((a for a in accounts if a.provider == provider), None)
@@ -114,22 +157,6 @@ def upsert_mercado_pago_account(
         )
         db.add(account)
 
-    pagbank = db.query(RestaurantPaymentAccount).filter(
-        RestaurantPaymentAccount.restaurante_id == int(restaurant_id),
-        RestaurantPaymentAccount.provider == "pagbank",
-        RestaurantPaymentAccount.status == "active",
-    ).first()
-    if pagbank is not None and pagbank.provider == "pagbank":
-        # Keep tokens for reconciliation of historical intents; select only MP for new orders.
-        pagbank.status = "disconnected"
-
-    # Selecting an automatic receiver also replaces the former manual-Pix mode.
-    direct_pix = db.query(RestaurantDirectPixConfig).filter(
-        RestaurantDirectPixConfig.restaurante_id == int(restaurant_id),
-    ).first()
-    if direct_pix is not None:
-        direct_pix.enabled = False
-
     identity_changed = account.provider_user_id != tokens.provider_user_id
     account.provider_user_id = tokens.provider_user_id
     account.status = "active"
@@ -141,7 +168,7 @@ def upsert_mercado_pago_account(
         account.public_key = tokens.public_key
     account.token_expires_at = _expires_at(tokens.expires_in)
     account.updated_at = datetime.datetime.now(datetime.timezone.utc)
-
+    enable_menu_pix(db, restaurant_id=int(restaurant_id))
     db.flush()
     return account
 
@@ -157,10 +184,11 @@ def payment_account_status(account: RestaurantPaymentAccount | None) -> dict[str
         }
 
     self_connected = is_marketplace_owner_account(account.provider_user_id)
+    credentials_present = bool(account.access_token and account.webhook_secret)
     return {
         "provider": "mercado_pago",
-        "connected": account.status == "active" and not self_connected,
-        "status": "error" if self_connected else account.status,
+        "connected": account.status == "active" and not self_connected and credentials_present,
+        "status": "error" if self_connected or account.status == 'active' and not credentials_present else account.status,
         "provider_user_id": account.provider_user_id,
         "token_expires_at": (
             account.token_expires_at.isoformat()
