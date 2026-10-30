@@ -1,5 +1,14 @@
 import { expect, test } from '@playwright/test';
-import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
+import { mockCashierBackend as mockBaseCashierBackend, seedCashierSession } from './fixtures/cashier';
+import type { Page } from '@playwright/test';
+
+async function mockCashierBackend(page: Page) {
+  await mockBaseCashierBackend(page);
+  // These scenarios start without a competing receiving bank.
+  await page.route('**/payments/mercado-pago/status', route => route.fulfill({ json: {
+    connected: false, status: 'disconnected', receiver_provider: null, connection_blocked: false,
+  } }));
+}
 
 test('retorno em outra aba aceita só o estado iniciado no mesmo navegador', async ({ page, context }) => {
   await mockCashierBackend(page);
@@ -27,7 +36,7 @@ test('retorno em outra aba aceita só o estado iniciado no mesmo navegador', asy
     configured: true, connected: completions > 0, environment: 'production', status: completions ? 'active' : 'disconnected',
   } }));
   await returned.goto('/?view=caixa&pagbank=authorized&code=new-tab-code&state=new-tab-state');
-  await expect(returned.getByText('PagBank conectado. A conta do restaurante receberá os novos Pix.')).toBeVisible();
+  await expect(returned.getByText('PagBank conectado. Pix habilitado no cardápio online.')).toBeVisible();
   expect(completions).toBe(1);
   expect(await returned.evaluate(() => localStorage.getItem('koma_pagbank_oauth_pending:new-tab-state'))).toBeNull();
   expect(returned.url()).not.toMatch(/[?&](code|state|pagbank)=/);
@@ -75,13 +84,13 @@ test('retorno autorizado conclui uma vez pela sessão KÔMA e limpa o código da
     expect(route.request().postDataJSON()).toEqual({ code: 'one-use-code', state: 'expected-state' });
     expect(route.request().headers()['authorization']).toBeTruthy();
     connected = true;
-    await route.fulfill({ json: { status: 'connected' } });
+    await route.fulfill({ json: { status: 'connected', environment: 'sandbox' } });
   });
   await page.route('**/payments/pagbank/status', route => route.fulfill({ json: {
     provider: 'pagbank', configured: true, connected, environment: 'sandbox', status: connected ? 'active' : 'disconnected',
   } }));
   await page.goto('/?view=caixa&pagbank=authorized&code=one-use-code&state=expected-state');
-  await expect(page.getByText('PagBank conectado. A conta do restaurante receberá os novos Pix.')).toBeVisible();
+  await expect(page.getByText('PagBank conectado em ambiente de testes. Pix de teste habilitado no cardápio online.')).toBeVisible();
   expect(completions).toBe(1);
   expect(page.url()).not.toContain('code=');
   expect(page.url()).not.toContain('state=');

@@ -225,7 +225,7 @@ def test_rejects_currency_multiple_charges_non_pix_and_url_injection():
 
 
 @pytest.mark.parametrize('environment', ['sandbox', 'production'])
-def test_callback_connects_seller_in_state_tenant_and_revokes_before_disconnect(monkeypatch, environment):
+def test_callback_connects_seller_and_disconnect_preserves_historical_credentials(monkeypatch, environment):
     from fastapi.testclient import TestClient
     from app.main import app
     from app.database import SessionLocal, current_restaurante_id
@@ -303,8 +303,9 @@ def test_callback_connects_seller_in_state_tenant_and_revokes_before_disconnect(
         revoked = []
         monkeypatch.setattr(oauth, 'revoke', lambda token, **kwargs: revoked.append((token, kwargs['environment'])))
         result = pagbank_payments.disconnect(db=db, user=user)
-        assert result['status'] == 'disconnected' and revoked == [('seller-token', environment)]
-        assert account.access_token == ''
+        assert result['status'] == 'disconnected' and revoked == []
+        assert account.access_token == 'seller-token'
+        assert account.refresh_token == 'seller-refresh'
         from fastapi import HTTPException
         other_user = Usuario(id='another-admin', restaurante_id=rid, nome='Other', cargo='admin', role='admin')
         with pytest.raises(HTTPException) as denied:
@@ -350,7 +351,7 @@ def test_migration_sqlite_upgrade_and_downgrade_preserves_constraints():
     engine.dispose()
 
 
-def test_reconnecting_mercado_pago_selects_only_one_automatic_receiver():
+def test_mercado_pago_requires_explicit_disconnect_of_other_receivers():
     import datetime
     from app.database import SessionLocal, current_restaurante_id
     from app.models import Restaurante, RestaurantPaymentAccount, RestaurantDirectPixConfig
@@ -370,6 +371,14 @@ def test_reconnecting_mercado_pago_selects_only_one_automatic_receiver():
         db.add(pagbank)
         manual = RestaurantDirectPixConfig(restaurante_id=rid, enabled=True, key_type='email', pix_key='seller@example.test', holder_name='SELLER', city='FORTALEZA', accepted_by='test-admin', accepted_at=datetime.datetime.now(datetime.timezone.utc), terms_version='direct-pix-v1')
         db.add(manual)
+        db.commit()
+        from app.services.online_payments.account_connection import MercadoPagoAccountConnectionError
+        with pytest.raises(MercadoPagoAccountConnectionError, match='Desconecte'):
+            upsert_mercado_pago_account(db, restaurant_id=rid,
+                tokens=MercadoPagoOAuthTokens('mp-seller-token', 'mp-refresh', None, 'mp-switch', 3600), webhook_secret='mp-secret')
+        assert pagbank.status == 'active' and manual.enabled
+        pagbank.status = 'disconnected'
+        manual.enabled = False
         db.commit()
         account = upsert_mercado_pago_account(db, restaurant_id=rid,
             tokens=MercadoPagoOAuthTokens('mp-seller-token', 'mp-refresh', None, 'mp-switch', 3600), webhook_secret='mp-secret')
@@ -833,7 +842,7 @@ def test_payment_adapter_uses_account_environment_when_pilot_policy_changes(monk
 
 
 @pytest.mark.parametrize('origin', ['https://app.komafood.com.br', 'https://komafood.com.br', 'https://sistema-gourmet-bistro.pages.dev'])
-def test_oauth_returns_to_same_origin_without_moving_browser_session(origin):
+def test_oauth_returns_to_same_origin_without_moving_browser_session(origin, monkeypatch):
     from fastapi.testclient import TestClient
     from app.main import app
     uid = '00000000-0000-0000-0000-000000000001'
@@ -841,6 +850,7 @@ def test_oauth_returns_to_same_origin_without_moving_browser_session(origin):
     from types import SimpleNamespace
     from app.database import current_restaurante_id
     from app.routes import pagbank_payments
+    monkeypatch.setattr(pagbank_payments, 'ensure_receiver_available', lambda db, **kw: None)
     context = current_restaurante_id.set(8)
     try:
         result = pagbank_payments.connect(request=Request({'type': 'http', 'headers': [(b'origin', origin.encode())]}),

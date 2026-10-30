@@ -21,7 +21,10 @@ from ..database import get_db, require_tenant_id, tenant_session_scope
 from ..models import OnlinePaymentIntent, OnlinePaymentWebhookEvent, Restaurante, RestaurantDirectPixConfig, RestaurantPaymentAccount, Usuario
 from ..security import ensure_permission, require_permission
 from ..services.online_payments import OnlinePaymentService, OnlinePaymentValidationError
-from ..services.online_payments.account_connection import _expires_at, guard_receiver_change, MercadoPagoAccountConnectionError
+from ..services.online_payments.account_connection import (
+    _expires_at, guard_receiver_change, MercadoPagoAccountConnectionError,
+    ensure_receiver_available, receiver_connection_status, enable_menu_pix,
+)
 from ..services.online_payments.pagbank import oauth
 from ..services.online_payments.pagbank.webhook import (
     extract_webhook_identifiers, verify_pagbank_signature,
@@ -49,17 +52,22 @@ def connection_status(db: Session = Depends(get_db), user: Usuario = Depends(req
     account = _account(db, rid)
     return {'provider': 'pagbank', 'configured': oauth.configured(environment), 'environment': environment,
             'connected': bool(account and account.access_token and account.status == 'active' and account.provider_environment == environment and not oauth.owner_receiver_blocked(rid, account.provider_user_id, environment=environment)), 'status': account.status if account else 'disconnected',
-            'provider_user_id': account.provider_user_id if account else None}
+            'provider_user_id': account.provider_user_id if account else None,
+            **receiver_connection_status(db, restaurant_id=rid, provider='pagbank')}
 
 
 @router.get('/pagbank/connect')
-def connect(request: Request, response: Response, user: Usuario = Depends(require_permission('configuracoes:administrar'))):
+def connect(request: Request, response: Response, db: Session = Depends(get_db), user: Usuario = Depends(require_permission('configuracoes:administrar'))):
     try:
         rid = require_tenant_id()
+        ensure_receiver_available(db, restaurant_id=rid, provider='pagbank')
         url, _state = oauth.authorization(rid, str(user.id), return_origin=request.headers.get("origin"))
         oauth.log_sandbox_oauth_evidence('authorization_url_issued', restaurant_id=rid, state=_state)
     except oauth.PagBankOAuthError as exc:
         raise HTTPException(503, str(exc)) from exc
+    except MercadoPagoAccountConnectionError as exc:
+        db.rollback()
+        raise HTTPException(409, str(exc)) from exc
     response.headers['Cache-Control'] = 'no-store'
     return {'authorization_url': url}
 
@@ -99,6 +107,7 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
             if initiator is None:
                 raise HTTPException(403, 'Usuário indisponível.')
             ensure_permission(initiator, 'configuracoes:administrar')
+            ensure_receiver_available(db, restaurant_id=rid, provider='pagbank')
             environment = oauth.environment_for_restaurant(rid)
             tokens = oauth.exchange(code, environment=environment,
                                     evidence_restaurant_id=rid, evidence_state=state)
@@ -126,9 +135,8 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
             account.token_expires_at = _expires_at(tokens.expires_in)
             account.status = 'active'
             account.updated_at = datetime.datetime.now(datetime.timezone.utc)
-            db.query(RestaurantPaymentAccount).filter(RestaurantPaymentAccount.restaurante_id == rid,
-                RestaurantPaymentAccount.provider != 'pagbank').update({'status': 'disconnected'})
-            db.query(RestaurantDirectPixConfig).filter(RestaurantDirectPixConfig.restaurante_id == rid).update({'enabled': False})
+            enable_menu_pix(db, restaurant_id=rid)
+            manager.queue_committed_broadcast(db, {'event': 'config_updated'}, int(rid))
             db.commit()
             oauth.log_sandbox_oauth_evidence('connection_completed', restaurant_id=rid, state=state)
     except oauth.PagBankOAuthError as exc:
@@ -140,13 +148,12 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
                 409, 'Autorização PagBank expirada ou já utilizada. Inicie uma nova conexão.'
             ) from exc
         if exc.reason in {'41012', 'token_is_no_longer_active', '41008', 'invalid_token'}:
-            # OAuth token exchange authenticates with the KOMA app bearer.
-            # Repeating Connect cannot repair a revoked/inactive app credential.
-            # Keep the previously connected seller account unchanged.
+            # The code identifies a rejected credential, not which credential
+            # caused it. Preserve the previous account pending diagnosis.
             raise HTTPException(
                 503,
-                'Token da integração PagBank inativo ou inválido. '
-                'O suporte KÔMA precisa revisar a credencial da aplicação; '
+                'O PagBank recusou uma credencial na autorização. '
+                'O suporte KÔMA precisa revisar as credenciais da integração; '
                 'sua conexão anterior foi preservada.',
             ) from exc
         raise HTTPException(502, 'Não foi possível concluir a conexão PagBank.') from exc
@@ -156,7 +163,7 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
     except MercadoPagoAccountConnectionError as exc:
         db.rollback()
         raise HTTPException(409, str(exc)) from exc
-    return {'status': 'connected'}
+    return {'status': 'connected', 'environment': environment}
 
 
 @router.get('/pagbank/reconciliation')
@@ -218,13 +225,10 @@ def disconnect(db: Session = Depends(get_db), user: Usuario = Depends(require_pe
         if db.query(OnlinePaymentIntent.id).filter(OnlinePaymentIntent.restaurante_id == rid,
             OnlinePaymentIntent.provider == 'pagbank', OnlinePaymentIntent.status.in_(('created', 'pending', 'error'))).first():
             raise HTTPException(409, 'Resolva os Pix pendentes antes de desconectar.')
-        try:
-            oauth.revoke(account.access_token, environment=account.provider_environment)
-        except oauth.PagBankOAuthError as exc:
-            raise HTTPException(502, 'PagBank não confirmou a desconexão.') from exc
+        # Disconnect new sales locally. Historical intents still depend on this
+        # exact seller's credentials for reconciliation and refunds.
         account.status = 'disconnected'
-        account.access_token = ''
-        account.refresh_token = None
+        manager.queue_committed_broadcast(db, {'event': 'config_updated'}, int(rid))
         db.commit()
     return {'status': 'disconnected'}
 

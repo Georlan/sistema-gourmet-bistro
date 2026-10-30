@@ -62,10 +62,13 @@ def test_connect_is_authenticated_tenant_scoped_and_returns_only_authorization_u
         return "https://auth.mercadopago.com/authorization?safe=1"
 
     monkeypatch.setattr(online_payments, "build_authorization_url", fake_build)
+    guards = []
+    monkeypatch.setattr(online_payments, 'ensure_receiver_available', lambda db, **kw: guards.append(kw))
 
     payload = online_payments.mercado_pago_connect(current_user=_admin_user())
 
     assert captured == {"restaurant_id": 4, "user_id": "admin-1"}
+    assert guards == [{'restaurant_id': 4, 'provider': 'mercado_pago'}]
     assert payload == {
         "authorization_url": "https://auth.mercadopago.com/authorization?safe=1"
     }
@@ -73,6 +76,7 @@ def test_connect_is_authenticated_tenant_scoped_and_returns_only_authorization_u
 
 
 def test_callback_persists_only_inside_state_tenant_and_redirects(monkeypatch):
+    monkeypatch.setattr(online_payments.manager, 'queue_committed_broadcast', lambda *args: None)
     initiator = _admin_user(restaurant_id=12, user_id="admin-12")
     db = _FakeDb(query_value=initiator)
     captured = {}

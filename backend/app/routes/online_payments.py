@@ -11,13 +11,15 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..database import get_db, require_tenant_id, tenant_session_scope
-from ..models import OnlinePaymentWebhookEvent, RestaurantPaymentAccount, Usuario
+from ..models import OnlinePaymentWebhookEvent, OnlinePaymentIntent, Restaurante, RestaurantPaymentAccount, Usuario
 from ..security import ensure_permission, require_permission
 from ..services.online_payments import OnlinePaymentService, OnlinePaymentValidationError
 from ..services.online_payments.account_connection import (
     MercadoPagoAccountConnectionError,
     payment_account_status,
     upsert_mercado_pago_account,
+    ensure_receiver_available,
+    receiver_connection_status,
 )
 from ..services.online_payments.oauth import (
     MercadoPagoOAuthConfigurationError,
@@ -145,25 +147,55 @@ def mercado_pago_connection_status(
         )
         .first()
     )
-    return payment_account_status(account)
+    return {**payment_account_status(account),
+            **receiver_connection_status(db, restaurant_id=rest_id, provider='mercado_pago')}
 
 
 @router.get("/mercado-pago/connect")
 def mercado_pago_connect(
+    db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
 ):
     rest_id = require_tenant_id()
     try:
+        ensure_receiver_available(db, restaurant_id=rest_id, provider='mercado_pago')
         authorization_url = build_authorization_url(
             restaurant_id=rest_id,
             user_id=current_user.id,
         )
+    except MercadoPagoAccountConnectionError as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except MercadoPagoOAuthConfigurationError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
     return {"authorization_url": authorization_url}
+
+
+@router.post('/mercado-pago/disconnect')
+def mercado_pago_disconnect(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission('configuracoes:administrar')),
+):
+    rest_id = require_tenant_id()
+    db.query(Restaurante).filter(Restaurante.id == rest_id).with_for_update().one()
+    account = db.query(RestaurantPaymentAccount).filter(
+        RestaurantPaymentAccount.restaurante_id == rest_id,
+        RestaurantPaymentAccount.provider == 'mercado_pago').first()
+    if account and account.status == 'active':
+        if db.query(OnlinePaymentIntent.id).filter(
+            OnlinePaymentIntent.restaurante_id == rest_id,
+            OnlinePaymentIntent.provider == 'mercado_pago',
+            OnlinePaymentIntent.status.in_(('created', 'pending', 'error'))).first():
+            raise HTTPException(409, 'Resolva os Pix pendentes ou incertos antes de desconectar.')
+        # Stop new charges; retain the seller credentials for historical refunds
+        # and reconciliation. This does not revoke consent in the bank account.
+        account.status = 'disconnected'
+        manager.queue_committed_broadcast(db, {'event': 'config_updated'}, int(rest_id))
+        db.commit()
+    return {'status': 'disconnected'}
 
 
 @router.get("/mercado-pago/oauth/callback")
@@ -218,6 +250,7 @@ def mercado_pago_oauth_callback(
                 restaurant_id=oauth_state.restaurant_id,
                 tokens=tokens,
             )
+            manager.queue_committed_broadcast(db, {'event': 'config_updated'}, int(oauth_state.restaurant_id))
             db.commit()
     except MercadoPagoAccountConnectionError as exc:
         db.rollback()
@@ -226,7 +259,7 @@ def mercado_pago_oauth_callback(
                 url=_frontend_oauth_result("invalid_seller"),
                 status_code=status.HTTP_303_SEE_OTHER,
             )
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(

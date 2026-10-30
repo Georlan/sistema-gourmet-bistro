@@ -133,6 +133,22 @@ def test_owner_oauth_exchange_is_evidence_only_only_for_sandbox_qa9(
     db.query.return_value.filter.return_value.first.return_value = SimpleNamespace(
         id='qa-admin', restaurante_id=rid, role='admin'
     )
+    # This owner/evidence test starts with no receiver. Distinguish inventory
+    # queries from the initiating user instead of returning a truthy admin for
+    # every queried table (which incorrectly simulates an active direct Pix).
+    from app.models import Usuario
+    initiator_query = db.query.return_value
+    def query(model):
+        if model is Usuario:
+            return initiator_query
+        empty = MagicMock()
+        empty.filter.return_value = empty
+        empty.with_for_update.return_value = empty
+        empty.one.return_value = SimpleNamespace(id=rid)
+        empty.all.return_value = []
+        empty.first.return_value = None
+        return empty
+    db.query.side_effect = query
     user = SimpleNamespace(id='qa-admin', restaurante_id=rid, role='admin')
     request = pagbank_payments.AuthorizationCompletion(code='one-time-code', state='signed-state')
 

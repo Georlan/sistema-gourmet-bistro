@@ -54,7 +54,8 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
   const normalizePlanTarget = (target: { tab: CashierTab; subTab: string }) =>
     normalizeCashierTargetForEntitlements(target, entitlements);
   const [initialNavigation] = useState(() => {
-    if (new URLSearchParams(window.location.search).has("pagbank")) {
+    const callbackParams = new URLSearchParams(window.location.search);
+    if (callbackParams.has("pagbank") || callbackParams.has("mercado_pago")) {
       return { tab: "impressao_salao" as CashierTab, subTab: "integracoes" };
     }
     const restored = normalizePlanTarget(normalizeCashierNavigationState(

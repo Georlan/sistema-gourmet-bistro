@@ -97,6 +97,15 @@ def env(name: str) -> str:
 def environment_for_restaurant(restaurant_id: int) -> str:
     # Opt-in is server-owned; tenants cannot select credentials or API hosts.
     allowed = {value.strip() for value in env('PAGBANK_PRODUCTION_RESTAURANT_IDS').split(',') if value.strip()}
+    sandbox = {value.strip() for value in env('PAGBANK_SANDBOX_RESTAURANT_IDS').split(',') if value.strip()}
+    if str(int(restaurant_id)) in sandbox:
+        return 'sandbox'
+    if env('PAGBANK_PRODUCTION_ONBOARDING_ENABLED') == 'true':
+        # Keep the dedicated evidence-only QA account in its Sandbox. A general
+        # release never turns the platform owner's evidence flow into a receiver.
+        if int(restaurant_id) == 9 and env('PAGBANK_SANDBOX_QA9_OAUTH_EVIDENCE_ONLY') == 'true':
+            return 'sandbox'
+        return 'production'
     return 'production' if str(int(restaurant_id)) in allowed else default_environment()
 
 

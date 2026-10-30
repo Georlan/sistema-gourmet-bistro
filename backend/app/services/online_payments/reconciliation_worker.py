@@ -58,7 +58,8 @@ def reconcile_pending_intents(
         raise ValueError("Reconciliation sweep limits must be positive")
 
     allowed_tenants = _allowed_reconciliation_tenants()
-    if not allowed_tenants:
+    connected_onboarding = os.getenv('ONLINE_PAYMENT_RECONCILIATION_CONNECTED_TENANTS_ENABLED', '') == 'true'
+    if not allowed_tenants and not connected_onboarding:
         return 0
 
     now = datetime.datetime.now(datetime.timezone.utc)
@@ -67,7 +68,7 @@ def reconcile_pending_intents(
 
     with SessionLocal() as scan_db:
         available_ids = discover_active_tenant_ids(scan_db)
-    tenant_ids = sorted({rid for rid in available_ids if rid in allowed_tenants})
+    tenant_ids = sorted({rid for rid in available_ids if connected_onboarding or rid in allowed_tenants})
     if not tenant_ids:
         return 0
 
@@ -90,6 +91,17 @@ def reconcile_pending_intents(
                     ).first()
                     if not has_active_account:
                         continue
+                    if rid not in allowed_tenants:
+                        # General enrollment is only for one usable automatic
+                        # receiver. Never query money for Sandbox or ambiguous
+                        # connections through this production release switch.
+                        accounts = db.query(RestaurantPaymentAccount).filter(
+                            RestaurantPaymentAccount.restaurante_id == rid,
+                            RestaurantPaymentAccount.status == 'active').all()
+                        if (len(accounts) != 1
+                            or accounts[0].provider == 'pagbank' and accounts[0].provider_environment != 'production'
+                            or not OnlinePaymentService.has_active_account(db, rid)):
+                            continue
 
                     intents = (
                         db.query(OnlinePaymentIntent)
