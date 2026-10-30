@@ -78,7 +78,8 @@ class ValidationDataLoader:
             if config.pedido_minimo:
                 min_delivery_subtotal = to_money_decimal(config.pedido_minimo)
             enforce_minimum_pickup = bool(getattr(config, "pedido_minimo_retirada", False))
-            active_cardapio_id = getattr(config, "cardapio_ativo_id", None)
+            raw_cardapio_id = getattr(config, "cardapio_ativo_id", None)
+            active_cardapio_id = str(raw_cardapio_id).strip() if raw_cardapio_id and str(raw_cardapio_id).strip() else None
 
         # 2. Carregar Produtos e os grupos efetivos (produto + categoria + ancestrais)
         prod_ids = {str(it.get("produto_id")) for it in itens_solicitados if it.get("produto_id")}

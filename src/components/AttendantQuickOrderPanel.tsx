@@ -14,6 +14,8 @@ interface AttendantQuickOrderPanelProps {
   activeWaiterNome: string;
   liveProdutos: Product[];
   liveCategorias: CatalogCategory[];
+  cardapio_ativo_id?: string | null;
+  cardapios_ativos_ids?: string[];
   catalogReady: boolean;
   onRefreshOrders: () => Promise<void>;
   onOptimisticAddOrder?: (newOrder: any) => void;
@@ -26,6 +28,8 @@ export function AttendantQuickOrderPanel({
   activeWaiterNome,
   liveProdutos,
   liveCategorias,
+  cardapio_ativo_id,
+  cardapios_ativos_ids,
   catalogReady,
   onRefreshOrders,
   onOptimisticAddOrder,
@@ -59,6 +63,8 @@ export function AttendantQuickOrderPanel({
     dynamicMenu: liveProdutos,
     pdvTableOptions: [],
     allowedOrderTypes: ATTENDANT_ORDER_TYPES,
+    cardapioAtivoId: cardapio_ativo_id,
+    cardapiosAtivosIds: cardapios_ativos_ids,
   });
 
   return (

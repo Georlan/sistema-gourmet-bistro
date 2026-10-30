@@ -22,7 +22,7 @@ import {
   X,
 } from 'lucide-react';
 
-import type { CatalogCategory, CatalogModifierGroup } from '../catalog/catalog';
+import { type CatalogCategory, type CatalogModifierGroup, getSellableProducts, isProductSellable } from '../catalog/catalog';
 import { getProductPresets, obterNomeCategoria, smartSearchMatch } from '../domain';
 import {
   changeModifierQuantitySelection,
@@ -49,6 +49,8 @@ interface MenuPanelProps {
   historicClients?: string[];
   liveProdutos?: Product[];
   liveCategorias?: CatalogCategory[];
+  cardapio_ativo_id?: string | null;
+  cardapios_ativos_ids?: string[];
   catalogReady?: boolean;
   isSubmitting?: boolean;
   allowExternalOrders?: boolean;
@@ -141,6 +143,8 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   historicClients = [],
   liveProdutos = [],
   liveCategorias = [],
+  cardapio_ativo_id,
+  cardapios_ativos_ids,
   catalogReady = false,
   isSubmitting = false,
   allowExternalOrders = true,
@@ -169,8 +173,23 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     removedDraftsRef.current = removedDraftsRef.current.slice(0, -1);
     setRemovedDrafts(removedDraftsRef.current);
   };
+
+  const unavailableDraftItemIds = useMemo(() => {
+    const productMap = new Map(liveProdutos.map((p) => [p.id, p]));
+    const set = new Set<string>();
+    draftItems.forEach((item) => {
+      const prod = productMap.get(item.produtoId);
+      if (!isProductSellable(prod, cardapio_ativo_id, cardapios_ativos_ids)) {
+        set.add(item.id);
+      }
+    });
+    return set;
+  }, [draftItems, liveProdutos, cardapio_ativo_id, cardapios_ativos_ids]);
+
+  const hasUnavailableDraftItems = unavailableDraftItemIds.size > 0;
+
   const submitDraft = () => {
-    if (isSubmitting) return;
+    if (isSubmitting || hasUnavailableDraftItems) return;
     removedDraftsRef.current = [];
     setRemovedDrafts([]);
     onSubmitDraft(orderType);
@@ -188,7 +207,11 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [orderType, setOrderType] = useState<'Consumo no Local' | 'Retirada'>('Consumo no Local');
-  const [selectedProductToConfigure, setSelectedProductToConfigure] = useState<Product | null>(() => initialConfiguration ? liveProdutos.find(product => product.id === initialConfiguration.productId && product.ativo !== false) || null : null);
+  const [selectedProductToConfigure, setSelectedProductToConfigure] = useState<Product | null>(() => {
+    if (!initialConfiguration) return null;
+    const candidate = liveProdutos.find(product => product.id === initialConfiguration.productId);
+    return candidate && isProductSellable(candidate, cardapio_ativo_id, cardapios_ativos_ids) ? candidate : null;
+  });
   const [editingDraftItemId, setEditingDraftItemId] = useState<string | null>(null);
   const [configQty, setConfigQty] = useState(1);
   const [configObs, setConfigObs] = useState(initialConfiguration?.observacao || '');
@@ -199,14 +222,20 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
   }, [initialConfiguration, onInitialConfigurationConsumed]);
 
   React.useEffect(() => {
+    if (selectedProductToConfigure && !isProductSellable(selectedProductToConfigure, cardapio_ativo_id, cardapios_ativos_ids)) {
+      setSelectedProductToConfigure(null);
+    }
+  }, [selectedProductToConfigure, cardapio_ativo_id, cardapios_ativos_ids]);
+
+  React.useEffect(() => {
     if (!allowExternalOrders && orderType !== 'Consumo no Local') {
       setOrderType('Consumo no Local');
     }
   }, [allowExternalOrders, orderType]);
 
   const activeProducts = useMemo(
-    () => liveProdutos.filter((product) => (product as ProductWithModifiers).ativo !== false),
-    [liveProdutos],
+    () => getSellableProducts(liveProdutos, cardapio_ativo_id, cardapios_ativos_ids).filter((product) => (product as ProductWithModifiers).ativo !== false),
+    [liveProdutos, cardapio_ativo_id, cardapios_ativos_ids],
   );
 
   const unavailableSearchMatches = useMemo(() => {
@@ -214,10 +243,10 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     if (!query) return [];
     return liveProdutos.filter((product) => {
       const decorated = product as ProductWithModifiers;
-      return decorated.ativo === false
-        && smartSearchMatch(`${product.nome} ${product.descricao || ''}`, query);
+      const isUnavailable = decorated.ativo === false || !isProductSellable(product, cardapio_ativo_id, cardapios_ativos_ids);
+      return isUnavailable && smartSearchMatch(`${product.nome} ${product.descricao || ''}`, query);
     });
-  }, [liveProdutos, searchQuery]);
+  }, [liveProdutos, cardapio_ativo_id, cardapios_ativos_ids, searchQuery]);
 
   const categoriesList = useMemo(() => {
     const activeCategoryIds = new Set(
@@ -524,10 +553,26 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                             </div>
                           )}
                           {item.clienteNome && (!standardQuickEntry || item.clienteNome.trim().toLocaleLowerCase('pt-BR') !== 'consumo geral') && <span className="ml-7 text-[9px] uppercase font-bold text-emerald-400">Para: {item.clienteNome}</span>}
+                          {unavailableDraftItemIds.has(item.id) && (
+                            <div
+                              id={`draft-item-unavailable-${item.id}`}
+                              data-testid={`draft-item-unavailable-${item.id}`}
+                              className="mt-1 ml-7 inline-flex items-center gap-1.5 text-[10px] font-bold text-rose-400 bg-rose-500/15 border border-rose-500/30 px-2 py-0.5 rounded-md"
+                            >
+                              <span>Item indisponível no cardápio ativo</span>
+                            </div>
+                          )}
                         </div>
                         <div className="kw-draft-actions flex items-center gap-1.5 shrink-0">
                           <span className="kw-draft-amount text-xs font-mono font-bold text-emerald-400">R$ {money(Number(item.preco) * (item.quantidade || 1))}</span>
-                          <button type="button" disabled={isSubmitting || !product} onClick={() => product && handleOpenConfig(product, item)} className="p-1.5 rounded-lg text-koma-muted hover:text-emerald-400 hover:bg-koma-raised disabled:opacity-40" title="Editar item e complementos" aria-label={`Editar ${item.nome}`}>
+                          <button
+                            type="button"
+                            disabled={isSubmitting || !product || unavailableDraftItemIds.has(item.id)}
+                            onClick={() => product && handleOpenConfig(product, item)}
+                            className="p-1.5 rounded-lg text-koma-muted hover:text-emerald-400 hover:bg-koma-raised disabled:opacity-40"
+                            title={unavailableDraftItemIds.has(item.id) ? 'Item indisponível no cardápio ativo' : 'Editar item e complementos'}
+                            aria-label={`Editar ${item.nome}`}
+                          >
                             <Edit3 size={13} />
                           </button>
                           <button id={`remove-draft-item-${item.id}`} type="button" disabled={isSubmitting} onClick={() => removeDraftItem(item)} className="p-1.5 rounded-lg text-koma-muted hover:text-rose-400 hover:bg-rose-500/10 disabled:opacity-40" title="Remover item" aria-label={`Remover ${item.nome}`}>
@@ -569,13 +614,51 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   <span className="kw-review-total__amount text-xl font-mono font-bold text-emerald-400">R$ {money(draftTotal)}</span>
                 </div>
 
-                <button id="submit-draft-order-btn" type="button" disabled={isSubmitting} onClick={submitDraft} className="hidden sm:flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-500 text-zinc-950 text-sm font-extrabold disabled:opacity-50" aria-label={isSubmitting ? 'Enviando pedido' : `${submitCta} para a Mesa ${tableId}`}>
+                {hasUnavailableDraftItems && (
+                  <div
+                    id="draft-unavailable-warning"
+                    data-testid="draft-unavailable-warning"
+                    className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-400 text-xs font-semibold text-center"
+                  >
+                    Há itens indisponíveis no rascunho. Remova-os antes de enviar o pedido.
+                  </div>
+                )}
+
+                <button
+                  id="submit-draft-order-btn"
+                  type="button"
+                  disabled={isSubmitting || hasUnavailableDraftItems}
+                  onClick={submitDraft}
+                  className="hidden sm:flex w-full min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-500 text-zinc-950 text-sm font-extrabold disabled:opacity-50"
+                  aria-label={
+                    isSubmitting
+                      ? 'Enviando pedido'
+                      : hasUnavailableDraftItems
+                        ? 'Remova os itens indisponíveis para enviar'
+                        : `${submitCta} para a Mesa ${tableId}`
+                  }
+                  title={hasUnavailableDraftItems ? 'Remova os itens indisponíveis antes de enviar' : undefined}
+                >
                   {isSubmitting ? 'Enviando pedido…' : submitCta} <ArrowRight size={15} />
                 </button>
               </div>
 
               <div className="kw-order-mobile-footer sm:hidden fixed inset-x-0 bottom-0 z-[80] border-t border-emerald-500/20 bg-koma-card/95 px-3 pt-2 pb-[calc(0.65rem+env(safe-area-inset-bottom))] backdrop-blur-xl">
-                <button id="submit-draft-order-btn-mobile" type="button" disabled={isSubmitting} onClick={submitDraft} className="mx-auto flex min-h-12 w-full max-w-2xl items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-black text-sm font-bold disabled:opacity-50" aria-label={isSubmitting ? 'Enviando pedido' : `${submitCta} para a Mesa ${tableId}`}>
+                <button
+                  id="submit-draft-order-btn-mobile"
+                  type="button"
+                  disabled={isSubmitting || hasUnavailableDraftItems}
+                  onClick={submitDraft}
+                  className="mx-auto flex min-h-12 w-full max-w-2xl items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-black text-sm font-bold disabled:opacity-50"
+                  aria-label={
+                    isSubmitting
+                      ? 'Enviando pedido'
+                      : hasUnavailableDraftItems
+                        ? 'Remova os itens indisponíveis para enviar'
+                        : `${submitCta} para a Mesa ${tableId}`
+                  }
+                  title={hasUnavailableDraftItems ? 'Remova os itens indisponíveis antes de enviar' : undefined}
+                >
                   {isSubmitting ? 'Enviando pedido…' : submitCta} <ArrowRight size={15} />
                 </button>
               </div>
@@ -652,7 +735,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                 <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 sm:gap-4">
                   {unavailableSearchMatches.map((product) => (
                     <article key={product.id} id={`unavailable-product-${product.id}`} aria-disabled="true" className="flex flex-col justify-between rounded-2xl border border-dashed border-koma-border bg-koma-card/50 p-3 opacity-80 sm:p-4">
-                      <div className="space-y-2"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><h4 className="font-serif text-sm font-bold text-koma-secondary">{product.nome}</h4><span className="mt-1 inline-flex rounded-md border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-rose-400">Esgotado</span></div><span className="whitespace-nowrap font-mono text-xs font-bold text-koma-muted">R$ {money(Number(product.preco))}</span></div>{product.descricao && <p className="line-clamp-2 text-[11px] leading-relaxed text-koma-muted">{product.descricao}</p>}</div>
+                      <div className="space-y-2"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><h4 className="font-serif text-sm font-bold text-koma-secondary">{product.nome}</h4><span className="mt-1 inline-flex rounded-md border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-rose-400">{(product as ProductWithModifiers).ativo === false ? 'Esgotado' : 'Cardápio inativo'}</span></div><span className="whitespace-nowrap font-mono text-xs font-bold text-koma-muted">R$ {money(Number(product.preco))}</span></div>{product.descricao && <p className="line-clamp-2 text-[11px] leading-relaxed text-koma-muted">{product.descricao}</p>}</div>
                       <p className="mt-3 border-t border-koma-border/60 pt-2 text-[10px] font-semibold text-koma-muted">Indisponível para lançamento</p>
                     </article>
                   ))}

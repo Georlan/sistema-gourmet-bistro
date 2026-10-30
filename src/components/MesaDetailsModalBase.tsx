@@ -61,6 +61,8 @@ interface MesaDetailsModalProps {
   salonTables?: Table[];
   liveProdutos?: Product[];
   liveCategorias?: CatalogCategory[];
+  cardapio_ativo_id?: string | null;
+  cardapios_ativos_ids?: string[];
   catalogReady?: boolean;
   restauranteConfig?: any;
   onUpdateItemDetails?: (
@@ -113,6 +115,8 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
   salonTables,
   liveProdutos = [],
   liveCategorias = [],
+  cardapio_ativo_id,
+  cardapios_ativos_ids,
   catalogReady = false,
   restauranteConfig,
   onUpdateItemDetails,
@@ -183,7 +187,12 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
     && operationalState.financial !== 'AWAITING_PAYMENT' && !operationalState.hasPendingConfirmation;
   const handleRepeatItem = (item: OrderItem) => {
     if (!canRepeatItems || isSubmitting || !catalogReady) return;
-    const plan = planWaiterRepeat(item, liveProdutos.find(product => product.id === item.produtoId));
+    const plan = planWaiterRepeat(
+      item,
+      liveProdutos.find(product => product.id === item.produtoId),
+      cardapio_ativo_id,
+      cardapios_ativos_ids,
+    );
     if (plan.kind === 'unavailable') return;
     if (plan.kind === 'configure') {
       setRepeatConfiguration(plan.configuration);
@@ -412,6 +421,8 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               onRepeatItem={canRepeatItems ? handleRepeatItem : undefined}
               repeatProducts={liveProdutos}
               repeatCatalogReady={catalogReady}
+              cardapio_ativo_id={cardapio_ativo_id}
+              cardapios_ativos_ids={cardapios_ativos_ids}
               isSubmitting={isSubmitting}
             />
             </>
@@ -439,6 +450,8 @@ export const MesaDetailsModal: React.FC<MesaDetailsModalProps> = ({
               isSubmitting={isSubmitting}
               liveProdutos={liveProdutos}
               liveCategorias={liveCategorias}
+              cardapio_ativo_id={cardapio_ativo_id}
+              cardapios_ativos_ids={cardapios_ativos_ids}
               catalogReady={catalogReady}
               allowExternalOrders={canCreateExternalOrder}
             />

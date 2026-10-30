@@ -55,6 +55,8 @@ interface MesaConsumptionPanelProps {
   onRepeatItem?: (item: OrderItem) => void;
   repeatProducts?: Product[];
   repeatCatalogReady?: boolean;
+  cardapio_ativo_id?: string | null;
+  cardapios_ativos_ids?: string[];
   isSubmitting?: boolean;
 }
 
@@ -78,7 +80,8 @@ export function MesaConsumptionPanel({
   canTransferTables, canTransferItems, isPrintingDirect, directPrintToast, confirmClear,
   setActiveTab, setTransferType, setSelectedOrderToPrint, setEditingItem,
   onPrintPreview, onPrintValues, onCloseTable, onMergeTables, onUnmergeTable, onDeliverItem, onCancelItem,
-  onRepeatItem, repeatProducts = [], repeatCatalogReady = false, isSubmitting = false,
+  onRepeatItem, repeatProducts = [], repeatCatalogReady = false,
+  cardapio_ativo_id, cardapios_ativos_ids, isSubmitting = false,
 }: MesaConsumptionPanelProps) {
   const amount = (value: number) => activeRole === 'garcom' ? waiterAmount.format(value) : value.toFixed(2);
   const repeatProductMap = new Map(repeatProducts.map(product => [product.id, product]));
@@ -390,7 +393,9 @@ export function MesaConsumptionPanel({
                   {/* Order Items */}
                   <div className="p-3 divide-y divide-koma-border">
                     {unpaidItems.map((item) => {
-                      const repeatPlan = onRepeatItem ? planWaiterRepeat(item, repeatProductMap.get(item.produtoId)) : null;
+                      const repeatPlan = onRepeatItem
+                        ? planWaiterRepeat(item, repeatProductMap.get(item.produtoId), cardapio_ativo_id, cardapios_ativos_ids)
+                        : null;
                       return (
                       <div
                         key={item.id}

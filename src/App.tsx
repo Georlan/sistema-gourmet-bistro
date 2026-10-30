@@ -1740,6 +1740,8 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           activeWaiterNome={activeWaiterNome}
           liveProdutos={liveProdutos}
           liveCategorias={liveCategorias}
+          cardapio_ativo_id={cardapio_ativo_id}
+          cardapios_ativos_ids={cardapios_ativos_ids}
           catalogReady={isProductsLoaded}
           onRefreshOrders={fetchOrdersFromAPI}
           onOptimisticAddOrder={handleOptimisticAddOrder}
@@ -2024,6 +2026,8 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
             onPrintKitchenLaunch={handlePrintKitchenLaunch}
             liveProdutos={liveProdutos}
             liveCategorias={liveCategorias}
+            cardapio_ativo_id={cardapio_ativo_id}
+            cardapios_ativos_ids={cardapios_ativos_ids}
             catalogReady={isProductsLoaded}
             restauranteConfig={restauranteConfig}
             onUpdateItemDetails={handleUpdateItemDetails}
