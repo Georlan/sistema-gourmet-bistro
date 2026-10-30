@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { PaymentMethod } from '../../../cardapio/paymentMethods';
 import type { CatalogCategory } from '../../../catalog/catalog';
 import { getSellableProducts, isProductSellable } from '../../../catalog/catalog';
@@ -17,6 +17,17 @@ import { formatApiError } from '../../../utils/apiError';
 import { makeOperationKey, operationalFetch } from '../../../utils/operationalRequest';
 import type { CaixaPanelProps, CashierNotice, CashierTab } from '../cashierContracts';
 import { formatCompactCurrency } from '../cashierPresentation';
+import {
+  createEmptyCustomerState,
+  handleCustomerPhoneUpdate,
+  handleCustomerLookupSuccess,
+  handleCustomerLookupNotFound,
+  handleCustomerLookupError,
+  handleOrderTypeSwitch,
+  handleManualAddressUpdate,
+  handleOrderSubmissionRecovery,
+  type CustomerSessionState,
+} from './cashierCustomerLookup';
 
 export type PdvModifierSelection = {
   id: string;
@@ -61,8 +72,6 @@ type Props = {
   cardapiosAtivosIds?: string[];
 };
 
-const emptyDeliveryAddress = (): DeliveryAddressDraft => ({ ...EMPTY_DELIVERY_ADDRESS });
-
 export function useCashierPdv({
   apiBaseUrl,
   authHeaders,
@@ -95,38 +104,55 @@ export function useCashierPdv({
 
   const [pdvCart, setPdvCart] = useState<PdvCartItem[]>([]);
 
-  const [pdvCustomerName, setPdvCustomerName] = useState('');
+  const [customerState, setCustomerState] = useState<CustomerSessionState>(createEmptyCustomerState);
 
-  const [pdvCustomerPhone, setPdvCustomerPhone] = useState('');
+  const pdvCustomerName = customerState.name;
+  const pdvCustomerPhone = customerState.phone;
+  const pdvCustomerId = customerState.customerId;
+  const pdvCustomerLookup = customerState.lookupStatus;
+  const pdvDeliveryAddress = customerState.deliveryAddress;
+  const pdvDeliveryAddressDraft = customerState.deliveryAddressDraft;
+  const pdvDeliveryAddressLegacyHint = customerState.deliveryAddressLegacyHint;
 
-  const [pdvCustomerId, setPdvCustomerId] = useState<string | null>(null);
+  const setPdvCustomerPhone = useCallback((raw: React.SetStateAction<string>) => {
+    setCustomerState((prev) => {
+      const nextPhone = typeof raw === 'function' ? raw(prev.phone) : raw;
+      return handleCustomerPhoneUpdate(prev, nextPhone);
+    });
+  }, []);
 
-  const [pdvCustomerLookup, setPdvCustomerLookup] = useState<'idle' | 'loading' | 'found' | 'new'>('idle');
+  const setPdvCustomerName = useCallback((raw: React.SetStateAction<string>) => {
+    setCustomerState((prev) => {
+      const nextName = typeof raw === 'function' ? raw(prev.name) : raw;
+      return { ...prev, name: nextName };
+    });
+  }, []);
+
+  const setPdvCustomerId = useCallback((raw: React.SetStateAction<string | null>) => {
+    setCustomerState((prev) => {
+      const nextId = typeof raw === 'function' ? raw(prev.customerId) : raw;
+      return { ...prev, customerId: nextId };
+    });
+  }, []);
+
+  const handlePdvDeliveryAddressChange = useCallback((nextAddress: DeliveryAddressDraft) => {
+    setCustomerState((prev) => handleManualAddressUpdate(prev, nextAddress));
+  }, []);
 
   const [pdvCustomerCPF, setPdvCustomerCPF] = useState('');
 
   const allowedPdvOrderTypes = allowedOrderTypes.length > 0 ? allowedOrderTypes : DEFAULT_PDV_ORDER_TYPES;
   const [pdvOrderType, setPdvOrderTypeState] = useState<PdvOrderType>(
-    () => allowedPdvOrderTypes.includes('pickup') ? 'pickup' : allowedPdvOrderTypes[0] || 'pickup',
+    () => (allowedPdvOrderTypes.includes('pickup') ? 'pickup' : allowedPdvOrderTypes[0] || 'pickup'),
   );
-  const setPdvOrderType = (nextType: PdvOrderType) => {
-    if (allowedPdvOrderTypes.includes(nextType)) setPdvOrderTypeState(nextType);
-  };
+  const setPdvOrderType = useCallback((nextType: PdvOrderType) => {
+    if (allowedPdvOrderTypes.includes(nextType)) {
+      setPdvOrderTypeState(nextType);
+      setCustomerState((prev) => handleOrderTypeSwitch(prev, nextType));
+    }
+  }, [allowedPdvOrderTypes]);
 
   const [pdvPaymentMethod, setPdvPaymentMethod] = useState<PaymentMethod | null>(null);
-
-  // Legacy text remains only as a projection/backward-compatible payload. The
-  // editable source of truth for new delivery orders is the structured draft.
-  const [pdvDeliveryAddress, setPdvDeliveryAddress] = useState('');
-  const [pdvDeliveryAddressDraft, setPdvDeliveryAddressDraft] = useState<DeliveryAddressDraft>(emptyDeliveryAddress);
-  const [pdvDeliveryAddressLegacyHint, setPdvDeliveryAddressLegacyHint] = useState('');
-
-  const handlePdvDeliveryAddressChange = (nextAddress: DeliveryAddressDraft) => {
-    setPdvDeliveryAddressDraft(nextAddress);
-    setPdvDeliveryAddressLegacyHint('');
-    const snapshot = deliveryAddressDraftToSnapshot(nextAddress);
-    setPdvDeliveryAddress(snapshot ? formatDeliveryAddressLegacy(snapshot) : '');
-  };
 
   const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState<number>(0);
 
@@ -136,54 +162,67 @@ export function useCashierPdv({
 
   const pdvCartItemCount = pdvCart.reduce((sum, item) => sum + item.quantity, 0);
 
+  const authScopeKey = `${apiBaseUrl}:${authHeaders.Authorization || ''}:${authHeaders['X-Restaurant-Id'] || ''}`;
+
+  // Reset defensivo de identificação ao alternar sessão/restaurante
+  const previousAuthScopeRef = React.useRef(authScopeKey);
+  useEffect(() => {
+    if (previousAuthScopeRef.current !== authScopeKey) {
+      previousAuthScopeRef.current = authScopeKey;
+      setCustomerState(createEmptyCustomerState());
+    }
+  }, [authScopeKey]);
+
   useEffect(() => {
     if (pdvOrderType === 'dine_in') {
-      setPdvCustomerId(null);
-      setPdvCustomerLookup('idle');
+      setCustomerState((prev) => handleOrderTypeSwitch(prev, 'dine_in'));
       return;
     }
-    const normalizedPhone = pdvCustomerPhone.replace(/\D/g, '');
+    const normalizedPhone = customerState.normalizedPhone;
     if (normalizedPhone.length < 10 || normalizedPhone.length > 11) {
-      setPdvCustomerId(null);
-      setPdvCustomerLookup('idle');
+      return;
+    }
+
+    // Se já está reconhecido com sucesso para este número exato, não refaz busca
+    if (
+      customerState.recognizedBinding
+      && customerState.recognizedBinding.phone === normalizedPhone
+      && customerState.customerId === customerState.recognizedBinding.customerId
+      && customerState.lookupStatus === 'found'
+    ) {
       return;
     }
 
     const controller = new AbortController();
     const timeout = window.setTimeout(async () => {
-      setPdvCustomerLookup('loading');
+      setCustomerState((prev) =>
+        prev.normalizedPhone === normalizedPhone ? { ...prev, lookupStatus: 'loading' } : prev,
+      );
       try {
         const response = await fetch(
           `${apiBaseUrl}/fidelidade/clientes/lookup?telefone=${encodeURIComponent(normalizedPhone)}`,
           { headers: authHeaders, signal: controller.signal },
         );
+        if (controller.signal.aborted) return;
+
         if (response.status === 404) {
-          setPdvCustomerId(null);
-          setPdvCustomerLookup('new');
+          setCustomerState((prev) => handleCustomerLookupNotFound(prev, normalizedPhone));
           return;
         }
         if (!response.ok) {
-          setPdvCustomerLookup('idle');
+          setCustomerState((prev) => handleCustomerLookupError(prev, normalizedPhone));
           return;
         }
         const customer = await response.json();
-        setPdvCustomerId(String(customer.id));
-        setPdvCustomerName(String(customer.cliente || customer.nome || ''));
-        if (pdvOrderType === 'delivery' && customer.endereco) {
-          const storedAddress = String(customer.endereco).trim();
-          const parsedAddress = parseDeliveryAddressLegacy(storedAddress);
-          setPdvDeliveryAddress(storedAddress);
-          if (parsedAddress) {
-            setPdvDeliveryAddressDraft(parsedAddress);
-            setPdvDeliveryAddressLegacyHint('');
-          } else {
-            setPdvDeliveryAddressDraft(emptyDeliveryAddress());
-            setPdvDeliveryAddressLegacyHint(storedAddress);
-          }
-        }
-        setPdvCustomerLookup('found');
+        if (controller.signal.aborted) return;
+
+        setCustomerState((prev) =>
+          handleCustomerLookupSuccess(prev, customer, normalizedPhone, pdvOrderType === 'delivery'),
+        );
       } catch (error) {
-        if ((error as Error).name !== 'AbortError') setPdvCustomerLookup('idle');
+        if ((error as Error).name !== 'AbortError') {
+          setCustomerState((prev) => handleCustomerLookupError(prev, normalizedPhone));
+        }
       }
     }, 180);
 
@@ -191,7 +230,7 @@ export function useCashierPdv({
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [pdvCustomerPhone, pdvOrderType, apiBaseUrl]);
+  }, [customerState.normalizedPhone, pdvOrderType, authScopeKey]);
 
   useEffect(() => {
     if (activeSubTab !== 'balcao') return;
@@ -428,15 +467,9 @@ export function useCashierPdv({
     }
 
     setPdvCart([]);
-    setPdvCustomerName('');
-    setPdvCustomerPhone('');
-    setPdvCustomerId(null);
-    setPdvCustomerLookup('idle');
+    setCustomerState(createEmptyCustomerState());
     setPdvCustomerCPF('');
     setPdvPaymentMethod(null);
-    setPdvDeliveryAddress('');
-    setPdvDeliveryAddressDraft(emptyDeliveryAddress());
-    setPdvDeliveryAddressLegacyHint('');
     setPdvDeliveryTaxa(0);
 
     try {
@@ -522,13 +555,17 @@ export function useCashierPdv({
         clearOptimisticOrder();
         showToast(`Erro ao registrar venda: ${formatApiError(err, 'Falha no servidor. Tente novamente.')}`, 'error');
         setPdvCart((prev) => (prev.length > 0 ? prev : cartItems));
-        setPdvCustomerName(customerName);
-        setPdvCustomerPhone(customerPhone);
-        setPdvCustomerId(customerId);
+        setCustomerState(
+          handleOrderSubmissionRecovery({
+            phone: customerPhone,
+            name: customerName,
+            customerId,
+            deliveryAddress,
+            deliveryAddressDraft,
+            deliveryAddressLegacyHint,
+          }),
+        );
         setPdvPaymentMethod(paymentMethod);
-        setPdvDeliveryAddress(deliveryAddress);
-        setPdvDeliveryAddressDraft(deliveryAddressDraft);
-        setPdvDeliveryAddressLegacyHint(deliveryAddressLegacyHint);
         setPdvDeliveryTaxa(deliveryTaxa);
       }
     } catch (err) {
@@ -536,13 +573,17 @@ export function useCashierPdv({
       clearOptimisticOrder();
       showToast('A rede falhou. O carrinho foi restaurado para você tentar novamente.', 'error');
       setPdvCart((prev) => (prev.length > 0 ? prev : cartItems));
-      setPdvCustomerName(customerName);
-      setPdvCustomerPhone(customerPhone);
-      setPdvCustomerId(customerId);
+      setCustomerState(
+        handleOrderSubmissionRecovery({
+          phone: customerPhone,
+          name: customerName,
+          customerId,
+          deliveryAddress,
+          deliveryAddressDraft,
+          deliveryAddressLegacyHint,
+        }),
+      );
       setPdvPaymentMethod(paymentMethod);
-      setPdvDeliveryAddress(deliveryAddress);
-      setPdvDeliveryAddressDraft(deliveryAddressDraft);
-      setPdvDeliveryAddressLegacyHint(deliveryAddressLegacyHint);
       setPdvDeliveryTaxa(deliveryTaxa);
     } finally {
       isPdvSubmittingRef.current = false;
