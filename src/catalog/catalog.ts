@@ -143,15 +143,26 @@ export function normalizeCatalogSnapshot(payload: unknown): CatalogSnapshot {
   };
 }
 
-export function getSellableProducts(products: CatalogProduct[], activeCardapioId?: string | null, activeIds?: string[]): CatalogProduct[] {
-  const ids = activeIds?.length ? activeIds : activeCardapioId ? [activeCardapioId] : [];
-  return products.filter((product) => {
-    if (!product.ativo) return false;
-    if (ids.length) {
-      if (!product.cardapio_id || !ids.includes(product.cardapio_id)) {
-        return false;
-      }
+export function isProductSellable<T extends { ativo?: boolean; cardapio_id?: string | null }>(
+  product: T | null | undefined,
+  activeCardapioId?: string | null,
+  activeIds?: string[],
+): boolean {
+  if (!product || product.ativo === false) return false;
+  const ids = (activeIds?.length ? activeIds : activeCardapioId ? [activeCardapioId] : [])
+    .filter((id): id is string => Boolean(id && typeof id === 'string' && id.trim()));
+  if (ids.length > 0) {
+    if (!product.cardapio_id || !ids.includes(product.cardapio_id)) {
+      return false;
     }
-    return true;
-  });
+  }
+  return true;
+}
+
+export function getSellableProducts<T extends { ativo?: boolean; cardapio_id?: string | null }>(
+  products: T[],
+  activeCardapioId?: string | null,
+  activeIds?: string[],
+): T[] {
+  return products.filter((product) => isProductSellable(product, activeCardapioId, activeIds));
 }

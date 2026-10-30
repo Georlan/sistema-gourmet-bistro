@@ -1,4 +1,4 @@
-import type { CatalogModifierGroup } from '../catalog/catalog';
+import { type CatalogModifierGroup, isProductSellable } from '../catalog/catalog';
 import type { DraftItem, OrderItem, Product } from '../types';
 import { modifierGroupSelectionValid } from './modifierQuantity';
 
@@ -19,9 +19,22 @@ type RepeatPlan =
   | { kind: 'quick'; product: RepeatedProduct; client: string; observation: string; unitPrice: number };
 
 /** Rebuild a NEW unit from the current catalog. Historical consumption is never repriced. */
-export function planWaiterRepeat(item: OrderItem, product?: Product): RepeatPlan {
-  if (!product || product.ativo === false || !Number.isFinite(Number(product.preco)) || Number(product.preco) < 0) {
-    return { kind: 'unavailable', reason: 'Produto indisponível' };
+export function planWaiterRepeat(
+  item: OrderItem,
+  product?: Product,
+  activeCardapioId?: string | null,
+  activeIds?: string[],
+): RepeatPlan {
+  if (
+    !product
+    || !isProductSellable(product, activeCardapioId, activeIds)
+    || !Number.isFinite(Number(product.preco))
+    || Number(product.preco) < 0
+  ) {
+    return {
+      kind: 'unavailable',
+      reason: product && product.ativo !== false ? 'Cardápio indisponível' : 'Produto indisponível',
+    };
   }
   if (item.composicao_agrupada || item.status === 'cancelado') {
     return { kind: 'unavailable', reason: 'Abra o cardápio para montar este item' };

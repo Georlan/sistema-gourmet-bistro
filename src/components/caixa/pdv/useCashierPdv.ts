@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import type { PaymentMethod } from '../../../cardapio/paymentMethods';
 import type { CatalogCategory } from '../../../catalog/catalog';
+import { getSellableProducts } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import {
   EMPTY_DELIVERY_ADDRESS,
@@ -516,16 +517,7 @@ export function useCashierPdv({
   };
 
   const sellableProducts = useMemo(() => {
-    return dynamicMenu.filter((product) => {
-      if (product.ativo === false) return false;
-      const ids = cardapiosAtivosIds?.length ? cardapiosAtivosIds : cardapioAtivoId ? [cardapioAtivoId] : [];
-      if (ids.length) {
-        if (!product.cardapio_id || !ids.includes(product.cardapio_id)) {
-          return false;
-        }
-      }
-      return true;
-    });
+    return getSellableProducts(dynamicMenu, cardapioAtivoId, cardapiosAtivosIds);
   }, [dynamicMenu, cardapioAtivoId, cardapiosAtivosIds]);
 
   const pdvCategories = useMemo(() => {

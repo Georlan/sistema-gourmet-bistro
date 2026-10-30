@@ -242,7 +242,7 @@ class OrderValidationService:
             if not prod.is_active:
                 raise ProductInactiveError(raw_item.product_id)
 
-            if context.active_cardapio_id is not None:
+            if context.active_cardapio_id:
                 prod_menu = str(prod.cardapio_id).strip() if prod.cardapio_id else None
                 if not prod_menu or prod_menu not in (context.active_cardapio_id, *context.additional_cardapio_ids):
                     raise ProductMenuInactiveError(raw_item.product_id, prod.name)
