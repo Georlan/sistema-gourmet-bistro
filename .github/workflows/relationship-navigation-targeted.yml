@@ -6,6 +6,7 @@ on:
       - 'src/components/caixa/navigation/**'
       - 'src/index.css'
       - 'e2e/cashier-horizontal-navigation.spec.ts'
+      - 'e2e/cashier-theme-transition.spec.ts'
       - 'src/components/caixa/customers/**'
       - 'src/components/shared/KomaMetricGroup.tsx'
       - 'src/components/shared/KomaEmptyState.tsx'
@@ -40,6 +41,7 @@ jobs:
         run: >-
           KOMA_E2E_PORT=4283 npm run test:e2e --
           e2e/cashier-horizontal-navigation.spec.ts
+          e2e/cashier-theme-transition.spec.ts
           e2e/relationship-navigation.spec.ts
           e2e/loyalty-stage3.spec.ts
           e2e/crm-api-contract.spec.ts
