@@ -25,7 +25,19 @@ export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlem
     const scroller = scrollRef.current;
     if (!scroller) return;
     const preserveUserPosition = () => { position.current.userPositioned = true; };
-    const update = () => setEdges({ left: scroller.scrollLeft > 2, right: scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 2 });
+    let frame = 0;
+    const update = () => {
+      const left = scroller.scrollLeft > 2;
+      const right = scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 2;
+      // The old handler created a fresh object (and React render) for every
+      // scroll event even when neither arrow's state had changed.
+      setEdges(previous => previous.left === left && previous.right === right
+        ? previous : { left, right });
+    };
+    const scheduleUpdate = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => { frame = 0; update(); });
+    };
     const revealSelected = () => {
       const selected = scroller.querySelector<HTMLElement>('[aria-current="page"]');
       if (selected) {
@@ -40,14 +52,19 @@ export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlem
     };
     const onScroll = () => {
       if (Math.abs(scroller.scrollLeft - position.current.revealed) > 1) preserveUserPosition();
-      update();
+      scheduleUpdate();
     };
     if (position.current.userPositioned) update();
     else revealSelected();
     const observer = new ResizeObserver(() => {
-      // A font swap must not undo a person's swipe or wheel movement.
-      if (position.current.userPositioned) update();
-      else revealSelected();
+      // ResizeObserver must not synchronously measure and re-render during
+      // a fast swipe or a font/layout update.
+      if (frame) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = 0;
+        if (position.current.userPositioned) update();
+        else revealSelected();
+      });
     });
     observer.observe(scroller);
     // Text scaling changes child widths even when the viewport is unchanged.
@@ -57,6 +74,7 @@ export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlem
     scroller.addEventListener('wheel', preserveUserPosition, { passive: true });
     return () => {
       observer.disconnect();
+      if (frame) cancelAnimationFrame(frame);
       scroller.removeEventListener('scroll', onScroll);
       scroller.removeEventListener('pointerdown', preserveUserPosition);
       scroller.removeEventListener('wheel', preserveUserPosition);
