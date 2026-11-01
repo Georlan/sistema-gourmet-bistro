@@ -1,34 +1,32 @@
-import clsx from 'clsx';
 import './cashierOptions.css';
-import { Bell, RefreshCw, SlidersHorizontal, Volume2, VolumeX, X } from 'lucide-react';
+import { Bell, CircleHelp, RefreshCw, Volume2, VolumeX, X } from 'lucide-react';
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { persistKomaTheme } from '../../../config/theme';
+import { openCustomerSupport } from '../../app/customerSupportEvents';
 import { LoginButton } from '../../auth/LoginButton';
 import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';
 import type { useCashierAlerts } from '../realtime/useCashierAlerts';
-import type { useCashierPreferences } from './useCashierPreferences';
 
-type BoundaryProps = Pick<ReturnType<typeof useCashierPreferences>, 'changeFontSize' | 'fontSize' | 'theme'> &
-  Pick<ReturnType<typeof useCashierAlerts>, 'soundEnabled' | 'audioReady' | 'toggleSound' | 'activateAudio'> &
-  Pick<CaixaPanelProps, 'activeWaiterNome' | 'onRefreshOrders'> & {
+type BoundaryProps = Pick<ReturnType<typeof useCashierAlerts>, 'soundEnabled' | 'audioReady' | 'toggleSound' | 'activateAudio'> &
+  Pick<CaixaPanelProps, 'activeWaiterNome' | 'onRefreshOrders' | 'isWsConnected'> & {
+    restaurantName: string;
     isOperatorDrawerOpen: boolean;
     setIsOperatorDrawerOpen: React.Dispatch<React.SetStateAction<boolean>>;
     handleLogoutOperator: () => void;
     showToast: CashierNotice;
   };
 
-/** Local preferences and session actions; no duplicated salon projection. */
+/** Session and browser controls only; operational owners keep their existing callbacks. */
 export function CashierOperatorDrawer({
   isOperatorDrawerOpen, setIsOperatorDrawerOpen, activeWaiterNome, handleLogoutOperator,
-  onRefreshOrders, showToast, changeFontSize, fontSize, theme,
+  onRefreshOrders, restaurantName, isWsConnected,
   soundEnabled, toggleSound, audioReady, activateAudio,
 }: BoundaryProps) {
   const [syncing, setSyncing] = useState(false);
   const [testingSound, setTestingSound] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [syncFeedback, setSyncFeedback] = useState('');
   const dialogRef = useRef<HTMLDialogElement>(null);
   const titleId = useId();
-
   useEffect(() => {
     if (!isOperatorDrawerOpen) return;
     const dialog = dialogRef.current;
@@ -37,124 +35,56 @@ export function CashierOperatorDrawer({
     document.body.style.overflow = 'hidden';
     if (dialog && !dialog.open) dialog.showModal();
     return () => {
-      dialog?.close();
-      document.body.style.overflow = previousOverflow;
+      dialog?.close(); document.body.style.overflow = previousOverflow;
       if (previousFocus?.isConnected && previousFocus !== document.body) previousFocus.focus();
       else document.getElementById('btn-mobile-caixa-sidebar-open')?.focus();
     };
   }, [isOperatorDrawerOpen]);
-
-  const controlClass = 'min-h-11 min-w-0 rounded-xl border px-2 py-2 text-sm font-semibold whitespace-normal break-words leading-snug transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500';
   const close = () => setIsOperatorDrawerOpen(false);
-
   if (!isOperatorDrawerOpen) return null;
-
-  return (
-    <dialog
-      ref={dialogRef}
-      aria-labelledby={titleId}
-      onCancel={(event) => { event.preventDefault(); close(); }}
-      className="fixed inset-0 m-0 h-dvh max-h-none w-full max-w-none border-0 bg-transparent p-0 text-koma-foreground backdrop:bg-black/60"
-    >
-      <div className="absolute inset-0" aria-hidden="true" onClick={close} />
-      <section className="cashier-options relative flex h-full w-full max-w-sm flex-col border-r border-koma-border bg-koma-panel shadow-2xl">
-        <header className="flex shrink-0 items-center gap-3 border-b border-koma-border px-4 py-3">
-          <SlidersHorizontal size={20} className="shrink-0 text-koma-accent" aria-hidden="true" />
-          <h2 id={titleId} className="min-w-0 flex-1 text-base font-bold leading-snug">Conta e preferências</h2>
-          <button type="button" autoFocus onClick={close} aria-label="Fechar preferências" className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-koma-secondary hover:bg-koma-raised">
-            <X size={20} />
-          </button>
-        </header>
-
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain p-4">
-          <section aria-label="Operador atual" className="space-y-3">
-            <div className="flex items-start gap-3">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-koma-raised text-lg font-bold text-koma-accent" aria-hidden="true">
-                {activeWaiterNome?.trim().charAt(0).toUpperCase() || 'K'}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs text-koma-muted">Operador atual</p>
-                <p className="break-words text-base font-semibold leading-snug">{activeWaiterNome || 'Operador'}</p>
-              </div>
-            </div>
-            <LoginButton onClick={handleLogoutOperator} className="min-h-11 w-full whitespace-normal text-sm tracking-normal">
-              Sair / trocar operador
-            </LoginButton>
-          </section>
-
-          <fieldset className="min-w-0 space-y-2 border-0 p-0">
-            <legend className="mb-2 text-sm font-semibold">Tamanho do texto</legend>
-            <div className="grid grid-cols-3 gap-2">
-              {(['padrao', 'grande', 'gigante'] as const).map(size => (
-                <button key={size} type="button" aria-pressed={fontSize === size} onClick={() => changeFontSize(size)} className={clsx(controlClass,
-                  fontSize === size ? 'border-emerald-500 bg-emerald-500 text-zinc-950' : 'border-koma-border bg-koma-raised text-koma-foreground')}
-                >{size === 'padrao' ? 'Padrão' : size === 'grande' ? 'Grande' : 'Gigante'}</button>
-              ))}
-            </div>
-          </fieldset>
-
-          <fieldset className="min-w-0 space-y-2 border-0 p-0">
-            <legend className="mb-2 text-sm font-semibold">Tema</legend>
-            <div className="grid grid-cols-2 gap-2">
-              {(['light', 'dark'] as const).map(value => (
-                <button key={value} type="button" aria-pressed={theme === value} onClick={() => persistKomaTheme(value)} className={clsx(controlClass,
-                  theme === value ? 'border-emerald-500 bg-emerald-500 text-zinc-950' : 'border-koma-border bg-koma-raised text-koma-foreground')}
-                >{value === 'light' ? 'Claro' : 'Escuro'}</button>
-              ))}
-            </div>
-          </fieldset>
-
-          <section aria-label="Sons dos pedidos" className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="flex min-w-0 items-center gap-2 text-sm font-semibold">
-                {soundEnabled ? <Volume2 size={18} className="shrink-0" /> : <VolumeX size={18} className="shrink-0" />}
-                Sons dos pedidos
-              </span>
-              <button type="button" onClick={() => {
-                if (soundEnabled && !audioReady) void activateAudio();
-                else toggleSound();
-              }} className={clsx(controlClass, 'border-koma-border bg-koma-raised text-koma-foreground')}>
-                {soundEnabled ? (audioReady ? 'Silenciar' : 'Ativar som') : 'Ativar som'}
-              </button>
-            </div>
-            <p className="text-xs leading-relaxed text-koma-muted">
-              {soundEnabled && audioReady ? 'Som liberado neste navegador.' : soundEnabled ? 'Libere o áudio neste navegador para ouvir os avisos.' : 'Avisos sonoros desativados neste navegador.'}
-            </p>
-            <button type="button" disabled={testingSound} onClick={async () => {
+  return <dialog ref={dialogRef} aria-labelledby={titleId} onCancel={event => { event.preventDefault(); close(); }} className="cashier-account-dialog">
+    <div className="cashier-account-backdrop" aria-hidden="true" onClick={close} />
+    <section className="cashier-options">
+      <header className="cashier-options__header">
+        <div><h2 id={titleId}>Conta e preferências</h2><p>{restaurantName}</p></div>
+        <button type="button" autoFocus onClick={close} aria-label="Fechar preferências" className="cashier-options__close"><X size={20} /></button>
+      </header>
+      <div className="cashier-options__body">
+        <section className="cashier-options__identity" aria-label="Operador atual">
+          <img src="/brand/cashier/operator-access-v1.svg" alt="" width="92" height="104" aria-hidden="true" />
+          <div><span>Operador desta aba</span><strong>{activeWaiterNome || 'Operador'}</strong></div>
+        </section>
+        <section className="cashier-options__section" aria-label="Sons dos pedidos">
+          <div className="cashier-options__section-heading"><span className="cashier-options__symbol" aria-hidden="true">{soundEnabled ? <Volume2 size={23} /> : <VolumeX size={23} />}</span><div><h3>Sons dos pedidos</h3><p>{soundEnabled ? audioReady ? 'Ativos neste navegador' : 'Aguardando liberação do navegador' : 'Silenciados neste navegador'}</p></div></div>
+          <div className="cashier-options__sound-actions">
+            <button type="button" role="switch" aria-checked={soundEnabled} aria-label="Sons dos pedidos" className="cashier-options__sound-switch" onClick={toggleSound}><span aria-hidden="true" /><strong>{soundEnabled ? 'Silenciar' : 'Ativar som'}</strong></button>
+            <button type="button" disabled={testingSound} className="cashier-options__secondary" onClick={async () => {
               if (testingSound) return;
               setTestingSound(true);
               try {
                 const ready = await activateAudio();
-                const message = ready ? 'Teste enviado ao navegador. Confira se ouviu o bip neste computador.' : 'O navegador não liberou o áudio. Verifique as permissões de som deste site.';
-                setFeedback(message);
-                showToast(message, ready ? 'info' : 'error');
-              } catch {
-                setFeedback('Não foi possível testar o som. Tente novamente.');
-                showToast('Não foi possível testar o som. Tente novamente.', 'error');
-              } finally { setTestingSound(false); }
-            }} className={clsx(controlClass, 'flex w-full items-center justify-center gap-2 border-koma-border bg-koma-raised text-koma-foreground disabled:opacity-50')}>
-              <Bell size={16} className="shrink-0" />{testingSound ? 'Testando…' : 'Testar som'}
-            </button>
-          </section>
-
-          {feedback && <p role="status" className="text-xs leading-relaxed text-koma-secondary">{feedback}</p>}
-
-          <details className="border-t border-koma-border pt-3">
-            <summary className="cursor-pointer py-2 text-sm font-semibold text-koma-secondary">Recuperação</summary>
-            <p className="my-2 text-xs leading-relaxed text-koma-muted">Se a tela parecer desatualizada, consulte os pedidos novamente.</p>
-            <button type="button" disabled={syncing} onClick={async () => {
-              if (syncing) return;
-              setSyncing(true);
-              try { await onRefreshOrders(); showToast('Consulta de atualização concluída.', 'info'); }
-              catch { showToast('Não foi possível atualizar os pedidos. Tente novamente.', 'error'); }
-              finally { setSyncing(false); }
-            }} className={clsx(controlClass, 'flex w-full items-center justify-center gap-2 border-koma-border bg-koma-raised text-koma-foreground disabled:opacity-50')}>
-              <RefreshCw size={16} className={clsx('shrink-0', syncing && 'animate-spin')} />
-              {syncing ? 'Atualizando pedidos…' : 'Atualizar pedidos'}
-            </button>
-          </details>
-        </div>
-      </section>
-    </dialog>
-  );
+                setFeedback(ready ? 'Teste enviado ao navegador. Confira se ouviu o bip neste computador.' : 'O navegador não liberou o áudio. Verifique as permissões de som deste site.');
+              } catch { setFeedback('Não foi possível testar o som. Tente novamente.'); }
+              finally { setTestingSound(false); }
+            }}><Bell size={16} />{testingSound ? 'Testando…' : 'Testar som'}</button>
+          </div>
+          {feedback && <p role="status" className="cashier-options__feedback">{feedback}</p>}
+        </section>
+        <section className="cashier-options__section" aria-label="Conexão dos pedidos">
+          <div className="cashier-options__connection"><span className="cashier-options__connection-dot" data-connected={isWsConnected} aria-hidden="true" /><div><h3>Atualização dos pedidos</h3><p>{isWsConnected ? 'Conectado em tempo real' : 'Reconectando às atualizações'}</p></div></div>
+          <button type="button" disabled={syncing} className="cashier-options__secondary" onClick={async () => {
+            if (syncing) return;
+            setSyncing(true);
+            setSyncFeedback('');
+            try { await onRefreshOrders(); setSyncFeedback('Consulta de atualização concluída.'); }
+            catch { setSyncFeedback('Não foi possível atualizar os pedidos. Tente novamente.'); }
+            finally { setSyncing(false); }
+          }}><RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />{syncing ? 'Atualizando pedidos…' : 'Atualizar pedidos'}</button>
+          {syncFeedback && <p role="status" className="cashier-options__feedback">{syncFeedback}</p>}
+        </section>
+        <button type="button" className="cashier-options__help" onClick={() => { close(); openCustomerSupport(); }}><CircleHelp size={21} /><span>Ajuda e feedback</span><span aria-hidden="true">›</span></button>
+      </div>
+      <footer className="cashier-options__footer"><LoginButton onClick={handleLogoutOperator} className="cashier-options__logout">Sair / trocar operador</LoginButton></footer>
+    </section>
+  </dialog>;
 }

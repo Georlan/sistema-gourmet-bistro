@@ -347,3 +347,181 @@ def test_failure_rolls_back_address_fee_and_audit(char_client, order):
         assert load_delivery_address_snapshot(db, restaurante_id=order['restaurant_id'], comanda_id=order['id']) is None
         logs = db.query(ActivityLog).filter_by(restaurante_id=order['restaurant_id'], action='CONVERT_FULFILLMENT').all()
         assert not any(json.loads(log.details)['comanda_id'] == order['id'] for log in logs)
+
+
+def test_delivery_address_revision_reprices_on_server_and_keeps_original(char_client, order):
+    payload, first = quote(char_client, order)
+    assert call(char_client, order, '', {**payload, 'token': first['token'], 'motivo': 'Cliente pediu entrega'}).status_code == 200
+    assert call(char_client, order, '/opcoes').json()['options'] == ['pickup', 'delivery']
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=order['restaurant_id']).one()
+        config.taxa_entrega_fixa = 11
+        db.commit()
+    revised, price = quote(char_client, order, address_snapshot={**ADDRESS, 'numero': '27'})
+    assert price['delivery_fee'] == 11
+    assert price['total'] == first['total'] + 4
+    assert call(char_client, order, '', {**revised, 'token': price['token'], 'motivo': 'Cliente corrigiu endereço'}).status_code == 200
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        latest = load_delivery_address_snapshot(db, restaurante_id=order['restaurant_id'], comanda_id=order['id'])
+        original = load_original_delivery_address_snapshot(db, restaurante_id=order['restaurant_id'], comanda_id=order['id'])
+        assert latest['numero'] == '27'
+        assert original['numero'] == '10'
+
+
+def test_single_table_order_converts_to_delivery_and_releases_table(char_client, order):
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        command = db.get(Comanda, order['id'])
+        command.tipo = 'Consumo no Local'
+        command.mesa_id = 1
+        command.delivery_status = None
+        command.lancamentos[0].status = 'producao'
+        db.commit()
+    assert 'delivery' in call(char_client, order, '/opcoes').json()['options']
+    payload, preview = quote(char_client, order)
+    result = call(char_client, order, '', {**payload, 'token': preview['token'], 'motivo': 'Cliente pediu entrega'})
+    assert result.status_code == 200, result.text
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        command = db.get(Comanda, order['id'])
+        assert command.tipo == 'Delivery'
+        assert command.mesa_id is None
+        assert command.delivery_status == 'producao'
+        assert command.delivery_taxa == 7
+        assert len(command.itens) == 1
+
+
+def test_table_conversion_blocks_multiple_orders_even_in_one_command(char_client, order):
+    from app.models import Lancamento
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        command = db.get(Comanda, order['id'])
+        command.tipo = 'Consumo no Local'
+        command.mesa_id = 1
+        command.delivery_status = None
+        db.add(Lancamento(id=uuid.uuid4().hex, restaurante_id=order['restaurant_id'], comanda_id=command.id,
+                          garcom_id='usr-char-admin', origem='caixa', status='producao'))
+        db.commit()
+    result = call(char_client, order, '/opcoes')
+    assert result.json()['options'] == []
+    assert call(char_client, order, '/previa', {'fulfillment': 'delivery', 'address_snapshot': ADDRESS}).status_code == 409
+
+
+def test_table_conversion_rejects_new_order_after_preview(char_client, order):
+    from app.models import Lancamento
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        command = db.get(Comanda, order['id'])
+        command.tipo, command.mesa_id, command.delivery_status = 'Consumo no Local', 1, None
+        command.lancamentos[0].status = 'producao'
+        db.commit()
+    payload, preview = quote(char_client, order)
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        db.add(Lancamento(id=uuid.uuid4().hex, restaurante_id=order['restaurant_id'], comanda_id=order['id'],
+                          garcom_id='usr-char-admin', origem='caixa', status='producao'))
+        db.commit()
+    result = call(char_client, order, '', {**payload, 'token': preview['token'], 'motivo': 'Cliente pediu entrega'})
+    assert result.status_code == 409
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        assert db.get(Comanda, order['id']).mesa_id == 1
+
+
+def test_table_conversion_closes_linked_account_preserving_history(char_client, order):
+    from app.services.atendimentos import ensure_atendimento_for_comanda
+    from app.operational_models import AtendimentoMesa, AtendimentoComanda
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        command = db.get(Comanda, order['id'])
+        command.tipo, command.mesa_id, command.delivery_status = 'Consumo no Local', 1, None
+        command.lancamentos[0].status = 'producao'
+        account = ensure_atendimento_for_comanda(db, command, actor_id='usr-char-admin')
+        account_id = account.id
+        db.commit()
+    payload, preview = quote(char_client, order)
+    result = call(char_client, order, '', {**payload, 'token': preview['token'], 'motivo': 'Cliente pediu entrega'})
+    assert result.status_code == 200, result.text
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        assert db.get(AtendimentoMesa, account_id).status == 'fechado'
+        assert db.query(AtendimentoComanda).filter_by(restaurante_id=order['restaurant_id'], atendimento_id=account_id, comanda_id=order['id']).count() == 1
+        assert db.get(Comanda, order['id']).mesa_id is None
+
+
+def test_table_conversion_rejects_another_open_command(char_client, order):
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        command = db.get(Comanda, order['id'])
+        command.tipo, command.mesa_id, command.delivery_status = 'Consumo no Local', 1, None
+        command.lancamentos[0].status = 'producao'
+        dto = OrderApplicationService.create_order(db, CreateOrderCommand(
+            restaurant_id=order['restaurant_id'], channel=OrderChannel.POS, fulfillment=FulfillmentType.PICKUP,
+            operator_user_id='usr-char-admin', customer=CustomerInput(name='Outro', phone='85999990000'),
+            items=(OrderItemInput(product_id='prod-char-simples', quantity=Decimal('1')),)))
+        db.flush()
+        other = db.get(Comanda, dto.comanda_id)
+        other.tipo, other.mesa_id = 'Consumo no Local', 1
+        db.commit()
+    assert call(char_client, order, '/opcoes').json()['options'] == []
+    assert call(char_client, order, '/previa', {'fulfillment': 'delivery', 'address_snapshot': ADDRESS}).status_code == 409
+
+
+def test_single_table_order_can_convert_to_pickup_without_delivery_fee(char_client, order):
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        command = db.get(Comanda, order['id'])
+        command.tipo, command.mesa_id, command.delivery_status = 'Consumo no Local', 1, None
+        command.lancamentos[0].status = 'producao'
+        db.commit()
+    assert set(call(char_client, order, '/opcoes').json()['options']) == {'pickup', 'delivery'}
+    payload, preview = quote(char_client, order, fulfillment='pickup')
+    result = call(char_client, order, '', {**payload, 'token': preview['token'], 'motivo': 'Cliente vai retirar'})
+    assert result.status_code == 200, result.text
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        command = db.get(Comanda, order['id'])
+        assert command.tipo == 'Retirada' and command.mesa_id is None
+        assert command.delivery_status == 'producao' and command.delivery_taxa == 0
+
+
+def test_table_with_served_items_cannot_be_converted(char_client, order):
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        command = db.get(Comanda, order['id'])
+        command.tipo, command.mesa_id, command.delivery_status = 'Consumo no Local', 1, None
+        command.lancamentos[0].status = 'producao'
+        command.itens[0].status = 'entregue'
+        db.commit()
+    assert call(char_client, order, '/opcoes').json()['options'] == []
+    assert call(char_client, order, '/previa', {'fulfillment': 'delivery', 'address_snapshot': ADDRESS}).status_code == 409
+
+
+def test_stale_table_launch_is_rejected_after_conversion(char_client, order):
+    from app.domain.orders.errors import OrderValidationError
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        command = db.get(Comanda, order['id'])
+        command.tipo, command.mesa_id, command.delivery_status = 'Consumo no Local', 1, None
+        command.lancamentos[0].status = 'producao'
+        db.commit()
+    payload, preview = quote(char_client, order)
+    result = call(char_client, order, '', {**payload, 'token': preview['token'], 'motivo': 'Cliente pediu entrega'})
+    assert result.status_code == 200, result.text
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        with pytest.raises(OrderValidationError, match='mudou de mesa ou modalidade'):
+            OrderApplicationService.create_order(db, CreateOrderCommand(
+                restaurant_id=order['restaurant_id'], channel=OrderChannel.WAITER, fulfillment=FulfillmentType.DINE_IN,
+                check_id=order['id'], table_id='1', operator_user_id='usr-char-admin',
+                items=(OrderItemInput(product_id='prod-char-simples', quantity=Decimal('1')),)))
+        db.rollback()
+        assert len(db.get(Comanda, order['id']).itens) == 1
+
+
+def test_table_conversion_rolls_back_account_and_table_on_failure(char_client, order):
+    from unittest.mock import patch
+    from app.services.atendimentos import ensure_atendimento_for_comanda
+    from app.operational_models import AtendimentoMesa
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        command = db.get(Comanda, order['id'])
+        command.tipo, command.mesa_id, command.delivery_status = 'Consumo no Local', 1, None
+        command.lancamentos[0].status = 'producao'
+        account = ensure_atendimento_for_comanda(db, command, actor_id='usr-char-admin')
+        account_id = account.id
+        db.commit()
+    payload, preview = quote(char_client, order)
+    with patch('app.services.order_chat_service.queue_order_tracking_refresh', side_effect=RuntimeError('failure')):
+        result = call(char_client, order, '', {**payload, 'token': preview['token'], 'motivo': 'Cliente pediu entrega'})
+    assert result.status_code == 500
+    with SessionLocal(restaurante_id=order['restaurant_id']) as db:
+        command = db.get(Comanda, order['id'])
+        assert command.mesa_id == 1 and command.tipo == 'Consumo no Local'
+        assert db.get(AtendimentoMesa, account_id).status == 'aberto'
+        assert load_delivery_address_snapshot(db, restaurante_id=order['restaurant_id'], comanda_id=order['id']) is None

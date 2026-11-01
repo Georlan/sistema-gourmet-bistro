@@ -793,6 +793,7 @@ def update_item_status(
     item_id: str,
     status: str,
     background_tasks: BackgroundTasks,
+    avancar_pedido: bool = False,
     db: Session = Depends(get_db),
     current_garcom: Usuario = Depends(get_current_user)
 ):
@@ -806,6 +807,16 @@ def update_item_status(
         ensure_permission(current_garcom, "pedidos:alterar_status")
 
     rest_id = require_tenant_id()
+    # Serialize KDS updates by order first, so concurrent last-item updates
+    # observe one committed order state before deciding to advance it.
+    if avancar_pedido and status == "pronto":
+        item_owner = db.query(Item.comanda_id).filter(
+            Item.restaurante_id == rest_id, Item.id == item_id,
+        ).first()
+        if item_owner:
+            db.query(Comanda).filter(
+                Comanda.restaurante_id == rest_id, Comanda.id == item_owner.comanda_id,
+            ).with_for_update().first()
     item = db.query(Item).filter(
         Item.restaurante_id == rest_id,
         Item.id == item_id,
@@ -826,9 +837,26 @@ def update_item_status(
             detail="Somente itens prontos podem ser marcados como servidos pelo garçom."
         )
     item.status = status
+    db.flush()
+    if avancar_pedido and status == "pronto":
+        comanda = db.query(Comanda).filter(
+            Comanda.restaurante_id == rest_id, Comanda.id == item.comanda_id,
+        ).first()
+        if comanda and normalize_to_order_status(comanda.delivery_status) in {OrderStatus.ACCEPTED, OrderStatus.PREPARING}:
+            active_items = db.query(Item).filter(
+                Item.restaurante_id == rest_id, Item.comanda_id == comanda.id,
+                or_(Item.status.is_(None), Item.status != "cancelado"),
+            ).all()
+            if active_items and all(entry.status in {"pronto", "entregue"} for entry in active_items):
+                from ..application.orders.lifecycle import OrderLifecycleCoordinator
+                OrderLifecycleCoordinator.transition_check_status(
+                    db, restaurant_id=rest_id, comanda_id=comanda.id,
+                    target_status="pronto", operator_user_id=current_garcom.id, commit=False,
+                )
     db.commit()
     db.refresh(item)
 
+    # The opt-in KDS transition above shares the canonical order transaction.
     # Item readiness is a production signal only. Customer-facing "ready" status
     # belongs to the canonical order lifecycle and is emitted only when the
     # operator explicitly advances the order to `pronto`.

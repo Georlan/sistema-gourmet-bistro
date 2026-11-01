@@ -1,0 +1,83 @@
+/* Shared KÔMA palette for existing operational overlays; no new component system. */
+:is(.ko-pause,.ko-support,#cashier-chat-panel) {
+  --ko-canvas: #162e24; --ko-panel: #1d3b2e; --ko-raised: #2b5140; --ko-input: #132b21;
+  --ko-ink: #eff4e8; --ko-muted: #b9d0bf; --ko-line: #567762;
+  --koma-surface-canvas: var(--ko-canvas); --koma-surface-panel: var(--ko-panel); --koma-surface-card: var(--ko-panel); --koma-surface-raised: var(--ko-raised); --koma-surface-input: var(--ko-input);
+  --koma-text-primary: var(--ko-ink); --koma-text-secondary: #d4e5d6; --koma-text-muted: var(--ko-muted); --koma-border-default: var(--ko-line);
+  font-family: var(--koma-font-body); color: var(--ko-ink);
+}
+[data-koma-theme="light"] :is(.ko-pause,.ko-support,#cashier-chat-panel) {
+  --ko-canvas: #e6ede3; --ko-panel: #f0f3e9; --ko-raised: #d4e3d7; --ko-input: #f6f7ef;
+  --ko-ink: #173c2c; --ko-muted: #476653; --ko-line: #9fb7a5; --koma-text-secondary: #345941;
+}
+:is(.ko-pause,.ko-support,#cashier-chat-panel) :is(button,input,select,textarea) { font-family: var(--koma-font-body); }
+:is(.ko-pause,.ko-support,#cashier-chat-panel) :is(h2,h3) { font-family: var(--koma-font-display); font-weight: 650; letter-spacing: -.025em; }
+:is(.ko-pause,.ko-support,#cashier-chat-panel) button { cursor: pointer; min-height: 44px; transition: background-color 140ms ease, box-shadow 140ms ease, transform 140ms ease; }
+:is(.ko-pause,.ko-support,#cashier-chat-panel) button:not(:disabled):active { transform: translateY(1px); }
+:is(.ko-pause,.ko-support,#cashier-chat-panel) button:disabled { cursor: not-allowed; }
+:is(.ko-pause,.ko-support,#cashier-chat-panel) :is(button,input,textarea,select):focus-visible { outline: 2px solid #05c49d; outline-offset: 3px; }
+.ko-overlay__art { flex: 0 0 auto; width: 56px; height: 56px; }
+.ko-pause { background: var(--ko-canvas); border: 1px solid var(--ko-line); box-shadow: 0 24px 72px #00000066, inset 0 1px 0 #ffffff25; animation: ko-overlay-in 180ms ease-out; max-height: calc(100dvh - 2rem); overflow-y: auto; }
+.ko-pause .ko-overlay__header { gap: .8rem; align-items: flex-start; }
+.ko-pause .ko-overlay__header > div { min-width: 0; flex: 1; }
+.ko-pause h2 { font-size: 1.35rem; line-height: 1.25; color: var(--ko-ink); }
+.ko-pause .ko-overlay__header p { font-size: .8rem; line-height: 1.55; color: var(--ko-muted); }
+.ko-pause [aria-label="Fechar"] { display: grid; place-items: center; min-width: 40px; min-height: 40px; border: 0; border-radius: 50%; background: var(--ko-panel); color: var(--ko-muted); }
+.ko-pause__counts { padding: 1rem 0; border-block: 1px solid var(--ko-line); border-radius: 0; background: transparent; }
+.ko-pause__counts small { color: var(--ko-muted); font-size: .65rem; font-weight: 450; }
+.ko-pause__counts strong { display: block; margin-top: .15rem; font: 600 1.1rem var(--koma-font-display); color: var(--ko-ink); }
+.ko-pause label > span,.ko-pause label + div > span { font-size: .8rem; color: var(--ko-muted); font-weight: 500; text-transform: none; letter-spacing: 0; }
+.ko-pause :is(select,input) { min-height: 46px; background: var(--ko-input); border-color: var(--ko-line); color: var(--ko-ink); font-size: .85rem; box-shadow: inset 0 2px 3px #00000015; }
+.ko-pause .grid-cols-4 button { font-family: var(--koma-font-display); font-size: .85rem; background: var(--ko-panel); color: var(--ko-muted); border-color: var(--ko-line); }
+.ko-pause .grid-cols-4 button[aria-pressed="true"] { background: #b7e8d2; color: #103e30; border-color: #d5f3e4; box-shadow: 0 2px 0 #0b3e3259; }
+.ko-pause .ko-action--primary,.ko-support button[type="submit"] { background: #05c49d; color: #052f25; border: 1px solid #61ddbd; font-size: .85rem; font-weight: 650; box-shadow: inset 0 1px 0 #ffffff66, 0 3px 0 #075e49; }
+.ko-pause .ko-action--primary:hover:not(:disabled),.ko-support button[type="submit"]:hover:not(:disabled) { background: #40dab5; }
+.ko-pause button:not(.ko-action--primary):not([aria-pressed]):not([aria-label="Fechar"]) { color: var(--ko-muted); border-color: var(--ko-line); }
+.ko-support aside { background: var(--ko-canvas); border-color: var(--ko-line); animation: ko-overlay-in 180ms ease-out; }
+.ko-support header { align-items: flex-start; padding: 1.25rem; background: var(--ko-panel); border-color: var(--ko-line); }
+.ko-support header > div { display: grid; grid-template-columns: 56px 1fr; align-items: center; gap: .2rem .8rem; }
+.ko-support header img { grid-row: 1 / 3; }
+.ko-support header h2 { margin: 0; color: var(--ko-ink); font-size: 1.4rem; }
+.ko-support header p { margin: 0; color: var(--ko-muted); font-size: .8rem; }
+.ko-support [aria-label="Fechar"] { border: 0; border-radius: 50%; background: var(--ko-raised); color: var(--ko-muted); }
+.ko-support :is(label > span,form p) { color: var(--ko-muted); text-transform: none; letter-spacing: 0; font-size: .8rem; font-weight: 450; }
+.ko-support textarea { min-height: 180px; background: var(--ko-input); color: var(--ko-ink); border-color: var(--ko-line); font-size: 1rem; box-shadow: inset 0 2px 4px #00000018; }
+.ko-support form .grid button { background: transparent; border-color: var(--ko-line); box-shadow: none; }
+.ko-support form .grid button[aria-pressed="true"] { background: var(--ko-raised); border-color: #05c49d; box-shadow: inset 3px 0 0 #05c49d; }
+.ko-support form .grid button span { color: var(--ko-ink); font-size: .85rem; font-weight: 550; }
+.ko-support footer { background: var(--ko-panel); border-color: var(--ko-line); }
+.ko-support footer p { font-size: .7rem; color: var(--ko-muted); }
+/* Chat has its own clear list/thread/composer surfaces and uses the existing layout. */
+#cashier-chat-panel { background: var(--ko-canvas); border-color: var(--ko-line); animation: ko-overlay-in 180ms ease-out; }
+#cashier-chat-panel .ko-chat__header { background: var(--ko-panel); }
+#cashier-chat-panel .ko-chat__header h2 { color: var(--ko-ink); font-size: 1.4rem; }
+#cashier-chat-panel .ko-chat__header > div > div:first-child:has(img) { background: transparent; width: 48px; height: 48px; border-radius: 0; }
+#cashier-chat-panel .ko-chat__header p { color: var(--ko-muted); font-size: .8rem; }
+#cashier-chat-panel :is(input,textarea) { background: var(--ko-input); color: var(--ko-ink); border-color: var(--ko-line); font-size: .9rem; min-height: 44px; }
+#cashier-chat-panel :is(input,textarea)::placeholder { color: var(--ko-muted); opacity: .85; }
+#cashier-chat-panel .ko-chat__conversation { padding: 1rem; gap: .35rem; }
+#cashier-chat-panel .ko-chat__conversation[aria-pressed="true"] { background: var(--ko-raised); border-left-color: #05c49d; box-shadow: inset 0 1px 0 #ffffff15; }
+#cashier-chat-panel .ko-chat__conversation[data-unread="true"] { border-left-color: #83e3c6; }
+#cashier-chat-panel .ko-chat__conversation .text-xs { font-size: .85rem; }
+#cashier-chat-panel .ko-chat__conversation .text-amber-300,#cashier-chat-panel .text-amber-300 { color: var(--ko-ink); background: var(--ko-raised); border-color: var(--ko-line); text-transform: none; font-weight: 500; letter-spacing: 0; }
+#cashier-chat-panel .ko-chat__messages { background: var(--ko-canvas); }
+#cashier-chat-panel .ko-chat__bubble { font-size: .9rem; line-height: 1.6; }
+#cashier-chat-panel .ko-chat__bubble.bg-emerald-600 { background: #badfca; color: #123c2c; box-shadow: 0 2px 0 #0b3e3259; }
+#cashier-chat-panel .ko-chat__bubble.bg-koma-raised { background: var(--ko-panel); color: var(--ko-ink); border-color: var(--ko-line); box-shadow: 0 2px 0 #08281e33; }
+#cashier-chat-panel .ko-chat__composer { background: var(--ko-panel); padding: .85rem 1rem; }
+#cashier-chat-panel [aria-label="Respostas rápidas"] button { min-height: 36px; padding: .4rem .65rem; font-size: .75rem; font-weight: 450; border-radius: .6rem; color: var(--ko-muted); background: transparent; }
+#cashier-chat-panel [aria-label="Respostas rápidas"] button:hover { color: var(--ko-ink); background: var(--ko-raised); }
+#cashier-chat-panel [aria-label="Enviar resposta"] { align-self: flex-start; width: 48px; height: 48px; margin-bottom: 0; border: 1px solid #61ddbd; color: #052f25; background: #05c49d; box-shadow: inset 0 1px 0 #ffffff66, 0 3px 0 #075e49; }
+#cashier-chat-panel .ko-chat__error { margin: 0; padding: .7rem 1rem; background: var(--ko-raised); color: var(--ko-ink); font-size: .85rem; }
+@keyframes ko-overlay-in { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) { :is(.ko-pause,.ko-support aside,#cashier-chat-panel) { animation: none; } :is(.ko-pause,.ko-support,#cashier-chat-panel) button { transition: none; } }
+@media (max-width: 479px) { .ko-pause { padding: 1rem; } .ko-pause .ko-overlay__art { width: 40px; height: 40px; } .ko-support header > div { grid-template-columns: 40px 1fr; } .ko-support header img { width: 40px; height: 40px; } }
+#cashier-chat-panel .ko-chat__conversation span { font-size: .8rem; }
+#cashier-chat-panel .ko-chat__conversation > div:first-child span:first-child { font-family: var(--koma-font-display); font-size: .95rem; font-weight: 600; }
+#cashier-chat-panel .ko-chat__messages > div > span { font-size: .7rem; font-family: var(--koma-font-body); }
+#cashier-chat-panel .ko-chat__composer .pointer-events-none { background: linear-gradient(to left,var(--ko-panel),transparent); }
+@media (prefers-reduced-motion: reduce) { #cashier-chat-panel .scroll-smooth { scroll-behavior: auto; } }
+
+.ko-support .text-koma-muted-foreground,.ko-support textarea::placeholder { color: var(--ko-muted); }
+@keyframes ko-overlay-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 639px) { #cashier-chat-panel { animation-name: ko-overlay-fade; } }

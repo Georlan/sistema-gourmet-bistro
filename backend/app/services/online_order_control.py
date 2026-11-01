@@ -341,7 +341,7 @@ def auto_accept_online_order_if_enabled(
         db,
         restaurant_id=restaurante_id,
         comanda_id=comanda.id,
-        target_status="aceito" if str(comanda.tipo or "").lower() in {"entrega", "delivery"} else "producao",
+        target_status="aceito" if str(comanda.tipo or "").lower() in {"entrega", "delivery", "retirada", "viagem"} else "producao",
         operator_user_id=operator_user_id or getattr(comanda, "garcom_id", None),
         commit=False,
     )

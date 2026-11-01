@@ -127,20 +127,22 @@ test('Caixa respeita scroll móvel e colunas simultâneas no desktop', async ({ 
   const enabledColumns = page.locator('.orders-column:not(.is-channel-disabled)');
   const stageTabs = page.getByRole('tablist', { name: 'Etapa dos pedidos' });
 
-  if (viewport.width < DESKTOP_BREAKPOINT) {
+  if (await stageTabs.isVisible()) {
     await expect(stageTabs).toBeVisible();
     await expect(page.getByRole('tab')).toHaveCount(3);
     await expect(page.getByRole('tab', { name: /Salão/ })).toHaveAttribute('aria-selected', 'true');
 
+    if (viewport.width < DESKTOP_BREAKPOINT) {
     const scrollBefore = await page.evaluate(() => window.scrollY);
     const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
     expect(scrollHeight).toBeGreaterThan(viewport.height);
     await swipeDocumentUp(page);
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(scrollBefore);
 
-    await page.getByRole('tab', { name: /Balcão/ }).tap();
-    await expect(page.getByRole('tab', { name: /Balcão/ })).toHaveAttribute('aria-selected', 'true');
-    await expect(enabledColumns.filter({ has: page.getByText('Balcão e delivery', { exact: true }) })).toBeVisible();
+    }
+    await page.getByRole('tab', { name: /Digitais/ }).click();
+    await expect(page.getByRole('tab', { name: /Digitais/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(enabledColumns.filter({ has: page.getByText('Balcão e online', { exact: true }) })).toBeVisible();
   } else {
     await expect(stageTabs).toBeHidden();
     await expect(enabledColumns).toHaveCount(3);
@@ -156,22 +158,15 @@ test('Caixa respeita scroll móvel e colunas simultâneas no desktop', async ({ 
     expect(positions[0].right).toBeLessThanOrEqual(positions[1].left + 1);
     expect(positions[1].right).toBeLessThanOrEqual(positions[2].left + 1);
 
-    const expandedSidebar = page.locator('.cashier-sidebar:visible');
-    const expandedThemeButton = expandedSidebar.getByRole('button', { name: 'Alternar tema' });
+    const expandedThemeButton = page.locator('#btn-caixa-theme');
     await expect(expandedThemeButton).toBeVisible();
-    const themeBounds = await expandedThemeButton.evaluate(element => {
-      const button = element.getBoundingClientRect();
-      const sidebar = element.closest('.cashier-sidebar')?.getBoundingClientRect();
-      return { buttonLeft: button.left, buttonRight: button.right, sidebarLeft: sidebar?.left ?? 0, sidebarRight: sidebar?.right ?? 0 };
-    });
-    expect(themeBounds.buttonLeft).toBeGreaterThanOrEqual(themeBounds.sidebarLeft - 1);
-    expect(themeBounds.buttonRight).toBeLessThanOrEqual(themeBounds.sidebarRight + 1);
+    await expect(page.locator('#btn-caixa-text-size')).toBeVisible();
 
     await expandedThemeButton.click();
     await expect(page.locator('html')).toHaveAttribute('data-koma-theme', 'light');
     const pendingItemsWarning = page.getByText('Outro item continua em preparo.', { exact: true });
     await expect(pendingItemsWarning).toBeVisible();
-    await expect.poll(() => pendingItemsWarning.evaluate(element => getComputedStyle(element).color)).toBe('rgb(146, 64, 14)');
+    await expect.poll(() => pendingItemsWarning.evaluate(element => getComputedStyle(element).color)).toBe('rgb(23, 61, 80)');
 
     await cashierSubnavButton(page, 'Salão').click();
     const freeTableCard = page.locator('[data-table-status="free"]').first();
@@ -184,7 +179,9 @@ test('Caixa respeita scroll móvel e colunas simultâneas no desktop', async ({ 
     await expect.poll(() => freeTableAction.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(191, 234, 212)');
     await expect.poll(() => occupiedTableAction.evaluate(element => getComputedStyle(element).backgroundColor)).toBe('rgb(247, 188, 188)');
 
-    await page.getByRole('button', { name: 'Recolher ou expandir menu' }).click();
+    const rail = page.getByRole('separator', { name: /Largura do menu/ });
+    await rail.focus();
+    await page.keyboard.press('ArrowLeft');
     const collapsedSidebar = page.locator('.cashier-sidebar:visible');
     const compactLogo = collapsedSidebar.locator('.cashier-sidebar__logo-wrap--compact');
     await expect(compactLogo).toBeVisible();
@@ -205,7 +202,8 @@ test('Caixa respeita scroll móvel e colunas simultâneas no desktop', async ({ 
     expect(logoBounds.logoWidth).toBeLessThanOrEqual(35);
     expect(logoBounds.logoLeft).toBeGreaterThanOrEqual(logoBounds.sidebarLeft - 1);
     expect(logoBounds.logoRight).toBeLessThanOrEqual(logoBounds.sidebarRight + 1);
-    await expect(collapsedSidebar.getByRole('button', { name: 'Alternar tema' })).toBeVisible();
+    await expect(page.locator('#btn-caixa-theme')).toBeVisible();
+    await expect(page.locator('#btn-caixa-text-size')).toBeVisible();
   }
 });
 

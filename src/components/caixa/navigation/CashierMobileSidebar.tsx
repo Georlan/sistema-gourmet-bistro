@@ -1,4 +1,5 @@
 import clsx from 'clsx';
+import { useSidebarSwipe } from './useSidebarSwipe';
 import { SlidersHorizontal, X } from 'lucide-react';
 import React from 'react';
 import { KomaLogo } from '../../KomaLogo';
@@ -44,7 +45,10 @@ export function CashierMobileSidebar({
   setTheme,
   theme,
   activeWaiterNome,
+  restaurantName,
+  restaurantLogo,
 }: BoundaryProps) {
+  const swipe = useSidebarSwipe(setIsMobileSidebarOpen);
   const setupMode = readSetupMode();
   const shiftKnown = turnoLoadState === 'loaded';
   const shiftOpen = shiftKnown && turno?.status === 'aberto';
@@ -59,6 +63,7 @@ export function CashierMobileSidebar({
 
   return (
     <>
+      {!isMobileSidebarOpen && <div {...swipe} className="cashier-sidebar__edge lg:hidden" aria-hidden="true" />}
       {isMobileSidebarOpen && (
         <div className="fixed inset-0 z-[90] flex lg:hidden animate-fade-in">
           <div
@@ -66,6 +71,7 @@ export function CashierMobileSidebar({
             className="fixed inset-0 bg-black/80 backdrop-blur-sm"
           />
           <aside
+            {...swipe}
             id="mobile-caixa-sidebar"
             role="dialog"
             aria-modal="true"
@@ -75,11 +81,8 @@ export function CashierMobileSidebar({
             <SidebarHeader className="cashier-sidebar__header p-3">
               <div className="cashier-sidebar__brand-row">
                 <div className="cashier-sidebar__brand">
-                  <span className="cashier-sidebar__logo-wrap"><KomaLogo size="md" /></span>
-                  <span className="cashier-sidebar__brand-copy">
-                    <strong>Kôma</strong>
-                    <small>{setupMode ? 'Configuração inicial' : 'Se você está com fome, Kôma'}</small>
-                  </span>
+                  <span className="cashier-sidebar__logo-wrap"><KomaLogo size="md" withText variant="dark" /></span>
+                  {setupMode && <span className="cashier-sidebar__brand-copy"><small>Configuração inicial</small></span>}
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button
@@ -178,6 +181,9 @@ export function CashierMobileSidebar({
                 setTheme={setTheme}
                 theme={theme}
                 activeWaiterNome={activeWaiterNome}
+          restaurantName={restaurantName}
+          restaurantLogo={restaurantLogo}
+          onRestaurantClick={() => handleSidebarNavigation('config_aparencia')}
               />
             </SidebarFooter>
           </aside>

@@ -256,7 +256,7 @@ export function CashierCouriers({
                   <div className="flex flex-wrap items-center gap-2">
                     <strong className="text-[11px] text-koma-foreground">Pedido {order.numeroPedido ? `#${order.numeroPedido}` : order.id}</strong>
                     <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-extrabold uppercase text-amber-500">
-                      {awaitingAcceptance ? 'Aguardando aceite' : 'Em preparo'}
+                      {awaitingAcceptance ? 'Aguardando aceite' : order.status === 'aceito' ? 'Aceito · aguardando preparo' : 'Em preparo'}
                     </span>
                   </div>
                   <p className="mt-1 text-[10px] font-bold text-koma-secondary">{order.cliente}{order.telefone ? ` · ${order.telefone}` : ''}</p>
@@ -265,12 +265,6 @@ export function CashierCouriers({
                   <p className={`mt-2 text-[9px] font-bold ${order.pago ? 'text-emerald-500' : 'text-amber-500'}`}>
                     {getDigitalOrderPaymentSummary(order)}
                   </p>
-
-                  {!awaitingAcceptance && (
-                    <div className="mt-3">
-                      {renderCourierSelect(order, 'Pré-atribuir entregador')}
-                    </div>
-                  )}
 
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button type="button" onClick={() => openDeliveryOrderDetails(order)} className="rounded-xl border border-koma-border px-3 py-2 text-[9px] font-bold text-koma-secondary hover:bg-koma-card">
@@ -310,7 +304,7 @@ export function CashierCouriers({
                         onClick={() => void runOrderAction(order.id, () => handleAdvanceDigitalOrder(order))}
                         className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-[9px] font-extrabold text-emerald-500 disabled:opacity-50"
                       >
-                        {pending ? 'Atualizando…' : order.status === 'aceito' ? 'Iniciar preparo' : 'Marcar como pronto'}
+                        {pending ? 'Atualizando…' : 'Marcar como pronto'}
                       </button>
                     )}
                   </div>

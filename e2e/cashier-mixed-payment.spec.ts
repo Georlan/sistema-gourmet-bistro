@@ -18,7 +18,7 @@ test('pagamento misto não duplica retry e espera saldo confirmado pelo servidor
 
   const card = page.locator('article[data-table-status="occupied"]');
   await card.getByRole('button', { name: 'Ver comanda', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Consumo local · Mesa 07', exact: true })
+  await page.getByRole('dialog', { name: 'Mesa 07', exact: true })
     .getByRole('button', { name: 'Receber', exact: true }).click();
   await page.getByRole('checkbox', { name: 'Dividir pagamento' }).check();
   const value = page.getByRole('textbox', { name: /valor/i });
@@ -90,7 +90,7 @@ test('Pix e dinheiro sequenciais dependem de duas projeções financeiras do bac
 
   await page.locator('article[data-table-status="occupied"]')
     .getByRole('button', { name: 'Ver comanda', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Consumo local · Mesa 07', exact: true })
+  await page.getByRole('dialog', { name: 'Mesa 07', exact: true })
     .getByRole('button', { name: 'Receber', exact: true }).click();
   await page.getByRole('checkbox', { name: 'Dividir pagamento' }).check();
   const value = page.getByRole('textbox', { name: /valor/i });
@@ -154,7 +154,7 @@ test('planeja dinheiro, Pix e cartão; confirma três pagamentos sem quitar ante
 
   await page.locator('article[data-table-status="occupied"]')
     .getByRole('button', { name: 'Ver comanda', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Consumo local · Mesa 07', exact: true })
+  await page.getByRole('dialog', { name: 'Mesa 07', exact: true })
     .getByRole('button', { name: 'Receber', exact: true }).click();
   await page.getByRole('checkbox', { name: 'Dividir pagamento' }).check();
   await page.getByRole('button', { name: /Planejar divisão/ }).click();

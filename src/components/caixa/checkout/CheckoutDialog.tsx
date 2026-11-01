@@ -1,8 +1,9 @@
 import clsx from 'clsx';
-import { Check, Printer, RefreshCw, Smartphone, User, X } from 'lucide-react';
+import { Check, RefreshCw, Smartphone, User, X } from 'lucide-react';
 import { isCashierTableOrder as isTableCheckoutOrder } from '../../../domain/cashierOrderProjection';
 import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
 import MoneyInput from '../../MoneyInput';
+import { CheckoutPaymentArt } from './CheckoutPaymentArt';
 import { formatCurrency } from '../cashierPresentation';
 import type { RestaurantReceiptInfo } from '../digital-receipt/digitalReceipt';
 import type { useCashierSmartPos } from '../smartpos/useCashierSmartPos';
@@ -75,8 +76,6 @@ export function CheckoutDialog({
     getCheckoutTotals,
     getCheckoutBalance,
     getSelectedItemsTotal,
-    printCheckoutReceipt,
-    printCheckoutValues,
     shareCheckoutBill,
   } = controller;
   const {
@@ -125,24 +124,25 @@ export function CheckoutDialog({
     selectedOrder &&
     showCheckoutModal && (
       <div
-        className="fixed inset-0 bg-black/85 backdrop-blur-xs z-[80] flex items-center justify-center p-2 sm:p-4"
+        className="cashier-checkout fixed inset-0 bg-black/85 backdrop-blur-xs z-[80] flex items-center justify-center p-2 sm:p-4"
         onClick={() => { if (!isProcessingPayment) setShowCheckoutModal(false); }}
       >
         <div
-          className="bg-koma-input/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl border border-koma-accent/15 shadow-2xl w-full max-w-3xl overflow-hidden max-h-[92vh] sm:max-h-[90vh] flex flex-col"
+          role="dialog" aria-modal="true" aria-label="Receber pagamento"
+          className="cashier-checkout__dialog bg-koma-input/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl border border-koma-accent/15 shadow-2xl w-full max-w-3xl overflow-hidden max-h-[92vh] sm:max-h-[90vh] flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
           <div
-            className="bg-koma-raised text-koma-foreground px-4 py-3.5 sm:px-5 sm:py-4 flex justify-between items-center shrink-0 border-b border-koma-border"
+            className="cashier-checkout__header bg-koma-raised text-koma-foreground px-4 py-3.5 sm:px-5 sm:py-4 flex justify-between items-center shrink-0 border-b border-koma-border"
           >
             <div>
               <span
                 className={"text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider block"}
               >
-                Checkout / Caixa
+                Recebimento
               </span>
               <h3 className={"font-serif text-lg font-bold text-koma-foreground"}>
-                {selectedOrder.mesaId > 0 ? `Mesa ${selectedOrder.mesaId}` : `Pedido Balcão`}
+                {selectedOrder.mesaId > 0 ? `Mesa ${selectedOrder.mesaId}` : `Pedido`}
               </h3>
               {selectedOrder.mesaOrigemId && Number(selectedOrder.mesaOrigemId) !== Number(selectedOrder.mesaId) && (
                 <span
@@ -231,14 +231,14 @@ export function CheckoutDialog({
           )}
 
           <div
-            className="p-3.5 sm:p-5 overflow-y-auto flex-1 min-h-0 bg-koma-raised grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5"
+            className="cashier-checkout__content p-3.5 sm:p-5 overflow-y-auto flex-1 min-h-0 bg-koma-raised grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5"
           >
             <div className="space-y-3 sm:space-y-4 flex flex-col min-h-0">
               <div
                 className="flex items-center justify-between border-b border-koma-border pb-1.5 shrink-0"
               >
                 <div>
-                  <h4 className="font-serif font-bold text-koma-secondary">Extrato Consumo</h4>
+                  <h4 className="font-serif font-bold text-koma-secondary">Itens do pedido</h4>
                 </div>
                 {taxaServicoAtiva && (
                   <label
@@ -273,6 +273,10 @@ export function CheckoutDialog({
                   return (
                     <div
                       key={item.id}
+                      role={canSelect ? "checkbox" : undefined}
+                      aria-checked={canSelect ? selectedItemIds.includes(item.id) : undefined}
+                      tabIndex={canSelect ? 0 : undefined}
+                      onKeyDown={(event) => { if (canSelect && (event.key === "Enter" || event.key === " ")) { event.preventDefault(); event.currentTarget.click(); } }}
                       onClick={() => {
                         if (!canSelect) return;
                         setSplitPeople('1');
@@ -292,7 +296,7 @@ export function CheckoutDialog({
                           return copy;
                         });
                       }}
-                      className={`flex items-start justify-between p-2.5 rounded-xl border border-transparent transition-all text-[11px] ${
+                      className={`cashier-checkout__item flex items-start justify-between p-2.5 rounded-xl border border-transparent transition-all text-[11px] ${
                         isCancelled
                           ? 'bg-rose-500/5 border-rose-500/10 text-rose-400 opacity-60'
                           : isPaid
@@ -334,7 +338,7 @@ export function CheckoutDialog({
                       </div>
 
                       <div className={"text-right pl-3 shrink-0 font-mono"}>
-                        <span className={"font-bold text-koma-secondary"}>R$ {item.preco.toFixed(2)}</span>
+                        <span className={"font-bold text-koma-secondary"}>{formatCurrency(item.preco)}</span>
                         {isPaid && (
                           <span
                             className={"text-[8px] uppercase tracking-wider block font-bold text-emerald-500 font-sans mt-0.5"}
@@ -370,30 +374,30 @@ export function CheckoutDialog({
                 const projectedBalance = Math.max(0, currentBalance - selectedTotal);
                 return (
                   <div
-                    className={"bg-koma-card/60 border border-koma-border p-4 rounded-2xl font-mono text-[11px] space-y-2"}
+                    className={"cashier-checkout__totals bg-koma-card/60 border border-koma-border p-4 rounded-2xl font-mono text-[11px] space-y-2"}
                   >
                     <div className={"flex justify-between"}>
                       <span className={"font-sans text-koma-subtle"}>
                         {isTableCheckoutOrder(selectedOrder) ? 'Consumo da Mesa:' : 'Total Itens em Aberto:'}
                       </span>
-                      <span className="text-koma-secondary">R$ {subtotal.toFixed(2)}</span>
+                      <span className="text-koma-secondary">{formatCurrency(subtotal)}</span>
                     </div>
                     {taxaServicoAtiva && checkoutServiceTax && (
                       <div className={"flex justify-between"}>
                         <span className={"font-sans text-koma-subtle"}>Taxa Serviço ({serviceTaxRate}%):</span>
-                        <span className="text-koma-secondary">R$ {taxa.toFixed(2)}</span>
+                        <span className="text-koma-secondary">{formatCurrency(taxa)}</span>
                       </div>
                     )}
                     {!isTableCheckoutOrder(selectedOrder) && deliveryFee > 0 && (
                       <div className={"flex justify-between"}>
                         <span className={"font-sans text-koma-subtle"}>Taxa de entrega:</span>
-                        <span className="text-koma-secondary">R$ {deliveryFee.toFixed(2)}</span>
+                        <span className="text-koma-secondary">{formatCurrency(deliveryFee)}</span>
                       </div>
                     )}
                     {!isTableCheckoutOrder(selectedOrder) && discounts > 0 && (
                       <div className={"flex justify-between"}>
                         <span className={"font-sans text-koma-subtle"}>Descontos:</span>
-                        <span className="text-emerald-600 dark:text-emerald-300">- R$ {discounts.toFixed(2)}</span>
+                        <span className="text-emerald-600 dark:text-emerald-300">- {formatCurrency(discounts)}</span>
                       </div>
                     )}
                     {selectedItemIds.length > 0 && (
@@ -401,73 +405,36 @@ export function CheckoutDialog({
                         className={"flex justify-between text-emerald-700 dark:text-emerald-400 font-bold border-t border-koma-border/40 pt-2"}
                       >
                         <span className="font-sans">Total Selecionado:</span>
-                        <span>R$ {selectedTotal.toFixed(2)}</span>
+                        <span>{formatCurrency(selectedTotal)}</span>
                       </div>
                     )}
                     {selectedOrder.valorPago && selectedOrder.valorPago > 0 ? (
                       <div className={"flex justify-between text-emerald-400"}>
-                        <span className={"font-sans font-bold"}>Total Pago Parcial:</span>
-                        <span className="font-bold">R$ {selectedOrder.valorPago.toFixed(2)}</span>
+                        <span className={"font-sans font-bold"}>Já recebido:</span>
+                        <span className="font-bold">{formatCurrency(selectedOrder.valorPago)}</span>
                       </div>
                     ) : null}
                     <div
                       className={"flex justify-between border-t border-koma-border pt-2 text-sm text-emerald-700 dark:text-emerald-400 font-bold"}
                     >
                       <span className="font-sans">
-                        {selectedItemIds.length > 0 ? 'Restará após receber:' : 'Saldo restante:'}
+                        {selectedItemIds.length > 0 ? 'Restará após receber:' : 'Falta receber:'}
                       </span>
-                      <span>R$ {(selectedItemIds.length > 0 ? projectedBalance : currentBalance).toFixed(2)}</span>
+                      <span>{formatCurrency(selectedItemIds.length > 0 ? projectedBalance : currentBalance)}</span>
                     </div>
                   </div>
                 );
               })()}
 
-              {/* BARRA DE COMPROVANTE: IMPRESSÃO OU DIGITAL */}
-              {hasPrinting !== false ? (
-                <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-koma-border/40 bg-koma-card/40 shrink-0">
-                  <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider flex items-center gap-1.5">
-                    <Printer size={12} /> Impressão:
-                  </span>
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      onClick={printCheckoutReceipt}
-                      className="px-2.5 py-1 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-lg text-[10px] font-bold text-koma-foreground transition-all cursor-pointer text-center"
-                      title="Imprime a via térmica completa com todos os itens consumidos"
-                    >
-                      Reimpressão total
-                    </button>
-                    <button
-                      type="button"
-                      onClick={printCheckoutValues}
-                      className="px-2.5 py-1 bg-koma-panel hover:bg-koma-raised border border-koma-border rounded-lg text-[10px] font-bold text-koma-foreground transition-all cursor-pointer text-center"
-                      title="Imprime a Conta da Mesa com subtotal e taxa de serviço"
-                    >
-                      Imprimir Conta
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 shrink-0">
-                  <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-1.5">
-                    <Smartphone size={12} /> Conta digital:
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => shareCheckoutBill?.(restaurantInfo)}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[11px] font-bold transition-all cursor-pointer text-center flex items-center gap-1.5 shadow-xs"
-                    title="Enviar conta para o WhatsApp ou copiar"
-                  >
-                    <Smartphone size={13} />
-                    <span>Compartilhar Conta (WhatsApp)</span>
-                  </button>
-                </div>
+              {hasPrinting === false && (
+                <button type="button" onClick={() => shareCheckoutBill?.(restaurantInfo)}
+                  className="cashier-checkout__share"><Smartphone size={16} /> Compartilhar conta</button>
               )}
             </div>
 
             <div className="space-y-3 sm:space-y-4 flex flex-col min-h-0">
               <h4 className="font-serif font-bold text-koma-secondary border-b border-koma-border pb-1.5 shrink-0">
-                Receber Pagamento
+                Pagamento
               </h4>
 
               {selectedItemIds.length > 0 ? (
@@ -486,7 +453,7 @@ export function CheckoutDialog({
                         Valor dos Itens
                       </span>
                       <strong className="text-sm font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                        R$ {selectedTotal.toFixed(2)}
+                        {formatCurrency(selectedTotal)}
                       </strong>
                     </div>
                     <button
@@ -503,7 +470,7 @@ export function CheckoutDialog({
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center justify-between p-3 bg-koma-card/60 rounded-2xl border border-koma-border shrink-0 text-xs">
+                <div className="cashier-checkout__balance flex items-center justify-between p-3 bg-koma-card/60 rounded-2xl border border-koma-border shrink-0 text-xs">
                   <div className="flex items-center gap-2">
                     <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider">
                       Dividir por:
@@ -530,7 +497,7 @@ export function CheckoutDialog({
                       {Number(splitPeople) > 1 ? 'Cada um paga:' : 'Saldo a receber:'}
                     </span>
                     <strong className="text-sm font-bold text-koma-foreground font-mono">
-                      R$ {(currentBalance / Math.max(1, parseInt(splitPeople, 10) || 1)).toFixed(2)}
+                      {formatCurrency(currentBalance / Math.max(1, parseInt(splitPeople, 10) || 1))}
                     </strong>
                   </div>
                 </div>
@@ -538,7 +505,7 @@ export function CheckoutDialog({
 
               <form
                 onSubmit={handleProcessPayment}
-                className="space-y-3.5 bg-koma-card/40 p-3.5 sm:p-4 rounded-2xl border border-koma-border/50 flex-1 flex flex-col justify-between"
+                className="cashier-checkout__form space-y-3.5 bg-koma-card/40 p-3.5 sm:p-4 rounded-2xl border border-koma-border/50 flex-1 flex flex-col justify-between"
               >
                 <fieldset disabled={isProcessingPayment || mixedPaymentAwaitingRefresh || paymentVerificationRequired} className="space-y-3.5">
                   <label className="flex min-h-11 items-center gap-3 text-sm font-semibold text-koma-foreground cursor-pointer">
@@ -601,20 +568,22 @@ export function CheckoutDialog({
                       {[
                         { id: 'pix' as const, label: 'Pix' },
                         { id: 'dinheiro' as const, label: 'Dinheiro' },
-                        { id: 'cartao_debito' as const, label: 'C. Débito' },
-                        { id: 'cartao_credito' as const, label: 'C. Crédito' },
+                        { id: 'cartao_debito' as const, label: 'Débito' },
+                        { id: 'cartao_credito' as const, label: 'Crédito' },
                       ].map((method) => (
                         <button
                           key={method.id}
+                          aria-pressed={paymentMetodo === method.id}
                           type="button"
                           onClick={() => setPaymentMetodo(method.id)}
                           className={clsx(
-                            'min-h-11 py-2.5 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center text-center',
+                            'cashier-checkout__method min-h-11 py-2.5 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center text-center',
                             paymentMetodo === method.id
                               ? 'bg-emerald-600 border border-emerald-500 text-white shadow-md ring-2 ring-emerald-500/30'
                               : 'bg-koma-card border border-koma-border text-koma-secondary hover:border-koma-accent/40 hover:text-koma-foreground'
                           )}
                         >
+                          <CheckoutPaymentArt method={method.id} />
                           {method.label}
                         </button>
                       ))}
@@ -708,7 +677,7 @@ export function CheckoutDialog({
                         {(Number(identifiedCustomer.saldoCashback || 0) > 0 ||
                           Number(identifiedCustomer.pontos || 0) > 0) && (
                           <span className="text-[9px] font-bold text-emerald-800 dark:text-emerald-300">
-                            Cashback: R$ {Number(identifiedCustomer.saldoCashback || 0).toFixed(2)}
+                            Cashback: {formatCurrency(Number(identifiedCustomer.saldoCashback || 0))}
                           </span>
                         )}
                       </div>
@@ -751,7 +720,7 @@ export function CheckoutDialog({
                             Troco devido:
                           </span>
                           <span className="font-extrabold text-sm text-emerald-600 dark:text-emerald-300">
-                            R$ {troco.toFixed(2)}
+                            {formatCurrency(troco)}
                           </span>
                         </div>
                       );
@@ -771,7 +740,7 @@ export function CheckoutDialog({
                   <button
                     type="submit"
                     disabled={selectedCheckoutSmartPosState?.blocksPayment || isProcessingPayment || mixedPaymentAwaitingRefresh || paymentVerificationRequired || !planReady}
-                    className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer uppercase tracking-wider text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    className="cashier-checkout__submit w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer uppercase tracking-wider text-xs disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Check size={16} />
                     <span>{primaryButtonLabel}</span>

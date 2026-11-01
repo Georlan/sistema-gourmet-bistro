@@ -1,0 +1,48 @@
+/* Reading/control hierarchy, using the courier's forest/mint/blue family. */
+.orders-workspace { --koma-warning-bg: #a7cfe8; --koma-warning-text: #15394f; --koma-warning-border: #79afcb; }
+[data-koma-theme="light"] .orders-workspace { --koma-warning-bg: #d1e6ee; --koma-warning-text: #173d50; --koma-warning-border: #83acbd; }
+.orders-workspace .orders-card__number .orders-card__table-label { font-family: var(--koma-font-body); font-size: .65rem; font-weight: 550; line-height: 1.1; color: #0b3e32; }
+.orders-workspace .orders-card__age.is-normal { color: var(--koma-text-muted); }
+.orders-workspace .orders-card__age.is-attention { color: var(--koma-text-primary); font-weight: 600; }
+.orders-workspace .orders-card__age.is-late { color: #cae7f6; font-weight: 650; text-decoration: underline; text-decoration-color: #8cb8cc; text-underline-offset: 3px; }
+[data-koma-theme="light"] .orders-workspace .orders-card__age.is-late { color: #23526a; }
+.orders-workspace .orders-card__partial { background: var(--koma-warning-bg); border-color: var(--koma-warning-border); color: var(--koma-warning-text); font-weight: 500; }
+.orders-workspace .orders-payment-note { color: #bfe4f6; }
+[data-koma-theme="light"] .orders-workspace .orders-payment-note { color: #173d50; }
+.orders-workspace .orders-card__state:is([data-state="producao"],[data-state="aceito"],[data-state="bill"])::before { background: #a7cfe8; }
+[data-koma-theme="light"] .orders-workspace .orders-card__state:is([data-state="producao"],[data-state="aceito"],[data-state="bill"])::before { background: #31576c; }
+.orders-workspace .orders-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; padding: .65rem; border-radius: 1rem; backdrop-filter: none; box-shadow: inset 0 1px 0 #ffffff15, 0 3px 0 #082d204d !important; }
+.orders-workspace .orders-search { flex: 1 1 18rem; width: auto; min-width: 0; }
+.orders-workspace .orders-search__input { min-height: 48px; padding: .7rem 2.8rem .7rem 2.5rem; background: var(--koma-surface-input); border: 1px solid var(--koma-border-strong); border-radius: .75rem; font-family: var(--koma-font-body); font-size: .85rem; font-weight: 450; box-shadow: inset 0 2px 3px #051b1618; }
+.orders-workspace .orders-search__input::-webkit-search-cancel-button { display: none; }
+.orders-workspace .orders-search__input:focus { border-color: var(--koma-accent-text); box-shadow: 0 0 0 2px var(--koma-accent-soft); }
+.orders-workspace .orders-search__clear { width: 40px; height: 40px; right: .25rem; background: transparent; font-size: 1rem; }
+.orders-workspace .orders-search__result { font-family: var(--koma-font-body); font-size: .75rem; }
+.orders-workspace .orders-toolbar__actions { display: flex; width: auto; flex: 0 1 auto; flex-wrap: wrap; gap: .6rem; align-items: center; }
+.orders-workspace .orders-auto-accept { min-height: 48px; padding: .25rem .6rem; gap: .6rem; border: 0; }
+.orders-workspace .orders-auto-accept__label { display: flex; flex-direction: column; gap: .15rem; color: var(--koma-text-secondary); font-size: .78rem; font-weight: 550; }
+.orders-workspace .orders-auto-accept__label small { color: var(--koma-text-muted); font-size: .7rem; font-weight: 400; }
+.orders-workspace .orders-switch { width: 36px; height: 22px; border-color: var(--koma-border-strong); background: var(--koma-surface-input); box-shadow: inset 0 2px 3px #00000020; }
+.orders-workspace .orders-switch > span { width: 14px; height: 14px; top: 3px; left: 3px; background: var(--koma-text-muted); }
+.orders-workspace .orders-auto-accept input:checked + .orders-switch { background: #05c49d; border-color: #83e3c6; }
+.orders-workspace .orders-auto-accept input:checked + .orders-switch > span { background: #07382c; transform: translateX(14px); }
+.orders-workspace .orders-new-orders:not(.orders-pix-conference) { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 48px; padding: .4rem .8rem .4rem .5rem; border: 1px solid var(--koma-border-strong); border-radius: .75rem; background: var(--koma-surface-raised); color: var(--koma-text-primary); font-family: var(--koma-font-body); font-size: .85rem; font-weight: 600; box-shadow: inset 0 1px 0 #ffffff25, 0 3px 0 #082d2059; }
+.orders-workspace .orders-new-orders[data-has-orders="true"] { background: #b7e8d2; color: #103e30; border-color: #d5f4e6; }
+.orders-workspace .orders-new-orders img { width: 32px; height: 32px; flex: 0 0 auto; }
+.orders-workspace .orders-new-orders__count { display: grid; place-items: center; min-width: 24px; min-height: 24px; padding: 0 .35rem; border: 0; border-radius: .45rem; background: #103e30; color: #edf9f3; font-family: var(--koma-font-display); font-size: .8rem; }
+.orders-workspace .orders-new-orders:not(.orders-pix-conference):hover { transform: translateY(-1px); box-shadow: inset 0 1px 0 #ffffff55, 0 4px 0 #082d2066; }
+.orders-workspace .orders-new-orders:not(.orders-pix-conference):active { transform: translateY(1px); box-shadow: none; }
+.orders-workspace :is(.orders-new-orders,.orders-search__clear):focus-visible { outline: 2px solid var(--koma-focus-ring); outline-offset: 3px; }
+@media (max-width: 767px) {
+  .orders-workspace .orders-toolbar { gap: .5rem; }
+  .orders-workspace .orders-search { flex-basis: 100%; }
+  .orders-workspace .orders-toolbar__actions { width: 100%; justify-content: space-between; }
+  .orders-workspace .orders-auto-accept { padding-inline: .25rem; }
+}
+@media (prefers-reduced-motion: reduce) { .orders-workspace .orders-new-orders:is(:hover,:active) { transform: none; } }
+
+.orders-workspace .orders-cash-pending { border: 1px solid var(--koma-warning-border); }
+.orders-workspace .orders-cash-pending__heading { font-size: .85rem; font-weight: 600; color: var(--koma-text-primary); }
+.orders-workspace .orders-cash-pending__reject { min-height: 44px; border: 1px solid var(--koma-border-strong); color: var(--koma-text-secondary); background: var(--koma-surface-panel); }
+.orders-workspace .orders-cash-pending__reject:hover { background: var(--koma-surface-raised); }
+.orders-detail-modal .orders-detail-modal__item-status::before { background: #a6cddf; }

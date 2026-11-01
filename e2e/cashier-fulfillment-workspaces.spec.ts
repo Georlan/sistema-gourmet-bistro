@@ -348,14 +348,14 @@ test('Retiradas e Entregas permitem completar o trabalho normal sem voltar ao Ka
     (element as HTMLButtonElement).click();
   });
   await expect.poll(state.getAcceptCalls).toBe(1);
-  await expect(pickups).toContainText('Em preparo');
+  await expect(pickups).toContainText('Aceito · aguardando preparo');
 
   await pickups.getByRole('button', { name: 'Marcar pronto para retirada' }).click();
   await expect(pickups).toContainText('Pronto para retirada');
   const pickupCheckout = pickups.getByRole('button', { name: 'Receber e concluir retirada' });
   await expect(pickupCheckout).toBeVisible();
   await pickupCheckout.click();
-  await expect(page.getByText('CHECKOUT / CAIXA')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Receber pagamento' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   await page.reload();
@@ -374,15 +374,14 @@ test('Retiradas e Entregas permitem completar o trabalho normal sem voltar ao Ka
     (element as HTMLButtonElement).click();
   });
   await expect.poll(state.getAcceptCalls).toBe(2);
-  await expect(deliveries.getByRole('button', { name: 'Iniciar preparo' })).toBeVisible();
-  await deliveries.getByRole('button', { name: 'Iniciar preparo' }).click();
-  await expect(deliveries).toContainText('Em preparo');
+  await expect(deliveries).toContainText('Aceito · aguardando preparo');
 
+  await expect(deliveries.getByRole('combobox', { name: /Entregador do pedido 5002/i })).toHaveCount(0);
+  await deliveries.getByRole('button', { name: 'Marcar como pronto' }).click();
+  await expect(deliveries).toContainText('Pronto');
   const courierSelect = deliveries.getByRole('combobox', { name: /Entregador do pedido 5002/i });
   await courierSelect.selectOption('7');
   await expect.poll(state.getAssignmentCalls).toBe(1);
-  await deliveries.getByRole('button', { name: 'Marcar como pronto' }).click();
-  await expect(deliveries).toContainText('Pronto');
 
   const dispatch = deliveries.getByRole('button', { name: 'Despachar pedido' });
   await dispatch.evaluate((element) => {
@@ -403,7 +402,7 @@ test('Retiradas e Entregas permitem completar o trabalho normal sem voltar ao Ka
   const deliveryCheckout = deliveries.getByRole('button', { name: 'Receber e marcar entregue' });
   await expect(deliveryCheckout).toBeVisible();
   await deliveryCheckout.click();
-  await expect(page.getByText('CHECKOUT / CAIXA')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Receber pagamento' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -427,7 +426,7 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
   await showStage(page, 'Concluir');
   const readyCard = page.locator('.orders-card--closing').filter({ hasText: 'Bruno Delivery' });
   await expect(readyCard).toBeVisible();
-  await expect(readyCard).toContainText('PRONTO PARA SAIR');
+  await expect(readyCard).toContainText('Pronto para sair');
   const readyCourierSelect = readyCard.getByRole('combobox', { name: /Entregador do pedido 5002/i });
   await readyCourierSelect.selectOption('7');
   await expect.poll(state.getAssignmentCalls).toBe(1);
@@ -440,7 +439,7 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
     (element as HTMLButtonElement).click();
   });
   const inRouteCard = page.locator('.orders-card--closing').filter({ hasText: 'Bruno Delivery' });
-  await expect(inRouteCard).toContainText('EM ROTA');
+  await expect(inRouteCard).toContainText('Em rota');
   await expect(inRouteCard).toContainText('Pedro Entregador');
   await expect(inRouteCard.getByRole('combobox', { name: /Entregador do pedido 5002/i })).toHaveCount(0);
 
@@ -498,7 +497,7 @@ test('delivery alterado para retirada sai de Entregas e aparece em Retiradas sem
   await pickups.getByRole('button', { name: 'Marcar pronto para retirada' }).click();
   await expect(pickups).toContainText('Pronto para retirada');
   await pickups.getByRole('button', { name: 'Receber e concluir retirada' }).click();
-  await expect(page.getByText('CHECKOUT / CAIXA')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Receber pagamento' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -577,6 +576,9 @@ async function mockThreeTerminalFulfillmentBackend(context: BrowserContext) {
           String(item.id) === itemId ? { ...item, status: nextStatus } : item
         ),
       };
+      if (url.searchParams.get('avancar_pedido') === 'true' && nextStatus === 'pronto' && delivery.itens.every((item: any) => item.status === 'pronto' || item.status === 'cancelado')) {
+        delivery = { ...delivery, delivery_status: 'pronto' };
+      }
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -715,17 +717,12 @@ test('Pedidos, Cozinha e Entregas convergem entre três terminais sem refresh ma
   await expect(deliveries).toContainText('Cliente Multi Terminal');
   await expect(kitchenPage.getByRole('button', { name: /Marcar como pronto: Pizza Delivery/i })).toBeVisible();
 
+  await expect(deliveries.getByRole('combobox', { name: /Entregador do pedido 5100/i })).toHaveCount(0);
+  await expect(ordersCard.getByRole('combobox')).toHaveCount(0);
+  await kitchenPage.getByRole('button', { name: /Marcar como pronto: Pizza Delivery/i }).click();
+  await expect(deliveries).toContainText('Pronto');
   const deliveryCourier = deliveries.getByRole('combobox', { name: /Entregador do pedido 5100/i });
   await deliveryCourier.selectOption('7');
-  await expect(ordersCard.getByRole('combobox')).toHaveCount(0);
-
-  await kitchenPage.getByRole('button', { name: /Marcar como pronto: Pizza Delivery/i }).click();
-  await expect(ordersCard).not.toContainText('Cozinha');
-  await expect(ordersCard).toContainText('EM PREPARO');
-  await expect(deliveries).toContainText('Em preparo');
-
-  await ordersCard.getByRole('button', { name: /Marcar como pronto/i }).click();
-  await expect(deliveries).toContainText('Pronto');
   await expect(deliveries.getByRole('button', { name: 'Despachar pedido' })).toBeEnabled();
 
   await deliveries.getByRole('button', { name: 'Despachar pedido' }).click();
@@ -734,7 +731,7 @@ test('Pedidos, Cozinha e Entregas convergem entre três terminais sem refresh ma
   });
 
   const routeCard = ordersPage.locator('.orders-card--closing').filter({ hasText: 'Cliente Multi Terminal' });
-  await expect(routeCard).toContainText('EM ROTA');
+  await expect(routeCard).toContainText('Em rota');
   await expect(routeCard).toContainText('Pedro Entregador');
   await expect(deliveries).toContainText('Em rota');
   await expectNoHorizontalOverflow(ordersPage);
@@ -920,10 +917,10 @@ test('Pedidos e Retiradas convergem em tempo real para um pedido de retirada nor
   const pickups = pickupsPage.locator('#cashier-pickups-workspace');
   await expect(pickups).toContainText('Cliente Retirada E2E');
   await expect(pickups).toContainText('Aguardando aceite');
-  await expect(ordersPage.getByRole('button', { name: /Aguardando aceite/i })).toBeVisible();
+  await expect(ordersPage.getByRole('button', { name: /Novos pedidos/i })).toBeVisible();
 
   await pickups.getByRole('button', { name: 'Aceitar pedido' }).click();
-  await expect(pickups).toContainText('Em preparo');
+  await expect(pickups).toContainText('Aceito · aguardando preparo');
 
   const ordersBalcaoTab = ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Digitais' });
   await ordersBalcaoTab.waitFor({ state: 'attached' });
@@ -931,7 +928,7 @@ test('Pedidos e Retiradas convergem em tempo real para um pedido de retirada nor
 
   const ordersCard = ordersPage.locator('.orders-card--digital').filter({ hasText: 'Cliente Retirada E2E' });
   await expect(ordersCard).toBeVisible();
-  await expect(ordersCard).toContainText(/Em preparo/i);
+  await expect(ordersCard).toContainText(/Aceito · aguardando preparo/i);
 
   await ordersCard.getByRole('button', { name: /Pronto para retirada/i }).click();
   await expect(pickups).toContainText('Pronto para retirada');
@@ -1035,7 +1032,6 @@ test('cancelar retirada pronta usa lifecycle canônico e remove o pedido sem cob
   const card = page.locator('.orders-card--closing').filter({ hasText: 'Ana Retirada' });
   await expect(card).toBeVisible();
   await card.click();
-  await page.locator('.orders-detail-modal').getByText('Mais opções', { exact: true }).click();
   await page.locator('.orders-detail-modal').getByRole('button', { name: 'Cancelar pedido', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Cancelar este pedido?' });
   await dialog.getByPlaceholder('Ex.: pedido lançado por engano').fill('Cliente desistiu da retirada');

@@ -5,9 +5,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { Order, OrderItem, Table } from '../src/types';
 import { getCashierTableOrderPresentation, projectCashierTableSlices } from '../src/domain/cashierOrderProjection';
 import { projectCashierSalonTables } from '../src/domain/cashierSalonProjection';
-import { CaixaOrdersWorkspace, type CaixaOrdersWorkspaceProps } from '../src/components/caixa/orders/CaixaOrdersWorkspace';
+import { CaixaOrdersWorkspaceView as CaixaOrdersWorkspace, type CaixaOrdersWorkspaceProps } from '../src/components/caixa/orders/CaixaOrdersWorkspace';
 import { CaixaSalonTab, type CaixaSalonTabProps } from '../src/components/caixa/salao/CaixaSalonTab';
 import { CashierSalonCard } from '../src/components/caixa/salao/CashierSalonCard';
+import { CashierTableDestinations } from '../src/components/caixa/orders/CashierTableDestinations';
 import { KanbanOrderDetails, type KanbanOrderDetailsProps } from '../src/components/caixa/orders/KanbanOrderDetails';
 import type { CashierTableCard, DeliveryOrderView } from '../src/components/caixa/orders/cashierWorkspaceTypes';
 
@@ -60,7 +61,7 @@ test('fila de aceite usa status confirmado e bloqueia ações durante a transiç
   };
   const pendingMarkup = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, props));
   assert.match(pendingMarkup, /orders-pending-card/);
-  assert.equal(button(CaixaOrdersWorkspace(props), '✓ Aceitar').props.disabled, true);
+  assert.equal(button(CaixaOrdersWorkspace(props), 'Aceitar').props.disabled, true);
   assert.equal(button(CaixaOrdersWorkspace(props), 'Recusar').props.disabled, true);
 
   const acceptedMarkup = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
@@ -160,14 +161,16 @@ test('workspace consumes frozen projections: 112/48 remain separate; requested b
   assert.match(markup, /R\$\s*112,00/);
   assert.match(markup, /R\$\s*48,00/);
   assert.match(markup, /Receber itens prontos/);
-  assert.doesNotMatch(markup, /CONTA PEDIDA/);
+  assert.doesNotMatch(markup, /Conta pedida/);
   assert.deepEqual(props.columns.tableProduction[0].order.itens.map(entry => entry.status), ['preparando']);
 
   const requested = freeze(workspace([check({ statusComanda: 'aguardando_pagamento' })]));
   const requestedMarkup = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, requested));
   assert.equal(requested.columns.tableProduction.length, 0);
-  assert.match(requestedMarkup, /CONTA PEDIDA/);
-  assert.match(requestedMarkup, /2 itens no fechamento/);
+  assert.match(requestedMarkup, /Conta pedida/);
+  assert.match(requestedMarkup, /Item preparing/);
+  assert.match(requestedMarkup, /Item ready/);
+  assert.doesNotMatch(requestedMarkup, /itens no fechamento/);
   assert.doesNotMatch(requestedMarkup, /2 de 3|Valor dos itens prontos|Receber itens prontos/);
   assert.match(requestedMarkup, /R\$\s*160,00/);
   assert.deepEqual(requested.columns.tableClosing[0].order.itens.map(entry => entry.status), ['preparando', 'pronto']);
@@ -196,7 +199,7 @@ test('workspace preserves card keyboard guards and stops action clicks before de
   let stopped = 0;
   const click = { stopPropagation: () => stopped++ };
   invoke(button(view, 'Marcar item como pronto'), 'onClick', click);
-  invoke(find(view, element => element.props['aria-label'] === 'Imprimir conferência de Pedido #24'), 'onClick', click);
+  invoke(find(view, element => element.props['aria-label'] === 'Reimprimir Pedido #24'), 'onClick', click);
   invoke(button(view, 'Receber itens prontos'), 'onClick', click);
   assert.equal(stopped, 3);
   assert.deepEqual(acted, [props.columns.tableProduction[0].order, props.columns.tableProduction[0].order,
@@ -280,7 +283,7 @@ test('search, autoaccept and pending drawer report controlled changes and comple
   invoke(find(view, element => element.props['aria-label'] === 'Aceitar pedidos online automaticamente'), 'onChange', { target: { checked: true } });
   invoke(button(view, 'Confirmar Recebimento'), 'onClick');
   invoke(button(view, 'Rejeitar'), 'onClick');
-  invoke(button(view, '✓ Aceitar'), 'onClick');
+  invoke(button(view, 'Aceitar'), 'onClick');
   invoke(button(view, 'Recusar'), 'onClick');
   assert.deepEqual(calls, ['Varanda', true, payment, payment, pending, pending]);
 });
@@ -340,20 +343,22 @@ test('details groups visible units and delegates print/transfer/cancellation wit
   assert.match(markup, /2×/);
   assert.doesNotMatch(markup, /Item cancelado/);
   assert.doesNotMatch(markup, /option value="7"/);
-  for (const label of ['Reimprimir produção', 'Reimpressão total', 'Conta da Mesa', 'Transferir', 'Cancelar toda a mesa e liberar']) {
+  for (const label of ['Reimprimir Total', 'Conta Total', 'Cancelar toda a mesa e liberar']) {
     invoke(button(view, label), 'onClick');
   }
-  assert.deepEqual(calls, ['production', 'full', 'values', 'transfer', 'consumption']);
-  const backdrop = elements(view)[0];
-  const target = {};
-  invoke(backdrop, 'onClick', { target: {}, currentTarget: target });
-  assert.equal(calls.length, 5);
-  invoke(backdrop, 'onClick', { target, currentTarget: target });
+  assert.deepEqual(calls, ['full', 'values', 'consumption']);
+  const picker = elements(view).find(element => element.type === CashierTableDestinations)!;
+  assert.equal(picker.props.transfer, props.transfer);
+  assert.equal((picker.props.actions as KanbanOrderDetailsProps['actions']).transferTable, props.actions.transferTable);
+  // DOM backdrop hit-testing and keyboard return are covered in the browser suite.
+  const frame = elements(view)[0];
+
+  invoke(frame, 'close');
   assert.equal(calls.at(-1), 'close');
   const salonView = KanbanOrderDetails({ ...props, salonActions: {
     addConsumption: () => calls.push('add'), receive: () => calls.push('receive'), canReceive: true,
   } });
-  invoke(button(salonView, 'Adicionar consumo'), 'onClick');
+  invoke(button(salonView, 'Adicionar itens'), 'onClick');
   invoke(button(salonView, 'Receber'), 'onClick');
   assert.deepEqual(calls.slice(-2), ['add', 'receive']);
   const disabledView = KanbanOrderDetails({ ...props, salonActions: {
@@ -364,7 +369,8 @@ test('details groups visible units and delegates print/transfer/cancellation wit
     ...props, order: { ...props.order, contextoSalao: false },
     salonActions: { addConsumption: noop, receive: noop, canReceive: true },
   }));
-  assert.doesNotMatch(launchMarkup, /Ações da mesa/);
+  assert.match(launchMarkup, /Ações da mesa/);
+  assert.match(launchMarkup, /Cancelar somente este pedido/);
 });
 
 test('digital detail uses the same controlled advance and order-only cancellation actions', () => {
@@ -377,9 +383,9 @@ test('digital detail uses the same controlled advance and order-only cancellatio
       cancelOrder: () => calls.push('order') },
   };
   const view = KanbanOrderDetails(props);
-  invoke(button(view, 'Marcar pronto para retirada'), 'onClick');
+  assert.doesNotMatch(renderToStaticMarkup(createElement(KanbanOrderDetails, props)), /Marcar pronto para retirada/);
   invoke(button(view, 'Cancelar pedido'), 'onClick');
-  assert.deepEqual(calls, ['advance', 'order']);
+  assert.deepEqual(calls, ['order']);
   assert.doesNotMatch(renderToStaticMarkup(createElement(KanbanOrderDetails, props)), /Mesa de destino/);
 });
 
@@ -417,18 +423,20 @@ test('digital dine-in keeps digital identity before and after table association'
 
   const unlinkedView = KanbanOrderDetails(baseProps);
   const unlinkedMarkup = renderToStaticMarkup(createElement(KanbanOrderDetails, baseProps));
-  assert.match(unlinkedMarkup, /Consumo no local/);
-  invoke(button(unlinkedView, 'Marcar pronto para servir'), 'onClick');
-  invoke(button(unlinkedView, 'Associar'), 'onClick');
-  assert.deepEqual(calls, ['advance', 'associate']);
+  assert.match(unlinkedMarkup, /Consumo/);
+  assert.doesNotMatch(unlinkedMarkup, /Marcar pronto para servir/);
+  const picker = elements(unlinkedView).find(element => element.type === CashierTableDestinations)!;
+  assert.equal(picker.props.association, true);
+  (picker.props.actions as KanbanOrderDetailsProps['actions']).associateTable();
+  assert.deepEqual(calls, ['associate']);
 
   const associatedProps: KanbanOrderDetailsProps = {
     ...baseProps,
     order: { ...baseProps.order, mesaId: 7 },
   };
   const associatedMarkup = renderToStaticMarkup(createElement(KanbanOrderDetails, associatedProps));
-  assert.match(associatedMarkup, /Consumo local vinculado à mesa/);
-  assert.match(associatedMarkup, /Consumo local · Mesa 07/);
+  assert.match(associatedMarkup, /Consumo/);
+  assert.match(associatedMarkup, /Mesa 07/);
   assert.doesNotMatch(associatedMarkup, /Atendimento do salão/);
   assert.doesNotMatch(associatedMarkup, /Conta da Mesa|Reimpressão total/);
 });
@@ -446,6 +454,10 @@ test('digital detail shows the payment method and requested cash change', () => 
   assert.match(markup, /Pagamento no atendimento/);
   assert.match(markup, /dinheiro/i);
   assert.match(markup, /Troco para R\$\s*100,00/);
+  const pixMarkup = renderToStaticMarkup(createElement(KanbanOrderDetails, {
+    ...props, order: { ...props.order, paymentMethod: 'pix' },
+  }));
+  assert.doesNotMatch(pixMarkup, /Troco para/);
 });
 
 
@@ -478,4 +490,26 @@ test('fila sem impressão mostra todos os itens e observações sem botão de re
   assert.match(html, /Sobremesa/);
   assert.match(html, /Separar embalagem/);
   assert.doesNotMatch(html, /mais itens \(expandir\)|Recolher itens/);
+});
+
+test('order details distinguish paid, online confirmation, and remaining balance', () => {
+  const props: KanbanOrderDetailsProps = {
+    order: { id: 'payment-detail', mesaId: 0, numeroPedido: 100, modalidade: 'delivery', deliveryStatus: 'producao', total: 40, itens: [] },
+    transfer: { targetId: '', onTargetChange: noop, isTransferring: false, tables: [] },
+    actions: { close: noop, advanceDigitalOrder: noop, reprintProduction: noop, printFullTable: noop,
+      printTableValues: noop, transferTable: noop, associateTable: noop, convertDeliveryToPickup: noop, cancelConsumption: noop, cancelOrder: noop },
+  };
+  const render = (order: Partial<KanbanOrderDetailsProps['order']>) => renderToStaticMarkup(createElement(KanbanOrderDetails, { ...props, order: { ...props.order, ...order } }));
+  const paidAtCounter = render({ amountPaid: 40, amountDue: 0, paymentMethod: 'dinheiro' });
+  assert.match(paidAtCounter, /Não cobrar/);
+  assert.doesNotMatch(paidAtCounter, /Pagamento online aprovado/);
+  const approvedPartial = render({ onlinePaymentStatus: 'approved', amountPaid: 20, amountDue: 20, paymentMethod: 'cartao_credito' });
+  assert.match(approvedPartial, /Cobrar na entrega/);
+  assert.match(approvedPartial, /20,00/);
+  assert.doesNotMatch(approvedPartial, /Não cobrar/);
+  const paidWithoutMethod = render({ amountPaid: 40, amountDue: 0 });
+  assert.match(paidWithoutMethod, /Não cobrar/);
+  const approvedUnknown = render({ onlinePaymentStatus: 'approved' });
+  assert.match(approvedUnknown, /Conferir pagamento/);
+  assert.doesNotMatch(approvedUnknown, /Não cobrar/);
 });

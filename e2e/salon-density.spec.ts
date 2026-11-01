@@ -33,7 +33,6 @@ test('30 mesas mantêm cards compactos e livres não esticam; detalhes cabem na 
   expect(box.y + box.height).toBeLessThanOrEqual(page.viewportSize()!.height);
   await expect(details.getByRole('button', { name: 'Adicionar consumo', exact: true })).toBeVisible();
   await expect(details.getByRole('button', { name: 'Receber', exact: true })).toBeVisible();
-  await details.getByText('Mais opções', { exact: true }).click();
   await details.getByRole('combobox', { name: 'Mesa de destino' }).scrollIntoViewIfNeeded();
   await expect(details.getByRole('combobox', { name: 'Mesa de destino' })).toBeInViewport();
   await details.getByRole('button', { name: 'Fechar detalhes' }).scrollIntoViewIfNeeded();

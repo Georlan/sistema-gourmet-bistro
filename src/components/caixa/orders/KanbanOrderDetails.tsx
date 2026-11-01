@@ -1,8 +1,9 @@
+import { PAYMENT_LABELS, type PaymentMethod } from '../../../cardapio/paymentMethods';
 import { OrderItemComposition } from '../../shared/OrderItemComposition';
 import { itemCompositionPresentation, itemCompositionSignature, type CompositionSource } from '../../../domain/orderItemComposition';
 import React from 'react';
 import clsx from 'clsx';
-import { Smartphone, Users, ShoppingCart, X, Check, Printer, RefreshCw, ArrowUpRight, Trash2, Plus, CreditCard } from 'lucide-react';
+import { X, Check } from 'lucide-react';
 import type { Table } from '../../../types';
 import type { TableOrderContext as Context } from '../../../domain/tableReadModel';
 import { TableOrderContext } from '../../shared/TableOrderContext';
@@ -10,12 +11,13 @@ import type { CashierTableCard } from './cashierWorkspaceTypes';
 import {
   getCashierDeliveryStatusLabel as deliveryStatusLabel,
   getCashierHumanOrderNumber as humanOrderNumber,
-  projectCashierDeliveryState,
 } from '../../../domain/cashierOrderProjection';
 import { formatBackendTime } from '../../../utils/dateTime';
 import { formatCurrency, operationalOriginLabel } from '../cashierPresentation';
 import { DigitalReceiptAction } from '../digital-receipt/DigitalReceiptAction';
-import { getTableAssociationOptionLabel } from './digitalOrderPresentation';
+import { CashierDetailActionArt } from './CashierDetailActionArt';
+import { CourierPaymentArtwork } from '../../courier/CourierGlyph';
+import { CashierTableDestinations } from './CashierTableDestinations';
 
 export interface KanbanDetailSourceItem extends CompositionSource {
   readonly id?: string;
@@ -35,6 +37,7 @@ export interface KanbanCourierAssignment {
   readonly value: number | null;
   readonly options: readonly { id: number; nome: string }[];
   readonly loading?: boolean;
+  readonly loadState?: 'loading' | 'loaded' | 'error';
   readonly onChange: (motoboyId: string) => void;
 }
 
@@ -59,6 +62,7 @@ export interface KanbanDetailOrder {
   readonly onlinePaymentStatus?: string | null;
   readonly identificador?: string;
   readonly telefone?: string;
+  readonly endereco?: string;
   readonly paymentMethod?: string | null;
   readonly changeFor?: number | null;
   readonly criadoEm?: string;
@@ -95,6 +99,7 @@ export interface KanbanOrderDetailsProps {
     readonly printFullTable: () => void;
     readonly printTableValues: () => void;
     readonly transferTable: () => void;
+    readonly mergeTable?: () => Promise<void>;
     readonly associateTable: () => void;
     readonly convertDeliveryToPickup: () => void;
     readonly cancelConsumption: () => void;
@@ -152,8 +157,6 @@ export function KanbanOrderDetails({
   serviceTaxRate,
   onToast,
 }: KanbanOrderDetailsProps) {
-  const { targetId: tableTransferTargetId, onTargetChange: setTableTransferTargetId,
-    isTransferring: isTransferringTable, tables: salonTables } = transfer;
   const selectedDetailItems = selectedKanbanOrder
     ? groupKanbanDetailItems(selectedKanbanOrder.itens)
     : [];
@@ -200,25 +203,17 @@ export function KanbanOrderDetails({
       0,
     ) ?? 0)
     : 0;
-  const selectedCanAdvanceDigital = selectedIsDigital
-    && (
-      projectCashierDeliveryState(selectedKanbanOrder?.deliveryStatus).inProduction
-      || selectedIsReadyDelivery
-    );
-  const isWholeTableDetail = Boolean(selectedKanbanOrder.tableContext);
-  const selectedAssociationTable = salonTables.find(
-    (table) => String(table.id) === String(tableTransferTargetId),
-  );
+  const selectedCanAdvanceDigital = selectedIsDigital && selectedIsReadyDelivery;
+  const isGeneratedTableLabel = Number(selectedKanbanOrder.mesaId) > 0
+    && new RegExp(`^mesa\\s*0*${Number(selectedKanbanOrder.mesaId)}$`, 'i').test(String(selectedKanbanOrder.identificador || '').trim());
+  const paymentLabel = selectedKanbanOrder.paymentMethod && (Object.hasOwn(PAYMENT_LABELS, selectedKanbanOrder.paymentMethod) ? PAYMENT_LABELS[selectedKanbanOrder.paymentMethod as PaymentMethod] : selectedKanbanOrder.paymentMethod.replace(/_/g, ' '));
+  const detailArt = selectedIsDelivery ? 'delivery' : selectedKanbanOrder.mesaId > 0 || selectedIsDineIn ? 'table' : 'pickup';
 
   return (
-    <div
-      onClick={(e) => { if (e.target === e.currentTarget) actions.close(); }}
-      className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-[80] flex items-center justify-center p-4 cursor-pointer"}
-    >
-      <div role="dialog" aria-modal="true" aria-labelledby="kanban-detail-title" className={"orders-detail-modal w-full max-w-[44rem] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-3xl flex flex-col text-left relative animate-scale-in"}>
+    <KanbanDetailFrame close={() => { if (!transfer.isTransferring) actions.close(); }}>
         <div className="orders-detail-modal__hero">
           <div className={clsx('orders-detail-modal__number', selectedIsQuickSale && 'is-quick-sale')}>
-            {selectedIsQuickSale ? <Smartphone size={18} /> : selectedKanbanOrder.mesaId > 0 ? <Users size={18} /> : <ShoppingCart size={18} />}
+            <img src={`/brand/cashier/detail-${detailArt}-v2.svg`} width="64" height="64" alt="" aria-hidden="true" />
           </div>
           <div className="min-w-0 flex-1">
             <span className="orders-detail-modal__eyebrow">
@@ -227,15 +222,15 @@ export function KanbanOrderDetails({
                 : selectedIsTableLinkedPickup
                   ? 'Retirada vinculada à mesa'
                   : selectedIsTableLinkedDineIn
-                    ? 'Consumo local vinculado à mesa'
+                    ? 'Consumo'
                     : selectedKanbanOrder.contextoSalao
                       ? 'Atendimento do salão'
                       : selectedIsDelivery
-                        ? 'Delivery'
+                        ? 'Entrega'
                         : selectedIsDineIn
-                          ? 'Consumo no local'
+                          ? 'Consumo'
                           : 'Retirada'}
-              {!selectedKanbanOrder.tableContext && <span> · {selectedKanbanOrder.criadoEm || formatBackendTime(selectedKanbanOrder.created_at) || '—'}</span>}
+              {!selectedKanbanOrder.tableContext && <span> · {formatBackendTime(selectedKanbanOrder.criadoEm || selectedKanbanOrder.created_at)}</span>}
             </span>
             <h3 id="kanban-detail-title" className="orders-detail-modal__title">
               {selectedIsQuickSale
@@ -243,7 +238,7 @@ export function KanbanOrderDetails({
                 : selectedIsTableLinkedPickup
                   ? `Retirada · Mesa ${String(selectedKanbanOrder.mesaId).padStart(2, '0')}`
                   : selectedIsTableLinkedDineIn
-                    ? `Consumo local · Mesa ${String(selectedKanbanOrder.mesaId).padStart(2, '0')}`
+                    ? `Mesa ${String(selectedKanbanOrder.mesaId).padStart(2, '0')}`
                     : selectedKanbanOrder.contextoSalao && selectedKanbanOrder.mesaId > 0
                       ? `Mesa ${selectedKanbanOrder.mesaId}`
                       : `Pedido #${selectedOrderNumber}`}
@@ -258,24 +253,32 @@ export function KanbanOrderDetails({
           </div>
           <div className="orders-detail-modal__hero-side">
             <strong>{formatCurrency(selectedOrderTotal)}</strong>
+            <div className="kd-hero-controls">
+            {(canChangeFulfillment || (!selectedIsQuickSale && selectedKanbanOrder.mesaId > 0)) && <button type="button" className="kd-hero-change" disabled={transfer.isTransferring} onClick={actions.convertDeliveryToPickup} aria-label="Tipo e endereço" title="Alterar tipo ou endereço"><CashierDetailActionArt kind="change" /></button>}
             <button
               type="button"
               onClick={actions.close}
+              disabled={transfer.isTransferring}
               className="orders-detail-modal__close"
               aria-label="Fechar detalhes"
             >
-              <X size={16} />
+              <X size={18} />
             </button>
+            </div>
           </div>
         </div>
         <div className="orders-detail-modal__body">
-          {selectedKanbanOrder.identificador && !selectedIsQuickSale && (
+          {selectedKanbanOrder.identificador && !selectedIsQuickSale && !isGeneratedTableLabel && (
             <div className="orders-detail-modal__customer">
-              <div><span>Cliente</span><strong>{selectedKanbanOrder.identificador}</strong></div>
+              <div><span>{selectedKanbanOrder.contextoSalao ? 'Atendimento' : 'Cliente'}</span><strong>{selectedKanbanOrder.identificador}</strong></div>
               {selectedKanbanOrder.telefone && <span className="orders-detail-modal__phone">{selectedKanbanOrder.telefone}</span>}
             </div>
           )}
-          {selectedKanbanOrder.tableContext && <TableOrderContext context={selectedKanbanOrder.tableContext} />}
+          {selectedIsDelivery && selectedKanbanOrder.endereco && <div className="orders-detail-modal__address">
+            <svg viewBox="0 0 32 40" width="28" height="35" fill="none" aria-hidden="true"><path d="M16 37S3 23 3 15a13 13 0 1 1 26 0c0 8-13 22-13 22Z" fill="#a7cfe8" stroke="#15394f" strokeWidth="2"/><circle cx="16" cy="15" r="5" fill="#15394f"/></svg>
+            <div><span>Endereço de entrega</span><strong>{selectedKanbanOrder.endereco}</strong></div>
+          </div>}
+
           {tableMovement && <div className="space-y-1 text-xs text-koma-secondary">
             {tableMovement.mergedMesaIds.length > 0 && <p>Consumo unido de: {tableMovement.mergedMesaIds.map(id => `Mesa ${id}`).join(', ')}.</p>}
             {tableMovement.transferredFromMesaIds.length > 0 && <p>Consumo transferido de: {tableMovement.transferredFromMesaIds.map(id => `Mesa ${id}`).join(', ')}.</p>}
@@ -296,58 +299,38 @@ export function KanbanOrderDetails({
               </div>
             </div>
           )}
-          {(selectedKanbanOrder.paymentMethod || Number(selectedKanbanOrder.changeFor || 0) > 0) && (() => {
-            const isOnlinePaid =
-              selectedKanbanOrder.onlinePaymentStatus === 'approved' ||
-              (Number(selectedKanbanOrder.amountPaid || 0) >= Number(selectedKanbanOrder.total || 0) &&
-                Number(selectedKanbanOrder.total || 0) > 0);
-
-            if (isOnlinePaid) {
-              return (
-                <div className="orders-detail-modal__payment is-paid" aria-label="Pagamento do pedido">
-                  <div className="flex items-center gap-1.5">
-                    <Check className="h-3.5 w-3.5 text-emerald-500" />
-                    <span className="block text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
-                      Pagamento online aprovado
-                    </span>
-                  </div>
-                  {selectedKanbanOrder.paymentMethod && (
-                    <strong className="mt-1 block text-sm capitalize text-koma-foreground">
-                      {selectedKanbanOrder.paymentMethod}
-                    </strong>
-                  )}
-                  {Number(selectedKanbanOrder.amountPaid || 0) > 0 && (
-                    <p className="mt-0.5 text-xs text-emerald-600 dark:text-emerald-400 font-bold">
-                      Valor recebido: {formatCurrency(Number(selectedKanbanOrder.amountPaid))}
-                    </p>
-                  )}
-                </div>
-              );
+          {(selectedKanbanOrder.paymentMethod || Number(selectedKanbanOrder.changeFor || 0) > 0 || Number(selectedKanbanOrder.amountPaid || 0) > 0 || selectedKanbanOrder.onlinePaymentStatus === 'approved') && (() => {
+            const paid = Math.max(0, Number(selectedKanbanOrder.amountPaid || 0));
+            const due = Math.max(0, selectedKanbanOrder.amountDue ?? (selectedOrderTotal - paid));
+            const onlineApproved = selectedKanbanOrder.onlinePaymentStatus === 'approved';
+            // Online approval is not proof of a settled balance when the values are missing or disagree.
+            const fullyPaid = selectedOrderTotal > 0 && paid >= selectedOrderTotal && due < 0.01;
+            const needsVerification = onlineApproved && !fullyPaid && paid <= 0;
+            if (fullyPaid) {
+              return <div className="orders-detail-modal__payment is-paid kd-payment kd-payment--paid" aria-label="Pagamento do pedido">
+                <span className="kd-payment__paid-symbol" aria-hidden="true"><Check size={20} strokeWidth={2.5} /></span>
+                <div className="kd-payment__copy"><strong>{selectedIsDelivery ? 'Não cobrar' : 'Pago'}</strong><span>{onlineApproved ? 'Pagamento online aprovado' : 'Pagamento registrado'}</span></div>
+              </div>;
             }
-
-            return (
-              <div className="orders-detail-modal__payment" aria-label="Pagamento do pedido">
-                <span className="block text-[9px] font-bold uppercase tracking-wider text-koma-secondary">
-                  Pagamento no atendimento
-                </span>
-                {selectedKanbanOrder.paymentMethod && (
-                  <strong className="mt-1 block text-sm capitalize text-koma-foreground">
-                    {selectedKanbanOrder.paymentMethod}
-                  </strong>
-                )}
-                {Number(selectedKanbanOrder.changeFor || 0) > 0 && (
-                  <p className="mt-1 text-xs font-bold text-koma-foreground">
-                    Troco para {formatCurrency(Number(selectedKanbanOrder.changeFor))}
-                  </p>
-                )}
+            if (needsVerification) {
+              return <div className="orders-detail-modal__payment kd-payment" aria-label="Pagamento do pedido">
+                <div className="kd-payment__copy"><strong>Conferir pagamento</strong><span>Pagamento online aprovado</span></div>
+              </div>;
+            }
+            return <div className="orders-detail-modal__payment kd-payment" aria-label="Pagamento do pedido">
+              <div className="kd-payment__copy">
+                <span>{selectedIsDelivery ? 'Cobrar na entrega' : 'Pagamento no atendimento'}</span>
+                {selectedIsDelivery && selectedOrderTotal > 0 && <strong>{formatCurrency(due)}</strong>}
+                {onlineApproved && paid > 0 && <span>Pagamento online registrado parcialmente</span>}
+                {selectedKanbanOrder.paymentMethod && <span className={selectedIsDelivery && /^(dinheiro|cartao|cartao_credito|cartao_debito)$/.test(selectedKanbanOrder.paymentMethod) ? 'sr-only' : undefined}>{paymentLabel}</span>}
+                {String(selectedKanbanOrder.paymentMethod || '').trim().toLowerCase() === 'dinheiro' && Number(selectedKanbanOrder.changeFor || 0) > 0 && <p>Troco para {formatCurrency(Number(selectedKanbanOrder.changeFor))}</p>}
               </div>
-            );
+              {selectedIsDelivery && selectedKanbanOrder.paymentMethod && /^(dinheiro|cartao|cartao_credito|cartao_debito)$/.test(selectedKanbanOrder.paymentMethod) && <CourierPaymentArtwork method={selectedKanbanOrder.paymentMethod === 'dinheiro' ? 'cash' : 'card'} />}
+            </div>;
           })()}
-          <div className="space-y-2">
-            <div className="orders-detail-modal__section-title">
-              <span>Itens do pedido</span>
-              <strong>{selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0)} no total</strong>
-            </div>
+          <details className="kd-items-disclosure">
+            <summary><CashierDetailActionArt kind="items" /><span>Ver {selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0)} {selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0) === 1 ? 'item' : 'itens'}</span><span className="kd-items-chevron" aria-hidden="true">⌄</span></summary>
+            {selectedKanbanOrder.tableContext && <TableOrderContext context={selectedKanbanOrder.tableContext} />}
             <div className="orders-detail-modal__items">
               {selectedDetailItems.map((item, idx) => (
                 <div key={item.sourceItems[0]?.id || `${item.nome}-${idx}`} className="orders-detail-modal__item">
@@ -373,19 +356,13 @@ export function KanbanOrderDetails({
                 </div>
               ))}
             </div>
-          </div>
+          </details>
         </div>
-        <footer className="orders-detail-modal__footer">
-        {selectedKanbanOrder.contextoSalao && salonActions && (
-          <div className="grid grid-cols-2 gap-2" aria-label="Ações da mesa">
-            <button type="button" onClick={salonActions.addConsumption} className="orders-detail-modal__reprint min-h-11">
-              <Plus size={14} aria-hidden="true" />Adicionar consumo
-            </button>
-            <button type="button" onClick={salonActions.receive} disabled={!salonActions.canReceive} className="orders-detail-modal__primary-action min-h-11 disabled:cursor-not-allowed disabled:opacity-40">
-              <CreditCard size={14} aria-hidden="true" />Receber
-            </button>
-          </div>
-        )}
+        <footer className="orders-detail-modal__footer kd-footer">
+          {salonActions && <div className="kd-actions-grid" aria-label="Ações da mesa">
+            <button type="button" onClick={salonActions.addConsumption} className="kd-action kd-action--add"><CashierDetailActionArt kind="add" /><span>Adicionar itens</span></button>
+            <button type="button" onClick={salonActions.receive} disabled={!salonActions.canReceive} className="kd-action kd-action--receive"><CashierDetailActionArt kind="receive" /><span>Receber</span></button>
+          </div>}
           {selectedIsDelivery && ['pronto', 'transito'].includes(selectedDeliveryStatus) && selectedKanbanOrder.courierAssignment && (
             <div className="rounded-xl border border-koma-border bg-koma-panel/60 p-3 space-y-2">
               <div className="orders-detail-modal__section-title">
@@ -401,7 +378,7 @@ export function KanbanOrderDetails({
                   className="min-h-10 w-full rounded-xl border border-koma-border bg-koma-card px-3 text-xs font-bold text-koma-foreground outline-none focus:border-emerald-500/60 disabled:opacity-60"
                 >
                   <option value="">
-                    {selectedKanbanOrder.courierAssignment.loading ? 'Sincronizando entregadores...' : 'Selecionar entregador...'}
+                    {selectedKanbanOrder.courierAssignment.loadState === 'error' ? 'Não foi possível carregar entregadores' : selectedKanbanOrder.courierAssignment.loading ? 'Sincronizando entregadores...' : 'Selecionar entregador...'}
                   </option>
                   {selectedKanbanOrder.courierAssignment.options.map((courier) => (
                     <option key={courier.id} value={courier.id}>{courier.nome}</option>
@@ -409,7 +386,7 @@ export function KanbanOrderDetails({
                 </select>
               ) : (
                 <p className="text-xs font-bold text-koma-secondary">
-                  {selectedCourierName || 'Entregador não identificado'}
+                  {selectedCourierName || (selectedKanbanOrder.courierAssignment.loadState === 'error' ? 'Não foi possível carregar o entregador' : selectedKanbanOrder.courierAssignment.loading ? 'Carregando entregador…' : 'Entregador não identificado')}
                 </p>
               )}
             </div>
@@ -423,9 +400,7 @@ export function KanbanOrderDetails({
               >
                 <Check size={15} />
                 <span>
-                  {selectedKanbanOrder.deliveryStatus === 'aceito'
-                    ? 'Iniciar preparo'
-                    : selectedIsReadyDelivery
+                  {selectedIsReadyDelivery
                     ? 'Despachar pedido'
                     : selectedIsDelivery
                       ? 'Marcar como pronto'
@@ -435,209 +410,67 @@ export function KanbanOrderDetails({
                 </span>
               </button>
             )}
-          <details className="orders-detail-modal__more">
-            <summary>Mais opções</summary>
-            <div className="orders-detail-modal__more-content">
-          {hasPrinting !== false && selectedKanbanOrder.tableContext && selectedKanbanOrder.tableContext.launches.length > 0 && (
-            <div className="space-y-2 rounded-xl border border-koma-border bg-koma-panel/60 p-3">
-              <div className="orders-detail-modal__section-title">
-                <span>Pedidos desta mesa</span>
-                <strong>{selectedKanbanOrder.tableContext.launches.length} no atendimento</strong>
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {selectedKanbanOrder.tableContext.launches.map((launch) => {
-                  const label = launch.displayNumber || launch.id;
-                  return (
-                    <button
-                      key={launch.id}
-                      type="button"
-                      onClick={() => actions.reprintProduction(launch.id)}
-                      className="orders-detail-modal__reprint min-h-10"
-                      aria-label={`Reimprimir pedido ${label}`}
-                    >
-                      <Printer size={13} aria-hidden="true" />
-                      <span>Reimprimir #{label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
-            {canChangeFulfillment && (
-              <button
-                type="button"
-                onClick={actions.convertDeliveryToPickup}
-                className="orders-detail-modal__secondary-action"
-              >
-                Alterar tipo do pedido
-              </button>
-            )}
-            {!isWholeTableDetail && hasPrinting !== false && (
-              <button
-                type="button"
-                onClick={() => actions.reprintProduction()}
-                className="orders-detail-modal__reprint"
-              >
-                <Printer size={13} />
-                <span>Reimprimir produção</span>
-              </button>
-            )}
-            {Boolean(selectedKanbanOrder.mesaId && selectedKanbanOrder.mesaId > 0) && (
-              <div className={"space-y-2 w-full"}>
-                {selectedKanbanOrder.contextoSalao && (
-                  hasPrinting !== false ? (
-                    <div className={"flex gap-2 w-full"}>
-                      <button
-                        type="button"
-                        onClick={actions.printFullTable}
-                        title="Reimprime todos os itens ativos da mesa"
-                        className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
-                      >
-                        <Printer size={13} />
-                        <span>Reimpressão total</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={actions.printTableValues}
-                        title="Imprime a Conta da Mesa"
-                        className={"flex-1 py-2.5 bg-koma-panel hover:bg-koma-raised text-koma-secondary hover:text-koma-foreground font-bold text-xs rounded-xl transition-all cursor-pointer uppercase tracking-wider text-center flex items-center justify-center gap-1.5 border border-koma-border shadow-lg"}
-                      >
-                        <Printer size={13} />
-                        <span>Conta da Mesa</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="w-full">
-                      <DigitalReceiptAction
-                        order={{
-                          mesaId: selectedKanbanOrder.mesaId,
-                          identificador: selectedKanbanOrder.identificador,
-                          itens: (selectedKanbanOrder.itens as any) || [],
-                          valorPago: selectedKanbanOrder.amountPaid || 0,
-                          telefone: selectedKanbanOrder.telefone,
-                        }}
-                        restaurantConfig={restaurantConfig}
-                        taxaServicoAtiva={taxaServicoAtiva}
-                        serviceTaxRate={serviceTaxRate}
-                        label="Compartilhar Conta da Mesa (WhatsApp)"
-                        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
-                        onToast={onToast}
-                      />
-                    </div>
-                  )
-                )}
-                {selectedKanbanOrder.contextoSalao && (
-                  <div className={"flex gap-2 w-full"}>
-                    <select
-                      aria-label="Mesa de destino"
-                      value={tableTransferTargetId}
-                      onChange={(event) => setTableTransferTargetId(event.target.value)}
-                      disabled={isTransferringTable}
-                      className={"min-h-10 min-w-0 flex-1 rounded-xl border border-koma-border bg-koma-panel px-3 text-xs font-bold text-koma-secondary outline-none focus:border-emerald-500/60"}
-                    >
-                      <option value="">Transferir para…</option>
-                      {salonTables
-                        .filter(table => Number(table.id) !== Number(selectedKanbanOrder.mesaId))
-                        .map(table => <option key={table.id} value={table.id}>{getTableAssociationOptionLabel(table)}</option>)}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={actions.transferTable}
-                      disabled={!tableTransferTargetId || isTransferringTable}
-                      className={"flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"}
-                    >
-                      {isTransferringTable ? <RefreshCw className="animate-spin" size={13} /> : <ArrowUpRight size={13} />}
-                      Transferir
-                    </button>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={actions.cancelConsumption}
-                  className={"flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-300 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 px-3 text-[10px] font-bold text-rose-700 dark:text-rose-300 transition-colors hover:bg-rose-100 dark:hover:bg-rose-950/40"}
-                >
-                  <Trash2 size={13} />
-                  {selectedKanbanOrder.contextoSalao ? 'Cancelar toda a mesa e liberar' : 'Cancelar somente este pedido'}
-                </button>
-              </div>
-            )}
-            {Number(selectedKanbanOrder.mesaId || 0) <= 0 && (
-              <div className="w-full space-y-2">
-                {selectedCanAssociateTable && (
-                  <>
-                    <div className="flex gap-2 w-full">
-                      <select
-                        aria-label="Mesa para associar ao pedido"
-                        aria-describedby="association-table-status"
-                        value={tableTransferTargetId}
-                        onChange={(event) => setTableTransferTargetId(event.target.value)}
-                        disabled={isTransferringTable}
-                        className="min-h-10 min-w-0 flex-1 rounded-xl border border-koma-border bg-koma-panel px-3 text-xs font-bold text-koma-secondary outline-none focus:border-emerald-500/60"
-                      >
-                        <option value="">Associar à mesa…</option>
-                        {salonTables.map((table) => (
-                          <option key={table.id} value={table.id}>
-                            {getTableAssociationOptionLabel(table)}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={actions.associateTable}
-                        disabled={!tableTransferTargetId || isTransferringTable}
-                        className="flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        {isTransferringTable ? <RefreshCw className="animate-spin" size={13} /> : <Users size={13} />}
-                        {selectedAssociationTable?.isOccupied ? 'Associar mesmo assim' : 'Associar'}
-                      </button>
-                    </div>
-                    <div
-                      id="association-table-status"
-                      role="status"
-                      className={clsx(
-                        'flex min-h-10 items-start gap-2 rounded-xl border px-3 py-2 text-[10px]',
-                        selectedAssociationTable?.isOccupied
-                          ? 'border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300'
-                          : 'border-koma-border bg-koma-panel text-koma-muted',
-                      )}
-                    >
-                      <span aria-hidden="true" className={clsx(
-                        'mt-1 h-2 w-2 shrink-0 rounded-full',
-                        selectedAssociationTable?.isOccupied ? 'bg-rose-500' : selectedAssociationTable ? 'bg-emerald-500' : 'bg-koma-muted',
-                      )} />
-                      <span>
-                        {!selectedAssociationTable
-                          ? 'Escolha uma mesa. Mesas em atendimento estão marcadas com ●.'
-                          : selectedAssociationTable.isOccupied
-                            ? `Mesa ${selectedAssociationTable.id} já está em atendimento${Number(selectedAssociationTable.total || 0) > 0 ? `, com ${formatCurrency(Number(selectedAssociationTable.total))} em aberto` : ''}. Associe somente se este cliente estiver nessa mesa.`
-                            : `Mesa ${selectedAssociationTable.id} está livre e será vinculada a este pedido.`}
-                      </span>
-                    </div>
-                  </>
-                )}
-                <button
-                  type="button"
-                  onClick={actions.cancelOrder}
-                  className={"flex min-h-10 w-full items-center justify-center gap-2 rounded-xl border border-rose-300 dark:border-rose-900/40 bg-rose-50 dark:bg-rose-950/20 px-3 text-[10px] font-bold text-rose-700 dark:text-rose-300 transition-colors hover:bg-rose-100 dark:hover:bg-rose-950/40"}
-                >
-                  <Trash2 size={13} />
-                  Cancelar pedido
-                </button>
-              </div>
-            )}
-            </div>
-          </details>
+          {hasPrinting !== false && <div className="kd-actions-grid" aria-label="Impressão">
+            <button type="button" onClick={actions.printFullTable} className="kd-action kd-action--print"><CashierDetailActionArt kind="print" /><span>Reimprimir Total</span></button>
+            {selectedKanbanOrder.mesaId > 0 && <button type="button" onClick={actions.printTableValues} className="kd-action kd-action--bill"><CashierDetailActionArt kind="bill" /><span>Conta Total</span></button>}
+          </div>}
+          {hasPrinting === false && selectedKanbanOrder.mesaId > 0 && <DigitalReceiptAction order={{ mesaId: selectedKanbanOrder.mesaId, identificador: selectedKanbanOrder.identificador, itens: selectedKanbanOrder.itens as any, valorPago: selectedKanbanOrder.amountPaid || 0, telefone: selectedKanbanOrder.telefone }} restaurantConfig={restaurantConfig} taxaServicoAtiva={taxaServicoAtiva} serviceTaxRate={serviceTaxRate} onToast={onToast} label="Compartilhar conta" />}
+          {selectedKanbanOrder.mesaId > 0 && (selectedKanbanOrder.contextoSalao || salonActions) && <CashierTableDestinations source={selectedKanbanOrder.mesaId} transfer={transfer} actions={actions} />}
+          {selectedCanAssociateTable && <CashierTableDestinations association source={0} transfer={transfer} actions={actions} />}
+          <button type="button" onClick={selectedKanbanOrder.mesaId > 0 ? actions.cancelConsumption : actions.cancelOrder} className="kd-action kd-action--cancel">
+            <CashierDetailActionArt kind="cancel" /><span>{selectedKanbanOrder.contextoSalao ? 'Cancelar toda a mesa e liberar' : selectedKanbanOrder.mesaId > 0 ? 'Cancelar somente este pedido' : 'Cancelar pedido'}</span>
+          </button>
         </footer>
-      </div>
-    </div>
+    </KanbanDetailFrame>
   );
+}
+
+
+/** Focus/return behavior stays separate from the stateless order presentation. */
+function KanbanDetailFrame({ close, children }: { close: () => void; children: React.ReactNode }) {
+  const dialog = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    dialog.current?.querySelector<HTMLButtonElement>('[aria-label="Fechar detalhes"]')?.focus();
+    return () => {
+      document.body.style.overflow = overflow;
+      if (previous?.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, []);
+  return <div onClick={event => { if (event.target === event.currentTarget) close(); }}
+    className="fixed inset-0 bg-black/85 backdrop-blur-xs z-[80] flex items-center justify-center p-4 cursor-pointer">
+    <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="kanban-detail-title"
+      className="orders-detail-modal w-full max-w-[44rem] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-3xl flex flex-col text-left relative animate-scale-in"
+      onKeyDown={event => {
+        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); }
+        if (event.key !== 'Tab') return;
+        const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
+          'button:not(:disabled),a[href],input:not(:disabled),textarea:not(:disabled),select:not(:disabled),summary,[tabindex="0"]',
+        )).filter(control => {
+          if (!control.getClientRects().length || getComputedStyle(control).visibility === 'hidden') return false;
+          for (let parent = control.parentElement; parent; parent = parent.parentElement) {
+            if (parent instanceof HTMLDetailsElement && !parent.open && !parent.querySelector(':scope > summary')?.contains(control)) return false;
+          }
+          return true;
+        });
+        const first = controls[0], last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }}>{children}</div>
+  </div>;
 }
 
 function ItemObservationEditor({ item, save, unit }: { item: KanbanDetailSourceItem; unit?: number; save: (id: string, observation: string) => Promise<void> }) {
   const [value, setValue] = React.useState(itemCompositionPresentation(item).observation);
   const [saving, setSaving] = React.useState(false);
   const [message, setMessage] = React.useState('');
+  const closeEditor = (element: HTMLElement) => {
+    const details = element.closest('details');
+    if (details) { details.open = false; details.querySelector('summary')?.focus(); }
+  };
   return <div className="rounded-xl border border-koma-border p-3 space-y-2">
     <label className="block text-xs text-koma-foreground">Observação — {item.nome || item.produto?.nome || 'Item'}{unit ? ` · Unidade ${unit}` : ''}
       <textarea value={value} maxLength={1000} disabled={saving} onChange={event => { setValue(event.target.value); setMessage(''); }} className="mt-2 block w-full rounded-lg border border-koma-border bg-koma-card p-2" />
@@ -648,6 +481,7 @@ function ItemObservationEditor({ item, save, unit }: { item: KanbanDetailSourceI
       catch (error) { setMessage(error instanceof Error ? error.message : 'Não foi possível salvar.'); }
       finally { setSaving(false); }
     }} className="text-xs font-bold text-emerald-500 disabled:opacity-50">{saving ? 'Salvando…' : 'Salvar observação'}</button>
+    <button type="button" disabled={saving} onClick={event => closeEditor(event.currentTarget)} className="orders-detail-modal__observation-close">Fechar edição</button>
     {message && <p role="status" className="text-xs">{message}</p>}
   </div>;
 }

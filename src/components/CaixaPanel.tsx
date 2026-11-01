@@ -1,3 +1,4 @@
+import { useCashierNotice } from './caixa/navigation/useCashierNotice';
 import { StaffPushNotifications } from './caixa/realtime/StaffPushNotifications';
 import { DirectPixPendingPanel } from './caixa/orders/DirectPixPendingPanel';
 import { KomaBillingNotice } from './caixa/settings/KomaBillingNotice';
@@ -65,8 +66,20 @@ import { CashierOpenShiftDialog } from './caixa/shift/CashierOpenShiftDialog';
 import { useCashShift } from './caixa/shift/useCashShift';
 import { useCashierSmartPos } from './caixa/smartpos/useCashierSmartPos';
 import { SuprimentoModal } from './caixa/SuprimentoModal';
-import { OperationalBanner, OperationalSummaryProvider, OperationalSummaryButton } from './shared/OperationalBanner';
-import { SidebarProvider, SidebarTrigger } from './ui/sidebar';
+import { OperationalBanner } from './shared/OperationalBanner';
+import { SidebarProvider } from './ui/sidebar';
+import './caixa/navigation/cashierChrome.css';
+import './caixa/orders/cashierOrderDetails.css';
+import './caixa/orders/cashierDetailActions.css';
+import './caixa/orders/cashierOrderControls.css';
+import './caixa/orders/cashierOrderCards.css';
+import './caixa/checkout/cashierCheckout.css';
+import './caixa/orders/cashierActionControls.css';
+import './caixa/orders/cashierOrderColumns.css';
+import './caixa/navigation/cashierTypography.css';
+import { CashierTextSizeToggle } from './caixa/navigation/CashierTextSizeToggle';
+import { CashierThemeToggle } from './caixa/navigation/CashierThemeToggle';
+import './shared/komaThemeTransition.css';
 const loadCashierInventory = () => import('./caixa/inventory/CashierInventory');
 const loadCashierCatalog = () => import('./caixa/catalog/CashierCatalog');
 const loadCashierCustomers = () => import('./caixa/customers/CashierCustomers');
@@ -174,9 +187,7 @@ export function CaixaPanel({
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
-  const [toastData, setToastData] = useState<{ msg: string; type: 'success' | 'error' | 'info' } | null>(
-    null,
-  );
+  const { toastData, showToast } = useCashierNotice();
   const [planNoticeBanner, setPlanNoticeBanner] = useState<string | null>(null);
 
   const {
@@ -188,10 +199,6 @@ export function CaixaPanel({
     setChatUnreadCount,
   } = useCashierChat(apiBaseUrl, authHeaders.Authorization || "");
 
-  const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
-    setToastData({ msg, type });
-    setTimeout(() => setToastData(null), 3000);
-  };
   const {
     turno,
     turnoLoadState,
@@ -323,6 +330,7 @@ export function CaixaPanel({
     handlePrintSelectedKanbanValues,
     handleInspectSalonTable,
     handleTransferSelectedKanbanTable,
+    handleMergeSelectedKanbanTable,
     handleAssociateSelectedKanbanTable,
     handleCancelSelectedKanbanConsumption,
     handleCancelSelectedKanbanOrder,
@@ -533,10 +541,11 @@ export function CaixaPanel({
   const activeKitchenItems = orders.flatMap((order) =>
     order.itens
       .filter((item) => item.status === 'preparando' || item.status === 'pronto')
-      .filter(() => order.deliveryStatus !== 'aceito' && order.deliveryStatus !== 'pendente' && order.deliveryStatus !== 'recusado')
+      .filter(() => order.deliveryStatus !== 'pendente' && order.deliveryStatus !== 'recusado')
       .map((item) => ({
         ...item,
         orderId: order.id,
+        deliveryStatus: order.deliveryStatus,
         mesaId: order.mesaId,
         garcomNome: item.responsavelNome || order.garcomNome,
         timestamp: (item as any).created_at || (item as any).timestamp || order.timestamp,
@@ -703,7 +712,7 @@ export function CaixaPanel({
   });
 
   const selectedCheckoutSmartPosState = selectedOrder ? getSmartPosCardState(selectedOrder) : null;
-  const selectedSalonCard = selectedKanbanOrder?.contextoSalao
+  const selectedSalonCard = Number(selectedKanbanOrder?.mesaId) > 0
     ? salonTableCards.find(card => card.table.id === Number(selectedKanbanOrder.mesaId) && !card.isMerged)
     : undefined;
 
@@ -715,21 +724,12 @@ export function CaixaPanel({
       }`}
     >
 
-      {toastData && (
-        <div
-          className={clsx(
-            'fixed bottom-6 right-6 z-[9999] font-bold px-5 py-3 rounded-2xl shadow-2xl text-sm animate-fade-in pointer-events-none border backdrop-blur-md',
-            toastData.type === 'error'
-              ? 'bg-rose-900/90 border-rose-700/50 text-rose-100'
-              : toastData.type === 'info'
-                ? 'bg-amber-900/90 border-amber-700/50 text-amber-100'
-                : 'bg-[#10b981] text-[#0B0B0C] border-[#10b981]',
-          )}
-        >
+      {toastData?.type === 'error' && (
+        <div role="alert" className="cashier-feedback">
           {toastData.msg}
         </div>
       )}
-      <OperationalSummaryProvider scope={`${activeTab}:${activeSubTab}`}><SidebarProvider className="contents">
+      <SidebarProvider className="contents">
         <CashierMobileSidebar
           isMobileSidebarOpen={isMobileSidebarOpen}
           setIsMobileSidebarOpen={setIsMobileSidebarOpen}
@@ -749,6 +749,8 @@ export function CaixaPanel({
           setTheme={setTheme}
           theme={theme}
           activeWaiterNome={activeWaiterNome}
+          restaurantName={String(restauranteConfig?.nome || 'KÔMA')}
+          restaurantLogo={String(restauranteConfig?.logo_url || '')}
         />
 
         <CashierDesktopSidebar
@@ -768,11 +770,13 @@ export function CaixaPanel({
           setTheme={setTheme}
           theme={theme}
           activeWaiterNome={activeWaiterNome}
+          restaurantName={String(restauranteConfig?.nome || 'KÔMA')}
+          restaurantLogo={String(restauranteConfig?.logo_url || '')}
         />
 
         <main className={"cashier-main min-w-0 min-h-0 flex-1 bg-koma-canvas flex flex-col w-full"}>
           <header className={"cashier-topbar h-14 border-b border-koma-border bg-koma-panel px-4 sm:px-6 flex items-center justify-between shrink-0"}>
-            <div className={"flex items-center gap-2 truncate"}>
+            <div className={"cashier-topbar__identity flex items-center gap-2 truncate"}>
               <button
                 type="button"
                 onClick={() => setIsMobileSidebarOpen(true)}
@@ -785,7 +789,6 @@ export function CaixaPanel({
               >
                 <Menu size={16} />
               </button>
-              <SidebarTrigger className="hidden lg:flex" title="Recolher ou expandir menu" aria-label="Recolher ou expandir menu" />
               <h2 className={"font-serif font-bold text-xs sm:text-sm tracking-tight text-koma-foreground truncate"}>
                 {(activeTab === 'relatorios' || activeTab === 'dashboard') && 'Relatórios'}
                 {activeTab === 'operacao' && 'Vendas'}
@@ -798,15 +801,18 @@ export function CaixaPanel({
                 {(activeTab === 'assinatura_pix' || (activeTab === 'configuracoes' && activeSubTab === 'planos')) && 'Conta & assinatura'}
                 {(activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital') && 'Cardápio online'}
               </h2>
+              <img className="cashier-topbar__art" src="/brand/cashier/cashier-counter-v1.svg" alt="" aria-hidden="true" width="80" height="48" />
+              {toastData && toastData.type !== 'error' && <span className="cashier-feedback-inline" role="status" title={toastData.msg}>{toastData.msg}</span>}
             </div>
 
-            <div className={"flex items-center gap-2 shrink-0"}>
-              <OperationalSummaryButton />
+            <div className={"cashier-topbar__actions flex items-center gap-2 shrink-0"}>
+              <CashierThemeToggle theme={theme} />
+              <CashierTextSizeToggle size={fontSize} onChange={changeFontSize} />
               <button
                 type="button"
                 onClick={() => setIsChatDrawerOpen(true)}
                 className={clsx(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border relative',
+                  'cashier-topbar__control cashier-topbar__control--chat flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border relative',
                   chatUnreadCount > 0
                     ? 'bg-emerald-500/15 text-emerald-700 border-emerald-500/40 dark:text-emerald-300 hover:bg-emerald-500/25'
                     : 'bg-koma-raised text-koma-secondary border-koma-border hover:bg-koma-card hover:text-koma-foreground',
@@ -814,6 +820,7 @@ export function CaixaPanel({
                 title="Conversas dos Pedidos"
                 aria-label={`Abrir conversas dos pedidos${chatUnreadCount > 0 ? `, ${chatUnreadCount} mensagens não lidas` : ""}`}
                 id="btn-caixa-conversas-drawer"
+                data-unread={chatUnreadCount > 0}
               >
                 <MessageSquare size={15} />
                 <span>Conversas</span>
@@ -828,13 +835,14 @@ export function CaixaPanel({
                 type="button"
                 onClick={toggleFullscreen}
                 className={clsx(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border',
+                  'cashier-topbar__control flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border',
                   isFullscreen
                     ? 'bg-emerald-100 text-emerald-800 border-emerald-400 hover:bg-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/40 dark:hover:bg-emerald-500/30'
                     : 'bg-koma-raised text-koma-secondary border-koma-border hover:bg-koma-card hover:text-koma-foreground',
                 )}
                 title={isFullscreen ? 'Sair do Modo PDV Tela Cheia' : 'Entrar no Modo PDV Tela Cheia'}
                 aria-label={isFullscreen ? 'Sair do modo PDV em tela cheia' : 'Entrar no modo PDV em tela cheia'}
+                aria-pressed={isFullscreen}
                 id="btn-modo-pdv-fullscreen"
               >
                 {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
@@ -1289,10 +1297,12 @@ export function CaixaPanel({
               printFullTable: handlePrintSelectedKanbanTable,
               printTableValues: handlePrintSelectedKanbanValues,
               transferTable: handleTransferSelectedKanbanTable,
+              mergeTable: handleMergeSelectedKanbanTable,
               associateTable: handleAssociateSelectedKanbanTable,
               convertDeliveryToPickup: () => fulfillmentConversion.request({
                 id: selectedKanbanOrder.comandaId || selectedKanbanOrder.id,
                 numeroPedido: selectedKanbanOrder.numeroPedido,
+                tableId: selectedKanbanOrder.mesaId,
               }),
               cancelConsumption: handleCancelSelectedKanbanConsumption,
               cancelOrder: handleCancelSelectedKanbanOrder,
@@ -1328,9 +1338,8 @@ export function CaixaPanel({
           handleLogoutOperator={handleLogoutOperator}
           onRefreshOrders={onRefreshOrders}
           showToast={showToast}
-          changeFontSize={changeFontSize}
-          fontSize={fontSize}
-          theme={theme}
+          restaurantName={String(restauranteConfig?.nome || 'KÔMA')}
+          isWsConnected={isWsConnected}
           soundEnabled={soundEnabled}
           toggleSound={toggleSound}
           audioReady={audioReady}
@@ -1363,7 +1372,7 @@ export function CaixaPanel({
           kitchenCount={activeKitchenItems.length}
             shiftOpen={turno?.status === 'aberto'}
           />
-      </SidebarProvider></OperationalSummaryProvider>
+      </SidebarProvider>
     </div>
   );
 }

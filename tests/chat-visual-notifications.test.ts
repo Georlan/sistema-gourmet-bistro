@@ -178,7 +178,7 @@ test('central do Caixa fecha por backdrop e Escape sem apagar o realtime corrigi
 test('central do Caixa consulta somente conversas operacionais ativas', () => {
   assert.match(cashierChatRoute, /list_caixa_conversations/);
   assert.doesNotMatch(cashierChatRoute, /list_caixa_conversations_for_central/);
-  assert.match(cashierDrawer, /Somente pedidos ativos/);
+  assert.match(cashierDrawer, /Converse com os clientes dos pedidos ativos/);
   assert.doesNotMatch(cashierDrawer, /filterButton\('archived'/);
   assert.doesNotMatch(cashierDrawer, /filterButton\('all'/);
 });

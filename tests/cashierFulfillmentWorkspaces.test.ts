@@ -24,6 +24,7 @@ test('payment summary deixa cobrança e troco explícitos no card operacional', 
   assert.match(pending, /A cobrar R\$\s*48,00/);
   assert.match(pending, /Dinheiro/);
   assert.match(pending, /Troco para R\$\s*100,00/);
+  assert.doesNotMatch(getDigitalOrderPaymentSummary({ pago: false, amountDue: 48, paymentMethod: 'pix', changeFor: 100 }), /Troco/);
 
   assert.equal(
     getDigitalOrderPaymentSummary({
@@ -57,7 +58,7 @@ test('Entregas resolve aceite, preparo, logística, cobrança e conclusão com a
   assert.match(couriers, /handleAdvanceDigitalOrder/);
   assert.match(couriers, /handleDespacharKanban/);
   assert.match(couriers, /handleFinalizarPedido/);
-  assert.match(couriers, /Pré-atribuir entregador/);
+  assert.doesNotMatch(couriers, /Pré-atribuir entregador/);
   assert.match(couriers, /Marcar como pronto/);
   assert.match(couriers, /Despachar pedido/);
   assert.match(couriers, /Receber e marcar entregue/);

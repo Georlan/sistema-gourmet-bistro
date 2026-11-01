@@ -1,0 +1,413 @@
+/* Shared cashier chrome. No module layout or transaction rules live here. */
+.cashier-shell {
+  --kc-chrome-brand: #0b3e32;
+  --kc-chrome-ink: #edf9f3;
+  --kc-chrome-selected: #83e3c6;
+  --kc-chrome-on-selected: #07382c;
+  --kc-chrome-operator: #253f33;
+  --kc-chrome-on-operator: #edf9f3;
+}
+
+.cashier-shell .cashier-sidebar {
+  background: var(--koma-surface-panel) !important;
+  box-shadow: none;
+}
+
+.cashier-shell .cashier-sidebar__header {
+  padding: .9rem .85rem .8rem !important;
+  gap: .9rem;
+  border: 0;
+  border-radius: 0 0 1.5rem 0;
+  background: var(--kc-chrome-brand);
+  color: var(--kc-chrome-ink);
+}
+
+.cashier-shell .cashier-sidebar__brand-row { min-height: 2.5rem; gap: .4rem; }
+.cashier-shell .cashier-sidebar__brand { flex: 1; }
+.cashier-shell .cashier-sidebar__logo-wrap {
+  width: 6.5rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+.cashier-shell .cashier-sidebar__logo-wrap img { width: 100%; height: 100%; object-fit: contain; }
+.cashier-shell .cashier-sidebar__logo-wrap--compact { display: none; }
+.cashier-shell .cashier-sidebar__utility-button {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: .9rem;
+  border-color: #4f8a75;
+  background: #205b47;
+  color: var(--kc-chrome-ink);
+  box-shadow: inset 0 1px 0 #77a89133, 0 2px 0 #052d23;
+}
+.cashier-shell .cashier-sidebar__utility-button:hover { background: #2a6b54; }
+.cashier-shell .cashier-shift-card {
+  min-height: 2.7rem;
+  padding: .5rem .6rem;
+  border-color: #4f8a75;
+  border-radius: .85rem;
+  background: #154d3b;
+}
+.cashier-shell .cashier-shift-card__copy strong {
+  color: var(--kc-chrome-ink);
+  font-size: .78rem;
+  white-space: normal;
+  line-height: 1.2;
+}
+.cashier-shell .cashier-shift-card__copy small { color: #c5ded1; }
+.cashier-shell .cashier-shift-card__action {
+  min-height: 2rem;
+  color: var(--kc-chrome-ink);
+  border-color: #4f8a75;
+  background: #205b47;
+  border-radius: .65rem;
+  font-size: .7rem;
+}
+.cashier-shell .cashier-sidebar__content { padding: .85rem .65rem !important; }
+.cashier-shell .cashier-sidebar [data-sidebar="group-label"] {
+  padding-inline: .65rem;
+  margin-top: .5rem;
+  height: 1.65rem;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: .72rem !important;
+  font-weight: 600 !important;
+}
+.cashier-shell .cashier-sidebar [data-sidebar="menu-button"] {
+  min-height: 2.85rem;
+  padding: .4rem .6rem;
+  gap: .65rem;
+  border: 1px solid transparent;
+  border-radius: 1rem;
+}
+.cashier-shell .cashier-sidebar [data-sidebar="menu-button"][data-active="true"] {
+  background: var(--kc-chrome-selected) !important;
+  border-color: var(--kc-chrome-selected) !important;
+  color: var(--kc-chrome-on-selected) !important;
+  box-shadow: inset 0 1px 0 #ffffff55, 0 2px 0 #356e5c !important;
+}
+.cashier-shell .cashier-nav-icon {
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  color: var(--koma-text-secondary);
+}
+.cashier-shell .cashier-nav-item[data-active="true"] .cashier-nav-icon {
+  color: var(--kc-chrome-on-selected);
+  background: transparent;
+  border: 0;
+}
+.cashier-shell .cashier-nav-label { font-size: .83rem; font-weight: 650; }
+.cashier-shell .cashier-sidebar [data-sidebar="menu-button"][data-active="true"] [data-sidebar="menu-badge"] {
+  background: #0c4936;
+  color: #e8fff3;
+}
+.cashier-shell .cashier-nav-children {
+  margin: .5rem .45rem .5rem 1.4rem;
+  padding-left: .85rem;
+  border-color: var(--koma-border-strong);
+}
+.cashier-shell .cashier-nav-child { min-height: 2rem; font-size: .75rem; }
+.cashier-shell .cashier-nav-child[aria-current="page"] {
+  background: var(--koma-accent-soft);
+  color: var(--koma-accent-text);
+}
+.cashier-shell .cashier-sidebar input[type="search"] {
+  height: 2.65rem;
+  border-radius: 1rem;
+  background: var(--koma-surface-input);
+  border-color: var(--koma-border-default);
+  font-size: .75rem;
+  font-weight: 500;
+}
+.cashier-shell .cashier-sidebar__footer {
+  gap: .55rem;
+  padding: .65rem !important;
+  background: var(--koma-surface-panel) !important;
+}
+.cashier-shell .cashier-operator {
+  min-height: 3rem;
+  padding: .5rem .6rem;
+  border: 0;
+  border-radius: 1rem;
+  color: var(--kc-chrome-on-operator);
+  background: var(--kc-chrome-operator);
+}
+.cashier-shell .cashier-operator__avatar {
+  background: var(--kc-chrome-on-operator);
+  color: var(--kc-chrome-operator);
+  border: 0;
+  border-radius: 50%;
+}
+.cashier-shell .cashier-operator__copy strong { color: var(--kc-chrome-on-operator); font-size: .76rem; }
+.cashier-shell .cashier-operator__copy small { display: none; }
+
+.cashier-shell .cashier-topbar,
+.cashier-shell .cashier-subnav { backdrop-filter: none; }
+.cashier-shell .cashier-topbar { background: var(--koma-surface-panel) !important; }
+.cashier-shell .cashier-topbar h2 {
+  font-family: var(--koma-font-display);
+  font-size: 1.2rem !important;
+  letter-spacing: -.035em;
+}
+.cashier-shell .cashier-topbar button {
+  min-height: 2.5rem;
+  border-radius: .9rem;
+  font-size: .75rem;
+  font-weight: 650;
+  box-shadow: inset 0 1px 0 var(--koma-border-subtle), 0 2px 0 var(--koma-surface-page);
+}
+.cashier-shell .cashier-subnav { padding: .45rem .85rem !important; }
+.cashier-shell .cashier-subnav__scroll { gap: .35rem; }
+.cashier-shell .cashier-subnav__button {
+  min-height: 2.3rem;
+  padding-inline: .9rem;
+  border-radius: 1rem;
+  font-size: .75rem;
+  font-weight: 600;
+}
+.cashier-shell .cashier-subnav__button.is-active {
+  color: var(--kc-chrome-on-selected);
+  background: var(--kc-chrome-selected);
+  border-color: var(--kc-chrome-selected);
+  box-shadow: inset 0 1px 0 #ffffff55, 0 2px 0 var(--koma-accent-border);
+}
+.cashier-shell :is(.cashier-topbar,.cashier-sidebar,.cashier-subnav,.cashier-options) button {
+  transition: background-color 140ms ease, color 140ms ease, border-color 140ms ease, transform 100ms ease;
+  touch-action: manipulation;
+}
+.cashier-shell :is(.cashier-topbar,.cashier-sidebar,.cashier-subnav,.cashier-options) button:active:not(:disabled) { transform: translateY(1px); }
+.cashier-shell :is(.cashier-topbar,.cashier-sidebar,.cashier-subnav,.cashier-options) :is(button,input):focus-visible {
+  outline: 2px solid var(--koma-focus-ring);
+  outline-offset: 3px;
+}
+.cashier-shell .cashier-mobile-bottom-bar {
+  background: var(--koma-surface-panel);
+  backdrop-filter: none;
+}
+.cashier-shell .cashier-mobile-bottom-bar button {
+  gap: .1rem;
+  border-radius: .9rem;
+  color: var(--koma-text-secondary);
+}
+.cashier-shell .cashier-mobile-bottom-bar button[aria-current="page"] {
+  color: var(--kc-chrome-on-selected);
+  background: var(--kc-chrome-selected);
+}
+.cashier-shell .cashier-mobile-bottom-bar button[aria-current="page"] > div > span {
+  color: #effff7;
+  background: #0c4936;
+}
+
+/* Preserve the existing compact/collapsed navigation and touch boundaries. */
+.cashier-shell [data-collapsible="icon"] .cashier-sidebar__logo-wrap--expanded { display: none; }
+.cashier-shell [data-collapsible="icon"] .cashier-sidebar__logo-wrap--compact { display: grid; width: 2rem; }
+.cashier-shell [data-collapsible="icon"] .cashier-sidebar__header { padding-inline: .5rem !important; border-radius: 0; }
+.cashier-shell [data-collapsible="icon"] .cashier-sidebar [data-sidebar="menu-button"] { padding: .4rem; }
+.cashier-shell [data-collapsible="icon"] .cashier-operator { padding: .4rem; }
+@media (max-width: 1023px) {
+  .cashier-shell .cashier-sidebar__utility-button,
+  .cashier-shell .cashier-topbar button,
+  .cashier-shell .cashier-subnav__button { min-width: 2.75rem; min-height: 2.75rem; }
+  .cashier-shell .cashier-sidebar--mobile [data-sidebar="menu-button"] { min-height: 3rem; }
+  .cashier-shell .cashier-nav-child { min-height: 2.75rem; }
+  .cashier-shell .cashier-topbar h2 { font-size: 1.05rem !important; }
+  .cashier-shell .cashier-subnav { padding-inline: .5rem !important; }
+  .cashier-shell .cashier-subnav__button { padding-inline: .75rem; }
+  .cashier-shell .cashier-mobile-bottom-bar > div { gap: .25rem; padding-inline: .5rem; }
+}
+@media (pointer: coarse) {
+  .cashier-shell .cashier-topbar button,
+  .cashier-shell .cashier-sidebar button { min-height: 2.75rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cashier-shell :is(.cashier-topbar,.cashier-sidebar,.cashier-subnav,.cashier-options) button { transition: none; }
+  .cashier-shell :is(.cashier-topbar,.cashier-sidebar,.cashier-subnav,.cashier-options) button:active:not(:disabled) { transform: none; }
+}
+
+/* Readable operation palette, scoped to Caixa rather than changing other apps. */
+.cashier-shell {
+  --koma-topbar-bg: var(--koma-surface-panel);
+  /* Rebind legacy Tailwind aliases at the same scope as the operation palette. */
+  --color-koma-canvas: var(--koma-surface-canvas);
+  --color-koma-panel: var(--koma-surface-panel);
+  --color-koma-card: var(--koma-surface-card);
+  --color-koma-raised: var(--koma-surface-raised);
+  --color-koma-input: var(--koma-surface-input);
+  --color-koma-dialog: var(--koma-surface-dialog);
+  --color-koma-foreground: var(--koma-text-primary);
+  --color-koma-secondary: var(--koma-text-secondary);
+  --color-koma-muted: var(--koma-text-muted);
+  --color-koma-subtle: var(--koma-text-subtle);
+  --color-koma-border: var(--koma-border-default);
+  --color-koma-border-strong: var(--koma-border-strong);
+}
+[data-koma-theme="dark"] .cashier-shell {
+  --koma-main-bg: var(--koma-surface-canvas);
+  --koma-surface-page: #13231b;
+  --koma-surface-canvas: #15271e;
+  --koma-surface-shell: #192d23;
+  --koma-surface-panel: #1d3328;
+  --koma-surface-card: #284235;
+  --koma-surface-raised: #355242;
+  --koma-surface-input: #182d22;
+  --koma-surface-dialog: #233d2f;
+  --koma-text-primary: #f3faf5;
+  --koma-text-secondary: #d5e7db;
+  --koma-text-muted: #c0d5c6;
+  --koma-text-subtle: #b0c8b8;
+  --koma-border-subtle: #496754;
+  --koma-border-default: #577664;
+  --koma-border-strong: #729681;
+}
+.cashier-shell .cashier-topbar {
+  height: 3.25rem;
+  min-height: 3.25rem;
+  border-bottom: 0;
+  padding-inline: 1rem;
+}
+.cashier-shell .cashier-topbar__identity { min-width: 0; }
+.cashier-shell .cashier-topbar__art {
+  flex: 0 0 auto;
+  width: 5rem;
+  height: 3rem;
+  margin-left: .5rem;
+  object-fit: contain;
+}
+.cashier-shell .cashier-topbar__actions { gap: .4rem; }
+/* Utility actions: distinct hit areas, one raised focus for unread conversations. */
+.cashier-shell .cashier-topbar__actions > button {
+  display: inline-flex; align-items: center; justify-content: center; gap: .45rem;
+  min-height: 2.75rem; padding: .5rem .75rem;
+  color: var(--koma-text-primary); background: var(--koma-surface-card);
+  border: 1px solid var(--koma-border-default); border-radius: .8rem;
+  font-family: var(--koma-font-body); font-size: .8rem; font-weight: 600;
+  box-shadow: inset 0 1px 0 #ffffff20, 0 2px 0 #082d2059;
+  transition: color 150ms ease, background-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.cashier-shell .cashier-topbar__actions > #btn-caixa-conversas-drawer[data-unread="true"] {
+  background: var(--kc-chrome-selected); color: var(--kc-chrome-on-selected);
+}
+.cashier-shell .cashier-topbar__actions > #btn-modo-pdv-fullscreen[aria-pressed="true"] {
+  background: var(--koma-accent-soft); color: var(--koma-accent-text);
+}
+@media (hover: hover) {
+  .cashier-shell .cashier-topbar__actions > button:hover:not(:disabled) {
+    background: var(--koma-surface-raised); border-color: var(--koma-border-strong);
+    box-shadow: inset 0 1px 0 #ffffff35, 0 3px 0 #082d2066; transform: translateY(-1px);
+  }
+  .cashier-topbar__control > svg { transition: transform 180ms ease; }
+  .cashier-topbar__control:hover > svg { transform: scale(1.12); }
+}
+.cashier-shell .cashier-subnav {
+  min-height: 3.1rem;
+  background: var(--koma-surface-panel);
+  padding: .35rem 1rem .6rem !important;
+}
+.cashier-shell .cashier-subnav__button {
+  min-height: 2.5rem;
+  border-color: transparent;
+  border-radius: .75rem;
+  font-family: var(--koma-font-body);
+  font-weight: 550;
+  font-size: .85rem;
+}
+.cashier-shell .cashier-subnav__button.is-active {
+  background: var(--kc-chrome-selected);
+  color: var(--kc-chrome-on-selected);
+  border-color: transparent;
+  font-weight: 650;
+  box-shadow: inset 0 1px 0 #ffffff66, 0 2px 0 var(--koma-accent-border);
+}
+@media (max-width: 1023px) {
+  .cashier-shell .cashier-topbar { padding-inline: .65rem; gap: .25rem; }
+  .cashier-shell .cashier-topbar__art { width: 3.25rem; height: 2.5rem; margin-left: 0; }
+  .cashier-shell .cashier-topbar__actions { gap: .25rem; }
+  .cashier-shell .cashier-subnav { padding-inline: .5rem !important; }
+  .cashier-shell .cashier-subnav__button { min-height: 2.75rem; }
+}
+@media (max-width: 359px) {
+  .cashier-shell .cashier-topbar__art { display: none; }
+}
+
+/* Soft light surfaces: retain contrast without filling the workspace with white. */
+[data-koma-theme="light"] .cashier-shell {
+  --koma-surface-page: #dce2dc;
+  --koma-surface-canvas: #dfe6df;
+  --koma-surface-shell: #e8ede6;
+  --koma-surface-panel: #e8ede6;
+  --koma-surface-card: #f2f4ed;
+  --koma-surface-raised: #d7e1d7;
+  --koma-surface-input: #f1f4ef;
+  --koma-surface-dialog: #edf2eb;
+  --koma-main-bg: var(--koma-surface-canvas);
+  --koma-text-primary: #1b3024;
+  --koma-text-secondary: #354c40;
+  --koma-text-muted: #4b6254;
+  --koma-text-subtle: #50685a;
+  --koma-border-default: #a1b5a5;
+  --koma-border-strong: #849e8e;
+}
+.cashier-shell #btn-caixa-theme { display: inline-grid; place-items: center; min-width: 2.75rem; min-height: 2.75rem; color: var(--koma-text-primary); background: var(--koma-surface-raised); border: 1px solid var(--koma-border-default); border-radius: .8rem; cursor: pointer; }
+.cashier-shell #btn-caixa-theme:disabled { opacity: .7; cursor: wait; }
+@media (max-width: 767px) { .cashier-shell .cashier-topbar__art { display: none; } }
+[data-koma-theme="dark"] .cashier-shell { --koma-surface-canvas: #14251c; --koma-surface-card: #2c493b; --koma-surface-raised: #385746; --koma-border-default: #5c7c68; }
+
+.cashier-shell .cashier-subnav__arrow.is-unneeded { display: none; }
+.cashier-shell .cashier-subnav__button:hover:not(.is-active) { background: var(--koma-surface-raised); color: var(--koma-text-primary); }
+.cashier-theme-toggle__symbols { position: relative; display: block; width: 20px; height: 20px; }
+.cashier-theme-toggle__symbols svg { position: absolute; inset: 0; transition: opacity 180ms ease, transform 220ms ease; }
+.cashier-theme-toggle__symbols[data-theme="dark"] .cashier-theme-toggle__moon,
+.cashier-theme-toggle__symbols[data-theme="light"] .cashier-theme-toggle__sun { opacity: 0; transform: rotate(-65deg) scale(.45); }
+@media (hover: hover) {
+  .cashier-theme-toggle:hover .cashier-theme-toggle__symbols[data-theme="dark"] .cashier-theme-toggle__sun,
+  .cashier-theme-toggle:hover .cashier-theme-toggle__symbols[data-theme="light"] .cashier-theme-toggle__moon { opacity: 0; transform: rotate(65deg) scale(.45); }
+  .cashier-theme-toggle:hover .cashier-theme-toggle__symbols[data-theme="dark"] .cashier-theme-toggle__moon,
+  .cashier-theme-toggle:hover .cashier-theme-toggle__symbols[data-theme="light"] .cashier-theme-toggle__sun { opacity: 1; transform: rotate(0) scale(1); }
+}
+.cashier-sidebar__drag-surface { touch-action: pan-y; cursor: ew-resize; }
+.cashier-sidebar__rail { position: absolute; inset-block: 0; right: -10px; width: 20px; z-index: 30; display: flex; align-items: center; justify-content: center; cursor: ew-resize; touch-action: none; }
+.cashier-sidebar__rail > span { height: 42px; width: 4px; border-radius: 4px; background: var(--koma-border-strong); transition: height 150ms ease, background-color 150ms ease; }
+.cashier-sidebar__rail:hover > span,.cashier-sidebar__rail:focus-visible > span { height: 64px; background: var(--koma-accent-text); }
+.cashier-sidebar__rail:focus-visible { outline: 2px solid var(--koma-focus-ring); outline-offset: -3px; border-radius: .5rem; }
+.cashier-sidebar__edge { position: fixed; top: 0; bottom: 0; left: 0; width: 14px; z-index: 45; touch-action: pan-y; }
+.cashier-sidebar--mobile { touch-action: pan-y; }
+@media (prefers-reduced-motion: reduce) {
+  .cashier-shell .cashier-topbar__actions > button,.cashier-topbar__control > svg,.cashier-theme-toggle__symbols svg,.cashier-sidebar__rail > span { transition: none; }
+  .cashier-shell .cashier-topbar__actions > button:hover,.cashier-topbar__control:hover > svg { transform: none; }
+}
+/* Both the occupied width and its fixed content follow the pointer. */
+[data-kc-dragging] > div { width: var(--kc-sidebar-drag-width) !important; transition: none !important; }
+[data-kc-dragging] { user-select: none; }
+
+/* Clip a stable layout while dragging: never squeeze full labels into an icon rail. */
+[data-kc-dragging] .cashier-sidebar > [data-sidebar="sidebar"] { width: var(--kc-sidebar-content-width); min-width: var(--kc-sidebar-content-width); overflow: hidden; }
+[data-kc-dragging] .cashier-sidebar { overflow: clip; }
+.cashier-shell [data-collapsible="icon"] .cashier-sidebar__utility-button,
+.cashier-shell [data-collapsible="icon"] .cashier-shift-card,
+.cashier-shell [data-collapsible="icon"] .cashier-sidebar__footer #online-orders-emergency-trigger { display: none; }
+.cashier-shell [data-collapsible="icon"] .cashier-sidebar__content { overflow-x: hidden; }
+.cashier-shell [data-collapsible="icon"] .cashier-operator__copy { display: none; }
+
+.cashier-shell .cashier-operator { display: flex; align-items: center; gap: .65rem; width: 100%; text-align: left; cursor: pointer; }
+.cashier-shell .cashier-operator__avatar { display: grid; place-items: center; width: 40px; height: 40px; flex: 0 0 40px; overflow: hidden; border-radius: 12px; }
+.cashier-shell .cashier-operator__avatar img { width: 100%; height: 100%; object-fit: contain; }
+.cashier-shell .cashier-operator__copy { min-width: 0; overflow-wrap: anywhere; }
+.cashier-shell [data-collapsible="icon"] .cashier-operator { padding: .25rem; justify-content: center; }
+.cashier-shell [data-collapsible="icon"] .cashier-operator__avatar { width: 32px; height: 32px; flex-basis: 32px; }
+
+.cashier-feedback-inline { max-width: 20rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--koma-text-secondary); font-size: .75rem; font-weight: 500; }
+@media(max-width:640px) { .cashier-feedback-inline { max-width: 7rem; } }
+/* Restaurant identity remains available on short POS screens as well. */
+.cashier-shell .cashier-sidebar__footer .cashier-operator { display: flex !important; }
+@media(max-width:639px) {
+  .cashier-shell .cashier-topbar__actions > #btn-caixa-conversas-drawer > span:not([role=status]) { display: none; }
+  .cashier-shell .cashier-topbar__actions > button { min-width: 44px; width: 44px; padding-inline: .35rem; }
+  .cashier-shell .cashier-topbar__actions { gap: .25rem; }
+  .cashier-shell .cashier-topbar__identity { flex: 1; }
+  .cashier-shell .cashier-feedback-inline { display: block; position: fixed; top: .75rem; left: 50%; z-index: 80; transform: translateX(-50%); width: max-content; max-width: min(90vw, 24rem); padding: .65rem .85rem; border: 1px solid var(--koma-border-strong); border-radius: .75rem; background: var(--koma-surface-raised); color: var(--koma-text-primary); box-shadow: 0 4px 16px #00170c55; white-space: normal; text-align: center; }
+}

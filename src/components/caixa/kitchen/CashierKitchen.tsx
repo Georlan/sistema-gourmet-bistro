@@ -121,6 +121,7 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
                   {getKdsDestinationLabel(ticket)}
                 </span>
               </div>
+              {ticket.deliveryStatus === 'aceito' && <span className="text-[10px] text-koma-muted">Aguardando preparo</span>}
               <div className="mt-1 flex flex-wrap gap-x-2 text-[10px] text-koma-muted">
                 {ticket.identificador && <span>{ticket.identificador}</span>}
                 {source && <span>{source}</span>}
@@ -253,7 +254,7 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
             ? 'Nenhum ticket desta etapa corresponde à busca.'
             : readyLane
               ? 'Nada aguardando saída.'
-              : 'Nenhum ticket em preparo.'}
+              : 'Nenhum ticket para preparar.'}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">{tickets.map(renderTicket)}</div>
@@ -272,12 +273,12 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
             <div>
               <h2 className="font-serif text-base font-bold text-koma-secondary">Fila de preparo</h2>
               <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
-                Acompanhe o que está sendo preparado e marque itens como prontos ou entregues. Esta fila na tela funciona sem impressão física.
+                Acompanhe os pedidos e marque os itens como prontos ou entregues.
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold">
-            <span className="rounded-full bg-amber-500/10 px-2.5 py-1.5 text-amber-400">{projection.preparingItemCount} em preparo</span>
+            <span className="rounded-full bg-amber-500/10 px-2.5 py-1.5 text-amber-400">{projection.preparingItemCount} a preparar</span>
             <span className="rounded-full bg-emerald-500/15 px-2.5 py-1.5 text-emerald-400">{projection.readyItemCount} prontos</span>
           </div>
         </div>
@@ -316,7 +317,7 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
             {projection.tickets.length} {projection.tickets.length === 1 ? 'ticket' : 'tickets'}
           </span>
           <span className="rounded-full bg-amber-500/10 px-2.5 py-1.5 text-[10px] font-bold text-amber-400">
-            {projection.preparingItemCount} em preparo
+            {projection.preparingItemCount} a preparar
           </span>
           <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1.5 text-[10px] font-bold text-emerald-400">
             <Check size={11} /> {projection.readyItemCount} prontos
@@ -355,8 +356,8 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
       ) : (
         <div className="grid grid-cols-1 items-start gap-4 2xl:grid-cols-2">
           {renderLane(
-            'Em produção',
-            'Tickets com pelo menos um item ainda em preparo.',
+            'A preparar',
+            'Pedidos com itens ainda não prontos.',
             visiblePreparingTickets,
             projection.preparingTickets.length,
           )}

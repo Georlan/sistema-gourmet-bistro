@@ -15,4 +15,6 @@ export type CashierSidebarProps = Pick<ReturnType<typeof useCashShift>, 'turno' 
     entitlements?: SubscriptionEntitlements;
     hasOnlineMenu: boolean;
     sidebarOrderCount: number;
+    restaurantName?: string;
+    restaurantLogo?: string;
   };

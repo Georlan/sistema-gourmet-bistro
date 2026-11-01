@@ -4,7 +4,7 @@ import type { Order, OrderItem } from '../../../types';
 export type KdsKitchenItem = OrderItem &
   Pick<
     Order,
-    'mesaId' | 'garcomNome' | 'displayNumber' | 'numeroPedido' | 'tipo' | 'origemOperacional' | 'identificador'
+    'mesaId' | 'garcomNome' | 'displayNumber' | 'numeroPedido' | 'tipo' | 'origemOperacional' | 'identificador' | 'deliveryStatus'
   > & {
     orderId: Order['id'];
     timestamp: unknown;
@@ -21,6 +21,7 @@ export interface KdsTicket {
   tipo?: Order['tipo'];
   origemOperacional?: Order['origemOperacional'];
   identificador?: string;
+  deliveryStatus?: Order['deliveryStatus'];
   timestamp: unknown;
   items: KdsKitchenItem[];
   preparingCount: number;
@@ -87,6 +88,7 @@ export function projectKdsTickets(items: readonly KdsKitchenItem[]): KdsProjecti
       tipo: item.tipo,
       origemOperacional: item.origemOperacional,
       identificador: item.identificador,
+      deliveryStatus: item.deliveryStatus,
       timestamp: item.timestamp,
       items: [item],
       preparingCount: 0,

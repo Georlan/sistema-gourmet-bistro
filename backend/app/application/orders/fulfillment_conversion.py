@@ -1,12 +1,14 @@
 """Conversão logística restrita, com prévia autoritativa e detecção de estado antigo."""
 import hashlib
+import datetime
 import json
 from decimal import Decimal
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from typing import Any
-from ...models import Comanda, Pagamento, OnlinePaymentIntent, ConfiguracaoRestaurante, ActivityLog, ExternalOrderReference
+from ...models import Comanda, Mesa, Pagamento, OnlinePaymentIntent, ConfiguracaoRestaurante, ActivityLog, ExternalOrderReference
+from ...operational_models import AtendimentoMesa, AtendimentoComanda
 from ...fiscal_models import FiscalDocument
 from ...delivery_address_snapshot import load_delivery_address_snapshot, revise_delivery_address_snapshot
 from ...domain.orders.types import FulfillmentType, normalize_to_fulfillment
@@ -19,18 +21,55 @@ from ...services.clientes import normalizar_telefone_cliente
 
 
 def locked_order(db: Session, rid: int, order_id: str) -> Comanda:
-    order = db.query(Comanda).filter(Comanda.restaurante_id == rid, Comanda.id == order_id).with_for_update().first()
+    # Mesa primeiro: mesma ordem das operações que criam/transferem atendimento.
+    source = db.query(Comanda.mesa_id).filter(Comanda.restaurante_id == rid, Comanda.id == order_id).first()
+    if source is None:
+        raise HTTPException(404, 'Comanda não encontrada')
+    table_id = source[0]
+    if table_id is not None:
+        table = db.query(Mesa).filter(Mesa.restaurante_id == rid, Mesa.id == table_id).with_for_update().first()
+        if table is None:
+            raise HTTPException(409, 'Mesa não encontrada. Atualize os pedidos.')
+    order = db.query(Comanda).filter(Comanda.restaurante_id == rid, Comanda.id == order_id).with_for_update(of=Comanda).first()
     if order is None:
         raise HTTPException(404, 'Comanda não encontrada')
+    if order.mesa_id != table_id:
+        raise HTTPException(409, 'O pedido mudou de mesa. Atualize e tente novamente.')
     return order
 
 
 def blocked_reason(db: Session, order: Comanda) -> str | None:
     rid = order.restaurante_id
-    if order.fechada or order.status_comanda or order.delivery_status not in {'analise', 'pendente', 'aceito', 'producao', 'pronto'}:
+    table_order = bool(order.mesa_id)
+    allowed_states = {'analise', 'pendente', 'aceito', 'producao', 'pronto'}
+    if order.fechada or order.status_comanda or (order.delivery_status not in allowed_states and not (table_order and order.delivery_status is None)):
         return 'Pedido encerrado, em trânsito ou sem etapa operacional compatível.'
-    if order.mesa_id or normalize_to_fulfillment(order.tipo) == FulfillmentType.DINE_IN or is_quick_counter_sale(order) or any(launch.origem == "smartpos" for launch in order.lancamentos):
-        return 'Pedidos de mesa, consumo local e venda rápida não permitem esta conversão.'
+    if is_quick_counter_sale(order) or any(launch.origem == 'smartpos' for launch in order.lancamentos):
+        return 'Venda rápida ou SmartPOS não permite esta conversão.'
+    if normalize_to_fulfillment(order.tipo) == FulfillmentType.DINE_IN and not table_order:
+        return 'Consumo sem mesa ainda não permite esta conversão.'
+    if table_order:
+        active_orders = db.query(Comanda.id).filter(Comanda.restaurante_id == rid, Comanda.mesa_id == order.mesa_id, Comanda.fechada == False).all()
+        if len(active_orders) != 1:
+            return 'A mesa possui mais de uma comanda aberta; não é possível converter apenas uma.'
+        launches = [launch for launch in order.lancamentos if launch.status not in {'cancelado', 'recusado'}]
+        if len(launches) != 1 or launches[0].status not in {'pendente', 'aceito', 'producao', 'pronto'}:
+            return 'A mesa possui mais de um pedido ou um pedido já finalizado.'
+        if any(item.status == 'entregue' for item in order.itens):
+            return 'A mesa possui itens já servidos; não é possível convertê-los em entrega.'
+        links = db.query(AtendimentoComanda).filter_by(restaurante_id=rid, comanda_id=order.id).all()
+        linked_ids = {link.atendimento_id for link in links}
+        open_accounts = db.query(AtendimentoMesa.id).filter_by(restaurante_id=rid, mesa_id=order.mesa_id, status='aberto').all()
+        if any(account_id not in linked_ids for (account_id,) in open_accounts):
+            return 'A mesa possui outro atendimento ativo; revise a conta antes de converter.'
+        for link in links:
+            account = db.query(AtendimentoMesa).filter_by(restaurante_id=rid, id=link.atendimento_id).with_for_update().first()
+            if account is None or account.status != 'aberto' or account.mesa_id != order.mesa_id or account.principal_id is not None:
+                return 'Atendimento inconsistente ou mesclado não permite conversão automática.'
+            linked = db.query(AtendimentoComanda.id).filter_by(restaurante_id=rid, atendimento_id=account.id).count()
+            children = db.query(AtendimentoMesa.id).filter_by(restaurante_id=rid, principal_id=account.id, status='aberto').count()
+            if linked != 1 or children:
+                return 'Atendimento com outras comandas ou mesas não permite conversão automática.'
     if order.cupom_id or money(order.valor_desconto_cupom) > 0 or money(order.valor_desconto_cashback) > 0:
         return 'Pedido com cupom ou cashback exige revisão financeira antes da conversão.'
     if db.query(ExternalOrderReference.id).filter(ExternalOrderReference.restaurante_id == rid, ExternalOrderReference.internal_order_id.in_([order.id, *(launch.id for launch in order.lancamentos)])).first():
@@ -53,11 +92,14 @@ def blocked_reason(db: Session, order: Comanda) -> str | None:
 def options(db: Session, order: Comanda) -> dict[str, Any]:
     reason = blocked_reason(db, order)
     current = normalize_to_fulfillment(order.tipo)
-    target = 'delivery' if current == FulfillmentType.PICKUP else 'pickup'
+    target = 'delivery' if current in {FulfillmentType.PICKUP, FulfillmentType.DINE_IN} else 'pickup'
     config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == order.restaurante_id).with_for_update(of=ConfiguracaoRestaurante).first()
-    if not reason and (not mode_is_allowed(config, 'delivery' if target == 'delivery' else 'retirada') or (target == 'delivery' and (config is None or not config.delivery_ativo))):
+    candidates = [target, 'delivery'] if current == FulfillmentType.DELIVERY else (['delivery', 'pickup'] if current == FulfillmentType.DINE_IN and order.mesa_id else [target])
+    enabled = [mode for mode in candidates if mode_is_allowed(config, 'delivery' if mode == 'delivery' else 'retirada')
+               and (mode != 'delivery' or (config is not None and config.delivery_ativo))]
+    if not reason and not enabled:
         reason = 'A modalidade de destino não está habilitada no restaurante.'
-    return {'options': [] if reason else [target],
+    return {'options': [] if reason else enabled,
             'blocked_reason': reason,
             'address_snapshot': load_delivery_address_snapshot(db, restaurante_id=order.restaurante_id, comanda_id=order.id)}
 
@@ -105,6 +147,7 @@ def preview(db: Session, order: Comanda, payload: dict[str, Any]):
              'previous_phone': order.delivery_telefone, 'previous_address': order.delivery_endereco, 'new_total': str(new_total), 'new_fee': str(fee),
              'discounts': [str(order.valor_desconto_cupom), str(order.valor_desconto_cashback)],
              'payment_method': order.delivery_forma_pagamento, 'change': str(order.delivery_troco_para),
+             'table': order.mesa_id, 'launches': sorted((str(l.id), l.status) for l in order.lancamentos),
              'items': sorted((str(i.id), i.status, str(i.preco_unit), bool(i.pago)) for i in order.itens)}
     token = hashlib.sha256(json.dumps(state, sort_keys=True).encode()).hexdigest()
     return {'fulfillment': target, 'previous_fee': float(order.delivery_taxa or 0), 'delivery_fee': float(fee),
@@ -119,6 +162,7 @@ def apply(db: Session, order: Comanda, payload: dict[str, Any], operator_id: str
     if not 3 <= len(reason) <= 500:
         raise HTTPException(422, 'Informe um motivo entre 3 e 500 caracteres.')
     previous_type = order.tipo
+    previous_table = order.mesa_id
     previous_address = load_delivery_address_snapshot(
         db,
         restaurante_id=order.restaurante_id,
@@ -137,6 +181,14 @@ def apply(db: Session, order: Comanda, payload: dict[str, Any], operator_id: str
         order.delivery_endereco = address.to_legacy_address()
         order.delivery_bairro = address.neighborhood
         order.delivery_telefone = normalizar_telefone_cliente(str(payload.get('telefone') or order.delivery_telefone or ''))
+    if previous_table:
+        for link in db.query(AtendimentoComanda).filter_by(restaurante_id=order.restaurante_id, comanda_id=order.id).all():
+            account = db.query(AtendimentoMesa).filter_by(restaurante_id=order.restaurante_id, id=link.atendimento_id).with_for_update().one()
+            account.status = 'fechado'
+            account.fechado_em = datetime.datetime.now(datetime.timezone.utc)
+        if order.delivery_status is None:
+            order.delivery_status = next(launch.status for launch in order.lancamentos if launch.status not in {'cancelado', 'recusado'})
+        order.mesa_id = None
     order.tipo = 'Delivery' if quote['fulfillment'] == 'delivery' else 'Retirada'
     order.delivery_taxa = quote['delivery_fee']
     db.add(ActivityLog(restaurante_id=order.restaurante_id, garcom_id=operator_id, action='CONVERT_FULFILLMENT',
@@ -145,7 +197,7 @@ def apply(db: Session, order: Comanda, payload: dict[str, Any], operator_id: str
             'delivery_taxa_atual': quote['delivery_fee'], 'endereco_corrigido': bool(
                 address and previous_address is not None and previous_address != address.to_snapshot()
             ), 'address_revision_id': getattr(address_revision, 'id', None),
-            'motivo': reason}, ensure_ascii=False, sort_keys=True)))
+            'mesa_origem': previous_table, 'motivo': reason}, ensure_ascii=False, sort_keys=True)))
     from ...services.order_chat_service import queue_order_tracking_refresh
     queue_order_tracking_refresh(db, order.restaurante_id, order.id)
     return quote

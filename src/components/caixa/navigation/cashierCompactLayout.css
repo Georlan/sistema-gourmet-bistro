@@ -14,17 +14,12 @@
     --sidebar-width: 14rem !important;
   }
 
-  /* Emergency control owns the footer on short screens. Operator identity is
-   * available from account/preferences and must never squeeze this action. */
+  /* Stack footer actions without squeezing their labels on short screens. */
   .cashier-sidebar__footer {
     flex-direction: column !important;
     align-items: stretch !important;
     justify-content: flex-end !important;
     gap: 0.35rem !important;
-  }
-
-  .cashier-sidebar__footer .cashier-operator {
-    display: none !important;
   }
 
   .cashier-sidebar__footer #online-orders-emergency-trigger {

@@ -1,0 +1,11 @@
+.cashier-text-toggle { display: grid; place-items: center; flex: 0 0 auto; width: 44px; min-width: 44px; height: 44px; border: 1px solid var(--koma-border-strong); border-top-color: var(--koma-border-strong); border-radius: .85rem; background: var(--koma-surface-raised); color: var(--koma-text-primary); box-shadow: inset 0 1px 0 #ffffff18,0 2px 0 #082b2133; cursor: pointer; }
+.cashier-text-toggle[aria-pressed=true] { background: #b5edd7; color: #0b3e32; border-color: #74ba9e; }
+.cashier-text-toggle svg { overflow: visible; }
+.cashier-text-toggle__letter { transform-origin: 9px 18px; transition: transform 180ms ease; }
+.cashier-text-toggle [data-large=true] .cashier-text-toggle__letter { transform: scale(1.15); }
+.cashier-text-toggle__arrow { transition: transform 180ms ease; }
+@media(hover:hover) { .cashier-text-toggle:hover { border-color: var(--koma-accent); box-shadow: inset 0 1px 0 #ffffff26,0 3px 0 #082b2144; } .cashier-text-toggle:hover .cashier-text-toggle__letter { transform: scale(1.12); } .cashier-text-toggle:hover [data-large=true] .cashier-text-toggle__letter { transform: scale(.95); } .cashier-text-toggle:hover .cashier-text-toggle__arrow { transform: translateY(-2px); } .cashier-text-toggle:hover [data-large=true] .cashier-text-toggle__arrow { transform: translateY(2px); } }
+.cashier-text-toggle:active { transform: translateY(1px); }
+.cashier-text-toggle:focus-visible { outline: 2px solid var(--koma-focus-ring); outline-offset: 3px; }
+@media(prefers-reduced-motion:reduce) { .cashier-text-toggle * { transition: none; } .cashier-text-toggle:hover .cashier-text-toggle__arrow { transform: none; } }
+.cashier-shell .cashier-topbar__actions > .cashier-text-toggle[aria-pressed=true] { background: #b5edd7; color: #0b3e32; border-color: #74ba9e; box-shadow: inset 0 1px 0 #eafff3,0 2px 0 #2c6b5333; }

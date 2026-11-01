@@ -1,0 +1,20 @@
+/* One type hierarchy for existing Caixa workspaces and their body portals. */
+:is(.cashier-shell,.cashier-portal) {
+  font-family: var(--koma-font-body);
+  --font-weight-black: 700;
+  --font-weight-extrabold: 700;
+}
+:is(.cashier-shell,.cashier-portal) :is(h1,h2,h3,.font-serif,.font-display) {
+  font-family: var(--koma-font-display);
+  letter-spacing: -.02em;
+}
+:is(.cashier-shell,.cashier-portal) :is(button,input,select,textarea,.font-sans,.font-mono) {
+  font-family: var(--koma-font-body);
+}
+:is(.cashier-shell,.cashier-portal) .font-mono {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+:is(.cashier-shell,.cashier-portal) :is(pre,code) { font-family: ui-monospace,monospace; }
+/* PostCSS already applies the preference to font sizes; keep rem's base stable. */
+html[data-koma-text-context="caixa"][data-koma-text-size] { font-size: 100%; }

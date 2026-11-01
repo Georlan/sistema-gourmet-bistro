@@ -397,7 +397,7 @@ def test_backend_auto_accepts_all_cardapio_fulfillments_and_ignores_non_online_o
                 db.commit()
                 db.refresh(order)
                 db.refresh(launch)
-                expected_status = "aceito" if order.tipo == "Delivery" else "producao"
+                expected_status = "aceito" if order.tipo in {"Delivery", "Retirada"} else "producao"
                 assert order.delivery_status == expected_status
                 assert launch.status == expected_status
 

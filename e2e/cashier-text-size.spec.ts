@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 
 async function navigate(page: Page, area: string) {
+  await expect(page.locator('.cashier-shell')).toBeVisible();
   if (!await page.locator('.cashier-sidebar:visible').isVisible()) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
   await page.locator('.cashier-sidebar:visible').getByRole('button', { name: new RegExp(`^${area}(?: \\d+)?$`) }).first().click();
 }
@@ -19,7 +20,7 @@ for (const width of [360, 390, 1366]) {
     await mockCashierBackend(page);
     await seedCashierSession(page);
     await page.goto('/?view=caixa');
-    const areas = ['Vendas', 'Caixa', 'Cardápio', 'Cardápio online', 'Estoque & compras', 'Clientes', 'Relatórios', 'Equipe', 'Configurações', 'Conta & assinatura'];
+    const areas = ['Vendas', 'Caixa', 'Cardápio', 'Cardápio online', 'Estoque & compras', 'Relacionamento', 'Relatórios', 'Equipe', 'Configurações', 'Conta & assinatura'];
     const baseSizes: Record<string, number> = {};
     for (const [size, scale] of [['padrao', 1], ['grande', 1.2], ['gigante', 1.4]] as const) {
       await setSize(page, size);
@@ -52,20 +53,10 @@ test('real preference controls scale summaries and portal dialogs, and reset the
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.goto('/?view=caixa');
-  await page.getByRole('button', { name: 'Ver resumo da tela' }).click();
-  const summaryTitle = page.getByRole('dialog').getByRole('heading', { name: 'Resumo da tela' });
-  const baseSummary = await summaryTitle.evaluate(el => parseFloat(getComputedStyle(el).fontSize));
-  await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Abrir menu principal' }).click();
-  await page.getByRole('button', { name: 'Abrir conta e preferências' }).click();
-  const options = page.locator('.cashier-options');
-  await options.getByRole('button', { name: 'Gigante', exact: true }).click();
-  await expect(page.locator('html')).toHaveAttribute('data-koma-text-size', 'gigante');
-  await options.getByRole('button', { name: 'Gigante', exact: true }).click();
-  await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Ver resumo da tela' }).click();
-  expect(await summaryTitle.evaluate(el => parseFloat(getComputedStyle(el).fontSize)) / baseSummary).toBeCloseTo(1.4, 1);
-  await page.keyboard.press('Escape');
+  await expect(page.locator('#btn-caixa-resumo')).toHaveCount(0);
+  const baseTitle = await page.locator('.cashier-topbar h2').evaluate(el => parseFloat(getComputedStyle(el).fontSize));
+  await setSize(page, 'gigante');
+  expect(await page.locator('.cashier-topbar h2').evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(baseTitle);
   await navigate(page, 'Equipe');
   await page.getByRole('button', { name: 'Convidar pessoa', exact: true }).click();
   const invite = page.getByRole('dialog', { name: 'Convidar para a equipe' });

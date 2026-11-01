@@ -1,4 +1,5 @@
 import clsx from 'clsx';
+import { useSidebarSwipe } from './useSidebarSwipe';
 import { SlidersHorizontal } from 'lucide-react';
 import React from 'react';
 import { KomaLogo } from '../../KomaLogo';
@@ -8,7 +9,7 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarHeader,
-  SidebarRail,
+  useSidebar,
 } from '../../ui/sidebar';
 import { OnlineOrderEmergencyControl } from '../online-menu/OnlineOrderEmergencyControl';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
@@ -46,7 +47,11 @@ export function CashierDesktopSidebar({
   setTheme,
   theme,
   activeWaiterNome,
+  restaurantName,
+  restaurantLogo,
 }: BoundaryProps) {
+  const { open, setOpen } = useSidebar();
+  const swipe = useSidebarSwipe(setOpen);
   const setupMode = readSetupMode();
   const shiftKnown = turnoLoadState === 'loaded';
   const shiftOpen = shiftKnown && turno?.status === 'aberto';
@@ -64,22 +69,19 @@ export function CashierDesktopSidebar({
       collapsible="icon"
       className="cashier-sidebar hidden lg:flex flex-col justify-between shrink-0"
     >
-      <SidebarHeader className="cashier-sidebar__header p-3.5">
+      <SidebarHeader {...swipe} className="cashier-sidebar__header cashier-sidebar__drag-surface p-3.5">
         <div className="cashier-sidebar__brand-row">
           <div className="cashier-sidebar__brand">
             <span className="cashier-sidebar__logo-wrap cashier-sidebar__logo-wrap--expanded">
-              <KomaLogo size="md" />
+              <KomaLogo size="md" withText variant="dark" />
             </span>
             <span
               className="cashier-sidebar__logo-wrap cashier-sidebar__logo-wrap--compact"
               aria-hidden="true"
             >
-              <KomaLogo size="md" contextualWordmark={false} alt="" />
+              <KomaLogo size="md" variant="dark" contextualWordmark={false} alt="" />
             </span>
-            <span className="cashier-sidebar__brand-copy">
-              <strong>Kôma</strong>
-              <small>{setupMode ? 'Configuração inicial' : 'Se você está com fome, Kôma'}</small>
-            </span>
+            {setupMode && <span className="cashier-sidebar__brand-copy"><small>Configuração inicial</small></span>}
           </div>
           <button
             type="button"
@@ -155,9 +157,21 @@ export function CashierDesktopSidebar({
           setTheme={setTheme}
           theme={theme}
           activeWaiterNome={activeWaiterNome}
+          restaurantName={restaurantName}
+          restaurantLogo={restaurantLogo}
+          onRestaurantClick={() => handleSidebarNavigation('config_aparencia')}
         />
       </SidebarFooter>
-      <SidebarRail />
+      <div {...swipe} className="cashier-sidebar__rail" role="separator" tabIndex={0}
+        aria-label="Largura do menu: arraste para recolher ou expandir"
+        aria-orientation="vertical" aria-valuemin={0} aria-valuemax={1} aria-valuenow={open ? 1 : 0}
+        aria-valuetext={open ? 'Expandido' : 'Recolhido'}
+        title="Arraste para recolher ou expandir · ← →"
+        onKeyDown={event => {
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+            event.preventDefault(); setOpen(event.key === 'ArrowRight');
+          }
+        }}><span aria-hidden="true" /></div>
     </Sidebar>
   );
 }

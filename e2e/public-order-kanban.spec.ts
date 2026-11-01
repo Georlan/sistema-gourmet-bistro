@@ -165,7 +165,7 @@ test('pedido do cardápio é aceito uma vez e surge no kanban com contexto útil
 
   await expect(page.locator('.orders-board')).toBeVisible();
 
-  const pendingButton = page.getByRole('button', { name: /Aguardando aceite/i });
+  const pendingButton = page.getByRole('button', { name: /Novos pedidos/i });
   await expect(pendingButton).toBeVisible();
   await pendingButton.click();
 

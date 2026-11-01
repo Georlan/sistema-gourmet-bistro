@@ -23,7 +23,7 @@ export function getDigitalOrderFulfillmentLabel(
   order: Pick<DeliveryOrderView, 'modalidade'>,
 ): string {
   if (order.modalidade === 'delivery') return 'Delivery';
-  if (order.modalidade === 'dine_in') return 'Consumo no local';
+  if (order.modalidade === 'dine_in') return 'Consumo';
   return 'Retirada';
 }
 
@@ -105,6 +105,6 @@ export function getDigitalOrderPaymentSummary(
 
   const parts = [`A cobrar ${digitalMoney(due)}`];
   if (method) parts.push(method);
-  if (Number(order.changeFor || 0) > 0) parts.push(`Troco para ${digitalMoney(Number(order.changeFor))}`);
+  if (method === 'Dinheiro' && Number(order.changeFor || 0) > 0) parts.push(`Troco para ${digitalMoney(Number(order.changeFor))}`);
   return parts.join(' · ');
 }

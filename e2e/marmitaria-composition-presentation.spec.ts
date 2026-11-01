@@ -57,7 +57,7 @@ test('marmitaria shows the same grouped choices in Kanban and details without me
 
 test('new-order notification and acceptance show compact groups and customer note', async ({ page }) => {
   await setup(page, 'pendente');
-  await page.getByRole('button', { name: /Aguardando aceite/ }).click();
+  await page.getByRole('button', { name: /Novos pedidos/ }).click();
   const notification = page.locator('.orders-pending-card');
   await expect(notification).toContainText('PROTEÍNAS: Frango');
   await expect(notification).toContainText('PROTEÍNAS: Costela');

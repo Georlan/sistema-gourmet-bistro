@@ -127,6 +127,12 @@ export default function GrowthEconomicsCalculator({
           : 'Não foi possível calcular a sugestão agora.';
         throw new Error(detail);
       }
+      if (!payload || typeof payload !== 'object' || !payload.suggestion || typeof payload.suggestion !== 'object'
+        || !['effective_reward_percent', 'cashback_percent', 'points_per_real', 'point_value_brl'].every(key => Number.isFinite(payload.suggestion[key]))
+        || !payload.evidence || typeof payload.evidence !== 'object' || !Number.isFinite(payload.evidence.orders_analyzed)
+        || !Number.isFinite(payload.evidence.cost_coverage_percent) || !Array.isArray(payload.warnings)) {
+        throw new Error('Não foi possível carregar a sugestão. Tente novamente.');
+      }
       if (version === automaticRequestVersion.current) setAutomaticResult(payload as AutomaticLoyaltyResponse);
     } catch (loadError) {
       if (version !== automaticRequestVersion.current) return;

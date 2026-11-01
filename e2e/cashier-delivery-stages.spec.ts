@@ -55,16 +55,15 @@ test('delivery pronto avança à última coluna, despacha e permanece até fecha
     await route.fulfill({ json: check() });
   });
   await page.goto('/?view=caixa');
-  await page.getByRole('button', { name: /Aguardando aceite/ }).click();
+  await page.getByRole('button', { name: /Novos pedidos/ }).click();
   await expect(page.locator('.orders-pending-card')).toContainText('Opções: Bisteca, Costela, Baião, Arroz, Salada verde');
-  await page.getByRole('button', { name: '✓ Aceitar', exact: true }).click();
+  await page.getByRole('button', { name: 'Aceitar', exact: true }).click();
   const digital = page.locator('.orders-column--digital');
   const closing = page.locator('.orders-column--closing');
   const digitalTab = page.getByRole('tab', { name: /^Digitais/ });
   if (await digitalTab.isVisible()) await digitalTab.click();
-  await expect(digital.getByRole('button', { name: 'Iniciar preparo', exact: true })).toBeVisible();
+  await expect(digital.getByRole('button', { name: 'Marcar como pronto', exact: true })).toBeVisible();
   await expect(closing.locator('.orders-card--closing')).toHaveCount(0);
-  await digital.getByRole('button', { name: 'Iniciar preparo', exact: true }).click();
   await expect(digital.getByRole('combobox')).toHaveCount(0);
   await expect(digital).toContainText('Opções: Bisteca, Costela, Baião, Arroz, Salada verde');
   await expect(digital).not.toContainText('Cozinha');
@@ -83,19 +82,19 @@ test('delivery pronto avança à última coluna, despacha e permanece até fecha
   await expect(closing.getByRole('button', { name: 'Despachar pedido', exact: true })).toBeEnabled();
   await closing.getByRole('button', { name: 'Despachar pedido', exact: true }).click();
   await expect(closing.locator('.orders-card--closing')).toHaveCount(1);
-  await expect(closing).toContainText('EM ROTA');
+  await expect(closing).toContainText('Em rota');
   await expect(closing.getByRole('button', { name: 'Fechar e pagar', exact: true })).toBeVisible();
   await expect(closing.getByRole('combobox')).toHaveCount(0);
   await expect(closing.getByRole('button', { name: 'Trocar entregador', exact: true })).toHaveCount(0);
   await expect(closing.getByRole('button', { name: 'Despachar pedido', exact: true })).toHaveCount(0);
   await expect(closing.getByText('R$ 47,00', { exact: true })).toBeVisible();
   await closing.getByRole('button', { name: 'Fechar e pagar', exact: true }).click();
-  await expect(page.getByText('CHECKOUT / CAIXA')).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Receber pagamento' })).toBeVisible();
   await page.getByRole('button', { name: 'Dinheiro', exact: true }).click();
   await page.getByRole('button', { name: /Receber saldo total/i }).click();
   await expect(closing.locator('.orders-card--closing')).toHaveCount(0);
   expect(paid).toBe(true);
-  expect(transitions).toEqual(['aceito', 'producao', 'pronto', 'transito', 'finalizado']);
+  expect(transitions).toEqual(['aceito', 'pronto', 'transito', 'finalizado']);
 });
 
 
@@ -119,5 +118,6 @@ test('marmitaria sem consumo local reaproveita duas etapas sem coluna de salão'
     const columnBox = await page.locator('.orders-column--digital').boundingBox();
     expect(columnBox!.width).toBeGreaterThan(boardBox!.width * 0.95);
   }
-  await expect(page.locator('.orders-column__number')).toContainText(['01 / PREPARO', '02 / ENTREGA E RECEBIMENTO']);
+  await expect(page.locator('.orders-column--digital')).toContainText('Em preparo');
+  await expect(page.locator('.orders-column--closing')).toContainText('Entrega e recebimento');
 });

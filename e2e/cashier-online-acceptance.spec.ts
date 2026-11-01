@@ -34,7 +34,7 @@ async function setup(page: Page, options: { count?: number; payment?: string; ch
     else { statuses.set(id, new URL(route.request().url()).searchParams.get('status_novo')!); await route.fulfill({ json: check(id) }); }
   });
   await page.goto('/?view=caixa');
-  await page.getByRole('button', { name: /Aguardando aceite/ }).click();
+  await page.getByRole('button', { name: /Novos pedidos/ }).click();
   await expect(page.locator('.orders-pending-card')).toHaveCount(options.count ?? 1);
   return { release, requested: () => requested, arrive: () => {
     statuses.set('online-2', 'pendente');
@@ -46,11 +46,11 @@ for (const payment of ['dinheiro', 'pix']) {
   test(`card mostra pagamento ${payment} e troco somente em dinheiro`, async ({ page }) => {
     await setup(page, { payment });
     const card = page.locator('.orders-pending-card');
-    await expect(card).toContainText(`Pagamento: ${payment}`);
+    await expect(card).toContainText(payment === 'dinheiro' ? 'Dinheiro' : 'Pix');
     await expect(card).toContainText('Rua de teste, 123');
     if (payment === 'dinheiro') await expect(card).toContainText('Troco para R$ 50,00');
     else await expect(card).not.toContainText('Troco para');
-    await expect(card.getByRole('button', { name: '✓ Aceitar' })).toBeEnabled();
+    await expect(card.getByRole('button', { name: 'Aceitar', exact: true })).toBeEnabled();
   });
 }
 
@@ -61,33 +61,33 @@ test('dinheiro sem solicitação não inventa troco', async ({ page }) => {
 
 test('aceita dois pedidos e fecha painel apenas após confirmação do último', async ({ page }) => {
   await setup(page, { count: 2 });
-  await page.locator('.orders-pending-card').first().getByRole('button', { name: '✓ Aceitar' }).click();
-  await expect(page.getByRole('heading', { name: 'Pedidos aguardando aceite' })).toBeVisible();
+  await page.locator('.orders-pending-card').first().getByRole('button', { name: 'Aceitar', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Novos pedidos' })).toBeVisible();
   await expect(page.locator('.orders-pending-card')).toHaveCount(1);
-  await page.locator('.orders-pending-card').getByRole('button', { name: '✓ Aceitar' }).click();
-  await expect(page.getByRole('heading', { name: 'Pedidos aguardando aceite' })).toHaveCount(0);
+  await page.locator('.orders-pending-card').getByRole('button', { name: 'Aceitar', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Novos pedidos' })).toHaveCount(0);
   await expect(page.locator('.orders-card--digital')).toHaveCount(2);
 });
 
 test('aguarda confirmação antes de fechar e mantém painel em falha', async ({ page }) => {
   const state = await setup(page, { fail: true, hold: true });
-  await page.getByRole('button', { name: '✓ Aceitar' }).click();
+  await page.getByRole('button', { name: 'Aceitar', exact: true }).click();
   await expect.poll(state.requested).toBe(true);
-  await expect(page.getByRole('heading', { name: 'Pedidos aguardando aceite' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Novos pedidos' })).toBeVisible();
   state.release();
   await expect(page.locator('.orders-pending-card')).toHaveCount(1);
-  await expect(page.getByRole('heading', { name: 'Pedidos aguardando aceite' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '✓ Aceitar' })).toBeEnabled();
+  await expect(page.getByRole('heading', { name: 'Novos pedidos' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Aceitar', exact: true })).toBeEnabled();
 });
 
 test('pedido novo durante aceite mantém painel aberto', async ({ page }) => {
   const state = await setup(page, { hold: true });
-  await page.getByRole('button', { name: '✓ Aceitar' }).click();
+  await page.getByRole('button', { name: 'Aceitar', exact: true }).click();
   await expect.poll(state.requested).toBe(true);
   state.arrive();
   await expect(page.locator('.orders-pending-card')).toContainText('Cliente online-2');
   state.release();
-  await expect(page.getByRole('heading', { name: 'Pedidos aguardando aceite' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Novos pedidos' })).toBeVisible();
   await expect(page.locator('.orders-pending-card')).toHaveCount(1);
 });
 
@@ -96,11 +96,11 @@ test('última retirada exibe troco e volta ao Kanban somente depois do aceite co
   const state = await setup(page, { pickup: true, hold: true });
   await expect(page.locator('.orders-pending-card')).toContainText('Troco para R$ 50,00');
   if (process.env.ACCEPTANCE_SCREENSHOT) await page.screenshot({ path: process.env.ACCEPTANCE_SCREENSHOT });
-  await page.getByRole('button', { name: '✓ Aceitar' }).click();
+  await page.getByRole('button', { name: 'Aceitar', exact: true }).click();
   await expect.poll(state.requested).toBe(true);
-  await expect(page.getByRole('heading', { name: 'Pedidos aguardando aceite' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Novos pedidos' })).toBeVisible();
   state.release();
-  await expect(page.getByRole('heading', { name: 'Pedidos aguardando aceite' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Novos pedidos' })).toHaveCount(0);
   await expect(page.locator('.orders-card--digital')).toContainText('Cliente online-1');
 });
 
@@ -114,7 +114,7 @@ test('pedido agendado chega no painel online com data e horário antes do prepar
   await expect(card).toContainText('Agendado para');
   await expect(card).toContainText('10/10/2026');
   await expect(card).toContainText('11:30');
-  await expect(card.getByRole('button', { name: '✓ Aceitar' })).toBeEnabled();
+  await expect(card.getByRole('button', { name: 'Aceitar', exact: true })).toBeEnabled();
 });
 
 });

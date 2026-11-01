@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import React, { createElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { CaixaOrdersWorkspace, type CaixaOrdersWorkspaceProps } from '../src/components/caixa/orders/CaixaOrdersWorkspace';
+import { CaixaOrdersWorkspaceView as CaixaOrdersWorkspace, type CaixaOrdersWorkspaceProps } from '../src/components/caixa/orders/CaixaOrdersWorkspace';
 import { KanbanOrderDetails, type KanbanOrderDetailsProps } from '../src/components/caixa/orders/KanbanOrderDetails';
 import type { DeliveryOrderView } from '../src/components/caixa/orders/cashierWorkspaceTypes';
 import { projectApiComandaToDeliveryView } from '../src/components/caixa/orders/deliveryOrderProjection';
@@ -263,7 +263,7 @@ test('delivery pode virar retirada antes da rota e mantém exceção fora do flu
   };
 
   const preparingView = KanbanOrderDetails({ ...props, canChangeFulfillment: true });
-  invoke(button(preparingView, 'Alterar tipo do pedido'), 'onClick');
+  invoke(elements(preparingView).find(element => element.type === 'button' && element.props['aria-label'] === 'Tipo e endereço')!, 'onClick');
   assert.deepEqual(calls, ['convert']);
 
   const transitView = KanbanOrderDetails({
@@ -272,7 +272,7 @@ test('delivery pode virar retirada antes da rota e mantém exceção fora do flu
   });
   assert.equal(
     elements(transitView).filter(element => element.type === 'button'
-      && textOf(element).replace(/\s+/g, ' ').trim() === 'Alterar tipo do pedido').length,
+      && element.props['aria-label'] === 'Tipo e endereço').length,
     0,
   );
 
@@ -321,4 +321,14 @@ test('concorrência de atribuição: sincronização autoritativa elimina seleç
 
   assert.match(syncSlice, /order\.motoboyId \? String\(order\.motoboyId\) : ''/);
   assert.match(syncSlice, /applySelectedMotoboysState\(next\);/);
+});
+
+
+test('official partner marks require explicit canonical source, never customer naming', () => {
+  const raw = { id: 'origin-test', tipo: 'Delivery', delivery_status: 'producao', identificador: 'Cliente iFood', itens: [] };
+  assert.equal(projectApiComandaToDeliveryView(raw)?.partner, undefined);
+  for (const channel of ['ifood', '99food', 'keeta'] as const) {
+    assert.equal(projectApiComandaToDeliveryView({ ...raw, source: { channel } })?.partner, channel);
+  }
+  assert.equal(projectApiComandaToDeliveryView({ ...raw, source: { channel: 'unverified' } })?.partner, undefined);
 });

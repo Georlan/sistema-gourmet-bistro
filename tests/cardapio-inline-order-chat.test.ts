@@ -92,8 +92,8 @@ test('modal deixa explicito que somente o cardapio online sera pausado', () => {
   assert.match(emergencyControl, /createPortal\(/);
   assert.match(emergencyControl, /document\.body/);
   assert.match(emergencyControl, /z-\[9999\]/);
-  assert.match(emergencyControl, /Pausar apenas o cardápio online\?/);
-  assert.match(emergencyControl, /O restaurante continua operando normalmente/);
-  assert.match(emergencyControl, /Só novas compras pelo cardápio online serão bloqueadas/);
+  assert.match(emergencyControl, /Pausar cardápio online/);
+  assert.match(emergencyControl, /Pedidos recebidos e conversas continuam ativos/);
+  assert.match(emergencyControl, /Só novas compras no cardápio ficam suspensas/);
   assert.match(emergencyControl, /Pausar cardápio online/);
 });
