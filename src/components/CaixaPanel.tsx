@@ -538,7 +538,9 @@ export function CaixaPanel({
   });
   const { setBalcaoMobileView, setPdvOrderType, setPdvTargetMesaId } = pdv;
 
-  const activeKitchenItems = orders.flatMap((order) =>
+  // Realtime/status/clock updates should not rebuild the kitchen projection
+  // unless the canonical order snapshot actually changes.
+  const activeKitchenItems = useMemo(() => orders.flatMap((order) =>
     order.itens
       .filter((item) => item.status === 'preparando' || item.status === 'pronto')
       .filter(() => order.deliveryStatus !== 'pendente' && order.deliveryStatus !== 'recusado')
@@ -550,7 +552,7 @@ export function CaixaPanel({
         garcomNome: item.responsavelNome || order.garcomNome,
         timestamp: (item as any).created_at || (item as any).timestamp || order.timestamp,
       })),
-  );
+  ), [orders]);
   const matchesSearchQuery = useCallback((card: any, query: string) => {
     if (!query || !query.trim()) return true;
     const q = query.toLowerCase().trim();
@@ -618,6 +620,16 @@ export function CaixaPanel({
       .filter((o) => projectCashierDeliveryState(o.status, o.modalidade).inFinalization)
       .filter((order) => matchesSearchQuery(order, searchQuery));
   }, [deliveryOrders, searchQuery, matchesSearchQuery]);
+
+  // CaixaOrdersWorkspace sorts its columns. Stable references avoid repeating
+  // the four sorts and arrival-stage comparisons on every unrelated parent
+  // render (clock, theme, header and operator drawer updates).
+  const cashierOrderColumns = useMemo(() => ({
+    tableProduction: filteredCol1.map(buildCashierTableCard),
+    digitalProduction: filteredDigitalProduction,
+    tableClosing: filteredCol2Table.map(buildCashierTableCard),
+    digitalFinalization: filteredDeliveryFinalization,
+  }), [filteredCol1, filteredDigitalProduction, filteredCol2Table, filteredDeliveryFinalization, salonTables]);
 
   const activeDeliveryOrdersCount = useMemo(
     () =>
@@ -896,12 +908,7 @@ export function CaixaPanel({
               <CaixaOrdersWorkspace
                 pixConferenceTrigger={<DirectPixPendingPanel apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onRefreshOrders={onRefreshOrders} />}
                 hasLocalServiceWork={tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0}
-                columns={{
-                  tableProduction: filteredCol1.map(buildCashierTableCard),
-                  digitalProduction: filteredDigitalProduction,
-                  tableClosing: filteredCol2Table.map(buildCashierTableCard),
-                  digitalFinalization: filteredDeliveryFinalization,
-                }}
+                columns={cashierOrderColumns}
                 pendingCashPayments={pagamentosPendentes.map((pag) => {
                   const comandaMesa = orders.find((order) => order.id === pag.comanda_id);
                   return { ...pag, mesaNum: comandaMesa ? comandaMesa.mesaId : '?' };
