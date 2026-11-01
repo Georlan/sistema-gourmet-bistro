@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { openOperationalScenario } from './fixtures/operational';
 
 for (const mode of ['native', 'reduced', 'unsupported', 'long-list']) {
-  test(`cashier theme switches instantly and preserves operations with ${mode} capability`, async ({ page }) => {
+  test(`cashier theme persists and preserves operations with ${mode} transition`, async ({ page }) => {
     if (mode === 'reduced') await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.addInitScript(mode => {
       if (!localStorage.getItem('@koma:theme')) localStorage.setItem('@koma:theme', 'dark');
@@ -25,9 +25,7 @@ for (const mode of ['native', 'reduced', 'unsupported', 'long-list']) {
     await expect(page.locator('html')).toHaveAttribute('data-koma-theme', 'light');
     await expect(page.locator('html')).not.toHaveAttribute('data-courier-theme-wipe');
     await expect(page.getByRole('button', { name: 'Usar tema escuro', exact: true })).toBeEnabled();
-    // Full-page View Transitions capture and animate every visible card. The
-    // cashier stays responsive by never starting one, even on capable devices.
-    expect(await page.evaluate(() => (window as any).themeStarts)).toBe(0);
+    expect(await page.evaluate(() => (window as any).themeStarts)).toBe(mode === 'native' || mode === 'long-list' ? 1 : 0);
     expect(await page.evaluate(() => localStorage.getItem('@koma:theme'))).toBe('light');
     expect(scenario.actions).toHaveLength(0);
     await page.reload();
