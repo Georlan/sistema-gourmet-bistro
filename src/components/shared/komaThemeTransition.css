@@ -1,0 +1,13 @@
+/* Ink-like native reveal: only on an explicit courier theme tap, ~0.4 s. */
+:root[data-courier-theme-wipe]::view-transition-group(root){animation:none}
+:root[data-courier-theme-wipe]::view-transition-old(root),
+:root[data-courier-theme-wipe]::view-transition-new(root){animation:none;mix-blend-mode:normal}
+:root[data-courier-theme-wipe]::view-transition-old(root){z-index:0}
+:root[data-courier-theme-wipe]::view-transition-new(root){z-index:1;animation:courier-theme-fill 420ms cubic-bezier(.22,.7,.25,1) both}
+:root[data-courier-theme-wipe]::view-transition{pointer-events:none}
+@keyframes courier-theme-fill{
+  0%{clip-path:ellipse(0px 0px at var(--courier-wipe-x) var(--courier-wipe-y))}
+  55%{clip-path:ellipse(calc(var(--courier-wipe-radius) * .7) calc(var(--courier-wipe-radius) * .52) at var(--courier-wipe-x) var(--courier-wipe-y))}
+  100%{clip-path:ellipse(var(--courier-wipe-radius) var(--courier-wipe-radius) at var(--courier-wipe-x) var(--courier-wipe-y))}
+}
+@media(prefers-reduced-motion:reduce){:root[data-courier-theme-wipe]::view-transition-new(root){animation:none}}

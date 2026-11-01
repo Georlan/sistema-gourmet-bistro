@@ -226,7 +226,7 @@ export function CashierPickups({
                 </span>
               )}
               <span className={`rounded-md px-1.5 py-0.5 text-[8px] font-extrabold uppercase ${readyForPickup ? 'bg-emerald-500/15 text-emerald-400' : awaitingAcceptance ? 'bg-amber-500/10 text-amber-400' : 'bg-sky-500/10 text-sky-400'}`}>
-                {readyForPickup ? 'Pronto para retirada' : awaitingAcceptance ? 'Aguardando aceite' : 'Em preparo'}
+                {readyForPickup ? 'Pronto para retirada' : awaitingAcceptance ? 'Aguardando aceite' : order.status === 'aceito' ? 'Aceito · aguardando preparo' : 'Em preparo'}
               </span>
               {late && (
                 <span className="inline-flex items-center gap-1 rounded-md bg-rose-500/10 px-1.5 py-0.5 text-[8px] font-extrabold uppercase text-rose-400">
@@ -277,7 +277,7 @@ export function CashierPickups({
               </>
             )}
 
-            {!readyForPickup && order.status === 'producao' && (
+            {!readyForPickup && (order.status === 'aceito' || order.status === 'producao') && (
               <button
                 type="button"
                 disabled={pending}

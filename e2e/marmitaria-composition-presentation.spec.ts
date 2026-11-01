@@ -48,6 +48,10 @@ test('marmitaria shows the same grouped choices in Kanban and details without me
   await expect(card).not.toContainText('Opções:');
   await card.click();
   const details = page.locator('.orders-detail-modal');
+  const itemsDisclosure = details.locator('.kd-items-disclosure');
+  await expect(itemsDisclosure).not.toHaveAttribute('open', '');
+  await itemsDisclosure.locator('summary').first().click();
+  await expect(itemsDisclosure).toHaveAttribute('open', '');
   await expect(details.locator('.orders-detail-modal__item')).toHaveCount(2);
   await expect(details).toContainText('GUARNIÇÕES: Arroz à grega');
   await expect(details).toContainText('Sem salada');
@@ -57,7 +61,7 @@ test('marmitaria shows the same grouped choices in Kanban and details without me
 
 test('new-order notification and acceptance show compact groups and customer note', async ({ page }) => {
   await setup(page, 'pendente');
-  await page.getByRole('button', { name: /Aguardando aceite/ }).click();
+  await page.getByRole('button', { name: /Novos pedidos/ }).click();
   const notification = page.locator('.orders-pending-card');
   await expect(notification).toContainText('PROTEÍNAS: Frango');
   await expect(notification).toContainText('PROTEÍNAS: Costela');

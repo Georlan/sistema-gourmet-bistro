@@ -13,15 +13,15 @@ test('checkout da mesa exige itens e método explícitos', async ({ page }) => {
   await expect(card).toBeVisible();
   await card.getByRole('button', { name: 'Ver comanda', exact: true }).click();
 
-  const details = page.getByRole('dialog', { name: 'Consumo local · Mesa 07', exact: true });
+  const details = page.getByRole('dialog', { name: 'Mesa 07', exact: true });
   await details.getByRole('button', { name: 'Receber', exact: true }).click();
   await expect(details).toBeHidden();
-  await expect(page.getByText('Receber Pagamento', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pagamento', exact: true })).toBeVisible();
 
   const pix = page.getByRole('button', { name: 'Pix', exact: true });
   const dinheiro = page.getByRole('button', { name: 'Dinheiro', exact: true });
-  await expect(pix).not.toHaveClass(/bg-emerald-600/);
-  await expect(dinheiro).not.toHaveClass(/bg-emerald-600/);
+  await expect(pix).toHaveAttribute('aria-pressed', 'false');
+  await expect(dinheiro).toHaveAttribute('aria-pressed', 'false');
   await expect(page.getByText(/Pagando \d+ item\(ns\)/)).toHaveCount(0);
 
   // O saldo vem preenchido para reduzir digitação, mas continua editável e
@@ -40,7 +40,7 @@ test('checkout da mesa exige itens e método explícitos', async ({ page }) => {
 
   // Selecionar forma de pagamento limpa o erro imediatamente
   await pix.click();
-  await expect(pix).toHaveClass(/bg-emerald-600/);
+  await expect(pix).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByText('Escolha a forma de pagamento antes de receber.', { exact: true })).toHaveCount(0);
 
   // Alterar valor para parcial atualiza rótulo do botão de forma coerente

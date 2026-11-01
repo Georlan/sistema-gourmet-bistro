@@ -245,10 +245,10 @@ test('relógio global não é consultado por projections; fallback capturado con
 });
 
 test('getDigitalOrderActionCapability define capacidade canônica por status e modalidade', () => {
-  // 1. Pendente/análise só permite aceitar (produção), nunca finalizar ou avançar diretamente para pronto
+  // 1. O aceite mantém o pedido aguardando início de preparo
   const pendingPickup = getDigitalOrderActionCapability({ id: 'p-1', status: 'pendente', modalidade: 'retirada' });
   assert.equal(pendingPickup.action, 'accept');
-  assert.equal(pendingPickup.targetStatus, 'producao');
+  assert.equal(pendingPickup.targetStatus, 'aceito');
   assert.equal(pendingPickup.label, 'Aceitar pedido');
   assert.equal(pendingPickup.isAllowed, true);
 
@@ -323,13 +323,13 @@ test('delivery pronto avança para fechamento antes do despacho, independente do
   assert.equal(projectCashierDeliveryState('pronto', 'retirada').inFinalization, true);
 });
 
-test('aceite de delivery preserva etapa explícita para iniciar preparo', () => {
+test('delivery aceito pode avançar a pronto em uma ação', () => {
   const accepted = getDigitalOrderActionCapability({ id: 'delivery', status: 'pendente', modalidade: 'delivery' });
   assert.equal(accepted.targetStatus, 'aceito');
   const start = getDigitalOrderActionCapability({ id: 'delivery', status: 'aceito', modalidade: 'delivery' });
-  assert.equal(start.action, 'start_preparation');
-  assert.equal(start.targetStatus, 'producao');
-  assert.equal(start.label, 'Iniciar preparo');
+  assert.equal(start.action, 'mark_ready');
+  assert.equal(start.targetStatus, 'pronto');
+  assert.equal(start.label, 'Marcar como pronto');
   assert.equal(projectCashierDeliveryState('aceito', 'delivery').inProduction, true);
 });
 

@@ -11,6 +11,8 @@ export interface DeliveryOrderView {
   amountPaid?: number;
   amountDue?: number;
   canal: 'ifood' | 'site' | 'whats' | 'smartpos';
+  /** Only canonical partner metadata may drive an official logo. */
+  partner?: 'ifood' | '99food' | 'keeta';
   origemOperacional: 'smartpos' | 'cardapio' | 'caixa' | 'garcom' | 'desconhecida';
   isQuickSale: boolean;
   quantidadeItens: number;

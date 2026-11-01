@@ -60,7 +60,7 @@ export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:P
       <QrCode size={14} aria-hidden="true"/><span>Conferir Pix</span><span className="orders-new-orders__count">{rows.length}</span>
     </button>
     {createPortal(<dialog ref={dialogRef} aria-labelledby="pix-conference-title"
-      className="fixed inset-0 m-0 h-[100dvh] max-h-none w-full max-w-none border-0 bg-black/60 p-0 text-koma-foreground open:flex"
+      className="cashier-portal fixed inset-0 m-0 h-[100dvh] max-h-none w-full max-w-none border-0 bg-black/60 p-0 text-koma-foreground open:flex"
       onCancel={event=>{if(busy) event.preventDefault(); else setOpen(false);}}
       onClose={()=>setOpen(false)} onClick={event=>{if(event.target===event.currentTarget && !busy) setOpen(false);}}>
       <section className="ml-auto flex h-full min-h-0 w-full max-w-sm flex-col border-l border-koma-border bg-koma-panel shadow-2xl">

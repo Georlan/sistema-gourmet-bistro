@@ -119,6 +119,8 @@ test('native touch swipe in reports stays away from the selected tab until navig
   }
   await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await expect.poll(() => strip.evaluate(el => el.scrollLeft)).toBeGreaterThan(80);
+  // A late font swap can change tab widths after a gesture has positioned the strip.
+  await strip.locator('button').first().evaluate(el => el.style.letterSpacing = '1px');
   await page.waitForTimeout(500);
   expect(await strip.evaluate(el => el.scrollLeft)).toBeGreaterThan(80);
   await expect(nav.locator('[aria-current="page"]')).toHaveAttribute('data-navigation-id', 'relatorios_visao_geral');

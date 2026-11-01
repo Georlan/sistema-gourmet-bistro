@@ -65,7 +65,7 @@ class OrderStateMachine:
         if current == OrderStatus.PENDING:
             allowed = {OrderStatus.ACCEPTED, OrderStatus.PREPARING, OrderStatus.REJECTED}
         elif current == OrderStatus.ACCEPTED:
-            allowed = {OrderStatus.PREPARING, OrderStatus.REJECTED}
+            allowed = {OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.REJECTED}
         elif current == OrderStatus.PREPARING:
             allowed = {OrderStatus.READY, OrderStatus.REJECTED}
         elif current == OrderStatus.READY:

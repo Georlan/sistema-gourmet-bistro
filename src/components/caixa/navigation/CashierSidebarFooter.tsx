@@ -1,46 +1,48 @@
-import { CircleHelp } from 'lucide-react';
+import { KomaLogo } from '../../KomaLogo';
+import { ChevronRight } from 'lucide-react';
+import { CashierFooterArt } from './CashierFooterArt';
 import { StoreSwitchButton } from '../../auth/StoreSwitchButton';
 import { openCustomerSupport } from '../../app/customerSupportEvents';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
 import './cashierLowHeight.css';
-import './cashierLightContrast.css';
+import './cashierSidebarFooter.css';
 import './cashierCompactLayout.css';
 
 type Props = Pick<
   CashierSidebarProps,
-  'changeFontSize' | 'fontSize' | 'setTheme' | 'theme' | 'activeWaiterNome'
-> & { mobile?: boolean };
+  'changeFontSize' | 'fontSize' | 'setTheme' | 'theme' | 'activeWaiterNome' | 'restaurantName' | 'restaurantLogo'
+> & { mobile?: boolean; onRestaurantClick?: () => void };
 
 /**
  * Rodapé operacional da navegação.
  *
- * Tema e tamanho de texto pertencem a Conta e preferências; repetir esses
+ * Tema e tamanho de texto ficam no cabeçalho; repetir esses
  * controles aqui consome a área mais valiosa do Caixa em monitores baixos.
  */
-export function CashierSidebarFooter({ activeWaiterNome }: Props) {
+export function CashierSidebarFooter({ restaurantName, restaurantLogo, onRestaurantClick }: Props) {
   return (
     <>
       <StoreSwitchButton />
       <button
         type="button"
         onClick={openCustomerSupport}
-        className="flex w-full items-center gap-2 rounded-xl border border-koma-border bg-koma-raised/40 px-3 py-2.5 text-left text-xs font-bold text-koma-foreground transition hover:bg-koma-raised group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-2"
+        className="cashier-footer-help"
         title="Ajuda e feedback"
         aria-label="Abrir ajuda e feedback"
       >
-        <CircleHelp size={16} className="shrink-0 text-koma-accent" />
-        <span className="group-data-[collapsible=icon]:hidden">Ajuda e feedback</span>
+        <CashierFooterArt kind="help" />
+        <span className="cashier-footer-help__label">Ajuda e feedback</span>
+        <ChevronRight className="cashier-footer-help__arrow" size={16} aria-hidden="true" />
       </button>
 
-      <div className="cashier-operator">
-        <span className="cashier-operator__avatar">
-          {activeWaiterNome?.trim().charAt(0).toUpperCase() || 'K'}
+      <button type="button" className="cashier-operator" onClick={onRestaurantClick}
+        title={`${restaurantName || 'Restaurante'} · Aparência`} aria-label={`Aparência de ${restaurantName || 'Restaurante'}`}>
+        <span className="cashier-operator__avatar" aria-hidden="true">
+          {restaurantLogo ? <img src={restaurantLogo} alt="" width="40" height="40" loading="lazy" decoding="async" /> : <KomaLogo size="sm" variant="dark" contextualWordmark={false} alt="" />}
         </span>
-        <span className="cashier-operator__copy">
-          <small style={{ color: 'var(--koma-text-secondary)' }}>Operador</small>
-          <strong>{activeWaiterNome}</strong>
-        </span>
-      </div>
+        <span className="cashier-operator__copy"><strong>{restaurantName || 'Restaurante'}</strong></span>
+        <ChevronRight className="cashier-operator__arrow" size={16} aria-hidden="true" />
+      </button>
     </>
   );
 }

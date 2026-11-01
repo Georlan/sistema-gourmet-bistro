@@ -1,3 +1,4 @@
+import '../shared/komaOperationalOverlays.css';
 import {
   CircleHelp,
   Lightbulb,
@@ -178,7 +179,7 @@ export function CustomerSupportWidget() {
   };
 
   return (
-    <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label="Ajuda e feedback KÔMA" onKeyDown={event => {
+    <div className="ko-support fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label="Ajuda e feedback KÔMA" onKeyDown={event => {
       if (event.key === 'Escape') setIsOpen(false);
       if (event.key === 'Tab') {
         const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), textarea')].filter(node => node.getClientRects().length > 0 && node.getAttribute('aria-label') !== 'Fechar ajuda');
@@ -197,10 +198,10 @@ export function CustomerSupportWidget() {
       <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col border-l border-koma-border bg-koma-page shadow-2xl">
         <header className="flex items-start justify-between gap-4 border-b border-koma-border px-5 py-5">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-koma-accent">Suporte KÔMA</p>
+            <img className="ko-overlay__art" src="/brand/cashier/support-note-v1.svg" width="56" height="56" alt="" aria-hidden="true" />
             <h2 className="mt-1 text-xl font-bold text-koma-foreground">Ajuda e feedback</h2>
             <p className="mt-1 text-sm text-koma-muted-foreground">
-              Conte como podemos ajudar.
+              Fale com a equipe KÔMA.
             </p>
           </div>
           <button
@@ -220,7 +221,7 @@ export function CustomerSupportWidget() {
             </div>
             <h3 className="mt-5 text-lg font-bold text-koma-foreground">Mensagem recebida</h3>
             <p className="mt-2 max-w-sm text-sm leading-6 text-koma-muted-foreground">
-              Obrigado. O feedback ficou registrado para o suporte KÔMA e será usado para melhorar o produto.
+              Sua mensagem ficou registrada com a equipe KÔMA.
             </p>
             <div className="mt-6 flex gap-3">
               <button
@@ -261,7 +262,7 @@ export function CustomerSupportWidget() {
 
               <div className="mt-2 flex items-center justify-between gap-3 text-xs text-koma-muted-foreground">
                 <span>{message.length}/2000</span>
-                <span>A tela atual é anexada automaticamente.</span>
+                <span>Página de origem incluída.</span>
               </div>
 
               <p className="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-koma-muted-foreground">
@@ -309,7 +310,7 @@ export function CustomerSupportWidget() {
                 {isSending ? 'Enviando…' : `Enviar ${activeOption.label.toLowerCase()}`}
               </button>
               <p className="mt-2 text-center text-[11px] leading-4 text-koma-muted-foreground">
-                Não inclua senhas, dados de cartão ou outras credenciais na mensagem.
+                Não envie senhas ou dados de cartão.
               </p>
             </footer>
           </form>

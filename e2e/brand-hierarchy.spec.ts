@@ -59,7 +59,7 @@ for (const theme of ['dark','light']) {
     await expect(card).toBeVisible();
     await expect(card).toContainText('Prato em preparo');
     await page.screenshot({path:test.info().outputPath(`vendas-${theme}.png`),fullPage:true});
-    await card.getByRole('button',{name:/Imprimir conferência/}).click();
+    await card.getByRole('button',{name:/Reimprimir Pedido/}).click();
     await expect.poll(()=>scenario.actions.filter(action=>action.path.includes('imprimir')).length).toBe(1);
     await expect(page.locator('.orders-detail-modal')).toHaveCount(0);
   });

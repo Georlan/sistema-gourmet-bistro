@@ -35,8 +35,9 @@ for (const theme of ['dark','light']) for (const size of ['padrao','gigante']) {
     await expect(cards.first()).toBeVisible();
     for(const [index,card] of (await cards.all()).entries()) {
       await expect(card.locator('.orders-card__identity-title')).toHaveText(`Cliente ${index} com nome comprido`);
-      const tag=card.locator('.orders-card__fulfillment-tag');
-      await expect(tag).toHaveText(index%2?'Delivery':'Retirada');
+      const tag=card.getByRole('img',{name:`${index%2?'Entrega':'Retirada'}, pedido ${101+index}`,exact:true});
+      await expect(tag).toBeVisible();
+      await expect.poll(()=>tag.locator('img').evaluate((el: HTMLImageElement)=>el.complete && el.naturalWidth>0)).toBe(true);
       expect(await tag.evaluate(el=>{
         const style=getComputedStyle(el);
         const luminance=(value:string)=>{
@@ -52,28 +53,34 @@ for (const theme of ['dark','light']) for (const size of ['padrao','gigante']) {
       expect(tagBox!.y+tagBox!.height).toBeLessThanOrEqual(cardBox!.y+cardBox!.height);
       await expect(card.locator('.orders-card__number strong')).toHaveText(`#${101+index}`);
       await expect(card.locator('.orders-card__identity-subtitle')).toContainText('85999999999');
-      expect(await card.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+      expect(await card.evaluate(el=>{
+        const box=el.getBoundingClientRect();
+        return [...el.querySelectorAll<HTMLElement>('.orders-card__identity,.orders-card__items,.orders-card__action,.orders-card__destination,.orders-card__courier-control')].every(child=>{
+          const r=child.getBoundingClientRect();return r.left>=box.left-1 && r.right<=box.right+1 && child.scrollWidth<=child.clientWidth+1;
+        });
+      })).toBe(true);
       const number=await card.locator('.orders-card__number').boundingBox();
       const title=await card.locator('.orders-card__identity-title').boundingBox();
       expect(number!.x+number!.width).toBeLessThan(title!.x);
       const amount=await card.locator('.orders-card__price').boundingBox();
       const print=await card.getByRole('button',{name:`Imprimir conferência do pedido ${101+index}`,exact:true}).boundingBox();
-      expect(Math.max(amount!.y,print!.y)).toBeLessThan(Math.min(amount!.y+amount!.height,print!.y+print!.height));
+      expect(amount!.y+amount!.height).toBeLessThanOrEqual(print!.y+1);
       if(cardBox!.width>380) expect(Math.abs(tagBox!.y-title!.y)).toBeLessThanOrEqual(2);
       expect(await card.locator('.orders-card__number strong').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
     }
     const first=await cards.nth(0).boundingBox(), next=await cards.nth(1).boundingBox();
     expect(next!.y-(first!.y+first!.height)).toBeGreaterThanOrEqual(8);
     expect(next!.y-(first!.y+first!.height)).toBeLessThanOrEqual(12);
-    const relativeTop=await cards.first().evaluate(el=>el.querySelector('.orders-card__fulfillment-tag')!.getBoundingClientRect().top-el.getBoundingClientRect().top);
+    const relativeTop=await cards.first().evaluate(el=>el.querySelector('.orders-card__mark')!.getBoundingClientRect().top-el.getBoundingClientRect().top);
     await cards.first().hover();
-    expect(await cards.first().evaluate(el=>el.querySelector('.orders-card__fulfillment-tag')!.getBoundingClientRect().top-el.getBoundingClientRect().top)).toBeCloseTo(relativeTop,0);
+    expect(await cards.first().evaluate(el=>el.querySelector('.orders-card__mark')!.getBoundingClientRect().top-el.getBoundingClientRect().top)).toBeCloseTo(relativeTop,0);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
     await page.screenshot({path:test.info().outputPath(`cards-${theme}-${size}.png`),fullPage:true});
     await cards.first().getByRole('button',{name:'Imprimir conferência do pedido 101',exact:true}).click();
     await expect.poll(()=>prints).toBe(1);
     await expect(page.locator('.orders-detail-modal')).toHaveCount(0);
-    await cards.first().click();
+    // With large text the card center can be the primary action; open details via its body.
+    await cards.first().locator('.orders-card__identity-title').click();
     await expect(page.getByRole('dialog',{name:'Pedido #101'})).toBeVisible();
   });
 }
@@ -81,14 +88,16 @@ for (const theme of ['dark','light']) for (const size of ['padrao','gigante']) {
 test('table cards distinguish table number from the persisted order and ready value',async({page})=>{
   await openOperationalScenario(page);
   const preparing=page.locator('.orders-card--salon').first();
-  await expect(preparing.locator('.orders-card__number-label')).toHaveText('Mesa');
+  await expect(preparing.locator('.orders-card__number-label')).toHaveCount(0);
+  await expect(preparing.locator('.orders-card__number .orders-card__table-label')).toHaveText('Mesa');
   await expect(preparing.locator('.orders-card__number strong')).toHaveText('07');
   await expect(preparing.locator('.orders-card__identity-title')).toHaveText('Pedido #24');
   await expect(preparing.locator('.orders-card__price')).toHaveText(/112,00/);
   await page.screenshot({path:test.info().outputPath('cards-mesa.png'),fullPage:true});
   await showStage(page,'Concluir');
   const ready=page.locator('.orders-card--closing').first();
-  await expect(ready.locator('.orders-card__number-label')).toHaveText('Mesa');
+  await expect(ready.locator('.orders-card__number-label')).toHaveCount(0);
+  await expect(ready.locator('.orders-card__number .orders-card__table-label')).toHaveText('Mesa');
   await expect(ready.locator('.orders-card__number strong')).toHaveText('07');
   await expect(ready.locator('.orders-card__price')).toHaveText(/48,00/);
 });

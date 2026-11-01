@@ -114,6 +114,7 @@ export function projectApiComandaToDeliveryView(c: any): DeliveryOrderView | nul
     amountPaid,
     amountDue,
     canal,
+    ...(['ifood', '99food', 'keeta'].includes(c?.source?.channel) ? { partner: c.source.channel } : {}),
     origemOperacional,
     isQuickSale,
     quantidadeItens: activeItems.length,
@@ -223,7 +224,7 @@ export function bucketPickupOrders(
 
     if (order.status === 'pendente' || order.status === 'analise') {
       buckets.awaitingAcceptance.push(order);
-    } else if (order.status === 'producao') {
+    } else if (order.status === 'aceito' || order.status === 'producao') {
       buckets.preparing.push(order);
     } else if (order.status === 'pronto' || order.status === 'transito') {
       buckets.ready.push(order);

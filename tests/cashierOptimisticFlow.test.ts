@@ -188,14 +188,15 @@ test('order modal associates eligible unlinked orders to a table through the ded
 
   assert.match(orders, /\/comandas\/\$\{encodeURIComponent\(primaryComandaId\)\}\/associar-mesa\/\$\{targetMesaId\}/);
   assert.match(orders, /Pedidos de delivery não podem ser associados a uma mesa/);
-  assert.match(details, /Associar à mesa…/);
+  const picker = source('src/components/caixa/orders/CashierTableDestinations.tsx');
+  assert.match(picker, /Vincular mesa/);
   assert.match(details, /selectedCanAssociateTable/);
   assert.match(details, /'retirada', 'pickup', 'dine_in', 'consumo_local', 'consumo no local'/);
-  assert.match(details, /onClick=\{actions\.associateTable\}/);
-  assert.match(details, /getTableAssociationOptionLabel/);
+  assert.match(picker, /actions\.associateTable\(\)/);
+  assert.match(picker, /role="radiogroup"/);
   assert.match(presentation, /EM ATENDIMENTO/);
-  assert.match(details, /Associar mesmo assim/);
-  assert.match(details, /Mesas em atendimento estão marcadas com ●/);
+  assert.match(picker, /Esta mesa já possui consumo/);
+  assert.match(picker, /data-occupied/);
   assert.match(owner, /associateTable: handleAssociateSelectedKanbanTable/);
   assert.match(owner, /pdvTableOptions\.map/);
 });

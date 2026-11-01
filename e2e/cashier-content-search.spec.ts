@@ -43,9 +43,9 @@ test('search respects effective capabilities and can reach loyalty without a sam
   await page.goto('/?view=caixa');
   const search = await openMenu(page);
   await search.fill('cashback');
-  await expect(page.getByRole('option').first()).toContainText('Programa de Fidelidade');
+  await expect(page.getByRole('option').first()).toContainText('Fidelidade');
   await search.press('Enter');
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('koma_active_subtab'))).toBe('fidelidade');
-  await expect(page.locator('.cashier-subnav__button', { hasText: 'Programa de Fidelidade' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('.cashier-subnav__button', { hasText: 'Benefícios' })).toHaveAttribute('aria-current', 'page');
   await page.screenshot({ path: test.info().outputPath('clientes-organizados.png') });
 });

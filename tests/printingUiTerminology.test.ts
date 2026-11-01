@@ -16,12 +16,12 @@ test('waiter table actions distinguish reprint from Conta da Mesa', () => {
   assert.doesNotMatch(source, /Extrato Completo|Apenas Valores/);
 });
 
-test('cashier table detail names the three physical print scopes explicitly', () => {
+test('cashier table detail names the two total print actions explicitly', () => {
   const source = read('src/components/caixa/orders/KanbanOrderDetails.tsx');
 
-  assert.match(source, /<span>Reimprimir produção<\/span>/);
-  assert.match(source, /<span>Reimpressão total<\/span>/);
-  assert.match(source, /<span>Conta da Mesa<\/span>/);
+  assert.doesNotMatch(source, /<span>Reimprimir produção<\/span>/);
+  assert.match(source, /<span>Reimprimir Total<\/span>/);
+  assert.match(source, /<span>Conta Total<\/span>/);
   assert.doesNotMatch(source, /<span>Fechamento<\/span>/);
   assert.doesNotMatch(source, /Comanda Inteira|Só Valores|Apenas Valores/);
 });
@@ -32,7 +32,7 @@ test('values-only presentation is named as Conta across waiter and cashier surfa
   const cashierOrders = read('src/components/caixa/orders/useCashierOrders.ts');
 
   assert.match(waiterDialogs, /Imprimir Conta/);
-  assert.match(checkout, /Imprimir Conta/);
+  assert.doesNotMatch(checkout, /Imprimir Conta|Reimpressão total/);
   assert.match(cashierOrders, /Erro ao imprimir Conta da Mesa\./);
   assert.doesNotMatch(waiterDialogs, /Apenas Valores|Extrato Completo/);
   assert.doesNotMatch(checkout, /Apenas Valores|Extrato Completo|Imprime apenas o resumo/);

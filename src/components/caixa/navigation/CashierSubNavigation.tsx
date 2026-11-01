@@ -16,12 +16,15 @@ interface Props {
 export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlements, setupMode, onNavigate, counts = {} }: Props) {
   const items = getCashierHorizontalItems(activeTab, planId, entitlements, setupMode);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const position = useRef({ userPositioned: false, revealed: 0 });
+  useEffect(() => { position.current = { userPositioned: false, revealed: 0 }; }, [activeTab, activeSubTab]);
   const [edges, setEdges] = useState({ left: false, right: false });
   const itemKey = items.map(item => item.id).join('|');
 
   useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
+    const preserveUserPosition = () => { position.current.userPositioned = true; };
     const update = () => setEdges({ left: scroller.scrollLeft > 2, right: scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 2 });
     const revealSelected = () => {
       const selected = scroller.querySelector<HTMLElement>('[aria-current="page"]');
@@ -32,21 +35,38 @@ export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlem
         if (start < scroller.scrollLeft) scroller.scrollLeft = start;
         else if (start + selected.offsetWidth > scroller.scrollLeft + scroller.clientWidth) scroller.scrollLeft = start + selected.offsetWidth - scroller.clientWidth;
       }
+      position.current.revealed = scroller.scrollLeft;
       update();
     };
-    revealSelected();
-    const observer = new ResizeObserver(revealSelected);
+    const onScroll = () => {
+      if (Math.abs(scroller.scrollLeft - position.current.revealed) > 1) preserveUserPosition();
+      update();
+    };
+    if (position.current.userPositioned) update();
+    else revealSelected();
+    const observer = new ResizeObserver(() => {
+      // A font swap must not undo a person's swipe or wheel movement.
+      if (position.current.userPositioned) update();
+      else revealSelected();
+    });
     observer.observe(scroller);
     // Text scaling changes child widths even when the viewport is unchanged.
     for (const child of scroller.children) observer.observe(child);
-    scroller.addEventListener('scroll', update, { passive: true });
-    return () => { observer.disconnect(); scroller.removeEventListener('scroll', update); };
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    scroller.addEventListener('pointerdown', preserveUserPosition, { passive: true });
+    scroller.addEventListener('wheel', preserveUserPosition, { passive: true });
+    return () => {
+      observer.disconnect();
+      scroller.removeEventListener('scroll', onScroll);
+      scroller.removeEventListener('pointerdown', preserveUserPosition);
+      scroller.removeEventListener('wheel', preserveUserPosition);
+    };
   }, [activeTab, activeSubTab, itemKey]);
 
   if (!items.length) return null;
   return (
     <nav className="cashier-subnav cashier-subnav--shared flex shrink-0 border-b border-koma-border" aria-label="Telas desta área">
-      <button type="button" className="cashier-subnav__arrow" aria-label="Ver abas anteriores" disabled={!edges.left} onClick={() => scrollRef.current?.scrollBy({ left: -240, behavior: 'smooth' })}><ChevronLeft size={16} /></button>
+      <button type="button" className={`cashier-subnav__arrow${!edges.left && !edges.right ? ' is-unneeded' : ''}`} aria-label="Ver abas anteriores" disabled={!edges.left} onClick={() => scrollRef.current?.scrollBy({ left: -240, behavior: 'smooth' })}><ChevronLeft size={16} /></button>
       <div ref={scrollRef} className="cashier-subnav__scroll">
         {items.map(item => {
           const selected = isCashierNavigationActive(item.id, activeTab, activeSubTab);
@@ -55,7 +75,7 @@ export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlem
           </button>;
         })}
       </div>
-      <button type="button" className="cashier-subnav__arrow" aria-label="Ver próximas abas" disabled={!edges.right} onClick={() => scrollRef.current?.scrollBy({ left: 240, behavior: 'smooth' })}><ChevronRight size={16} /></button>
+      <button type="button" className={`cashier-subnav__arrow${!edges.left && !edges.right ? ' is-unneeded' : ''}`} aria-label="Ver próximas abas" disabled={!edges.right} onClick={() => scrollRef.current?.scrollBy({ left: 240, behavior: 'smooth' })}><ChevronRight size={16} /></button>
     </nav>
   );
 }

@@ -1,0 +1,29 @@
+/* Checkout shares the operational palette; amounts and decisions lead the hierarchy. */
+.cashier-checkout__dialog { font-family: Inter, sans-serif; box-shadow: 0 24px 70px #001b1580, 0 4px 0 #052b20; }
+.cashier-checkout__dialog h3, .cashier-checkout__dialog h4 { font-family: 'Space Grotesk', Inter, sans-serif; letter-spacing: -.025em; }
+.cashier-checkout__dialog h3 { font-size: 1.35rem; }
+.cashier-checkout__dialog h4 { font-size: 1rem; }
+.cashier-checkout__dialog [role='checkbox']:focus-visible, .cashier-checkout__dialog button:focus-visible { outline: 2px solid #78dfc2; outline-offset: 2px; }
+.cashier-checkout__method { min-height: 68px; flex-direction: column; gap: 6px; box-shadow: 0 3px 0 #092c22; }
+.cashier-checkout__method[aria-pressed='true'] { background: #9ce4cd; color: #103a2d; border-color: #c1f3e1; box-shadow: 0 3px 0 #3b9478; }
+.cashier-checkout__submit { background: #05c49d; color: #062c24; box-shadow: 0 4px 0 #08735f; text-transform: none; letter-spacing: 0; font-size: .875rem; }
+.cashier-checkout__submit:hover { background: #47dbb7; }
+.cashier-checkout__share { display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 44px; border: 1px solid var(--koma-border); border-radius: 12px; color: inherit; font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .cashier-checkout__dialog * { transition-duration: 0s !important; animation-duration: 0s !important; } }
+.cashier-checkout__method svg { position: static; width: 40px; height: 30px; flex: none; }
+.cashier-checkout__method { min-height: 80px; }
+/* Distinct surfaces reserve the lightest, most saturated tone for the next action. */
+.cashier-checkout__dialog { background:var(--koma-surface-dialog); }
+.cashier-checkout__header { background:var(--koma-surface-shell); border-bottom-color:var(--koma-border-strong); }
+.cashier-checkout__content { background:var(--koma-surface-panel); }
+.cashier-checkout__form { background:var(--koma-surface-dialog); border-color:var(--koma-border-strong); box-shadow:0 3px 0 #061b1329; }
+.cashier-checkout__item { font-size:.8rem; min-height:52px; }
+.cashier-checkout__item span.text-\[9px\] { font-size:.7rem; }
+.cashier-checkout__totals { background:var(--koma-surface-input); border-color:var(--koma-border-strong); font-size:.78rem; }
+.cashier-checkout__totals > div:last-child { font-size:1rem; }
+.cashier-checkout__balance { background:var(--koma-surface-input); border-color:var(--koma-border-strong); }
+.cashier-checkout__balance strong { font-family:var(--koma-font-display),sans-serif; font-size:1.2rem; }
+.cashier-checkout__method { background:var(--koma-surface-input); border-color:var(--koma-border-strong); }
+.cashier-checkout__method:hover { transform:translateY(-2px); border-color:#75d6b6; }
+.cashier-checkout__method:active { transform:translateY(1px); box-shadow:0 1px 0 #092c22; }
+@media (prefers-reduced-motion: reduce) { .cashier-checkout__method:hover,.cashier-checkout__method:active { transform:none; } }

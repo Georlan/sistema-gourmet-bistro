@@ -21,21 +21,8 @@ test('mensagem de cliente usa assinatura sonora própria e respeita som desativa
   assert.doesNotMatch(chatHook, /1174\.66/);
 });
 
-test('botão Conversas ganha atenção forte apenas quando há não lidas', () => {
+test('unread conversations keep a visible counter without repeating animations or yellow', () => {
   assert.match(attentionCss, /#btn-caixa-conversas-drawer\[aria-label\*="mensagens não lidas"\]/);
-  assert.match(attentionCss, /koma-chat-attention/);
-  assert.match(attentionCss, /koma-chat-attention-ring/);
   assert.match(attentionCss, /span\[role="status"\]/);
-  assert.match(attentionCss, /#fbbf24/);
-});
-
-test('rótulos repetitivos de aguardando resposta deixam de competir visualmente', () => {
-  assert.match(attentionCss, /#cashier-chat-panel \.text-amber-300/);
-  assert.match(attentionCss, /#cashier-chat-panel \.sticky\.top-0\.z-10/);
-  assert.match(attentionCss, /display: none !important/);
-});
-
-test('animação respeita preferência por movimento reduzido', () => {
-  assert.match(attentionCss, /prefers-reduced-motion: reduce/);
-  assert.match(attentionCss, /animation: none !important/);
+  assert.doesNotMatch(attentionCss, /animation:|#fbbf24|display: none/);
 });

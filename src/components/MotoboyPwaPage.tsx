@@ -19,6 +19,7 @@ import { API_BASE_URL } from '../config/api';
 import { KomaLogo } from './KomaLogo';
 import { nextKomaTheme, persistKomaTheme, readKomaTheme, applyKomaTheme } from '../config/theme';
 import './courier/courierPresentation.css';
+import './shared/komaThemeTransition.css';
 import { useCourierTrip } from './courier/useCourierTrip';
 import { CourierRideArtwork } from './courier/CourierRideArtwork';
 import { useCourierAutoOrder } from './courier/useCourierAutoOrder';

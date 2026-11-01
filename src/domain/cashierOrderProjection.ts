@@ -123,7 +123,10 @@ export const getCashierTableOrderPresentation = (order: Order & { projectionScop
         ? `Pedidos ${orderNumbers.map(number => `#${number}`).join(' + ')}`
         : `Pedido #${orderNumbers[0] || getCashierHumanOrderNumber(order)}`;
 
+  const defaultNames = [`mesa ${mesaId}`, `mesa ${String(mesaId).padStart(2, '0')}`];
+  const customName = configuredName && !defaultNames.includes(configuredName.toLocaleLowerCase('pt-BR')) ? configuredName : '';
   return {
+    supportingLabel: [customName, order.garcomNome || 'Atendimento'].filter(Boolean).join(' · '),
     shortLabel: mesaId > 0 ? `M${mesaId}` : 'B',
     title: orderLabel,
     subtitle: `${configuredName || (mesaId > 0 ? `Mesa ${String(mesaId).padStart(2, '0')}` : 'Balcão')} · ${activeItemCount} ${activeItemCount === 1 ? 'item' : 'itens'} · ${order.garcomNome || 'Atendimento'}`,
@@ -387,7 +390,7 @@ export const formatCashierOldestAge = (values: unknown[], now: number) => {
 };
 
 export interface DigitalOrderActionCapability {
-  action: 'accept' | 'start_preparation' | 'mark_ready' | 'dispatch' | 'finalize' | 'none';
+  action: 'accept' | 'mark_ready' | 'dispatch' | 'finalize' | 'none';
   targetStatus?: 'aceito' | 'producao' | 'pronto' | 'transito' | 'finalizado';
   label: string;
   isAllowed: boolean;
@@ -416,18 +419,14 @@ export function getDigitalOrderActionCapability(
   if (status === 'pendente' || status === 'analise') {
     return {
       action: 'accept',
-      targetStatus: isDelivery ? 'aceito' : 'producao',
+      targetStatus: 'aceito',
       label: isPending ? 'Aceitando…' : 'Aceitar pedido',
       isAllowed: !isPending,
       disabledReason: isPending ? 'Aceitando pedido…' : undefined,
     };
   }
 
-  if (status === 'aceito') {
-    return { action: 'start_preparation', targetStatus: 'producao', label: isPending ? 'Iniciando…' : 'Iniciar preparo', isAllowed: !isPending };
-  }
-
-  if (status === 'producao') {
+  if (status === 'aceito' || status === 'producao') {
     let defaultLabel = 'Pronto para retirada';
     if (isDelivery) defaultLabel = 'Marcar como pronto';
     else if (modalidade === 'dine_in') defaultLabel = 'Pronto para servir';

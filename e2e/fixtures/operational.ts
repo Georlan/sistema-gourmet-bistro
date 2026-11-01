@@ -14,6 +14,7 @@ type Scenario = {
   canonicalIdentity?: boolean;
   secondCheck?: boolean;
   tableCount?: number;
+  tableName?: string;
   transferredSecondCheck?: boolean;
 };
 
@@ -94,7 +95,7 @@ export async function openOperationalScenario(page: Page, scenario: Scenario = {
     let body: unknown = [];
     if (path === '/comandas/detalhes/todos') body = checks;
     else if (path === '/mesas/') body = [
-      { id: 7, nome: 'Mesa 7', capacidade: 4, status: 'ocupada' },
+      { id: 7, nome: scenario.tableName ?? 'Mesa 7', capacidade: 4, status: 'ocupada' },
       { id: 8, nome: 'Mesa 8', capacidade: 4, status: 'livre' },
       ...Array.from({ length: Math.max(0, (scenario.tableCount ?? 2) - 2) }, (_, index) => ({
         id: index + 9, nome: `Mesa ${index + 9}`, capacidade: 4, status: 'livre',

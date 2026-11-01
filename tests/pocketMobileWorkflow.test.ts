@@ -141,7 +141,7 @@ test('CheckoutDialog hides physical print button and shows WhatsApp share button
 
   const pocketMarkup = renderToStaticMarkup(createElement(CheckoutDialog, propsPocket));
   assert.doesNotMatch(pocketMarkup, /Imprimir Comprovante Físico/);
-  assert.match(pocketMarkup, /Compartilhar Conta \(WhatsApp\)/);
+  assert.match(pocketMarkup, /Compartilhar conta/);
 
   const propsStandard: CheckoutDialogProps = {
     ...propsPocket,
@@ -149,8 +149,8 @@ test('CheckoutDialog hides physical print button and shows WhatsApp share button
   };
 
   const standardMarkup = renderToStaticMarkup(createElement(CheckoutDialog, propsStandard));
-  assert.match(standardMarkup, /Reimpressão total/);
-  assert.match(standardMarkup, /Imprimir Conta/);
+  assert.doesNotMatch(standardMarkup, /Reimpressão total/);
+  assert.doesNotMatch(standardMarkup, /Imprimir Conta/);
 });
 
 test('CashierMobileBottomBar renders 5 standard tabs with operational status', () => {

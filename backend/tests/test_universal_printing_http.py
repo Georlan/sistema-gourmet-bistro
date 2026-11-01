@@ -294,7 +294,7 @@ def test_scheduled_order_prints_on_arrival_with_local_time_and_no_duplicate_at_a
         schedule_order_in_session(db, restaurante_id=TENANT_ID, comanda_id=check.id, scheduled_for=target)
         db.commit()
         assert check.online_payment_status is None
-        assert check.delivery_status == ("producao" if automatic else "pendente")
+        assert check.delivery_status == ("aceito" if automatic else "pendente")
         assert db.query(Comanda).filter(Comanda.id == COMMAND_ID, _operational_online_payment_filter()).count() == 1
         dto = project_check_details(db, [check], TENANT_ID)[0]
         assert dto.scheduled_for is not None

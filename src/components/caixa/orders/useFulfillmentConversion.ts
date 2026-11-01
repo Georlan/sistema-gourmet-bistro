@@ -29,8 +29,9 @@ export function useFulfillmentConversion({ convertToPickup, apiBaseUrl, authHead
     return () => { active = false; };
   }, [selectedOrderId, selectedOrderRevision, apiBaseUrl, headersKey]);
 
-  const request = async (order: { id: string | number; numeroPedido?: number | null }) => {
+  const request = async (order: { id: string | number; numeroPedido?: number | null; tableId?: number }) => {
     const orderId = String(order.id);
+
     try {
       const data = await getOptions(orderId);
       setTarget({ orderId, orderLabel: order.numeroPedido ? `Pedido #${order.numeroPedido}` : `Pedido ${order.id}`,

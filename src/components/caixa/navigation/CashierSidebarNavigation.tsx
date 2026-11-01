@@ -11,6 +11,7 @@ import {
 } from '../../ui/sidebar';
 import type { CashierSidebarProps } from './cashierNavigationContracts';
 import type { CashierNavigationGroup } from './cashierNavigation';
+import { CashierNavigationGlyph } from './CashierNavigationGlyph';
 
 type Props = Pick<
   CashierSidebarProps,
@@ -50,7 +51,7 @@ export function CashierSidebarNavigation({
                       className="cashier-nav-item"
                       title={item.label}
                     >
-                      <span className="cashier-nav-icon"><Icon size={15} /></span>
+                      <span className="cashier-nav-icon"><CashierNavigationGlyph kind={item.id} fallback={Icon} /></span>
                       <span className="cashier-nav-label">{item.label}</span>
                       {item.id === 'operacao' && sidebarOrderCount > 0 && (
                         <SidebarMenuBadge>{sidebarOrderCount}</SidebarMenuBadge>

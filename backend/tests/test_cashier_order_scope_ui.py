@@ -38,7 +38,7 @@ def test_whole_table_cancellation_and_transfer_are_salon_context_actions():
     assert "Cancelar toda a mesa e liberar" in details
     assert "handleTransferTableFromSalon" in owner
     assert "handleTransferSelectedKanbanTable" in source
-    assert "Transferir para…" in details
+    assert "<CashierTableDestinations source={selectedKanbanOrder.mesaId} transfer={transfer} actions={actions}" in details
     assert "<CaixaSalonTab" in source
     assert "./caixa/salao/CaixaSalonTab" in source
 

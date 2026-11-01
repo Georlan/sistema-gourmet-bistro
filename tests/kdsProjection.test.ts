@@ -124,3 +124,10 @@ test('KDS search finds tickets by mesa, item, customer and observation without c
   assert.equal(matchesKdsTicketQuery(firstTicket, 'suco'), false);
   assert.equal(firstTicket.preparingCount, 1);
 });
+
+test('KDS identifica pedido aceito aguardando início sem o confundir com preparo', () => {
+  const projection = projectKdsTickets([
+    kitchenItem('accepted', 'preparando', { deliveryStatus: 'aceito' }),
+  ]);
+  assert.equal(projection.tickets[0].deliveryStatus, 'aceito');
+});

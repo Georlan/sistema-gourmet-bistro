@@ -20,7 +20,7 @@ for (const failure of [false, true]) {
     await page.route('**/comandas/delivery/ativos', route => route.fulfill({ json: [order()] }));
     await page.route('**/comandas/delivery/pendentes', route => route.fulfill({ json: [] }));
     await page.route('**/comandas/detalhes/todos?*', route => route.fulfill({ json: [order()] }));
-    await page.route('**/comandas/conversion-e2e/modalidade/opcoes', route => route.fulfill({ json: { options: [type === 'Retirada' ? 'delivery' : 'pickup'], address_snapshot: null } }));
+    await page.route('**/comandas/conversion-e2e/modalidade/opcoes', route => route.fulfill({ json: { options: type === 'Retirada' ? ['delivery'] : ['pickup', 'delivery'], address_snapshot: null } }));
     await page.route('**/comandas/conversion-e2e/modalidade/previa', async route => {
       const payload = route.request().postDataJSON();
       expect(payload.fulfillment).toBe('delivery');
@@ -43,9 +43,15 @@ for (const failure of [false, true]) {
     const card = page.locator('.orders-card--digital').filter({ hasText: 'Cliente conversão' });
     await card.click();
     const detail = page.locator('.orders-detail-modal');
-    await expect(detail.getByRole('button', { name: 'Marcar pronto para retirada' })).toBeVisible();
-  await detail.getByText('Mais opções', { exact: true }).click();
-    await detail.getByRole('button', { name: 'Alterar tipo do pedido' }).click();
+    await expect(detail.getByRole('button', { name: 'Marcar pronto para retirada' })).toHaveCount(0);
+    const associate = detail.getByRole('button', { name: 'Vincular mesa' });
+    await associate.click();
+    const chooser = detail.getByRole('region', { name: 'Vincular mesa' });
+    await expect(chooser).toBeVisible();
+    expect((await associate.boundingBox())!.height).toBeLessThan(100);
+    await chooser.getByRole('button', { name: 'Fechar escolha de mesa' }).click();
+    await expect(chooser).toHaveCount(0);
+    await detail.getByRole('button', { name: 'Tipo e endereço' }).click();
     const dialog = page.getByRole('dialog', { name: 'Alterar tipo do pedido' });
     await dialog.locator('#conversion-address-logradouro').fill('Rua das Flores');
     await dialog.locator('#conversion-address-numero').fill('10');
@@ -57,15 +63,27 @@ for (const failure of [false, true]) {
     await dialog.getByRole('button', { name: 'Confirmar alteração' }).click();
     if (failure) {
       await expect(dialog.getByRole('alert')).toContainText('Alteração não confirmada');
-      await expect(detail.getByRole('button', { name: 'Marcar pronto para retirada' })).toBeVisible();
+      await expect(detail.getByRole('button', { name: 'Marcar pronto para retirada' })).toHaveCount(0);
       expect(type).toBe('Retirada');
       await expect(dialog.getByRole('button', { name: 'Calcular e revisar' })).toBeVisible();
     } else {
       await expect(dialog).toHaveCount(0);
       await expect(card).toContainText('R$ 49,00');
       await card.click();
-      await expect(detail.getByRole('button', { name: 'Marcar como pronto', exact: true })).toBeVisible();
+      await expect(detail.getByRole('button', { name: 'Marcar como pronto', exact: true })).toHaveCount(0);
       await expect(detail.getByRole('button', { name: 'Marcar pronto para retirada' })).toHaveCount(0);
+      await detail.getByRole('button', { name: 'Tipo e endereço' }).click();
+      const revisionDialog = page.getByRole('dialog', { name: 'Alterar tipo do pedido' });
+      const selector = revisionDialog.getByLabel('Novo tipo do pedido');
+      await expect(selector).toBeFocused();
+      await selector.selectOption('delivery');
+      await expect(revisionDialog.locator('#conversion-address-logradouro')).toBeVisible();
+      await selector.selectOption('pickup');
+      await expect(revisionDialog.locator('#conversion-address-logradouro')).toHaveCount(0);
+      await page.keyboard.press('Escape');
+      await expect(revisionDialog).toHaveCount(0);
+      await expect(detail.getByRole('button', { name: 'Tipo e endereço' })).toBeFocused();
+
     }
     expect(commits).toBe(1);
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);

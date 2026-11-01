@@ -589,10 +589,16 @@ class OrderApplicationService:
                     Comanda.id == str(cmd.check_id),
                 )
                 .with_for_update()
+                .populate_existing()
                 .first()
             )
             if comanda and comanda.fechada:
                 raise OrderValidationError("Não é permitido adicionar pedidos a uma comanda fechada.")
+            if comanda and cmd.table_id and (
+                str(comanda.mesa_id or '') != str(cmd.table_id)
+                or normalize_to_fulfillment(comanda.tipo) != cmd.fulfillment
+            ):
+                raise OrderValidationError("O pedido mudou de mesa ou modalidade. Atualize e tente novamente.")
 
         # Status inicial de comanda e lançamento.
         #

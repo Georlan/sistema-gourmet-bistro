@@ -1,0 +1,72 @@
+/* Order reading surface. Green is reserved for progress; paper denotes printing. */
+.orders-detail-modal {
+  --kd-paper: #eff0d9;
+  --kd-ink: #133c2e;
+  font-family: var(--koma-font-body);
+  cursor: auto;
+  background: var(--koma-surface-dialog);
+  border-color: var(--koma-border-strong);
+  box-shadow: 0 24px 80px #00000066, 0 4px 0 #08281e88, inset 0 1px 0 #ffffff18;
+}
+.orders-detail-modal :is(button,input,select,textarea,summary) { font-family: var(--koma-font-body); }
+.orders-detail-modal .orders-detail-modal__hero { gap: 1rem; padding: 1.25rem; background: #103e30; border-color: #47755b; }
+.orders-detail-modal .orders-detail-modal__number { width: 64px; height: 64px; min-height: 0; border: 0; border-radius: 0; background: transparent; }
+.orders-detail-modal .orders-detail-modal__number img { display: block; width: 64px; height: 64px; }
+.orders-detail-modal .orders-detail-modal__eyebrow { color: #c2d8c4; font-family: var(--koma-font-body); font-size: .75rem; font-weight: 450; letter-spacing: 0; text-transform: none; line-height: 1.5; }
+.orders-detail-modal .orders-detail-modal__title { color: #f2f4e3; font-family: var(--koma-font-display); font-size: 1.7rem; font-weight: 650; line-height: 1.2; letter-spacing: -.035em; white-space: normal; overflow-wrap: anywhere; }
+.orders-detail-modal .orders-detail-modal__status-line { color: #c2d8c4; font-size: .8rem; line-height: 1.5; gap: .4rem; }
+.orders-detail-modal .orders-detail-modal__status-line strong { color: #9be6c9; font-weight: 550; }
+.orders-detail-modal .orders-detail-modal__hero-side { gap: .55rem; align-self: stretch; justify-content: space-between; }
+.orders-detail-modal .orders-detail-modal__hero-side > strong { font-family: var(--koma-font-display); font-size: 1.25rem; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; color: #f2f4e3; }
+.orders-detail-modal .orders-detail-modal__close { width: 36px; height: 36px; min-width: 44px; min-height: 44px; border: 0; border-radius: 50%; background: #ffffff0c; color: #c2d8c4; box-shadow: none; }
+.orders-detail-modal .orders-detail-modal__close:hover { color: #fff; background: #ffffff1c; box-shadow: none; }
+.orders-detail-modal .orders-detail-modal__body { padding: 1.25rem; gap: 1rem; }
+.orders-detail-modal .orders-detail-modal__customer { border: 0; border-radius: 0; padding: 0 0 .85rem; border-bottom: 1px solid var(--koma-border-default); background: transparent; }
+.orders-detail-modal :is(.orders-detail-modal__section-title span,.orders-detail-modal__customer span,.orders-detail-modal__metrics span) { font-family: var(--koma-font-body); font-size: .75rem; font-weight: 500; letter-spacing: 0; text-transform: none; line-height: 1.5; color: var(--koma-text-muted); }
+.orders-detail-modal .orders-detail-modal__section-title strong { font-size: .75rem; font-weight: 450; color: var(--koma-text-muted); }
+.orders-detail-modal .orders-detail-modal__items { padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.orders-detail-modal .orders-detail-modal__item { align-items: flex-start; gap: .8rem; padding: .8rem 0; border: 0; border-bottom: 1px solid var(--koma-border-default); border-radius: 0; background: transparent; }
+.orders-detail-modal .orders-detail-modal__item:last-child { border: 0; }
+.orders-detail-modal .orders-detail-modal__quantity { min-width: 2rem; width: auto; height: auto; min-height: 1.6rem; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--koma-text-secondary); font-family: var(--koma-font-display); font-size: 1rem; font-weight: 500; }
+.orders-detail-modal .orders-detail-modal__item strong { font-size: .95rem; font-weight: 600; line-height: 1.5; }
+.orders-detail-modal .orders-detail-modal__item-status { display: inline-flex; align-items: center; gap: .35rem; padding: .15rem 0 .15rem .4rem; margin-top: .15rem; color: var(--koma-text-secondary); font-family: var(--koma-font-body); font-size: .73rem; font-weight: 500; letter-spacing: 0; text-transform: none; border: 0; border-radius: 0; background: transparent; white-space: normal; }
+.orders-detail-modal .orders-detail-modal__item-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; background: #d5c984; }
+.orders-detail-modal .orders-detail-modal__item-status.is-ready { color: var(--koma-text-primary); background: transparent; }
+.orders-detail-modal .orders-detail-modal__item-status.is-ready::before { background: var(--koma-accent-text); }
+.orders-detail-modal .orders-detail-modal__edit > summary { display: list-item; width: fit-content; min-height: 36px; padding-block: .5rem; color: var(--koma-text-muted); font-size: .75rem; font-weight: 450; cursor: pointer; }
+.orders-detail-modal .orders-detail-modal__footer { padding: .85rem 1.25rem 1.15rem; background: var(--koma-surface-panel); border-color: var(--koma-border-default); }
+.orders-detail-modal .orders-detail-modal__primary-action { min-height: 48px; font-size: .9rem; font-weight: 650; border: 1px solid #51ddba; border-radius: .7rem; background: #05c49d; color: #052f25; box-shadow: inset 0 1px 0 #ffffff66, 0 3px 0 #075e49; }
+.orders-detail-modal .orders-detail-modal__primary-action:hover:not(:disabled) { background: #40dab5; }
+.orders-detail-modal :is(button,summary) { text-transform: none; letter-spacing: 0; cursor: pointer; transition: background-color 140ms ease, box-shadow 140ms ease, transform 140ms ease; }
+.orders-detail-modal :is(button,summary):focus-visible { outline: 2px solid var(--koma-focus-ring); outline-offset: 3px; }
+.orders-detail-modal button:not(:disabled):active { transform: translateY(1px); }
+.orders-detail-modal button:disabled { cursor: not-allowed; }
+@media (max-width: 480px) {
+  .orders-detail-modal .orders-detail-modal__hero { gap: .65rem; padding: 1rem; }
+  .orders-detail-modal .orders-detail-modal__number,.orders-detail-modal .orders-detail-modal__number img { width: 48px; height: 48px; }
+  .orders-detail-modal .orders-detail-modal__title { font-size: 1.35rem; }
+  .orders-detail-modal .orders-detail-modal__hero-side > strong { font-size: 1rem; }
+  .orders-detail-modal .orders-detail-modal__body { padding: 1rem; }
+  .orders-detail-modal .orders-detail-modal__footer { padding-inline: 1rem; }
+  .orders-detail-modal .orders-detail-modal__item { flex-wrap: wrap; }
+  .orders-detail-modal .orders-detail-modal__item-status { margin-left: 2.8rem; padding-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .orders-detail-modal :is(button,summary) { transition: none; }
+  .orders-detail-modal button:is(:hover,:active):not(:disabled) { transform: none; }
+}
+
+.orders-detail-modal__address { display: flex; align-items: flex-start; gap: .75rem; padding: 1rem 0; border-bottom: 1px solid var(--koma-border); }
+.orders-detail-modal__address svg { flex-shrink: 0; }
+.orders-detail-modal__address span { display: block; font-size: .75rem; color: var(--koma-text-secondary); margin-bottom: .25rem; }
+.orders-detail-modal__address strong { display: block; font-size: 1rem; line-height: 1.5; overflow-wrap: anywhere; }
+.orders-detail-modal .orders-detail-modal__observation-close { margin-left: 1rem; min-height: 40px; padding-inline: .7rem; border: 1px solid var(--koma-border); border-radius: .6rem; font-size: .8rem; }
+.cashier-feedback { position: fixed; left: 50%; top: .75rem; transform: translateX(-50%); z-index: 9999; max-width: min(32rem,90vw); border: 1px solid #b88486; border-radius: .75rem; background: #5c3037; color: #ffe5e4; padding: .65rem 1rem; font-size: .85rem; box-shadow: 0 3px 12px #0003; }
+.orders-detail-modal { overflow-y: auto; }
+.orders-detail-modal__body,.orders-detail-modal__footer { flex-shrink: 0; }
+
+.orders-detail-modal__payment:not(.is-paid) { background: #a7cfe8; color: #15394f; border: 1px solid #79afcb; border-top-color: #d5eaf6; box-shadow: inset 0 1px 0 #e4f4ff,0 3px 0 #31576c; }
+.orders-detail-modal__payment:not(.is-paid) :is(span,strong,p) { color: #15394f !important; }
+
+.orders-detail-modal .orders-detail-modal__number:has(img[src*="delivery"]) { width: 88px; }
+.orders-detail-modal .orders-detail-modal__number img[src*="delivery"] { width: 88px; }

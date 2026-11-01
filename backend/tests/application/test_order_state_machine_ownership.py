@@ -112,7 +112,7 @@ def test_canonical_cancel_intent_uses_rejection_edge_without_losing_semantics():
     assert transition.is_terminal is True
 
 
-def test_canonical_accepted_requires_starting_preparation_before_ready():
+def test_canonical_accepted_can_advance_directly_to_ready():
     accepted_targets = OrderStateMachine.get_allowed_targets(
         OrderStatus.ACCEPTED,
         FulfillmentType.DELIVERY,
@@ -122,7 +122,7 @@ def test_canonical_accepted_requires_starting_preparation_before_ready():
         FulfillmentType.DELIVERY,
     )
 
-    assert accepted_targets == (OrderStatus.PREPARING, OrderStatus.REJECTED)
+    assert accepted_targets == (OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.REJECTED)
     assert preparing_targets == (OrderStatus.READY, OrderStatus.REJECTED)
 
 

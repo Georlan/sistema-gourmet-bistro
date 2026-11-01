@@ -663,7 +663,6 @@ def test_delivery_acceptance_is_persisted_then_preparation_emits_separate_event(
     accepted = advance("aceito")
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["delivery_status"] == "aceito"
-    assert advance("pronto").status_code == 409
     assert advance("aceito").status_code == 200
     started = advance("producao")
     assert started.status_code == 200, started.text
@@ -674,3 +673,66 @@ def test_delivery_acceptance_is_persisted_then_preparation_emits_separate_event(
     names = _event_names_for_check(check_id)
     assert names.count("koma.order.accepted") == 1
     assert names.count("koma.order.preparing") == 1
+
+@patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)
+@patch("app.services.whatsapp.enviar_notificacao_whatsapp_task", lambda *args, **kwargs: None)
+def test_kds_last_item_ready_advances_order_without_advancing_partial_items(char_client, char_setup):
+    headers = char_setup['headers']
+    comanda_id = _create_pickup(char_client, phone='11977770333', customer_name='KDS Integration')
+    started = char_client.put(f'/comandas/{comanda_id}/delivery/status', params={'status_novo': 'producao'}, headers=headers)
+    assert started.status_code == 200, started.text
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        first = db.query(Item).filter_by(restaurante_id=CHAR_RESTAURANT_ID, comanda_id=comanda_id).first()
+        second = Item(id='kds-extra-item', restaurante_id=CHAR_RESTAURANT_ID, comanda_id=comanda_id,
+                      lancamento_id=first.lancamento_id, produto_id=first.produto_id,
+                      preco_unit=first.preco_unit, status='preparando', pago=False)
+        db.add(second)
+        first_id = first.id
+        db.commit()
+    finally:
+        db.close()
+    for item_id, expected in [(first_id, 'producao'), ('kds-extra-item', 'pronto')]:
+        result = char_client.put(f'/comandas/itens/{item_id}/status', params={'status': 'pronto', 'avancar_pedido': 'true'}, headers=headers)
+        assert result.status_code == 200, result.text
+        db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+        try:
+            assert db.query(Comanda).filter_by(restaurante_id=CHAR_RESTAURANT_ID, id=comanda_id).one().delivery_status == expected
+        finally:
+            db.close()
+
+@patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)
+@patch("app.services.whatsapp.enviar_notificacao_whatsapp_task", lambda *args, **kwargs: None)
+def test_kds_completes_accepted_pickup_without_intermediate_start(char_client, char_setup):
+    headers = char_setup['headers']
+    comanda_id = _create_pickup(char_client, phone='11977770334', customer_name='KDS sem etapa extra')
+    result = char_client.put(f'/comandas/{comanda_id}/delivery/status', params={'status_novo':'aceito'}, headers=headers)
+    assert result.status_code == 200, result.text
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        item_id = db.query(Item.id).filter_by(restaurante_id=CHAR_RESTAURANT_ID, comanda_id=comanda_id).scalar()
+    finally:
+        db.close()
+    result = char_client.put(f'/comandas/itens/{item_id}/status', params={'status':'pronto', 'avancar_pedido':'true'}, headers=headers)
+    assert result.status_code == 200, result.text
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        assert db.query(Comanda).filter_by(restaurante_id=CHAR_RESTAURANT_ID, id=comanda_id).one().delivery_status == 'pronto'
+    finally:
+        db.close()
+
+@patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)
+@patch("app.services.whatsapp.enviar_notificacao_whatsapp_task", lambda *args, **kwargs: None)
+def test_accepted_order_moves_directly_to_ready_once_without_preparing_event(char_client, char_setup):
+    _clear_outbox()
+    headers = char_setup['headers']
+    comanda_id = _create_pickup(char_client, phone='11977770335', customer_name='Avanço direto')
+    url = f'/comandas/{comanda_id}/delivery/status'
+    assert char_client.put(url, params={'status_novo':'aceito'}, headers=headers).status_code == 200
+    ready = char_client.put(url, params={'status_novo':'pronto'}, headers=headers)
+    assert ready.status_code == 200, ready.text
+    assert ready.json()['delivery_status'] == 'pronto'
+    assert char_client.put(url, params={'status_novo':'pronto'}, headers=headers).status_code == 200
+    events = _event_names_for_check(comanda_id)
+    assert events.count('koma.order.ready') == 1
+    assert events.count('koma.order.preparing') == 0

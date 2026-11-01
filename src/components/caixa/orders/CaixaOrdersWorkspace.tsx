@@ -1,12 +1,19 @@
 import { formatBackendDateTime } from "../../../utils/dateTime";
+import { CashierPrintGlyph } from './CashierPrintGlyph';
+import { CheckoutPaymentArt } from '../checkout/CheckoutPaymentArt';
+import { CashierOrderMark } from './CashierOrderMark';
+import { CashierCardEdge } from './CashierCardEdge';
+import { CashierColumnHeader } from './CashierColumnHeader';
 import { OrderItemComposition } from '../../shared/OrderItemComposition';
 import { itemCompositionSignature, type CompositionSource } from '../../../domain/orderItemComposition';
-import React from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { AlertTriangle, Search, MapPin, ClipboardList, Users, Printer, Check, Globe, Smartphone, Clock, Truck, ShoppingBag, Utensils } from 'lucide-react';
+import { AlertTriangle, Search, MapPin, ClipboardList, Check, Smartphone, Clock } from 'lucide-react';
 import type { OrderItem } from '../../../types';
 import { OperationalBanner } from '../../shared/OperationalBanner';
+import { trapOverlayTab } from '../../shared/trapOverlayTab';
 import { deriveProductionState } from '../../../domain/operationalState';
+import { normalizeOperationalTimestamp } from '../../../domain/operationalTime';
 import {
   getCashierDeliveryStatusLabel as deliveryStatusLabel,
   getCashierHumanOrderNumber as humanOrderNumber,
@@ -17,7 +24,7 @@ import {
 import { formatCompactCurrency, formatCurrency, operationalOriginLabel } from '../cashierPresentation';
 import type { CashierTableCard, DeliveryOrderView, OrdersStage, PendingCashPayment, PendingCashPaymentCard } from './cashierWorkspaceTypes';
 import { DigitalReceiptAction } from '../digital-receipt/DigitalReceiptAction';
-import { getDigitalOrderAssociation, getDigitalOrderCustomerLabel, getDigitalOrderFulfillmentLabel, getDigitalOrderSourceLabel, getDigitalOrderTableBlockLabel, getDigitalOrderVisualKind } from './digitalOrderPresentation';
+import { getDigitalOrderAssociation, getDigitalOrderCustomerLabel, getDigitalOrderFulfillmentLabel, getDigitalOrderPaymentSummary, getDigitalOrderSourceLabel, getDigitalOrderTableBlockLabel, getDigitalOrderVisualKind } from './digitalOrderPresentation';
 
 export interface CaixaOrdersWorkspaceProps {
   readonly pixConferenceTrigger?: React.ReactNode;
@@ -81,12 +88,15 @@ export interface CaixaOrdersWorkspaceProps {
   readonly now: number;
 }
 
-// The icon identifies fulfillment, independently of who created the order.
-const digitalOrderIcon = (order: DeliveryOrderView) => {
-  if (order.modalidade === 'delivery') return <Truck size={17} aria-hidden="true" />;
-  if (order.modalidade === 'dine_in') return <Utensils size={17} aria-hidden="true" />;
-  return <ShoppingBag size={17} aria-hidden="true" />;
-};
+// Fulfillment is identified inside the number block; it does not change the order identity.
+const digitalOrderMark = (order: DeliveryOrderView, number: string, associatedTable: boolean) => (
+  <CashierOrderMark number={number}
+    kind={order.isQuickSale ? 'counter' : order.modalidade === 'delivery' ? 'delivery' : order.modalidade === 'retirada' ? 'pickup' : 'dine-in'}
+    label={order.isQuickSale ? 'Balcão' : order.modalidade === 'delivery' ? 'Entrega' : getDigitalOrderFulfillmentLabel(order)}
+    tableLabel={associatedTable ? `Mesa ${String(order.mesaId).padStart(2, '0')}` : undefined} />
+);
+
+const digitalOrderEdge = (order: DeliveryOrderView) => <CashierCardEdge partner={order.partner} />;
 
 // Renderizador compacto de itens de alta densidade
 const renderCompactItemsList = (
@@ -154,12 +164,53 @@ const renderCompactItemsList = (
 };
 
 
-/** Controlled order workspace. Selection, effects and complete business actions stay in CaixaPanel. */
-export function CaixaOrdersWorkspace({
+/** Maintains short-lived arrival feedback without coupling it to operational actions. */
+export function CaixaOrdersWorkspace(props: CaixaOrdersWorkspaceProps) {
+  const { columns, isLoading, search } = props;
+  // Experimental: newest orders first within each existing operational group.
+  const dateValue = (value: unknown): number => normalizeOperationalTimestamp(value) ?? 0;
+  const tableTime = (card: CashierTableCard) => Math.max(0, ...card.order.itens.map(item => dateValue(item.timestamp)), dateValue(card.order.created_at));
+  const digitalTime = (order: DeliveryOrderView) => dateValue(order.created_at || order.criadoEm);
+  const filteredCol1 = useMemo(() => [...columns.tableProduction].sort((a, b) => tableTime(b) - tableTime(a)), [columns.tableProduction]);
+  const filteredDigitalProduction = useMemo(() => [...columns.digitalProduction].sort((a, b) => digitalTime(b) - digitalTime(a)), [columns.digitalProduction]);
+  const filteredCol2Table = useMemo(() => [...columns.tableClosing].sort((a, b) => tableTime(b) - tableTime(a)), [columns.tableClosing]);
+  const filteredDeliveryFinalization = useMemo(() => [...columns.digitalFinalization].sort((a, b) => digitalTime(b) - digitalTime(a)), [columns.digitalFinalization]);
+  const previousStages = useRef<{ digital: Set<string>; items: Set<string> } | null>(null);
+  const [arrivals, setArrivals] = useState<Set<string>>(new Set());
+  const arrivalTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(arrivalTimer.current), []);
+  useEffect(() => {
+    if (isLoading) return;
+    const previous = previousStages.current;
+    const next = {
+      digital: new Set(columns.digitalProduction.map(order => String(order.id))),
+      items: new Set(columns.tableProduction.flatMap(({ order }) => order.itens.map(item => String(item.id)))),
+    };
+    previousStages.current = next;
+    if (!previous || search.query.trim()) return;
+    const moved = new Set<string>();
+    for (const order of columns.digitalFinalization) {
+      if (previous.digital.has(String(order.id))) moved.add(`digital:${order.id}`);
+    }
+    for (const { order } of columns.tableClosing) {
+      if (order.itens.some(item => previous.items.has(String(item.id)))) moved.add(`table:${order.id}`);
+    }
+    if (!moved.size) return;
+    setArrivals(moved);
+
+  }, [columns.digitalProduction, columns.digitalFinalization, columns.tableProduction, columns.tableClosing, search.query, isLoading]);
+  return <CaixaOrdersWorkspaceView {...props} columns={{
+    tableProduction: filteredCol1, digitalProduction: filteredDigitalProduction,
+    tableClosing: filteredCol2Table, digitalFinalization: filteredDeliveryFinalization,
+  }} arrivals={arrivals} />;
+}
+
+/** Stateless rendering boundary; callbacks remain owned by CaixaPanel. */
+export function CaixaOrdersWorkspaceView({
   pixConferenceTrigger, columns, pendingCashPayments: pagamentosPendentes, insights: operationalOrderInsights,
   search, acceptance, navigation, couriers, actions, isLoading, now: nowTimestamp,
-  hasPrinting = true, hasLocalServiceWork, restaurantConfig, onToast,
-}: CaixaOrdersWorkspaceProps) {
+  hasPrinting = true, hasLocalServiceWork, restaurantConfig, onToast, arrivals = new Set<string>(),
+}: CaixaOrdersWorkspaceProps & { arrivals?: ReadonlySet<string> }) {
   const { tableProduction: filteredCol1, digitalProduction: filteredDigitalProduction,
     tableClosing: filteredCol2Table, digitalFinalization: filteredDeliveryFinalization } = columns;
   const { query: searchQuery, onChange: setSearchQuery } = search;
@@ -183,19 +234,20 @@ export function CaixaOrdersWorkspace({
 
     return (
       <div
-        className="rounded-lg border border-koma-border bg-koma-panel/55 px-2.5 py-2"
+        className="orders-card__courier-control"
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => event.stopPropagation()}
       >
-        <div className="mb-1 flex items-center justify-between gap-2 text-[9px]">
-          <span className="font-bold uppercase tracking-wide text-koma-muted">Entregador</span>
-        </div>
+        <img src="/brand/cashier/delivery-v1.svg" alt="" width="32" height="32" />
+        <div className="orders-card__courier-field">
+        <label htmlFor={`courier-${order.id}`}>Entregador</label>
         <select
+            id={`courier-${order.id}`}
             aria-label={`Entregador do pedido ${orderNumber}`}
             value={selectedCourierId}
             disabled={couriers.loadState !== 'loaded'}
             onChange={(event) => couriers.onChange(String(order.id), event.target.value)}
-            className="min-h-8 w-full rounded-lg border border-koma-border bg-koma-card px-2 text-[10px] font-bold text-koma-foreground outline-none focus:border-emerald-500/60 disabled:opacity-60"
+            className="orders-card__courier-select"
           >
             <option value="">
               {couriers.loadState === 'loaded' ? 'Selecionar entregador...' : 'Sincronizando entregadores...'}
@@ -208,6 +260,7 @@ export function CaixaOrdersWorkspace({
                 </option>
               ))}
           </select>
+        </div>
       </div>
     );
   };
@@ -219,9 +272,10 @@ export function CaixaOrdersWorkspace({
     ...filteredDeliveryFinalization.map(order => ({ key: `finalization:${order.id}`, timestamps: [order.created_at] })),
   ]);
   const renderLatestTag = (key: string) => latestCardKey === key ? (
-    <div className="flex flex-wrap" data-order-recency="latest">
-      <span className="orders-card__chip is-primary">Mais recente</span>
-    </div>
+    <span className="orders-card__recency" data-order-recency="latest">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="m8 1 2.2 4.8L15 8l-4.8 2.2L8 15l-2.2-4.8L1 8l4.8-2.2L8 1Z" /></svg>
+      Mais recente
+    </span>
   ) : null;
 
   const totalResultadosBusca = filteredCol1.length + filteredDigitalProduction.length + filteredCol2Table.length + filteredDeliveryFinalization.length;
@@ -270,8 +324,8 @@ export function CaixaOrdersWorkspace({
       />
       {/* ALERTA DE PAGAMENTO PENDENTE EM DINHEIRO (GARÇOM) */}
       {pagamentosPendentes.length > 0 && (
-        <div className={"bg-koma-card border-2 border-amber-500/40 p-4 rounded-2xl space-y-3 animate-pulse-subtle"}>
-          <div className={"flex items-center gap-2 text-amber-500 font-bold uppercase tracking-wider text-[10px]"}>
+        <div className={"orders-cash-pending bg-koma-card p-4 rounded-2xl space-y-3"}>
+          <div className={"orders-cash-pending__heading flex items-center gap-2"}>
             <AlertTriangle size={14} />
             <span>Confirmação de Dinheiro Pendente ({pagamentosPendentes.length})</span>
           </div>
@@ -296,7 +350,7 @@ export function CaixaOrdersWorkspace({
                     <button
                       type="button"
                       onClick={() => actions.rejectCashPayment(pag)}
-                      className={"px-3 py-1.5 bg-rose-50 border border-rose-300 text-rose-800 hover:bg-rose-700 hover:text-white dark:bg-rose-950/30 dark:border-rose-900/35 dark:text-rose-300 dark:hover:bg-rose-900/50 rounded-lg font-bold text-[9px] transition-all cursor-pointer"}
+                      className={"orders-cash-pending__reject px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer"}
                     >
                       Rejeitar
                     </button>
@@ -313,7 +367,8 @@ export function CaixaOrdersWorkspace({
         <div className={"orders-search relative"}>
           <Search className={"absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-koma-muted"} />
           <input
-            type="text"
+            type="search"
+            aria-label="Buscar pedidos"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Buscar mesa, cliente, telefone ou item"
@@ -345,21 +400,20 @@ export function CaixaOrdersWorkspace({
               aria-label="Aceitar pedidos online automaticamente"
             />
             <span className="orders-switch" aria-hidden="true"><span /></span>
-            <span className="orders-auto-accept__label">Aceitar pedidos online automaticamente</span>
+            <span className="orders-auto-accept__label">Aceite automático<small>{autoAccept ? 'Ativo' : 'Manual'}</small></span>
           </label>
-          <div className="orders-delivery-total">
-            <span>Pedidos digitais</span>
-            <strong>{formatCurrency(deliveryOrders.reduce((s, o) => s + o.total, 0))}</strong>
-          </div>
           {pixConferenceTrigger}
           {/* Bell button — opens floating drawer */}
           <button
             type="button"
             onClick={() => { setIsDrawerOpen(true); }}
             className="orders-new-orders"
+            aria-haspopup="dialog"
+            aria-expanded={isDrawerOpen}
+            data-has-orders={deliveryOrders.length > 0}
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
-            <span>Aguardando aceite</span>
+            <img src="/brand/cashier/inbox-orders-v1.svg" alt="" aria-hidden="true" width="32" height="32" />
+            <span>Novos pedidos</span>
             {deliveryOrders.length > 0 && (
               <span className="orders-new-orders__count">
                 {deliveryOrders.length}
@@ -378,19 +432,23 @@ export function CaixaOrdersWorkspace({
           <div className={"absolute inset-0 bg-black/60 backdrop-blur-sm"} />
           {/* Drawer panel */}
           <div
-            className={"relative ml-auto h-full w-full max-w-sm bg-koma-panel border-l border-koma-border flex flex-col shadow-2xl"}
+            className={"orders-pending-drawer relative ml-auto h-full w-full max-w-sm bg-koma-panel border-l border-koma-border flex flex-col shadow-2xl"} role="dialog" aria-modal="true" aria-label="Novos pedidos"
             onClick={e => e.stopPropagation()}
+            onKeyDown={event => {
+              if (event.key === 'Escape') { event.stopPropagation(); setIsDrawerOpen(false); }
+              else trapOverlayTab(event);
+            }}
           >
             {/* Drawer header */}
             <div className={"flex items-center justify-between px-5 py-4 border-b border-koma-border shrink-0"}>
               <div>
-                <h2 className={"font-bold text-koma-foreground text-sm"}>Pedidos aguardando aceite</h2>
-                <p className={"text-[10px] text-koma-subtle mt-0.5"}>Aceite ou recuse cada pedido antes de produzir</p>
+                <h2 className="orders-pending-title">Novos pedidos</h2>
+                <p className="orders-pending-subtitle">Confira e aceite</p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsDrawerOpen(false)}
-                className={"p-1.5 rounded-lg bg-koma-raised border border-koma-border text-koma-subtle hover:text-koma-foreground cursor-pointer"}
+                className={"orders-pending-close p-1.5 rounded-lg bg-koma-raised border border-koma-border text-koma-subtle hover:text-koma-foreground cursor-pointer"} aria-label="Fechar novos pedidos" autoFocus
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
@@ -405,28 +463,17 @@ export function CaixaOrdersWorkspace({
               ) : (
                 deliveryOrders.map((order) => (
                   <div key={order.id} className={"orders-pending-card p-4 rounded-xl space-y-3"}>
-                    <div className={"flex justify-between items-start"}>
-                      <div>
-                        <div className={"flex flex-wrap gap-1 mb-1"}>
-                          <span className={"orders-card__chip is-primary"}>
-                            {getDigitalOrderFulfillmentLabel(order)}
-                          </span>
-                          <span className={"orders-card__chip is-muted"}>
-                            {getDigitalOrderSourceLabel(order)}
-                          </span>
-                          {getDigitalOrderAssociation(order) && <span className={"orders-card__chip is-table-link"}>{getDigitalOrderAssociation(order)}</span>}
-                        </div>
-                        <strong className={"text-koma-foreground text-sm block"}>{order.cliente}</strong>
-                        <span className={"text-[10px] text-koma-subtle block"}>{order.telefone}</span>
+                    {digitalOrderEdge(order)}
+                    <div className="orders-pending-identity">
+                      {digitalOrderMark(order, humanOrderNumber(order), Boolean(getDigitalOrderAssociation(order)))}
+                      <div className="orders-pending-person"><strong>{getDigitalOrderCustomerLabel(order)}</strong>
+                        {order.telefone && <span>{order.telefone}</span>}
+                        {getDigitalOrderAssociation(order) && <span>{getDigitalOrderAssociation(order)}</span>}
                       </div>
-                      <div className="text-right">
-                        <span className="orders-card__price">{formatCurrency(order.total)}</span>
-                        <span className={"text-[9px] text-koma-muted"}>{order.criadoEm}</span>
-                        {order.numeroPedido && <span className={"text-[8px] text-gray-600 font-mono block"}>#{order.numeroPedido}</span>}
-                      </div>
+                      <strong className="orders-pending-total">{formatCurrency(order.total)}</strong>
                     </div>
                     {order.scheduledFor && (
-                      <p className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                      <p className="text-sm font-bold orders-payment-note">
                         Agendado para {formatBackendDateTime(order.scheduledFor)}
                       </p>
                     )}
@@ -438,12 +485,9 @@ export function CaixaOrdersWorkspace({
                       </span>
                     )}
                     {order.paymentMethod && (
-                      <div className="text-[11px] text-koma-secondary space-y-0.5" aria-label="Pagamento do pedido">
-                        <p>Pagamento: <strong className="text-koma-foreground">{order.paymentMethod}</strong></p>
-                        {order.paymentMethod.trim().toLowerCase() === 'dinheiro'
-                          && Number.isFinite(order.changeFor) && Number(order.changeFor) > 0 && (
-                          <p className="font-semibold text-amber-700 dark:text-amber-300">Troco para {formatCurrency(Number(order.changeFor))}</p>
-                        )}
+                      <div className="orders-pending-payment" aria-label="Pagamento do pedido">
+                        <CheckoutPaymentArt method={order.paymentMethod.toLowerCase().includes('dinheiro') ? 'dinheiro' : order.paymentMethod.toLowerCase().includes('pix') ? 'pix' : 'cartao_credito'} />
+                        <span>{getDigitalOrderPaymentSummary(order)}</span>
                       </div>
                     )}
                     <div className={"flex gap-2 pt-1"}>
@@ -453,7 +497,7 @@ export function CaixaOrdersWorkspace({
                         disabled={pendingOrderIds.has(String(order.id))}
                         className="orders-pending-card__accept"
                       >
-                        ✓ Aceitar
+                        <Check size={16} aria-hidden="true" /> Aceitar
                       </button>
                       <button
                         type="button"
@@ -479,7 +523,7 @@ export function CaixaOrdersWorkspace({
             role="tab"
             aria-selected={effectiveMobileOrdersStage === stage.id}
             onClick={() => setMobileOrdersStage(stage.id)}
-            className={clsx('orders-mobile-stages__button', effectiveMobileOrdersStage === stage.id && 'is-active')}
+            className={clsx('orders-mobile-stages__button', effectiveMobileOrdersStage === stage.id && 'is-active', stage.id === 'closing' && arrivals.size > 0 && 'orders-stage--arrived')}
           >
             <span>{stage.label}</span>
             <strong>{stage.count}</strong>
@@ -493,21 +537,12 @@ export function CaixaOrdersWorkspace({
       >
         {/* COLUMN 1: Em produção */}
         {!compactMarmitaria && <div className={clsx('orders-column orders-column--salon flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'salon' && 'is-mobile-active', filteredCol1.length === 0 && 'is-empty')}>
-          <div className={"orders-column__header px-4 py-2.5 flex justify-between items-center shrink-0"}>
-            <div>
-              <span className="orders-column__number">01 / SALÃO</span>
-              <span className={"font-bold text-koma-foreground font-sans block text-sm"}>Mesas em Atendimento</span>
-              <span className={"text-xs text-koma-subtle block mt-0.5 font-normal"}>Lançados pelo garçom ou caixa</span>
-            </div>
-            <span className="orders-column__count">
-              {filteredCol1.length}
-            </span>
-          </div>
+          <CashierColumnHeader kind="salon" title="Salão" count={filteredCol1.length} />
           <div className={"orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5"}>
             {filteredCol1.length === 0 ? (
               <div className={"orders-empty-state py-16 text-center text-koma-subtle text-xs space-y-1"}>
-                <ClipboardList size={20} className={"mx-auto opacity-70 mb-2 text-emerald-700 dark:text-emerald-400"} />
-                <p>{searchQuery ? "Nenhum pedido encontrado para a busca" : "Nenhum pedido local em produção"}</p>
+                {!searchQuery && <img src="/brand/cashier/salon-empty-v1.svg" width="144" height="101" alt="" className="orders-empty-state__art mx-auto mb-2" />}
+                <p>{searchQuery ? "Nenhum pedido encontrado para a busca" : "Salão sem pedidos em preparo"}</p>
               </div>
             ) : (
               <>
@@ -529,6 +564,7 @@ export function CaixaOrdersWorkspace({
                           actions.inspectTableOrder(order);
                         }
                       }}
+                      data-layout="salon"
                       role="button"
                       tabIndex={0}
                       aria-label={`${presentation.title}, ${presentation.subtitle}, ver detalhes`}
@@ -540,36 +576,13 @@ export function CaixaOrdersWorkspace({
                       {renderLatestTag(`salon:${order.id}`)}
                       <div className="orders-card__identity">
                         <div className="orders-card__number is-table">
-                          <Users size={15} aria-hidden="true" />
-                          <span className="orders-card__number-label">{order.mesaId > 0 ? 'Mesa' : 'Balcão'}</span>
+                          <span className="orders-card__table-label">{order.mesaId > 0 ? 'Mesa' : 'Balcão'}</span>
                           <strong>{order.mesaId > 0 ? String(order.mesaId).padStart(2, '0') : 'B'}</strong>
                         </div>
                         <div className="min-w-0">
                           <strong className="orders-card__identity-title">{presentation.title}</strong>
-                          <span className="orders-card__identity-subtitle">{presentation.subtitle.replace(/^Mesa \d+ · /, '')}</span>
-                          <div className="orders-card__identity-chips">
-                            <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
-                            <span className={"orders-card__chip is-primary"}>EM ATENDIMENTO</span>
-                            {smartPosState ? (
-                              <span className={clsx('orders-card__chip', smartPosState.chipClass)}>
-                                {smartPosState.label}
-                              </span>
-                            ) : (
-                              <span className={"orders-card__chip is-muted"}>
-                                {operationalOriginLabel(order.origemOperacional)}
-                              </span>
-                            )}
-                            {tableMovement.transferredFromMesaIds.length > 0 && (
-                              <span className={"orders-card__chip is-muted"}>
-                                ↪ Transferida da M{tableMovement.transferredFromMesaIds.join(', M')}
-                              </span>
-                            )}
-                            {tableMovement.mergedMesaIds.length > 0 && (
-                              <span className={"orders-card__chip is-muted"}>
-                                ⛓ Mesclada com M{tableMovement.mergedMesaIds.join(', M')}
-                              </span>
-                            )}
-                          </div>
+                          <span className="orders-card__identity-subtitle">{presentation.supportingLabel}</span>
+                          <span className={clsx('orders-card__age', sla.badgeClass)}>{sla.label}</span>
                         </div>
                         <div className="orders-card__identity-side">
                           <span className="orders-card__price">{formatCurrency(totalVal)}</span>
@@ -583,10 +596,10 @@ export function CaixaOrdersWorkspace({
                                 actions.printConference(order);
                               }}
                               className="orders-card__icon disabled:opacity-40 disabled:cursor-wait"
-                              title={isPendingConfirmation ? 'Aguardando confirmação do pedido' : 'Imprimir pré-conta / conferência'}
-                              aria-label={`Imprimir conferência de ${presentation.title}`}
+                              title={isPendingConfirmation ? 'Aguardando confirmação do pedido' : order.projectionScope === 'launch' ? `Reimprimir ${presentation.title}` : 'Imprimir conferência da mesa'}
+                              aria-label={order.projectionScope === 'launch' ? `Reimprimir ${presentation.title}` : `Imprimir conferência de ${presentation.title}`}
                             >
-                              <Printer size={12} />
+                              <CashierPrintGlyph />
                             </button>
                           ) : (
                             <DigitalReceiptAction
@@ -604,6 +617,23 @@ export function CaixaOrdersWorkspace({
                           )}
                         </div>
                       </div>
+                      {(smartPosState || tableMovement.transferredFromMesaIds.length > 0 || tableMovement.mergedMesaIds.length > 0) && (
+                      <div className="orders-card__identity-chips">
+                        {smartPosState && (
+                          <span className={clsx('orders-card__chip', smartPosState.chipClass)}>{smartPosState.label}</span>
+                        )}
+                        {tableMovement.transferredFromMesaIds.length > 0 && (
+                          <span className={"orders-card__chip is-muted"}>
+                            ↪ Transferida da M{tableMovement.transferredFromMesaIds.join(', M')}
+                          </span>
+                        )}
+                        {tableMovement.mergedMesaIds.length > 0 && (
+                          <span className={"orders-card__chip is-muted"}>
+                            ⛓ Mesclada com M{tableMovement.mergedMesaIds.join(', M')}
+                          </span>
+                        )}
+                      </div>
+                      )}
                       {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion, hasPrinting === false)}
                       <button
                         type="button"
@@ -633,20 +663,11 @@ export function CaixaOrdersWorkspace({
         </div>}
         {/* COLUMN 2: pedidos sem mesa, de venda rápida, delivery ou retirada. */}
         <div className={clsx('orders-column orders-column--digital flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'digital' && 'is-mobile-active', filteredDigitalProduction.length === 0 && 'is-empty')}>
-          <div className={"orders-column__header px-4 py-2.5 flex justify-between items-center shrink-0"}>
-            <div>
-              <span className="orders-column__number">{compactMarmitaria ? "01 / PREPARO" : "02 / DIGITAL"}</span>
-              <span className={"font-bold text-koma-foreground font-sans block text-sm"}>Pedidos digitais</span>
-              <span className={"text-xs text-koma-subtle block mt-0.5 font-normal"}>Retirada, consumo no local e delivery</span>
-            </div>
-            <span className="orders-column__count">
-              {filteredDigitalProduction.length}
-            </span>
-          </div>
+          <CashierColumnHeader kind="digital" title={compactMarmitaria ? "Em preparo" : "Balcão e online"} count={filteredDigitalProduction.length} />
           <div className={"orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5"}>
             {filteredDigitalProduction.length === 0 ? (
               <div className={"orders-empty-state py-16 text-center text-koma-subtle text-xs space-y-1"}>
-                <Globe size={20} className={"mx-auto opacity-40 mb-2 text-emerald-600 dark:text-emerald-300"} />
+                <img src="/brand/cashier/order-ticket-v1.svg" width="96" height="72" alt="" className="orders-empty-state__art" />
                 <p>{searchQuery ? "Nenhum pedido encontrado para a busca" : "Nenhum pedido online em preparo"}</p>
               </div>
             ) : (
@@ -656,7 +677,7 @@ export function CaixaOrdersWorkspace({
                   const sla = getOrderSlaData(order, nowTimestamp);
                   const isExpanded = !!expandedCardIds[cardId];
                   const isDeliveryOrder = order.modalidade === 'delivery';
-                  const badgeText = deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
+                  const badgeText = deliveryStatusLabel(order.status, order.modalidade);
                   const isMutating = acceptance.pendingOrderIds.has(String(order.id));
                   const selectedCourierId = courierSelection(order);
                   const capability = getDigitalOrderActionCapability(order, {
@@ -689,30 +710,23 @@ export function CaixaOrdersWorkspace({
                         sla.borderTopClass
                       )}
                     >
+                      {renderLatestTag(`digital:${order.id}`)}
+                      {digitalOrderEdge(order)}
                       <div className="orders-card__identity">
-                        <div className={clsx('orders-card__number', order.isQuickSale && 'is-quick-sale', tableBlockLabel && 'is-table')}>
-                          {tableBlockLabel ? <Users size={15} /> : digitalOrderIcon(order)}
-                          <strong>#{orderNumber}</strong>
-                          {tableBlockLabel && <span className="orders-card__number-detail">Mesa {String(order.mesaId).padStart(2, '0')}</span>}
-                        </div>
+                        {digitalOrderMark(order, orderNumber, Boolean(tableBlockLabel))}
                         <div className="min-w-0">
                           <strong className="orders-card__identity-title">
                             {order.isQuickSale ? 'Venda rápida' : getDigitalOrderCustomerLabel(order)}
                           </strong>
                           <span className="orders-card__identity-subtitle">
                             {order.isQuickSale
-                              ? `${order.quantidadeItens} ${order.quantidadeItens === 1 ? 'item' : 'itens'}`
+                              ? ''
                               : [getDigitalOrderAssociation(order), order.telefone].filter(Boolean).join(' · ')}
                           </span>
-                          <div className="orders-card__identity-chips">
-                            {renderLatestTag(`digital:${order.id}`)}
-                            <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
-                            <span className={"orders-card__chip is-primary"}>{badgeText}</span>
-                            <span className={"orders-card__chip is-muted"}>{getDigitalOrderSourceLabel(order)}</span>
-                          </div>
+                          <span className={clsx('orders-card__age', sla.badgeClass)}>{sla.label}</span>
+
                         </div>
                         <div className="orders-card__identity-side orders-card__identity-side--digital">
-                          <span className="orders-card__fulfillment-tag">{order.isQuickSale ? 'Balcão · venda rápida' : getDigitalOrderFulfillmentLabel(order)}</span>
                           <div className="orders-card__money-actions">
                             <span className="orders-card__price">{formatCurrency(order.total)}</span>
                             {hasPrinting !== false ? (
@@ -723,7 +737,7 @@ export function CaixaOrdersWorkspace({
                                 title="Imprimir pré-conta / conferência"
                                 aria-label={`Imprimir conferência do pedido ${humanOrderNumber(order)}`}
                               >
-                                <Printer size={12} />
+                                <CashierPrintGlyph />
                               </button>
                             ) : (
                               <DigitalReceiptAction
@@ -742,18 +756,22 @@ export function CaixaOrdersWorkspace({
                           </div>
                         </div>
                       </div>
+                      <div className="orders-card__identity-chips">
+                        <span className="orders-card__state" data-state={order.status}>{badgeText}</span>
+                        {!order.partner && <span className={"orders-card__chip is-muted"}>{getDigitalOrderSourceLabel(order)}</span>}
+                      </div>
                       {order.scheduledFor && (
-                        <p className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                        <p className="text-sm font-bold orders-payment-note">
                           Agendado para {formatBackendDateTime(order.scheduledFor)}
                         </p>
                       )}
-                      {renderCompactItemsList(order.detailItems?.length ? order.detailItems : order.itens, cardId, isExpanded, toggleCardExpansion, hasPrinting === false)}
                       {isDeliveryOrder && order.endereco && (
-                        <span className={"font-normal text-xs text-koma-subtle flex items-center gap-1 truncate"}>
-                          <MapPin size={11} className={"shrink-0 text-emerald-600 dark:text-emerald-300/80"} />
-                          <span className="truncate">{order.endereco}</span>
-                        </span>
+                        <div className="orders-card__destination">
+                          <MapPin size={16} aria-hidden="true" />
+                          <span>{order.endereco}</span>
+                        </div>
                       )}
+                      {renderCompactItemsList(order.detailItems?.length ? order.detailItems : order.itens, cardId, isExpanded, toggleCardExpansion, hasPrinting === false)}
                       <button
                         type="button"
                         disabled={!capability.isAllowed}
@@ -776,17 +794,8 @@ export function CaixaOrdersWorkspace({
           </div>
         </div>
         {/* COLUMN 3: pagamento e finalização de todas as modalidades. */}
-        <div className={clsx('orders-column orders-column--closing flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'closing' && 'is-mobile-active', filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 && 'is-empty')}>
-          <div className={"orders-column__header px-4 py-2.5 flex justify-between items-center shrink-0"}>
-            <div>
-              <span className="orders-column__number">{compactMarmitaria ? "02 / ENTREGA E RECEBIMENTO" : "03 / FECHAMENTO"}</span>
-              <span className={"font-bold text-koma-foreground font-sans block text-sm"}>Itens prontos e conclusão</span>
-              <span className={"text-xs text-koma-subtle block mt-0.5 font-normal"}>Veja o que já pode ser recebido ou finalizado</span>
-            </div>
-            <span className="orders-column__count">
-              {filteredCol2Table.length + filteredDeliveryFinalization.length}
-            </span>
-          </div>
+        <div className={clsx('orders-column orders-column--closing flex flex-col overflow-hidden', arrivals.size > 0 && 'orders-column--arrived', effectiveMobileOrdersStage === 'closing' && 'is-mobile-active', filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 && 'is-empty')}>
+          <CashierColumnHeader kind="closing" title={compactMarmitaria ? "Entrega e recebimento" : "Prontos e recebimentos"} count={filteredCol2Table.length + filteredDeliveryFinalization.length} />
           <div className={"orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5"}>
             {filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 ? (
               <div className={"orders-empty-state py-16 text-center text-koma-subtle text-xs space-y-1"}>
@@ -801,7 +810,7 @@ export function CaixaOrdersWorkspace({
                   const sla = getOrderSlaData(order, nowTimestamp);
                   const isExpanded = !!expandedCardIds[cardId];
                   const contaPedida = !!order.contaPedida;
-                  const badgeText = contaPedida ? 'CONTA PEDIDA' : 'PRONTO / RECEBER';
+                  const badgeText = contaPedida ? 'Conta pedida' : 'Pronto para receber';
                   const totalVal = order.itens.reduce((sum: number, it: OrderItem & { preco_unit?: number }) => sum + (it.preco_unit || it.preco || 0), 0);
                   const pendingTableItems = Number(order.itensEmPreparoCount || 0);
                   const readyTableItems = order.itens.filter(item => item.status === 'pronto').length;
@@ -817,19 +826,20 @@ export function CaixaOrdersWorkspace({
                           actions.inspectTableOrder(order);
                         }
                       }}
+                      data-layout="salon"
                       role="button"
                       tabIndex={0}
                       aria-label={`${presentation.title}, ${badgeText.toLowerCase()}, ver detalhes`}
                       className={clsx(
                         'orders-card orders-card--closing rounded-xl p-2.5 sm:p-3 space-y-2 text-left cursor-pointer',
+                        arrivals.has(`table:${order.id}`) && 'orders-card--arrived',
                         sla.borderTopClass
                       )}
                     >
                       {renderLatestTag(`closing:${order.id}`)}
                       <div className="orders-card__identity">
                         <div className="orders-card__number is-table">
-                          <Users size={15} aria-hidden="true" />
-                          <span className="orders-card__number-label">{order.mesaId > 0 ? 'Mesa' : 'Balcão'}</span>
+                          <span className="orders-card__table-label">{order.mesaId > 0 ? 'Mesa' : 'Balcão'}</span>
                           <strong>{order.mesaId > 0 ? String(order.mesaId).padStart(2, '0') : 'B'}</strong>
                         </div>
                         <div className="min-w-0">
@@ -838,34 +848,12 @@ export function CaixaOrdersWorkspace({
                           </strong>
                           <span className="orders-card__identity-subtitle">
                             {contaPedida
-                              ? `Conta solicitada · ${totalTableItems} itens no fechamento · ${presentation.subtitle}`
+                              ? `Conta solicitada · ${presentation.supportingLabel}`
                               : pendingTableItems > 0
-                              ? `${readyTableItems} de ${totalTableItems} ${totalTableItems === 1 ? 'item pronto' : 'itens prontos'} · ${presentation.subtitle}`
-                              : presentation.subtitle.replace(/^Mesa \d+ · /, '')}
+                              ? `${readyTableItems} de ${totalTableItems} ${totalTableItems === 1 ? 'item pronto' : 'itens prontos'} · ${presentation.supportingLabel}`
+                              : presentation.supportingLabel}
                           </span>
-                          <div className="orders-card__identity-chips">
-                            <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
-                            <span className={clsx('orders-card__chip', contaPedida ? 'is-attention' : 'is-primary')}>{badgeText}</span>
-                            {smartPosState ? (
-                              <span className={clsx('orders-card__chip', smartPosState.chipClass)}>
-                                {smartPosState.label}
-                              </span>
-                            ) : (
-                              <span className={"orders-card__chip is-muted"}>
-                                {operationalOriginLabel(order.origemOperacional)}
-                              </span>
-                            )}
-                            {tableMovement.transferredFromMesaIds.length > 0 && (
-                              <span className={"orders-card__chip is-muted"}>
-                                ↪ Transferida da M{tableMovement.transferredFromMesaIds.join(', M')}
-                              </span>
-                            )}
-                            {tableMovement.mergedMesaIds.length > 0 && (
-                              <span className={"orders-card__chip is-muted"}>
-                                ⛓ Mesclada com M{tableMovement.mergedMesaIds.join(', M')}
-                              </span>
-                            )}
-                          </div>
+                          <span className={clsx('orders-card__age', sla.badgeClass)}>{sla.label}</span>
                         </div>
                         <div className="orders-card__identity-side">
                           <span className="orders-card__price" title={pendingTableItems > 0 && !contaPedida ? 'Valor dos itens prontos' : 'Valor a receber'}>{formatCurrency(totalVal)}</span>
@@ -874,10 +862,10 @@ export function CaixaOrdersWorkspace({
                               type="button"
                               onClick={(e) => { e.stopPropagation(); actions.printConference(order); }}
                               className="orders-card__icon"
-                              title="Imprimir pré-conta / conferência"
+                              title={order.projectionScope === 'launch' ? `Reimprimir ${presentation.title}` : 'Imprimir conferência da mesa'}
                               aria-label={`Imprimir conferência da ${presentation.title}`}
                             >
-                              <Printer size={12} />
+                              <CashierPrintGlyph />
                             </button>
                           ) : (
                             <DigitalReceiptAction
@@ -895,14 +883,35 @@ export function CaixaOrdersWorkspace({
                           )}
                         </div>
                       </div>
+                      {Number(order.valorPago || 0) > 0 && (
+                        <div className="orders-card__paid" aria-label={`Já recebido ${formatCurrency(Number(order.valorPago))}`}>
+                          <Check size={13} aria-hidden="true" /> Já recebido {formatCurrency(Number(order.valorPago))}
+                        </div>
+                      )}
                       {pendingTableItems > 0 && (
-                        <div className={"flex items-center gap-2 rounded-lg border border-koma-warning-border bg-koma-warning-bg px-2.5 py-2 text-[11px] font-semibold text-koma-warning-text"}>
+                        <div className="orders-card__partial flex items-center gap-2 rounded-lg border border-koma-warning-border bg-koma-warning-bg px-2.5 py-2 text-[11px] font-semibold text-koma-warning-text">
                           <Clock size={13} className="shrink-0" />
                           <span>
                             {pendingTableItems === 1 ? 'Outro item continua em preparo.' : `Outros ${pendingTableItems} itens continuam em preparo.`}
                           </span>
                         </div>
                       )}
+                      <div className="orders-card__identity-chips">
+                        <span className="orders-card__state" data-state={contaPedida ? "bill" : "ready"}>{badgeText}</span>
+                        {smartPosState && (
+                          <span className={clsx('orders-card__chip', smartPosState.chipClass)}>{smartPosState.label}</span>
+                        )}
+                        {tableMovement.transferredFromMesaIds.length > 0 && (
+                          <span className={"orders-card__chip is-muted"}>
+                            ↪ Transferida da M{tableMovement.transferredFromMesaIds.join(', M')}
+                          </span>
+                        )}
+                        {tableMovement.mergedMesaIds.length > 0 && (
+                          <span className={"orders-card__chip is-muted"}>
+                            ⛓ Mesclada com M{tableMovement.mergedMesaIds.join(', M')}
+                          </span>
+                        )}
+                      </div>
                       {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion, hasPrinting === false)}
                       <button
                         type="button"
@@ -934,8 +943,8 @@ export function CaixaOrdersWorkspace({
                     couriersLoaded: couriers.loadState === 'loaded',
                   });
                   const badgeText = order.pago
-                    ? 'PAGO'
-                    : deliveryStatusLabel(order.status, order.modalidade).toUpperCase();
+                    ? 'Pago'
+                    : deliveryStatusLabel(order.status, order.modalidade);
                   const tableBlockLabel = getDigitalOrderTableBlockLabel(order);
                   const orderNumber = humanOrderNumber(order);
                   return (
@@ -954,36 +963,30 @@ export function CaixaOrdersWorkspace({
                       aria-label={`${order.isQuickSale ? 'Venda rápida' : order.modalidade} pedido ${humanOrderNumber(order)}, ver detalhes`}
                       className={clsx(
                         'orders-card orders-card--closing rounded-xl p-2.5 sm:p-3 space-y-2 text-left cursor-pointer',
+                        arrivals.has(`digital:${order.id}`) && 'orders-card--arrived',
                         order.isQuickSale && 'orders-card--quick-sale',
                         `orders-card--fulfillment-${order.modalidade}`,
                         `orders-card--source-${getDigitalOrderVisualKind(order)}`,
                         sla.borderTopClass
                       )}
                     >
+                      {renderLatestTag(`finalization:${order.id}`)}
+                      {digitalOrderEdge(order)}
                       <div className="orders-card__identity">
-                        <div className={clsx('orders-card__number', order.isQuickSale && 'is-quick-sale', tableBlockLabel && 'is-table')}>
-                          {tableBlockLabel ? <Users size={15} /> : digitalOrderIcon(order)}
-                          <strong>#{orderNumber}</strong>
-                          {tableBlockLabel && <span className="orders-card__number-detail">Mesa {String(order.mesaId).padStart(2, '0')}</span>}
-                        </div>
+                        {digitalOrderMark(order, orderNumber, Boolean(tableBlockLabel))}
                         <div className="min-w-0">
                           <strong className="orders-card__identity-title">
                             {order.isQuickSale ? 'Venda rápida' : getDigitalOrderCustomerLabel(order)}
                           </strong>
                           <span className="orders-card__identity-subtitle">
                             {order.isQuickSale
-                              ? `${order.quantidadeItens} ${order.quantidadeItens === 1 ? 'item' : 'itens'}`
+                              ? ''
                               : [getDigitalOrderAssociation(order), order.telefone].filter(Boolean).join(' · ')}
                           </span>
-                          <div className="orders-card__identity-chips">
-                            {renderLatestTag(`finalization:${order.id}`)}
-                            <span className={clsx('orders-card__chip', sla.badgeClass)}>{sla.label}</span>
-                            <span className={"orders-card__chip is-primary"}>{badgeText}</span>
-                            <span className={"orders-card__chip is-muted"}>{getDigitalOrderSourceLabel(order)}</span>
-                          </div>
+                          <span className={clsx('orders-card__age', sla.badgeClass)}>{sla.label}</span>
+
                         </div>
                         <div className="orders-card__identity-side orders-card__identity-side--digital">
-                          <span className="orders-card__fulfillment-tag">{order.isQuickSale ? 'Balcão · venda rápida' : getDigitalOrderFulfillmentLabel(order)}</span>
                           <div className="orders-card__money-actions">
                             <span className="orders-card__price">{formatCurrency(order.total)}</span>
                             {hasPrinting !== false ? (
@@ -994,7 +997,7 @@ export function CaixaOrdersWorkspace({
                                 title="Imprimir pré-conta / conferência"
                                 aria-label={`Imprimir conferência do pedido ${humanOrderNumber(order)}`}
                               >
-                                <Printer size={12} />
+                                <CashierPrintGlyph />
                               </button>
                             ) : (
                               <DigitalReceiptAction
@@ -1013,18 +1016,25 @@ export function CaixaOrdersWorkspace({
                           </div>
                         </div>
                       </div>
+                      {Number(order.amountPaid || 0) > 0 && Number(order.amountDue || 0) > 0 && (
+                        <div className="orders-card__paid"><Check size={13} aria-hidden="true" /> Já recebido {formatCurrency(Number(order.amountPaid))} · Falta {formatCurrency(Number(order.amountDue))}</div>
+                      )}
+                      <div className="orders-card__identity-chips">
+                        <span className="orders-card__state" data-state={order.status}>{badgeText}</span>
+                        {!order.partner && <span className={"orders-card__chip is-muted"}>{getDigitalOrderSourceLabel(order)}</span>}
+                      </div>
                       {order.scheduledFor && (
-                        <p className="text-sm font-bold text-amber-700 dark:text-amber-300">
+                        <p className="text-sm font-bold orders-payment-note">
                           Agendado para {formatBackendDateTime(order.scheduledFor)}
                         </p>
                       )}
-                      {renderCompactItemsList(order.detailItems?.length ? order.detailItems : order.itens, cardId, isExpanded, toggleCardExpansion, hasPrinting === false)}
                       {isDeliveryOrder && order.endereco && (
-                        <span className={"font-normal text-xs text-koma-subtle flex items-center gap-1 truncate"}>
-                          <MapPin size={11} className={"shrink-0 text-emerald-600 dark:text-emerald-300/80"} />
-                          <span className="truncate">{order.endereco}</span>
-                        </span>
+                        <div className="orders-card__destination">
+                          <MapPin size={16} aria-hidden="true" />
+                          <span>{order.endereco}</span>
+                        </div>
                       )}
+                      {renderCompactItemsList(order.detailItems?.length ? order.detailItems : order.itens, cardId, isExpanded, toggleCardExpansion, hasPrinting === false)}
                       {renderCourierControl(order, orderNumber)}
                       {isDeliveryOrder && !isReadyDelivery && order.motoboyId && (
                         <span className="text-xs text-koma-subtle">Entregador: {courierName(order.motoboyId) || `#${order.motoboyId}`}</span>

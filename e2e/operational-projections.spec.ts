@@ -175,7 +175,6 @@ test('detalhes por teclado preservam a rota de impressão da fatia sem usar o n�
   const details = page.locator('.orders-detail-modal');
   await expect(details).toContainText('Prato em preparo');
   await expect(details).not.toContainText('Prato da segunda rodada');
-  await details.getByText('Mais opções', { exact: true }).click();
   await details.getByRole('button', { name: 'Reimprimir produção', exact: true }).click();
   await expect.poll(() => state.actions.filter(action => action.path.endsWith('/imprimir-recibo'))).toEqual([
     { path: '/comandas/check-phase7-24/imprimir-recibo', query: '', method: 'POST', body: null },
@@ -189,7 +188,6 @@ test('falha de impressão mantém os detalhes abertos e não informa sucesso', a
   await launch.focus();
   await launch.press('Space');
   const details = page.locator('.orders-detail-modal');
-  await details.getByText('Mais opções', { exact: true }).click();
   await details.getByRole('button', { name: 'Reimprimir produção', exact: true }).click();
   await expect(page.getByText('Erro ao solicitar reimpressão.', { exact: true })).toBeVisible();
   await expect(details).toBeVisible();
@@ -200,7 +198,6 @@ test('cancelar pelo detalhe do pedido envia somente os IDs dos itens daquela fat
   const state = await openOperationalScenario(page, { statuses: ['preparando', 'preparando'] });
   await page.locator('.orders-card--salon').filter({ hasText: 'Prato em preparo' }).click();
   const details = page.locator('.orders-detail-modal');
-  await details.getByText('Mais opções', { exact: true }).click();
   await expect(details).not.toContainText('Prato da segunda rodada');
   await expect(details.getByRole('combobox', { name: 'Mesa de destino' })).toHaveCount(0);
   await details.getByRole('button', { name: 'Cancelar somente este pedido', exact: true }).click();
@@ -224,7 +221,6 @@ test('cancelar a mesa inteira permanece uma ação de Salão com motivo e escopo
   const details = page.locator('.orders-detail-modal');
   await expect(details).toContainText('Prato em preparo');
   await expect(details).toContainText('Prato da segunda rodada');
-  await details.getByText('Mais opções', { exact: true }).click();
   await details.getByRole('button', { name: 'Cancelar toda a mesa e liberar', exact: true }).click();
   const confirmation = page.getByRole('dialog', { name: 'Cancelar consumo e liberar Mesa 7?' });
   await expect(confirmation.getByRole('button', { name: 'Cancelar e liberar', exact: true })).toBeDisabled();
@@ -239,7 +235,6 @@ test('transferência do Salão usa Comanda técnica e o destino selecionado', as
   const state = await openOperationalScenario(page, { subtab: 'mesas' });
   await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda' }).click();
   const details = page.locator('.orders-detail-modal');
-  await details.getByText('Mais opções', { exact: true }).click();
   await expect(details.getByRole('button', { name: 'Transferir', exact: true })).toBeDisabled();
   await details.getByRole('combobox', { name: 'Mesa de destino' }).selectOption('8');
   expect(state.actions.filter(action => action.path.includes('/transferir/'))).toHaveLength(0);

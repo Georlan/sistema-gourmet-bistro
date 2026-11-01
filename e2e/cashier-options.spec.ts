@@ -27,7 +27,10 @@ for (const [theme, size] of [['light', 'grande'], ['dark', 'gigante']] as const)
     await expect(dialog.getByText('Status do Salão ao Vivo')).toHaveCount(0);
     await expect(dialog.getByText('Modo PDV Imersivo')).toHaveCount(0);
     await expect(dialog.getByText(/Dark Engine|Multi-Tenant/)).toHaveCount(0);
-    await expect(dialog.getByRole('button', { name: 'Atualizar pedidos', exact: true })).not.toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Atualizar pedidos', exact: true })).toBeVisible();
+    await expect(dialog.getByRole('group', { name: 'Tamanho do texto' })).toHaveCount(0);
+    await expect(dialog.getByText('Tema', { exact: true })).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Ajuda e feedback', exact: true })).toBeVisible();
     await expect(dialog.locator('section').first()).toHaveJSProperty('scrollWidth', await dialog.locator('section').first().evaluate(el => el.clientWidth));
     for (const button of await dialog.getByRole('button').all()) {
       if (!await button.isVisible()) continue;
@@ -35,12 +38,6 @@ for (const [theme, size] of [['light', 'grande'], ['dark', 'gigante']] as const)
       expect(await button.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     }
     await page.screenshot({ path: test.info().outputPath(`preferencias-${theme}-${size}.png`) });
-    await dialog.getByRole('button', { name: 'Padrão', exact: true }).click();
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('koma_font_size'))).toBe('padrao');
-    await dialog.getByRole('button', { name: theme === 'light' ? 'Escuro' : 'Claro', exact: true }).click();
-    await expect(page.locator('html')).toHaveAttribute('data-koma-theme', theme === 'light' ? 'dark' : 'light');
-    await dialog.getByText('Recuperação', { exact: true }).click();
-    await expect(dialog.getByRole('button', { name: 'Atualizar pedidos', exact: true })).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(dialog).not.toBeVisible();
     const opener = (page.viewportSize()?.width ?? 1366) < 1024 ? page.locator('#btn-mobile-caixa-sidebar-open') : page.getByRole('button', { name: 'Abrir conta e preferências', exact: true });
