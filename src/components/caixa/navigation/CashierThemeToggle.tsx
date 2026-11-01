@@ -8,7 +8,7 @@ export function CashierThemeToggle({ theme }: { theme: KomaTheme }) {
   return (
     <button type="button" id="btn-caixa-theme" className="cashier-theme-toggle"
       aria-label={label} title={label} disabled={transition.animating}
-      onClick={event => transition.change(event.currentTarget, () => persistKomaTheme(nextKomaTheme(readKomaTheme())), document.querySelectorAll('.orders-card').length > 30)}>
+      onClick={event => transition.change(event.currentTarget, () => persistKomaTheme(nextKomaTheme(readKomaTheme())))}>
       <span className="cashier-theme-toggle__symbols" data-theme={theme} aria-hidden="true">
         <Sun className="cashier-theme-toggle__sun" size={19} />
         <Moon className="cashier-theme-toggle__moon" size={19} />

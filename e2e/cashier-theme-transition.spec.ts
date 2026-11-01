@@ -25,7 +25,7 @@ for (const mode of ['native', 'reduced', 'unsupported', 'long-list']) {
     await expect(page.locator('html')).toHaveAttribute('data-koma-theme', 'light');
     await expect(page.locator('html')).not.toHaveAttribute('data-courier-theme-wipe');
     await expect(page.getByRole('button', { name: 'Usar tema escuro', exact: true })).toBeEnabled();
-    expect(await page.evaluate(() => (window as any).themeStarts)).toBe(mode === 'native' ? 1 : 0);
+    expect(await page.evaluate(() => (window as any).themeStarts)).toBe(mode === 'native' || mode === 'long-list' ? 1 : 0);
     expect(await page.evaluate(() => localStorage.getItem('@koma:theme'))).toBe('light');
     expect(scenario.actions).toHaveLength(0);
     await page.reload();
