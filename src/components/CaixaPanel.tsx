@@ -629,7 +629,7 @@ export function CaixaPanel({
     digitalProduction: filteredDigitalProduction,
     tableClosing: filteredCol2Table.map(buildCashierTableCard),
     digitalFinalization: filteredDeliveryFinalization,
-  }), [filteredCol1, filteredDigitalProduction, filteredCol2Table, filteredDeliveryFinalization, salonTables]);
+  }), [filteredCol1, filteredDigitalProduction, filteredCol2Table, filteredDeliveryFinalization, salonTables, getSmartPosCardState]);
 
   const activeDeliveryOrdersCount = useMemo(
     () =>
