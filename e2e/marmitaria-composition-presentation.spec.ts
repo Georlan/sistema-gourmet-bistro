@@ -48,6 +48,10 @@ test('marmitaria shows the same grouped choices in Kanban and details without me
   await expect(card).not.toContainText('Opções:');
   await card.click();
   const details = page.locator('.orders-detail-modal');
+  const itemsDisclosure = details.locator('.kd-items-disclosure');
+  await expect(itemsDisclosure).not.toHaveAttribute('open', '');
+  await itemsDisclosure.locator('summary').first().click();
+  await expect(itemsDisclosure).toHaveAttribute('open', '');
   await expect(details.locator('.orders-detail-modal__item')).toHaveCount(2);
   await expect(details).toContainText('GUARNIÇÕES: Arroz à grega');
   await expect(details).toContainText('Sem salada');
