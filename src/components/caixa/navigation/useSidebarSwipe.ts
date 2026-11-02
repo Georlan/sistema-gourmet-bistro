@@ -2,7 +2,7 @@ import { useEffect, useRef, type PointerEvent } from 'react';
 
 /** Preview width directly on the existing sidebar; commit state only on release. */
 export function useSidebarSwipe(setOpen: (open: boolean) => void) {
-  const start = useRef<{ id: number; x: number; y: number; width: number; owner: HTMLElement | null; mobile: HTMLElement | null; frame: number; dx: number; releasing: boolean } | null>(null);
+  const start = useRef<{ id: number; x: number; y: number; width: number; minWidth: number; maxWidth: number; owner: HTMLElement | null; mobile: HTMLElement | null; frame: number; dx: number; releasing: boolean } | null>(null);
   const clear = () => {
     const origin = start.current;
     if (!origin) return;
@@ -22,7 +22,9 @@ export function useSidebarSwipe(setOpen: (open: boolean) => void) {
       const sidebar = event.currentTarget.closest<HTMLElement>('.cashier-sidebar');
       const mobile = sidebar?.classList.contains('cashier-sidebar--mobile') ? sidebar : null;
       const owner = mobile ? null : sidebar?.parentElement ?? null;
-      start.current = { id: event.pointerId, x: event.clientX, y: event.clientY, width: sidebar?.getBoundingClientRect().width ?? 0, owner, mobile, frame: 0, dx: 0, releasing: false };
+      const rem = owner ? parseFloat(getComputedStyle(document.documentElement).fontSize) : 0;
+      const expanded = owner ? parseFloat(getComputedStyle(owner).getPropertyValue('--sidebar-width')) * rem || 16 * rem : 0;
+      start.current = { id: event.pointerId, x: event.clientX, y: event.clientY, width: sidebar?.getBoundingClientRect().width ?? 0, minWidth: 3.5 * rem, maxWidth: expanded, owner, mobile, frame: 0, dx: 0, releasing: false };
       event.currentTarget.setPointerCapture(event.pointerId);
     },
     onPointerMove(event: PointerEvent<HTMLElement>) {
@@ -36,10 +38,7 @@ export function useSidebarSwipe(setOpen: (open: boolean) => void) {
         origin.frame = 0;
         if (start.current !== origin) return;
         if (origin.owner) {
-          const rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
-          const styles = getComputedStyle(origin.owner);
-          const expanded = parseFloat(styles.getPropertyValue('--sidebar-width')) * rem || 16 * rem;
-          const width = Math.max(3.5 * rem, Math.min(expanded, origin.width + origin.dx));
+          const width = Math.max(origin.minWidth, Math.min(origin.maxWidth, origin.width + origin.dx));
           origin.owner.style.setProperty('--kc-sidebar-content-width', `${origin.width - 1}px`);
           origin.owner.style.setProperty('--kc-sidebar-drag-width', `${width}px`);
           origin.owner.setAttribute('data-kc-dragging', '');

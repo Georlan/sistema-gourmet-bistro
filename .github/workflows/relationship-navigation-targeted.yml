@@ -8,6 +8,7 @@ on:
       - 'e2e/cashier-horizontal-navigation.spec.ts'
       - 'e2e/cashier-theme-transition.spec.ts'
       - 'e2e/cashier-smartpos-freshness.spec.ts'
+      - 'e2e/cashier-sidebar-gesture-performance.spec.ts'
       - 'src/components/caixa/customers/**'
       - 'src/components/shared/KomaMetricGroup.tsx'
       - 'src/components/shared/KomaEmptyState.tsx'
@@ -44,6 +45,7 @@ jobs:
           e2e/cashier-horizontal-navigation.spec.ts
           e2e/cashier-theme-transition.spec.ts
           e2e/cashier-smartpos-freshness.spec.ts
+          e2e/cashier-sidebar-gesture-performance.spec.ts
           e2e/relationship-navigation.spec.ts
           e2e/loyalty-stage3.spec.ts
           e2e/crm-api-contract.spec.ts
