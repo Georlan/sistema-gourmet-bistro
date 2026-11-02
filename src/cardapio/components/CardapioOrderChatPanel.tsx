@@ -290,25 +290,10 @@ export default function CardapioOrderChatPanel({
               : [...current, incoming].sort((a, b) => (a.seq || 0) - (b.seq || 0)));
           }
           if (typeof data.status !== "string" || !data.status) return;
-          setTracking((current) => {
-            const tipo = current?.tipo || order.tipo || "Retirada";
-            const state = fallbackOrderState(data.status as string, tipo);
-            const closedAt = typeof data.closed_at === "string"
-              ? data.closed_at
-              : current?.closed_at || null;
-            return {
-              ...current,
-              status: data.status as string,
-              tipo,
-              state,
-              closed_at: closedAt,
-              conversa: {
-                ...(current?.conversa || {}),
-                closed_at: closedAt,
-                can_chat: state.can_chat,
-              },
-            };
-          });
+          // The event contains only operational status; the summary also owns
+          // payment and conversation state. Keep the last confirmed view until
+          // the authoritative snapshot has been read.
+          void refresh();
         } catch {
           startFallback();
         }

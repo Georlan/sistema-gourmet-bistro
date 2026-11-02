@@ -299,3 +299,39 @@ test('feed preserva evento separado e retry HTTP reutiliza UUID sem duplicar men
   expect(ids[1]).toBe(ids[0]);
   await expect(panel.getByText('Sem cebola, por favor.', { exact: true })).toHaveCount(1);
 });
+
+test('aviso operacional não apaga pagamento pendente no chat', async ({ page }) => {
+  await mockBackend(page);
+  await seedOrder(page);
+  await page.addInitScript(() => {
+    class FakeEventSource {
+      static all: FakeEventSource[] = [];
+      handlers = new Map<string, (event: MessageEvent) => void>();
+      onopen = null;
+      onerror = null;
+      constructor() { FakeEventSource.all.push(this); }
+      addEventListener(type: string, callback: (event: MessageEvent) => void) { this.handlers.set(type, callback); }
+      close() {}
+    }
+    (window as any).__sources = FakeEventSource.all;
+    (window as any).EventSource = FakeEventSource;
+  });
+  let summaries = 0;
+  await page.route('**/api/cardapio/pedidos/acompanhar/*/summary', async route => {
+    summaries++;
+    await route.fulfill({ json: {
+      status: 'aguardando_pagamento', tipo: 'Retirada', conversa: { can_chat: true },
+      state: { status: 'pending', phase: 'payment_pending', label: 'Aguardando pagamento', fulfillment: 'pickup', terminal: false, rejected: false, can_chat: true, can_cancel: false, progress_step: 1, progress_total: 4 },
+    } });
+  });
+  await page.goto('/cardapio?restaurante_id=2');
+  await openOrderChat(page);
+  const panel = page.locator('#inline-order-chat-panel');
+  await expect(panel.getByText('Aguardando pagamento', { exact: true })).toBeVisible();
+  const before = summaries;
+  await page.evaluate(() => {
+    for (const source of (window as any).__sources) source.handlers.get('status')?.({ data: JSON.stringify({ status: 'pendente' }) });
+  });
+  await expect.poll(() => summaries).toBeGreaterThan(before);
+  await expect(panel.getByText('Aguardando pagamento', { exact: true })).toBeVisible();
+});
