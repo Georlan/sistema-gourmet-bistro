@@ -2659,3 +2659,8 @@ html[data-theme="light"] .koma-art-promo-footer,
 @media (min-width: 1024px) {
   .koma-art-action-pill.lg\:inline-flex { display: inline-flex; }
 }
+
+/* Keep focused featured-product actions clear of the fixed navigation. */
+.koma-art-hero-stage button {
+  scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}
