@@ -9,6 +9,10 @@
 - `npm run lint`, `npm run test:unit`, `npm run build`; backend: `python -m pytest backend/tests -q -ra`.
 - Browser: `KOMA_E2E_PORT=4283 npm run test:e2e -- --workers=2`. Manter fontes congeladas durante a execução; não reutilizar servidor de outra tarefa.
 
+## Interfaces
+
+Antes de projetar ou alterar interfaces, consulte `docs/design-system/DESIGN_SYSTEM.md` e os documentos especializados referenciados; preserve contratos, exceções de contexto e distinção entre direção e padrão validado.
+
 ## Abrir somente o contexto da tarefa
 
 | Tarefa | Abrir primeiro | Fonte de verdade / contrato |
