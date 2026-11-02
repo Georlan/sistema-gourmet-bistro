@@ -731,7 +731,7 @@ export function CaixaPanel({
   return (
     <div
       data-koma-plan={currentPlanId}
-      className={`cashier-shell flex w-full bg-koma-page text-koma-foreground font-sans selection:bg-[#10b981]/30 text-xs ${
+      className={`cashier-shell ${activeTab === 'operacao' && activeSubTab === 'pedidos' ? 'cashier-shell--mobile-orders' : ''} flex w-full bg-koma-page text-koma-foreground font-sans selection:bg-[#10b981]/30 text-xs ${
         fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}
     >

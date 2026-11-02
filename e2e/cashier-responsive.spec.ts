@@ -133,11 +133,13 @@ test('Caixa respeita scroll móvel e colunas simultâneas no desktop', async ({ 
     await expect(page.getByRole('tab', { name: /Salão/ })).toHaveAttribute('aria-selected', 'true');
 
     if (viewport.width < DESKTOP_BREAKPOINT) {
-    const scrollBefore = await page.evaluate(() => window.scrollY);
-    const scrollHeight = await page.evaluate(() => document.documentElement.scrollHeight);
-    expect(scrollHeight).toBeGreaterThan(viewport.height);
+    const internal = viewport.width <= 767;
+    const scrollOwner = page.locator('.cashier-content');
+    const scrollBefore = internal ? await scrollOwner.evaluate(el => el.scrollTop) : await page.evaluate(() => window.scrollY);
+    const scrollHeight = internal ? await scrollOwner.evaluate(el => el.scrollHeight - el.clientHeight) : await page.evaluate(() => document.documentElement.scrollHeight - innerHeight);
+    expect(scrollHeight).toBeGreaterThan(0);
     await swipeDocumentUp(page);
-    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(scrollBefore);
+    await expect.poll(() => internal ? scrollOwner.evaluate(el => el.scrollTop) : page.evaluate(() => window.scrollY)).toBeGreaterThan(scrollBefore);
 
     }
     await page.getByRole('tab', { name: /Digitais/ }).click();
