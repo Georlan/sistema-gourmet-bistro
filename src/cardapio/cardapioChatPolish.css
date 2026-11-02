@@ -32,6 +32,14 @@
   color: var(--color-brand-primary);
 }
 
+#inline-order-chat-panel { min-height: 0; background: var(--menu-surface); color: var(--menu-text); }
+#inline-order-chat-panel .koma-chat-header { background: var(--menu-surface); border-color: var(--menu-border); }
+#inline-order-chat-panel .koma-chat-header h2 { font-family: var(--koma-font-display, inherit); font-size: 1rem; letter-spacing: -.02em; }
+#inline-order-chat-panel .koma-chat-header button { min-width: 44px; min-height: 44px; }
+#inline-order-chat-panel .koma-chat-status { background: color-mix(in srgb, var(--color-brand-primary) 9%, var(--menu-surface)); border-color: var(--menu-border); }
+#inline-order-chat-panel .koma-chat-messages { min-height: 6rem; overscroll-behavior: contain; }
+#inline-order-chat-panel .koma-chat-composer { background: var(--menu-surface); border-color: var(--menu-border); padding-bottom: max(.75rem, env(safe-area-inset-bottom)); }
+
 @media (max-width: 480px) {
   #floating-order-chat-container {
     right: 0.75rem;

@@ -74,6 +74,8 @@ import {
   clearAllStoredOrders,
   fallbackOrderState,
   orderFulfillmentLabel,
+  orderPhaseDescription,
+  orderProgress,
   resolveOrderState,
   updateStoredOrderStatus,
 } from "./orderTracking";
@@ -1049,11 +1051,7 @@ export default function CardapioPage() {
   const activeState = activeOrder ? resolveOrderState(activeOrder) : null;
   const terminal = activeState?.terminal ?? false;
   const rejected = activeState?.rejected ?? false;
-  const currentStep = activeState?.progress_step ?? 1;
-  const isDeliveryOrder = activeState?.fulfillment === "delivery";
-  const trackingSteps = isDeliveryOrder
-    ? ["Recebido", "Em preparo", "Pronto", "Saiu para entrega", "Concluído"]
-    : ["Recebido", "Em preparo", "Pronto", "Concluído"];
+  const trackingProgress = activeState ? orderProgress(activeState) : null;
 
   return (
     <div className="min-h-screen overflow-x-clip bg-bg-app font-sans text-text-app" id="app-root-container">
@@ -1208,9 +1206,7 @@ export default function CardapioPage() {
                         ? "Este pedido foi concluído. O resumo continua aqui até você iniciar outro acompanhamento."
                         : activeState.phase === "payment_pending"
                           ? "O Pix ainda não foi confirmado. Assim que o pagamento for aprovado, o restaurante poderá aceitar o pedido."
-                          : currentStep === 1
-                            ? "O pedido entrou na operação e está aguardando o aceite do restaurante."
-                            : "O restaurante já atualizou o andamento do seu pedido."}
+                          : orderPhaseDescription(activeState)}
                   </p>
                   <p className="mt-1 text-[10px] text-koma-subtle">
                     {orderFulfillmentLabel(activeState.fulfillment)} · {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(activeOrder.total || 0)}
@@ -1259,15 +1255,15 @@ export default function CardapioPage() {
                   </div>
                 </div>
               </div>
-            ) : !rejected ? (
-              <div className={clsx("mt-4 grid gap-1.5 border-t border-koma-border pt-3", isDeliveryOrder ? "grid-cols-5" : "grid-cols-4")}>
-                {trackingSteps.map((label, index) => {
+            ) : !rejected && trackingProgress ? (
+              <div className={clsx("mt-4 grid gap-1.5 border-t border-koma-border pt-3", trackingProgress.labels.length === 4 ? "grid-cols-4" : "grid-cols-3")}>
+                {trackingProgress.labels.map((label, index) => {
                   const step = index + 1;
-                  const passed = currentStep >= step;
+                  const passed = trackingProgress.current >= step;
                   return (
                     <div key={label} className="text-center">
                       <div className={clsx("h-1.5 rounded-full", passed ? "bg-emerald-500" : "bg-koma-raised")} />
-                      <span className={clsx("mt-1 block text-[9px] font-bold", passed ? "text-koma-secondary" : "text-koma-subtle")}>{label}</span>
+                      <span className={clsx("mt-1 block text-[10px] font-bold", passed ? "text-koma-secondary" : "text-koma-subtle")}>{label}</span>
                     </div>
                   );
                 })}

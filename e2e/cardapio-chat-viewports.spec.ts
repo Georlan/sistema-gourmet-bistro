@@ -165,7 +165,9 @@ for (const viewport of [
     await expect(drawer).toBeVisible();
     await expectInsideViewport(page, '#orders-drawer-panel');
     await expect(page.locator('#inline-order-chat-panel .koma-public-icon')).toBeVisible();
-    await expect(page.getByText('Chat e acompanhamento sem sair do cardápio')).toBeVisible();
+    await expect(page.getByText('Conversa com o restaurante')).toBeVisible();
+    await expect(page.locator('#inline-order-chat-panel').getByText('Em preparo', { exact: true })).toBeVisible();
+    await expect(page.locator('#inline-order-chat-panel').getByText('Pronto', { exact: true })).toBeVisible();
 
     const drawerOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(drawerOverflow).toBeLessThanOrEqual(1);
@@ -296,4 +298,40 @@ test('feed preserva evento separado e retry HTTP reutiliza UUID sem duplicar men
   expect(ids[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
   expect(ids[1]).toBe(ids[0]);
   await expect(panel.getByText('Sem cebola, por favor.', { exact: true })).toHaveCount(1);
+});
+
+test('aviso operacional não apaga pagamento pendente no chat', async ({ page }) => {
+  await mockBackend(page);
+  await seedOrder(page);
+  await page.addInitScript(() => {
+    class FakeEventSource {
+      static all: FakeEventSource[] = [];
+      handlers = new Map<string, (event: MessageEvent) => void>();
+      onopen = null;
+      onerror = null;
+      constructor() { FakeEventSource.all.push(this); }
+      addEventListener(type: string, callback: (event: MessageEvent) => void) { this.handlers.set(type, callback); }
+      close() {}
+    }
+    (window as any).__sources = FakeEventSource.all;
+    (window as any).EventSource = FakeEventSource;
+  });
+  let summaries = 0;
+  await page.route('**/api/cardapio/pedidos/acompanhar/*/summary', async route => {
+    summaries++;
+    await route.fulfill({ json: {
+      status: 'aguardando_pagamento', tipo: 'Retirada', conversa: { can_chat: true },
+      state: { status: 'pending', phase: 'payment_pending', label: 'Aguardando pagamento', fulfillment: 'pickup', terminal: false, rejected: false, can_chat: true, can_cancel: false, progress_step: 1, progress_total: 4 },
+    } });
+  });
+  await page.goto('/cardapio?restaurante_id=2');
+  await openOrderChat(page);
+  const panel = page.locator('#inline-order-chat-panel');
+  await expect(panel.getByText('Aguardando pagamento', { exact: true })).toBeVisible();
+  const before = summaries;
+  await page.evaluate(() => {
+    for (const source of (window as any).__sources) source.handlers.get('status')?.({ data: JSON.stringify({ status: 'pendente' }) });
+  });
+  await expect.poll(() => summaries).toBeGreaterThan(before);
+  await expect(panel.getByText('Aguardando pagamento', { exact: true })).toBeVisible();
 });

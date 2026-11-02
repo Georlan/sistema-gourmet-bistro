@@ -23,6 +23,7 @@ import {
   fallbackOrderState,
   isOrderStateContract,
   orderFulfillmentLabel,
+  orderProgress,
 } from "../orderTracking";
 import "../cardapioChatPolish.css";
 import CardapioPushNotifications from "./CardapioPushNotifications";
@@ -289,25 +290,10 @@ export default function CardapioOrderChatPanel({
               : [...current, incoming].sort((a, b) => (a.seq || 0) - (b.seq || 0)));
           }
           if (typeof data.status !== "string" || !data.status) return;
-          setTracking((current) => {
-            const tipo = current?.tipo || order.tipo || "Retirada";
-            const state = fallbackOrderState(data.status as string, tipo);
-            const closedAt = typeof data.closed_at === "string"
-              ? data.closed_at
-              : current?.closed_at || null;
-            return {
-              ...current,
-              status: data.status as string,
-              tipo,
-              state,
-              closed_at: closedAt,
-              conversa: {
-                ...(current?.conversa || {}),
-                closed_at: closedAt,
-                can_chat: state.can_chat,
-              },
-            };
-          });
+          // The event contains only operational status; the summary also owns
+          // payment and conversation state. Keep the last confirmed view until
+          // the authoritative snapshot has been read.
+          void refresh();
         } catch {
           startFallback();
         }
@@ -353,12 +339,8 @@ export default function CardapioOrderChatPanel({
     : isOrderStateContract(order.state)
       ? order.state
       : fallbackOrderState(rawStatus, rawType);
-  const isDelivery = state.fulfillment === "delivery";
-  const currentStep = state.progress_step;
   const rejected = state.rejected;
-  const steps = isDelivery
-    ? ["Recebido", "Em preparo", "Pronto", "Saiu", "Concluído"]
-    : ["Recebido", "Em preparo", "Pronto", "Concluído"];
+  const progress = orderProgress(state);
   const isClosed = !state.can_chat || tracking?.conversa?.can_chat === false;
 
   useEffect(() => {
@@ -408,7 +390,7 @@ export default function CardapioOrderChatPanel({
 
   return (
     <div className="flex h-full flex-col bg-koma-card text-koma-foreground" id="inline-order-chat-panel">
-      <div className="flex items-center justify-between border-b border-koma-border p-4 sm:p-5">
+      <div className="koma-chat-header flex items-center justify-between border-b border-koma-border p-4 sm:p-5">
         <div className="flex min-w-0 items-center gap-2.5">
           <button
             type="button"
@@ -423,7 +405,7 @@ export default function CardapioOrderChatPanel({
               <KomaOrderChatIcon size={16} className="shrink-0" aria-hidden="true" />
               <h2 className="truncate text-sm font-black">Pedido #{order.numero_pedido}</h2>
             </div>
-            <p className="mt-0.5 text-[10px] text-koma-muted">Chat e acompanhamento sem sair do cardápio</p>
+            <p className="mt-0.5 text-[10px] text-koma-muted">Conversa com o restaurante</p>
           </div>
         </div>
         <div className="flex items-center gap-1.5">
@@ -446,14 +428,14 @@ export default function CardapioOrderChatPanel({
         </div>
       </div>
 
-      <div className="border-b border-koma-border bg-koma-panel/50 p-4">
+      <div className="koma-chat-status border-b border-koma-border bg-koma-panel/50 p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <div className={clsx(
               "grid h-8 w-8 place-items-center rounded-xl",
               rejected ? "bg-rose-500/15 text-rose-400" : state.phase === "payment_pending" ? "bg-amber-500/15 text-amber-400" : "bg-emerald-500/15 text-emerald-400",
             )}>
-              {rejected ? <XCircle className="h-4 w-4" /> : state.phase === "payment_pending" ? <QrCode className="h-4 w-4" /> : currentStep >= steps.length ? <CheckCircle2 className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
+              {rejected ? <XCircle className="h-4 w-4" /> : state.phase === "payment_pending" ? <QrCode className="h-4 w-4" /> : state.phase === "completed" ? <CheckCircle2 className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
             </div>
             <div>
               <span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">
@@ -481,14 +463,14 @@ export default function CardapioOrderChatPanel({
               </button>
             )}
           </div>
-        ) : !rejected ? (
-          <div className={clsx("mt-3 grid gap-1", isDelivery ? "grid-cols-5" : "grid-cols-4")}>
-            {steps.map((label, index) => {
-              const passed = currentStep >= index + 1;
+        ) : !rejected && progress ? (
+          <div className={clsx("mt-3 grid gap-1", progress.labels.length === 4 ? "grid-cols-4" : "grid-cols-3")}>
+            {progress.labels.map((label, index) => {
+              const passed = progress.current >= index + 1;
               return (
                 <div key={label} className="text-center">
                   <div className={clsx("h-1.5 rounded-full", passed ? "bg-emerald-500" : "bg-koma-raised")} />
-                  <span className={clsx("mt-1 block text-[8px] font-bold", passed ? "text-emerald-300" : "text-koma-subtle")}>{label}</span>
+                  <span className={clsx("mt-1 block text-[10px] font-bold", passed ? "text-emerald-300" : "text-koma-subtle")}>{label}</span>
                 </div>
               );
             })}
@@ -499,7 +481,7 @@ export default function CardapioOrderChatPanel({
       {!state.terminal && <DeliveryReceiptCode compact code={tracking?.delivery_receipt_code !== undefined ? tracking.delivery_receipt_code : order.delivery_receipt_code} />}
       <CardapioPushNotifications order={order} />
 
-      <div ref={scrollRef} className="flex-1 space-y-2.5 overflow-y-auto p-4 sm:p-5" aria-live="polite">
+      <div ref={scrollRef} className="koma-chat-messages flex-1 space-y-2.5 overflow-y-auto p-4 sm:p-5" aria-live="polite">
         {hasOlderMessages && (
           <button type="button" onClick={() => void loadOlder()} disabled={loadingOlder}
             className="mx-auto block rounded-lg border border-koma-border px-3 py-1.5 text-[10px] font-bold text-koma-secondary disabled:opacity-50">
@@ -545,7 +527,7 @@ export default function CardapioOrderChatPanel({
         ))}
       </div>
 
-      <form onSubmit={sendMessage} className="border-t border-koma-border p-3 sm:p-4">
+      <form onSubmit={sendMessage} className="koma-chat-composer border-t border-koma-border p-3 sm:p-4">
         {error && <p className="mb-2 text-[10px] font-bold text-rose-400">{error}</p>}
         {isClosed ? (
           <div className="rounded-xl border border-koma-border bg-koma-panel px-3 py-3 text-center text-[10px] text-koma-muted">
