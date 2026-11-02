@@ -32,3 +32,24 @@ for (const mode of ['native', 'reduced', 'unsupported', 'long-list']) {
     await expect(page.locator('html')).toHaveAttribute('data-koma-theme', 'light');
   });
 }
+
+test('mobile reveal avoids card transitions while keeping the full-screen animation', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openOperationalScenario(page);
+  await expect(page.locator('.cashier-shell .orders-card__action').first()).toBeAttached();
+  const result = await page.evaluate(() => {
+    const root = document.documentElement;
+    const card = document.querySelector<HTMLElement>('.cashier-shell .orders-card__action');
+    if (!card) throw new Error('Order action missing');
+    const before = getComputedStyle(card).transitionDuration;
+    root.setAttribute('data-courier-theme-wipe', 'test');
+    const during = getComputedStyle(card).transitionDuration;
+    const reveal = getComputedStyle(root, '::view-transition-new(root)').animationName;
+    root.removeAttribute('data-courier-theme-wipe');
+    return { before, during, reveal, after: getComputedStyle(card).transitionDuration };
+  });
+  expect(result.before).not.toBe('0s');
+  expect(result.during).toBe('0s');
+  expect(result.after).toBe(result.before);
+  expect(result.reveal).toBe('courier-theme-fill');
+});

@@ -1,4 +1,10 @@
 /* Shared cashier chrome. No module layout or transaction rules live here. */
+/* The full-screen theme reveal remains animated. Avoid running every card's
+   color transition underneath the captured frames on smaller screens. */
+@media (max-width: 767px) {
+  html[data-courier-theme-wipe] .cashier-shell * { transition: none !important; }
+}
+
 .cashier-shell {
   --kc-chrome-brand: #0b3e32;
   --kc-chrome-ink: #edf9f3;
