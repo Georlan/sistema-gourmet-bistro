@@ -22,3 +22,8 @@ Inventário inicial baseado no código da `main` em `214cdc1`. **Global** signif
 | [`CardapioProductModal`](../../src/cardapio/components/CardapioProductModal.tsx), [`CardapioCartDrawer`](../../src/cardapio/components/CardapioCartDrawer.tsx) | Compra; montagem e sacola. | Preservar limites, disponibilidade, preço, foco e histórico de navegação. Não trocar por diálogo de operação. |
 
 Busca, selects, botões e overlays ainda têm implementações distribuídas. Antes de consolidar, mapear consumidores e comparar estados, teclado, foco, comportamento responsivo, autoridade dos dados e cobertura. Consolidar extraindo primitivas de apresentação só quando contratos forem equivalentes, mantendo especializações; não substituir componentes críticos em lote. Para feedback, usar mensagens presentes no fluxo responsável e distinguir carregando, atualizado, erro recuperável e resultado incerto. Falta catálogo exaustivo de variantes e testes de cada componente; portanto a tarefa de consolidação ainda não está encerrada.
+
+## Pontos para validação dirigida
+
+- `DeliveryAddressFields` no modo compacto declara rótulos de 8 px e campos de 10 px; é usado na conversão de modalidade. O código indica um risco de legibilidade, mas esta rodada não abriu esse formulário nem mediu o tamanho final com preferências de texto. Validar em Caixa, tema claro/escuro, zoom e dispositivo pequeno antes de alterar a geometria compartilhada.
+- A ação de destaque do Cardápio pode ficar sob a barra fixa na posição inicial em 390×720. O PR #1240 trata o foco após navegação por teclado; não comprova visibilidade inicial antes do foco.
