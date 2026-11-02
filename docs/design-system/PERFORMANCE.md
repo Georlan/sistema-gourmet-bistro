@@ -21,3 +21,7 @@ Para imagens, escolher variante com dimensões próximas à apresentação, rese
 Registrar commit e build, tela e cenário, dimensão, cache frio/quente, navegador, rede e aparelho. Comparar contagem de requisições e bytes transferidos por origem e recurso, conexões abertas, renderizações e LCP/CLS/INP quando o ambiente permitir. Medir navegação, retorno de aba, falha e reconexão; conferir impacto no fluxo e isolamento. Fixtures isoladas demonstram comportamento sob simulação, não custo ou desempenho de produção. Não usar pedidos, pagamentos, mensagens, impressões ou alteração de configuração do restaurante real como carga de teste.
 
 Nesta rodada não houve medição comparável de rede nem alteração de backend ou de contratos. O build alertou sobre tamanho de chunk; isso é um indício para análise de bundle, não uma regressão ou economia quantificada.
+
+## Medição de build local — 02/11/2026
+
+Build Vite de produção baseado em `214cdc1`, com dependências do lockfile, reportou `CaixaPanel` 512,37 kB minificado (138,88 kB gzip), `CardapioPage` 310,09 kB (84,02 kB gzip) e o asset `koma-phone-graphite-shell-v2.png` 1.146,50 kB. Esses são tamanhos de arquivos emitidos, não bytes totais baixados por uma visita, nem impacto medido de LCP ou custo real. O aviso do Vite para chunks acima de 500 kB identifica uma oportunidade de investigação; avaliar dependências, rotas e frequência de uso antes de dividir ou recomprimir. A medição precede o PR #1239 e não estabelece baseline de produção.
