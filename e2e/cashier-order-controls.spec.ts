@@ -27,7 +27,7 @@ for (const theme of ['dark', 'light']) {
       await expect(pause).toContainText('Pausar cardápio online');
     }
     await page.getByRole('button', { name: 'Novos pedidos', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Pedidos aguardando aceite' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Novos pedidos' }).getByRole('heading', { name: 'Novos pedidos' })).toBeVisible();
   });
 }
 

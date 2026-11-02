@@ -33,6 +33,8 @@ for (const theme of ['dark', 'light'] as const) {
 
       const topbar = page.locator('.cashier-topbar');
       const subnav = page.locator('.cashier-subnav');
+      const bottomBar = page.getByRole('navigation', { name: 'Navegação móvel principal' });
+      const bottomBefore = await bottomBar.boundingBox();
 
       const initial = await page.evaluate(() => {
         const topbar = document.querySelector('.cashier-topbar') as HTMLElement;
@@ -48,8 +50,8 @@ for (const theme of ['dark', 'light'] as const) {
       expect(initial.subnavPosition).toBe('sticky');
       expect(initial.topbarHeight).toBeGreaterThanOrEqual(56);
 
-      await page.evaluate(() => window.scrollTo({ top: 700, behavior: 'instant' }));
-      await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(300);
+      await page.locator('.cashier-content').evaluate((content) => content.scrollTo({ top: 700, behavior: 'instant' }));
+      await expect.poll(() => page.locator('.cashier-content').evaluate((content) => content.scrollTop)).toBeGreaterThan(300);
 
       const geometry = await page.evaluate(() => {
         const topbar = document.querySelector('.cashier-topbar') as HTMLElement;
@@ -67,6 +69,10 @@ for (const theme of ['dark', 'light'] as const) {
       expect(Math.abs(geometry.topbarTop)).toBeLessThanOrEqual(1);
       expect(Math.abs(geometry.subnavTop - geometry.topbarBottom)).toBeLessThanOrEqual(1);
       expect(geometry.subnavBottom).toBeLessThan(viewport.height / 3);
+      const bottomAfter = await bottomBar.boundingBox();
+      expect(bottomBefore).not.toBeNull();
+      expect(bottomAfter).not.toBeNull();
+      expect(Math.abs(bottomAfter!.y - bottomBefore!.y)).toBeLessThanOrEqual(1);
 
       await expect(page.getByRole('button', { name: 'Abrir menu principal' })).toBeVisible();
       await expect(page.locator('.cashier-subnav__button').first()).toBeVisible();
