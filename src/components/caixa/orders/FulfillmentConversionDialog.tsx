@@ -12,6 +12,7 @@ export type FulfillmentConversionTarget = {
   options: ('pickup' | 'delivery')[];
   address?: Partial<DeliveryAddressDraft> | null;
   blockedReason?: string | null;
+  loading?: boolean;
 };
 export type ConversionQuote = { token: string; previous_fee: number; delivery_fee: number; previous_total: number; total: number };
 type Props = {
@@ -52,7 +53,7 @@ export function FulfillmentConversionDialog({ target, isSubmitting, onClose, onP
     <section ref={dialog} onKeyDown={event => { trapOverlayTab(event); if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (!busy) onClose(); } }} role="dialog" aria-modal="true" aria-labelledby="fulfillment-conversion-title"
       className="fulfillment-dialog max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl border border-koma-border bg-koma-card p-5 shadow-2xl">
       <header className="fulfillment-dialog__header"><CashierDetailActionArt kind="change" /><div><h2 id="fulfillment-conversion-title">Alterar tipo do pedido</h2><p>{target.orderLabel}</p></div></header>
-      {target.blockedReason ? <p role="alert">{target.blockedReason}</p> : <form className="fulfillment-dialog__form space-y-3" onSubmit={async event => {
+      {target.loading ? <p role="status">Consultando opções do pedido…</p> : target.blockedReason || !target.options.length ? <p role="alert">{target.blockedReason || 'Nenhuma alteração disponível para este pedido.'}</p> : <form className="fulfillment-dialog__form space-y-3" onSubmit={async event => {
         event.preventDefault();
         if (busy || reason.trim().length < 3) return;
         setMessage('');
