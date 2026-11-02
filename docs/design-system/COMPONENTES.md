@@ -25,5 +25,5 @@ Busca, selects, botões e overlays ainda têm implementações distribuídas. An
 
 ## Pontos para validação dirigida
 
-- `DeliveryAddressFields` no modo compacto declara rótulos de 8 px e campos de 10 px; é usado na conversão de modalidade. O código indica um risco de legibilidade, mas esta rodada não abriu esse formulário nem mediu o tamanho final com preferências de texto. Validar em Caixa, tema claro/escuro, zoom e dispositivo pequeno antes de alterar a geometria compartilhada.
+- `DeliveryAddressFields` no modo compacto declara rótulos de 8 px e campos de 10 px; é usado na conversão de modalidade. Uma prévia isolada mediu 10 px no rótulo e campo da conversão em 390 e 1366; o PR #1242 propõe 12 px e 14 px, respectivamente, com testes dos fluxos e inspeção do PDV em 320 px com texto ampliado. A publicação e validação física seguem pendentes.
 - A ação de destaque do Cardápio pode ficar sob a barra fixa na posição inicial em 390×720. O PR #1240 trata o foco após navegação por teclado; não comprova visibilidade inicial antes do foco.
