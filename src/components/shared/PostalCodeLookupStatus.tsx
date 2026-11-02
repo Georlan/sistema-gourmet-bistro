@@ -82,7 +82,7 @@ export default function PostalCodeLookupStatus({
     <p
       aria-live="polite"
       data-postal-code-status={status}
-      className={`${compact ? 'mt-1 text-[8px]' : 'mt-1.5 text-[10px]'} text-koma-subtle`}
+      className={`${compact ? 'mt-1 text-xs' : 'mt-1.5 text-[10px]'} text-koma-subtle`}
     >
       {text}
     </p>
