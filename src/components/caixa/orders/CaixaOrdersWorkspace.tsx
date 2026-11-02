@@ -800,7 +800,7 @@ export function CaixaOrdersWorkspaceView({
           <div className={"orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5"}>
             {filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 ? (
               <div className={"orders-empty-state py-16 text-center text-koma-subtle text-xs space-y-1"}>
-                <Check size={20} className={"mx-auto opacity-40 mb-2 text-emerald-600 dark:text-emerald-300"} />
+                {!searchQuery && <img src="/brand/cashier/closing-empty-v1.svg" width="96" height="72" alt="" className="orders-empty-state__art" />}
                 <p>{searchQuery ? "Nenhum pedido encontrado para a busca" : "Nenhum pedido aguardando finalização"}</p>
               </div>
             ) : (
