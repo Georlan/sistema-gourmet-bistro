@@ -58,6 +58,28 @@ export interface OrderStateContract {
   progress_total: number;
 }
 
+/** Milestones describe confirmed results, not an inferred preparation event. */
+export function orderProgress(state: OrderStateContract): { labels: string[]; current: number } | null {
+  if (!["received", "accepted", "preparing", "ready", "dispatched", "completed"].includes(state.phase)) return null;
+  const delivery = state.fulfillment === "delivery";
+  const labels = delivery ? ["Recebido", "Pronto", "Saiu", "Concluído"] : ["Recebido", "Pronto", "Concluído"];
+  const current = state.phase === "completed" ? labels.length
+    : state.phase === "dispatched" && delivery ? 3
+      : state.phase === "ready" || state.phase === "dispatched" ? 2 : 1;
+  return { labels, current };
+}
+
+export function orderPhaseDescription(state: OrderStateContract): string {
+  switch (state.phase) {
+    case "received": return "Aguardando o restaurante aceitar.";
+    case "accepted": return "Aceito pelo restaurante; aguardando preparo.";
+    case "preparing": return "O restaurante iniciou o preparo.";
+    case "ready": return state.fulfillment === "delivery" ? "Pedido pronto para sair." : "Pedido pronto.";
+    case "dispatched": return "Pedido saiu para entrega.";
+    default: return "O restaurante atualizou o andamento do pedido.";
+  }
+}
+
 export interface StoredOrderItem {
   id?: string;
   nome: string;
@@ -109,6 +131,7 @@ const STATUS_ALIASES: Record<string, CanonicalOrderStatus> = {
   pronto: "ready",
   ready: "ready",
   transito: "dispatched",
+  saiu_para_entrega: "dispatched",
   saiu_entrega: "dispatched",
   dispatched: "dispatched",
   finalizado: "completed",

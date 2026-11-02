@@ -165,7 +165,9 @@ for (const viewport of [
     await expect(drawer).toBeVisible();
     await expectInsideViewport(page, '#orders-drawer-panel');
     await expect(page.locator('#inline-order-chat-panel .koma-public-icon')).toBeVisible();
-    await expect(page.getByText('Chat e acompanhamento sem sair do cardápio')).toBeVisible();
+    await expect(page.getByText('Conversa com o restaurante')).toBeVisible();
+    await expect(page.locator('#inline-order-chat-panel').getByText('Em preparo', { exact: true })).toBeVisible();
+    await expect(page.locator('#inline-order-chat-panel').getByText('Pronto', { exact: true })).toBeVisible();
 
     const drawerOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(drawerOverflow).toBeLessThanOrEqual(1);

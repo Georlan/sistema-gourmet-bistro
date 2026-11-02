@@ -24,6 +24,7 @@ import {
   OrderStateContract,
   StoredOrder,
   orderFulfillmentLabel,
+  orderProgress,
   resolveOrderState,
 } from "../orderTracking";
 import CardapioOrderChatPanel from "./CardapioOrderChatPanel";
@@ -624,11 +625,7 @@ export default function CardapioOrdersDrawer({
                   {activeOrders.map((order) => {
                     const state = resolveOrderState(order);
                     const rejected = state.rejected;
-                    const isDelivery = state.fulfillment === "delivery";
-                    const step = state.progress_step;
-                    const steps = isDelivery
-                      ? ["Recebido", "Preparo", "Pronto", "Saiu", "Entregue"]
-                      : ["Recebido", "Preparo", "Pronto", "Concluído"];
+                    const progress = orderProgress(state);
                     const isSelected = selectedOrderId === order.id;
                     const unread = unreadFor(order.id);
 
@@ -698,17 +695,17 @@ export default function CardapioOrdersDrawer({
                           </div>
                         )}
 
-                        {!rejected && (
+                        {!rejected && progress && (
                           <div className={clsx(
                             "mt-3 grid gap-1 border-t border-koma-border/60 pt-2.5",
-                            isDelivery ? "grid-cols-5" : "grid-cols-4",
+                            progress.labels.length === 4 ? "grid-cols-4" : "grid-cols-3",
                           )}>
-                            {steps.map((label, idx) => {
-                              const passed = step >= idx + 1;
+                            {progress.labels.map((label, idx) => {
+                              const passed = progress.current >= idx + 1;
                               return (
                                 <div key={label} className="text-center">
                                   <div className={clsx("h-1 rounded-full", passed ? "bg-emerald-500" : "bg-koma-raised")} />
-                                  <span className={clsx("mt-1 block text-[8px] font-bold", passed ? "text-emerald-300" : "text-koma-subtle")}>{label}</span>
+                                  <span className={clsx("mt-1 block text-[10px] font-bold", passed ? "text-emerald-300" : "text-koma-subtle")}>{label}</span>
                                 </div>
                               );
                             })}
