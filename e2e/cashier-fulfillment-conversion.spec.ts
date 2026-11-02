@@ -53,7 +53,11 @@ for (const failure of [false, true]) {
     await expect(chooser).toHaveCount(0);
     await detail.getByRole('button', { name: 'Tipo e endereço' }).click();
     const dialog = page.getByRole('dialog', { name: 'Alterar tipo do pedido' });
-    await dialog.locator('#conversion-address-logradouro').fill('Rua das Flores');
+    const addressInput = dialog.locator('#conversion-address-logradouro');
+    const addressLabel = addressInput.locator('..').locator('span').first();
+    expect(parseFloat(await addressLabel.evaluate(node => getComputedStyle(node).fontSize))).toBeGreaterThanOrEqual(12);
+    expect(parseFloat(await addressInput.evaluate(node => getComputedStyle(node).fontSize))).toBeGreaterThanOrEqual(14);
+    await addressInput.fill('Rua das Flores');
     await dialog.locator('#conversion-address-numero').fill('10');
     await dialog.getByRole('textbox', { name: 'Motivo da alteração', exact: true }).fill('Cliente pediu entrega');
     await dialog.getByRole('button', { name: 'Calcular e revisar' }).click();
