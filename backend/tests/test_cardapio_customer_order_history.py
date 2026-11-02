@@ -300,7 +300,7 @@ def test_customer_history_is_authenticated_paginated_and_grouped():
     second_payload = second.json()
     assert [item["numero_pedido"] for item in second_payload["items"]] == [900]
     assert second_payload["next_cursor"] is None
-    assert second_payload["items"][0]["state"]["label"] == "Concluído"
+    assert second_payload["items"][0]["state"]["label"] == "Retirada concluída"
 
 
 def test_customer_history_never_crosses_tenant_boundary():
