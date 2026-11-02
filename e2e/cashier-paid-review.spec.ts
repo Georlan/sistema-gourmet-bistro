@@ -17,6 +17,7 @@ test('paid, partially paid and unverified orders have distinct payment messages'
   await page.route('**/comandas/delivery/ativos', route => route.fulfill({ json: orders }));
   await page.route('**/comandas/detalhes/todos?*', route => route.fulfill({ json: orders }));
   await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
   const stages = page.getByRole('tablist', { name: 'Etapa dos pedidos' });
   if (await stages.isVisible()) await stages.getByRole('tab', { name: /Digitais/ }).click();
   for (const theme of ['dark', 'light']) {
@@ -47,6 +48,7 @@ test('open delivery detail updates when the courier list arrives', async ({ page
   const gate = new Promise<void>(resolve => { release = resolve; });
   await page.route('**/comandas/motoboys/lista', async route => { await gate; await route.fulfill({ json: [{ id: 7, nome: 'Lucas', ativo: true }] }); });
   await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board')).toBeVisible();
   const stages = page.getByRole('tablist', { name: 'Etapa dos pedidos' });
   if (await stages.isVisible()) await stages.getByRole('tab', { name: /Concluir/ }).click();
   await page.locator('.orders-card--closing').filter({ hasText: 'Entrega em rota' }).click();
