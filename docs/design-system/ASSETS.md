@@ -22,7 +22,7 @@ O estado “referenciado” significa ocorrência literal no código; caminhos m
 | --- | --- | --- | --- |
 | [`cashier-counter-v1.svg`](../../public/brand/cashier/cashier-counter-v1.svg) | SVG | `src/components/CaixaPanel.tsx` | README descreve como original; documentação jurídica não verificada. Uso operacional contextual. |
 | [`chat-pair-v1.svg`](../../public/brand/cashier/chat-pair-v1.svg) | SVG | `src/components/caixa/chat/CashierConversationsDrawer.tsx` | README descreve como original; documentação jurídica não verificada. Uso operacional contextual. |
-| [`counter-v1.svg`](../../public/brand/cashier/counter-v1.svg) | SVG | `src/components/CaixaPanel.tsx` | README descreve como original; documentação jurídica não verificada. Uso operacional contextual. |
+| [`counter-v1.svg`](../../public/brand/cashier/counter-v1.svg) | SVG | Sem ocorrência literal encontrada; pode haver caminho dinâmico. | README descreve como original; documentação jurídica não verificada. Uso operacional contextual. |
 | [`delivery-v1.svg`](../../public/brand/cashier/delivery-v1.svg) | SVG | `src/components/caixa/orders/CaixaOrdersWorkspace.tsx` | README descreve como original; documentação jurídica não verificada. Uso operacional contextual. |
 | [`detail-delivery-v2.svg`](../../public/brand/cashier/detail-delivery-v2.svg) | SVG | Sem ocorrência literal encontrada; pode haver caminho dinâmico. | README descreve como original; documentação jurídica não verificada. Uso operacional contextual. |
 | [`detail-pickup-v2.svg`](../../public/brand/cashier/detail-pickup-v2.svg) | SVG | Sem ocorrência literal encontrada; pode haver caminho dinâmico. | README descreve como original; documentação jurídica não verificada. Uso operacional contextual. |
@@ -58,4 +58,4 @@ O estado “referenciado” significa ocorrência literal no código; caminhos m
 | --- | --- |
 | ![Assinatura para fundo escuro](../../src/assets/brand/koma-wordmark-on-dark.svg) | ![Assinatura para fundo claro](../../src/assets/brand/koma-wordmark-on-light.svg) |
 
-As prévias dependem do fundo do visualizador; escolher a variante adequada à superfície. Componentes SVG em código, ícones de bibliotecas, fontes externas, arquivos fora dessas pastas e recursos recebidos de restaurantes ainda requerem inventário adicional. A comparação de telas está em [VISUAL-2026-11-02](VISUAL-2026-11-02.md).
+Para conferir contraste em fundos explícitos, abra [a galeria HTML](preview-assets.html) localmente. As prévias Markdown dependem do fundo do visualizador; escolher a variante adequada à superfície. Componentes SVG em código, ícones de bibliotecas, fontes externas, arquivos fora dessas pastas e recursos recebidos de restaurantes ainda requerem inventário adicional. A comparação de telas está em [VISUAL-2026-11-02](VISUAL-2026-11-02.md).
