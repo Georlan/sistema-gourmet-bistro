@@ -427,9 +427,11 @@ export function KanbanOrderDetails({
           {hasPrinting === false && selectedKanbanOrder.mesaId > 0 && <DigitalReceiptAction order={{ mesaId: selectedKanbanOrder.mesaId, identificador: selectedKanbanOrder.identificador, itens: selectedKanbanOrder.itens as any, valorPago: selectedKanbanOrder.amountPaid || 0, telefone: selectedKanbanOrder.telefone }} restaurantConfig={restaurantConfig} taxaServicoAtiva={taxaServicoAtiva} serviceTaxRate={serviceTaxRate} onToast={onToast} label="Compartilhar conta" />}
           {selectedKanbanOrder.mesaId > 0 && (selectedKanbanOrder.contextoSalao || salonActions) && <CashierTableDestinations source={selectedKanbanOrder.mesaId} transfer={transfer} actions={actions} />}
           {selectedCanAssociateTable && <CashierTableDestinations association source={0} transfer={transfer} actions={actions} />}
-          <button type="button" onClick={selectedKanbanOrder.mesaId > 0 ? actions.cancelConsumption : actions.cancelOrder} className="kd-action kd-action--cancel">
+          {selectedIsDelivery && selectedDeliveryStatus === 'finalizado' && !(selectedKanbanOrder.mesaId > 0)
+            ? <p className="text-sm text-koma-secondary">Entrega concluída.{Number(selectedKanbanOrder.amountDue || 0) > 0 && ' Registre o pagamento pendente no Caixa.'}</p>
+            : <button type="button" onClick={selectedKanbanOrder.mesaId > 0 ? actions.cancelConsumption : actions.cancelOrder} className="kd-action kd-action--cancel">
             <CashierDetailActionArt kind="cancel" /><span>{selectedKanbanOrder.contextoSalao ? 'Cancelar toda a mesa e liberar' : selectedKanbanOrder.mesaId > 0 ? 'Cancelar somente este pedido' : 'Cancelar pedido'}</span>
-          </button>
+          </button>}
         </footer>
     </KanbanDetailFrame>
   );
