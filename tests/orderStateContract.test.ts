@@ -31,7 +31,7 @@ test('cardápio usa contrato canônico e não recria parsers por substring', () 
   assert.match(drawerSource, /resolveOrderState\(order\)/);
   assert.match(chatSource, /orderProgress\(state\)/);
   assert.match(pageSource, /resolveOrderState\(activeOrder\)/);
-  assert.match(pageSource, /activeState\.label/);
+  assert.match(pageSource, /customerOrderLabel\(activeState\)/);
 });
 
 test('fallback de compatibilidade é mapa exato, não substring', () => {
