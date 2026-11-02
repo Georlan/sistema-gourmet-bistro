@@ -1,0 +1,38 @@
+<!doctype html>
+<html><head><title>Local print scope fixture</title></head><body>
+<div id="root"></div>
+<script type="module">
+  import React from 'react';
+  import { createRoot } from 'react-dom/client';
+  import { useLocalPrintAgent } from '/src/components/printing/useLocalPrintAgent.ts';
+  const late = Object.assign(new EventTarget(), { state: 'granted' });
+  const denied = Object.assign(new EventTarget(), { state: 'denied' });
+  const resetCase = new URL(location.href).searchParams.get('mode') === 'reset';
+  let calls = 0;
+  window.reads = 0;
+  Object.defineProperty(navigator, 'permissions', { value: {
+    query: () => resetCase ? Promise.resolve(late)
+      : ++calls === 1 ? new Promise(resolve => { window.releaseOld = () => resolve(late); }) : Promise.resolve(denied),
+  } });
+  window.resetPermission = () => { late.state = 'prompt'; late.dispatchEvent(new Event('change')); };
+  let identified = false;
+  window.fetch = url => {
+    window.reads++;
+    if (resetCase && url.includes(':17654/')) {
+      const response = () => new Response(JSON.stringify({ service: 'koma-print-agent', status: 'ready', agent_id: 'local-fixture' }));
+      if (!identified) { identified = true; return Promise.resolve(response()); }
+      return new Promise(resolve => { window.releaseRead = () => resolve(response()); });
+    }
+    return Promise.reject(new Error('unexpected discovery'));
+  };
+  function Probe() {
+    const [scope, setScope] = React.useState('session-A');
+    const connection = useLocalPrintAgent(scope);
+    return React.createElement('main', null,
+      React.createElement('output', null, connection.status),
+      React.createElement('button', { onClick: () => connection.refresh() }, 'Refresh identity'),
+      React.createElement('button', { onClick: () => setScope('session-B') }, 'Switch session'));
+  }
+  createRoot(document.getElementById('root')).render(React.createElement(Probe));
+</script>
+</body></html>

@@ -100,7 +100,8 @@ test('prepare printing ignores rapid duplicate launcher triggers in the same tab
 
 
 test('printing monitor isolates hardware by the local agent identity', () => {
-  assert.match(monitor, /\/agent\/identity/);
+  assert.match(monitor, /useLocalPrintAgent/);
+  assert.match(readFileSync('src/components/printing/localAgentConnection.ts', 'utf8'), /\/agent\/identity/);
   assert.match(monitor, /localAgentId/);
   assert.match(monitor, /agent\.agent_id === localAgentId/);
   assert.match(monitor, /agent_id: targetAgentId/);
