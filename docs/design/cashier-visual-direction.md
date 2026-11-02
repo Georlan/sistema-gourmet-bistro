@@ -7,7 +7,7 @@
 - Preservar os caminhos atuais: corpo do card abre detalhes; ação e impressão não propagam o clique. Estados de produção, atendimento e pagamento continuam independentes. O valor de uma fatia não pode se apresentar como total da mesa inteira.
 - Rótulos visuais não criam consultas ou estados próprios: usar as projeções existentes. Não alterar Garçom, Entregador ou Cardápio como efeito colateral do estilo do Caixa.
 
-Implementação compartilhada: `cashierTypography.css`, `cashierChrome.css`, `cashierOrderCards.css` e `cashierOrderColumns.css` em `src/components/caixa/`.
+Implementação compartilhada: `src/components/caixa/navigation/cashierTypography.css`, `src/components/caixa/navigation/cashierChrome.css`, `src/components/caixa/orders/cashierOrderCards.css` e `src/components/caixa/orders/cashierOrderColumns.css`.
 
 ## Cards e troca de tema
 
