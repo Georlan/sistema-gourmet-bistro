@@ -317,3 +317,17 @@ test('entregue com saldo continua no Caixa e não é tratado como recebido', () 
   assert.equal(row.amountDue, 8);
   assert.equal(row.pago, false);
 });
+
+test('resposta de status sem itens preserva total e calcula saldo com pagamento confirmado', () => {
+  const [previous] = projectDeliveryOrdersFromSharedSnapshot([baseOrder({ deliveryStatus: 'pendente', valorPago: 2 })]);
+  const [compact] = projectDeliveryOrdersFromSharedSnapshot([baseOrder({ deliveryStatus: 'aceito', itens: [], deliveryTax: 5, valorPago: 4 })]);
+  const partial = reconcileDeliveryOrderAfterStatus(previous, compact);
+  assert.equal(partial.total, 13);
+  assert.equal(partial.amountPaid, 4);
+  assert.equal(partial.amountDue, 9);
+  const missingPayment = reconcileDeliveryOrderAfterStatus(previous, compact, false);
+  assert.equal(missingPayment.amountPaid, 2);
+  assert.equal(missingPayment.amountDue, 11);
+  const paid = reconcileDeliveryOrderAfterStatus(previous, { ...compact, amountPaid: 13 });
+  assert.equal(paid.amountDue, 0);
+});

@@ -706,7 +706,7 @@ export function useCashierOrders({
       if (projected) {
         setDeliveryOrders((current) => current.map((order) =>
           String(order.id) === orderKey
-            ? reconcileDeliveryOrderAfterStatus(order, projected)
+            ? reconcileDeliveryOrderAfterStatus(order, projected, data?.valor_pago != null)
             : order
         ));
       }
@@ -939,7 +939,7 @@ export function useCashierOrders({
             projected
               ? current.map((order) => (
                   String(order.id) === orderKey
-                    ? reconcileDeliveryOrderAfterStatus(order, projected)
+                    ? reconcileDeliveryOrderAfterStatus(order, projected, updatedComanda.valor_pago != null)
                     : order
                 ))
               : current.filter((order) => String(order.id) !== orderKey)
