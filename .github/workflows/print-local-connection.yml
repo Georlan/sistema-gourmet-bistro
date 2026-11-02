@@ -1,0 +1,39 @@
+name: Print local connection
+on:
+  pull_request:
+    paths:
+      - 'src/components/printing/**'
+      - 'tests/localAgentConnection.test.ts'
+      - 'tests/printerMultiTransportUi.test.ts'
+      - 'e2e/print-local-connection.spec.ts'
+      - 'e2e/fixtures/print-scope.html'
+      - '.github/workflows/print-local-connection.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: print-local-connection-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  connection:
+    name: Local agent permission and browser compatibility
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx tsx --test tests/localAgentConnection.test.ts tests/printerMultiTransportUi.test.ts
+      - run: npx playwright install --with-deps chromium
+      - run: KOMA_E2E_PORT=4294 npx playwright test e2e/print-local-connection.spec.ts --project=mobile-390 --project=desktop-1366 --workers=2
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: print-local-connection-browser
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 3

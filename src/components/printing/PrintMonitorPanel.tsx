@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { OperationalBanner } from '../shared/OperationalBanner';
 import { parseBackendTimestamp } from '../../utils/dateTime';
+import { useLocalPrintAgent } from './useLocalPrintAgent';
 
 interface DetectedPrinter {
   name: string;
@@ -162,14 +163,6 @@ interface PrintMonitorResponse {
   } | null;
 }
 
-interface LocalAgentIdentity {
-  status: string;
-  service: string;
-  agent_id: string;
-  adapter?: string;
-  platform?: string;
-}
-
 interface PrintMonitorPanelProps {
   isWsConnected?: boolean;
   apiBaseUrl: string;
@@ -181,38 +174,6 @@ interface PrintMonitorPanelProps {
 }
 
 type DiagnosticTone = 'success' | 'warning' | 'danger' | 'neutral';
-
-const LOCAL_AGENT_PORTS = Array.from({ length: 11 }, (_, index) => 17654 + index);
-
-async function discoverLocalAgentIdentity(): Promise<LocalAgentIdentity | null> {
-  const attempts = LOCAL_AGENT_PORTS.map(async port => {
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 450);
-    try {
-      const response = await fetch(
-        `http://127.0.0.1:${port}/agent/identity`,
-        { signal: controller.signal, cache: 'no-store' }
-      );
-      if (!response.ok) return null;
-      const payload = await response.json().catch(() => null) as LocalAgentIdentity | null;
-      if (
-        payload?.service !== 'koma-print-agent'
-        || payload.status !== 'ready'
-        || !payload.agent_id?.trim()
-      ) {
-        return null;
-      }
-      return payload;
-    } catch {
-      return null;
-    } finally {
-      window.clearTimeout(timeoutId);
-    }
-  });
-
-  const results = await Promise.all(attempts);
-  return results.find((item): item is LocalAgentIdentity => Boolean(item)) || null;
-}
 
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Na fila',
@@ -369,7 +330,11 @@ export function PrintMonitorPanel({
   children,
   advancedTestsSlot
 }: PrintMonitorPanelProps) {
-  const [monitorData, setMonitorData] = useState<PrintMonitorResponse | null>(null);
+  const authorization = authHeaders.Authorization || authHeaders.authorization || '';
+  const connectionScope = `${apiBaseUrl}|${authorization}`;
+  const activeScopeRef = useRef(connectionScope); activeScopeRef.current = connectionScope;
+  const [monitorSnapshot, setMonitorSnapshot] = useState<{ scope: string; data: PrintMonitorResponse } | null>(null);
+  const monitorData = monitorSnapshot?.scope === connectionScope ? monitorSnapshot.data : null;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
@@ -377,31 +342,15 @@ export function PrintMonitorPanel({
   const [pendingCommandId, setPendingCommandId] = useState<string | null>(null);
   const [startingAgent, setStartingAgent] = useState(false);
   const startingAgentRef = useRef(false);
-  const [localAgentId, setLocalAgentId] = useState<string | null>(null);
-  const [localAgentResolved, setLocalAgentResolved] = useState(false);
   const [reprintingId, setReprintingId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
-  const authorization = authHeaders.Authorization || authHeaders.authorization || '';
-
-  const refreshLocalAgentIdentity = useCallback(async () => {
-    const identity = await discoverLocalAgentIdentity();
-    setLocalAgentId(identity?.agent_id || null);
-    setLocalAgentResolved(true);
-    return identity?.agent_id || null;
-  }, []);
-
-  useEffect(() => {
-    void refreshLocalAgentIdentity();
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        void refreshLocalAgentIdentity();
-      }
-    }, 5_000);
-    return () => window.clearInterval(intervalId);
-  }, [refreshLocalAgentIdentity]);
+  const localConnection = useLocalPrintAgent(connectionScope);
+  const localAgentId = localConnection.identity?.agent_id || null;
+  const localAgentResolved = localConnection.status !== 'checking';
+  const connectionNeedsPermission = localConnection.status === 'permission_prompt' || localConnection.status === 'permission_denied';
 
   const loadMonitor = useCallback(async (showLoading = false) => {
     if (showLoading) setLoading(true);
@@ -411,21 +360,23 @@ export function PrintMonitorPanel({
         { headers: authHeaders }
       );
       const data = await response.json().catch(() => null);
+      if (activeScopeRef.current !== connectionScope) return;
       if (!response.ok) {
         throw new Error('Não foi possível consultar a impressão.');
       }
-      setMonitorData(data as PrintMonitorResponse);
+      setMonitorSnapshot({ scope: connectionScope, data: data as PrintMonitorResponse });
       setError('');
     } catch (requestError) {
+      if (activeScopeRef.current !== connectionScope) return;
       setError(
         requestError instanceof Error
           ? requestError.message
           : 'Não foi possível consultar a impressão.'
       );
     } finally {
-      setLoading(false);
+      if (activeScopeRef.current === connectionScope) setLoading(false);
     }
-  }, [apiBaseUrl, authorization]);
+  }, [apiBaseUrl, authorization, connectionScope]);
 
   const reconcileMonitor = useCallback(() => loadMonitor(false), [loadMonitor]);
   useIdleReconciliation({
@@ -786,7 +737,7 @@ export function PrintMonitorPanel({
     }
   };
 
-  const startLocalAgent = () => {
+  const startLocalAgent = async () => {
     // O ref fecha a janela entre o clique e o próximo render do React.
     // Assim double-click/rajadas no mesmo tab disparam o protocolo uma única vez.
     if (startingAgentRef.current) return;
@@ -794,13 +745,20 @@ export function PrintMonitorPanel({
     setStartingAgent(true);
     setActionMessage('Preparando a impressão neste computador…');
     setActionSuccessful(null);
+    const result = await localConnection.connect();
+    if (result !== 'unavailable') {
+      startingAgentRef.current = false;
+      setStartingAgent(false);
+      setActionMessage('');
+      return;
+    }
     const launcher = document.createElement('a');
     launcher.href = 'koma-print://start';
     launcher.click();
     window.setTimeout(() => {
       startingAgentRef.current = false;
       setStartingAgent(false);
-      void refreshLocalAgentIdentity();
+      void localConnection.refresh();
       void loadMonitor(false);
     }, 3_000);
   };
@@ -899,6 +857,20 @@ export function PrintMonitorPanel({
         tone: 'neutral',
         title: 'Verificando a conexão…',
         detail: 'Aguarde a identificação do KÔMA Print neste computador.'
+      };
+    }
+    if (localConnection.status === 'permission_denied') {
+      return {
+        tone: 'danger',
+        title: 'O navegador bloqueou a conexão com o KÔMA Print.',
+        detail: 'Nas permissões deste site, permita o acesso a aplicativos neste computador (loopback/rede local). O agente pode continuar recebendo pedidos em segundo plano; este bloqueio impede a identificação pela tela.'
+      };
+    }
+    if (localConnection.status === 'permission_prompt') {
+      return {
+        tone: 'warning',
+        title: 'Autorize a conexão com o KÔMA Print.',
+        detail: 'Toque em Conectar KÔMA Print e permita o acesso solicitado pelo navegador. Seu vínculo e suas impressoras serão preservados.'
       };
     }
     if (!localAgentId) {
@@ -1007,6 +979,7 @@ export function PrintMonitorPanel({
     commandRunning,
     localAgentId,
     localAgentResolved,
+    localConnection.status,
     hasFreshPrinterDiagnostics,
     hasOnlineAgent,
     hasReadyPrinter,
@@ -1141,7 +1114,9 @@ export function PrintMonitorPanel({
                     hasOnlineAgent ? 'koma-badge-success' : 'koma-badge-danger'
                   }`}>
                     <span className={`h-1.5 w-1.5 rounded-full ${hasOnlineAgent ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                    {hasOnlineAgent ? 'KÔMA Print conectado' : 'KÔMA Print desconectado'}
+                    {localConnection.status === 'permission_denied' ? 'Acesso local bloqueado'
+                      : localConnection.status === 'permission_prompt' ? 'Autorização necessária'
+                        : hasOnlineAgent ? 'KÔMA Print conectado' : 'KÔMA Print desconectado'}
                   </span>
                   {activePrinterBadge && (
                     <span className={`rounded-full px-2 py-0.5 text-[9px] font-extrabold ${activePrinterBadge.badgeClass}`}>
@@ -1155,7 +1130,7 @@ export function PrintMonitorPanel({
                   ) : null}
                 </div>
 
-                <strong className="block text-sm sm:text-base font-bold text-koma-foreground truncate">
+                <strong className={`block text-sm sm:text-base font-bold text-koma-foreground ${connectionNeedsPermission ? 'whitespace-normal' : 'truncate'}`}>
                   {hasReadyPrinter && firstReady
                     ? `${friendlyPrinterName(firstReady.name)} — Pronta para imprimir`
                     : diagnostic.title}
@@ -1190,7 +1165,7 @@ export function PrintMonitorPanel({
                   {startingAgent
                     ? <RefreshCw size={16} className="animate-spin" />
                     : <Power size={16} />}
-                  {startingAgent ? 'Preparando…' : 'Preparar impressão'}
+                  {startingAgent ? 'Conectando…' : localConnection.status === 'permission_denied' ? 'Verificar acesso do navegador' : connectionNeedsPermission ? 'Conectar KÔMA Print' : 'Preparar impressão'}
                 </button>
               ) : null}
 
@@ -1233,7 +1208,7 @@ export function PrintMonitorPanel({
             </p>
           </div>
           <span className="rounded-full border border-koma-border bg-koma-raised px-2.5 py-1 text-[9px] font-semibold text-koma-muted">
-            {allDetectedPrinters.length} encontrada(s)
+            {connectionNeedsPermission ? 'Aguardando acesso' : `${allDetectedPrinters.length} encontrada(s)`}
           </span>
         </div>
 
@@ -1323,14 +1298,14 @@ export function PrintMonitorPanel({
             <div className="md:col-span-2 rounded-2xl border-2 border-dashed border-koma-border bg-koma-raised/40 px-5 py-8 text-center">
               <Printer size={24} className="mx-auto text-koma-muted" />
               <strong className="mt-3 block text-xs font-bold text-koma-foreground">
-                Desconectada
+                {connectionNeedsPermission ? 'Impressoras não verificadas' : 'Desconectada'}
               </strong>
               <span className="mt-1 block text-[10px] text-koma-muted">
-                Nenhuma impressora encontrada neste computador.
+                {connectionNeedsPermission ? 'Autorize o navegador para consultar as impressoras deste computador.' : 'Nenhuma impressora encontrada neste computador.'}
               </span>
               <span className="mt-4 inline-flex items-center gap-2 text-[10px] font-semibold text-koma-muted">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
-                Aguardando uma impressora · atualização automática
+                {connectionNeedsPermission ? 'Aguardando autorização do navegador' : 'Aguardando uma impressora · atualização automática'}
               </span>
             </div>
           )}
