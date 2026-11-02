@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { FulfillmentConversionTarget, ConversionQuote } from './FulfillmentConversionDialog';
 
 type Params = {
@@ -12,8 +12,10 @@ type Params = {
 export function useFulfillmentConversion({ convertToPickup, apiBaseUrl, authHeaders, selectedOrderId, selectedOrderRevision }: Params) {
   const [target, setTarget] = useState<FulfillmentConversionTarget | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [allowedOrderId, setAllowedOrderId] = useState<string | null>(null);
+  const [availability, setAvailability] = useState<{ scope: string; allowed: boolean } | null>(null);
+  const requestGeneration = useRef(0);
   const headersKey = JSON.stringify(authHeaders);
+  const scope = JSON.stringify([selectedOrderId, selectedOrderRevision, apiBaseUrl, headersKey]);
   const getOptions = async (id: string) => {
     const response = await fetch(`${apiBaseUrl}/comandas/${encodeURIComponent(id)}/modalidade/opcoes`, { headers: authHeaders });
     const data = await response.json();
@@ -22,25 +24,30 @@ export function useFulfillmentConversion({ convertToPickup, apiBaseUrl, authHead
   };
   useEffect(() => {
     let active = true;
-    setAllowedOrderId(null);
+    if (!selectedOrderId) setAvailability(null);
     if (selectedOrderId) void getOptions(selectedOrderId).then(data => {
-      if (active && data.options.length) setAllowedOrderId(selectedOrderId);
-    }).catch(() => {});
+      if (active) setAvailability({ scope, allowed: data.options.length > 0 });
+    }).catch(() => { if (active) setAvailability({ scope, allowed: false }); });
     return () => { active = false; };
-  }, [selectedOrderId, selectedOrderRevision, apiBaseUrl, headersKey]);
+  }, [scope]);
+  useEffect(() => () => { requestGeneration.current += 1; }, []);
 
   const request = async (order: { id: string | number; numeroPedido?: number | null; tableId?: number }) => {
     const orderId = String(order.id);
-
+    const orderLabel = order.numeroPedido ? `Pedido #${order.numeroPedido}` : `Pedido ${order.id}`;
+    const generation = ++requestGeneration.current;
+    setTarget({ orderId, orderLabel, options: [], loading: true });
     try {
       const data = await getOptions(orderId);
-      setTarget({ orderId, orderLabel: order.numeroPedido ? `Pedido #${order.numeroPedido}` : `Pedido ${order.id}`,
+      if (generation !== requestGeneration.current) return;
+      setTarget({ orderId, orderLabel,
         options: data.options, address: data.address_snapshot, blockedReason: data.blocked_reason });
     } catch (error) {
-      setTarget({ orderId, orderLabel: `Pedido ${order.id}`, options: [], blockedReason: String(error) });
+      if (generation !== requestGeneration.current) return;
+      setTarget({ orderId, orderLabel, options: [], blockedReason: error instanceof Error ? error.message : 'Não foi possível consultar o pedido.' });
     }
   };
-  const close = () => { if (!isSubmitting) setTarget(null); };
+  const close = () => { if (!isSubmitting) { requestGeneration.current += 1; setTarget(null); } };
   const preview = async (payload: Record<string, unknown>): Promise<ConversionQuote> => {
     if (!target) throw new Error('Pedido indisponível.');
     const response = await fetch(`${apiBaseUrl}/comandas/${encodeURIComponent(target.orderId)}/modalidade/previa`, {
@@ -59,5 +66,7 @@ export function useFulfillmentConversion({ convertToPickup, apiBaseUrl, authHead
       return success;
     } finally { setIsSubmitting(false); }
   };
-  return { target, isSubmitting, request, close, submit, preview, canChange: !!selectedOrderId && allowedOrderId === selectedOrderId };
+  return { target, isSubmitting, request, close, submit, preview,
+    canChange: !!selectedOrderId && availability?.scope === scope && availability.allowed,
+    checking: !!selectedOrderId && availability?.scope !== scope };
 }

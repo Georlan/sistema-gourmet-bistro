@@ -94,3 +94,38 @@ for (const failure of [false, true]) {
     expect(overflow).toBe(false);
   });
 }
+
+test('mostra conferência e não reabre janela após resposta tardia', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  const order = { id: 'latency-e2e', restaurante_id: 99001, numero_pedido: 88, tipo: 'Retirada', identificador: 'Cliente latência', fechada: false, garcom_id: 'caixa-e2e', valor_pago: 0, delivery_status: 'producao', delivery_taxa: 0, criado_em: new Date().toISOString(), lancamentos: [{ id: 'latency-launch', origem: 'cardapio', status: 'producao' }], itens: [{ id: 'latency-item', produto_id: '101', produto: { nome: 'Risoto' }, preco_unit: 42, pago: false, status: 'preparando', lancamento_id: 'latency-launch' }] };
+  await page.route('**/comandas/delivery/ativos', route => route.fulfill({ json: [order] }));
+  await page.route('**/comandas/delivery/pendentes', route => route.fulfill({ json: [] }));
+  await page.route('**/comandas/detalhes/todos?*', route => route.fulfill({ json: [order] }));
+  let releaseFirst!: () => void;
+  let releaseSecond!: () => void;
+  const first = new Promise<void>(resolve => { releaseFirst = resolve; });
+  const second = new Promise<void>(resolve => { releaseSecond = resolve; });
+  let calls = 0;
+  await page.route('**/comandas/latency-e2e/modalidade/opcoes', async route => {
+    calls += 1;
+    if (calls === 1) await first;
+    else if (calls === 2) await second;
+    await route.fulfill({ json: { options: ['delivery'], address_snapshot: null } }).catch(() => {});
+  });
+  try {
+    await page.goto('/?view=caixa');
+    if ((page.viewportSize()?.width || 1366) <= 768) await page.getByRole('tab', { name: /^Digitais/ }).click();
+    await page.locator('.orders-card--digital').filter({ hasText: 'Cliente latência' }).click();
+    const detail = page.locator('.orders-detail-modal');
+    await expect(detail.getByRole('button', { name: 'Verificando alteração de tipo' })).toBeDisabled();
+    releaseFirst();
+    await detail.getByRole('button', { name: 'Tipo e endereço' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Alterar tipo do pedido' });
+    await expect(dialog.getByRole('status')).toHaveText('Consultando opções do pedido…');
+    await expect(dialog.getByRole('button', { name: 'Calcular e revisar' })).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Cancelar' }).click();
+    releaseSecond();
+    await expect(dialog).toHaveCount(0);
+  } finally { releaseFirst(); releaseSecond(); }
+});
