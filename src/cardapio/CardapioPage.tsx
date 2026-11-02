@@ -68,6 +68,7 @@ import {
   OrderStateContract,
   StoredOrder,
   loadStoredOrders,
+  mergeLocalOrderSnapshots,
   restoreDurableStoredOrders,
   refreshAllStoredOrders,
   removeStoredOrder,
@@ -153,6 +154,8 @@ export default function CardapioPage() {
   const [couponToApply, setCouponToApply] = useState("");
   const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
   const [storedOrders, setStoredOrders] = useState<StoredOrder[]>([]);
+  const storedOrdersRef = useRef(storedOrders);
+  storedOrdersRef.current = storedOrders;
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [pixModalOrder, setPixModalOrder] = useState<StoredOrder | null>(null);
   const [user, setUser] = useState<CustomerProfile | null>(null);
@@ -232,7 +235,7 @@ export default function CardapioPage() {
   const checkActiveOrders = useCallback(async (restaurantId: number) => {
     try {
       setIsRefreshingOrders(true);
-      const updated = await refreshAllStoredOrders(restaurantId, API_BASE_URL);
+      const updated = await refreshAllStoredOrders(restaurantId, API_BASE_URL, storedOrdersRef.current);
       setStoredOrders(updated);
     } catch (error) {
       console.warn("Erro ao consultar status dos pedidos:", error);
@@ -456,7 +459,7 @@ export default function CardapioPage() {
       const rid = Number(brand.id);
       if (Number.isFinite(rid)) {
         const stored = loadStoredOrders(rid);
-        setStoredOrders(stored);
+        setStoredOrders(current => mergeLocalOrderSnapshots(stored, current));
         // Pedidos modernos são reconciliados pelo SSE/summary do drawer.
         // Somente registros legados sem capability token precisam de uma
         // reconciliação HTTP inicial.
@@ -471,7 +474,7 @@ export default function CardapioPage() {
         // acompanhamento/chat sem aumentar o payload público do cardápio.
         if (!background) {
           void restoreDurableStoredOrders(rid)
-            .then((restored) => setStoredOrders(current => restored.map(order => ({ ...order, delivery_receipt_code: current.find(item => item.id === order.id)?.delivery_receipt_code || null }))))
+            .then((restored) => setStoredOrders(current => mergeLocalOrderSnapshots(restored, current)))
             .catch((resumeError) => {
               console.warn("Falha ao retomar pedidos salvos neste navegador:", resumeError);
             });
@@ -1017,7 +1020,7 @@ export default function CardapioPage() {
     if (targetId) {
       removeStoredOrder(targetId);
       if (activeBrand?.id) {
-        setStoredOrders(loadStoredOrders(Number(activeBrand.id)));
+        setStoredOrders(current => mergeLocalOrderSnapshots(loadStoredOrders(Number(activeBrand.id)), current));
       }
     } else {
       if (activeBrand?.id) {
@@ -1606,7 +1609,7 @@ export default function CardapioPage() {
             setCheckoutRequest(null);
             if (activeBrand?.id) {
               const rid = Number(activeBrand.id);
-              setStoredOrders(loadStoredOrders(rid));
+              setStoredOrders(current => mergeLocalOrderSnapshots(loadStoredOrders(rid), current));
             }
           }}
           onSessionExpired={handleSessionExpired}
@@ -1630,7 +1633,7 @@ export default function CardapioPage() {
         onRemoveOrder={(id) => {
           removeStoredOrder(id);
           if (activeBrand?.id) {
-            setStoredOrders(loadStoredOrders(Number(activeBrand.id)));
+            setStoredOrders(current => mergeLocalOrderSnapshots(loadStoredOrders(Number(activeBrand.id)), current));
           }
         }}
         onRealtimeStatus={handleRealtimeOrderStatus}

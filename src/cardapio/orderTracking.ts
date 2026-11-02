@@ -298,6 +298,20 @@ function trackingTokenFromOrder(order: Partial<StoredOrder>): string {
   }
 }
 
+/** Reúne somente dados efêmeros removidos intencionalmente do armazenamento local. */
+export function mergeLocalOrderSnapshots(local: StoredOrder[], current: StoredOrder[]): StoredOrder[] {
+  return local.map((order) => {
+    if (order.delivery_receipt_code !== undefined || order.fechado || resolveOrderState(order).terminal) return order;
+    const token = trackingTokenFromOrder(order);
+    if (!token) return order;
+    const previous = current.find((item) => item.id === order.id
+      && item.restaurante_id === order.restaurante_id
+      && trackingTokenFromOrder(item) === token
+      && !item.fechado && !resolveOrderState(item).terminal);
+    return previous?.delivery_receipt_code ? { ...order, delivery_receipt_code: previous.delivery_receipt_code } : order;
+  });
+}
+
 /**
  * Projeção mínima limitada à sessão da aba. Dados pessoais, itens comprados,
  * URLs que duplicam segredos e identificadores de tracking não devem sobreviver
@@ -571,8 +585,9 @@ export async function fetchOrderLiveStatus(
 export async function refreshAllStoredOrders(
   restaurantId: number,
   apiBaseUrl: string,
+  current: StoredOrder[] = [],
 ): Promise<StoredOrder[]> {
-  const storedList = loadStoredOrders(restaurantId);
+  const storedList = mergeLocalOrderSnapshots(loadStoredOrders(restaurantId), current);
   if (storedList.length === 0) return [];
 
   const results = await Promise.allSettled(

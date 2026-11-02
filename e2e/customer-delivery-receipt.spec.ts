@@ -1,4 +1,4 @@
-import {test,expect} from '@playwright/test';
+import {test,expect, type WebSocketRoute} from '@playwright/test';
 import {publicMenuPayload} from './fixtures/menu-parity';
 const API='http://127.0.0.1:8000';
 test.beforeEach(async ({ page, baseURL }) => {
@@ -9,14 +9,15 @@ test.beforeEach(async ({ page, baseURL }) => {
   });
 });
 test('cliente vê código privado no acompanhamento sem outra requisição de código',async({page})=>{
-  let summaries=0; let finished=false;
+  let summaries=0; let finished=false; let menuReads=0; let failSummary=false; let socket: WebSocketRoute;
+  await page.routeWebSocket(/\/ws\/cliente/, ws => { socket = ws; ws.onMessage(() => {}); });
   await page.addInitScript(()=>sessionStorage.setItem('koma_active_orders',JSON.stringify([{
     id:'receipt-customer',numero_pedido:101,restaurante_id:2,timestamp:Date.now(),tracking_token:'private-receipt-token',status:'transito',total:12.9,tipo:'Delivery',
   }])));
   await page.route(`${API}/**`,route=>{
     const path=new URL(route.request().url()).pathname;
-    if(path.endsWith('/public'))return route.fulfill({json:publicMenuPayload});
-    if(path.endsWith('/summary')) { summaries++;return route.fulfill({json:{id:'receipt-customer',numero_pedido:101,tipo:'Delivery',status:finished?'finalizado':'transito',delivery_receipt_code:finished?null:'012',fechada:finished,conversa:{id:'conv-receipt',can_chat:true,unread_count:0}}}); }
+    if(path.endsWith('/public')) { menuReads++; return route.fulfill({json:publicMenuPayload}); }
+    if(path.endsWith('/summary')) { summaries++;if(failSummary) return route.fulfill({status:503,json:{detail:'offline'}});return route.fulfill({json:{id:'receipt-customer',numero_pedido:101,tipo:'Delivery',status:finished?'finalizado':'transito',delivery_receipt_code:finished?null:'012',fechada:finished,conversa:{id:'conv-receipt',can_chat:true,unread_count:0}}}); }
     if(path.endsWith('/events'))return route.fulfill({contentType:'text/event-stream',body:': local\n\n'});
     if(path.endsWith('/feed'))return route.fulfill({json:{items:[],has_more:false,oldest_seq:null,latest_seq:null,purged_at:null}});
     if(path.endsWith('/messages'))return route.fulfill({json:{items:[],conversa:{id:'conv-receipt',can_chat:true}}});
@@ -29,6 +30,12 @@ test('cliente vê código privado no acompanhamento sem outra requisição de c�
   await expect(receipt).toContainText('012');
   await expect(receipt).toContainText('quando receber o pedido');
   expect(summaries).toBeGreaterThan(0);
+  expect(await page.evaluate(() => sessionStorage.getItem('koma_active_orders'))).not.toContain('012');
+  const oldReads=menuReads; failSummary=true;
+  socket!.send(JSON.stringify({event:'catalog_updated'}));
+  await expect.poll(() => menuReads).toBeGreaterThan(oldReads);
+  await expect(receipt).toContainText('012');
+  failSummary=false;
   if (!await page.locator('#inline-order-chat-panel').isVisible()) await page.getByRole('button',{name:'Chat com restaurante',exact:true}).click();
   await expect(page.locator('#inline-order-chat-panel').getByLabel('Código de recebimento da entrega')).toBeVisible();
   finished=true;
