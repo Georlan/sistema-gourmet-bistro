@@ -285,7 +285,7 @@ export function CashierConversationsDrawer({
     pruneCashierDrafts(draftScope);
   }, [draftScope]);
 
-  const activeCount = conversations.length;
+  const activeCount = conversations.filter((conversation) => !isTerminalConversation(conversation)).length;
 
   const sortedConversations = useMemo(() => conversations
     .filter((conversation) => matchesConversationSearch(conversation, searchQuery))

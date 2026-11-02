@@ -118,3 +118,22 @@ test('pedido agendado chega no painel online com data e horário antes do prepar
 });
 
 });
+
+test('aceite com resposta compacta não exibe somente a taxa enquanto atualiza', async ({ page }) => {
+  await setup(page);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/comandas/delivery/ativos', async route => { await gate; await route.fulfill({ json: [] }).catch(() => {}); });
+  await page.route('**/comandas/delivery/pendentes', async route => { await gate; await route.fulfill({ json: [] }).catch(() => {}); });
+  await page.route('**/comandas/online-1/delivery/status?*', route => route.fulfill({ json: {
+    id: 'online-1', tipo: 'Delivery', identificador: 'Cliente online-1', fechada: false,
+    delivery_status: 'aceito', delivery_taxa: 5, valor_pago: 0,
+  } }));
+  try {
+    await page.getByRole('button', { name: 'Aceitar', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Novos pedidos' })).toHaveCount(0);
+    const card = page.locator('.orders-card--digital').filter({ hasText: 'Cliente online-1' });
+    await expect(card).toContainText('R$ 47,00');
+    await expect(card).not.toContainText('R$ 5,00');
+  } finally { release(); }
+});
