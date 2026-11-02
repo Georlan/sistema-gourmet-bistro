@@ -23,6 +23,7 @@ import { API_BASE_URL } from "../../config/api";
 import {
   OrderStateContract,
   StoredOrder,
+  customerOrderLabel,
   orderFulfillmentLabel,
   orderProgress,
   resolveOrderState,
@@ -664,7 +665,7 @@ export default function CardapioOrdersDrawer({
                                 )}
                               </div>
                               <span className="mt-0.5 block text-[11px] font-bold text-emerald-400">
-                                {unread > 0 ? "O restaurante respondeu" : state.label}
+                                {unread > 0 ? "O restaurante respondeu" : customerOrderLabel(state)}
                               </span>
                             </div>
                           </div>
@@ -840,7 +841,7 @@ export default function CardapioOrdersDrawer({
                                 )}
                               </div>
                               <span className={clsx("mt-0.5 block text-[10px] font-bold", rejected ? "text-rose-400" : "text-emerald-400")}>
-                                {unread > 0 ? "Nova resposta do restaurante" : state.label}
+                                {unread > 0 ? "Nova resposta do restaurante" : customerOrderLabel(state)}
                               </span>
                             </div>
                           </div>

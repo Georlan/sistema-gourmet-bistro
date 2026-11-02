@@ -30,7 +30,11 @@ def _base_phase(status: OrderStatus) -> str:
     }[status]
 
 
-def _label(phase: str) -> str:
+def _label(phase: str, fulfillment: FulfillmentType) -> str:
+    if phase == "ready":
+        return {FulfillmentType.PICKUP: "Pronto para retirar", FulfillmentType.DELIVERY: "Pronto para sair", FulfillmentType.DINE_IN: "Pronto para servir"}[fulfillment]
+    if phase == "completed":
+        return {FulfillmentType.PICKUP: "Retirada concluída", FulfillmentType.DELIVERY: "Entrega concluída", FulfillmentType.DINE_IN: "Pedido concluído"}[fulfillment]
     return {
         "payment_pending": "Aguardando pagamento",
         "payment_failed": "Pagamento não gerado",
@@ -93,7 +97,7 @@ def build_order_state_contract(
     return {
         "status": canonical_status.value,
         "phase": phase,
-        "label": _label(phase),
+        "label": _label(phase, fulfillment),
         "fulfillment": fulfillment.value,
         "terminal": terminal,
         "rejected": rejected,

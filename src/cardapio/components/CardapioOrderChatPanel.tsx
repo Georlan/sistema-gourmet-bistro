@@ -22,6 +22,7 @@ import {
   StoredOrder,
   fallbackOrderState,
   isOrderStateContract,
+  customerOrderLabel,
   orderFulfillmentLabel,
   orderProgress,
 } from "../orderTracking";
@@ -441,7 +442,7 @@ export default function CardapioOrderChatPanel({
               <span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">
                 {state.phase === "payment_pending" ? "Status do pagamento" : "Status atual"}
               </span>
-              <p className={clsx("text-xs font-black", rejected ? "text-rose-400" : state.phase === "payment_pending" ? "text-amber-300" : "text-emerald-400")}>{state.label}</p>
+              <p className={clsx("text-xs font-black", rejected ? "text-rose-400" : state.phase === "payment_pending" ? "text-amber-300" : "text-emerald-400")}>{customerOrderLabel(state)}</p>
             </div>
           </div>
           <span className="text-[10px] font-bold text-koma-muted">{orderFulfillmentLabel(state.fulfillment)}</span>

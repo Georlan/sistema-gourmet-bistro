@@ -73,6 +73,7 @@ import {
   removeStoredOrder,
   clearAllStoredOrders,
   fallbackOrderState,
+  customerOrderLabel,
   orderFulfillmentLabel,
   orderPhaseDescription,
   orderProgress,
@@ -1198,7 +1199,7 @@ export default function CardapioPage() {
                       </button>
                     )}
                   </div>
-                  <h2 className="mt-1 text-base font-black text-koma-foreground">{activeState.label}</h2>
+                  <h2 className="mt-1 text-base font-black text-koma-foreground">{customerOrderLabel(activeState)}</h2>
                   <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
                     {rejected
                       ? "O restaurante não conseguiu aceitar este pedido. Você pode montar um novo pedido quando quiser."

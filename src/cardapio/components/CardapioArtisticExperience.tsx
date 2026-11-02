@@ -34,7 +34,7 @@ import {
   Product,
 } from '../CardapioTypes';
 import { CustomerProfile } from '../customerSession';
-import { OrderStateContract, StoredOrder, orderFulfillmentLabel } from '../orderTracking';
+import { OrderStateContract, StoredOrder, customerOrderLabel, orderFulfillmentLabel } from '../orderTracking';
 import { buildKomaAttributionUrl } from '../komaAttribution';
 import { getPairingRecommendations, classifyProduct } from '../pairingRecommendations';
 import type { CartItem } from './CardapioCartDrawer';
@@ -618,7 +618,7 @@ export function CardapioArtisticExperience({
                   </button>
                 )}
               </div>
-              <h2 className="koma-art-tracker-title">{activeState.label}</h2>
+              <h2 className="koma-art-tracker-title">{customerOrderLabel(activeState)}</h2>
               <p className="koma-art-tracker-desc">
                 {activeState.rejected
                   ? 'O restaurante não conseguiu aceitar este pedido. Você pode montar um novo pedido quando quiser.'
