@@ -59,3 +59,20 @@ O estado “referenciado” significa ocorrência literal no código; caminhos m
 | ![Assinatura para fundo escuro](../../src/assets/brand/koma-wordmark-on-dark.svg) | ![Assinatura para fundo claro](../../src/assets/brand/koma-wordmark-on-light.svg) |
 
 Para conferir contraste em fundos explícitos, abra [a galeria HTML](preview-assets.html) localmente. As prévias Markdown dependem do fundo do visualizador; escolher a variante adequada à superfície. Componentes SVG em código, ícones de bibliotecas, fontes externas, arquivos fora dessas pastas e recursos recebidos de restaurantes ainda requerem inventário adicional. A comparação de telas está em [VISUAL-2026-11-02](VISUAL-2026-11-02.md).
+
+## Outros arquivos visuais locais
+
+Este levantamento cobre arquivos raster e SVG em `src/assets` e `public` fora das pastas de marca acima. Origem não verificada significa que não há evidência suficiente nesta revisão; não é licença de uso. Conteúdo em componentes SVG inline, ícones de dependências, arquivos fora desses diretórios e conteúdo de clientes requer revisão própria.
+
+| Arquivos | Categoria e uso identificado | Origem / orientação |
+| --- | --- | --- |
+| `src/assets/logo-koma-on-{dark,light,green}.png` | PNGs de compatibilidade de marca. | Informados como oficiais no registro de proveniência; comprovação de cessão/licença pendente. |
+| `public/logo-koma.png`, `public/koma-logo-on-{light,dark}.svg` | Favicons/compatibilidade. | Informados como oficiais no registro de proveniência; não remover cópias usadas por caminhos públicos sem migrar consumidores. |
+| `public/koma-event-wordmark.svg` | Assinatura usada nas páginas do evento (`CearaTechQrPage`, `CearaTechLeadPage`). | Conteúdo idêntico ao wordmark escuro versionado; conferir procedência do original. Caminho público tem consumidores próprios. |
+| `public/siara-tech-summit.svg` | Marca de terceiro nas páginas do evento. | Direitos e autorização não verificados; não promover a marca oficial KÔMA. |
+| `public/koma-pagbank-connect.png` | Material de conexão PagBank. | Origem e direitos não verificados nesta revisão; não usar como asset genérico. |
+| `src/assets/koma-{phone,tablet}-shell-3d.png` | Molduras 3D antigas. | `ASSET_PROVENANCE.md` marca procedência/licença como pendente. |
+| `src/assets/koma-{phone,tablet,notebook}-graphite-shell-v2.png` | Molduras usadas pela landing em `HowItWorks`, `TabletFrame` e `LaptopFrame`. | Origem e licença não verificadas nesta revisão; preservar telas substituíveis e transparência; não ampliar uso comercial sem evidência. |
+| `public/mock-preview/{burger-hero,drink-combo,porcao-fritas,smash-duplo}.jpg` | Fotografias da prévia fictícia local. | Direitos não verificados; não catalogar como fotografia oficial nem usar em outras telas sem comprovação. |
+
+Alguns arquivos têm bytes idênticos e papéis ou URLs distintos: `public/logo-koma.png` e os PNGs `on-light`/`on-green` compartilham conteúdo; os símbolos públicos claros/escuros coincidem com os símbolos equivalentes em `src/assets/brand`. A duplicação física deve ser avaliada junto com URLs públicas, manifests, cache e consumidores; não foi removida nesta rodada.
