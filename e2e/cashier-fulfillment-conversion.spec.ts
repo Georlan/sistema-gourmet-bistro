@@ -129,3 +129,24 @@ test('mostra conferência e não reabre janela após resposta tardia', async ({ 
     await expect(dialog).toHaveCount(0);
   } finally { releaseFirst(); releaseSecond(); }
 });
+
+test('permite repetir a conferência quando a consulta inicial falha', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  const order = { id: 'retry-e2e', restaurante_id: 99001, numero_pedido: 89, tipo: 'Retirada', identificador: 'Cliente nova consulta', fechada: false, garcom_id: 'caixa-e2e', valor_pago: 0, delivery_status: 'producao', delivery_taxa: 0, criado_em: new Date().toISOString(), lancamentos: [{ id: 'retry-launch', origem: 'cardapio', status: 'producao' }], itens: [{ id: 'retry-item', produto_id: '101', produto: { nome: 'Risoto' }, preco_unit: 42, pago: false, status: 'preparando', lancamento_id: 'retry-launch' }] };
+  await page.route('**/comandas/delivery/ativos', route => route.fulfill({ json: [order] }));
+  await page.route('**/comandas/delivery/pendentes', route => route.fulfill({ json: [] }));
+  await page.route('**/comandas/detalhes/todos?*', route => route.fulfill({ json: [order] }));
+  let calls = 0;
+  await page.route('**/comandas/retry-e2e/modalidade/opcoes', route => {
+    calls += 1;
+    return calls === 1 ? route.fulfill({ status: 503, json: { detail: 'Indisponível' } }) : route.fulfill({ json: { options: ['delivery'], address_snapshot: null } });
+  });
+  await page.goto('/?view=caixa');
+  if ((page.viewportSize()?.width || 1366) <= 768) await page.getByRole('tab', { name: /^Digitais/ }).click();
+  await page.locator('.orders-card--digital').filter({ hasText: 'Cliente nova consulta' }).click();
+  await page.locator('.orders-detail-modal').getByRole('button', { name: 'Tentar verificar alteração de tipo' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Alterar tipo do pedido' });
+  await expect(dialog.getByLabel('Novo tipo do pedido')).toBeVisible();
+  expect(calls).toBe(2);
+});

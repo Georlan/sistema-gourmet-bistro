@@ -1271,6 +1271,7 @@ export function CaixaPanel({
             saveObservation={saveItemObservation}
             canChangeFulfillment={fulfillmentConversion.canChange}
             checkingFulfillment={fulfillmentConversion.checking}
+            fulfillmentCheckFailed={fulfillmentConversion.checkFailed}
             hasPrinting={hasPrinting}
             restaurantConfig={restauranteConfig}
             taxaServicoAtiva={taxaServicoAtiva}

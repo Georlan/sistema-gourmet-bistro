@@ -12,7 +12,7 @@ type Params = {
 export function useFulfillmentConversion({ convertToPickup, apiBaseUrl, authHeaders, selectedOrderId, selectedOrderRevision }: Params) {
   const [target, setTarget] = useState<FulfillmentConversionTarget | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [availability, setAvailability] = useState<{ scope: string; allowed: boolean } | null>(null);
+  const [availability, setAvailability] = useState<{ scope: string; allowed: boolean; failed?: boolean } | null>(null);
   const requestGeneration = useRef(0);
   const headersKey = JSON.stringify(authHeaders);
   const scope = JSON.stringify([selectedOrderId, selectedOrderRevision, apiBaseUrl, headersKey]);
@@ -27,7 +27,7 @@ export function useFulfillmentConversion({ convertToPickup, apiBaseUrl, authHead
     if (!selectedOrderId) setAvailability(null);
     if (selectedOrderId) void getOptions(selectedOrderId).then(data => {
       if (active) setAvailability({ scope, allowed: data.options.length > 0 });
-    }).catch(() => { if (active) setAvailability({ scope, allowed: false }); });
+    }).catch(() => { if (active) setAvailability({ scope, allowed: false, failed: true }); });
     return () => { active = false; };
   }, [scope]);
   useEffect(() => () => { requestGeneration.current += 1; }, []);
@@ -68,5 +68,6 @@ export function useFulfillmentConversion({ convertToPickup, apiBaseUrl, authHead
   };
   return { target, isSubmitting, request, close, submit, preview,
     canChange: !!selectedOrderId && availability?.scope === scope && availability.allowed,
+    checkFailed: !!selectedOrderId && availability?.scope === scope && !!availability.failed,
     checking: !!selectedOrderId && availability?.scope !== scope };
 }

@@ -107,6 +107,7 @@ export interface KanbanOrderDetailsProps {
   };
   readonly canChangeFulfillment?: boolean;
   readonly checkingFulfillment?: boolean;
+  readonly fulfillmentCheckFailed?: boolean;
   readonly hasPrinting?: boolean;
   readonly restaurantConfig?: Record<string, unknown> | null;
   readonly taxaServicoAtiva?: boolean;
@@ -154,6 +155,7 @@ export function KanbanOrderDetails({
   hasPrinting = true,
   canChangeFulfillment = false,
   checkingFulfillment = false,
+  fulfillmentCheckFailed = false,
   restaurantConfig,
   taxaServicoAtiva,
   serviceTaxRate,
@@ -171,6 +173,11 @@ export function KanbanOrderDetails({
       && Number(selectedKanbanOrder?.mesaId || 0) === 0
       && String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase() === 'retirada'
     );
+  const hasTableConversion = !selectedIsQuickSale && selectedKanbanOrder.mesaId > 0;
+  const checkingConversion = checkingFulfillment && !canChangeFulfillment && !hasTableConversion;
+  const conversionLabel = fulfillmentCheckFailed && !hasTableConversion
+    ? 'Tentar verificar alteração de tipo'
+    : checkingConversion ? 'Verificando alteração de tipo' : 'Tipo e endereço';
   const selectedNormalizedFulfillment = String(
     selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '',
   ).trim().toLowerCase();
@@ -256,7 +263,7 @@ export function KanbanOrderDetails({
           <div className="orders-detail-modal__hero-side">
             <strong>{formatCurrency(selectedOrderTotal)}</strong>
             <div className="kd-hero-controls">
-            {(canChangeFulfillment || checkingFulfillment || (!selectedIsQuickSale && selectedKanbanOrder.mesaId > 0)) && <button type="button" className="kd-hero-change" disabled={transfer.isTransferring || (checkingFulfillment && !canChangeFulfillment && !(selectedKanbanOrder.mesaId > 0))} onClick={actions.convertDeliveryToPickup} aria-label={checkingFulfillment && !canChangeFulfillment && !(selectedKanbanOrder.mesaId > 0) ? 'Verificando alteração de tipo' : 'Tipo e endereço'} title={checkingFulfillment && !canChangeFulfillment && !(selectedKanbanOrder.mesaId > 0) ? 'Verificando alteração de tipo' : 'Alterar tipo ou endereço'}><CashierDetailActionArt kind="change" /></button>}
+            {(canChangeFulfillment || checkingFulfillment || fulfillmentCheckFailed || hasTableConversion) && <button type="button" className="kd-hero-change" disabled={transfer.isTransferring || checkingConversion} onClick={actions.convertDeliveryToPickup} aria-label={conversionLabel} title={conversionLabel}><CashierDetailActionArt kind="change" /></button>}
             <button
               type="button"
               onClick={actions.close}
