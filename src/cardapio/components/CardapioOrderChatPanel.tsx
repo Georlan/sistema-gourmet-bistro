@@ -147,7 +147,12 @@ export default function CardapioOrderChatPanel({
           return { items, has_more: false, oldest_seq: null, latest_seq: null, purged_at: null };
         })(),
       ]);
-      if (!orderRes.ok) throw new Error("Não foi possível atualizar o pedido.");
+      if (!orderRes.ok) {
+        if ([401, 403, 404].includes(orderRes.status)) {
+          setTracking(current => ({ status: order.status || 'pendente', tipo: order.tipo || 'Delivery', ...current, delivery_receipt_code: null }));
+        }
+        throw new Error("Não foi possível atualizar o pedido.");
+      }
       const orderData = await orderRes.json() as TrackingPayload;
       setTracking(orderData);
       if (page && Array.isArray(page.items)) {

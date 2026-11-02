@@ -327,3 +327,15 @@ test('restauração local preserva código só para o mesmo pedido e credencial 
   assert.equal(mergeLocalOrderSnapshots([{ ...local, status: 'finalizado' }], [current])[0].delivery_receipt_code, undefined);
   assert.equal(mergeLocalOrderSnapshots([{ ...local, delivery_receipt_code: null }], [current])[0].delivery_receipt_code, null);
 });
+
+test('acesso negado remove código da memória; falha temporária não o apaga', async () => {
+  const originalFetch = globalThis.fetch;
+  const order = { id: 'a', restaurante_id: 8, timestamp: Date.now(), tipo: 'Delivery', status: 'aceito', tracking_token: 'token-a', delivery_receipt_code: '007' } as StoredOrder;
+  try {
+    for (const status of [401, 403, 503]) {
+      globalThis.fetch = (async () => new Response(null, { status })) as typeof fetch;
+      const result = await fetchOrderLiveStatus(order, 'https://example.test');
+      assert.equal(result?.delivery_receipt_code, status === 503 ? '007' : null);
+    }
+  } finally { globalThis.fetch = originalFetch; }
+});

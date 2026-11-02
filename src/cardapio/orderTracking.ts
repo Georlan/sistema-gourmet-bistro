@@ -551,6 +551,7 @@ export async function fetchOrderLiveStatus(
 
   const response = await fetch(url, { cache: "no-store" });
   if (response.status === 404) return null;
+  if (response.status === 401 || response.status === 403) return { ...order, delivery_receipt_code: null };
   if (!response.ok) return order;
 
   const data = await response.json();
