@@ -40,11 +40,13 @@ Inventário ainda incompleto: botões, campos, navegação, overlays e duplicaç
 
 ## Cobertura e pendências
 
+[Comparação visual inicial e capturas](VISUAL-2026-11-02.md), com limites e resultados dos testes.
+
 | Superfície | Código identificado | Validação visual atual |
 | --- | --- | --- |
-| Cardápio | `src/cardapio/CardapioPage.tsx` | Não realizada nesta rodada |
-| Garçom | `src/components/mesas/` e `src/components/MenuPanel.tsx` | Não realizada nesta rodada |
-| Caixa/Pedidos | `src/components/caixa/orders/CaixaOrdersWorkspace.tsx` | Não realizada nesta rodada; PR #1232 incorporado à main |
-| Entregador | `src/components/MotoboyPwaPage.tsx`, `src/components/courier/` | Código presente na main; não foi validado em dispositivo nesta rodada |
+| Cardápio | `src/cardapio/CardapioPage.tsx` | Captura local em 390 e 1366; ver comparação |
+| Garçom | `src/components/mesas/` e `src/components/MenuPanel.tsx` | Captura local em 390 e 1366; ver comparação |
+| Caixa/Pedidos | `src/components/caixa/orders/CaixaOrdersWorkspace.tsx` | Captura local em 390 e 1366; PR #1232 incorporado à main |
+| Entregador | `src/components/MotoboyPwaPage.tsx`, `src/components/courier/` | Captura local em 390 e 1366; dispositivo físico não validado |
 
-Faltam capturas rastreáveis mobile/desktop, matriz de contraste e interações, escala tipográfica e espaçamento acordados, inventário completo de assets e componentes, medições de rede e testes de regressão. Nenhuma das três tarefas da Fase 0 está encerrada por este levantamento.
+Faltam capturas de estados adicionais e temas, matriz completa de contraste e interações, escala tipográfica e espaçamento acordados, inventário completo de assets e componentes, medições de rede e testes de regressão. Nenhuma das três tarefas da Fase 0 está encerrada por este levantamento.
