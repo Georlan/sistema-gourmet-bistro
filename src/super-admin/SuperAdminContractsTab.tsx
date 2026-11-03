@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
   Clock3,
@@ -139,6 +139,33 @@ export function SuperAdminContractsTab({
   const [activatingProtocol, setActivatingProtocol] = useState<string | null>(null);
   const [activationNotice, setActivationNotice] = useState<string | null>(null);
   const [activationError, setActivationError] = useState<string | null>(null);
+  const [manualRestaurantId, setManualRestaurantId] = useState("");
+  const [suggestedRestaurantId, setSuggestedRestaurantId] = useState<number | null>(null);
+  const [eligibleRestaurantIds, setEligibleRestaurantIds] = useState<number[]>([]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void superAdminFetch("/api/super-admin/restaurantes/id-eligibility", {
+      signal: controller.signal,
+    })
+      .then(async response => {
+        if (!response.ok) return;
+        const data = (await response.json()) as {
+          suggestedId?: number | null;
+          eligibleIds?: number[];
+        };
+        if (typeof data?.suggestedId === "number") {
+          setSuggestedRestaurantId(data.suggestedId);
+        }
+        if (Array.isArray(data?.eligibleIds)) {
+          setEligibleRestaurantIds(data.eligibleIds);
+        }
+      })
+      .catch(() => {
+        // Ignora silenciosamente se indisponível
+      });
+    return () => controller.abort();
+  }, [items]);
 
   const pendingCount = items.filter(item => item.status === "SIGNED_PENDING_ACTIVATION").length;
   const activatedCount = items.filter(item => item.status === "ACTIVATED").length;
@@ -179,17 +206,32 @@ export function SuperAdminContractsTab({
     setActivationError(null);
 
     try {
+      const parsedRestaurantId = manualRestaurantId.trim()
+        ? Number.parseInt(manualRestaurantId.trim(), 10)
+        : null;
+      if (
+        manualRestaurantId.trim() &&
+        (!Number.isFinite(parsedRestaurantId) || (parsedRestaurantId ?? 0) < 1)
+      ) {
+        throw new Error("Informe um ID de restaurante elegível inteiro positivo (>= 1) ou deixe em branco para usar o menor ID elegível sugerido.");
+      }
+      const bodyPayload: Record<string, unknown> = {
+        reason: "Ativação de contratação eletrônica pelo Super Admin",
+      };
+      if (parsedRestaurantId !== null) {
+        bodyPayload.restaurant_id = parsedRestaurantId;
+      }
+
       const response = await superAdminFetch(
         `/api/super-admin/contracts/${encodeURIComponent(selected.protocol)}/activate`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            reason: "Ativação de contratação eletrônica pelo Super Admin",
-          }),
+          body: JSON.stringify(bodyPayload),
         },
       );
       const data = await response.json() as ContractActivationResponse;
+      setManualRestaurantId("");
       setActivationNotice(
         data.idempotent
           ? `A contratação já estava ativada no restaurante #${data.restaurantId}.`
@@ -339,31 +381,55 @@ export function SuperAdminContractsTab({
                   <h3 className="mt-1 text-lg font-black text-koma-foreground">{selected.restaurantName}</h3>
                   <p className="mt-1 font-mono text-[11px] text-koma-muted">{selected.protocol}</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {selected.status === "SIGNED_PENDING_ACTIVATION" && (
-                    <button
-                      type="button"
-                      onClick={() => void activateSelected()}
-                      disabled={
-                        activatingProtocol === selected.protocol ||
-                        (selected.activationEligible !== undefined
-                          ? !selected.activationEligible
-                          : (selected.billingStatus === "pending" || selected.billingStatus === "failed"))
-                      }
-                      title={
-                        (selected.activationEligible === false || selected.billingStatus === "pending" || selected.billingStatus === "failed")
-                          ? "Aguardando confirmação da forma de pagamento pelo restaurante"
-                          : undefined
-                      }
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-700/70 bg-[#00b894] px-3 py-2 text-[11px] font-black text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <Rocket className="h-3.5 w-3.5" />
-                      {activatingProtocol === selected.protocol
-                        ? "Ativando..."
-                        : (selected.activationEligible === false || selected.billingStatus === "pending" || selected.billingStatus === "failed")
-                        ? "Aguardando pagamento"
-                        : "Ativar restaurante"}
-                    </button>
+                    <>
+                      <label className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-2.5 py-1.5 text-[10px] text-koma-secondary">
+                        <span>ID:</span>
+                        <input
+                          type="number"
+                          min={1}
+                          step={1}
+                          value={manualRestaurantId}
+                          onChange={event => setManualRestaurantId(event.target.value)}
+                          placeholder={
+                            suggestedRestaurantId != null
+                              ? `Sugerido #${suggestedRestaurantId}`
+                              : "Automático"
+                          }
+                          aria-label="ID elegível do restaurante (opcional)"
+                          title={
+                            eligibleRestaurantIds.length > 0
+                              ? `IDs elegíveis verificados: ${eligibleRestaurantIds.map(id => `#${id}`).join(", ")}`
+                              : "Deixe em branco para usar o menor ID elegível sugerido ou informe outro ID elegível"
+                          }
+                          className="w-24 bg-transparent font-mono text-[11px] text-koma-foreground focus:outline-none"
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => void activateSelected()}
+                        disabled={
+                          activatingProtocol === selected.protocol ||
+                          (selected.activationEligible !== undefined
+                            ? !selected.activationEligible
+                            : (selected.billingStatus === "pending" || selected.billingStatus === "failed"))
+                        }
+                        title={
+                          (selected.activationEligible === false || selected.billingStatus === "pending" || selected.billingStatus === "failed")
+                            ? "Aguardando confirmação da forma de pagamento pelo restaurante"
+                            : undefined
+                        }
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-700/70 bg-[#00b894] px-3 py-2 text-[11px] font-black text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <Rocket className="h-3.5 w-3.5" />
+                        {activatingProtocol === selected.protocol
+                          ? "Ativando..."
+                          : (selected.activationEligible === false || selected.billingStatus === "pending" || selected.billingStatus === "failed")
+                          ? "Aguardando pagamento"
+                          : "Ativar restaurante"}
+                      </button>
+                    </>
                   )}
                   <button type="button" onClick={() => void copyProtocol()} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-[11px] font-bold text-koma-secondary hover:text-koma-foreground">
                     <Copy className="h-3.5 w-3.5" /> {copied ? "Copiado" : "Copiar protocolo"}

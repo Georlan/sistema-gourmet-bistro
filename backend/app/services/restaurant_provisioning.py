@@ -10,6 +10,7 @@ from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..contract_models import ContractAcceptance, RestaurantContractAcceptance
@@ -29,6 +30,12 @@ from ..services.billing_service import (
     BillingSetupData,
     contract_fixed_billing_required,
     link_billing_setup_to_tenant,
+)
+from ..services.tenant_id_reuse import (
+    assert_tenant_id_eligible_in_locked_tx,
+    provisioning_concurrency_guard,
+    reserve_sequential_tenant_id,
+    reserve_superadmin_tenant_id,
 )
 from ..subscription import VALID_SUBSCRIPTION_PLANS
 from .onboarding_trial import ONBOARDING_SUBSCRIPTION_STATUS, pause_provider_during_onboarding
@@ -179,6 +186,8 @@ def provision_restaurant_for_contract(
     billing_setup: BillingSetupData | None = None,
     actor: str = "saas_checkout",
     reason: str = "Ativação da conta com trial preservado até a conclusão da implantação essencial",
+    requested_restaurant_id: int | None = None,
+    allow_id_reuse: bool = False,
 ) -> dict[str, Any]:
     """
     Provisiona atomicamente o restaurante, configurações, admin inicial e assinatura SaaS.
@@ -250,19 +259,32 @@ def provision_restaurant_for_contract(
             ),
         )
 
-    tenant_id = _reserve_restaurant_id(db)
+    if requested_restaurant_id is not None and not allow_id_reuse:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A seleção manual de ID é exclusiva do provisionamento autorizado pelo Super Admin.",
+        )
+
     slug = activation_slug(restaurant_name, protocol)
 
-    with tenant_session_scope(db, tenant_id):
-        _lock_onboarding_transaction(db)
-
-        latest = resolve_activation_acceptance(db, protocol)
-        if latest and latest.get("linked_restaurante_id"):
-            existing_id = int(latest["linked_restaurante_id"])
+    with provisioning_concurrency_guard():
+        latest_pre = resolve_activation_acceptance(db, protocol)
+        if db.in_transaction():
             db.rollback()
+        if latest_pre and latest_pre.get("linked_restaurante_id"):
+            existing_id = int(latest_pre["linked_restaurante_id"])
+            if requested_restaurant_id is not None and int(requested_restaurant_id) != existing_id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Este contrato já foi provisionado no restaurante #{existing_id}.",
+                )
             with tenant_session_scope(db, existing_id):
                 restaurant = db.query(Restaurante).filter(Restaurante.id == existing_id).one()
-                subscription = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == existing_id).one_or_none()
+                subscription = (
+                    db.query(SaaSSubscription)
+                    .filter(SaaSSubscription.restaurante_id == existing_id)
+                    .one_or_none()
+                )
                 return {
                     "restaurant_id": existing_id,
                     "slug": restaurant.slug,
@@ -271,172 +293,303 @@ def provision_restaurant_for_contract(
                     "trial_status": subscription.status if subscription else None,
                 }
 
-        if _slug_owner_id(db, slug) is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="O subdomínio determinístico desta contratação já está em uso.",
-            )
+        excluded_ids: set[int] = set()
+        max_attempts = 1 if requested_restaurant_id is not None else 5
 
-        now = datetime.datetime.now(datetime.timezone.utc)
-        invitation_token = str(uuid.uuid4())
-
-        # Meios recorrentes são autorizados na inscrição e pausados durante o
-        # onboarding. Pix universal não possui mandato: nenhum pagamento é criado
-        # aqui; o QR só nasce depois do trial, quando existir valor devido.
-        if (
-            fixed_billing_required
-            and billing_setup is not None
-            and billing_setup.status == "ready"
-            and is_recurring_trial_payment_method(billing_setup.payment_method_type)
-            and billing_setup.provider_subscription_id
-        ):
-            try:
-                provider_result = pause_provider_during_onboarding(billing_setup.provider_subscription_id)
-            except SaasMercadoPagoError as exc:
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail=(
-                        "Não foi possível proteger o período grátis durante a implantação. "
-                        "O restaurante não foi liberado e nenhuma cobrança foi antecipada; tente novamente."
-                    ),
-                ) from exc
-            if str(provider_result.get("status") or "").strip().lower() != "paused":
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail="O gateway ainda não confirmou a pausa da recorrência durante a implantação.",
+        for attempt in range(max_attempts):
+            if allow_id_reuse:
+                tenant_id, id_selection_mode = reserve_superadmin_tenant_id(
+                    db,
+                    requested_id=requested_restaurant_id,
+                    excluded_ids=excluded_ids,
                 )
+            else:
+                tenant_id = reserve_sequential_tenant_id(
+                    db,
+                    excluded_ids=excluded_ids,
+                )
+                id_selection_mode = "sequence"
 
-        restaurant = Restaurante(
-            id=tenant_id,
-            nome=restaurant_name,
-            slug=slug,
-            plano=plan,
-            saas_status="active",
-            billing_mode="subscription",
+            try:
+                with tenant_session_scope(db, tenant_id):
+                    _lock_onboarding_transaction(db)
+
+                    latest = resolve_activation_acceptance(db, protocol)
+                    if latest and latest.get("linked_restaurante_id"):
+                        existing_id = int(latest["linked_restaurante_id"])
+                        if (
+                            requested_restaurant_id is not None
+                            and int(requested_restaurant_id) != existing_id
+                        ):
+                            raise HTTPException(
+                                status_code=status.HTTP_409_CONFLICT,
+                                detail=f"Este contrato já foi provisionado no restaurante #{existing_id}.",
+                            )
+                        db.rollback()
+                        with tenant_session_scope(db, existing_id):
+                            restaurant = (
+                                db.query(Restaurante)
+                                .filter(Restaurante.id == existing_id)
+                                .one()
+                            )
+                            subscription = (
+                                db.query(SaaSSubscription)
+                                .filter(SaaSSubscription.restaurante_id == existing_id)
+                                .one_or_none()
+                            )
+                            return {
+                                "restaurant_id": existing_id,
+                                "slug": restaurant.slug,
+                                "invitation_token": None,
+                                "trial_ends_at": (
+                                    subscription.trial_ends_at if subscription else None
+                                ),
+                                "trial_status": (
+                                    subscription.status if subscription else None
+                                ),
+                            }
+
+                    assert_tenant_id_eligible_in_locked_tx(
+                        db,
+                        tenant_id,
+                        requested_id=requested_restaurant_id,
+                    )
+
+                    if _slug_owner_id(db, slug) is not None:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail="O subdomínio determinístico desta contratação já está em uso.",
+                        )
+
+                    now = datetime.datetime.now(datetime.timezone.utc)
+                    invitation_token = str(uuid.uuid4())
+
+                    # Meios recorrentes são autorizados na inscrição e pausados durante o
+                    # onboarding. Pix universal não possui mandato: nenhum pagamento é criado
+                    # aqui; o QR só nasce depois do trial, quando existir valor devido.
+                    if (
+                        fixed_billing_required
+                        and billing_setup is not None
+                        and billing_setup.status == "ready"
+                        and is_recurring_trial_payment_method(
+                            billing_setup.payment_method_type
+                        )
+                        and billing_setup.provider_subscription_id
+                    ):
+                        try:
+                            provider_result = pause_provider_during_onboarding(
+                                billing_setup.provider_subscription_id
+                            )
+                        except SaasMercadoPagoError as exc:
+                            raise HTTPException(
+                                status_code=status.HTTP_502_BAD_GATEWAY,
+                                detail=(
+                                    "Não foi possível proteger o período grátis durante a implantação. "
+                                    "O restaurante não foi liberado e nenhuma cobrança foi antecipada; tente novamente."
+                                ),
+                            ) from exc
+                        if (
+                            str(provider_result.get("status") or "").strip().lower()
+                            != "paused"
+                        ):
+                            raise HTTPException(
+                                status_code=status.HTTP_502_BAD_GATEWAY,
+                                detail="O gateway ainda não confirmou a pausa da recorrência durante a implantação.",
+                            )
+
+                    restaurant = Restaurante(
+                        id=tenant_id,
+                        nome=restaurant_name,
+                        slug=slug,
+                        plano=plan,
+                        saas_status="active",
+                        billing_mode="subscription",
+                    )
+                    db.add(restaurant)
+                    db.flush()
+
+                    db.add(
+                        RestauranteOperationProfile(
+                            restaurante_id=tenant_id,
+                            profile_key=operation_profile,
+                        )
+                    )
+
+                    db.add(
+                        ConfiguracaoRestaurante(
+                            restaurante_id=tenant_id,
+                            impressao_nome_restaurante=restaurant_name,
+                        )
+                    )
+
+                    initial_admin = Usuario(
+                        restaurante_id=tenant_id,
+                        nome=admin_name,
+                        telefone=admin_phone,
+                        email=admin_email,
+                        cargo="admin",
+                        status="pendente_ativacao",
+                        senha_hash=None,
+                        token_convite=invitation_token,
+                        token_expira_em=now
+                        + datetime.timedelta(hours=INVITATION_TTL_HOURS),
+                    )
+                    db.add(initial_admin)
+                    db.flush()
+
+                    link = RestaurantContractAcceptance(
+                        id=str(uuid.uuid4()),
+                        restaurante_id=tenant_id,
+                        acceptance_id=str(acceptance["acceptance_id"]),
+                        linked_at=now,
+                    )
+                    db.add(link)
+
+                    if billing_setup is not None:
+                        link_billing_setup_to_tenant(db, protocol, tenant_id)
+
+                    if (not fixed_billing_required) or (
+                        billing_setup is not None and billing_setup.status == "ready"
+                    ):
+                        canonical_sub = SaaSSubscription(
+                            restaurante_id=tenant_id,
+                            provider=(
+                                billing_setup.provider
+                                if billing_setup is not None
+                                else "mercado_pago"
+                            ),
+                            provider_customer_id=(
+                                billing_setup.provider_customer_id
+                                if billing_setup is not None
+                                else None
+                            ),
+                            provider_subscription_id=(
+                                billing_setup.provider_subscription_id
+                                if billing_setup is not None
+                                else None
+                            ),
+                            payment_method_type=(
+                                billing_setup.payment_method_type
+                                if billing_setup is not None
+                                else None
+                            ),
+                            status=(
+                                ONBOARDING_SUBSCRIPTION_STATUS
+                                if fixed_billing_required
+                                else "active"
+                            ),
+                            billing_cycle=acceptance.get("billing_cycle") or "monthly",
+                            trial_started_at=None,
+                            trial_ends_at=None,
+                            current_period_start=None,
+                            current_period_end=None,
+                            created_at=now,
+                            updated_at=now,
+                        )
+                        db.add(canonical_sub)
+
+                    db.add(
+                        SuperAdminAuditLog(
+                            restaurante_id=tenant_id,
+                            actor=actor,
+                            action=(
+                                "SUPERADMIN_CONTRACT_ACTIVATE"
+                                if actor != "saas_checkout"
+                                else "ATOMIC_CONTRACT_ACTIVATE"
+                            ),
+                            reason=reason,
+                            before_data=None,
+                            after_data={
+                                "protocol": protocol,
+                                "acceptance_id": str(acceptance["acceptance_id"]),
+                                "restaurante_id": tenant_id,
+                                "id_selection_mode": id_selection_mode,
+                                "requested_restaurant_id": requested_restaurant_id,
+                                "slug": slug,
+                                "plan": plan,
+                                "operation_profile": operation_profile,
+                                "billing_cycle": acceptance.get("billing_cycle")
+                                or "monthly",
+                                "billing_status": (
+                                    billing_setup.status
+                                    if billing_setup is not None
+                                    else (
+                                        "not_required"
+                                        if not fixed_billing_required
+                                        else "pending"
+                                    )
+                                ),
+                                "billing_provider": (
+                                    billing_setup.provider if billing_setup else None
+                                ),
+                                "payment_method_type": (
+                                    billing_setup.payment_method_type
+                                    if billing_setup
+                                    else None
+                                ),
+                                "trial_status": (
+                                    "pending_onboarding"
+                                    if fixed_billing_required
+                                    else "not_applicable"
+                                ),
+                                "trial_days": (
+                                    DEFAULT_TRIAL_DAYS if fixed_billing_required else 0
+                                ),
+                                "trial_ends_at": None,
+                                "admin_user_id": initial_admin.id,
+                                "admin_email": admin_email,
+                                "admin_status": "pendente_ativacao",
+                                "credential_delivery": "outbox_scheduled",
+                                "mercado_pago": "disconnected",
+                            },
+                        )
+                    )
+                    from .signup_notifications import enqueue_activation
+
+                    enqueue_activation(
+                        db,
+                        protocol=protocol,
+                        restaurant_name=restaurant_name,
+                        representative_name=admin_name,
+                        email=admin_email,
+                        phone=admin_phone,
+                        token=invitation_token,
+                    )
+                    db.commit()
+
+                    return {
+                        "restaurant_id": tenant_id,
+                        "id_selection_mode": id_selection_mode,
+                        "slug": slug,
+                        "invitation_token": invitation_token,
+                        "admin_user_id": initial_admin.id,
+                        "admin_email": admin_email,
+                        "trial_ends_at": None,
+                        "trial_status": (
+                            ONBOARDING_SUBSCRIPTION_STATUS
+                            if fixed_billing_required
+                            else "active"
+                        ),
+                    }
+            except HTTPException as exc:
+                if (
+                    requested_restaurant_id is None
+                    and exc.status_code == status.HTTP_409_CONFLICT
+                    and "subdomínio determinístico" not in str(exc.detail)
+                    and "já foi provisionado" not in str(exc.detail)
+                    and attempt + 1 < max_attempts
+                ):
+                    excluded_ids.add(tenant_id)
+                    continue
+                raise
+            except IntegrityError:
+                if db.in_transaction():
+                    db.rollback()
+                if requested_restaurant_id is None and attempt + 1 < max_attempts:
+                    excluded_ids.add(tenant_id)
+                    continue
+                raise
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Não foi possível alocar um ID elegível livre para o restaurante.",
         )
-        db.add(restaurant)
-        db.flush()
-
-        db.add(
-            RestauranteOperationProfile(
-                restaurante_id=tenant_id,
-                profile_key=operation_profile,
-            )
-        )
-
-        db.add(
-            ConfiguracaoRestaurante(
-                restaurante_id=tenant_id,
-                impressao_nome_restaurante=restaurant_name,
-            )
-        )
-
-        initial_admin = Usuario(
-            restaurante_id=tenant_id,
-            nome=admin_name,
-            telefone=admin_phone,
-            email=admin_email,
-            cargo="admin",
-            status="pendente_ativacao",
-            senha_hash=None,
-            token_convite=invitation_token,
-            token_expira_em=now + datetime.timedelta(hours=INVITATION_TTL_HOURS),
-        )
-        db.add(initial_admin)
-        db.flush()
-
-        link = RestaurantContractAcceptance(
-            id=str(uuid.uuid4()),
-            restaurante_id=tenant_id,
-            acceptance_id=str(acceptance["acceptance_id"]),
-            linked_at=now,
-        )
-        db.add(link)
-
-        if billing_setup is not None:
-            link_billing_setup_to_tenant(db, protocol, tenant_id)
-
-        if (not fixed_billing_required) or (
-            billing_setup is not None and billing_setup.status == "ready"
-        ):
-            canonical_sub = SaaSSubscription(
-                restaurante_id=tenant_id,
-                provider=billing_setup.provider if billing_setup is not None else "mercado_pago",
-                provider_customer_id=(
-                    billing_setup.provider_customer_id if billing_setup is not None else None
-                ),
-                provider_subscription_id=(
-                    billing_setup.provider_subscription_id if billing_setup is not None else None
-                ),
-                payment_method_type=(
-                    billing_setup.payment_method_type if billing_setup is not None else None
-                ),
-                status=(
-                    ONBOARDING_SUBSCRIPTION_STATUS
-                    if fixed_billing_required
-                    else "active"
-                ),
-                billing_cycle=acceptance.get("billing_cycle") or "monthly",
-                trial_started_at=None,
-                trial_ends_at=None,
-                current_period_start=None,
-                current_period_end=None,
-                created_at=now,
-                updated_at=now,
-            )
-            db.add(canonical_sub)
-
-        db.add(
-            SuperAdminAuditLog(
-                restaurante_id=tenant_id,
-                actor=actor,
-                action="SUPERADMIN_CONTRACT_ACTIVATE" if actor != "saas_checkout" else "ATOMIC_CONTRACT_ACTIVATE",
-                reason=reason,
-                before_data=None,
-                after_data={
-                    "protocol": protocol,
-                    "acceptance_id": str(acceptance["acceptance_id"]),
-                    "restaurante_id": tenant_id,
-                    "slug": slug,
-                    "plan": plan,
-                    "operation_profile": operation_profile,
-                    "billing_cycle": acceptance.get("billing_cycle") or "monthly",
-                    "billing_status": (
-                        billing_setup.status
-                        if billing_setup is not None
-                        else ("not_required" if not fixed_billing_required else "pending")
-                    ),
-                    "billing_provider": billing_setup.provider if billing_setup else None,
-                    "payment_method_type": billing_setup.payment_method_type if billing_setup else None,
-                    "trial_status": "pending_onboarding" if fixed_billing_required else "not_applicable",
-                    "trial_days": DEFAULT_TRIAL_DAYS if fixed_billing_required else 0,
-                    "trial_ends_at": None,
-                    "admin_user_id": initial_admin.id,
-                    "admin_email": admin_email,
-                    "admin_status": "pendente_ativacao",
-                    "credential_delivery": "outbox_scheduled",
-                    "mercado_pago": "disconnected",
-                },
-            )
-        )
-        from .signup_notifications import enqueue_activation
-        enqueue_activation(
-            db,
-            protocol=protocol,
-            restaurant_name=restaurant_name,
-            representative_name=admin_name,
-            email=admin_email,
-            phone=admin_phone,
-            token=invitation_token,
-        )
-        db.commit()
-
-        return {
-            "restaurant_id": tenant_id,
-            "slug": slug,
-            "invitation_token": invitation_token,
-            "admin_user_id": initial_admin.id,
-            "admin_email": admin_email,
-            "trial_ends_at": None,
-            "trial_status": ONBOARDING_SUBSCRIPTION_STATUS if fixed_billing_required else "active",
-        }
