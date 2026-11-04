@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, Copy, ExternalLink, Plus, X } from "lucide-react";
 import {
   SUBSCRIPTION_PLANS,
@@ -97,18 +97,60 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   );
 }
 
+type IdEligibilityBlocker = {
+  code: string;
+  source: string;
+  column: string;
+  count: number;
+  detail: string;
+};
+
+type IdEligibilityReport = {
+  id: number;
+  eligible: boolean;
+  status: "eligible" | "occupied" | "ineligible_history" | "invalid_id";
+  blockers: IdEligibilityBlocker[];
+};
+
+type IdEligibilitySummary = {
+  suggestedId: number | null;
+  eligibleIds: number[];
+  priorityId: number;
+  priorityReport: IdEligibilityReport | null;
+};
+
 export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTenantModalProps) {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [slugEdited, setSlugEdited] = useState(false);
   const [plan, setPlan] = useState("pocket");
   const [operationProfile, setOperationProfile] = useState("generic");
+  const [customRestaurantId, setCustomRestaurantId] = useState("");
+  const [idEligibility, setIdEligibility] = useState<IdEligibilitySummary | null>(null);
   const [adminName, setAdminName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<OnboardingResponse | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void superAdminFetch("/api/super-admin/restaurantes/id-eligibility", {
+      signal: controller.signal,
+    })
+      .then(async response => {
+        if (!response.ok) return;
+        const data = (await response.json()) as IdEligibilitySummary;
+        if (data && typeof data === "object") {
+          setIdEligibility(data);
+        }
+      })
+      .catch(() => {
+        //Mantém submissão funcional mesmo se o preview falhar
+      });
+    return () => controller.abort();
+  }, []);
 
   const selectedPlan = useMemo(
     () => SUBSCRIPTION_PLANS.find(item => item.id === plan),
@@ -137,18 +179,33 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
     setIsSubmitting(true);
     setError(null);
     try {
+      const parsedRestaurantId = customRestaurantId.trim()
+        ? Number.parseInt(customRestaurantId.trim(), 10)
+        : null;
+      if (
+        customRestaurantId.trim() &&
+        (!Number.isFinite(parsedRestaurantId) || (parsedRestaurantId ?? 0) < 1)
+      ) {
+        throw new Error("Informe um ID de restaurante inteiro positivo (>= 1) ou deixe em branco para usar a sugestão automática.");
+      }
+
+      const requestBody: Record<string, unknown> = {
+        name: name.trim(),
+        subdomain: slug.trim(),
+        plan,
+        operation_profile: operationProfile,
+        admin_name: adminName.trim(),
+        admin_email: adminEmail.trim(),
+        temporary_password: temporaryPassword,
+      };
+      if (parsedRestaurantId !== null) {
+        requestBody.restaurant_id = parsedRestaurantId;
+      }
+
       const response = await superAdminFetch("/api/super-admin/restaurantes/provisionar", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim(),
-          subdomain: slug.trim(),
-          plan,
-          operation_profile: operationProfile,
-          admin_name: adminName.trim(),
-          admin_email: adminEmail.trim(),
-          temporary_password: temporaryPassword,
-        }),
+        body: JSON.stringify(requestBody),
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
@@ -240,6 +297,67 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Restaurante</span><input value={name} onChange={event => updateName(event.target.value)} required minLength={2} maxLength={255} autoFocus className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none" placeholder="Ex: Pizzaria Central" /></label>
             <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Slug público</span><input value={slug} onChange={event => updateSlug(event.target.value)} required minLength={2} maxLength={100} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 font-mono text-koma-foreground focus:border-[#00b894] focus:outline-none" placeholder="pizzaria-central" /><span className="mt-1 block text-[10px] text-koma-subtle">{slug ? `${slug}.komafood.com.br` : "slug-do-restaurante.komafood.com.br"}</span></label>
+          </div>
+
+          <div className="rounded-lg border border-zinc-800 bg-koma-page p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <label htmlFor="superadmin-tenant-id-input" className="font-medium text-koma-secondary">
+                ID do restaurante (opcional)
+              </label>
+              {idEligibility?.suggestedId != null && (
+                <span className="rounded-md border border-emerald-800/50 bg-emerald-950/30 px-2 py-0.5 font-mono text-[10px] font-bold text-emerald-300">
+                  Sugerido: #{idEligibility.suggestedId}
+                </span>
+              )}
+            </div>
+            <input
+              id="superadmin-tenant-id-input"
+              type="number"
+              min={1}
+              step={1}
+              value={customRestaurantId}
+              onChange={event => setCustomRestaurantId(event.target.value)}
+              className="mt-2 w-full rounded-lg border border-zinc-800 bg-koma-card p-2 font-mono text-koma-foreground focus:border-[#00b894] focus:outline-none"
+              placeholder={
+                idEligibility?.suggestedId != null
+                  ? `Automático: #${idEligibility.suggestedId} (menor ID elegível)`
+                  : "Automático (menor ID desocupado e elegível)"
+              }
+            />
+            {idEligibility?.eligibleIds && idEligibility.eligibleIds.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-koma-subtle">
+                <span>Elegíveis verificados:</span>
+                {idEligibility.eligibleIds.slice(0, 6).map(candidateId => (
+                  <button
+                    key={candidateId}
+                    type="button"
+                    onClick={() => setCustomRestaurantId(String(candidateId))}
+                    className={`rounded border px-1.5 py-0.5 font-mono ${
+                      customRestaurantId === String(candidateId)
+                        ? "border-[#00b894] bg-emerald-950/40 text-emerald-200"
+                        : "border-zinc-700 bg-zinc-900 text-koma-secondary hover:text-koma-foreground"
+                    }`}
+                  >
+                    #{candidateId}
+                  </button>
+                ))}
+                {customRestaurantId && (
+                  <button
+                    type="button"
+                    onClick={() => setCustomRestaurantId("")}
+                    className="ml-1 text-[10px] text-koma-muted underline hover:text-koma-foreground"
+                  >
+                    Usar automático
+                  </button>
+                )}
+              </div>
+            )}
+            {idEligibility?.priorityReport && !idEligibility.priorityReport.eligible && (
+              <p className="mt-2 text-[10px] leading-relaxed text-amber-300/90">
+                ID #{idEligibility.priorityReport.id} indisponível para reutilização imediata:{" "}
+                {idEligibility.priorityReport.blockers.map(b => b.detail).join(" ")}
+              </p>
+            )}
           </div>
 
           <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Tipo de operação</span><select value={operationProfile} onChange={event => setOperationProfile(event.target.value)} className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none">{OPERATION_PROFILES.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select><span className="mt-1 block text-[10px] leading-relaxed text-koma-subtle">Isso só adapta sugestões e atalhos. Você continua com acesso a todos os recursos do KÔMA e o cardápio não é preenchido automaticamente.</span></label>

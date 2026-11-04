@@ -53,6 +53,7 @@ class ContractActivationRequest(BaseModel):
         min_length=3,
         max_length=1000,
     )
+    restaurant_id: int | None = Field(default=None, ge=1, le=2_147_483_647)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -551,6 +552,14 @@ def activate_contract(
 
         existing_tenant_id = acceptance.get("linked_restaurante_id")
         if existing_tenant_id is not None:
+            if (
+                payload.restaurant_id is not None
+                and int(payload.restaurant_id) != int(existing_tenant_id)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Este contrato já foi provisionado no restaurante #{existing_tenant_id}.",
+                )
             if not contract_fixed_billing_required(db, normalized):
                 acceptance["billing_status"] = "not_required"
                 acceptance["billing_provider"] = None
@@ -575,6 +584,8 @@ def activate_contract(
             billing_setup=billing_setup,
             actor=str(admin.get("user") or "superadmin"),
             reason=clean_reason,
+            requested_restaurant_id=payload.restaurant_id,
+            allow_id_reuse=True,
         )
         latest = resolve_activation_acceptance(db, normalized) or acceptance
         if not contract_fixed_billing_required(db, normalized):
