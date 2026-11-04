@@ -864,6 +864,10 @@ def create_tenant(
 
     Sugere e utiliza o menor ID elegível (ou o ID manualmente escolhido pelo Super Admin
     após verificação completa de elegibilidade), sem manipular a sequência PostgreSQL.
+    Depois disso, todas as escritas são executadas sob o mesmo tenant/RLS e confirmadas
+    em um único commit. O fluxo não cria conta Mercado Pago nem integrações externas:
+    o novo restaurante nasce explicitamente desconectado, recebe 7 dias grátis de SaaS e
+    conecta o recebedor do Cardápio Online depois via OAuth.
     """
     normalized = _normalize_payload(payload)
     db = SessionLocal()
