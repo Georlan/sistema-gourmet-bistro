@@ -12,7 +12,10 @@ import {
   readActiveDeliveryStatus,
   reconcileDeliveryOrderAfterStatus,
 } from './deliveryOrderProjection';
-import { getDigitalOrderActionCapability } from '../../../domain/cashierOrderProjection';
+import {
+  getDigitalOrderActionCapability,
+  isCashierTableOrder,
+} from '../../../domain/cashierOrderProjection';
 
 type Props = Pick<
   CaixaPanelProps,
@@ -85,31 +88,41 @@ export function useCashierOrders({
   };
 
   const openCancelOrderConfirmation = (order: any, intent: 'reject' | 'cancel' = 'cancel') => {
-    const rawItems = Array.isArray(order?.itens)
+    let rawItems = Array.isArray(order?.itens)
       ? order.itens
       : Array.isArray(order?.detailItems)
         ? order.detailItems
         : [];
-    const activeItems = rawItems.filter(
+    let activeItems = rawItems.filter(
       (item: any) => String(item?.status || '').toLowerCase() !== 'cancelado' && item?.id
     );
-    const normalizedType = String(order?.modalidade || order?.tipo || '').toLowerCase();
-    const isProjectedTableLaunch = order?.projectionScope === 'launch' && Number(order?.mesaId || 0) > 0;
-    const isDigitalOrder = !isProjectedTableLaunch && (
-      Number(order?.mesaId || 0) <= 0
-      || ['delivery', 'entrega', 'retirada', 'pickup', 'dine_in', 'consumo_local', 'consumo no local'].includes(normalizedType)
-    );
+    const mesaId = Number(order?.mesaId || 0);
+    if (activeItems.length === 0 && mesaId > 0 && Array.isArray(orders)) {
+      const fallbackItems = orders
+        .filter((o: any) => Number(o?.mesaId) === mesaId && !o?.fechada)
+        .flatMap((o: any) => o?.itens || [])
+        .filter((item: any) => String(item?.status || '').toLowerCase() !== 'cancelado' && item?.id);
+      if (fallbackItems.length > 0) {
+        activeItems = fallbackItems;
+      }
+    }
+    const hasTable = mesaId > 0;
+    const isTraditionalTableOrder = hasTable && isCashierTableOrder({
+      ...order,
+      tipo: order?.tipo || order?.modalidade,
+    });
+    const isDigitalOrder = !isTraditionalTableOrder;
     const comandaIds = new Set(
       activeItems.map((item: any) => String(item.comandaId || order.comandaId || order.id)).filter(Boolean)
     );
     setCancelConsumptionTarget({
       scope: isDigitalOrder ? 'digital' : 'order',
       intent: isDigitalOrder ? intent : 'cancel',
-      mesaId: Number(order.mesaId || 0),
+      mesaId,
       orderId: isDigitalOrder ? String(order.id || order.comandaId || '') : undefined,
       comandas: isDigitalOrder ? 1 : comandaIds.size,
       itens: activeItems.length || Number(order.quantidadeItens || 0),
-      total: Number(order.total) || activeItems.reduce((sum: number, item: any) => sum + (Number(item.preco) || 0), 0),
+      total: Number(order.total) || activeItems.reduce((sum: number, item: any) => sum + (Number(item.preco_unit || item.preco || 0)), 0),
       itemIds: activeItems.map((item: any) => String(item.id)),
     });
     setCancelTableReason('');
@@ -197,6 +210,7 @@ export function useCashierOrders({
         }
       } else {
         await onRefreshOrders();
+        window.dispatchEvent(new Event('koma_orders_updated'));
         const manualPaymentsPreserved = Number(data?.pagamentos_manuais_preservados || 0);
         const manualPaymentsValue = Number(data?.valor_pagamentos_preservados || 0);
         const paidValuePreserved = Number(data?.valor_pago_preservado || 0);
