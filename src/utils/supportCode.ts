@@ -19,7 +19,7 @@ export function supportCodeFromRequestId(requestId: string | null): string | nul
 
 export function installSupportCodeObserver(): void {
   const originalFetch = window.fetch.bind(window);
-  const apiOrigin = new URL(API_BASE_URL || window.location.origin, window.location.href).origin;
+  const apiOrigin = new URL(API_BASE_URL).origin;
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const response = await originalFetch(input, init);
     if (response.status < 500 || (input instanceof Request && inlineSupportRequests.has(input))) return response;

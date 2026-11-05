@@ -60,28 +60,6 @@ export default defineConfig(() => {
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
-      proxy: {
-        '/api': {
-          target: 'https://sistema-gourmet-bistro-production.up.railway.app',
-          changeOrigin: true,
-          secure: false,
-        },
-        '/cardapio': {
-          target: 'https://sistema-gourmet-bistro-production.up.railway.app',
-          changeOrigin: true,
-          secure: false,
-        },
-        '/caixa': {
-          target: 'https://sistema-gourmet-bistro-production.up.railway.app',
-          changeOrigin: true,
-          secure: false,
-        },
-        '/impressao': {
-          target: 'https://sistema-gourmet-bistro-production.up.railway.app',
-          changeOrigin: true,
-          secure: false,
-        },
-      },
       watch: process.env.DISABLE_HMR === 'true' ? null : {
         ignored: [
           '**/bistro.db',

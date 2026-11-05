@@ -13,7 +13,7 @@ const envApiUrl = (import.meta as any).env?.VITE_API_URL;
 const envWsUrl = (import.meta as any).env?.VITE_WS_URL;
 
 // Base HTTP API URL
-export const API_BASE_URL = envApiUrl !== undefined ? (envApiUrl || (typeof window !== 'undefined' ? window.location.origin : '')) : (isLocalHost && typeof window !== 'undefined'
+export const API_BASE_URL = envApiUrl || (isLocalHost && typeof window !== 'undefined'
   ? `${window.location.protocol}//${window.location.hostname}:8000`
   : 'https://sistema-gourmet-bistro-production.up.railway.app');
 
