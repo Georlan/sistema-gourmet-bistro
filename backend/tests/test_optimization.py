@@ -34,7 +34,9 @@ def setup_database():
         existente = db.query(Restaurante).filter(Restaurante.id == 1).first()
         if not existente:
             db.add(Restaurante(id=1, nome="Restaurante Teste", plano="premium"))
-            db.commit()
+        else:
+            existente.plano = "premium"
+        db.commit()
         
         # Create test users
         db.add(Usuario(id="g-1", restaurante_id=1, nome="Mateus Garcom", usuario="mateus", senha_hash=get_password_hash("123"), role="garcom", status="ativo"))

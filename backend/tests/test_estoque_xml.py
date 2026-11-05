@@ -119,6 +119,11 @@ def setup_database():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
+    rest = db.query(Restaurante).filter(Restaurante.id == 1).first()
+    if rest:
+        rest.plano = 'premium'
+    else:
+        db.add(Restaurante(id=1, nome='Bistro Test', plano='premium'))
     
     # Create test user (Caixa)
     u1 = Usuario(

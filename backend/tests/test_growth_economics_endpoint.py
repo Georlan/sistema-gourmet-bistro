@@ -35,7 +35,7 @@ def setup_database():
         # teste. Reaproveitamos esse registro para não criar uma segunda PK.
         restaurante = db.query(Restaurante).filter(Restaurante.id == 1).one()
         restaurante.nome = "Economia Pro"
-        restaurante.plano = "pro"
+        restaurante.plano = "premium"
         restaurante.billing_mode = "legacy"
         db.add(
             Usuario(
