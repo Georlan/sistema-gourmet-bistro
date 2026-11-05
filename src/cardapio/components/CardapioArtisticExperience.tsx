@@ -48,6 +48,12 @@ import {
   KomaSocialCameraIcon,
   KomaUserIcon,
 } from './KomaPublicIcons';
+import {
+  groupCategoryProductsForDisplay,
+  isGroupedProduct,
+  type CatalogDisplayItem,
+  type GroupedDisplayProduct,
+} from '../catalogGrouping';
 import '../cardapioArtisticExperience.css';
 
 export interface CardapioArtisticExperienceProps {
@@ -56,7 +62,7 @@ export interface CardapioArtisticExperienceProps {
   setSearchQuery: (query: string) => void;
   selectedCategory: string;
   onSelectCategory: (category: string) => void;
-  onSelectProduct: (product: Product) => void;
+  onSelectProduct: (product: Product | CatalogDisplayItem) => void;
   onFastAdd: (product: Product, event?: React.MouseEvent) => void;
   onFastRemove: (product: Product, event?: React.MouseEvent) => void;
   getProductCartQuantity: (productId: string) => number;
@@ -1096,7 +1102,15 @@ export function CardapioArtisticExperience({
           </section>
         )}
         {visibleCategories.map((category, catIndex) => {
-          const catProducts = filteredProducts.filter((p) => p.category === category);
+          const catProducts = filteredProducts
+            .filter((p) => p.category === category)
+            .sort((a, b) => {
+              const orderA = a.ordem_exibicao ?? Number.MAX_SAFE_INTEGER;
+              const orderB = b.ordem_exibicao ?? Number.MAX_SAFE_INTEGER;
+              if (orderA !== orderB) return orderA - orderB;
+              return 0;
+            });
+          const displayItems = groupCategoryProductsForDisplay(category, catProducts);
           const indexFormatted = String(catIndex + 1).padStart(2, '0');
           const catDomId = `cat-${category.toLowerCase().replace(/\s+/g, '-')}`;
 
@@ -1110,97 +1124,137 @@ export function CardapioArtisticExperience({
                 <div className="koma-art-cat-monument__info">
                   <h3 className="koma-art-cat-monument__title">{category}</h3>
                   <span className="koma-art-cat-monument__count">
-                    {catProducts.length} {catProducts.length === 1 ? 'item' : 'itens'}
+                    {displayItems.length} {displayItems.length === 1 ? 'opção' : 'opções'}
                   </span>
                 </div>
               </div>
 
               {/* Grade de Cards do Catálogo */}
               <div className="koma-art-catalog-grid">
-                {catProducts.map((product) => {
-                  const qty = getProductCartQuantity(product.id);
-                  const isAvail = product.isAvailable !== false;
-                  const hasMods = Boolean(
-                    (product.modifierGroups && product.modifierGroups.length > 0) ||
-                    (product.modifiers && product.modifiers.length > 0)
+                {displayItems.map((item) => {
+                  const isGrouped = isGroupedProduct(item);
+                  const qty = isGrouped
+                    ? item.variants.reduce((acc, v) => acc + getProductCartQuantity(v.id), 0)
+                    : getProductCartQuantity(item.id);
+                  const isAvail = item.isAvailable !== false;
+                  const hasMods = isGrouped || Boolean(
+                    (item.modifierGroups && item.modifierGroups.length > 0) ||
+                    (item.modifiers && item.modifiers.length > 0)
                   );
+                  const rawFormattedPrice = formatPrice(item.price);
+                  const formattedPrice = isGrouped && item.hasVariablePrice
+                    ? `A partir de ${rawFormattedPrice}`
+                    : rawFormattedPrice;
 
                   return (
                     <article
-                      key={product.id}
-                      id={`product-card-${product.id}`}
+                      key={item.id}
+                      id={`product-card-${item.id}`}
                       className={`koma-art-catalog-card ${isAvail ? 'is-available' : 'is-unavailable'}`}
                       onClick={() => {
-                        if (isAvail) onSelectProduct(product);
+                        if (isAvail) onSelectProduct(item);
                       }}
                     >
                       <div className="koma-art-card-left">
                         <div className="flex items-center gap-2">
-                          <h4 className="koma-art-card-title"><button type="button" disabled={!isAvail} className="cardapio-product-card__details-hitbox koma-art-details-trigger" aria-label={`${product.name}, ${formatPrice(product.price)}, ver detalhes`} onClick={event => { event.stopPropagation(); onSelectProduct(product); }}>{product.name}</button></h4>
+                          <h4 className="koma-art-card-title">
+                            <button
+                              type="button"
+                              disabled={!isAvail}
+                              className="cardapio-product-card__details-hitbox koma-art-details-trigger"
+                              aria-label={`${item.name}, ${formattedPrice}, ver detalhes`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onSelectProduct(item);
+                              }}
+                            >
+                              {item.name}
+                            </button>
+                          </h4>
                           {!isAvail && (
                             <span className="rounded-md bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-rose-400">
                               Esgotado
                             </span>
                           )}
                         </div>
-                        {product.description && (
-                          <p className="koma-art-card-desc">{product.description}</p>
+                        {item.description && (
+                          <p className="koma-art-card-desc">{item.description}</p>
                         )}
                         <div className="koma-art-card-pricing-row">
-                          <strong className="koma-art-card-price">{formatPrice(product.price)}</strong>
-                          {isAvail && (qty > 0 ? (
-                            <div
-                              className="koma-art-card-stepper"
-                              onClick={(e) => e.stopPropagation()}
-                            >
+                          <strong className="koma-art-card-price">{formattedPrice}</strong>
+                          {isAvail && (
+                            isGrouped ? (
                               <button
                                 type="button"
-                                onClick={(e) => onFastRemove(product, e)}
-                                className="koma-art-card-step-btn"
-                                id={`btn-fast-dec-${product.id}`}
-                                aria-label={`Diminuir ${product.name}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectProduct(item);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-xl bg-emerald-500/20 border border-emerald-500/40 px-2.5 py-1 text-xs font-bold text-emerald-400 hover:bg-emerald-500 hover:text-white transition cursor-pointer"
+                                id={`btn-choose-${item.id}`}
+                                aria-label={`Escolher opções para ${item.name}`}
                               >
-                                <Minus className="w-3 h-3" />
+                                {qty > 0 && (
+                                  <span className="bg-emerald-500 text-white rounded-full px-1.5 py-0.2 text-[10px]">
+                                    {qty}
+                                  </span>
+                                )}
+                                <span>Escolher</span>
                               </button>
-                              <span className="koma-art-card-qty" id={`qty-${product.id}`}>
-                                {qty}
-                              </span>
+                            ) : qty > 0 ? (
+                              <div
+                                className="koma-art-card-stepper"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={(e) => onFastRemove(item, e)}
+                                  className="koma-art-card-step-btn"
+                                  id={`btn-fast-dec-${item.id}`}
+                                  aria-label={`Diminuir ${item.name}`}
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </button>
+                                <span className="koma-art-card-qty" id={`qty-${item.id}`}>
+                                  {qty}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => onFastAdd(item, e)}
+                                  className="koma-art-card-step-btn"
+                                  id={`btn-fast-inc-${item.id}`}
+                                  aria-label={`Aumentar ${item.name}`}
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ) : (
                               <button
                                 type="button"
-                                onClick={(e) => onFastAdd(product, e)}
-                                className="koma-art-card-step-btn"
-                                id={`btn-fast-inc-${product.id}`}
-                                aria-label={`Aumentar ${product.name}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (hasMods) {
+                                    onSelectProduct(item);
+                                  } else {
+                                    onFastAdd(item, e);
+                                  }
+                                }}
+                                className="koma-art-card-add-btn"
+                                id={`btn-fast-add-${item.id}`}
+                                aria-label={`Adicionar ${item.name} à sacola`}
                               >
-                                <Plus className="w-3 h-3" />
+                                <Plus className="w-4 h-4" />
                               </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (hasMods) {
-                                  onSelectProduct(product);
-                                } else {
-                                  onFastAdd(product, e);
-                                }
-                              }}
-                              className="koma-art-card-add-btn"
-                              id={`btn-fast-add-${product.id}`}
-                              aria-label={`Adicionar ${product.name} à sacola`}
-                            >
-                              <Plus className="w-4 h-4" />
-                            </button>
-                          ))}
+                            )
+                          )}
                         </div>
                       </div>
 
                       <div className="koma-art-card-media-pod">
-                        {product.image ? (
+                        {item.image ? (
                           <CatalogProductImage
-                            image={product.image}
-                            alt={product.name}
+                            image={item.image}
+                            alt={item.name}
                             className="koma-art-card-img"
                           />
                         ) : (
