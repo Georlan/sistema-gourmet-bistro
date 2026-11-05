@@ -611,15 +611,6 @@ def is_provisional_preparation(db: Session, restaurante_id: int) -> bool:
     if sub_exists is not None:
         return False
 
-    from ..routes.super_admin_onboarding import restaurant_trials
-    trial_exists = db.execute(
-        select(restaurant_trials.c.restaurante_id).where(
-            restaurant_trials.c.restaurante_id == restaurante_id
-        )
-    ).first()
-    if trial_exists is not None:
-        return False
-
     from ..contract_models import RestaurantContractAcceptance
     contract_exists = (
         db.query(RestaurantContractAcceptance.id)
@@ -629,10 +620,18 @@ def is_provisional_preparation(db: Session, restaurante_id: int) -> bool:
     if contract_exists is not None:
         return False
 
-    profile_exists = (
-        db.query(RestauranteOperationProfile.restaurante_id)
-        .filter(RestauranteOperationProfile.restaurante_id == restaurante_id)
+    audit = (
+        db.query(SuperAdminAuditLog)
+        .filter(
+            SuperAdminAuditLog.restaurante_id == restaurante_id,
+            SuperAdminAuditLog.action == "SUPERADMIN_TENANT_ONBOARD",
+        )
+        .order_by(SuperAdminAuditLog.id.desc())
         .first()
     )
-    return bool(profile_exists)
+    if audit is not None and isinstance(audit.after_data, dict):
+        if audit.after_data.get("trial_status") == "pending_setup":
+            return True
+
+    return False
 
