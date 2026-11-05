@@ -366,6 +366,13 @@ class CardapioWebAdapter:
                     detail="Restaurante temporariamente suspenso para novos pedidos.",
                 )
 
+            from ...services.restaurant_provisioning import is_provisional_preparation
+            if is_provisional_preparation(db, rest_id):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Restaurante em fase de preparação. Operação comercial não liberada.",
+                )
+
             if settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS and not customer_token:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
