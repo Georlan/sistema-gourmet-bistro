@@ -251,6 +251,13 @@ def abrir_turno(
     
     rest_id = require_tenant_id()
 
+    from ..services.restaurant_provisioning import is_provisional_preparation
+    if is_provisional_preparation(db, rest_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Restaurante em fase de preparação. Operação comercial não liberada.",
+        )
+
     # A restrição parcial no banco também protege contra duas aberturas simultâneas.
     turno_ativo = db.query(CaixaTurno).filter(
         CaixaTurno.restaurante_id == rest_id,

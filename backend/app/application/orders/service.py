@@ -378,6 +378,10 @@ class OrderApplicationService:
         if not new_sales_allowed(db, cmd.restaurant_id):
             raise OrderValidationError('Novas vendas indisponíveis: regularize a fatura KÔMA em atraso. Faturas e histórico continuam acessíveis.')
 
+        from ...services.restaurant_provisioning import is_provisional_preparation
+        if is_provisional_preparation(db, cmd.restaurant_id):
+            raise OrderValidationError("Restaurante em fase de preparação. Operação comercial não liberada.")
+
         if cmd.coupon_code and not has_plan_entitlement(
             db,
             cmd.restaurant_id,
