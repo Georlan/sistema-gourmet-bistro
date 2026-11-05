@@ -129,8 +129,6 @@ def enforce_public_order_rate_limits(
         max_requests=MAX_PUBLIC_ORDERS_PER_PHONE,
         window_seconds=PUBLIC_ORDER_RATE_WINDOW_SECONDS,
     )
-    db.commit()
-
     consume_rate_limit(
         db,
         restaurante_id=restaurante_id,
