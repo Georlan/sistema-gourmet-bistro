@@ -78,9 +78,16 @@ const isAddonsOrExtrasGroup = (title: string): boolean =>
     (title || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase()
   );
 
-const shouldExpandModifierByDefault = (modifier: QuantityModifier, totalCount: number): boolean => {
+const shouldExpandModifierByDefault = (
+  modifier: QuantityModifier,
+  totalCount: number,
+  isMarmitaria?: boolean,
+  restaurantId?: string | number,
+): boolean => {
   if (modifier.required || (modifier.minSelection ?? 0) > 0) return true;
   if (totalCount === 1) return true;
+  // Preserva os contratos estritos de marmitaria e quentinhas do restaurante 6
+  if (isMarmitaria === true || String(restaurantId) === '6') return false;
   if (isAddonsOrExtrasGroup(modifier.title)) return true;
   if (modifier.options.some((o) => o.extraPrice > 0)) return true;
   return false;
@@ -211,7 +218,7 @@ export default function CardapioProductModal({
       setCurrentImgIndex(0);
       const defaultExpanded: Record<string, boolean> = {};
       allModifiers.forEach((m) => {
-        if (shouldExpandModifierByDefault(m, allModifiers.length)) {
+        if (shouldExpandModifierByDefault(m, allModifiers.length, effectiveProduct.marmitaria, restaurantId)) {
           defaultExpanded[m.id] = true;
         }
       });
