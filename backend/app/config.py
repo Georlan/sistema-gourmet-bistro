@@ -146,6 +146,35 @@ def normalize_supabase_url(raw: str, environment: str) -> str:
     return f"{scheme}://{hostname}{port_suffix}"
 
 
+def parse_malloc_arena_max(raw_val: str | None = None) -> int | None:
+    """Parseia MALLOC_ARENA_MAX para configuração de arenas glibc.
+
+    Retorna int >= 1 se ativo, ou None se desativado.
+    Valores que desativam: '0', '', 'none', 'disabled', 'false', 'off', 'null'.
+
+    Documentação operacional:
+    - O controle de arenas via mallopt(M_ARENA_MAX) afeta apenas alocadores glibc no Linux.
+    - Em contêineres multicore (Railway/Docker), o padrão do glibc é criar até 8 * vCPUs arenas,
+      o que pode reter memória RSS desnecessária.
+    - Em contrapartida, sob alta concorrência de threads simultâneas (ex: 20-40+), limitar arenas
+      a 1 ou 2 pode introduzir contenção de mutex entre threads.
+    - Valores entre 2 e 4 oferecem bom equilíbrio em cargas moderadas; valores desativados (None)
+      preservam o comportamento padrão do SO.
+    - Alterações exigem reinicialização do processo para terem efeito pleno antes que as threads
+      do servidor comecem a alocar memória.
+    """
+    if raw_val is None:
+        raw_val = os.getenv("MALLOC_ARENA_MAX", "2")
+    cleaned = str(raw_val).strip().lower()
+    if cleaned in ("", "0", "none", "disabled", "false", "off", "null"):
+        return None
+    try:
+        val = int(cleaned)
+        return max(1, val) if val > 0 else None
+    except ValueError:
+        return None
+
+
 class Settings:
     RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
     RESEND_WEBHOOK_SECRET: str = os.getenv("RESEND_WEBHOOK_SECRET", "")
@@ -166,8 +195,15 @@ class Settings:
         0.0,
         float(os.getenv("DB_PRE_PING_FRESH_SECONDS", "5.0")),
     )
-    # Memory and Allocator (glibc)
-    MALLOC_ARENA_MAX: int = max(1, int(os.getenv("MALLOC_ARENA_MAX", "2")))
+    # Memory and Allocator (glibc mallopt)
+    # Define o limite de arenas alocadas pelo glibc. None desativa a chamada de mallopt (preserva o padrão do SO).
+    # Exige reinicialização do processo para ter efeito pleno.
+    MALLOC_ARENA_MAX: int | None = parse_malloc_arena_max(os.getenv("MALLOC_ARENA_MAX", "2"))
+
+    # Otimização experimental de Garbage Collection: gc.freeze()
+    # Desativado por padrão (False) para evitar retenção de memória e regressões de latência p95/p99
+    # observadas sob cargas com referências cíclicas em processos web de longa duração.
+    ENABLE_GC_FREEZE: bool = os.getenv("ENABLE_GC_FREEZE", "false").strip().lower() in ("true", "1", "yes")
     
 
     # Security

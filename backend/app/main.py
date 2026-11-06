@@ -52,24 +52,32 @@ from .routes import (
 install_sensitive_query_log_filter()
 
 
-def configure_memory_allocator() -> bool:
+def configure_memory_allocator(arena_max: int | None = ...) -> bool:
     """Configura o alocador de memória glibc malloc em Linux para limitar fragmentação de arenas.
 
     Em contêineres compartilhados (como Railway/Docker), hosts multicore reportam
-    dezenas de vCPUs, fazendo o glibc criar arenas em excesso (8 * N_CORES).
-    Limitar as arenas ao valor de MALLOC_ARENA_MAX (default=2) reduz a retenção
-    de RSS em ~37% sem qualquer impacto negativo na latência ou throughput.
+    muitas vCPUs, fazendo o glibc criar arenas em excesso (8 * N_CORES).
+    Se arena_max for None ou <= 0 (ou configurado como 0/'none' em MALLOC_ARENA_MAX),
+    a chamada a mallopt é ignorada, preservando a política padrão do alocador do sistema.
+
+    Nota: Esta configuração afeta apenas runtimes Linux baseados em glibc (libc.so) e
+    exige reinicialização do processo para ter efeito consistente antes que múltiplos
+    threads comecem a alocar memória.
     """
-    if sys.platform.startswith("linux"):
-        try:
-            import ctypes
-            libc = ctypes.CDLL(None)
-            arena_max = max(1, int(os.getenv("MALLOC_ARENA_MAX", "2")))
-            # M_ARENA_MAX = -8 no glibc malloc.h
-            return bool(libc.mallopt(-8, arena_max))
-        except Exception:
-            return False
-    return False
+    if not sys.platform.startswith("linux"):
+        return False
+
+    limit = settings.MALLOC_ARENA_MAX if arena_max is ... else arena_max
+    if limit is None or limit <= 0:
+        return False
+
+    try:
+        import ctypes
+        libc = ctypes.CDLL(None)
+        # M_ARENA_MAX = -8 no glibc malloc.h
+        return bool(libc.mallopt(-8, int(limit)))
+    except Exception:
+        return False
 
 
 configure_memory_allocator()
@@ -135,12 +143,14 @@ async def lifespan(app: FastAPI):
     manager.start()
     order_chat_hub.ensure_started()
 
-    # Move os módulos, esquemas e classes estáticas carregadas para a geração
-    # permanente do coletor cíclico, eliminando overhead de varredura durante requisições.
-    import gc
-    gc.collect()
-    if hasattr(gc, "freeze"):
-        gc.freeze()
+    # Otimização de GC via gc.freeze() é mantida desativada por padrão (ENABLE_GC_FREEZE=False)
+    # para evitar potenciais retenções de memória e degradação de p95/p99 com referências cíclicas.
+    if getattr(settings, "ENABLE_GC_FREEZE", False):
+        import gc
+        gc.collect()
+        if hasattr(gc, "freeze"):
+            gc.freeze()
+            print("[GC] gc.freeze() ativado explicitamente via ENABLE_GC_FREEZE.", flush=True)
 
     try:
         yield
