@@ -166,6 +166,8 @@ class Settings:
         0.0,
         float(os.getenv("DB_PRE_PING_FRESH_SECONDS", "5.0")),
     )
+    # Memory and Allocator (glibc)
+    MALLOC_ARENA_MAX: int = max(1, int(os.getenv("MALLOC_ARENA_MAX", "2")))
     
 
     # Security
