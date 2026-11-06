@@ -16,6 +16,7 @@ from fastapi import (
     HTTPException,
     Header,
     Query,
+    Request,
     status,
 )
 from pydantic import BaseModel, Field
@@ -67,7 +68,12 @@ _cached_invalid_auth_last_log_at = 0.0
 _cached_invalid_auth_suppressed = 0
 
 
-def _log_cached_invalid_agent_token() -> None:
+def _log_cached_invalid_agent_token(
+    *,
+    token_prefix: str = "",
+    client_ip: str = "",
+    user_agent: str = "",
+) -> None:
     global _cached_invalid_auth_last_log_at, _cached_invalid_auth_suppressed
     now = time.monotonic()
     with _cached_invalid_auth_log_lock:
@@ -78,9 +84,30 @@ def _log_cached_invalid_agent_token() -> None:
         _cached_invalid_auth_suppressed = 0
         _cached_invalid_auth_last_log_at = now
     log.warning(
-        "print_agent_auth_rejected reason=cached_invalid_token attempts=%s",
+        "print_agent_auth_rejected reason=cached_invalid_token attempts=%s token_prefix=%s client_ip=%s user_agent=%s",
         attempts,
+        token_prefix or "unknown",
+        client_ip or "unknown",
+        user_agent or "unknown",
     )
+
+
+def _extract_client_info(request: Request = None) -> tuple[str, str]:
+    if request is None:
+        return "unknown", "unknown"
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        ip = cf_ip.strip()
+    else:
+        x_forwarded_for = request.headers.get("x-forwarded-for")
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(",")[0].strip()
+        elif request.client and request.client.host:
+            ip = request.client.host
+        else:
+            ip = "unknown"
+    user_agent = request.headers.get("user-agent", "unknown")
+    return ip, user_agent
 
 
 # Tenant routing hint cache: maps token_hash -> (token_id, restaurante_id, expires_at).
@@ -1137,6 +1164,7 @@ def _claim_pending_jobs(
 
 
 def get_current_agent(
+    request: Request = None,
     x_agent_token: Optional[str] = Header(None, alias="X-Agent-Token"),
     authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db)
@@ -1149,6 +1177,8 @@ def get_current_agent(
     O ``last_seen_at`` é atualizado apenas no heartbeat explícito; consultas de
     fila ociosa não precisam gerar uma escrita no banco a cada polling.
     """
+    client_ip, user_agent = _extract_client_info(request)
+
     raw_token = x_agent_token
     if not raw_token and authorization:
         parts = authorization.split()
@@ -1156,18 +1186,29 @@ def get_current_agent(
             raw_token = parts[1]
 
     if not raw_token:
-        log.warning("print_agent_auth_rejected reason=missing_token")
+        log.warning(
+            "print_agent_auth_rejected reason=missing_token client_ip=%s user_agent=%s",
+            client_ip,
+            user_agent,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token de agente não fornecido no cabeçalho X-Agent-Token"
+            detail="Token de agente não fornecido no cabeçalho X-Agent-Token",
+            headers={"Retry-After": "60"},
         )
 
     computed_hash = hash_token(raw_token.strip())
+    token_prefix = computed_hash[:8]
     if _invalid_agent_token_is_cached(computed_hash):
-        _log_cached_invalid_agent_token()
+        _log_cached_invalid_agent_token(
+            token_prefix=token_prefix,
+            client_ip=client_ip,
+            user_agent=user_agent,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token de agente inválido ou revogado"
+            detail="Token de agente inválido ou revogado",
+            headers={"Retry-After": "60"},
         )
 
     cached_identity = _get_cached_agent_token_tenant(computed_hash)
@@ -1222,12 +1263,18 @@ def get_current_agent(
         ).mappings().first()
 
     if not identity:
-        log.warning('print_agent_auth_rejected reason=unknown_or_revoked_token')
+        log.warning(
+            "print_agent_auth_rejected reason=unknown_or_revoked_token token_prefix=%s client_ip=%s user_agent=%s",
+            token_prefix,
+            client_ip,
+            user_agent,
+        )
         _forget_agent_token_tenant(computed_hash)
         _remember_invalid_agent_token(computed_hash)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token de agente inválido ou revogado"
+            detail="Token de agente inválido ou revogado",
+            headers={"Retry-After": "60"},
         )
 
     _forget_invalid_agent_token(computed_hash)
@@ -1247,7 +1294,12 @@ def get_current_agent(
             # Pode ser uma corrida com revogação ou uma inconsistência de RLS;
             # não declarar o token inválido nem causar perda do arquivo local.
             # Na próxima tentativa, a lookup autoritativa decide novamente.
-            log.warning('print_agent_auth_rejected reason=tenant_validation_failed')
+            log.warning(
+                "print_agent_auth_rejected reason=tenant_validation_failed token_prefix=%s client_ip=%s user_agent=%s",
+                token_prefix,
+                client_ip,
+                user_agent,
+            )
             _forget_agent_token_tenant(computed_hash)
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

@@ -2635,3 +2635,40 @@ def test_job_ack_ownership_mismatch_returns_409_conflict():
     assert resp_fail.status_code == 409
     assert "outro agente" in resp_fail.json()["detail"]
 
+
+def test_invalid_agent_auth_returns_retry_after_and_logs_client_metadata(caplog):
+    print_agents_route._clear_invalid_agent_token_cache()
+    client = TestClient(app)
+    bad_token = "koma_ag_obsolete_token_probe"
+    expected_prefix = print_agents_route.hash_token(bad_token)[:8]
+
+    with caplog.at_level("WARNING", logger="koma.print_agents"):
+        resp = client.post(
+            "/api/print-agents/heartbeat",
+            headers={
+                "X-Agent-Token": bad_token,
+                "CF-Connecting-IP": "203.0.113.42",
+                "User-Agent": "KomaPrintAgent/2026.09.27.1",
+            },
+        )
+        assert resp.status_code == 401
+        assert resp.headers.get("Retry-After") == "60"
+
+        # Subsequent hit within TTL uses cache and returns Retry-After: 60
+        resp_cached = client.post(
+            "/api/print-agents/jobs/claim-batch",
+            headers={
+                "X-Agent-Token": bad_token,
+                "CF-Connecting-IP": "203.0.113.42",
+                "User-Agent": "KomaPrintAgent/2026.09.27.1",
+            },
+        )
+        assert resp_cached.status_code == 401
+        assert resp_cached.headers.get("Retry-After") == "60"
+
+    assert f"token_prefix={expected_prefix}" in caplog.text
+    assert "client_ip=203.0.113.42" in caplog.text
+    assert "user_agent=KomaPrintAgent/2026.09.27.1" in caplog.text
+    assert bad_token not in caplog.text
+
+
