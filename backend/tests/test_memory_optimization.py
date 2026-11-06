@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 
@@ -25,7 +26,9 @@ def test_parse_malloc_arena_max():
 def test_settings_memory_defaults():
     """Valida que os defaults de memória e GC seguem os contratos de segurança operacional."""
     assert hasattr(settings, "MALLOC_ARENA_MAX")
-    if settings.MALLOC_ARENA_MAX is not None:
+    if "MALLOC_ARENA_MAX" not in os.environ:
+        assert settings.MALLOC_ARENA_MAX is None, "Must not enable a slower allocator by default"
+    elif settings.MALLOC_ARENA_MAX is not None:
         assert settings.MALLOC_ARENA_MAX >= 1
 
     # gc.freeze() DEVE ser False por padrão para proteger latência e evitar retenção de referências cíclicas
