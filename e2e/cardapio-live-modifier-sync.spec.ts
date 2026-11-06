@@ -27,7 +27,10 @@ for (const variant of ['editorial', 'artistic-total']) {
     const modal=page.locator('#product-details-modal');
     await modal.getByRole('button',{name:'Adicionar uma unidade de Frango',exact:true}).click();
     await modal.getByRole('button',{name:'Adicionar uma unidade de Carne',exact:true}).click();
-    await modal.getByRole('button',{name:/Adicionais pagos/}).click();
+    const extraBtn=modal.getByRole('button',{name:/Adicionais pagos/});
+    if(await extraBtn.count() > 0 && await extraBtn.getAttribute('aria-expanded') !== 'true') {
+      await extraBtn.click();
+    }
     await modal.getByRole('button',{name:'Adicionar uma unidade de Frango adicional',exact:true}).click();
     const notes=modal.locator('textarea');
     await notes.fill('Sem cebola');

@@ -23,6 +23,13 @@ A solução arquitetural de **Famílias de Produtos** resolve esse dilema separa
    O agrupamento visual automático de famílias foi restrito e validado no JE Lanches (ID 1). Os demais restaurantes da plataforma mantêm seu comportamento e renderização padrão de produtos individuais, garantindo compatibilidade reversa e estabilidade operacional. A ativação para novos estabelecimentos poderá ser habilitada futuramente de forma configurável por tenant.
 4. **Adicionais visíveis e expansão transparente:**
    Para maximizar a conversão comercial de adicionais (ex.: bacon, ovo, queijo, carne extra a R$ 2,00) sem fricção oculta:
-   - Grupos opcionais de adicionais pagos ou identificados como "Adicionais" iniciam expandidos por padrão em todos os restaurantes da plataforma.
+   - Grupos opcionais de adicionais pagos ou identificados como "Adicionais" iniciam expandidos por padrão em todos os restaurantes da plataforma (incluindo Marmitaria e ID 6).
+   - Complementos gratuitos e escolhas de composição (proteínas, guarnições, saladas) continuam visíveis por padrão.
    - Nenhum adicional é pré-marcado automaticamente (seleção estritamente opt-in pelo cliente).
    - O consumidor possui controle total para recolher o grupo via accordion; uma vez recolhido, a preferência do usuário é respeitada e o grupo não reabre sozinho.
+
+## Task futura: Classificação comercial explícita na gestão
+
+- **Escopo futuro (fora do PR #1257):** Conectar o papel comercial explícito (`commercial_role`: `Principal`, `Acompanhamento`, `Bebida`, `Sobremesa`, `Outro`) à interface de cadastro de produtos no Caixa/Admin, persistência no banco e payload da API pública `/api/cardapio-digital/public`.
+- **Estado atual:** O motor de recomendações complementares (`src/cardapio/pairingRecommendations.ts`) já aceita e respeita essa propriedade com precedência determinística sobre os matchers semânticos, permitindo ativação imediata assim que o campo for disponibilizado nos formulários operacionais.
+

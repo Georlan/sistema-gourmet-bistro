@@ -36,6 +36,12 @@ import { trackAnalyticsEvent } from "../../analytics";
 import { isMarmitariaSaladGroup } from "../../domain/marmitariaSalad";
 import { containModalFocus } from "../../utils/modalFocus";
 
+import {
+  isAddonsOrExtrasGroup,
+  shouldExpandModifierByDefault,
+  type QuantityModifier,
+} from "../modifierExpansion";
+
 interface CardapioProductModalProps {
   product: Product | GroupedDisplayProduct;
   initialItem?: { quantity: number; selectedOptions: Record<string, ProductOption[]>; notes: string };
@@ -57,8 +63,6 @@ interface CardapioProductModalProps {
   };
 }
 
-type QuantityModifier = ProductModifier & { minSelection?: number };
-
 // Reutiliza o formatador durante toques rápidos em listas extensas.
 const priceFormatter = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -72,26 +76,6 @@ const rulesForModifier = (modifier: QuantityModifier): ModifierQuantityRules => 
   maxSelection: Math.max(1, Number(modifier.maxSelection || 1)),
   selectionMode: modifier.selectionMode,
 });
-
-const isAddonsOrExtrasGroup = (title: string): boolean =>
-  /adiciona(l|is)|extra(s)?|acrescimo(s)?/i.test(
-    (title || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase()
-  );
-
-const shouldExpandModifierByDefault = (
-  modifier: QuantityModifier,
-  totalCount: number,
-  isMarmitaria?: boolean,
-  restaurantId?: string | number,
-): boolean => {
-  if (modifier.required || (modifier.minSelection ?? 0) > 0) return true;
-  if (totalCount === 1) return true;
-  // Preserva os contratos estritos de marmitaria e quentinhas do restaurante 6
-  if (isMarmitaria === true || String(restaurantId) === '6') return false;
-  if (isAddonsOrExtrasGroup(modifier.title)) return true;
-  if (modifier.options.some((o) => o.extraPrice > 0)) return true;
-  return false;
-};
 
 export default function CardapioProductModal({
   product,
@@ -218,7 +202,7 @@ export default function CardapioProductModal({
       setCurrentImgIndex(0);
       const defaultExpanded: Record<string, boolean> = {};
       allModifiers.forEach((m) => {
-        if (shouldExpandModifierByDefault(m, allModifiers.length, effectiveProduct.marmitaria, restaurantId)) {
+        if (shouldExpandModifierByDefault(m, allModifiers.length)) {
           defaultExpanded[m.id] = true;
         }
       });
