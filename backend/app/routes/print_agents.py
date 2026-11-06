@@ -1,10 +1,11 @@
-import hashlib
-import json
-import secrets
 import datetime
+import hashlib
+import ipaddress
+import json
 import logging
 import os
 import re
+import secrets
 import threading
 import time
 from collections.abc import Mapping
@@ -67,13 +68,40 @@ _cached_invalid_auth_log_lock = threading.Lock()
 _cached_invalid_auth_last_log_at = 0.0
 _cached_invalid_auth_suppressed = 0
 
+_CONTROL_CHAR_RE = re.compile(r"[\r\n\t\x00-\x1f\x7f-\x9f]")
 
-def _log_cached_invalid_agent_token(
-    *,
-    token_prefix: str = "",
-    client_ip: str = "",
-    user_agent: str = "",
-) -> None:
+
+def _sanitize_ip(raw_ip: str | None) -> str:
+    """Valida e sanitiza endereço IP para evitar log injection e formatos inválidos."""
+    if not raw_ip:
+        return "unknown"
+    cleaned = raw_ip.strip()
+    if cleaned.startswith("[") and "]" in cleaned:
+        cleaned = cleaned[1 : cleaned.index("]")]
+    elif ":" in cleaned and cleaned.count(":") == 1:
+        cleaned = cleaned.split(":")[0]
+    try:
+        return str(ipaddress.ip_address(cleaned))
+    except ValueError:
+        return "invalid"
+
+
+def _sanitize_user_agent(raw_ua: str | None) -> str:
+    """Sanitiza User-Agent removendo caracteres de controle e limitando o tamanho."""
+    if not raw_ua:
+        return "unknown"
+    cleaned = _CONTROL_CHAR_RE.sub(" ", raw_ua).strip()
+    if not cleaned:
+        return "unknown"
+    return cleaned[:80]
+
+
+def _log_cached_invalid_agent_token() -> None:
+    """Registra contagem agregada de tentativas com token inválido em cache.
+
+    A contagem é global e não deve ser atribuída a um IP ou token específico
+    para evitar falso diagnóstico de volume por origem.
+    """
     global _cached_invalid_auth_last_log_at, _cached_invalid_auth_suppressed
     now = time.monotonic()
     with _cached_invalid_auth_log_lock:
@@ -84,29 +112,28 @@ def _log_cached_invalid_agent_token(
         _cached_invalid_auth_suppressed = 0
         _cached_invalid_auth_last_log_at = now
     log.warning(
-        "print_agent_auth_rejected reason=cached_invalid_token attempts=%s token_prefix=%s client_ip=%s user_agent=%s",
+        "print_agent_auth_rejected reason=cached_invalid_token attempts=%s",
         attempts,
-        token_prefix or "unknown",
-        client_ip or "unknown",
-        user_agent or "unknown",
     )
 
 
 def _extract_client_info(request: Request = None) -> tuple[str, str]:
+    """Extrai e sanitiza IP de origem e User-Agent para observabilidade segura."""
     if request is None:
         return "unknown", "unknown"
     cf_ip = request.headers.get("cf-connecting-ip")
     if cf_ip:
-        ip = cf_ip.strip()
+        ip = _sanitize_ip(cf_ip)
     else:
         x_forwarded_for = request.headers.get("x-forwarded-for")
         if x_forwarded_for:
-            ip = x_forwarded_for.split(",")[0].strip()
+            first_ip = x_forwarded_for.split(",")[0].strip()
+            ip = _sanitize_ip(first_ip)
         elif request.client and request.client.host:
-            ip = request.client.host
+            ip = _sanitize_ip(request.client.host)
         else:
             ip = "unknown"
-    user_agent = request.headers.get("user-agent", "unknown")
+    user_agent = _sanitize_user_agent(request.headers.get("user-agent"))
     return ip, user_agent
 
 
@@ -1200,11 +1227,7 @@ def get_current_agent(
     computed_hash = hash_token(raw_token.strip())
     token_prefix = computed_hash[:8]
     if _invalid_agent_token_is_cached(computed_hash):
-        _log_cached_invalid_agent_token(
-            token_prefix=token_prefix,
-            client_ip=client_ip,
-            user_agent=user_agent,
-        )
+        _log_cached_invalid_agent_token()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token de agente inválido ou revogado",
