@@ -158,13 +158,13 @@ def parse_malloc_arena_max(raw_val: str | None = None) -> int | None:
       o que pode reter memória RSS desnecessária.
     - Em contrapartida, sob alta concorrência de threads simultâneas (ex: 20-40+), limitar arenas
       a 1 ou 2 pode introduzir contenção de mutex entre threads.
-    - Valores entre 2 e 4 oferecem bom equilíbrio em cargas moderadas; valores desativados (None)
+    - Valores 2 ou 4 exigem benchmark sob carga representativa; valores desativados (None)
       preservam o comportamento padrão do SO.
     - Alterações exigem reinicialização do processo para terem efeito pleno antes que as threads
       do servidor comecem a alocar memória.
     """
     if raw_val is None:
-        raw_val = os.getenv("MALLOC_ARENA_MAX", "2")
+        raw_val = os.getenv("MALLOC_ARENA_MAX", "off")
     cleaned = str(raw_val).strip().lower()
     if cleaned in ("", "0", "none", "disabled", "false", "off", "null"):
         return None
@@ -198,7 +198,7 @@ class Settings:
     # Memory and Allocator (glibc mallopt)
     # Define o limite de arenas alocadas pelo glibc. None desativa a chamada de mallopt (preserva o padrão do SO).
     # Exige reinicialização do processo para ter efeito pleno.
-    MALLOC_ARENA_MAX: int | None = parse_malloc_arena_max(os.getenv("MALLOC_ARENA_MAX", "2"))
+    MALLOC_ARENA_MAX: int | None = parse_malloc_arena_max(os.getenv("MALLOC_ARENA_MAX", "off"))
 
     # Otimização experimental de Garbage Collection: gc.freeze()
     # Desativado por padrão (False) para evitar retenção de memória e regressões de latência p95/p99
