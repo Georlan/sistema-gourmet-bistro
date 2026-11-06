@@ -37,6 +37,46 @@ const normalize = (val: string) =>
     .toLowerCase()
     .trim();
 
+/**
+ * Calcula o custo mínimo de entrada de um produto, somando o preço base ao
+ * menor custo possível de seleções obrigatórias (minSelection > 0 ou tipo 'obrigatorio').
+ */
+export function calculateProductMinStartingPrice(product: Product): number {
+  let minCost = Number(product.price) || 0;
+
+  if (product.modifierGroups && product.modifierGroups.length > 0) {
+    for (const group of product.modifierGroups) {
+      const isRequired = typeof group.minSelection === 'number'
+        ? group.minSelection > 0
+        : group.type === 'obrigatorio';
+      const minSelection = Math.max(0, group.minSelection ?? (isRequired ? 1 : 0));
+
+      if (minSelection > 0 && group.options && group.options.length > 0) {
+        const activeOptions = group.options.filter((o) => o.active !== false);
+        if (activeOptions.length > 0) {
+          const sortedPrices = activeOptions
+            .map((o) => Number(o.extraPrice) || 0)
+            .sort((a, b) => a - b);
+          const cheapest = sortedPrices.slice(0, minSelection);
+          const groupMinExtra = cheapest.reduce((sum, price) => sum + price, 0);
+          minCost += groupMinExtra;
+        }
+      }
+    }
+  } else if (product.modifiers && product.modifiers.length > 0) {
+    for (const mod of product.modifiers) {
+      if (mod.required && mod.options && mod.options.length > 0) {
+        const sortedPrices = mod.options
+          .map((o) => Number(o.extraPrice) || 0)
+          .sort((a, b) => a - b);
+        minCost += sortedPrices[0] || 0;
+      }
+    }
+  }
+
+  return minCost;
+}
+
 function formatVariantLabel(name: string, kind: string): string {
   const norm = normalize(name);
   if (kind === 'batatas') {
@@ -67,8 +107,17 @@ function formatVariantLabel(name: string, kind: string): string {
 export function groupCategoryProductsForDisplay(
   categoryName: string,
   products: Product[],
+  restaurantId?: string | number,
 ): CatalogDisplayItem[] {
   if (!products || products.length === 0) return [];
+
+  // O agrupamento visual por famílias foi validado inicialmente para o JE Lanches (ID 1).
+  // Para outros restaurantes da plataforma, mantemos 100% o comportamento padrão e retrocompatibilidade,
+  // preservando a flexibilidade de configurar famílias de produtos por tenant futuramente.
+  const isEligibleRestaurant = restaurantId !== undefined && restaurantId !== null && String(restaurantId) === '1';
+  if (!isEligibleRestaurant) {
+    return products;
+  }
 
   const catNorm = normalize(categoryName);
 
@@ -85,12 +134,14 @@ export function groupCategoryProductsForDisplay(
         id: p.id,
         label: formatVariantLabel(p.name, 'batatas'),
         description: p.description,
-        price: p.price,
+        price: calculateProductMinStartingPrice(p),
         product: p,
         isAvailable: p.isAvailable !== false,
       }));
 
-      const prices = batatas.map((p) => p.price);
+      const availableVariants = variants.filter((v) => v.isAvailable);
+      const pricingPool = availableVariants.length > 0 ? availableVariants : variants;
+      const prices = pricingPool.map((v) => v.price);
       const minPrice = Math.min(...prices);
       const maxPrice = Math.max(...prices);
       const leadProduct = batatas.find((p) => normalize(p.name) === 'batata frita') || batatas[0];
@@ -124,12 +175,14 @@ export function groupCategoryProductsForDisplay(
         id: p.id,
         label: formatVariantLabel(p.name, 'pasteis'),
         description: p.description,
-        price: p.price,
+        price: calculateProductMinStartingPrice(p),
         product: p,
         isAvailable: p.isAvailable !== false,
       }));
 
-      const prices = pasteis.map((p) => p.price);
+      const availableVariants = variants.filter((v) => v.isAvailable);
+      const pricingPool = availableVariants.length > 0 ? availableVariants : variants;
+      const prices = pricingPool.map((v) => v.price);
       const minPrice = Math.min(...prices);
       const maxPrice = Math.max(...prices);
       const leadProduct = pasteis.find((p) => normalize(p.name).includes('carne de sol')) || pasteis[0];
@@ -167,11 +220,13 @@ export function groupCategoryProductsForDisplay(
         id: p.id,
         label: formatVariantLabel(p.name, 'sucos'),
         description: p.description,
-        price: p.price,
+        price: calculateProductMinStartingPrice(p),
         product: p,
         isAvailable: p.isAvailable !== false,
       }));
-      const prices = sucos.map((p) => p.price);
+      const availableVariants = variants.filter((v) => v.isAvailable);
+      const pricingPool = availableVariants.length > 0 ? availableVariants : variants;
+      const prices = pricingPool.map((v) => v.price);
       const minPrice = Math.min(...prices);
       const maxPrice = Math.max(...prices);
       const lead = sucos[0];
@@ -200,11 +255,13 @@ export function groupCategoryProductsForDisplay(
         id: p.id,
         label: formatVariantLabel(p.name, 'vitaminas'),
         description: p.description,
-        price: p.price,
+        price: calculateProductMinStartingPrice(p),
         product: p,
         isAvailable: p.isAvailable !== false,
       }));
-      const prices = vitaminas.map((p) => p.price);
+      const availableVariants = variants.filter((v) => v.isAvailable);
+      const pricingPool = availableVariants.length > 0 ? availableVariants : variants;
+      const prices = pricingPool.map((v) => v.price);
       const minPrice = Math.min(...prices);
       const maxPrice = Math.max(...prices);
       const lead = vitaminas[0];
@@ -246,12 +303,14 @@ export function groupCategoryProductsForDisplay(
         id: p.id,
         label: formatVariantLabel(p.name, 'refrigerantes'),
         description: p.description,
-        price: p.price,
+        price: calculateProductMinStartingPrice(p),
         product: p,
         isAvailable: p.isAvailable !== false,
       }));
 
-      const prices = refri1L.map((p) => p.price);
+      const availableVariants = variants.filter((v) => v.isAvailable);
+      const pricingPool = availableVariants.length > 0 ? availableVariants : variants;
+      const prices = pricingPool.map((v) => v.price);
       const minPrice = Math.min(...prices);
       const maxPrice = Math.max(...prices);
       const lead = refri1L[0];

@@ -73,6 +73,19 @@ const rulesForModifier = (modifier: QuantityModifier): ModifierQuantityRules => 
   selectionMode: modifier.selectionMode,
 });
 
+const isAddonsOrExtrasGroup = (title: string): boolean =>
+  /adiciona(l|is)|extra(s)?|acrescimo(s)?/i.test(
+    (title || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase()
+  );
+
+const shouldExpandModifierByDefault = (modifier: QuantityModifier, totalCount: number): boolean => {
+  if (modifier.required || (modifier.minSelection ?? 0) > 0) return true;
+  if (totalCount === 1) return true;
+  if (isAddonsOrExtrasGroup(modifier.title)) return true;
+  if (modifier.options.some((o) => o.extraPrice > 0)) return true;
+  return false;
+};
+
 export default function CardapioProductModal({
   product,
   initialItem,
@@ -198,7 +211,7 @@ export default function CardapioProductModal({
       setCurrentImgIndex(0);
       const defaultExpanded: Record<string, boolean> = {};
       allModifiers.forEach((m) => {
-        if (m.required || (allModifiers.length === 1 && !m.required)) {
+        if (shouldExpandModifierByDefault(m, allModifiers.length)) {
           defaultExpanded[m.id] = true;
         }
       });
@@ -521,7 +534,7 @@ export default function CardapioProductModal({
                   : `Escolha até ${max} ${unit}`;
                 const simpleSelection = modifier.selectionMode === "tipos" || max === 1;
                 const complete = modifier.required && selectionWithinRules(rules, selectedIds);
-                const collapsible = min === 0 && modifier.options.length > 0 && modifier.options.every(option => option.extraPrice > 0);
+                const collapsible = min === 0 && modifier.options.length > 0;
                 const expanded = !collapsible || expandedExtras[modifier.id] === true;
                 const surcharge = selections.reduce((total, option) => total + option.extraPrice, 0);
                 const Heading = collapsible ? "button" : "div";
@@ -529,8 +542,15 @@ export default function CardapioProductModal({
                 return (
                   <section key={modifier.id} tabIndex={-1} aria-label={modifier.title} ref={node => { if (node) groupRefs.current.set(modifier.id, node); else groupRefs.current.delete(modifier.id); }}>
                     <Heading
-                      {...(collapsible ? { type: "button" as const, "aria-expanded": expanded, "aria-controls": `modifier-options-${modifier.id}`, onClick: () => setExpandedExtras(current => ({ ...current, [modifier.id]: !expanded })) } : {})}
-                      className={`flex w-full items-start justify-between gap-3 text-left ${collapsible ? "rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 transition hover:border-emerald-500/30" : ""}`}
+                      {...(collapsible
+                        ? {
+                            type: "button" as const,
+                            "aria-expanded": expanded,
+                            "aria-controls": `modifier-options-${modifier.id}`,
+                            onClick: () => setExpandedExtras((current) => ({ ...current, [modifier.id]: !expanded })),
+                          }
+                        : {})}
+                      className={`flex w-full items-start justify-between gap-3 text-left ${collapsible ? "rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 transition hover:border-emerald-500/30 cursor-pointer" : ""}`}
                     >
                       <div>
                         <h3 className="text-sm font-black text-koma-foreground">{modifier.title}</h3>

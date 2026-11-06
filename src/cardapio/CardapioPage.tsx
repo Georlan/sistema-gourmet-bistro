@@ -1367,7 +1367,7 @@ export default function CardapioPage() {
                 if (orderA !== orderB) return orderA - orderB;
                 return 0;
               });
-            const displayItems = groupCategoryProductsForDisplay(category, products);
+            const displayItems = groupCategoryProductsForDisplay(category, products, activeBrand?.id);
             const indexLabel = String(catIndex + 1).padStart(2, '0');
             return (
               <section key={category} id={categorySectionId(category)} className="scroll-mt-[10.5rem] cardapio-catalog-category-section">

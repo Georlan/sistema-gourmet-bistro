@@ -1110,7 +1110,7 @@ export function CardapioArtisticExperience({
               if (orderA !== orderB) return orderA - orderB;
               return 0;
             });
-          const displayItems = groupCategoryProductsForDisplay(category, catProducts);
+          const displayItems = groupCategoryProductsForDisplay(category, catProducts, activeBrand.id);
           const indexFormatted = String(catIndex + 1).padStart(2, '0');
           const catDomId = `cat-${category.toLowerCase().replace(/\s+/g, '-')}`;
 

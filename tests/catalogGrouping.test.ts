@@ -1,13 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  calculateProductMinStartingPrice,
   groupCategoryProductsForDisplay,
   isGroupedProduct,
   type GroupedDisplayProduct,
 } from '../src/cardapio/catalogGrouping';
 import type { Product } from '../src/cardapio/CardapioTypes';
 
-test('groupCategoryProductsForDisplay agrupa Batatas Fritas em um unico card principal', () => {
+test('groupCategoryProductsForDisplay agrupa Batatas Fritas em um unico card principal para JE Lanches (ID 1)', () => {
   const batatas: Product[] = [
     {
       id: 'prod-je-08',
@@ -74,7 +75,7 @@ test('groupCategoryProductsForDisplay agrupa Batatas Fritas em um unico card pri
     },
   ];
 
-  const grouped = groupCategoryProductsForDisplay('Batatas Fritas', batatas);
+  const grouped = groupCategoryProductsForDisplay('Batatas Fritas', batatas, '1');
   assert.equal(grouped.length, 1);
   const card = grouped[0];
   assert.ok(isGroupedProduct(card));
@@ -97,6 +98,114 @@ test('groupCategoryProductsForDisplay agrupa Batatas Fritas em um unico card pri
   assert.equal(card.variants[3].product.id, 'prod-je-11');
 });
 
+test('groupCategoryProductsForDisplay preserva produtos individuais para outros restaurantes (IDs !== 1)', () => {
+  const batatas: Product[] = [
+    { id: 'b1', name: 'Batata Simples', price: 15.0, description: '', image: '', category: 'Batatas Fritas', isAvailable: true },
+    { id: 'b2', name: 'Batata Rústica', price: 20.0, description: '', image: '', category: 'Batatas Fritas', isAvailable: true },
+  ];
+
+  // Outro restaurante (ex: ID 2 ou ID 6)
+  const resultForOtherRestaurant = groupCategoryProductsForDisplay('Batatas Fritas', batatas, '2');
+  assert.equal(resultForOtherRestaurant.length, 2);
+  assert.equal(isGroupedProduct(resultForOtherRestaurant[0]), false);
+  assert.equal(resultForOtherRestaurant[0].id, 'b1');
+  assert.equal(resultForOtherRestaurant[1].id, 'b2');
+
+  const resultWithoutId = groupCategoryProductsForDisplay('Batatas Fritas', batatas);
+  assert.equal(resultWithoutId.length, 2);
+  assert.equal(isGroupedProduct(resultWithoutId[0]), false);
+});
+
+test('calculateProductMinStartingPrice computa escolhas obrigatórias e ignora opções opcionais', () => {
+  const burger: Product = {
+    id: 'b1',
+    name: 'Burger Gourmet',
+    price: 30.0,
+    description: '',
+    image: '',
+    category: 'Lanches',
+    isAvailable: true,
+    modifierGroups: [
+      {
+        id: 'ponto-carne',
+        name: 'Ponto da carne',
+        minSelection: 1,
+        maxSelection: 1,
+        type: 'obrigatorio',
+        options: [
+          { id: 'ao-ponto', name: 'Ao ponto', extraPrice: 0, active: true },
+          { id: 'bem-passado', name: 'Bem passado', extraPrice: 0, active: true },
+        ],
+      },
+      {
+        id: 'adicionais-pagos',
+        name: 'Adicionais',
+        minSelection: 0,
+        maxSelection: 3,
+        type: 'opcional',
+        options: [
+          { id: 'bacon', name: 'Bacon extra', extraPrice: 5.0, active: true },
+          { id: 'queijo', name: 'Queijo extra', extraPrice: 4.0, active: true },
+        ],
+      },
+      {
+        id: 'acompanhamento-obrigatorio',
+        name: 'Escolha seu acompanhamento',
+        minSelection: 1,
+        maxSelection: 1,
+        type: 'obrigatorio',
+        options: [
+          { id: 'salada', name: 'Salada simples', extraPrice: 2.0, active: true },
+          { id: 'fritas', name: 'Batata frita', extraPrice: 4.0, active: true },
+        ],
+      },
+    ],
+  };
+
+  // Preço base 30 + ponto (0) + acomp obrigatório mais barato (salada +2) = 32.0 (ignora adicionais opcionais)
+  const minStarting = calculateProductMinStartingPrice(burger);
+  assert.equal(minStarting, 32.0);
+});
+
+test('groupCategoryProductsForDisplay calcula preco inicial considerando apenas variantes disponiveis', () => {
+  const batatas: Product[] = [
+    {
+      id: 'b1',
+      name: 'Batata Pequena',
+      description: '200g',
+      price: 10.0,
+      image: '',
+      category: 'Batatas Fritas',
+      isAvailable: false, // INDISPONÍVEL!
+    },
+    {
+      id: 'b2',
+      name: 'Batata Média',
+      description: '300g',
+      price: 15.0,
+      image: '',
+      category: 'Batatas Fritas',
+      isAvailable: true,
+    },
+    {
+      id: 'b3',
+      name: 'Batata Grande',
+      description: '400g',
+      price: 20.0,
+      image: '',
+      category: 'Batatas Fritas',
+      isAvailable: true,
+    },
+  ];
+
+  const grouped = groupCategoryProductsForDisplay('Batatas Fritas', batatas, '1');
+  assert.equal(grouped.length, 1);
+  const card = grouped[0] as GroupedDisplayProduct;
+  // O menor preço entre as DISPONÍVEIS é 15 (a de 10 está desativada)
+  assert.equal(card.minPrice, 15.0);
+  assert.equal(card.hasVariablePrice, true);
+});
+
 test('groupCategoryProductsForDisplay agrupa Pasteis unificando os 6 sabores', () => {
   const pasteis: Product[] = [
     { id: 'prod-je-12', name: 'Pastel de Carne de Sol', description: 'carne de sol, queijo e catupiry', price: 7.0, image: 'img-12.jpg', category: 'Pastelões e Pastel Médio', isAvailable: true },
@@ -107,7 +216,7 @@ test('groupCategoryProductsForDisplay agrupa Pasteis unificando os 6 sabores', (
     { id: 'prod-je-17', name: 'Pastel Três Queijos', description: 'queijo coalho, cheddar e mussarela', price: 7.0, image: 'img-17.jpg', category: 'Pastelões e Pastel Médio', isAvailable: true },
   ];
 
-  const grouped = groupCategoryProductsForDisplay('Pastelões e Pastel Médio', pasteis);
+  const grouped = groupCategoryProductsForDisplay('Pastelões e Pastel Médio', pasteis, '1');
   assert.equal(grouped.length, 1);
   const card = grouped[0];
   assert.ok(isGroupedProduct(card));
@@ -132,7 +241,7 @@ test('groupCategoryProductsForDisplay separa Sucos e Vitaminas em dois cards lim
     { id: 'prod-25', name: 'vitamina de goiaba', description: 'vitamina de 300 ml', price: 6.0, image: 'vit.jpg', category: 'Vitaminas e Sucos', isAvailable: true },
   ];
 
-  const grouped = groupCategoryProductsForDisplay('Vitaminas e Sucos', drinks);
+  const grouped = groupCategoryProductsForDisplay('Vitaminas e Sucos', drinks, '1');
   assert.equal(grouped.length, 2);
 
   const sucosCard = grouped[0] as GroupedDisplayProduct;
@@ -157,7 +266,7 @@ test('groupCategoryProductsForDisplay agrupa Refrigerantes 1L em um unico card',
     { id: 'prod-28', name: 'refrigerante sukita', description: 'refrigerante sukita 1L', price: 9.0, image: 'sukita.jpg', category: 'Refrigerantes', isAvailable: true },
   ];
 
-  const grouped = groupCategoryProductsForDisplay('Refrigerantes', refris);
+  const grouped = groupCategoryProductsForDisplay('Refrigerantes', refris, '1');
   assert.equal(grouped.length, 1);
   const card = grouped[0] as GroupedDisplayProduct;
   assert.ok(isGroupedProduct(card));
@@ -175,7 +284,7 @@ test('groupCategoryProductsForDisplay mantem Hambúrgueres como produtos individ
     { id: 'prod-02', name: 'X-Burguer', description: 'brioche e ovo', price: 12.0, image: 'b2.jpg', category: 'Hambúrgueres', isAvailable: true },
   ];
 
-  const grouped = groupCategoryProductsForDisplay('Hambúrgueres', burgers);
+  const grouped = groupCategoryProductsForDisplay('Hambúrgueres', burgers, '1');
   assert.equal(grouped.length, 2);
   assert.equal(isGroupedProduct(grouped[0]), false);
   assert.equal(isGroupedProduct(grouped[1]), false);
