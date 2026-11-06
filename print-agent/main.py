@@ -21,25 +21,20 @@ logging.basicConfig(
 PAIRING_REQUIRED_EXIT = 2
 
 
-def pairing_exit_code() -> int:
-    """Retorna o código de saída apropriado quando pareamento é necessário.
-
-    No Linux, a unit systemd usa RestartPreventExitStatus=2 para não reiniciar.
-    No Windows, o Agendador de Tarefas interpreta qualquer código diferente de 0 como falha
-    e dispara a contagem de reinícios (RestartCount 999 a cada 1 minuto). Encerrar com 0
-    informa conclusão normal ao Windows e impede o loop infinito de reinícios.
-    """
-    if sys.platform == "win32":
-        return 0
-    return PAIRING_REQUIRED_EXIT
-
-
 def main() -> int:
     config = parse_cli_args(AgentConfig.load())
     try:
         with single_instance():
             configure_file_logging()
-            return run(config)
+            exit_code = run(config)
+            # No Windows, o Agendador de Tarefas executa pythonw main.py em background.
+            # Se o processo retornar código != 0, o Windows considera falha e aciona
+            # RestartCount 999 a cada 1 minuto. Encerrar o processo com 0 quando
+            # a pausa foi intencional (pareamento necessário) informa ao Windows que
+            # a tarefa foi concluída normalmente e interrompe o loop de reinício.
+            if sys.platform == "win32" and exit_code == PAIRING_REQUIRED_EXIT:
+                return 0
+            return exit_code
     except AgentAlreadyRunning:
         print("[KÔMA] O conector já está aberto neste computador.")
         return 0
@@ -54,7 +49,7 @@ def run(config: AgentConfig) -> int:
                     "[PAREAMENTO] Este computador precisa ser autorizado. "
                     "Use 'Preparar impressão' no Kôma para iniciar uma única conexão segura."
                 )
-                return pairing_exit_code()
+                return PAIRING_REQUIRED_EXIT
 
             from pairing import pair_agent
 
@@ -94,7 +89,7 @@ def run(config: AgentConfig) -> int:
                 "[PAREAMENTO] A autorização anterior foi revogada. "
                 "Use 'Preparar impressão' para autorizar este computador novamente."
             )
-            return pairing_exit_code()
+            return PAIRING_REQUIRED_EXIT
 
         if config.pair_only:
             print("[PAREAMENTO] Credencial local pronta. Nenhum token precisa ser copiado.")
@@ -113,7 +108,7 @@ def run(config: AgentConfig) -> int:
                 "[PAREAMENTO] A autorização deste computador foi revogada. "
                 "O serviço foi pausado sem abrir navegador; use 'Preparar impressão'."
             )
-            return pairing_exit_code()
+            return PAIRING_REQUIRED_EXIT
 
 
 if __name__ == "__main__":
