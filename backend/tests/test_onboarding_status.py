@@ -109,6 +109,21 @@ def test_profile_progress_requires_real_profile_content():
     assert _profile_is_configured(configured) is True
 
 
+
+def test_profile_without_definitive_address_remains_ready_during_preparation_and_commercial_onboarding():
+    restaurant = SimpleNamespace(
+        nome="JE Lanches",
+        endereco=None,
+        socials={"whatsapp": "5588999999999"},
+    )
+    assert _profile_is_configured(
+        restaurant, require_essentials=True, require_address=False
+    ) is True
+    assert _profile_is_configured(
+        restaurant, require_essentials=True, require_address=True
+    ) is False
+
+
 def test_required_progress_has_four_configuration_items_only():
     steps = {
         "profile": True,
