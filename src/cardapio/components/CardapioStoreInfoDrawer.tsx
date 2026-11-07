@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { buildKomaAttributionUrl } from "../komaAttribution";
+import { getRestaurantMapsUrl } from "../getRestaurantMapsUrl";
 import { KomaSocialCameraIcon } from "./KomaPublicIcons";
 
 interface CardapioStoreInfoDrawerProps {
@@ -81,6 +82,7 @@ export default function CardapioStoreInfoDrawer({
   const deliveryMode =
     brand.tipoTaxaEntrega || ((brand.tabelaTaxasBairros?.length ?? 0) > 0 ? "bairro" : "fixa");
   const neighborhoods = brand.tabelaTaxasBairros ?? [];
+  const mapsUrl = getRestaurantMapsUrl(brand.googleMapsUrl);
   const distanceConfig = brand.tabelaTaxasKm?.[0];
 
   return (
@@ -229,9 +231,9 @@ export default function CardapioStoreInfoDrawer({
                     <p className="leading-relaxed">{brand.address}</p>
                   </div>
                 )}
-                {brand.googleMapsUrl && (
+                {mapsUrl && (
                   <a
-                    href={brand.googleMapsUrl}
+                    href={mapsUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-2.5 inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition"
