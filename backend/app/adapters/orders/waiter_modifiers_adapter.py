@@ -32,6 +32,8 @@ from ...domain.orders.errors import (
     ModifierGroupMismatchError,
     ModifierInactiveError,
     ModifierNotFoundError,
+    ModifierSelectionLimitError,
+    OrderValidationError,
     ProductInactiveError,
     ProductNotFoundError,
     ProductTenantMismatchError,
@@ -251,10 +253,16 @@ class WaiterModifiersAdapter:
         except (ModifierNotFoundError, ModifierInactiveError, ModifierGroupMismatchError):
             db.rollback()
             raise HTTPException(status_code=422, detail="Modificador não encontrado ou inativo.")
+        except ModifierSelectionLimitError as err:
+            db.rollback()
+            raise HTTPException(status_code=422, detail=str(err))
         except EmptyOrderItemsError:
             db.rollback()
             raise HTTPException(status_code=422, detail="O pedido deve conter pelo menos um item.")
         except InvalidItemQuantityError as err:
+            db.rollback()
+            raise HTTPException(status_code=422, detail=str(err))
+        except OrderValidationError as err:
             db.rollback()
             raise HTTPException(status_code=422, detail=str(err))
         except IntegrityError:

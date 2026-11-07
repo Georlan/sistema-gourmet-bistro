@@ -39,7 +39,9 @@ from ...domain.orders.errors import (
     ModifierGroupMismatchError,
     ModifierInactiveError,
     ModifierNotFoundError,
+    ModifierSelectionLimitError,
     OrderDomainError,
+    OrderValidationError,
     ProductInactiveError,
     ProductNotFoundError,
     ProductTenantMismatchError,
@@ -439,6 +441,12 @@ class PosAdapter:
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Modificador não encontrado ou inativo.",
             )
+        except ModifierSelectionLimitError as err:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(err),
+            )
         except EmptyOrderItemsError:
             db.rollback()
             raise HTTPException(
@@ -446,6 +454,12 @@ class PosAdapter:
                 detail="O pedido deve conter pelo menos um item.",
             )
         except InvalidItemQuantityError as err:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=str(err),
+            )
+        except OrderValidationError as err:
             db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,

@@ -30,8 +30,10 @@ def test_gerar_link_motoboy_flow():
 
         rest = db.query(Restaurante).filter(Restaurante.id == 1).first()
         if not rest:
-            rest = Restaurante(id=1, nome="Bistro Test", slug="bistro-test")
+            rest = Restaurante(id=1, nome="Bistro Test", slug="bistro-test", plano="premium")
             db.add(rest)
+        else:
+            rest.plano = "premium"
         db.commit()
 
         mb = db.query(Motoboy).filter(Motoboy.id == 10, Motoboy.restaurante_id == 1).first()

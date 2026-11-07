@@ -779,7 +779,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                             aria-label={`Personalizar ${product.nome}`}
                           >
                             <div className="space-y-2">
-                              {settings.exibirImagens && product.imagem && <div className="w-full h-32 rounded-xl overflow-hidden border border-koma-border bg-koma-raised"><img src={product.imagem} alt={product.nome} className="w-full h-full object-cover" referrerPolicy="no-referrer" /></div>}
+                              {settings.exibirImagens && product.imagem && <div className="w-full h-32 rounded-xl overflow-hidden border border-koma-border bg-koma-raised"><img src={product.imagem} alt={product.nome} loading="lazy" decoding="async" className="w-full h-full object-cover" referrerPolicy="no-referrer" /></div>}
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0"><h4 className="font-serif font-bold text-sm text-koma-foreground">{product.nome}</h4>{groups.length > 0 && <span className={`mt-1 inline-flex px-1.5 py-0.5 rounded border text-[9px] font-bold ${requiredConfig ? 'bg-cyan-500/10 border-cyan-500/25 text-cyan-300' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>{requiredConfig ? 'Escolhas obrigatórias' : `Personalizável${recommendedCount > 0 ? ` · ${recommendedCount} recomendados` : ''}`}</span>}</div>
                                 <span className="font-mono text-xs font-bold text-emerald-400 whitespace-nowrap">R$ {money(Number(product.preco))}</span>

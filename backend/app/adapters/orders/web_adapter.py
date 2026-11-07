@@ -366,6 +366,13 @@ class CardapioWebAdapter:
                     detail="Restaurante temporariamente suspenso para novos pedidos.",
                 )
 
+            from ...services.restaurant_provisioning import is_provisional_preparation
+            if is_provisional_preparation(db, rest_id):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Restaurante em fase de preparação. Operação comercial não liberada.",
+                )
+
             if settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS and not customer_token:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -575,7 +582,7 @@ class CardapioWebAdapter:
             order_dto = OrderApplicationService.create_order(
                 db,
                 cmd,
-                commit=not (online_payment or is_scheduled),
+                commit=False,
             )
 
             comanda = (
@@ -598,21 +605,22 @@ class CardapioWebAdapter:
                     restaurante_id=rest_id,
                     pedido_id=order_dto.comanda_id,
                 )
-                if not (online_payment or is_scheduled):
-                    db.commit()
             except Exception:
                 logger.exception("Falha ao criar conversa para o pedido %s", order_dto.comanda_id)
 
             if not online_payment and not is_scheduled and comanda is not None:
                 from ...services.online_order_control import auto_accept_online_order_if_enabled
 
-                if auto_accept_online_order_if_enabled(
+                auto_accept_online_order_if_enabled(
                     db,
                     restaurante_id=rest_id,
                     comanda=comanda,
                     operator_user_id=garcom.id,
-                ):
-                    db.commit()
+                )
+
+            if not (online_payment or is_scheduled):
+                db.commit()
+                if comanda is not None:
                     db.refresh(comanda)
 
             if is_scheduled:

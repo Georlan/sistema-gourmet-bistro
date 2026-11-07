@@ -218,3 +218,18 @@ def test_sem_agenda_ou_override_aberto_exige_caixa():
             )
             assert not policy.accepting_orders
             assert policy.source == "cash_closed"
+
+
+def test_restaurante_provisorio_bloqueia_pedidos_mesmo_com_caixa_aberto():
+    policy = evaluate_online_order_policy(
+        _restaurant(),
+        _config(),
+        modalidade="retirada",
+        cash_open=True,
+        is_provisional=True,
+    )
+
+    assert policy.accepting_orders is False
+    assert policy.source == "provisional_preparation"
+    assert policy.reason == "Restaurante em fase de preparação. Operação comercial não liberada."
+

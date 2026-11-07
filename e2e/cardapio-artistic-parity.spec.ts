@@ -21,6 +21,50 @@ async function menu(page:Page, mutate?:(payload:any)=>void, rankingGate?:Promise
   return {payload,orders,rankingRequests:()=>rankingRequests};
 }
 
+test('logo da loja mantém avatar circular sem moldura branca no cabeçalho e no painel', async ({ page }) => {
+  const logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#101010"/><circle cx="32" cy="32" r="24" fill="#ffd12b"/></svg>';
+  await menu(page, payload => {
+    payload.restaurante.logo_url = `data:image/svg+xml,${encodeURIComponent(logoSvg)}`;
+  });
+
+  const headerLogo = page.locator('.koma-art-brand-logo');
+  await expect(headerLogo).toBeVisible();
+  const headerStyle = await headerLogo.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, radius: style.borderRadius, fit: style.objectFit };
+  });
+  expect(headerStyle).toEqual({ background: 'rgba(0, 0, 0, 0)', radius: '50%', fit: 'contain' });
+
+  await page.locator('#header-brand-info-trigger').click();
+  const avatar = page.locator('#store-info-brand-avatar');
+  await expect(avatar).toBeVisible();
+  const avatarStyle = await avatar.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, overflow: style.overflow, padding: style.padding, radius: style.borderRadius };
+  });
+  expect(avatarStyle.background).not.toBe('rgb(255, 255, 255)');
+  expect(avatarStyle.overflow).toBe('hidden');
+  expect(avatarStyle.padding).toBe('0px');
+  expect(parseFloat(avatarStyle.radius)).toBeGreaterThan(20);
+  const logo = avatar.locator('img');
+  await expect(logo).toHaveAttribute('alt', 'Pizzeria Bella Italia');
+  expect(await logo.evaluate((element) => getComputedStyle(element).objectFit)).toBe('contain');
+});
+
+test('link de rota usa Google Maps quando cadastrado somente o Plus Code', async ({ page }) => {
+  await menu(page, payload => {
+    payload.restaurante.google_maps_url = 'Q4H9+CQ, Limoeiro do Norte - CE, 62930-000';
+  });
+  await page.locator('#header-brand-info-trigger').click();
+  const mapsLink = page.locator('#btn-google-maps-link');
+  await expect(mapsLink).toBeVisible();
+  await expect(mapsLink).toHaveAttribute(
+    'href',
+    'https://www.google.com/maps/dir/?api=1&destination=Q4H9%2BCQ%2C%20Limoeiro%20do%20Norte%20-%20CE%2C%2062930-000',
+  );
+  await expect(mapsLink).toHaveAttribute('target', '_blank');
+});
+
  test('ranking real, IDs únicos e consulta única ao navegar', async({page})=>{
   const state=await menu(page);
   await expect(page.locator('#koma-art-hero-showcase')).toContainText('Vinho Tinto');

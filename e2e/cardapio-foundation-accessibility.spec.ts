@@ -131,3 +131,24 @@ test('fechar e Voltar restauram o fundo; reabrir e editar na sacola preservam fo
   await expect(page.locator('#cart-drawer-container')).toBeVisible();
   await expect(edit).toBeFocused();
 });
+
+
+test('ação do destaque focada não fica sob navegação fixa no celular', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 720 });
+  await page.routeWebSocket('**/ws/**', () => {});
+  await page.route('http://127.0.0.1:8000/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    return route.fulfill({ json: path.endsWith('/public') ? publicMenuPayload
+      : path.endsWith('/populares') ? { produtos: [] } : {} });
+  });
+  await page.goto('/cardapio?restaurante_id=2&vitrine=artistic-total');
+  const action = page.locator('[id^="btn-hero-fast-add-"]');
+  await expect(action).toBeVisible();
+  await action.focus();
+  await expect(action).toBeFocused();
+  expect(await action.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const target = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    return target === element || (target !== null && element.contains(target));
+  })).toBe(true);
+});

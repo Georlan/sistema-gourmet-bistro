@@ -805,3 +805,59 @@ def test_assistance_pdf_bytes_are_preserved(test_setup):
         assert stored == content
     finally:
         db.close()
+
+
+@patch("httpx.AsyncClient.request")
+@patch("httpx.AsyncClient.post")
+def test_replacing_logo_cleans_up_previous_owned_object(mock_post, mock_delete, test_setup):
+    mock_post.return_value = AsyncMock(status_code=200)
+    mock_delete.return_value = AsyncMock(status_code=200)
+    headers = {"Authorization": f"Bearer {test_setup['token']}"}
+
+    first = client.post(
+        "/api/cardapio-digital/assets/logo",
+        headers=headers,
+        files={"file": ("logo1.png", VALID_PNG_BYTES, "image/png")},
+    )
+    assert first.status_code == 200
+    first_path = first.json()["cardapio_logo_path"]
+
+    second = client.post(
+        "/api/cardapio-digital/assets/logo",
+        headers=headers,
+        files={"file": ("logo2.png", VALID_PNG_BYTES, "image/png")},
+    )
+    assert second.status_code == 200
+    assert second.json()["cardapio_logo_path"] != first_path
+    assert mock_delete.await_count >= 1
+    assert mock_delete.call_args.kwargs["json"] == {"prefixes": [first_path]}
+
+
+def test_cross_tenant_bucket_reference_rejected_in_config_and_product_import(test_setup):
+    headers = {"Authorization": f"Bearer {test_setup['token']}"}
+    bad_config = client.put(
+        "/api/cardapio-digital/config",
+        headers=headers,
+        json={
+            "logo_url": "https://iiowhekvahxiepwcdidm.supabase.co/storage/v1/object/public/cardapio-assets/123/logo/other.webp"
+        },
+    )
+    assert bad_config.status_code == 400
+    assert "outro restaurante" in bad_config.json()["detail"]
+
+    bad_import = client.post(
+        "/produtos/importar",
+        headers=headers,
+        json=[
+            {
+                "id": "prod-cross-tenant",
+                "nome": "Produto Invasivo",
+                "preco": 19.9,
+                "categoria_id": "cat-teste",
+                "imagem": "https://iiowhekvahxiepwcdidm.supabase.co/storage/v1/object/public/cardapio-assets/123/products/other.webp",
+            }
+        ],
+    )
+    assert bad_import.status_code == 400
+    assert "outro restaurante" in bad_import.json()["detail"]
+

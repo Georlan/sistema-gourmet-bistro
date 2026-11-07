@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { buildKomaAttributionUrl } from "../komaAttribution";
+import { getRestaurantMapsUrl } from "../getRestaurantMapsUrl";
 import { KomaSocialCameraIcon } from "./KomaPublicIcons";
 
 interface CardapioStoreInfoDrawerProps {
@@ -81,6 +82,7 @@ export default function CardapioStoreInfoDrawer({
   const deliveryMode =
     brand.tipoTaxaEntrega || ((brand.tabelaTaxasBairros?.length ?? 0) > 0 ? "bairro" : "fixa");
   const neighborhoods = brand.tabelaTaxasBairros ?? [];
+  const mapsUrl = getRestaurantMapsUrl(brand.googleMapsUrl);
   const distanceConfig = brand.tabelaTaxasKm?.[0];
 
   return (
@@ -122,8 +124,11 @@ export default function CardapioStoreInfoDrawer({
           </button>
 
           <div className="absolute inset-x-0 bottom-0 flex items-end gap-3.5 p-5">
-            <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl border border-white/20 bg-white p-1.5 shadow-xl">
-              <img src={brand.logo} alt={brand.name} className="h-full w-full object-contain" />
+            <div
+              id="store-info-brand-avatar"
+              className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-full border border-white/20 bg-black/25 shadow-xl"
+            >
+              <img src={brand.logo} alt={brand.name} className="block h-full w-full object-contain object-center" />
             </div>
             <div className="min-w-0 pb-0.5">
               <h2 className="truncate font-serif text-xl font-black tracking-tight text-white">
@@ -226,9 +231,9 @@ export default function CardapioStoreInfoDrawer({
                     <p className="leading-relaxed">{brand.address}</p>
                   </div>
                 )}
-                {brand.googleMapsUrl && (
+                {mapsUrl && (
                   <a
-                    href={brand.googleMapsUrl}
+                    href={mapsUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="mt-2.5 inline-flex items-center gap-1.5 text-xs font-bold text-emerald-400 hover:text-emerald-300 transition"

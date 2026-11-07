@@ -116,9 +116,9 @@ html[data-koma-theme="light"] .koma-art-canvas,
 .koma-art-brand-logo {
   width: 44px;
   height: 44px;
-  border-radius: 14px;
-  object-fit: cover;
-  background: #ffffff;
+  border-radius: 50%;
+  object-fit: contain;
+  background: transparent;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   flex-shrink: 0;
 }
@@ -2658,4 +2658,9 @@ html[data-theme="light"] .koma-art-promo-footer,
 .koma-art-status-text.cardapio-order-status::before { content: none; }
 @media (min-width: 1024px) {
   .koma-art-action-pill.lg\:inline-flex { display: inline-flex; }
+}
+
+/* Keep focused featured-product actions clear of the fixed navigation. */
+.koma-art-hero-stage button {
+  scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }

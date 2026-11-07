@@ -7,16 +7,17 @@ import CatalogProductImage from './CatalogProductImage';
 import React from "react";
 import { ChevronRight, Minus, Plus } from "lucide-react";
 import { Product } from "../CardapioTypes";
+import { isGroupedProduct, type GroupedDisplayProduct } from "../catalogGrouping";
 import { getProductCatalogSignalLabel } from "../cardapioMerchandising";
 import "../cardapioTone.css";
 
 interface CardapioProductCardProps {
   key?: React.Key;
-  product: Product;
+  product: Product | GroupedDisplayProduct;
   cartQuantity?: number;
-  onSelectProduct: (product: Product) => void;
-  onFastAdd: (product: Product) => void;
-  onFastRemove?: (product: Product) => void;
+  onSelectProduct: (product: Product | GroupedDisplayProduct) => void;
+  onFastAdd: (product: Product | GroupedDisplayProduct) => void;
+  onFastRemove?: (product: Product | GroupedDisplayProduct) => void;
 }
 
 export default function CardapioProductCard({
@@ -27,20 +28,30 @@ export default function CardapioProductCard({
   onFastRemove,
 }: CardapioProductCardProps) {
   const available = product.isAvailable !== false;
+  const isGrouped = isGroupedProduct(product);
   const hasModifiers = Boolean(
+    isGrouped ||
     (product.modifiers && product.modifiers.length > 0) ||
     (product.modifierGroups && product.modifierGroups.length > 0)
   );
   const catalogSignal = getProductCatalogSignalLabel(product.category);
 
-  const formattedPrice = new Intl.NumberFormat("pt-BR", {
+  const rawFormattedPrice = new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
   }).format(product.price);
 
+  const formattedPrice = isGrouped && product.hasVariablePrice
+    ? `A partir de ${rawFormattedPrice}`
+    : rawFormattedPrice;
+
   const handleAction = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!available) return;
+    if (isGrouped) {
+      onSelectProduct(product);
+      return;
+    }
     onFastAdd(product);
   };
 

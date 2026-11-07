@@ -168,3 +168,77 @@ def test_transient_ack_failure_keeps_job_for_retry(tmp_path):
     worker.process_unconfirmed_journal_jobs(client, journal)
 
     assert {item["job_id"] for item in journal.get_unconfirmed_printed_jobs()} == {"job-a", "job-b"}
+
+
+def test_windows_main_returns_zero_on_pairing_exit_to_stop_task_scheduler_restart_loop(isolated, monkeypatch):
+    """No Windows, Task Scheduler reinicia a tarefa se o processo terminar com exit code != 0.
+    main() converte PAIRING_REQUIRED_EXIT (2) em 0 no Windows para informar conclusão normal (0x0)
+    ao Agendador de Tarefas, interrompendo o loop sem reexecutar a cada 1 minuto.
+    """
+    credentials, config_file = isolated
+    _write(config_file, {"agent_token": STALE})
+    config = AgentConfig.load(str(config_file))
+
+    class RejectingClient:
+        def __init__(self, *_args):
+            self.session = MagicMock()
+
+        def heartbeat(self):
+            raise AgentAuthenticationError("revoked")
+
+    monkeypatch.setattr(agent_main, "KomaApiClient", RejectingClient)
+    monkeypatch.setattr(agent_main, "parse_cli_args", lambda c: config)
+    monkeypatch.setattr(agent_main.AgentConfig, "load", staticmethod(lambda *a, **k: config))
+    monkeypatch.setattr(agent_main, "configure_file_logging", lambda: None)
+    monkeypatch.setattr(agent_main, "single_instance", MagicMock())
+
+    # No Windows, main() deve retornar 0 ao SO
+    monkeypatch.setattr(agent_main.sys, "platform", "win32")
+    assert agent_main.main() == 0
+
+    # No Linux, main() retorna PAIRING_REQUIRED_EXIT (2) para systemd RestartPreventExitStatus=2
+    monkeypatch.setattr(agent_main.sys, "platform", "linux")
+    assert agent_main.main() == agent_main.PAIRING_REQUIRED_EXIT == 2
+
+
+def test_empty_credentials_stops_immediately_without_http_calls(isolated, monkeypatch):
+    """Em modo daemon sem credenciais, run() encerra com PAIRING_REQUIRED_EXIT sem tocar HTTP."""
+    _, config_file = isolated
+    _write(config_file, {})
+    config = AgentConfig.load(str(config_file))
+    http_called = False
+
+    class FailingClient:
+        def __init__(self, *_args):
+            nonlocal http_called
+            http_called = True
+
+    monkeypatch.setattr(agent_main, "KomaApiClient", FailingClient)
+
+    # Execução retorna PAIRING_REQUIRED_EXIT (2) sem tocar HTTP em qualquer plataforma
+    assert agent_main.run(config) == agent_main.PAIRING_REQUIRED_EXIT == 2
+    assert not http_called
+
+
+def test_transient_failure_preserves_credentials_and_recovers_without_exit(isolated, monkeypatch):
+    """Falhas transitórias (500, 502, timeout) não devem apagar credenciais nem abortar o loop."""
+    credentials, config_file = isolated
+    _write(credentials, {"agent_token": PAIRED, "agent_id": "desktop-test"})
+    config = AgentConfig.load(str(config_file))
+
+    client = KomaApiClient("https://example.invalid", PAIRED)
+    mock_resp = MagicMock()
+    mock_resp.status_code = 500
+    mock_resp.headers = {"Retry-After": "5"}
+
+    # Simulando resposta 500: _check_auth não deve levantar AgentAuthenticationError
+    client._check_auth(mock_resp)
+
+    # RetryBudget deve absorver a falha e aplicar backoff
+    delay = client._heartbeat_retry.fail(mock_resp)
+    assert delay >= 5.0
+    assert not client._heartbeat_retry.ready()
+
+    # Credencial continua íntegra no disco
+    assert pairing.load_stored_token() == PAIRED
+

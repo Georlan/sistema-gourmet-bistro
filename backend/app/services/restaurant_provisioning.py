@@ -9,7 +9,7 @@ import uuid
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -88,7 +88,7 @@ def _operation_profile_for_contract(db: Session, protocol: str) -> str:
 
 def resolve_activation_acceptance(db: Session, protocol: str) -> dict[str, Any] | None:
     """Busca os dados do aceite contratual para ativação ou setup de billing."""
-    from sqlalchemy import text
+    from sqlalchemy import select, text
     from ..contract_models import ContractAcceptance
     from ..saas_billing_models import SaaSBillingSetup, SaaSPlanChange
     from .billing_service import get_billing_setup
@@ -593,3 +593,46 @@ def provision_restaurant_for_contract(
             status_code=status.HTTP_409_CONFLICT,
             detail="Não foi possível alocar um ID elegível livre para o restaurante.",
         )
+
+
+def is_provisional_preparation(db: Session, restaurante_id: int) -> bool:
+    """Retorna True se o restaurante está em preparação provisória (onboarding deferido),
+    sem assinatura comercial vinculada e sem trial iniciado.
+    Durante este estado, a operação comercial (pedidos e abertura de caixa) permanece impedida.
+    """
+    if restaurante_id is None or restaurante_id <= 0:
+        return False
+
+    audit = (
+        db.query(SuperAdminAuditLog)
+        .filter(
+            SuperAdminAuditLog.restaurante_id == restaurante_id,
+            SuperAdminAuditLog.action == "SUPERADMIN_TENANT_ONBOARD",
+        )
+        .order_by(SuperAdminAuditLog.id.desc())
+        .first()
+    )
+    if audit is None or not isinstance(audit.after_data, dict):
+        return False
+    if audit.after_data.get("trial_status") != "pending_setup":
+        return False
+
+    sub_exists = (
+        db.query(SaaSSubscription.id)
+        .filter(SaaSSubscription.restaurante_id == restaurante_id)
+        .first()
+    )
+    if sub_exists is not None:
+        return False
+
+    from ..contract_models import RestaurantContractAcceptance
+    contract_exists = (
+        db.query(RestaurantContractAcceptance.id)
+        .filter(RestaurantContractAcceptance.restaurante_id == restaurante_id)
+        .first()
+    )
+    if contract_exists is not None:
+        return False
+
+    return True
+

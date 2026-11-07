@@ -9,7 +9,7 @@ on:
 
 concurrency:
   group: backend-full-suite-${{ github.event.pull_request.head.ref || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -39,4 +39,4 @@ jobs:
           SECRET_KEY: backend-full-suite-test-only-secret
           ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
           PYTHONPATH: backend
-        run: python -m pytest backend/tests -q -ra
+        run: python -m pytest backend/tests -q -ra --durations=15

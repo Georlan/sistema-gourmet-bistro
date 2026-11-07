@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..models import Comanda, Lancamento
@@ -52,9 +53,20 @@ def get_or_create_control(
         query = query.with_for_update()
     control = query.first()
     if control is None:
-        control = OnlineOrderControl(restaurante_id=restaurante_id)
-        db.add(control)
-        db.flush()
+        try:
+            with db.begin_nested():
+                control = OnlineOrderControl(restaurante_id=restaurante_id)
+                db.add(control)
+                db.flush()
+        except IntegrityError:
+            query = db.query(OnlineOrderControl).filter(
+                OnlineOrderControl.restaurante_id == restaurante_id,
+            )
+            if for_update:
+                query = query.with_for_update()
+            control = query.first()
+            if control is None:
+                control = OnlineOrderControl(restaurante_id=restaurante_id)
     return control
 
 

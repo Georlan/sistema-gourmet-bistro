@@ -74,6 +74,10 @@ class ProfiledTenantOnboardingRequest(TenantOnboardingRequest):
     """
 
     operation_profile: str | None = Field(default=None, max_length=64)
+    defer_trial: bool = Field(
+        default=False,
+        description="Se verdadeiro, provisiona o tenant em estado de implantação/preparação sem iniciar os 7 dias grátis",
+    )
 
     @field_validator("operation_profile")
     @classmethod
@@ -156,7 +160,16 @@ def create_profiled_tenant(
                             )
                         )
 
-                        trial = _create_default_trial(db, tenant_id)
+                        if payload.defer_trial:
+                            # Provisório/Preparação: não inicia janela de trial
+                            trial = {
+                                "status": "pending_setup",
+                                "started_at": None,
+                                "ends_at": None,
+                                "days": DEFAULT_TRIAL_DAYS,
+                            }
+                        else:
+                            trial = _create_default_trial(db, tenant_id)
 
                         config = ConfiguracaoRestaurante(
                             restaurante_id=tenant_id,
@@ -192,8 +205,8 @@ def create_profiled_tenant(
                                     "saas_status": "active",
                                     "operation_profile": operation_profile,
                                     "trial_status": trial["status"],
-                                    "trial_started_at": trial["started_at"].isoformat(),
-                                    "trial_ends_at": trial["ends_at"].isoformat(),
+                                    "trial_started_at": trial["started_at"].isoformat() if trial["started_at"] else None,
+                                    "trial_ends_at": trial["ends_at"].isoformat() if trial["ends_at"] else None,
                                     "trial_days": trial["days"],
                                     "admin_user_id": initial_admin.id,
                                     "admin_email": normalized["admin_email"],
@@ -225,10 +238,10 @@ def create_profiled_tenant(
                             "onlinePaymentStatus": "disconnected",
                             "commercialTermsStatus": "not_contracted",
                             "trial": {
-                                "status": "active",
-                                "startedAt": trial["started_at"].isoformat(),
-                                "endsAt": trial["ends_at"].isoformat(),
-                                "daysRemaining": DEFAULT_TRIAL_DAYS,
+                                "status": trial["status"],
+                                "startedAt": trial["started_at"].isoformat() if trial["started_at"] else None,
+                                "endsAt": trial["ends_at"].isoformat() if trial["ends_at"] else None,
+                                "daysRemaining": trial["days"] if trial["started_at"] else DEFAULT_TRIAL_DAYS,
                                 "daysGranted": DEFAULT_TRIAL_DAYS,
                             },
                             "admin": {
