@@ -145,12 +145,16 @@ export default function CardapioProductModal({
     });
   }, [effectiveProduct.id, restaurantId]);
 
-  const galleryImages = useMemo(
-    () => (effectiveProduct.imagesGallery && effectiveProduct.imagesGallery.length > 0
-      ? effectiveProduct.imagesGallery.slice(0, 4)
-      : [effectiveProduct.image]),
-    [effectiveProduct],
-  );
+  const galleryImages = useMemo(() => {
+    const rawList =
+      effectiveProduct.imagesGallery && effectiveProduct.imagesGallery.length > 0
+        ? effectiveProduct.imagesGallery
+        : [effectiveProduct.image];
+    const deduped = Array.from(
+      new Set(rawList.map((item) => (item || "").trim()).filter(Boolean)),
+    ).slice(0, 4);
+    return deduped.length > 0 ? deduped : [effectiveProduct.image];
+  }, [effectiveProduct]);
 
   const allModifiers = useMemo<QuantityModifier[]>(() => {
     if (effectiveProduct.modifiers && effectiveProduct.modifiers.length > 0) {
@@ -344,6 +348,7 @@ export default function CardapioProductModal({
             src={getProductImageUrl(galleryImages[currentImgIndex] || effectiveProduct.image)}
             alt={effectiveProduct.name}
             className="h-full w-full object-cover transition duration-300"
+            decoding="async"
             crossOrigin="anonymous"
             referrerPolicy="no-referrer"
             onError={(event) => {

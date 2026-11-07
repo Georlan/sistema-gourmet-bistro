@@ -8,11 +8,11 @@ from app.services.outbox.worker import discover_active_restaurant_ids
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('mode', choices=['collect', 'reconcile'])
+    parser.add_argument('mode', choices=['collect', 'reconcile', 'inventory', 'migrate', 'observability'])
     scope = parser.add_mutually_exclusive_group(required=True)
     scope.add_argument('--tenant', type=int)
     scope.add_argument('--all-tenants', action='store_true')
-    parser.add_argument('--execute', action='store_true', help='Explicitly enroll (reconcile) or DELETE due objects (collect)')
+    parser.add_argument('--execute', action='store_true', help='Explicitly enroll (reconcile), migrate (migrate), or DELETE due objects (collect)')
     parser.add_argument('--min-age-days', type=int, default=7)
     args = parser.parse_args()
     if args.tenant is not None and args.tenant <= 0:

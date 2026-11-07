@@ -1,6 +1,7 @@
 export type ImageAssetKind = 'products' | 'logo' | 'banner';
 export const MAX_IMAGE_UPLOAD_SOURCE_BYTES = 20 * 1024 * 1024;
 export const IMAGE_UPLOAD_EDGES = { products: 1280, logo: 512, banner: 1920 } as const;
+export const IMAGE_UPLOAD_BUDGET_BYTES = { products: 200 * 1024, logo: 100 * 1024, banner: 350 * 1024 } as const;
 const ALLOWED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
 
 function validateRaster(bytes: Uint8Array, type: string) {
@@ -53,17 +54,19 @@ export async function prepareImageUpload(file: File, kind: ImageAssetKind): Prom
   try {
     if (width * height > 48_000_000) throw new Error('A foto é muito grande. Use uma imagem de até 48 megapixels.');
     const scale = Math.min(1, IMAGE_UPLOAD_EDGES[kind] / Math.max(width, height));
-    // Already-small inputs go directly to the canonical server encoder, avoiding another lossy pass.
-    if (scale === 1 && file.size <= 5 * 1024 * 1024) return file;
+    const budgetBytes = IMAGE_UPLOAD_BUDGET_BYTES[kind];
+    // Already-compact inputs go directly to the canonical server encoder, avoiding another lossy pass.
+    if (scale === 1 && (file.size <= budgetBytes * 2 || (type === 'image/webp' && file.size <= budgetBytes))) return file;
     const canvas = document.createElement('canvas');
     canvas.width = Math.max(1, Math.round(width * scale));
     canvas.height = Math.max(1, Math.round(height * scale));
     const context = canvas.getContext('2d');
     if (!context) throw new Error('Não foi possível preparar a imagem neste navegador.');
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    // Logos keep lossless pixels and alpha; the backend then encodes compact WebP.
+    // Logos keep lossless pixels and alpha; products/banners encode to WebP within budget so the backend can passthrough.
     const outputType = kind === 'logo' ? 'image/png' : 'image/webp';
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, outputType, 0.94));
+    const quality = scale === 1 ? 0.86 : 0.90;
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, outputType, quality));
     if (!blob || blob.type !== outputType || blob.size > 5 * 1024 * 1024) {
       throw new Error('Não foi possível preparar a foto para envio. Escolha outra imagem.');
     }

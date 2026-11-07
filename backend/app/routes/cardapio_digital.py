@@ -804,6 +804,12 @@ async def upload_cardapio_asset(
     restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
     if not restaurante:
         raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+    previous_url = (
+        (restaurante.logo_url or restaurante.cardapio_logo_path)
+        if asset_type == "logo"
+        else (restaurante.banner_url or restaurante.cardapio_banner_path)
+    )
+    previous_object_path = _storage_object_path(previous_url, rest_id, asset_type)
     if asset_type == "logo":
         restaurante.logo_url = public_url
         restaurante.cardapio_logo_path = object_path
@@ -813,6 +819,8 @@ async def upload_cardapio_asset(
 
     db.commit()
     db.refresh(restaurante)
+    if previous_object_path and previous_object_path != object_path:
+        await _delete_storage_object_best_effort(previous_object_path, rest_id, asset_type)
     notify_cardapio_config_update(background_tasks, rest_id)
     return restaurante
 

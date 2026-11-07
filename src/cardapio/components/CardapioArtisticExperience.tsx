@@ -297,6 +297,9 @@ export function CardapioArtisticExperience({
                   src={activeBrand.logo}
                   alt={activeBrand.name}
                   className="koma-art-brand-logo"
+                  width={48}
+                  height={48}
+                  decoding="async"
                   crossOrigin="anonymous"
                   referrerPolicy="no-referrer"
                   onError={(event) => {
@@ -540,6 +543,8 @@ export function CardapioArtisticExperience({
             src={activeBrand.bannerImage}
             alt={`${activeBrand.name} — banner`}
             className="koma-art-banner-img"
+            decoding="async"
+            fetchPriority="high"
           />
         </section>
       )}
@@ -878,6 +883,7 @@ export function CardapioArtisticExperience({
                   image={heroProduct.image}
                   alt={heroProduct.name}
                   className="koma-art-arch-img"
+                  priority
                 />
               ) : (
                 <ArtisticClocheIllustration />

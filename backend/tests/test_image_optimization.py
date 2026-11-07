@@ -98,3 +98,37 @@ def test_already_optimized_small_webp_keeps_exact_size_and_quality():
     first = optimize_image(raster((320, 200)), 'products')
     second = optimize_image(first.content, 'products')
     assert second == first
+
+
+def test_opaque_rgba_converts_to_rgb_and_transparent_rgb_noise_is_cleaned():
+    opaque_rgba = Image.new('RGBA', (120, 120), (200, 100, 50, 255))
+    buf = BytesIO()
+    opaque_rgba.save(buf, format='PNG')
+    result_opaque = optimize_image(buf.getvalue(), 'products')
+    with Image.open(BytesIO(result_opaque.content)) as decoded:
+        assert decoded.mode == 'RGB'
+
+    noisy_transparent = Image.new('RGBA', (120, 120), (250, 13, 99, 0))
+    for x in range(40, 80):
+        for y in range(40, 80):
+            noisy_transparent.putpixel((x, y), (20, 180, 90, 220))
+    buf_trans = BytesIO()
+    noisy_transparent.save(buf_trans, format='PNG')
+    result_trans = optimize_image(buf_trans.getvalue(), 'logo')
+    with Image.open(BytesIO(result_trans.content)) as decoded:
+        rgba = decoded.convert('RGBA')
+        assert rgba.getpixel((0, 0)) == (0, 0, 0, 0)
+        assert rgba.getpixel((60, 60))[3] == 220
+
+
+def test_adaptive_quality_and_runtime_metrics_recorded():
+    from app.services.image_optimization import get_optimization_metrics, reset_optimization_metrics
+    reset_optimization_metrics()
+    first = optimize_image(raster((400, 300), format='JPEG', quality=75), 'products')
+    second = optimize_image(first.content, 'products')
+    assert second.content == first.content
+    metrics = get_optimization_metrics()
+    assert metrics['products']['count'] == 2
+    assert metrics['products']['passthrough_count'] == 1
+    assert metrics['products']['total_duration_ms'] >= 0
+
