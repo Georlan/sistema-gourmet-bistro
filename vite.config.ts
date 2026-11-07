@@ -60,6 +60,13 @@ export default defineConfig(() => {
     },
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
+      proxy: {
+        '/api': {
+          target: 'https://sistema-gourmet-bistro-production.up.railway.app',
+          changeOrigin: true,
+          secure: false,
+        },
+      },
       watch: process.env.DISABLE_HMR === 'true' ? null : {
         ignored: [
           '**/bistro.db',
