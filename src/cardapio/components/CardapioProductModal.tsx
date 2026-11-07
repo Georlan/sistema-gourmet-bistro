@@ -94,6 +94,8 @@ export default function CardapioProductModal({
     return containModalFocus(dialog, () => closeRef.current(), dialog.querySelector<HTMLElement>('#btn-close-modal') || dialog);
   }, []);
   const isGrouped = isGroupedProduct(product);
+  const isPastelFamily = isGrouped && product.groupKind === 'pasteis';
+  const normalizeChoice = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
   const defaultVariantId = useMemo(() => {
     if (!isGrouped) return "";
     const avail = product.variants.find((v) => v.isAvailable);
@@ -101,12 +103,16 @@ export default function CardapioProductModal({
   }, [isGrouped, product]);
 
   const [selectedVariantId, setSelectedVariantId] = useState<string>(defaultVariantId);
+  const [chosenPastelSize, setChosenPastelSize] = useState('');
+  const [hasChosenPastelFlavor, setHasChosenPastelFlavor] = useState(false);
 
   useEffect(() => {
     if (isGrouped) {
       const avail = product.variants.find((v) => v.isAvailable);
       setSelectedVariantId(avail ? avail.id : (product.variants[0]?.id || ""));
     }
+    setChosenPastelSize('');
+    setHasChosenPastelFlavor(false);
   }, [isGrouped, product]);
 
   const activeVariant = useMemo(() => {
@@ -183,6 +189,25 @@ export default function CardapioProductModal({
     return [];
   }, [effectiveProduct]);
 
+  // Para a família de pastéis, Tamanho é um modificador REAL do SKU escolhido.
+  // Mostramos sua seleção primeiro e usamos exatamente a opção do produto atual
+  // na precificação, validação e payload do pedido (inclusive carne de sol +R$10).
+  const pastelSizeModifier = isPastelFamily
+    ? allModifiers.find((modifier) => normalizeChoice(modifier.title) === 'tamanho')
+    : undefined;
+  const effectiveSelectedOptions = useMemo<Record<string, ProductOption[]>>(() => {
+    if (!pastelSizeModifier) return selectedOptions;
+    const options: Record<string, ProductOption[]> = {};
+    for (const modifier of allModifiers) {
+      if (modifier.id !== pastelSizeModifier.id) {
+        options[modifier.id] = selectedOptions[modifier.id] || [];
+      }
+    }
+    const chosen = pastelSizeModifier.options.find((option) => normalizeChoice(option.name) === chosenPastelSize);
+    options[pastelSizeModifier.id] = chosen ? [chosen] : [];
+    return options;
+  }, [pastelSizeModifier, allModifiers, selectedOptions, chosenPastelSize]);
+
   useEffect(() => {
     const previous = draftIdentity;
     const newDraft = !previous || previous.productId !== effectiveProduct.id
@@ -219,13 +244,13 @@ export default function CardapioProductModal({
 
   const unitPrice = useMemo(() => {
     let value = effectiveProduct.price;
-    Object.values(selectedOptions).forEach((options) => {
+    Object.values(effectiveSelectedOptions).forEach((options) => {
       options.forEach((option) => {
         value += option.extraPrice;
       });
     });
     return value;
-  }, [effectiveProduct.price, selectedOptions]);
+  }, [effectiveProduct.price, effectiveSelectedOptions]);
 
   const totalPrice = unitPrice * quantity;
 
@@ -297,17 +322,22 @@ export default function CardapioProductModal({
 
   const unsatisfiedModifiers = useMemo(() => {
     return allModifiers.filter((modifier) => {
-      const selections = selectedOptions[modifier.id] || [];
+      const selections = effectiveSelectedOptions[modifier.id] || [];
       return !selectionWithinRules(
         rulesForModifier(modifier),
         selections.map((selection) => selection.id),
       );
     });
-  }, [allModifiers, selectedOptions]);
+  }, [allModifiers, effectiveSelectedOptions]);
 
-  const hasUnsatisfied = unsatisfiedModifiers.length > 0;
+  const hasUnsatisfied = unsatisfiedModifiers.length > 0 || (isPastelFamily && !hasChosenPastelFlavor);
 
   const handleAdd = () => {
+    if (isPastelFamily && !hasChosenPastelFlavor) {
+      setFeedback('Escolha o sabor do pastel para continuar.');
+      document.getElementById('modal-variants-selector')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return;
+    }
     if (unsatisfiedModifiers.length > 0) {
       setFeedback(`Confira as escolhas em ${unsatisfiedModifiers.map((m) => m.title).join(", ")} antes de ${compositionStep ? "continuar" : initialItem ? "salvar" : "adicionar"}.`);
       setExpandedExtras(current => ({ ...current, [unsatisfiedModifiers[0].id]: true }));
@@ -317,7 +347,7 @@ export default function CardapioProductModal({
       return;
     }
 
-    onAddToCart(effectiveProduct, compositionStep ? 1 : quantity, selectedOptions, notes.trim());
+    onAddToCart(effectiveProduct, compositionStep ? 1 : quantity, effectiveSelectedOptions, notes.trim());
     // Um passo de promoção só coleta as escolhas: não fecha nem grava na sacola.
     // Quem coordena o pacote controla o próximo passo e o envio atômico ao backend.
     if (!compositionStep) onClose();
@@ -433,8 +463,8 @@ export default function CardapioProductModal({
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <h2 className="font-serif text-2xl font-black tracking-tight text-koma-foreground sm:text-3xl" id="modal-product-name">{product.name}</h2>
-              {(activeVariant?.description || effectiveProduct.description || product.description) && (
-                <p className="mt-2 text-sm leading-relaxed text-koma-muted">{activeVariant?.description || effectiveProduct.description || product.description}</p>
+              {(isPastelFamily && !hasChosenPastelFlavor ? product.description : activeVariant?.description || effectiveProduct.description || product.description) && (
+                <p className="mt-2 text-sm leading-relaxed text-koma-muted">{isPastelFamily && !hasChosenPastelFlavor ? product.description : activeVariant?.description || effectiveProduct.description || product.description}</p>
               )}
             </div>
             <strong className="shrink-0 font-serif text-lg font-black text-emerald-400 sm:text-xl">
@@ -442,17 +472,50 @@ export default function CardapioProductModal({
             </strong>
           </div>
 
+          {isPastelFamily && pastelSizeModifier && (
+            <div
+              className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] p-3.5"
+              id="modal-pastel-size-selector"
+              tabIndex={-1}
+              ref={(element) => {
+                if (element) groupRefs.current.set(pastelSizeModifier.id, element);
+              }}
+            >
+              <h3 className="mb-3 text-sm font-black text-koma-foreground">1. Escolha o tamanho</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {pastelSizeModifier.options.map((option) => {
+                  const selected = normalizeChoice(option.name) === chosenPastelSize;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      id={`pastel-size-${option.id}`}
+                      aria-pressed={selected}
+                      onClick={() => { setChosenPastelSize(normalizeChoice(option.name)); setFeedback(''); }}
+                      className={`flex min-h-20 flex-col justify-between gap-2 rounded-xl border p-3 text-left transition-colors ${selected
+                        ? 'border-emerald-400 bg-emerald-500/20 text-white'
+                        : 'border-white/15 bg-white/[0.04] text-koma-foreground hover:border-emerald-400/40'}`}
+                    >
+                      <span className="text-sm font-bold leading-snug">{option.name}</span>
+                      <strong className="text-sm font-black text-emerald-400">{formatPrice(effectiveProduct.price + option.extraPrice)}</strong>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {isGrouped && product.variants && product.variants.length > 0 && (
             <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] p-3.5" id="modal-variants-selector">
               <div className="flex items-center justify-between mb-2.5">
                 <h3 className="text-xs font-black uppercase tracking-wider text-emerald-400">
-                  {product.groupDescription || "Escolha uma opção:"}
+                  {isPastelFamily ? '2. Escolha o sabor' : product.groupDescription || "Escolha uma opção:"}
                 </h3>
                 <span className="text-[10px] font-bold text-koma-muted">1 obrigatório</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className={`grid grid-cols-1 ${isPastelFamily ? '' : 'sm:grid-cols-2'} gap-2`}>
                 {product.variants.map((v) => {
-                  const isSelected = v.id === selectedVariantId;
+                  const isSelected = v.id === selectedVariantId && (!isPastelFamily || hasChosenPastelFlavor);
                   const isAvail = v.isAvailable;
                   return (
                     <button
@@ -462,6 +525,7 @@ export default function CardapioProductModal({
                       onClick={() => {
                         if (isSelected) return;
                         setSelectedVariantId(v.id);
+                        if (isPastelFamily) setHasChosenPastelFlavor(true);
                         setSelectedOptions({});
                       }}
                       className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all cursor-pointer ${
@@ -480,10 +544,10 @@ export default function CardapioProductModal({
                           }`}>
                             {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                           </div>
-                          <span className="text-xs font-bold truncate">{v.label}</span>
+                          <span className={`text-xs font-bold ${isPastelFamily ? 'whitespace-normal leading-snug' : 'truncate'}`}>{v.label}</span>
                         </div>
                         {v.description && (
-                          <p className="text-[10px] text-koma-muted mt-1 line-clamp-1 pl-6">{v.description}</p>
+                          <p className={`text-xs text-koma-muted mt-1 leading-snug pl-6 ${isPastelFamily ? '' : 'line-clamp-1'}`}>{v.description}</p>
                         )}
                       </div>
                       <strong className={`text-xs shrink-0 font-serif ${isSelected ? "text-emerald-400 font-black" : "text-koma-muted"}`}>
@@ -511,7 +575,7 @@ export default function CardapioProductModal({
 
           {allModifiers.length > 0 && (
             <div className="mt-4 space-y-4 border-t border-white/10 pt-4 sm:mt-6 sm:space-y-5 sm:pt-5">
-              {allModifiers.map((modifier) => {
+              {allModifiers.filter((modifier) => !(isPastelFamily && modifier.id === pastelSizeModifier?.id)).map((modifier) => {
                 const selections = selectedOptions[modifier.id] || [];
                 const selectedIds = selections.map((selection) => selection.id);
                 const rules = rulesForModifier(modifier);
@@ -730,7 +794,7 @@ export default function CardapioProductModal({
           {hasUnsatisfied ? (
             <p className="mb-2 text-xs font-bold text-amber-400 flex items-center gap-1.5 animate-pulse" role="status">
               <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-              Escolha {unsatisfiedModifiers.map((m) => m.title).join(", ")} para continuar
+              Escolha {[...(isPastelFamily && !hasChosenPastelFlavor ? ['Sabor'] : []), ...unsatisfiedModifiers.map((m) => m.title)].join(" e ")} para continuar
             </p>
           ) : (
             <p className="mb-2 text-xs text-koma-muted">Quantidade de itens{quantity > 1 ? " · Mesma montagem para todas as unidades" : ""}</p>
