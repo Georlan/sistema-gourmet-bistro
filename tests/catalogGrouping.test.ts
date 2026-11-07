@@ -8,7 +8,7 @@ import {
 } from '../src/cardapio/catalogGrouping';
 import type { Product } from '../src/cardapio/CardapioTypes';
 
-test('batatas são seis produtos legíveis, sem etapa de família ou tamanho duplicada', () => {
+test('somente tamanhos de batata tradicional formam família de três SKUs reais', () => {
   const entries = [
     ['p', 'Batata Frita Pequena (200 g)', 12],
     ['m', 'Batata Frita Média (300 g)', 15],
@@ -22,10 +22,17 @@ test('batatas são seis produtos legíveis, sem etapa de família ou tamanho dup
     description: 'Porção de batatas fritas', isAvailable: true,
   }));
   const items = groupCategoryProductsForDisplay('Batatas Fritas', products, '1');
-  assert.equal(items.length, 6);
-  assert.deepEqual(items.map(item => item.id), entries.map(entry => entry[0]));
-  assert.deepEqual(items.map(item => item.price), [12, 15, 18, 24, 24, 28]);
-  assert.ok(items.every(item => !isGroupedProduct(item)));
+  assert.equal(items.length, 4);
+  assert.deepEqual(items.map(item => item.id), ['family-size-batata-frita', 'especial', 'file', 'sol']);
+  const traditional = items[0] as GroupedDisplayProduct;
+  assert.ok(isGroupedProduct(traditional));
+  assert.equal(traditional.groupKind, 'size');
+  assert.equal(traditional.name, 'Batata Frita');
+  assert.equal(traditional.price, 12);
+  assert.deepEqual(traditional.variants.map(variant => variant.label), ['Pequena (200 g)', 'Média (300 g)', 'Grande (400 g)']);
+  assert.deepEqual(traditional.variants.map(variant => variant.price), [12, 15, 18]);
+  assert.deepEqual(traditional.variants.map(variant => variant.product.id), ['p', 'm', 'g']);
+  assert.ok(items.slice(1).every(item => !isGroupedProduct(item)));
 });
 
 test('groupCategoryProductsForDisplay preserva produtos individuais para outros restaurantes (IDs !== 1)', () => {
@@ -97,15 +104,17 @@ test('calculateProductMinStartingPrice computa escolhas obrigatórias e ignora o
   assert.equal(minStarting, 32.0);
 });
 
-test('batatas indisponíveis permanecem identificáveis individualmente, sem falsear preço inicial', () => {
+test('batata tradicional respeita indisponibilidade e preço menor entre tamanhos disponíveis', () => {
   const products: Product[] = [
-    { id: 'p', name: 'Batata Pequena', description: '200 g', price: 12, image: '', category: 'Batatas Fritas', isAvailable: false },
-    { id: 'm', name: 'Batata Média', description: '300 g', price: 15, image: '', category: 'Batatas Fritas', isAvailable: true },
+    { id: 'p', name: 'Batata Frita Pequena (200 g)', description: '', price: 12, image: '', category: 'Batatas Fritas', isAvailable: false },
+    { id: 'm', name: 'Batata Frita Média (300 g)', description: '', price: 15, image: '', category: 'Batatas Fritas', isAvailable: true },
   ];
   const items = groupCategoryProductsForDisplay('Batatas Fritas', products, '1');
-  assert.deepEqual(items.map(item => item.price), [12, 15]);
-  assert.deepEqual(items.map(item => item.isAvailable), [false, true]);
-  assert.ok(items.every(item => !isGroupedProduct(item)));
+  assert.equal(items.length, 1);
+  const family = items[0] as GroupedDisplayProduct;
+  assert.equal(family.price, 15);
+  assert.deepEqual(family.variants.map(v => v.isAvailable), [false, true]);
+  assert.equal(groupCategoryProductsForDisplay('Batatas Fritas', products, '99').length, 1);
 });
 
 test('groupCategoryProductsForDisplay agrupa Pasteis unificando os 6 sabores', () => {
@@ -122,7 +131,7 @@ test('groupCategoryProductsForDisplay agrupa Pasteis unificando os 6 sabores', (
   assert.equal(grouped.length, 1);
   const card = grouped[0];
   assert.ok(isGroupedProduct(card));
-  assert.equal(card.name, 'Pastéis (Médio e Pastelão)');
+  assert.equal(card.name, 'Pastel / Pastelão');
   assert.equal(card.minPrice, 7.0);
   assert.equal(card.hasVariablePrice, true);
   assert.equal(card.variants.length, 6);
