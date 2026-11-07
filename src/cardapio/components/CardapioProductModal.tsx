@@ -472,6 +472,7 @@ export default function CardapioProductModal({
                         if (isSelected) return;
                         setSelectedVariantId(v.id);
                         setSelectedOptions({});
+                        setFeedback("");
                       }}
                       className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all cursor-pointer ${
                         isSelected
