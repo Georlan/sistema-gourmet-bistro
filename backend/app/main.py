@@ -110,7 +110,9 @@ async def lifespan(app: FastAPI):
     from .services.order_chat_hub import order_chat_hub
     from .websocket_manager import manager
     manager.start()
-    order_chat_hub.ensure_started()
+    # O listener do chat inicia no primeiro assinante SSE, evitando reservar uma
+    # conexao de sessao do Supabase quando nenhum chat esta aberto.
+    # subscribe_caixa/subscribe_conversation aguardam wait_ready antes do stream.
     try:
         yield
     finally:
