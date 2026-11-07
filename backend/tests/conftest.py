@@ -5,7 +5,48 @@ Enforces strict test database isolation and prevents tests from running against 
 import os
 import time
 
+import bcrypt
 import pytest
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+
+_ORIGINAL_BCRYPT_GENSALT = bcrypt.gensalt
+
+
+def _fast_test_gensalt(rounds: int = 4, prefix: bytes = b"2b") -> bytes:
+    """Use minimum valid bcrypt rounds (4) in test fixtures unless explicitly specified."""
+    return _ORIGINAL_BCRYPT_GENSALT(rounds=rounds, prefix=prefix)
+
+
+bcrypt.gensalt = _fast_test_gensalt
+
+
+@event.listens_for(Engine, "connect", insert=False)
+def _configure_fast_test_sqlite_pragmas(dbapi_connection, _connection_record):
+    """Avoid hundreds of disk fsyncs per Base.metadata.drop_all/create_all on ephemeral test SQLite DBs."""
+    module_name = getattr(dbapi_connection.__class__, "__module__", "")
+    if not module_name.startswith("sqlite3"):
+        return
+    try:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA synchronous=OFF")
+        cursor.execute("PRAGMA temp_store=MEMORY")
+        cursor.close()
+    except Exception:
+        pass
+
+
+def pytest_collection_modifyitems(session, config, items):
+    """Ensure instance-level app.database.engine also keeps synchronous=OFF after set_default_sqlite_pragma."""
+    import sys
+
+    db_mod = sys.modules.get("app.database")
+    app_engine = getattr(db_mod, "engine", None) if db_mod else None
+    if app_engine is not None and not event.contains(
+        app_engine, "connect", _configure_fast_test_sqlite_pragmas
+    ):
+        event.listen(app_engine, "connect", _configure_fast_test_sqlite_pragmas)
+
 
 PROD_DB_INDICATORS = [
     "iiowhekvahxiepwcdidm",
