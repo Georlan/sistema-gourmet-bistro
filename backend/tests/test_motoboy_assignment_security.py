@@ -18,8 +18,10 @@ def test_unassigned_delivery_cannot_be_claimed_by_any_courier_token():
     with SessionLocal() as db:
         restaurante = db.query(Restaurante).filter(Restaurante.id == 1).first()
         if restaurante is None:
-            restaurante = Restaurante(id=1, nome="Bistro Security", slug="bistro-security")
+            restaurante = Restaurante(id=1, nome="Bistro Security", slug="bistro-security", plano="premium")
             db.add(restaurante)
+        else:
+            restaurante.plano = "premium"
 
         admin = Usuario(
             id=user_id,

@@ -74,7 +74,8 @@ def test_two_tenants_cannot_exceed_shared_campaign_daily_limit(monkeypatch):
     from app.models import ConfiguracaoRestaurante, CentralWhatsAppSenderState
     from app.crm_models import CrmCampanha, CrmClientePreferencia
     from app.services.central_whatsapp_campaigns import reserve_campaign, CampaignDeferred
-    monkeypatch.setattr("app.services.central_whatsapp_campaigns.campaign_now", lambda: dt.datetime.now(dt.timezone.utc).replace(hour=15))
+    now = dt.datetime(2026, 9, 10, 15, 0, tzinfo=dt.timezone.utc)
+    monkeypatch.setattr("app.services.central_whatsapp_campaigns.campaign_now", lambda: now)
     from app.services.central_whatsapp import transport_configuration, recipient_fingerprint
     from app.services.whatsapp_sender_gate import lock_sender
     from app.timezone_utils import OPERATIONAL_TIMEZONE
@@ -89,7 +90,6 @@ def test_two_tenants_cannot_exceed_shared_campaign_daily_limit(monkeypatch):
     monkeypatch.setenv('KOMA_CENTRAL_WA_INSTANCE_NAME','campaign-race-'+uuid.uuid4().hex)
     cfg=transport_configuration()
     engine=create_engine(url)
-    now=dt.datetime.now(dt.timezone.utc)
     snapshots=[]
     try:
         Base.metadata.create_all(engine)

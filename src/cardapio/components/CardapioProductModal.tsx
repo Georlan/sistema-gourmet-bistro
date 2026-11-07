@@ -31,12 +31,19 @@ import {
   getProductImageUrl,
   LOCAL_PRODUCT_PLACEHOLDER,
 } from "../CardapioTypes";
+import { isGroupedProduct, type GroupedDisplayProduct, type DisplayVariant } from "../catalogGrouping";
 import { trackAnalyticsEvent } from "../../analytics";
 import { isMarmitariaSaladGroup } from "../../domain/marmitariaSalad";
 import { containModalFocus } from "../../utils/modalFocus";
 
+import {
+  isAddonsOrExtrasGroup,
+  shouldExpandModifierByDefault,
+  type QuantityModifier,
+} from "../modifierExpansion";
+
 interface CardapioProductModalProps {
-  product: Product;
+  product: Product | GroupedDisplayProduct;
   initialItem?: { quantity: number; selectedOptions: Record<string, ProductOption[]>; notes: string };
   onClose: () => void;
   onAddToCart: (
@@ -55,8 +62,6 @@ interface CardapioProductModalProps {
     onBack?: () => void;
   };
 }
-
-type QuantityModifier = ProductModifier & { minSelection?: number };
 
 // Reutiliza o formatador durante toques rápidos em listas extensas.
 const priceFormatter = new Intl.NumberFormat("pt-BR", {
@@ -88,6 +93,29 @@ export default function CardapioProductModal({
     const dialog = dialogRef.current;
     return containModalFocus(dialog, () => closeRef.current(), dialog.querySelector<HTMLElement>('#btn-close-modal') || dialog);
   }, []);
+  const isGrouped = isGroupedProduct(product);
+  const defaultVariantId = useMemo(() => {
+    if (!isGrouped) return "";
+    const avail = product.variants.find((v) => v.isAvailable);
+    return avail ? avail.id : (product.variants[0]?.id || "");
+  }, [isGrouped, product]);
+
+  const [selectedVariantId, setSelectedVariantId] = useState<string>(defaultVariantId);
+
+  useEffect(() => {
+    if (isGrouped) {
+      const avail = product.variants.find((v) => v.isAvailable);
+      setSelectedVariantId(avail ? avail.id : (product.variants[0]?.id || ""));
+    }
+  }, [isGrouped, product]);
+
+  const activeVariant = useMemo(() => {
+    if (!isGrouped) return null;
+    return product.variants.find((v) => v.id === selectedVariantId) || product.variants[0] || null;
+  }, [isGrouped, product, selectedVariantId]);
+
+  const effectiveProduct: Product = activeVariant ? activeVariant.product : (product as Product);
+
   const groupRefs = useRef(new Map<string, HTMLElement>());
   const [quantity, setQuantity] = useState(1);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, ProductOption[]>>({});
@@ -106,33 +134,33 @@ export default function CardapioProductModal({
     reportedViewRef.current = true;
     trackAnalyticsEvent('public_product_viewed', {
       restaurant_id: restaurantId || '',
-      product_id: product.id,
-      product_name: product.name,
-      category: product.category,
-      price: product.price,
+      product_id: effectiveProduct.id,
+      product_name: effectiveProduct.name,
+      category: effectiveProduct.category,
+      price: effectiveProduct.price,
       has_modifiers: Boolean(
-        (product.modifiers && product.modifiers.length > 0)
-        || (product.modifierGroups && product.modifierGroups.length > 0)
+        (effectiveProduct.modifiers && effectiveProduct.modifiers.length > 0)
+        || (effectiveProduct.modifierGroups && effectiveProduct.modifierGroups.length > 0)
       ),
     });
-  }, [product.id, restaurantId]);
+  }, [effectiveProduct.id, restaurantId]);
 
   const galleryImages = useMemo(
-    () => (product.imagesGallery && product.imagesGallery.length > 0
-      ? product.imagesGallery.slice(0, 4)
-      : [product.image]),
-    [product],
+    () => (effectiveProduct.imagesGallery && effectiveProduct.imagesGallery.length > 0
+      ? effectiveProduct.imagesGallery.slice(0, 4)
+      : [effectiveProduct.image]),
+    [effectiveProduct],
   );
 
   const allModifiers = useMemo<QuantityModifier[]>(() => {
-    if (product.modifiers && product.modifiers.length > 0) {
-      return product.modifiers.map((modifier) => ({
+    if (effectiveProduct.modifiers && effectiveProduct.modifiers.length > 0) {
+      return effectiveProduct.modifiers.map((modifier) => ({
         ...modifier,
         minSelection: modifier.required ? 1 : 0,
       }));
     }
-    if (product.modifierGroups && product.modifierGroups.length > 0) {
-      return product.modifierGroups.map((g) => ({
+    if (effectiveProduct.modifierGroups && effectiveProduct.modifierGroups.length > 0) {
+      return effectiveProduct.modifierGroups.map((g) => ({
         id: g.id,
         title: g.name,
         required: typeof g.minSelection === "number" ? g.minSelection > 0 : g.type === "obrigatorio",
@@ -149,11 +177,11 @@ export default function CardapioProductModal({
       }));
     }
     return [];
-  }, [product]);
+  }, [effectiveProduct]);
 
   useEffect(() => {
     const previous = draftIdentity;
-    const newDraft = !previous || previous.productId !== product.id
+    const newDraft = !previous || previous.productId !== effectiveProduct.id
       || previous.restaurantId !== restaurantId || previous.initialItem !== initialItem;
     const source = newDraft ? initialItem?.selectedOptions || {} : draftOptionsRef.current;
     const initial: Record<string, ProductOption[]> = {};
@@ -172,22 +200,28 @@ export default function CardapioProductModal({
       setQuantity(initialItem?.quantity || 1);
       setNotes(initialItem?.notes || "");
       setCurrentImgIndex(0);
-      setExpandedExtras({});
+      const defaultExpanded: Record<string, boolean> = {};
+      allModifiers.forEach((m) => {
+        if (shouldExpandModifierByDefault(m, allModifiers.length)) {
+          defaultExpanded[m.id] = true;
+        }
+      });
+      setExpandedExtras(defaultExpanded);
       // Estado, em vez de ref, mantém a inicialização idempotente no replay
       // de efeitos do StrictMode antes do primeiro commit das escolhas.
-      setDraftIdentity({ productId: product.id, restaurantId, initialItem });
+      setDraftIdentity({ productId: effectiveProduct.id, restaurantId, initialItem });
     }
-  }, [allModifiers, product, initialItem, restaurantId, draftIdentity]);
+  }, [allModifiers, effectiveProduct, initialItem, restaurantId, draftIdentity]);
 
   const unitPrice = useMemo(() => {
-    let value = product.price;
+    let value = effectiveProduct.price;
     Object.values(selectedOptions).forEach((options) => {
       options.forEach((option) => {
         value += option.extraPrice;
       });
     });
     return value;
-  }, [product.price, selectedOptions]);
+  }, [effectiveProduct.price, selectedOptions]);
 
   const totalPrice = unitPrice * quantity;
 
@@ -279,7 +313,7 @@ export default function CardapioProductModal({
       return;
     }
 
-    onAddToCart(product, compositionStep ? 1 : quantity, selectedOptions, notes.trim());
+    onAddToCart(effectiveProduct, compositionStep ? 1 : quantity, selectedOptions, notes.trim());
     // Um passo de promoção só coleta as escolhas: não fecha nem grava na sacola.
     // Quem coordena o pacote controla o próximo passo e o envio atômico ao backend.
     if (!compositionStep) onClose();
@@ -307,8 +341,8 @@ export default function CardapioProductModal({
 
         <div className={`koma-art-modal-hero ${allModifiers.length > 0 ? "h-40 sm:h-52" : "h-52 sm:h-68"}`}>
           <img
-            src={getProductImageUrl(galleryImages[currentImgIndex] || product.image)}
-            alt={product.name}
+            src={getProductImageUrl(galleryImages[currentImgIndex] || effectiveProduct.image)}
+            alt={effectiveProduct.name}
             className="h-full w-full object-cover transition duration-300"
             crossOrigin="anonymous"
             referrerPolicy="no-referrer"
@@ -394,12 +428,68 @@ export default function CardapioProductModal({
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <h2 className="font-serif text-2xl font-black tracking-tight text-koma-foreground sm:text-3xl" id="modal-product-name">{product.name}</h2>
-              {product.description && (
-                <p className="mt-2 text-sm leading-relaxed text-koma-muted">{product.description}</p>
+              {(activeVariant?.description || effectiveProduct.description || product.description) && (
+                <p className="mt-2 text-sm leading-relaxed text-koma-muted">{activeVariant?.description || effectiveProduct.description || product.description}</p>
               )}
             </div>
-            <strong className="shrink-0 font-serif text-lg font-black text-emerald-400 sm:text-xl">{compositionStep ? "Incluso na promoção" : formatPrice(product.price)}</strong>
+            <strong className="shrink-0 font-serif text-lg font-black text-emerald-400 sm:text-xl">
+              {compositionStep ? "Incluso na promoção" : formatPrice(unitPrice)}
+            </strong>
           </div>
+
+          {isGrouped && product.variants && product.variants.length > 0 && (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.02] p-3.5" id="modal-variants-selector">
+              <div className="flex items-center justify-between mb-2.5">
+                <h3 className="text-xs font-black uppercase tracking-wider text-emerald-400">
+                  {product.groupDescription || "Escolha uma opção:"}
+                </h3>
+                <span className="text-[10px] font-bold text-koma-muted">1 obrigatório</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {product.variants.map((v) => {
+                  const isSelected = v.id === selectedVariantId;
+                  const isAvail = v.isAvailable;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      disabled={!isAvail}
+                      onClick={() => {
+                        if (isSelected) return;
+                        setSelectedVariantId(v.id);
+                        setSelectedOptions({});
+                      }}
+                      className={`flex items-center justify-between p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-emerald-500/20 border-emerald-400 text-white shadow-sm shadow-emerald-500/20"
+                          : isAvail
+                            ? "bg-white/[0.04] hover:bg-white/[0.08] border-white/10 text-stone-200"
+                            : "bg-white/[0.01] border-white/5 text-stone-600 opacity-60 line-through cursor-not-allowed"
+                      }`}
+                      id={`variant-btn-${v.id}`}
+                    >
+                      <div className="min-w-0 pr-2">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                            isSelected ? "border-emerald-400 bg-emerald-500" : "border-white/30"
+                          }`}>
+                            {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </div>
+                          <span className="text-xs font-bold truncate">{v.label}</span>
+                        </div>
+                        {v.description && (
+                          <p className="text-[10px] text-koma-muted mt-1 line-clamp-1 pl-6">{v.description}</p>
+                        )}
+                      </div>
+                      <strong className={`text-xs shrink-0 font-serif ${isSelected ? "text-emerald-400 font-black" : "text-koma-muted"}`}>
+                        {formatPrice(v.price)}
+                      </strong>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {product.marmitaria === true && allModifiers.some(modifier => (modifier.minSelection ?? 0) > 0) && (
             <div className="mt-3.5 rounded-2xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5 text-xs text-koma-muted">
@@ -435,7 +525,7 @@ export default function CardapioProductModal({
                   : `Escolha até ${max} ${unit}`;
                 const simpleSelection = modifier.selectionMode === "tipos" || max === 1;
                 const complete = modifier.required && selectionWithinRules(rules, selectedIds);
-                const collapsible = min === 0 && modifier.options.length > 0 && modifier.options.every(option => option.extraPrice > 0);
+                const collapsible = min === 0 && modifier.options.length > 0;
                 const expanded = !collapsible || expandedExtras[modifier.id] === true;
                 const surcharge = selections.reduce((total, option) => total + option.extraPrice, 0);
                 const Heading = collapsible ? "button" : "div";
@@ -443,8 +533,15 @@ export default function CardapioProductModal({
                 return (
                   <section key={modifier.id} tabIndex={-1} aria-label={modifier.title} ref={node => { if (node) groupRefs.current.set(modifier.id, node); else groupRefs.current.delete(modifier.id); }}>
                     <Heading
-                      {...(collapsible ? { type: "button" as const, "aria-expanded": expanded, "aria-controls": `modifier-options-${modifier.id}`, onClick: () => setExpandedExtras(current => ({ ...current, [modifier.id]: !expanded })) } : {})}
-                      className={`flex w-full items-start justify-between gap-3 text-left ${collapsible ? "rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 transition hover:border-emerald-500/30" : ""}`}
+                      {...(collapsible
+                        ? {
+                            type: "button" as const,
+                            "aria-expanded": expanded,
+                            "aria-controls": `modifier-options-${modifier.id}`,
+                            onClick: () => setExpandedExtras((current) => ({ ...current, [modifier.id]: !expanded })),
+                          }
+                        : {})}
+                      className={`flex w-full items-start justify-between gap-3 text-left ${collapsible ? "rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 transition hover:border-emerald-500/30 cursor-pointer" : ""}`}
                     >
                       <div>
                         <h3 className="text-sm font-black text-koma-foreground">{modifier.title}</h3>

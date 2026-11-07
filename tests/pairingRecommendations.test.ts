@@ -178,3 +178,72 @@ test('recomendações persistentes preservam inclusão e ordem após cada adiç�
 test('itens desconhecidos não preenchem vagas de acompanhamento', () => {
   assert.deepEqual(getPairingRecommendations({ catalog: [{ ...mockCatalog[0], name: 'Especial da casa', category: 'Especiais' }] }), []);
 });
+
+test('classifyProduct aceita papeis comerciais explicitos com precedencia sobre regex', () => {
+  const customItem1: Product = {
+    ...mockCatalog[0],
+    id: 'c1',
+    name: 'Combo Secreto da Casa',
+    category: 'Especiais',
+    // Embora o nome tenha 'Combo' (que o regex mapearia para main), o papel comercial explicito dita o comportamento
+    ...({ commercial_role: 'Acompanhamento' } as any),
+  };
+  assert.equal(classifyProduct(customItem1), 'side');
+
+  const customItem2: Product = {
+    ...mockCatalog[0],
+    id: 'c2',
+    name: 'X-Burger Especial',
+    category: 'Lanches',
+    ...({ papel_comercial: 'Principal' } as any),
+  };
+  assert.equal(classifyProduct(customItem2), 'main');
+
+  const customItem3: Product = {
+    ...mockCatalog[0],
+    id: 'c3',
+    name: 'Chá Gelado da Casa',
+    category: 'Bebidas',
+    ...({ commercialRole: 'Bebida' } as any),
+  };
+  assert.equal(classifyProduct(customItem3), 'beverage');
+
+  const customItem4: Product = {
+    ...mockCatalog[0],
+    id: 'c4',
+    name: 'Torta Holandesa',
+    category: 'Doces',
+    ...({ commercial_role: 'Sobremesa' } as any),
+  };
+  assert.equal(classifyProduct(customItem4), 'dessert');
+
+  const customItem5: Product = {
+    ...mockCatalog[0],
+    id: 'c5',
+    name: 'Brinde Especial',
+    category: 'Extras',
+    ...({ commercial_role: 'Outro' } as any),
+  };
+  assert.equal(classifyProduct(customItem5), 'other');
+});
+
+test('getPairingRecommendations diversifica sabores e nao recomenda multiplos sucos seguidos quando ha refrigerante', () => {
+  const drinksCatalog: Product[] = [
+    { id: 's1', name: 'suco de manga', price: 5, category: 'Vitaminas e Sucos', description: '', image: '', isAvailable: true },
+    { id: 's2', name: 'suco de acerola', price: 5, category: 'Vitaminas e Sucos', description: '', image: '', isAvailable: true },
+    { id: 's3', name: 'suco de goiaba', price: 5, category: 'Vitaminas e Sucos', description: '', image: '', isAvailable: true },
+    { id: 'r1', name: 'refrigerante guaraná', price: 9, category: 'Refrigerantes', description: '', image: '', isAvailable: true },
+    { id: 'r2', name: 'refrigerante sukita', price: 9, category: 'Refrigerantes', description: '', image: '', isAvailable: true },
+  ];
+
+  const recs = getPairingRecommendations({
+    catalog: drinksCatalog,
+    limit: 2,
+  });
+
+  // Os 2 primeiros recomendados devem ser 1 suco e 1 refrigerante, e NÃO 2 sucos!
+  assert.equal(recs.length, 2);
+  const names = recs.map((r) => r.name);
+  assert.ok(names.some((n) => n.startsWith('suco')));
+  assert.ok(names.some((n) => n.startsWith('refrigerante')));
+});

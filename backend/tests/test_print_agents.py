@@ -2635,3 +2635,77 @@ def test_job_ack_ownership_mismatch_returns_409_conflict():
     assert resp_fail.status_code == 409
     assert "outro agente" in resp_fail.json()["detail"]
 
+
+def test_invalid_agent_auth_returns_retry_after_and_logs_client_metadata(caplog):
+    print_agents_route._clear_invalid_agent_token_cache()
+    client = TestClient(app)
+    bad_token = "koma_ag_obsolete_token_probe"
+    expected_prefix = print_agents_route.hash_token(bad_token)[:8]
+
+    with caplog.at_level("WARNING", logger="koma.print_agents"):
+        resp = client.post(
+            "/api/print-agents/heartbeat",
+            headers={
+                "X-Agent-Token": bad_token,
+                "CF-Connecting-IP": "203.0.113.42",
+                "User-Agent": "KomaPrintAgent/2026.09.27.1",
+            },
+        )
+        assert resp.status_code == 401
+        assert resp.headers.get("Retry-After") == "60"
+
+        # Subsequent hit within TTL uses cache and returns Retry-After: 60
+        resp_cached = client.post(
+            "/api/print-agents/jobs/claim-batch",
+            headers={
+                "X-Agent-Token": bad_token,
+                "CF-Connecting-IP": "203.0.113.42",
+                "User-Agent": "KomaPrintAgent/2026.09.27.1",
+            },
+        )
+        assert resp_cached.status_code == 401
+        assert resp_cached.headers.get("Retry-After") == "60"
+
+    assert f"token_prefix={expected_prefix}" in caplog.text
+    assert "client_ip=203.0.113.42" in caplog.text
+    assert "user_agent=KomaPrintAgent/2026.09.27.1" in caplog.text
+    assert bad_token not in caplog.text
+
+
+def test_ip_and_user_agent_sanitization():
+    # Valid IPs
+    assert print_agents_route._sanitize_ip("203.0.113.42") == "203.0.113.42"
+    assert print_agents_route._sanitize_ip("203.0.113.42:8080") == "203.0.113.42"
+    assert print_agents_route._sanitize_ip("[2001:db8::1]:8080") == "2001:db8::1"
+    assert print_agents_route._sanitize_ip("::1") == "::1"
+
+    # Invalid / spoofed IPs
+    assert print_agents_route._sanitize_ip("not_an_ip") == "invalid"
+    assert print_agents_route._sanitize_ip("203.0.113.42\r\nInjected: True") == "invalid"
+    assert print_agents_route._sanitize_ip("999.999.999.999") == "invalid"
+    assert print_agents_route._sanitize_ip("") == "unknown"
+    assert print_agents_route._sanitize_ip(None) == "unknown"
+
+    # User Agent sanitization
+    assert print_agents_route._sanitize_user_agent("KomaPrintAgent/2026.09.27.1") == "KomaPrintAgent/2026.09.27.1"
+    assert print_agents_route._sanitize_user_agent("Agent\r\nInjected: Log") == "Agent  Injected: Log"
+    assert print_agents_route._sanitize_user_agent("A" * 120) == "A" * 80
+    assert print_agents_route._sanitize_user_agent("") == "unknown"
+    assert print_agents_route._sanitize_user_agent(None) == "unknown"
+
+
+def test_aggregated_cache_log_does_not_attribute_to_single_origin(caplog):
+    with caplog.at_level("WARNING", logger="koma.print_agents"):
+        print_agents_route._cached_invalid_auth_last_log_at = 0.0
+        print_agents_route._cached_invalid_auth_suppressed = 15
+        print_agents_route._log_cached_invalid_agent_token()
+
+    log_entry = [r.message for r in caplog.records if "cached_invalid_token" in r.message]
+    assert len(log_entry) == 1
+    assert "attempts=16" in log_entry[0]
+    assert "client_ip=" not in log_entry[0]
+    assert "token_prefix=" not in log_entry[0]
+    assert "user_agent=" not in log_entry[0]
+
+
+

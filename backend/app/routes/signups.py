@@ -205,6 +205,7 @@ def retry_delivery(delivery_id: str, admin=Depends(get_current_admin), db=Depend
 
 class ReleaseSignupRequest(BaseModel):
     reason: str = Field(default="Liberação manual de inscrição confirmada pelo SuperAdmin", min_length=3, max_length=255)
+    restaurant_id: int | None = Field(default=None, ge=1, le=2_147_483_647)
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
@@ -228,11 +229,18 @@ def release_signup(
     if not acceptance:
         raise HTTPException(status_code=404, detail="Contrato não encontrado.")
 
+    requested_restaurant_id = payload.restaurant_id if payload else None
     if acceptance.get("linked_restaurante_id"):
+        existing_id = int(acceptance["linked_restaurante_id"])
+        if requested_restaurant_id is not None and int(requested_restaurant_id) != existing_id:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Este contrato já foi provisionado no restaurante #{existing_id}.",
+            )
         return {
             "success": True,
             "status": "activated",
-            "restaurant_id": str(acceptance["linked_restaurante_id"]),
+            "restaurant_id": str(existing_id),
             "protocol": normalized,
             "idempotent": True,
             "message": "Contratação já estava liberada para este restaurante.",
@@ -254,6 +262,8 @@ def release_signup(
         billing_setup=billing_setup,
         actor=f"superadmin:{actor_name}",
         reason=reason,
+        requested_restaurant_id=requested_restaurant_id,
+        allow_id_reuse=True,
     )
 
     trial_ends_at = provision_res.get("trial_ends_at")
