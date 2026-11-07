@@ -373,7 +373,17 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
             <label className="mt-4 block"><span className="mb-1 block font-medium text-koma-secondary">Senha temporária</span><input type="password" value={temporaryPassword} onChange={event => setTemporaryPassword(event.target.value)} required minLength={8} maxLength={72} autoComplete="new-password" className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none" placeholder="Mínimo 8 caracteres" /><span className="mt-1 block text-[10px] text-koma-subtle">Não será retornada pelo backend. Após a criação, aparece uma única vez a partir deste formulário.</span></label>
           </div>
 
-          <div className="rounded-lg border border-emerald-800/40 bg-emerald-950/20 p-3 text-[10px] leading-relaxed text-emerald-100/75">O tenant nasce <strong className="text-emerald-200">ativo para homologação administrativa</strong>. Não existe preço/taxa contratada neste fluxo; operações financeiras que exigem termos comerciais falham fechado. O Mercado Pago do Cardápio Online nasce <strong className="text-amber-300">desconectado</strong>.</div>
+          <label className="flex items-start gap-2.5 rounded-lg border border-emerald-800/40 bg-emerald-950/20 p-3 text-[11px] leading-relaxed text-emerald-100/85">
+            <input
+              type="checkbox"
+              checked={deferTrial}
+              onChange={event => setDeferTrial(event.target.checked)}
+              className="mt-0.5 rounded border-zinc-700"
+            />
+            <span>
+              <strong className="text-emerald-200">Modo de preparação (recomendado)</strong>: libera acesso imediato para configurar perfil, horários, produtos e adicionais no celular <strong className="text-emerald-200">sem iniciar os 7 dias</strong> e sem permitir pedidos reais até a liberação comercial.
+            </span>
+          </label>
 
           {error && <div role="alert" className="rounded-lg border border-rose-800/50 bg-rose-950/40 p-3 text-xs text-rose-300">{error}</div>}
 

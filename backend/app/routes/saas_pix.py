@@ -92,7 +92,8 @@ def _checkout_methods_payload() -> dict[str, Any]:
     pix_ready, capabilities = _pix_available()
     return {
         "credit_card": bool(capabilities.get("credit_card")),
-        "pix": pix_ready,
+        "pix": True,
+        "pixAutomaticConfirmationAvailable": pix_ready,
         "account_money": False,  # descontinuado para novas inscrições; preserva assinaturas existentes
         "publicKey": str(capabilities.get("publicKey") or ""),
         "providerAuthReady": capabilities.get("providerAuthReady"),
@@ -116,9 +117,8 @@ def available_checkout_methods():
 @contract_router.post("/{protocol}/billing/pix/select")
 def select_contract_pix(protocol: str, db: Session = Depends(get_db)):
     """Seleciona Pix universal sem criar cobrança durante onboarding/trial."""
-    pix_ready, _ = _pix_available()
-    if not pix_ready:
-        raise HTTPException(503, "Pix está temporariamente indisponível; sua inscrição continua salva.")
+    _pix_ready, _ = _pix_available()
+
 
     normalized_protocol = _normalize_protocol(protocol)
     acceptance = resolve_activation_acceptance(db, normalized_protocol)

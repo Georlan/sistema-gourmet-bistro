@@ -38,6 +38,7 @@ export function SuperAdminReleaseModal({ restaurantId, onClose, onReleased }: {
   const [tableReason, setTableReason] = useState('');
   const [tableBusy, setTableBusy] = useState(false);
   const [tableNotice, setTableNotice] = useState('');
+  const [confirmPixPostTrial, setConfirmPixPostTrial] = useState(true);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -45,7 +46,7 @@ export function SuperAdminReleaseModal({ restaurantId, onClose, onReleased }: {
       .then(async response => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || 'Não foi possível carregar a implantação.');
-        if (!data.subscription) throw new Error('Este restaurante usa implantação administrativa. Consulte o cockpit 360°; liberação comercial não se aplica.');
+        if (!data.subscription) throw new Error('Este restaurante usa implantação administrativa ou ainda não possui contrato vinculado. Vincule o aceite na aba Contratações antes de liberar os 7 dias.');
         setPreview(data as ReleasePreview);
         setTableCount((current) => current || (Number(data?.counts?.tables || 0) > 0 ? String(data.counts.tables) : ''));
       })
@@ -98,12 +99,27 @@ export function SuperAdminReleaseModal({ restaurantId, onClose, onReleased }: {
     }
   };
 
+  const canReleaseNow = Boolean(
+    preview && (
+      preview.readyForRelease || (
+        !preview.subscription.paymentMethod &&
+        confirmPixPostTrial &&
+        Object.values(preview.steps).every(Boolean)
+      )
+    ),
+  );
+
   const release = async () => {
-    if (!preview?.readyForRelease || busy) return;
+    if (!canReleaseNow || busy) return;
     setBusy(true);
     setError('');
     try {
-      const response = await superAdminFetch(`/api/super-admin/onboarding/restaurantes/${restaurantId}/release`, { method: 'POST' });
+      const requestInit: RequestInit = { method: 'POST' };
+      if (!preview?.subscription.paymentMethod && confirmPixPostTrial) {
+        requestInit.headers = { 'Content-Type': 'application/json' };
+        requestInit.body = JSON.stringify({ payment_method_type: 'pix' });
+      }
+      const response = await superAdminFetch(`/api/super-admin/onboarding/restaurantes/${restaurantId}/release`, requestInit);
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail || 'Não foi possível liberar a operação.');
       setPreview(data as ReleasePreview);
@@ -121,6 +137,17 @@ export function SuperAdminReleaseModal({ restaurantId, onClose, onReleased }: {
       {preview ? <>
         <p className="mt-2 text-sm">{preview.restaurant.name} · {preview.restaurant.plan} · {preview.subscription.billingCycle === 'annual' || preview.subscription.billingCycle === 'anual' ? 'Anual' : 'Mensal'}</p>
         <p className="mt-1 text-xs text-koma-muted">Autorização: {preview.subscription.paymentMethod || 'não disponível'} · Status: {preview.subscription.status}</p>
+        {!preview.subscription.paymentMethod && !preview.trialStarted && (
+          <label className="mt-3 flex items-start gap-2 rounded-xl border border-emerald-800/50 bg-emerald-950/30 p-3 text-xs text-emerald-200">
+            <input
+              type="checkbox"
+              checked={confirmPixPostTrial}
+              onChange={event => setConfirmPixPostTrial(event.target.checked)}
+              className="mt-0.5"
+            />
+            <span>Confirmar cobrança pós-teste via Pix (sem cobrança durante os 7 dias e sem exigir gateway prévio).</span>
+          </label>
+        )}
         <ul className="mt-4 space-y-2 text-sm">{STEP_LABELS.map(([key, label]) => <li key={key}>{preview.steps[key] ? '✓' : '○'} {label}</li>)}</ul>
         <div className="mt-4 grid gap-2 rounded-xl border border-zinc-700 bg-zinc-900/40 p-3 text-xs">
           <p><strong>Tipo de operação:</strong> {preview.restaurant.operationProfile || 'não informado'}</p>
@@ -155,7 +182,7 @@ export function SuperAdminReleaseModal({ restaurantId, onClose, onReleased }: {
       {error && <p className="mt-3 text-sm text-rose-400" role="alert">{error}</p>}
       <div className="mt-6 flex justify-end gap-3">
         <button type="button" onClick={onClose} className="rounded-lg border border-zinc-700 px-4 py-2 text-sm">Fechar</button>
-        {preview && !preview.trialStarted && <button type="button" disabled={!preview.readyForRelease || busy} onClick={() => void release()} className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-bold text-zinc-950 disabled:opacity-40">{busy ? 'Liberando…' : 'LIBERAR OPERAÇÃO E INICIAR 7 DIAS'}</button>}
+        {preview && !preview.trialStarted && <button type="button" disabled={!canReleaseNow || busy} onClick={() => void release()} className="rounded-lg bg-emerald-500 px-4 py-2 text-sm font-bold text-zinc-950 disabled:opacity-40">{busy ? 'Liberando…' : 'LIBERAR OPERAÇÃO E INICIAR 7 DIAS'}</button>}
       </div>
     </div>
   </div>;

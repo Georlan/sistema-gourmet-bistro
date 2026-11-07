@@ -17,6 +17,7 @@ type TrialRecord = {
   trialEndsAt?: string | null;
   daysRemaining: number;
   commercialOnboarding?: boolean;
+  provisionalPreparation?: boolean;
 };
 
 interface SuperAdminTrialsTabProps {
@@ -144,7 +145,11 @@ export function SuperAdminTrialsTab({ tenants, globalSearch, refreshTenants }: S
                   return (
                     <tr key={item.restaurantId} className="hover:bg-koma-page/40">
                       <td className="px-4 py-3.5"><p className="font-semibold text-koma-foreground">{item.restaurantName}</p><p className="font-mono text-[10px] text-koma-muted">#{item.restaurantId} · {item.plan || "plano não disponível"}</p></td>
-                      <td className="px-4 py-3.5"><span className={`inline-flex rounded border px-2 py-0.5 text-[11px] font-bold ${statusClasses(item.trialStatus)}`}>{STATUS_LABELS[item.trialStatus]}</span></td>
+                      <td className="px-4 py-3.5">
+                        <span className={`inline-flex rounded border px-2 py-0.5 text-[11px] font-bold ${item.provisionalPreparation ? "border-amber-800/40 bg-amber-950/40 text-amber-300" : statusClasses(item.trialStatus)}`}>
+                          {item.provisionalPreparation ? "Em preparação (7d intactos)" : STATUS_LABELS[item.trialStatus]}
+                        </span>
+                      </td>
                       <td className="px-4 py-3.5 font-bold text-koma-foreground">{item.trialStatus === "active" ? `${item.daysRemaining} dia${item.daysRemaining === 1 ? "" : "s"}` : "—"}</td>
                       <td className="px-4 py-3.5 text-koma-muted">{formatDate(item.trialEndsAt)}</td>
                       <td className="px-4 py-3.5 text-koma-secondary">{item.saasStatus}</td>

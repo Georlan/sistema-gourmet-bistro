@@ -803,6 +803,8 @@ export default function CardapioPage() {
   }, [activeBrand, visibleCategories, vitrineVariant]);
 
   const orderingEnabled = activeBrand?.acceptingOrders !== false && activeBrand?.storeStatus !== "closed";
+  const isPreparationSimulation = activeBrand?.availabilitySource === "provisional_preparation";
+  const cartAssemblyEnabled = orderingEnabled || isPreparationSimulation;
   const orderingMessage = activeBrand?.orderingMessage || "O restaurante pausou novos pedidos por enquanto.";
 
   const handleAddToCart = (
@@ -812,7 +814,7 @@ export default function CardapioPage() {
     notes: string = "",
     revealCart = true,
   ) => {
-    if (!orderingEnabled) {
+    if (!cartAssemblyEnabled) {
       setNotice(`${orderingMessage} Você ainda pode consultar os produtos.`);
       return;
     }
@@ -869,7 +871,7 @@ export default function CardapioPage() {
   };
 
   const handlePromotionConfirm = (parts: PromotionPartSelection[]) => {
-    if (!selectedPromotion || !activeBrand || !orderingEnabled) return;
+    if (!selectedPromotion || !activeBrand || !cartAssemblyEnabled) return;
     const campaign = selectedPromotion;
     // Pacote único na sacola; componentes reais são serializados apenas no checkout.
     const options: Record<string, ProductOption[]> = {};

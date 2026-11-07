@@ -424,3 +424,28 @@ def test_commercial_setup_accepts_canonical_and_legacy_json_contact(socials):
 def test_commercial_setup_rejects_missing_contact_without_error(socials):
     restaurant = SimpleNamespace(nome="Pizzaria", endereco="Rua A, 10", socials=socials)
     assert _profile_is_configured(restaurant, require_essentials=True) is False
+
+
+def test_provisional_preparation_allows_profile_without_definitive_address():
+    restaurant_no_address = SimpleNamespace(
+        nome="JE Lanches",
+        endereco="",
+        socials={"whatsapp": "85999999999"},
+    )
+    assert _profile_is_configured(
+        restaurant_no_address,
+        require_essentials=True,
+        require_address=False,
+    ) is True
+
+    restaurant_no_contact_or_address = SimpleNamespace(
+        nome="JE Lanches",
+        endereco="",
+        socials={},
+    )
+    assert _profile_is_configured(
+        restaurant_no_contact_or_address,
+        require_essentials=True,
+        require_address=False,
+    ) is False
+
