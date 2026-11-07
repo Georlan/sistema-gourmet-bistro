@@ -16,7 +16,7 @@ export interface DisplayVariant {
 
 export interface GroupedDisplayProduct extends Product {
   isGrouped: true;
-  groupKind: 'batatas' | 'pasteis' | 'sucos' | 'vitaminas' | 'refrigerantes' | 'generic';
+  groupKind: 'pasteis' | 'sucos' | 'vitaminas' | 'refrigerantes' | 'generic';
   groupTitle: string;
   groupDescription: string;
   minPrice: number;
@@ -79,13 +79,6 @@ export function calculateProductMinStartingPrice(product: Product): number {
 
 function formatVariantLabel(name: string, kind: string): string {
   const norm = normalize(name);
-  if (kind === 'batatas') {
-    if (norm === 'batata frita') return 'Tradicional (com Molho Rosê)';
-    if (norm.includes('especial')) return 'Especial (Bacon ou Calabresa)';
-    if (norm.includes('file')) return 'Com Filé de Frango (200 g)';
-    if (norm.includes('carne de sol')) return 'Com Carne de Sol e Queijo Coalho';
-    return name;
-  }
   if (kind === 'pasteis') {
     return name
       .replace(/^pastel\s*(medio|médio|ao|ão)?\s*(de\s*)?/i, '')
@@ -121,50 +114,10 @@ export function groupCategoryProductsForDisplay(
 
   const catNorm = normalize(categoryName);
 
-  // 1. Grupo Batatas Fritas
-  if (catNorm.includes('batata') || catNorm.includes('frita')) {
-    const batatas = products.filter((p) => {
-      const n = normalize(p.name);
-      return n.includes('batata') || n.includes('frita') || n.includes('carne de sol com frita');
-    });
-
-    if (batatas.length >= 2) {
-      const remaining = products.filter((p) => !batatas.includes(p));
-      const variants: DisplayVariant[] = batatas.map((p) => ({
-        id: p.id,
-        label: formatVariantLabel(p.name, 'batatas'),
-        description: p.description,
-        price: calculateProductMinStartingPrice(p),
-        product: p,
-        isAvailable: p.isAvailable !== false,
-      }));
-
-      const availableVariants = variants.filter((v) => v.isAvailable);
-      const pricingPool = availableVariants.length > 0 ? availableVariants : variants;
-      const prices = pricingPool.map((v) => v.price);
-      const minPrice = Math.min(...prices);
-      const maxPrice = Math.max(...prices);
-      const leadProduct = batatas.find((p) => normalize(p.name) === 'batata frita') || batatas[0];
-
-      const grouped: GroupedDisplayProduct = {
-        ...leadProduct,
-        id: 'family-batatas-fritas',
-        name: 'Batata Frita',
-        description: 'Batatas crocantes nas versões Tradicional, Especial (Bacon ou Calabresa), com Filé de Frango ou Carne de Sol.',
-        price: minPrice,
-        isGrouped: true,
-        groupKind: 'batatas',
-        groupTitle: 'Batata Frita',
-        groupDescription: 'Escolha a preparação e os tamanhos ou acompanhamentos disponíveis:',
-        minPrice,
-        hasVariablePrice: maxPrice > minPrice,
-        variants,
-        isAvailable: variants.some((v) => v.isAvailable),
-      };
-
-      return [grouped, ...remaining];
-    }
-  }
+  // Batatas e petiscos são produtos independentes no catálogo. O agrupamento
+  // anterior fundia itens distintos num único card e criava um modal diferente
+  // do mostrado nas recomendações, inclusive quando havia tamanhos reais.
+  if (catNorm.includes('batata') || catNorm.includes('frita')) return products;
 
   // 2. Grupo Pastéis
   if (catNorm.includes('pastel') || catNorm.includes('pasteis')) {
