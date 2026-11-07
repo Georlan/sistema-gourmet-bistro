@@ -281,7 +281,6 @@ class KomaPrintAgentClient(
         require(token.isNotEmpty()) { "Token do agente de impressão não configurado." }
         return mapOf(
             "X-Agent-Token" to token,
-            "Authorization" to "Bearer $token",
         )
     }
 
