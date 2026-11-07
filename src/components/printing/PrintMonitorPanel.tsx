@@ -352,8 +352,13 @@ export function PrintMonitorPanel({
     if (!isMobileClient) return null;
     const stored = typeof window !== 'undefined' ? localStorage.getItem('koma_print_mobile_agent_id') : null;
     if (stored) return stored;
-    return (monitorData?.agents || []).find(a => a.online && (a.agent_id.startsWith('android-') || a.role === 'bluetooth' || a.role === 'mobile'))?.agent_id
-      || (monitorData?.agents || []).find(a => a.online)?.agent_id || null;
+    return (monitorData?.agents || []).find(a => (
+      a.online && (
+        a.agent_id.startsWith('android-')
+        || a.printer_diagnostics?.platform === 'android'
+        || a.printer_diagnostics?.adapter === 'android_bluetooth_spp'
+      )
+    ))?.agent_id || (monitorData?.agents || []).find(a => a.online)?.agent_id || null;
   }, [monitorData]);
   const localAgentId = localConnection.identity?.agent_id || detectedMobileAgentId || null;
   const localAgentResolved = localConnection.status !== 'checking';
@@ -789,7 +794,7 @@ export function PrintMonitorPanel({
         if (isMobileClient && typeof window !== 'undefined') {
           localStorage.setItem('koma_print_mobile_agent_id', agentId);
         }
-        const restaurantName = monitorData?.restaurant_name || 'KOMA GOURMET';
+        const restaurantName = (data as Record<string, unknown>)?.restaurant_name as string || 'KOMA GOURMET';
         targetUrl = `koma-print://connect?backend=${encodeURIComponent(apiBaseUrl)}&tenant=${tenantId}&name=${encodeURIComponent(restaurantName)}&agent_id=${encodeURIComponent(agentId)}&token=${encodeURIComponent(agentToken)}`;
       }
     } catch {
