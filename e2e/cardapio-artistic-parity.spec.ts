@@ -65,6 +65,45 @@ test('link de rota usa Google Maps quando cadastrado somente o Plus Code', async
   await expect(mapsLink).toHaveAttribute('target', '_blank');
 });
 
+test('batatas aparecem separadas e abrem o mesmo produto na sugestão e na categoria', async ({ page }) => {
+  await menu(page, payload => {
+    payload.restaurante.id = 1; // Exercita o antigo agrupamento hardcoded do tenant 1.
+    payload.categorias.push({ id: 30, nome: 'Batatas Fritas' });
+    payload.produtos.push(
+      { id: 'fries-small', nome: 'Batata Frita Pequena (200 g)', preco: 12, descricao: '200 g com molho rosé', categoria_id: 30, grupos_modificadores: [] },
+      { id: 'fries-medium', nome: 'Batata Frita Média (300 g)', preco: 15, descricao: '300 g com molho rosé', categoria_id: 30, grupos_modificadores: [] },
+      { id: 'fries-large', nome: 'Batata Frita Grande (400 g)', preco: 18, descricao: '400 g com molho rosé', categoria_id: 30, grupos_modificadores: [] },
+      { id: 'fries-special', nome: 'Batata Frita Especial (300 g)', preco: 24, descricao: 'Escolha bacon ou calabresa', categoria_id: 30,
+        grupos_modificadores: [{ id: 'topping', nome: 'Escolha o acompanhamento', min_selecoes: 1, max_selecoes: 1,
+          tipo: 'obrigatorio', opcoes: [{ id: 'bacon', nome: 'Bacon', preco_adicional: 0, ativo: true }, { id: 'calabresa', nome: 'Calabresa', preco_adicional: 0, ativo: true }] }] },
+    );
+  });
+
+  for (const id of ['fries-small', 'fries-medium', 'fries-large', 'fries-special']) {
+    await expect(page.locator(`#product-card-${id}`)).toBeVisible();
+  }
+  await expect(page.locator('#product-card-family-batatas-fritas')).toHaveCount(0);
+  await expect(page.locator('#pairing-card-fries-small')).toBeVisible();
+
+  await page.locator('#pairing-card-fries-small .koma-art-details-trigger').click();
+  const modal = page.locator('#product-details-modal');
+  await expect(modal).toContainText('Batata Frita Pequena (200 g)');
+  await expect(modal).not.toContainText('Escolha a preparação');
+  const fromPairing = await modal.locator('h2').first().textContent();
+  await modal.locator('#btn-close-modal').click();
+
+  await page.locator('#product-card-fries-small .koma-art-details-trigger').click();
+  await expect(modal).toBeVisible();
+  expect(await modal.locator('h2').first().textContent()).toBe(fromPairing);
+  await expect(modal).not.toContainText('Tamanho');
+  await modal.locator('#btn-close-modal').click();
+
+  await page.locator('#product-card-fries-special .koma-art-details-trigger').click();
+  await expect(modal.getByText('Escolha o acompanhamento')).toBeVisible();
+  await expect(modal.getByText('Bacon', { exact: true })).toBeVisible();
+  await expect(modal.getByText('Calabresa', { exact: true })).toBeVisible();
+});
+
  test('ranking real, IDs únicos e consulta única ao navegar', async({page})=>{
   const state=await menu(page);
   await expect(page.locator('#koma-art-hero-showcase')).toContainText('Vinho Tinto');
