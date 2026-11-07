@@ -506,12 +506,19 @@ export function PrintMonitorPanel({
     );
   }, [monitorData]);
 
+  const isMobileClient = typeof navigator !== 'undefined' && (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent))
+  );
+
   const isPrinterReady = (printer: DetectedPrinter): boolean => {
-    if (
-      printer.connection === 'bluetooth'
-      && !(printer.paired && (printer.spp ?? true))
-    ) {
-      return false;
+    if (printer.connection === 'bluetooth') {
+      return Boolean(
+        printer.configured
+        && printer.paired
+        && (printer.spp ?? true)
+        && (printer.dispatchable ?? true)
+      );
     }
     return Boolean(
       printer.available
@@ -749,20 +756,24 @@ export function PrintMonitorPanel({
     if (startingAgentRef.current) return;
     startingAgentRef.current = true;
     setStartingAgent(true);
-    setActionMessage('Preparando a impressão…');
+    setActionMessage(isMobileClient ? 'Conectando ao app KÔMA Print no celular…' : 'Preparando a impressão…');
     setActionSuccessful(null);
-    const result = await localConnection.connect();
-    if (result !== 'unavailable') {
-      startingAgentRef.current = false;
-      setStartingAgent(false);
-      setActionMessage('');
-      return;
+
+    if (!isMobileClient) {
+      // Desktop: tenta loopback local (127.0.0.1:17654) primeiro
+      const result = await localConnection.connect();
+      if (result !== 'unavailable') {
+        startingAgentRef.current = false;
+        setStartingAgent(false);
+        setActionMessage('');
+        return;
+      }
     }
 
     let targetUrl = 'koma-print://start';
     try {
       const suffix = Math.random().toString(36).substring(2, 7);
-      const requestedAgentId = `android-bt-${suffix}`;
+      const requestedAgentId = isMobileClient ? `android-bt-${suffix}` : `desktop-${suffix}`;
       const response = await fetch(`${apiBaseUrl}/api/print-agents/register`, {
         method: 'POST',
         headers: {
@@ -783,9 +794,14 @@ export function PrintMonitorPanel({
       // Fallback para koma-print://start
     }
 
-    const launcher = document.createElement('a');
-    launcher.href = targetUrl;
-    launcher.click();
+    if (isMobileClient) {
+      window.location.href = targetUrl;
+    } else {
+      const launcher = document.createElement('a');
+      launcher.href = targetUrl;
+      launcher.click();
+    }
+
     window.setTimeout(() => {
       startingAgentRef.current = false;
       setStartingAgent(false);
@@ -907,8 +923,10 @@ export function PrintMonitorPanel({
     if (!localAgentId && !hasOnlineAgent) {
       return {
         tone: 'danger',
-        title: 'KÔMA Print não conectado',
-        detail: 'Clique em “Preparar impressão” para conectar a impressora deste caixa.'
+        title: isMobileClient ? 'KÔMA Print desconectado' : 'KÔMA Print não identificado neste computador',
+        detail: isMobileClient
+          ? 'Toque em “Preparar impressão no Celular” para conectar a impressora Bluetooth deste aparelho.'
+          : 'Clique em “Preparar impressão” para conectar somente este computador.'
       };
     }
     if (!hasOnlineAgent) {
@@ -1196,7 +1214,15 @@ export function PrintMonitorPanel({
                   {startingAgent
                     ? <RefreshCw size={16} className="animate-spin" />
                     : <Power size={16} />}
-                  {startingAgent ? 'Conectando…' : localConnection.status === 'permission_denied' ? 'Verificar acesso do navegador' : connectionNeedsPermission ? 'Conectar KÔMA Print' : 'Preparar impressão'}
+                  {startingAgent
+                    ? 'Conectando…'
+                    : localConnection.status === 'permission_denied'
+                      ? 'Verificar acesso do navegador'
+                      : connectionNeedsPermission
+                        ? 'Conectar KÔMA Print'
+                        : isMobileClient
+                          ? 'Preparar impressão no Celular'
+                          : 'Preparar impressão'}
                 </button>
               ) : null}
 
@@ -1333,7 +1359,11 @@ export function PrintMonitorPanel({
                 {connectionNeedsPermission ? 'Impressoras não verificadas' : 'Desconectada'}
               </strong>
               <span className="mt-1 block text-[10px] text-koma-muted">
-                {connectionNeedsPermission ? 'Autorize o navegador para consultar as impressoras deste computador.' : 'Nenhuma impressora encontrada neste computador.'}
+                {connectionNeedsPermission
+                  ? 'Autorize o navegador para consultar as impressoras deste computador.'
+                  : isMobileClient
+                    ? 'Nenhuma impressora encontrada no app do celular.'
+                    : 'Nenhuma impressora encontrada neste computador.'}
               </span>
               <span className="mt-4 inline-flex items-center gap-2 text-[10px] font-semibold text-koma-muted">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
