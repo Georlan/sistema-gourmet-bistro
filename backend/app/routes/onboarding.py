@@ -471,7 +471,8 @@ def _build_onboarding_status(
         "profile": _profile_is_configured(
             restaurant,
             require_essentials=setup_pending,
-            require_address=not provisional_preparation,
+            # Endereço definitivo não bloqueia preparação nem onboarding comercial antes do trial.
+            require_address=not (provisional_preparation or commercial_setup_pending),
         ),
         "hours": _structured_has_items(restaurant.horarios_funcionamento),
         "catalog": active_product_count > 0,
