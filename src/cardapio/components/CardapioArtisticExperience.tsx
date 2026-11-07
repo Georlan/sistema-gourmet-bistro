@@ -37,6 +37,7 @@ import { CustomerProfile } from '../customerSession';
 import { OrderStateContract, StoredOrder, customerOrderLabel, orderFulfillmentLabel } from '../orderTracking';
 import { buildKomaAttributionUrl } from '../komaAttribution';
 import { getPairingRecommendations, classifyProduct } from '../pairingRecommendations';
+import { resolvePairingDisplay } from '../resolvePairingDisplay';
 import type { CartItem } from './CardapioCartDrawer';
 import CatalogProductImage from './CatalogProductImage';
 import {
@@ -231,15 +232,17 @@ export function CardapioArtisticExperience({
   }, [activeBrand.products, popularIds, activeBrand.popularProductIds]);
 
   // Produtos de harmonização / recomendação complementar contextual
-  const pairingProducts = useMemo<Product[]>(() => {
+  const pairingProducts = useMemo<CatalogDisplayItem[]>(() => {
+    const catalog = activeBrand.products || [];
     const cartProductIds = (cart || []).map((item) => item.product.id);
-    return getPairingRecommendations({
-      catalog: activeBrand.products || [],
+    const suggestions = getPairingRecommendations({
+      catalog,
       cartProductIds,
-      limit: 4,
+      limit: 12,
       excludeCartItems: false,
     });
-  }, [activeBrand.products, cart]);
+    return resolvePairingDisplay(catalog, suggestions, activeBrand.id, 4);
+  }, [activeBrand.products, activeBrand.id, cart]);
 
   const pairingHint = useMemo(() => {
     const types = new Set(pairingProducts.map(classifyProduct));
@@ -1000,8 +1003,10 @@ export function CardapioArtisticExperience({
 
           <div className="koma-art-pairing-grid">
             {pairingProducts.map((item) => {
-              const qty = getProductCartQuantity(item.id);
-              const hasMods = Boolean(
+              const qty = isGroupedProduct(item)
+                ? item.variants.reduce((sum, variant) => sum + getProductCartQuantity(variant.id), 0)
+                : getProductCartQuantity(item.id);
+              const hasMods = isGroupedProduct(item) || Boolean(
                 (item.modifierGroups && item.modifierGroups.length > 0) ||
                 (item.modifiers && item.modifiers.length > 0)
               );

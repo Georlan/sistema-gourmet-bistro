@@ -65,6 +65,33 @@ test('link de rota usa Google Maps quando cadastrado somente o Plus Code', async
   await expect(mapsLink).toHaveAttribute('target', '_blank');
 });
 
+test('batata sugerida e batata do catálogo abrem o mesmo SKU sem seleção duplicada', async ({ page }) => {
+  await menu(page, payload => {
+    payload.restaurante.id = 1;
+    payload.categorias.push({ id: 30, nome: 'Batatas Fritas' });
+    payload.produtos.push(
+      { id: 'batata-p', nome: 'Batata Frita Pequena (200 g)', descricao: 'Com molho rosé', preco: 12, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
+      { id: 'batata-m', nome: 'Batata Frita Média (300 g)', descricao: 'Com molho rosé', preco: 15, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
+      { id: 'batata-g', nome: 'Batata Frita Grande (400 g)', descricao: 'Com molho rosé', preco: 18, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
+    );
+  });
+  const catalog = page.locator('[data-menu-category="Batatas Fritas"]');
+  await expect(catalog.locator('[id^="product-card-"]')).toHaveCount(3);
+  await expect(page.locator('#pairing-card-batata-p')).toBeVisible();
+
+  await page.locator('#pairing-card-batata-p').click();
+  const modal = page.locator('#product-details-modal');
+  await expect(modal).toContainText('Batata Frita Pequena (200 g)');
+  await expect(modal).not.toContainText('Escolha a preparação');
+  await expect(modal).not.toContainText('Tamanho');
+  await modal.locator('#btn-close-modal').click();
+
+  await catalog.locator('#product-card-batata-p').click();
+  await expect(modal).toContainText('Batata Frita Pequena (200 g)');
+  await expect(modal).not.toContainText('Tamanho');
+  await expect(modal.locator('#btn-add-to-cart-action')).toBeEnabled();
+});
+
  test('ranking real, IDs únicos e consulta única ao navegar', async({page})=>{
   const state=await menu(page);
   await expect(page.locator('#koma-art-hero-showcase')).toContainText('Vinho Tinto');
