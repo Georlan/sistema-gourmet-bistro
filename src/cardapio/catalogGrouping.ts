@@ -84,7 +84,8 @@ function formatVariantLabel(name: string, kind: string): string {
     return name
       .replace(/^pastel\s+m[eé]dio\s*/i, '')
       .replace(/^pastel[aã]o\s*/i, '')
-      .replace(/^(de|sabor)\s+/i, '')
+      .replace(/^de\s+/i, '')
+      .replace(/^sabor\s+/i, '')
       .replace(/^\w/, (c) => c.toUpperCase());
   }
   if (kind === 'sucos') {
