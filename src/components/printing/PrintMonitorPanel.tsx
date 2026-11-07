@@ -359,16 +359,23 @@ export function PrintMonitorPanel({
   const localConnection = useLocalPrintAgent(connectionScope);
   const detectedMobileAgentId = useMemo(() => {
     if (!isMobileClient) return null;
-    const stored = typeof window !== 'undefined' ? localStorage.getItem('koma_print_mobile_agent_id') : null;
-    if (stored) return stored;
-    return (monitorData?.agents || []).find(a => (
+    const onlineAgent = (monitorData?.agents || []).find(a => (
       a.online && (
         a.agent_id.startsWith('android-')
         || a.printer_diagnostics?.platform === 'android'
         || a.printer_diagnostics?.adapter === 'android_bluetooth_spp'
       )
     ))?.agent_id || (monitorData?.agents || []).find(a => a.online)?.agent_id || null;
-  }, [monitorData]);
+    if (onlineAgent) {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('koma_print_mobile_agent_id', onlineAgent);
+      }
+      return onlineAgent;
+    }
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('koma_print_mobile_agent_id') : null;
+    if (stored) return stored;
+    return null;
+  }, [isMobileClient, monitorData]);
   const localAgentId = localConnection.identity?.agent_id || detectedMobileAgentId || null;
   const localAgentResolved = localConnection.status !== 'checking';
   const connectionNeedsPermission = localConnection.status === 'permission_prompt' || localConnection.status === 'permission_denied';
@@ -438,6 +445,21 @@ export function PrintMonitorPanel({
     hasPendingCommand
     && pendingCommandAgeMs <= usbSearchUiTimeoutMs
   );
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void loadMonitor(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleVisibility);
+    };
+  }, [loadMonitor]);
 
   useEffect(() => {
     if (!hasPendingCommand && !pendingCommandId) return;
@@ -788,7 +810,7 @@ export function PrintMonitorPanel({
           ...authHeaders,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ agent_id: requestedAgentId }),
+        body: JSON.stringify({ agent_id: requestedAgentId, is_primary: true }),
       });
       const data = await response.json().catch(() => null);
       if (response.ok && data?.agent_token) {
@@ -797,6 +819,14 @@ export function PrintMonitorPanel({
         const agentToken = data.agent_token;
         if (isMobileClient && typeof window !== 'undefined') {
           localStorage.setItem('koma_print_mobile_agent_id', agentId);
+          void fetch(`${apiBaseUrl}/api/print-agents/set-primary`, {
+            method: 'POST',
+            headers: {
+              ...authHeaders,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ agent_id: agentId }),
+          }).catch(() => null);
         }
         const restaurantName = (data as Record<string, unknown>)?.restaurant_name as string || 'KOMA GOURMET';
         targetUrl = `koma-print://connect?backend=${encodeURIComponent(apiBaseUrl)}&tenant=${tenantId}&name=${encodeURIComponent(restaurantName)}&agent_id=${encodeURIComponent(agentId)}&token=${encodeURIComponent(agentToken)}`;
