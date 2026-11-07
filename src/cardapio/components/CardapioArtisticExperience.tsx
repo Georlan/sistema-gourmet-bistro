@@ -220,16 +220,18 @@ export function CardapioArtisticExperience({
   }, [activeBrand.socials]);
 
   // Identificação do produto Hero (seleciona o #1 em escolhas registradas ou o primeiro disponível)
-  const heroProduct = useMemo<Product | null>(() => {
-    if (!activeBrand.products || activeBrand.products.length === 0) return null;
+  const heroProduct = useMemo<CatalogDisplayItem | null>(() => {
+    const catalog = activeBrand.products || [];
+    if (catalog.length === 0) return null;
     const effectivePopularIds = popularIds.length > 0 ? popularIds : (activeBrand.popularProductIds || []);
-    if (effectivePopularIds.length > 0) {
-      const topId = String(effectivePopularIds[0]);
-      const found = activeBrand.products.find((p) => String(p.id) === topId && p.isAvailable !== false);
-      if (found) return found;
-    }
-    return activeBrand.products.find((p) => p.isAvailable !== false) || null;
-  }, [activeBrand.products, popularIds, activeBrand.popularProductIds]);
+    const topId = effectivePopularIds.length > 0 ? String(effectivePopularIds[0]) : '';
+    const selected = catalog.find((p) => String(p.id) === topId && p.isAvailable !== false)
+      || catalog.find((p) => p.isAvailable !== false);
+    if (!selected) return null;
+    // O hero usa a mesma identidade do catálogo, inclusive se o produto
+    // em destaque for uma das gramagens de uma família.
+    return resolvePairingDisplay(catalog, [selected], activeBrand.id, 1)[0] || selected;
+  }, [activeBrand.products, activeBrand.id, popularIds, activeBrand.popularProductIds]);
 
   // Produtos de harmonização / recomendação complementar contextual
   const pairingProducts = useMemo<CatalogDisplayItem[]>(() => {
@@ -271,11 +273,17 @@ export function CardapioArtisticExperience({
   const fulfillment = getFulfillmentAvailability(activeBrand);
   const fulfillmentLabel = [fulfillment.delivery && 'Entrega', fulfillment.pickup && 'Retirada', fulfillment.dine_in && 'Consumo local'].filter(Boolean).join(' · ');
 
-  const heroCartQty = heroProduct ? getProductCartQuantity(heroProduct.id) : 0;
+  const heroCartQty = heroProduct
+    ? isGroupedProduct(heroProduct)
+      ? heroProduct.variants.reduce((sum, variant) => sum + getProductCartQuantity(variant.id), 0)
+      : getProductCartQuantity(heroProduct.id)
+    : 0;
   const isVerifiedTopRanked = Boolean(
     popularIds.length > 0 &&
     heroProduct &&
-    String(popularIds[0]) === String(heroProduct.id)
+    (isGroupedProduct(heroProduct)
+      ? heroProduct.variants.some((variant) => String(variant.id) === String(popularIds[0]))
+      : String(popularIds[0]) === String(heroProduct.id))
   );
 
   return (
@@ -930,10 +938,10 @@ export function CardapioArtisticExperience({
               <div className="koma-art-stage-action-row">
                 <div className="koma-art-stage-price-box">
                   <span className="koma-art-stage-price-label">Valor</span>
-                  <strong className="koma-art-stage-price-val">{formatPrice(heroProduct.price)}</strong>
+                  <strong className="koma-art-stage-price-val">{isGroupedProduct(heroProduct) && heroProduct.hasVariablePrice ? 'A partir de ' : ''}{formatPrice(heroProduct.price)}</strong>
                 </div>
 
-                {heroCartQty > 0 ? (
+                {heroCartQty > 0 && !isGroupedProduct(heroProduct) ? (
                   <div className="koma-art-stepper-capsule">
                     <button
                       type="button"
@@ -962,6 +970,7 @@ export function CardapioArtisticExperience({
                     type="button"
                     onClick={(e) => {
                       if (
+                        isGroupedProduct(heroProduct) ||
                         (heroProduct.modifierGroups && heroProduct.modifierGroups.length > 0) ||
                         (heroProduct.modifiers && heroProduct.modifiers.length > 0)
                       ) {
@@ -974,7 +983,7 @@ export function CardapioArtisticExperience({
                     id={`btn-hero-fast-add-${heroProduct.id}`}
                     aria-label={`Pedir ${heroProduct.name}`}
                   >
-                    <span>Pedir agora</span>
+                    <span>{isGroupedProduct(heroProduct) ? (heroCartQty > 0 ? 'Montar outra' : 'Escolher tamanho') : 'Pedir agora'}</span>
                     <ArrowRight className="w-4 h-4 ml-1" />
                   </button>
                 )}
@@ -1034,7 +1043,7 @@ export function CardapioArtisticExperience({
                   <div className="koma-art-pebble-content">
                     <h4 className="koma-art-pebble-title"><button type="button" className="koma-art-details-trigger" aria-label={`${item.name}, ver detalhes`} onClick={event => { event.stopPropagation(); onSelectProduct(item); }}>{item.name}</button></h4>
                     <div className="koma-art-pebble-footer">
-                      <span className="koma-art-pebble-price">{formatPrice(item.price)}</span>
+                      <span className="koma-art-pebble-price">{isGroupedProduct(item) && item.hasVariablePrice ? 'A partir de ' : ''}{formatPrice(item.price)}</span>
                       {!isAvailable ? (
                         <span className="koma-art-pebble-unavailable">Esgotado</span>
                       ) : qty > 0 && !hasMods ? (

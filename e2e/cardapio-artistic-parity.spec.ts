@@ -65,7 +65,7 @@ test('link de rota usa Google Maps quando cadastrado somente o Plus Code', async
   await expect(mapsLink).toHaveAttribute('target', '_blank');
 });
 
-test('batata sugerida e batata do catálogo abrem o mesmo SKU sem seleção duplicada', async ({ page }) => {
+test('batata do catálogo e da sugestão abre os mesmos três tamanhos', async ({ page }) => {
   await menu(page, payload => {
     payload.restaurante.id = 1;
     payload.categorias.push({ id: 30, nome: 'Batatas Fritas' });
@@ -73,23 +73,76 @@ test('batata sugerida e batata do catálogo abrem o mesmo SKU sem seleção dupl
       { id: 'batata-p', nome: 'Batata Frita Pequena (200 g)', descricao: 'Com molho rosé', preco: 12, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
       { id: 'batata-m', nome: 'Batata Frita Média (300 g)', descricao: 'Com molho rosé', preco: 15, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
       { id: 'batata-g', nome: 'Batata Frita Grande (400 g)', descricao: 'Com molho rosé', preco: 18, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
+      { id: 'batata-especial', nome: 'Batata Frita Especial (300 g)', descricao: 'Bacon ou calabresa', preco: 24, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
     );
   });
   const catalog = page.locator('[data-menu-category="Batatas Fritas"]');
-  await expect(catalog.locator('[id^="product-card-"]')).toHaveCount(3);
-  await expect(page.locator('#pairing-card-batata-p')).toBeVisible();
+  await expect(catalog.locator('[id^="product-card-"]')).toHaveCount(2);
+  await expect(page.locator('#pairing-card-family-size-batata-frita')).toBeVisible();
 
-  await page.locator('#pairing-card-batata-p').click();
+  await page.locator('#pairing-card-family-size-batata-frita').click();
   const modal = page.locator('#product-details-modal');
-  await expect(modal).toContainText('Batata Frita Pequena (200 g)');
-  await expect(modal).not.toContainText('Escolha a preparação');
-  await expect(modal).not.toContainText('Tamanho');
+  await expect(modal).toContainText('Batata Frita');
+  await expect(modal.locator('[id^="variant-btn-"]')).toHaveCount(3);
+  await modal.locator('#variant-btn-batata-g').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('18,00');
   await modal.locator('#btn-close-modal').click();
 
-  await catalog.locator('#product-card-batata-p').click();
-  await expect(modal).toContainText('Batata Frita Pequena (200 g)');
-  await expect(modal).not.toContainText('Tamanho');
-  await expect(modal.locator('#btn-add-to-cart-action')).toBeEnabled();
+  await catalog.locator('#product-card-family-size-batata-frita').click();
+  await expect(modal.locator('[id^="variant-btn-"]')).toHaveCount(3);
+  await modal.locator('#variant-btn-batata-m').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('15,00');
+  await expect(catalog.locator('#product-card-batata-especial')).toBeVisible();
+});
+
+test('destaque de batatas também abre a família de tamanhos, sem fast-add do SKU menor', async ({ page }) => {
+  await menu(page, payload => {
+    payload.restaurante.id = 1;
+    payload.categorias = [{ id: 30, nome: 'Batatas Fritas' }];
+    payload.produtos = [
+      { id: 'batata-p', nome: 'Batata Frita Pequena (200 g)', descricao: 'Com molho rosé', preco: 12, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
+      { id: 'batata-m', nome: 'Batata Frita Média (300 g)', descricao: 'Com molho rosé', preco: 15, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
+      { id: 'batata-g', nome: 'Batata Frita Grande (400 g)', descricao: 'Com molho rosé', preco: 18, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
+    ];
+  });
+  const hero = page.locator('#koma-art-hero-showcase');
+  await expect(hero).toContainText('Batata Frita');
+  await expect(hero).toContainText('A partir de');
+  await hero.locator('#btn-hero-fast-add-family-size-batata-frita').click();
+  const modal = page.locator('#product-details-modal');
+  await expect(modal.locator('[id^="variant-btn-"]')).toHaveCount(3);
+  await modal.locator('#variant-btn-batata-m').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('15,00');
+});
+
+test('pastel e pastelão apresentam tamanho primeiro, sabores completos e preço real por sabor', async ({ page }) => {
+  await menu(page, payload => {
+    payload.restaurante.id = 1;
+    payload.categorias.push({ id: 40, nome: 'Pastelões e Pastel Médio' });
+    const optionGroup = (sol: boolean) => ({
+      id: sol ? 'size-sol' : 'size-common', nome: 'Tamanho', tipo: 'obrigatorio',
+      min_selecoes: 1, max_selecoes: 1,
+      opcoes: [
+        { id: sol ? 'medium-sol' : 'medium', nome: 'Pastel Médio', preco_adicional: 0, ativo: true },
+        { id: sol ? 'large-sol' : 'large', nome: 'Pastelão', preco_adicional: sol ? 10 : 9, ativo: true },
+      ],
+    });
+    payload.produtos.push(
+      { id: 'pastel-sol', nome: 'Pastel de Carne de Sol', descricao: 'Carne de sol, queijo e catupiry', preco: 7, categoria_id: 40, imagem_url: '', grupos_modificadores: [optionGroup(true)] },
+      { id: 'pastel-frango', nome: 'Pastel de Frango', descricao: 'Frango, queijo e catupiry', preco: 7, categoria_id: 40, imagem_url: '', grupos_modificadores: [optionGroup(false)] },
+    );
+  });
+  await page.locator('#product-card-family-pasteis').click();
+  const modal = page.locator('#product-details-modal');
+  await expect(modal.locator('#modal-pastel-size-selector')).toBeVisible();
+  await expect(modal.locator('#modal-variants-selector')).toBeVisible();
+  await expect(modal).toContainText('Frango, queijo e catupiry');
+  await modal.locator('#pastel-size-large-sol').click();
+  await modal.locator('#variant-btn-pastel-sol').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('17,00');
+  await modal.locator('#variant-btn-pastel-frango').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('16,00');
+  await expect(modal.locator('#pastel-size-large')).toHaveAttribute('aria-pressed', 'true');
 });
 
  test('ranking real, IDs únicos e consulta única ao navegar', async({page})=>{

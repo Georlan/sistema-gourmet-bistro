@@ -8,15 +8,18 @@ function product(id: string, name: string, category: string, price: number): Pro
   return { id, name, category, price, description: '', image: '', isAvailable: true };
 }
 
-test('batatas individuais são a mesma identidade na vitrine e nas sugestões', () => {
+test('batatas tradicionais abrem a mesma família nas recomendações, sem misturar a especial', () => {
   const catalog = [
     product('p', 'Batata Frita Pequena (200 g)', 'Batatas Fritas', 12),
     product('m', 'Batata Frita Média (300 g)', 'Batatas Fritas', 15),
+    product('g', 'Batata Frita Grande (400 g)', 'Batatas Fritas', 18),
     product('esp', 'Batata Frita Especial (300 g)', 'Batatas Fritas', 24),
   ];
-  const result = resolvePairingDisplay(catalog, [catalog[0], catalog[1]], '1', 4);
-  assert.deepEqual(result.map(item => item.id), ['p', 'm']);
-  assert.ok(result.every(item => !isGroupedProduct(item)));
+  const result = resolvePairingDisplay(catalog, [catalog[0], catalog[1], catalog[3]], '1', 4);
+  assert.deepEqual(result.map(item => item.id), ['family-size-batata-frita', 'esp']);
+  assert.ok(isGroupedProduct(result[0]));
+  assert.deepEqual((result[0] as { variants: Array<{ id: string }> }).variants.map(v => v.id), ['p', 'm', 'g']);
+  assert.equal(isGroupedProduct(result[1]), false);
 });
 
 test('batata especial mantém somente sua escolha real de bacon ou calabresa', () => {
