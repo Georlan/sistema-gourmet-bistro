@@ -12,10 +12,41 @@ Requisitos validados:
 8. Idempotência na baixa: confirmações repetidas não duplicam a extensão do período.
 """
 import datetime as dt
+from contextlib import contextmanager
 from decimal import Decimal
 import pytest
 from types import SimpleNamespace
-from freezegun import freeze_time
+
+
+@contextmanager
+def freeze_time(target_dt: dt.datetime):
+    orig_dt = dt.datetime
+
+    class MockDatetime(orig_dt):
+        @classmethod
+        def now(cls, tz=None):
+            if tz is not None:
+                return target_dt.astimezone(tz)
+            return target_dt
+
+    import datetime
+    import app.routes.saas_pix as saas_pix_mod
+    import app.services.direct_pix_billing as direct_pix_mod
+    import app.routes.super_admin as super_admin_mod
+
+    dt.datetime = MockDatetime
+    datetime.datetime = MockDatetime
+    saas_pix_mod.dt.datetime = MockDatetime
+    direct_pix_mod.dt.datetime = MockDatetime
+    super_admin_mod.datetime.datetime = MockDatetime
+    try:
+        yield
+    finally:
+        dt.datetime = orig_dt
+        datetime.datetime = orig_dt
+        saas_pix_mod.dt.datetime = orig_dt
+        direct_pix_mod.dt.datetime = orig_dt
+        super_admin_mod.datetime.datetime = orig_dt
 
 from app.database import SessionLocal, tenant_session_scope
 from app.models import DirectPixFeeInvoice, Restaurante, SuperAdminAuditLog, Usuario
