@@ -198,10 +198,9 @@ def ensure_subscription_invoice(
 
     if amount is None:
         terms = tenant_commercial_terms(db, restaurant_id)
-        if terms is not None:
-            amount = terms.billing_amount
-        else:
-            amount = Decimal("79.90")
+        if terms is None:
+            raise ValueError("Não é possível emitir mensalidade sem termos comerciais vinculados.")
+        amount = terms.billing_amount
 
     invoice = DirectPixFeeInvoice(
         restaurante_id=restaurant_id,
