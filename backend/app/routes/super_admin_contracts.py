@@ -637,9 +637,14 @@ def activate_contract(
                     effective_method = (
                         billing_setup.payment_method_type
                         if billing_setup is not None and billing_setup.payment_method_type
-                        else (payload.payment_method_type or "pix")
+                        else payload.payment_method_type
                     )
                     if billing_setup is None and contract_fixed_billing_required(db, normalized):
+                        if effective_method != "pix":
+                            raise HTTPException(
+                                status_code=409,
+                                detail="Vincule uma autorização financeira real ou selecione Pix pós-teste explicitamente.",
+                            )
                         SaaSBillingSetup.__table__.create(db.get_bind(), checkfirst=True)
                         upsert_billing_setup(
                             db,
@@ -889,6 +894,11 @@ def link_contract(
                 # Transição canônica de restaurante provisório para cliente comercial
                 billing_setup = get_billing_setup(db, payload.protocol)
                 if billing_setup is None and payload.payment_method_type is not None:
+                    if payload.payment_method_type != "pix":
+                        raise HTTPException(
+                            status_code=409,
+                            detail="Cartão exige autorização do provedor; só Pix pós-teste pode ser selecionado sem gateway.",
+                        )
                     from ..services.billing_service import upsert_billing_setup
                     SaaSBillingSetup.__table__.create(db.get_bind(), checkfirst=True)
                     upsert_billing_setup(
