@@ -94,25 +94,28 @@ export default function CardapioProductModal({
     return containModalFocus(dialog, () => closeRef.current(), dialog.querySelector<HTMLElement>('#btn-close-modal') || dialog);
   }, []);
   const isGrouped = isGroupedProduct(product);
+  const requiresExplicitVariant = isGrouped && product.requiresExplicitVariantSelection === true;
   const defaultVariantId = useMemo(() => {
-    if (!isGrouped) return "";
+    if (!isGrouped || requiresExplicitVariant) return "";
     const avail = product.variants.find((v) => v.isAvailable);
     return avail ? avail.id : (product.variants[0]?.id || "");
-  }, [isGrouped, product]);
+  }, [isGrouped, product, requiresExplicitVariant]);
 
   const [selectedVariantId, setSelectedVariantId] = useState<string>(defaultVariantId);
 
   useEffect(() => {
     if (isGrouped) {
       const avail = product.variants.find((v) => v.isAvailable);
-      setSelectedVariantId(avail ? avail.id : (product.variants[0]?.id || ""));
+      setSelectedVariantId(requiresExplicitVariant ? "" : (avail ? avail.id : (product.variants[0]?.id || "")));
     }
-  }, [isGrouped, product]);
+  }, [isGrouped, product, requiresExplicitVariant]);
 
   const activeVariant = useMemo(() => {
-    if (!isGrouped) return null;
-    return product.variants.find((v) => v.id === selectedVariantId) || product.variants[0] || null;
-  }, [isGrouped, product, selectedVariantId]);
+    if (!isGrouped || (requiresExplicitVariant && !selectedVariantId)) return null;
+    return product.variants.find((v) => v.id === selectedVariantId)
+      || (requiresExplicitVariant ? null : product.variants[0] || null);
+  }, [isGrouped, product, selectedVariantId, requiresExplicitVariant]);
+  const needsVariantSelection = requiresExplicitVariant && !activeVariant;
 
   const effectiveProduct: Product = activeVariant ? activeVariant.product : (product as Product);
 
@@ -305,9 +308,15 @@ export default function CardapioProductModal({
     });
   }, [allModifiers, selectedOptions]);
 
-  const hasUnsatisfied = unsatisfiedModifiers.length > 0;
+  const hasUnsatisfied = needsVariantSelection || unsatisfiedModifiers.length > 0;
 
   const handleAdd = () => {
+    if (needsVariantSelection) {
+      setFeedback(isGrouped && product.groupKind === 'batata-tradicional'
+        ? 'Escolha o tamanho antes de adicionar.'
+        : 'Escolha o sabor antes de adicionar.');
+      return;
+    }
     if (unsatisfiedModifiers.length > 0) {
       setFeedback(`Confira as escolhas em ${unsatisfiedModifiers.map((m) => m.title).join(", ")} antes de ${compositionStep ? "continuar" : initialItem ? "salvar" : "adicionar"}.`);
       setExpandedExtras(current => ({ ...current, [unsatisfiedModifiers[0].id]: true }));
@@ -438,7 +447,7 @@ export default function CardapioProductModal({
               )}
             </div>
             <strong className="shrink-0 font-serif text-lg font-black text-emerald-400 sm:text-xl">
-              {compositionStep ? "Incluso na promoção" : formatPrice(unitPrice)}
+              {compositionStep ? "Incluso na promoção" : needsVariantSelection ? `A partir de ${formatPrice(unitPrice)}` : formatPrice(unitPrice)}
             </strong>
           </div>
 
@@ -450,7 +459,7 @@ export default function CardapioProductModal({
                 </h3>
                 <span className="text-[10px] font-bold text-koma-muted">1 obrigatório</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className={requiresExplicitVariant ? "grid grid-cols-1 gap-2" : "grid grid-cols-1 sm:grid-cols-2 gap-2"}>
                 {product.variants.map((v) => {
                   const isSelected = v.id === selectedVariantId;
                   const isAvail = v.isAvailable;
@@ -480,10 +489,10 @@ export default function CardapioProductModal({
                           }`}>
                             {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                           </div>
-                          <span className="text-xs font-bold truncate">{v.label}</span>
+                          <span className={requiresExplicitVariant ? "text-sm font-bold leading-snug whitespace-normal" : "text-xs font-bold truncate"}>{v.label}</span>
                         </div>
                         {v.description && (
-                          <p className="text-[10px] text-koma-muted mt-1 line-clamp-1 pl-6">{v.description}</p>
+                          <p className={requiresExplicitVariant ? "text-xs text-koma-muted mt-1 leading-relaxed pl-6" : "text-[10px] text-koma-muted mt-1 line-clamp-1 pl-6"}>{v.description}</p>
                         )}
                       </div>
                       <strong className={`text-xs shrink-0 font-serif ${isSelected ? "text-emerald-400 font-black" : "text-koma-muted"}`}>
@@ -730,7 +739,9 @@ export default function CardapioProductModal({
           {hasUnsatisfied ? (
             <p className="mb-2 text-xs font-bold text-amber-400 flex items-center gap-1.5 animate-pulse" role="status">
               <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-              Escolha {unsatisfiedModifiers.map((m) => m.title).join(", ")} para continuar
+              {needsVariantSelection
+                ? (isGrouped && product.groupKind === 'batata-tradicional' ? 'Escolha o tamanho para continuar' : 'Escolha o sabor para continuar')
+                : `Escolha ${unsatisfiedModifiers.map((m) => m.title).join(", ")} para continuar`}
             </p>
           ) : (
             <p className="mb-2 text-xs text-koma-muted">Quantidade de itens{quantity > 1 ? " · Mesma montagem para todas as unidades" : ""}</p>
@@ -774,7 +785,7 @@ export default function CardapioProductModal({
               <ShoppingBag className="h-4 w-4 shrink-0" />
               <span>{initialItem ? "Salvar" : "Adicionar"} {quantity}×</span>
             </span>
-            <strong className="text-sm font-black">{formatPrice(totalPrice)}</strong>
+            <strong className="text-sm font-black">{needsVariantSelection ? "Escolha uma opção" : formatPrice(totalPrice)}</strong>
           </button>
           </div>
           </>
