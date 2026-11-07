@@ -68,3 +68,17 @@ test('chat distinguishes a failed list from an empty queue and quick replies foc
   await expect(dialog).toHaveCount(0);
   await expect(page.locator('#btn-caixa-conversas-drawer')).toBeFocused();
 });
+
+test('contador de pedidos ativos exclui conversas encerradas mesmo com mensagens pendentes', async ({ page }) => {
+  await mockCashierBackend(page); await seedCashierSession(page);
+  const base = { tipo_pedido: 'Delivery', total_pedido: 35, unread_count: 0, updated_at: new Date().toISOString(), last_message: null };
+  await page.route('**/api/caixa/conversas', route => route.fulfill({ json: [
+    { ...base, id: 'active', pedido_id: 'active', numero_pedido: 10, cliente_nome: 'Ativo', status_pedido: 'producao', closed_at: null },
+    { ...base, id: 'closed', pedido_id: 'closed', numero_pedido: 11, cliente_nome: 'Encerrado', status_pedido: 'finalizado', closed_at: new Date().toISOString(), unread_count: 1 },
+  ] }));
+  await page.goto('/?view=caixa');
+  await page.locator('#btn-caixa-conversas-drawer').click();
+  const dialog = page.getByRole('dialog', { name: 'Central de Mensagens dos Pedidos', exact: true });
+  await expect(dialog.getByText('Pedidos ativos', { exact: true }).locator('..')).toContainText('1');
+  await expect(dialog.getByRole('button', { name: /Pedido #11/ })).toBeVisible();
+});

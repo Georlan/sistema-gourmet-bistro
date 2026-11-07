@@ -53,6 +53,7 @@ class ContractActivationRequest(BaseModel):
         min_length=3,
         max_length=1000,
     )
+    restaurant_id: int | None = Field(default=None, ge=1, le=2_147_483_647)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -551,6 +552,14 @@ def activate_contract(
 
         existing_tenant_id = acceptance.get("linked_restaurante_id")
         if existing_tenant_id is not None:
+            if (
+                payload.restaurant_id is not None
+                and int(payload.restaurant_id) != int(existing_tenant_id)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Este contrato já foi provisionado no restaurante #{existing_tenant_id}.",
+                )
             if not contract_fixed_billing_required(db, normalized):
                 acceptance["billing_status"] = "not_required"
                 acceptance["billing_provider"] = None
@@ -575,6 +584,8 @@ def activate_contract(
             billing_setup=billing_setup,
             actor=str(admin.get("user") or "superadmin"),
             reason=clean_reason,
+            requested_restaurant_id=payload.restaurant_id,
+            allow_id_reuse=True,
         )
         latest = resolve_activation_acceptance(db, normalized) or acceptance
         if not contract_fixed_billing_required(db, normalized):
@@ -688,6 +699,50 @@ def link_contract(
                 linked_at=datetime.datetime.now(datetime.timezone.utc),
             )
             db.add(link)
+
+            existing_subscription = (
+                db.query(SaaSSubscription)
+                .filter(SaaSSubscription.restaurante_id == tenant_id)
+                .one_or_none()
+            )
+            created_subscription = False
+            if existing_subscription is None:
+                # Transição canônica de restaurante provisório para cliente comercial
+                billing_setup = get_billing_setup(db, payload.protocol)
+                if billing_setup is not None:
+                    from ..services.billing_service import link_billing_setup_to_tenant
+                    link_billing_setup_to_tenant(db, payload.protocol, tenant_id)
+
+                sub = SaaSSubscription(
+                    restaurante_id=tenant_id,
+                    provider=(
+                        billing_setup.provider
+                        if billing_setup is not None
+                        else "mercado_pago"
+                    ),
+                    provider_customer_id=(
+                        billing_setup.provider_customer_id
+                        if billing_setup is not None
+                        else None
+                    ),
+                    provider_subscription_id=(
+                        billing_setup.provider_subscription_id
+                        if billing_setup is not None
+                        else None
+                    ),
+                    payment_method_type=(
+                        billing_setup.payment_method_type
+                        if billing_setup is not None
+                        else None
+                    ),
+                    status="onboarding",
+                    trial_started_at=None,
+                    trial_ends_at=None,
+                    billing_cycle=str(acceptance.get("billing_cycle") or "monthly"),
+                )
+                db.add(sub)
+                created_subscription = True
+
             db.add(
                 SuperAdminAuditLog(
                     restaurante_id=tenant_id,
@@ -700,6 +755,8 @@ def link_contract(
                         "acceptance_id": str(acceptance["acceptance_id"]),
                         "plan": acceptance["plan"],
                         "billing_cycle": acceptance["billing_cycle"],
+                        "created_subscription": created_subscription,
+                        "subscription_status": "onboarding" if created_subscription else getattr(existing_subscription, "status", None),
                     },
                 )
             )
@@ -710,6 +767,7 @@ def link_contract(
             "protocol": payload.protocol,
             "plan": acceptance["plan"],
             "billingCycle": acceptance["billing_cycle"],
+            "subscriptionStatus": "onboarding" if created_subscription else getattr(existing_subscription, "status", None),
             "message": "Aceite contratual vinculado ao restaurante com auditoria.",
         }
     except HTTPException:

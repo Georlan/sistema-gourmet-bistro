@@ -12,6 +12,11 @@ from ..database import SessionLocal, tenant_session_scope
 from ..models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
 from ..restaurant_profile_models import RestauranteOperationProfile
 from ..security import get_password_hash
+from ..services.tenant_id_reuse import (
+    assert_tenant_id_eligible_in_locked_tx,
+    provisioning_concurrency_guard,
+    reserve_superadmin_tenant_id,
+)
 from .super_admin import get_current_admin
 from .super_admin_onboarding import (
     DEFAULT_TRIAL_DAYS,
@@ -69,6 +74,10 @@ class ProfiledTenantOnboardingRequest(TenantOnboardingRequest):
     """
 
     operation_profile: str | None = Field(default=None, max_length=64)
+    defer_trial: bool = Field(
+        default=False,
+        description="Se verdadeiro, provisiona o tenant em estado de implantação/preparação sem iniciar os 7 dias grátis",
+    )
 
     @field_validator("operation_profile")
     @classmethod
@@ -109,119 +118,164 @@ def create_profiled_tenant(
     tenant_id: int | None = None
 
     try:
-        tenant_id = _reserve_restaurant_id(db)
+        with provisioning_concurrency_guard():
+            excluded_ids: set[int] = set()
+            max_attempts = 1 if payload.restaurant_id is not None else 5
 
-        with tenant_session_scope(db, tenant_id):
-            _lock_onboarding_transaction(db)
-
-            if _slug_owner_id(db, normalized["slug"]) is not None:
-                raise _serialize_conflict(
-                    "O slug/subdomínio informado já está em uso por outro restaurante."
+            for attempt in range(max_attempts):
+                tenant_id, id_selection_mode = reserve_superadmin_tenant_id(
+                    db,
+                    requested_id=payload.restaurant_id,
+                    excluded_ids=excluded_ids,
                 )
 
-            restaurante = Restaurante(
-                id=tenant_id,
-                nome=normalized["name"],
-                slug=normalized["slug"],
-                plano=normalized["plan"],
-                saas_status="active",
-            )
-            db.add(restaurante)
-            db.flush()
+                try:
+                    with tenant_session_scope(db, tenant_id):
+                        _lock_onboarding_transaction(db)
+                        assert_tenant_id_eligible_in_locked_tx(
+                            db,
+                            tenant_id,
+                            requested_id=payload.restaurant_id,
+                        )
 
-            db.add(
-                RestauranteOperationProfile(
-                    restaurante_id=tenant_id,
-                    profile_key=operation_profile,
-                )
-            )
+                        if _slug_owner_id(db, normalized["slug"]) is not None:
+                            raise _serialize_conflict(
+                                "O slug/subdomínio informado já está em uso por outro restaurante."
+                            )
 
-            trial = _create_default_trial(db, tenant_id)
+                        restaurante = Restaurante(
+                            id=tenant_id,
+                            nome=normalized["name"],
+                            slug=normalized["slug"],
+                            plano=normalized["plan"],
+                            saas_status="active",
+                        )
+                        db.add(restaurante)
+                        db.flush()
 
-            config = ConfiguracaoRestaurante(
-                restaurante_id=tenant_id,
-                impressao_nome_restaurante=normalized["name"],
-            )
-            db.add(config)
+                        db.add(
+                            RestauranteOperationProfile(
+                                restaurante_id=tenant_id,
+                                profile_key=operation_profile,
+                            )
+                        )
 
-            initial_admin = Usuario(
-                restaurante_id=tenant_id,
-                nome=normalized["admin_name"],
-                email=normalized["admin_email"],
-                cargo="admin",
-                status="ativo",
-                senha_hash=get_password_hash(payload.temporary_password),
-            )
-            db.add(initial_admin)
-            db.flush()
+                        if payload.defer_trial:
+                            # Provisório/Preparação: não inicia janela de trial
+                            trial = {
+                                "status": "pending_setup",
+                                "started_at": None,
+                                "ends_at": None,
+                                "days": DEFAULT_TRIAL_DAYS,
+                            }
+                        else:
+                            trial = _create_default_trial(db, tenant_id)
 
-            db.add(
-                SuperAdminAuditLog(
-                    restaurante_id=tenant_id,
-                    actor=str(admin.get("user") or "superadmin"),
-                    action="SUPERADMIN_TENANT_ONBOARD",
-                    reason="Provisionamento inicial de restaurante pelo Super Admin",
-                    before_data=None,
-                    after_data={
-                        "restaurante_id": tenant_id,
-                        "nome": normalized["name"],
-                        "slug": normalized["slug"],
-                        "plano": normalized["plan"],
-                        "saas_status": "active",
-                        "operation_profile": operation_profile,
-                        "trial_status": trial["status"],
-                        "trial_started_at": trial["started_at"].isoformat(),
-                        "trial_ends_at": trial["ends_at"].isoformat(),
-                        "trial_days": trial["days"],
-                        "admin_user_id": initial_admin.id,
-                        "admin_email": normalized["admin_email"],
-                        "mercado_pago": "disconnected",
-                        "commercial_terms_status": "not_contracted",
-                    },
-                )
-            )
-            db.commit()
+                        config = ConfiguracaoRestaurante(
+                            restaurante_id=tenant_id,
+                            impressao_nome_restaurante=normalized["name"],
+                        )
+                        db.add(config)
 
-            logger.info(
-                "SUPERADMIN TENANT PROFILE ONBOARDED tenant=%s actor=%s plan=%s profile=%s trial_days=%s",
-                tenant_id,
-                admin.get("user"),
-                normalized["plan"],
-                operation_profile,
-                DEFAULT_TRIAL_DAYS,
-            )
+                        initial_admin = Usuario(
+                            restaurante_id=tenant_id,
+                            nome=normalized["admin_name"],
+                            email=normalized["admin_email"],
+                            cargo="admin",
+                            status="ativo",
+                            senha_hash=get_password_hash(payload.temporary_password),
+                        )
+                        db.add(initial_admin)
+                        db.flush()
 
-            return {
-                "id": str(tenant_id),
-                "name": normalized["name"],
-                "subdomain": normalized["slug"],
-                "plan": normalized["plan"],
-                "operationProfile": operation_profile,
-                "status": "ACTIVE",
-                "onlinePaymentStatus": "disconnected",
-                "commercialTermsStatus": "not_contracted",
-                "trial": {
-                    "status": "active",
-                    "startedAt": trial["started_at"].isoformat(),
-                    "endsAt": trial["ends_at"].isoformat(),
-                    "daysRemaining": DEFAULT_TRIAL_DAYS,
-                    "daysGranted": DEFAULT_TRIAL_DAYS,
-                },
-                "admin": {
-                    "id": initial_admin.id,
-                    "name": normalized["admin_name"],
-                    "email": normalized["admin_email"],
-                    "status": "ativo",
-                },
-                "paths": {
-                    "cashier": "/?view=caixa",
-                    "publicMenu": f"/c/{normalized['slug']}",
-                },
-                "message": (
-                    "Tenant administrativo provisionado sem termos comerciais. "
-                    "Para cliente comercial, registre o aceite e use a ativação canônica."
-                ),
-            }
+                        db.add(
+                            SuperAdminAuditLog(
+                                restaurante_id=tenant_id,
+                                actor=str(admin.get("user") or "superadmin"),
+                                action="SUPERADMIN_TENANT_ONBOARD",
+                                reason="Provisionamento inicial de restaurante pelo Super Admin",
+                                before_data=None,
+                                after_data={
+                                    "restaurante_id": tenant_id,
+                                    "id_selection_mode": id_selection_mode,
+                                    "requested_restaurant_id": payload.restaurant_id,
+                                    "nome": normalized["name"],
+                                    "slug": normalized["slug"],
+                                    "plano": normalized["plan"],
+                                    "saas_status": "active",
+                                    "operation_profile": operation_profile,
+                                    "trial_status": trial["status"],
+                                    "trial_started_at": trial["started_at"].isoformat() if trial["started_at"] else None,
+                                    "trial_ends_at": trial["ends_at"].isoformat() if trial["ends_at"] else None,
+                                    "trial_days": trial["days"],
+                                    "admin_user_id": initial_admin.id,
+                                    "admin_email": normalized["admin_email"],
+                                    "mercado_pago": "disconnected",
+                                    "commercial_terms_status": "not_contracted",
+                                },
+                            )
+                        )
+                        db.commit()
+
+                        logger.info(
+                            "SUPERADMIN TENANT PROFILE ONBOARDED tenant=%s mode=%s actor=%s plan=%s profile=%s trial_days=%s",
+                            tenant_id,
+                            id_selection_mode,
+                            admin.get("user"),
+                            normalized["plan"],
+                            operation_profile,
+                            DEFAULT_TRIAL_DAYS,
+                        )
+
+                        return {
+                            "id": str(tenant_id),
+                            "idSelectionMode": id_selection_mode,
+                            "name": normalized["name"],
+                            "subdomain": normalized["slug"],
+                            "plan": normalized["plan"],
+                            "operationProfile": operation_profile,
+                            "status": "ACTIVE",
+                            "onlinePaymentStatus": "disconnected",
+                            "commercialTermsStatus": "not_contracted",
+                            "trial": {
+                                "status": trial["status"],
+                                "startedAt": trial["started_at"].isoformat() if trial["started_at"] else None,
+                                "endsAt": trial["ends_at"].isoformat() if trial["ends_at"] else None,
+                                "daysRemaining": trial["days"] if trial["started_at"] else DEFAULT_TRIAL_DAYS,
+                                "daysGranted": DEFAULT_TRIAL_DAYS,
+                            },
+                            "admin": {
+                                "id": initial_admin.id,
+                                "name": normalized["admin_name"],
+                                "email": normalized["admin_email"],
+                                "status": "ativo",
+                            },
+                            "paths": {
+                                "cashier": "/?view=caixa",
+                                "publicMenu": f"/c/{normalized['slug']}",
+                            },
+                            "message": (
+                                "Tenant administrativo provisionado sem termos comerciais. "
+                                "Para cliente comercial, registre o aceite e use a ativação canônica."
+                            ),
+                        }
+                except HTTPException as exc:
+                    if (
+                        payload.restaurant_id is None
+                        and exc.status_code == status.HTTP_409_CONFLICT
+                        and "slug/subdomínio" not in str(exc.detail)
+                        and attempt + 1 < max_attempts
+                    ):
+                        excluded_ids.add(tenant_id)
+                        continue
+                    raise
+                except IntegrityError:
+                    if db.in_transaction():
+                        db.rollback()
+                    if payload.restaurant_id is None and attempt + 1 < max_attempts:
+                        excluded_ids.add(tenant_id)
+                        continue
+                    raise
     except HTTPException:
         if db.in_transaction():
             db.rollback()

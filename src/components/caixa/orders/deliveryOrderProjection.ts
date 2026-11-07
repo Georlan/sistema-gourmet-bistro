@@ -168,6 +168,7 @@ const isPlaceholderCustomerName = (value: unknown) => {
 export function reconcileDeliveryOrderAfterStatus(
   previous: DeliveryOrderView,
   incoming: DeliveryOrderView,
+  paymentReported = true,
 ): DeliveryOrderView {
   const identityAwareIncoming = {
     ...incoming,
@@ -180,6 +181,7 @@ export function reconcileDeliveryOrderAfterStatus(
     return identityAwareIncoming;
   }
 
+  const amountPaid = paymentReported ? incoming.amountPaid : previous.amountPaid;
   return {
     ...identityAwareIncoming,
     cliente: previous.cliente,
@@ -187,8 +189,8 @@ export function reconcileDeliveryOrderAfterStatus(
     itens: previous.itens,
     detailItems: previous.detailItems,
     total: previous.total,
-    amountPaid: incoming.amountPaid ?? previous.amountPaid,
-    amountDue: incoming.amountDue ?? previous.amountDue,
+    amountPaid,
+    amountDue: Math.max(0, previous.total - (amountPaid ?? 0)),
     quantidadeItens: previous.quantidadeItens,
     pago: previous.pago,
     endereco: previous.endereco,

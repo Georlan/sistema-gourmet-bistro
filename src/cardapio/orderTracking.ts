@@ -58,6 +58,35 @@ export interface OrderStateContract {
   progress_total: number;
 }
 
+/** Handles both current responses and snapshots stored before modality-specific labels. */
+export function customerOrderLabel(state: Pick<OrderStateContract, "phase" | "fulfillment" | "label">): string {
+  if (state.phase === "ready") return { pickup: "Pronto para retirar", delivery: "Pronto para sair", dine_in: "Pronto para servir" }[state.fulfillment] ?? state.label;
+  if (state.phase === "completed") return { pickup: "Retirada concluída", delivery: "Entrega concluída", dine_in: "Pedido concluído" }[state.fulfillment] ?? state.label;
+  return state.label;
+}
+
+/** Milestones describe confirmed results, not an inferred preparation event. */
+export function orderProgress(state: OrderStateContract): { labels: string[]; current: number } | null {
+  if (!["received", "accepted", "preparing", "ready", "dispatched", "completed"].includes(state.phase)) return null;
+  const delivery = state.fulfillment === "delivery";
+  const labels = delivery ? ["Recebido", "Pronto", "Saiu para entrega", "Concluído"] : state.fulfillment === "pickup" ? ["Recebido", "Pronto para retirar", "Concluído"] : ["Recebido", "Pronto para servir", "Concluído"];
+  const current = state.phase === "completed" ? labels.length
+    : state.phase === "dispatched" && delivery ? 3
+      : state.phase === "ready" || state.phase === "dispatched" ? 2 : 1;
+  return { labels, current };
+}
+
+export function orderPhaseDescription(state: OrderStateContract): string {
+  switch (state.phase) {
+    case "received": return "Aguardando o restaurante aceitar.";
+    case "accepted": return "Aceito pelo restaurante; aguardando preparo.";
+    case "preparing": return "O restaurante iniciou o preparo.";
+    case "ready": return state.fulfillment === "delivery" ? "Pedido pronto para sair; aguardando despacho." : state.fulfillment === "pickup" ? "Seu pedido está pronto. Você já pode buscar no restaurante." : "Seu pedido está pronto para ser servido.";
+    case "dispatched": return "Pedido saiu para entrega.";
+    default: return "O restaurante atualizou o andamento do pedido.";
+  }
+}
+
 export interface StoredOrderItem {
   id?: string;
   nome: string;
@@ -109,6 +138,7 @@ const STATUS_ALIASES: Record<string, CanonicalOrderStatus> = {
   pronto: "ready",
   ready: "ready",
   transito: "dispatched",
+  saiu_para_entrega: "dispatched",
   saiu_entrega: "dispatched",
   dispatched: "dispatched",
   finalizado: "completed",
@@ -189,7 +219,7 @@ export function fallbackOrderState(status?: string, tipo?: string): OrderStateCo
   return {
     status: canonical,
     phase,
-    label: labelFor(phase),
+    label: customerOrderLabel({ phase, fulfillment, label: labelFor(phase) }),
     fulfillment,
     terminal,
     rejected,
@@ -235,7 +265,8 @@ export function isRejectedStatus(status: string | undefined): boolean {
 }
 
 export function orderStatusLabel(status: string | undefined): string {
-  return fallbackOrderState(status).label;
+  const raw = normalizeOrderStatus(status);
+  return labelFor(phaseFor(STATUS_ALIASES[raw] || "pending", raw));
 }
 
 export function orderStep(status: string | undefined): number {

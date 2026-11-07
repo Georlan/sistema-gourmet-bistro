@@ -33,6 +33,6 @@ test('cliente vê código privado no acompanhamento sem outra requisição de c�
   await expect(page.locator('#inline-order-chat-panel').getByLabel('Código de recebimento da entrega')).toBeVisible();
   finished=true;
   await page.reload();
-  await expect(page.getByRole('heading',{name:'Concluído',exact:true}).first()).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Entrega concluída',exact:true}).first()).toBeVisible();
   await expect(page.getByLabel('Código de recebimento da entrega')).toHaveCount(0);
 });

@@ -37,6 +37,12 @@ import CardapioBenefitsDrawer from "./components/CardapioBenefitsDrawer";
 import CardapioCategoryNav from "./components/CardapioCategoryNav";
 import CardapioProductCard from "./components/CardapioProductCard";
 import CardapioProductModal from "./components/CardapioProductModal";
+import {
+  groupCategoryProductsForDisplay,
+  isGroupedProduct,
+  type CatalogDisplayItem,
+  type GroupedDisplayProduct,
+} from "./catalogGrouping";
 import CardapioPromotionWizard from "./components/CardapioPromotionWizard";
 import type { PromotionPartSelection } from "./promotionComposition";
 import CardapioCartDrawer, {
@@ -73,7 +79,10 @@ import {
   removeStoredOrder,
   clearAllStoredOrders,
   fallbackOrderState,
+  customerOrderLabel,
   orderFulfillmentLabel,
+  orderPhaseDescription,
+  orderProgress,
   resolveOrderState,
   updateStoredOrderStatus,
 } from "./orderTracking";
@@ -136,7 +145,7 @@ export default function CardapioPage() {
   const [fulfillmentChoice, setFulfillmentChoice] = useState<{ restaurantId: string | number; method: CardapioFulfillment } | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [editingCartItem, setEditingCartItem] = useState<CartItem | null>(null);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<Product | GroupedDisplayProduct | null>(null);
   const [selectedPromotion, setSelectedPromotion] = useState<CatalogPromotion | null>(null);
   const [editingPromotionItem, setEditingPromotionItem] = useState<CartItem | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -497,6 +506,18 @@ export default function CardapioPage() {
 
   useEffect(() => {
     if (!activeBrand || !selectedProduct) return;
+    if (isGroupedProduct(selectedProduct)) {
+      const anyAvail = selectedProduct.variants.some((v) => {
+        const prod = activeBrand.products.find((p) => String(p.id) === String(v.id) && p.isAvailable !== false);
+        return Boolean(prod);
+      });
+      if (!anyAvail) {
+        setSelectedProduct(null);
+        setEditingCartItem(null);
+        setNotice("Este produto não está mais disponível. Consulte o cardápio atualizado.");
+      }
+      return;
+    }
     const current = activeBrand.products.find(product => String(product.id) === String(selectedProduct.id) && product.isAvailable !== false);
     if (!current) {
       setSelectedProduct(null);
@@ -1049,11 +1070,7 @@ export default function CardapioPage() {
   const activeState = activeOrder ? resolveOrderState(activeOrder) : null;
   const terminal = activeState?.terminal ?? false;
   const rejected = activeState?.rejected ?? false;
-  const currentStep = activeState?.progress_step ?? 1;
-  const isDeliveryOrder = activeState?.fulfillment === "delivery";
-  const trackingSteps = isDeliveryOrder
-    ? ["Recebido", "Em preparo", "Pronto", "Saiu para entrega", "Concluído"]
-    : ["Recebido", "Em preparo", "Pronto", "Concluído"];
+  const trackingProgress = activeState ? orderProgress(activeState) : null;
 
   return (
     <div className="min-h-screen overflow-x-clip bg-bg-app font-sans text-text-app" id="app-root-container">
@@ -1200,7 +1217,7 @@ export default function CardapioPage() {
                       </button>
                     )}
                   </div>
-                  <h2 className="mt-1 text-base font-black text-koma-foreground">{activeState.label}</h2>
+                  <h2 className="mt-1 text-base font-black text-koma-foreground">{customerOrderLabel(activeState)}</h2>
                   <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
                     {rejected
                       ? "O restaurante não conseguiu aceitar este pedido. Você pode montar um novo pedido quando quiser."
@@ -1208,9 +1225,7 @@ export default function CardapioPage() {
                         ? "Este pedido foi concluído. O resumo continua aqui até você iniciar outro acompanhamento."
                         : activeState.phase === "payment_pending"
                           ? "O Pix ainda não foi confirmado. Assim que o pagamento for aprovado, o restaurante poderá aceitar o pedido."
-                          : currentStep === 1
-                            ? "O pedido entrou na operação e está aguardando o aceite do restaurante."
-                            : "O restaurante já atualizou o andamento do seu pedido."}
+                          : orderPhaseDescription(activeState)}
                   </p>
                   <p className="mt-1 text-[10px] text-koma-subtle">
                     {orderFulfillmentLabel(activeState.fulfillment)} · {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(activeOrder.total || 0)}
@@ -1259,15 +1274,15 @@ export default function CardapioPage() {
                   </div>
                 </div>
               </div>
-            ) : !rejected ? (
-              <div className={clsx("mt-4 grid gap-1.5 border-t border-koma-border pt-3", isDeliveryOrder ? "grid-cols-5" : "grid-cols-4")}>
-                {trackingSteps.map((label, index) => {
+            ) : !rejected && trackingProgress ? (
+              <div className={clsx("mt-4 grid gap-1.5 border-t border-koma-border pt-3", trackingProgress.labels.length === 4 ? "grid-cols-4" : "grid-cols-3")}>
+                {trackingProgress.labels.map((label, index) => {
                   const step = index + 1;
-                  const passed = currentStep >= step;
+                  const passed = trackingProgress.current >= step;
                   return (
                     <div key={label} className="text-center">
                       <div className={clsx("h-1.5 rounded-full", passed ? "bg-emerald-500" : "bg-koma-raised")} />
-                      <span className={clsx("mt-1 block text-[9px] font-bold", passed ? "text-koma-secondary" : "text-koma-subtle")}>{label}</span>
+                      <span className={clsx("mt-1 block text-[10px] font-bold", passed ? "text-koma-secondary" : "text-koma-subtle")}>{label}</span>
                     </div>
                   );
                 })}
@@ -1352,6 +1367,7 @@ export default function CardapioPage() {
                 if (orderA !== orderB) return orderA - orderB;
                 return 0;
               });
+            const displayItems = groupCategoryProductsForDisplay(category, products, activeBrand?.id);
             const indexLabel = String(catIndex + 1).padStart(2, '0');
             return (
               <section key={category} id={categorySectionId(category)} className="scroll-mt-[10.5rem] cardapio-catalog-category-section">
@@ -1360,14 +1376,16 @@ export default function CardapioPage() {
                     <span className="cardapio-category-index" aria-hidden="true">{indexLabel}</span>
                     <h2 className="cardapio-category-title">{category}</h2>
                   </div>
-                  <span className="cardapio-category-count-pill">{products.length} {products.length === 1 ? "opção" : "opções"}</span>
+                  <span className="cardapio-category-count-pill">{displayItems.length} {displayItems.length === 1 ? "opção" : "opções"}</span>
                 </div>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {products.map((product) => (
+                  {displayItems.map((item) => (
                     <CardapioProductCard
-                      key={product.id}
-                      product={product}
-                      cartQuantity={getProductCartQuantity(product.id)}
+                      key={item.id}
+                      product={item}
+                      cartQuantity={isGroupedProduct(item)
+                        ? item.variants.reduce((acc, v) => acc + getProductCartQuantity(v.id), 0)
+                        : getProductCartQuantity(item.id)}
                       onSelectProduct={setSelectedProduct}
                       onFastAdd={handleFastAdd}
                       onFastRemove={handleFastRemove}

@@ -27,6 +27,14 @@ from ..security import get_password_hash
 from ..subscription import VALID_SUBSCRIPTION_PLANS
 from ..services.operational_modes import explicit_order_types
 from ..services.table_bootstrap import bootstrap_standard_tables
+from ..services.tenant_id_reuse import (
+    MAX_TENANT_ID,
+    assert_tenant_id_eligible_in_locked_tx,
+    provisioning_concurrency_guard,
+    reserve_sequential_tenant_id,
+    reserve_superadmin_tenant_id,
+    suggest_reusable_tenant_ids,
+)
 from .super_admin import _discover_restaurant_ids, get_current_admin
 
 logger = logging.getLogger("koma.super_admin.onboarding")
@@ -95,6 +103,7 @@ class TenantOnboardingRequest(BaseModel):
     admin_name: str = Field(min_length=2, max_length=100)
     admin_email: str = Field(min_length=3, max_length=100)
     temporary_password: str = Field(min_length=8, max_length=72)
+    restaurant_id: int | None = Field(default=None, ge=1, le=MAX_TENANT_ID)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -190,27 +199,29 @@ def _normalize_payload(payload: TenantOnboardingRequest) -> dict[str, str]:
     }
 
 
-def _reserve_restaurant_id(db) -> int:
-    """Reserva um ID gerado pelo banco antes de vincular a transação ao novo tenant.
+def _reserve_restaurant_id(
+    db,
+    *,
+    requested_id: int | None = None,
+    allow_id_reuse: bool = False,
+    excluded_ids: set[int] | None = None,
+) -> int:
+    """Reserva um ID para novo tenant sem manipular manualmente a sequência (`setval`).
 
-    Em PostgreSQL o valor vem da sequência da PK e não é reutilizado mesmo que o
-    provisionamento falhe. A gravação do restaurante e de todos os seus defaults
-    acontece depois, em uma única transação RLS vinculada a esse ID.
+    - Nos fluxos exclusivos do Super Admin (`allow_id_reuse=True`), sugere o menor ID
+      desocupado que passa na verificação completa de elegibilidade (ou valida o ID
+      escolhido manualmente).
+    - Nos fluxos automáticos públicos (`allow_id_reuse=False`), utiliza alocação
+      sequencial segura.
     """
-    if db.get_bind().dialect.name == "postgresql":
-        new_id = db.execute(
-            text(
-                "SELECT nextval(pg_get_serial_sequence('public.restaurantes', 'id'))"
-            )
-        ).scalar_one()
-        db.rollback()
-        return int(new_id)
-
-    new_id = db.execute(
-        text("SELECT COALESCE(MAX(id), 0) + 1 FROM restaurantes")
-    ).scalar_one()
-    db.rollback()
-    return int(new_id)
+    if allow_id_reuse:
+        tenant_id, _ = reserve_superadmin_tenant_id(
+            db,
+            requested_id=requested_id,
+            excluded_ids=excluded_ids,
+        )
+        return tenant_id
+    return reserve_sequential_tenant_id(db, excluded_ids=excluded_ids)
 
 
 def _serialize_conflict(detail: str) -> HTTPException:
@@ -811,6 +822,39 @@ def update_trial(
         db.close()
 
 
+@router.get("/restaurantes/id-eligibility")
+def get_tenant_id_eligibility(
+    candidate_id: int | None = None,
+    limit: int = 10,
+    admin: dict[str, Any] = Depends(get_current_admin),
+):
+    """Retorna o menor ID elegível sugerido e o diagnóstico de elegibilidade para o Super Admin."""
+    _ = admin
+    db = SessionLocal()
+    try:
+        summary = suggest_reusable_tenant_ids(
+            db,
+            limit=limit,
+            preferred_id=1,
+            candidate_id=candidate_id,
+        )
+        return {
+            "suggestedId": summary["suggested_id"],
+            "suggested_id": summary["suggested_id"],
+            "eligibleIds": summary["eligible_ids"],
+            "eligible_ids": summary["eligible_ids"],
+            "priorityId": summary["priority_id"],
+            "priority_id": summary["priority_id"],
+            "priorityReport": summary["priority_report"],
+            "priority_report": summary["priority_report"],
+            "candidateReport": summary["candidate_report"],
+            "candidate_report": summary["candidate_report"],
+            "candidates": summary["candidates"],
+        }
+    finally:
+        db.close()
+
+
 @router.post("/restaurantes", status_code=status.HTTP_201_CREATED)
 def create_tenant(
     payload: TenantOnboardingRequest,
@@ -818,114 +862,151 @@ def create_tenant(
 ):
     """Cria restaurante, administrador inicial, defaults e auditoria sem SQL manual.
 
-    O ID é reservado pela sequência do banco. Depois disso, todas as escritas são
-    executadas sob o mesmo tenant/RLS e confirmadas em um único commit. O fluxo não
-    cria conta Mercado Pago nem integrações externas: o novo restaurante nasce
-    explicitamente desconectado, recebe 7 dias grátis de SaaS e conecta o recebedor
-    do Cardápio Online depois via OAuth.
+    Sugere e utiliza o menor ID elegível (ou o ID manualmente escolhido pelo Super Admin
+    após verificação completa de elegibilidade), sem manipular a sequência PostgreSQL.
+    Depois disso, todas as escritas são executadas sob o mesmo tenant/RLS e confirmadas
+    em um único commit. O fluxo não cria conta Mercado Pago nem integrações externas:
+    o novo restaurante nasce explicitamente desconectado, recebe 7 dias grátis de SaaS e
+    conecta o recebedor do Cardápio Online depois via OAuth.
     """
     normalized = _normalize_payload(payload)
     db = SessionLocal()
     tenant_id: int | None = None
 
     try:
-        tenant_id = _reserve_restaurant_id(db)
+        with provisioning_concurrency_guard():
+            excluded_ids: set[int] = set()
+            max_attempts = 1 if payload.restaurant_id is not None else 5
 
-        with tenant_session_scope(db, tenant_id):
-            _lock_onboarding_transaction(db)
-
-            if _slug_owner_id(db, normalized["slug"]) is not None:
-                raise _serialize_conflict(
-                    "O slug/subdomínio informado já está em uso por outro restaurante."
+            for attempt in range(max_attempts):
+                tenant_id, id_selection_mode = reserve_superadmin_tenant_id(
+                    db,
+                    requested_id=payload.restaurant_id,
+                    excluded_ids=excluded_ids,
                 )
 
-            restaurante = Restaurante(
-                id=tenant_id,
-                nome=normalized["name"],
-                slug=normalized["slug"],
-                plano=normalized["plan"],
-                saas_status="active",
-            )
-            db.add(restaurante)
-            db.flush()
+                try:
+                    with tenant_session_scope(db, tenant_id):
+                        _lock_onboarding_transaction(db)
+                        assert_tenant_id_eligible_in_locked_tx(
+                            db,
+                            tenant_id,
+                            requested_id=payload.restaurant_id,
+                        )
 
-            trial = _create_default_trial(db, tenant_id)
+                        if _slug_owner_id(db, normalized["slug"]) is not None:
+                            raise _serialize_conflict(
+                                "O slug/subdomínio informado já está em uso por outro restaurante."
+                            )
 
-            config = ConfiguracaoRestaurante(
-                restaurante_id=tenant_id,
-                impressao_nome_restaurante=normalized["name"],
-            )
-            db.add(config)
+                        restaurante = Restaurante(
+                            id=tenant_id,
+                            nome=normalized["name"],
+                            slug=normalized["slug"],
+                            plano=normalized["plan"],
+                            saas_status="active",
+                        )
+                        db.add(restaurante)
+                        db.flush()
 
-            initial_admin = Usuario(
-                restaurante_id=tenant_id,
-                nome=normalized["admin_name"],
-                email=normalized["admin_email"],
-                cargo="admin",
-                status="ativo",
-                senha_hash=get_password_hash(payload.temporary_password),
-            )
-            db.add(initial_admin)
-            db.flush()
+                        trial = _create_default_trial(db, tenant_id)
 
-            audit = SuperAdminAuditLog(
-                restaurante_id=tenant_id,
-                actor=str(admin.get("user") or "superadmin"),
-                action="SUPERADMIN_TENANT_ONBOARD",
-                reason="Provisionamento inicial de restaurante pelo Super Admin",
-                before_data=None,
-                after_data={
-                    "restaurante_id": tenant_id,
-                    "nome": normalized["name"],
-                    "slug": normalized["slug"],
-                    "plano": normalized["plan"],
-                    "saas_status": "active",
-                    "trial_status": trial["status"],
-                    "trial_started_at": trial["started_at"].isoformat(),
-                    "trial_ends_at": trial["ends_at"].isoformat(),
-                    "trial_days": trial["days"],
-                    "admin_user_id": initial_admin.id,
-                    "admin_email": normalized["admin_email"],
-                    "mercado_pago": "disconnected",
-                },
-            )
-            db.add(audit)
-            db.commit()
+                        config = ConfiguracaoRestaurante(
+                            restaurante_id=tenant_id,
+                            impressao_nome_restaurante=normalized["name"],
+                        )
+                        db.add(config)
 
-            logger.info(
-                "SUPERADMIN TENANT ONBOARDED tenant=%s actor=%s plan=%s trial_days=%s",
-                tenant_id,
-                admin.get("user"),
-                normalized["plan"],
-                DEFAULT_TRIAL_DAYS,
-            )
+                        initial_admin = Usuario(
+                            restaurante_id=tenant_id,
+                            nome=normalized["admin_name"],
+                            email=normalized["admin_email"],
+                            cargo="admin",
+                            status="ativo",
+                            senha_hash=get_password_hash(payload.temporary_password),
+                        )
+                        db.add(initial_admin)
+                        db.flush()
 
-            return {
-                "id": str(tenant_id),
-                "name": normalized["name"],
-                "subdomain": normalized["slug"],
-                "plan": normalized["plan"],
-                "status": "ACTIVE",
-                "onlinePaymentStatus": "disconnected",
-                "trial": {
-                    "status": "active",
-                    "startedAt": trial["started_at"].isoformat(),
-                    "endsAt": trial["ends_at"].isoformat(),
-                    "daysRemaining": DEFAULT_TRIAL_DAYS,
-                    "daysGranted": DEFAULT_TRIAL_DAYS,
-                },
-                "admin": {
-                    "id": initial_admin.id,
-                    "name": normalized["admin_name"],
-                    "email": normalized["admin_email"],
-                    "status": "ativo",
-                },
-                "paths": {
-                    "cashier": "/?view=caixa",
-                    "publicMenu": f"/c/{normalized['slug']}",
-                },
-                "message": "Restaurante provisionado com 7 dias grátis.",
-            }
+                        audit = SuperAdminAuditLog(
+                            restaurante_id=tenant_id,
+                            actor=str(admin.get("user") or "superadmin"),
+                            action="SUPERADMIN_TENANT_ONBOARD",
+                            reason="Provisionamento inicial de restaurante pelo Super Admin",
+                            before_data=None,
+                            after_data={
+                                "restaurante_id": tenant_id,
+                                "id_selection_mode": id_selection_mode,
+                                "requested_restaurant_id": payload.restaurant_id,
+                                "nome": normalized["name"],
+                                "slug": normalized["slug"],
+                                "plano": normalized["plan"],
+                                "saas_status": "active",
+                                "trial_status": trial["status"],
+                                "trial_started_at": trial["started_at"].isoformat(),
+                                "trial_ends_at": trial["ends_at"].isoformat(),
+                                "trial_days": trial["days"],
+                                "admin_user_id": initial_admin.id,
+                                "admin_email": normalized["admin_email"],
+                                "mercado_pago": "disconnected",
+                            },
+                        )
+                        db.add(audit)
+                        db.commit()
+
+                        logger.info(
+                            "SUPERADMIN TENANT ONBOARDED tenant=%s mode=%s actor=%s plan=%s trial_days=%s",
+                            tenant_id,
+                            id_selection_mode,
+                            admin.get("user"),
+                            normalized["plan"],
+                            DEFAULT_TRIAL_DAYS,
+                        )
+
+                        return {
+                            "id": str(tenant_id),
+                            "idSelectionMode": id_selection_mode,
+                            "name": normalized["name"],
+                            "subdomain": normalized["slug"],
+                            "plan": normalized["plan"],
+                            "status": "ACTIVE",
+                            "onlinePaymentStatus": "disconnected",
+                            "trial": {
+                                "status": "active",
+                                "startedAt": trial["started_at"].isoformat(),
+                                "endsAt": trial["ends_at"].isoformat(),
+                                "daysRemaining": DEFAULT_TRIAL_DAYS,
+                                "daysGranted": DEFAULT_TRIAL_DAYS,
+                            },
+                            "admin": {
+                                "id": initial_admin.id,
+                                "name": normalized["admin_name"],
+                                "email": normalized["admin_email"],
+                                "status": "ativo",
+                            },
+                            "paths": {
+                                "cashier": "/?view=caixa",
+                                "publicMenu": f"/c/{normalized['slug']}",
+                            },
+                            "message": "Restaurante provisionado com 7 dias grátis.",
+                        }
+                except HTTPException as exc:
+                    if (
+                        payload.restaurant_id is None
+                        and exc.status_code == status.HTTP_409_CONFLICT
+                        and "slug/subdomínio" not in str(exc.detail)
+                        and attempt + 1 < max_attempts
+                    ):
+                        excluded_ids.add(tenant_id)
+                        continue
+                    raise
+                except IntegrityError:
+                    if db.in_transaction():
+                        db.rollback()
+                    if payload.restaurant_id is None and attempt + 1 < max_attempts:
+                        excluded_ids.add(tenant_id)
+                        continue
+                    raise
     except HTTPException:
         if db.in_transaction():
             db.rollback()

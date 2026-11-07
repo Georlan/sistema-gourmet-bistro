@@ -54,14 +54,18 @@ def setup_database():
         # Restaurante 1 (tenant principal)
         r1 = db.query(Restaurante).filter(Restaurante.id == 1).first()
         if not r1:
-            r1 = Restaurante(id=1, nome="Bistrô Kôma")
+            r1 = Restaurante(id=1, nome="Bistrô Kôma", plano="premium")
             db.add(r1)
+        else:
+            r1.plano = "premium"
 
         # Restaurante 2 (tenant isolado)
         r2 = db.query(Restaurante).filter(Restaurante.id == 2).first()
         if not r2:
-            r2 = Restaurante(id=2, nome="Outro Restaurante")
+            r2 = Restaurante(id=2, nome="Outro Restaurante", plano="premium")
             db.add(r2)
+        else:
+            r2.plano = "premium"
 
         # Usuários
         db.add(

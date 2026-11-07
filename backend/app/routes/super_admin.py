@@ -3,6 +3,7 @@ import os
 import time
 import uuid
 import hmac
+from decimal import Decimal
 from typing import Any, Dict, Optional
 
 import jwt
@@ -638,6 +639,153 @@ def restaurant_billing_history(restaurant_id: int, admin=Depends(get_current_adm
                  'total': str(row.fees + row.subscription_amount), 'status': row.status,
                  'due_at': row.due_at.isoformat() if row.due_at else None,
                  'paid_at': row.paid_at.isoformat() if row.paid_at else None} for row in rows]}
+
+
+class ManualPixPaymentRequest(BaseModel):
+    amount: Decimal = Field(..., gt=Decimal("0.00"), description="Valor efetivamente recebido em R$")
+    paid_at: Optional[datetime.datetime] = Field(None, description="Data/hora da liquidação do Pix (padrão: agora)")
+    bank_reference: str = Field(..., min_length=4, max_length=120, description="Identificador/EndToEndId da transação bancária Pix")
+    receipt_notes: Optional[str] = Field(None, max_length=500, description="Observações de conciliação / canal de confirmação")
+    reason: str = Field(..., min_length=5, max_length=255, description="Justificativa administrativa obrigatória")
+
+
+@router.post('/restaurantes/{restaurant_id}/invoices/{invoice_id}/confirm-manual-pix')
+def confirm_invoice_manual_pix(
+    restaurant_id: int,
+    invoice_id: str,
+    payload: ManualPixPaymentRequest,
+    admin=Depends(get_current_admin),
+):
+    """
+    Confirma recebimento manual de fatura SaaS por Pix (ex.: Pix enviado ao fundador via WhatsApp).
+    
+    Exige justificativa administrativa, referência bancária real e valor exato.
+    Audita no SuperAdminAuditLog, avança período em SaaSSubscription e quita a fatura.
+    """
+    from ..models import DirectPixFeeInvoice
+    from ..saas_billing_models import SaaSSubscription
+    from ..routes.saas_pix import _advance_paid_period
+    from ..services.signup_notifications import enqueue_billing_owner
+
+    clean_reason = payload.reason.strip()
+    if len(clean_reason) < 5:
+        raise HTTPException(status_code=400, detail="Justificativa administrativa obrigatória.")
+
+    clean_reference = payload.bank_reference.strip()
+    clean_notes = payload.receipt_notes.strip() if payload.receipt_notes else None
+    payment_time = payload.paid_at or datetime.datetime.now(datetime.timezone.utc)
+    if payment_time.tzinfo is None:
+        payment_time = payment_time.replace(tzinfo=datetime.timezone.utc)
+
+    admin_actor = str(admin.get("user") or admin.get("email") or "superadmin")
+
+    with SessionLocal() as db:
+        with tenant_session_scope(db, restaurant_id):
+            restaurante = db.query(Restaurante).filter(Restaurante.id == restaurant_id).first()
+            if restaurante is None:
+                raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+
+            invoice = (
+                db.query(DirectPixFeeInvoice)
+                .filter(
+                    DirectPixFeeInvoice.restaurante_id == restaurant_id,
+                    DirectPixFeeInvoice.id == invoice_id,
+                )
+                .with_for_update()
+                .one_or_none()
+            )
+            if invoice is None:
+                raise HTTPException(status_code=404, detail="Fatura não encontrada.")
+
+            total_due = (invoice.fees + invoice.subscription_amount).quantize(Decimal("0.01"))
+            payload_amount = payload.amount.quantize(Decimal("0.01"))
+
+            # Idempotência segura: se já está paga e a referência/valor batem, retorna sem duplicar
+            if invoice.status == "paid":
+                return {
+                    "success": True,
+                    "invoice_id": invoice.id,
+                    "status": "paid",
+                    "paid_at": invoice.paid_at.isoformat() if invoice.paid_at else None,
+                    "message": "Fatura já liquidada previamente.",
+                }
+
+            if payload_amount != total_due:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Valor informado (R$ {payload_amount}) diverge do total da fatura (R$ {total_due}).",
+                )
+
+            before_snapshot = {
+                "invoice_id": invoice.id,
+                "status": invoice.status,
+                "paid_at": invoice.paid_at.isoformat() if invoice.paid_at else None,
+                "fees": str(invoice.fees),
+                "subscription_amount": str(invoice.subscription_amount),
+            }
+
+            sub = (
+                db.query(SaaSSubscription)
+                .filter(SaaSSubscription.restaurante_id == restaurant_id)
+                .with_for_update()
+                .one_or_none()
+            )
+
+            # Se a fatura continha valor de assinatura, avança o período coberto
+            if invoice.subscription_amount > Decimal("0.00") and sub is not None:
+                due = invoice.subscription_due_at or payment_time
+                if due.tzinfo is None:
+                    due = due.replace(tzinfo=datetime.timezone.utc)
+                _advance_paid_period(sub, due)
+
+            invoice.status = "paid"
+            invoice.paid_at = payment_time
+
+            after_snapshot = {
+                "invoice_id": invoice.id,
+                "status": invoice.status,
+                "paid_at": invoice.paid_at.isoformat(),
+                "fees": str(invoice.fees),
+                "subscription_amount": str(invoice.subscription_amount),
+                "bank_reference": clean_reference,
+                "receipt_notes": clean_notes,
+                "confirmed_by_admin": admin_actor,
+                "subscription_status": sub.status if sub else None,
+                "current_period_end": sub.current_period_end.isoformat() if sub and sub.current_period_end else None,
+            }
+
+            db.add(
+                SuperAdminAuditLog(
+                    restaurante_id=restaurant_id,
+                    actor=admin_actor,
+                    action="invoice_manual_pix_confirmed",
+                    reason=clean_reason,
+                    before_data=before_snapshot,
+                    after_data=after_snapshot,
+                )
+            )
+
+            enqueue_billing_owner(
+                db,
+                tenant_id=restaurant_id,
+                invoice_id=invoice.id,
+                period=invoice.period,
+                event="paid",
+                amount=total_due,
+            )
+
+            db.commit()
+
+            return {
+                "success": True,
+                "invoice_id": invoice.id,
+                "restaurant_id": restaurant_id,
+                "status": "paid",
+                "paid_at": invoice.paid_at.isoformat(),
+                "amount": str(total_due),
+                "bank_reference": clean_reference,
+                "subscription_period_end": sub.current_period_end.isoformat() if sub and sub.current_period_end else None,
+            }
 
 
 @router.get("/audit")

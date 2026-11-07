@@ -35,6 +35,24 @@ CANONICAL_STATUS_MESSAGES = {
     "cancelado": "Pedido cancelado.",
 }
 
+
+def customer_status_message(status: str, fulfillment: str | None) -> str:
+    from ..domain.orders.types import FulfillmentType, normalize_to_fulfillment
+    kind = normalize_to_fulfillment(fulfillment)
+    if status == "pronto":
+        return {
+            FulfillmentType.PICKUP: "Seu pedido está pronto para retirada.",
+            FulfillmentType.DELIVERY: "Seu pedido está pronto e aguarda o despacho.",
+            FulfillmentType.DINE_IN: "Seu pedido está pronto para servir.",
+        }[kind]
+    if status == "finalizado":
+        return {
+            FulfillmentType.PICKUP: "Retirada concluída.",
+            FulfillmentType.DELIVERY: "Entrega concluída.",
+            FulfillmentType.DINE_IN: "Pedido concluído. Bom apetite!",
+        }[kind]
+    return CANONICAL_STATUS_MESSAGES.get(status, f"Status do pedido atualizado: {status}.")
+
 TERMINAL_ORDER_STATUSES = frozenset({"finalizado", "recusado", "cancelado"})
 LEGACY_ESCAPED_BODY_FORMAT = "html_escaped_v1"
 PLAIN_TEXT_BODY_FORMAT = "plain_text_v2"
@@ -287,6 +305,7 @@ def post_system_order_event(
     """
     conv = (
         db.query(OrderConversation)
+        .options(joinedload(OrderConversation.comanda))
         .filter(
             OrderConversation.restaurante_id == restaurante_id,
             OrderConversation.pedido_id == pedido_id,
@@ -305,7 +324,7 @@ def post_system_order_event(
         conv.closed_at = now
     event = append_order_feed_event(
         db, conv=conv, event_key=f"status:{norm_status}", order_status=norm_status,
-        body=CANONICAL_STATUS_MESSAGES.get(norm_status, f"Status do pedido atualizado: {norm_status}."),
+        body=customer_status_message(norm_status, conv.comanda.tipo if conv.comanda else None),
     )
     return {"status": norm_status, "body": event.body,
             "closed_at": conv.closed_at.isoformat() if conv.closed_at else None}

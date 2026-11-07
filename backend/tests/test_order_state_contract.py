@@ -1,5 +1,25 @@
 from app.routes.order_tracking import _effective_tracking_status
 from app.services.order_state_contract import build_order_state_contract
+from app.services.order_chat_service import customer_status_message
+
+
+def test_customer_labels_distinguish_fulfillment_without_changing_states():
+    for kind, ready, completed in [
+        ('Retirada', 'Pronto para retirar', 'Retirada concluída'),
+        ('Delivery', 'Pronto para sair', 'Entrega concluída'),
+        ('Consumo no Local', 'Pronto para servir', 'Pedido concluído'),
+    ]:
+        assert build_order_state_contract('pronto', kind)['label'] == ready
+        assert build_order_state_contract('finalizado', kind)['label'] == completed
+    assert build_order_state_contract('transito', 'Delivery')['label'] == 'Saiu para entrega'
+    assert build_order_state_contract('pronto', 'Retirada', payment_pending=True)['label'] == 'Aguardando pagamento'
+
+
+def test_chat_status_message_distinguishes_modalities():
+    assert customer_status_message('pronto', 'Retirada') == 'Seu pedido está pronto para retirada.'
+    assert customer_status_message('pronto', 'Delivery') == 'Seu pedido está pronto e aguarda o despacho.'
+    assert customer_status_message('pronto', 'Consumo no Local') == 'Seu pedido está pronto para servir.'
+    assert customer_status_message('transito', 'Delivery') == 'Seu pedido saiu para entrega.'
 
 
 def test_acceptance_does_not_announce_preparation_before_it_starts():

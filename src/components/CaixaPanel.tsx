@@ -53,6 +53,7 @@ import { KanbanOrderDetails } from './caixa/orders/KanbanOrderDetails';
 import { useCashierOrders } from './caixa/orders/useCashierOrders';
 import { useCourierReassignment } from './caixa/orders/useCourierReassignment';
 import { useFulfillmentConversion } from './caixa/orders/useFulfillmentConversion';
+import { fulfillmentEligibilityRevision } from './caixa/orders/fulfillmentEligibilityRevision';
 import { useOnlineOrderAutoAcceptPolicy } from './caixa/orders/useOnlineOrderAutoAcceptPolicy';
 import { useCashierPdv } from './caixa/pdv/useCashierPdv';
 import { useCashierAlerts } from './caixa/realtime/useCashierAlerts';
@@ -352,7 +353,7 @@ export function CaixaPanel({
   });
   const fulfillmentConversion = useFulfillmentConversion({
     convertToPickup: handleConvertDeliveryToPickup,
-    selectedOrderRevision: JSON.stringify(selectedKanbanOrder),
+    selectedOrderRevision: fulfillmentEligibilityRevision(selectedKanbanOrder),
     apiBaseUrl, authHeaders, selectedOrderId: selectedKanbanOrder ? String(selectedKanbanOrder.comandaId || selectedKanbanOrder.id) : undefined,
   });
 
@@ -731,7 +732,7 @@ export function CaixaPanel({
   return (
     <div
       data-koma-plan={currentPlanId}
-      className={`cashier-shell flex w-full bg-koma-page text-koma-foreground font-sans selection:bg-[#10b981]/30 text-xs ${
+      className={`cashier-shell ${activeTab === 'operacao' && activeSubTab === 'pedidos' ? 'cashier-shell--mobile-orders' : ''} flex w-full bg-koma-page text-koma-foreground font-sans selection:bg-[#10b981]/30 text-xs ${
         fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}
     >
@@ -1269,6 +1270,8 @@ export function CaixaPanel({
             order={selectedKanbanOrder}
             saveObservation={saveItemObservation}
             canChangeFulfillment={fulfillmentConversion.canChange}
+            checkingFulfillment={fulfillmentConversion.checking}
+            fulfillmentCheckFailed={fulfillmentConversion.checkFailed}
             hasPrinting={hasPrinting}
             restaurantConfig={restauranteConfig}
             taxaServicoAtiva={taxaServicoAtiva}

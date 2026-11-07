@@ -106,6 +106,8 @@ export interface KanbanOrderDetailsProps {
     readonly cancelOrder: () => void;
   };
   readonly canChangeFulfillment?: boolean;
+  readonly checkingFulfillment?: boolean;
+  readonly fulfillmentCheckFailed?: boolean;
   readonly hasPrinting?: boolean;
   readonly restaurantConfig?: Record<string, unknown> | null;
   readonly taxaServicoAtiva?: boolean;
@@ -152,6 +154,8 @@ export function KanbanOrderDetails({
   saveObservation,
   hasPrinting = true,
   canChangeFulfillment = false,
+  checkingFulfillment = false,
+  fulfillmentCheckFailed = false,
   restaurantConfig,
   taxaServicoAtiva,
   serviceTaxRate,
@@ -169,6 +173,11 @@ export function KanbanOrderDetails({
       && Number(selectedKanbanOrder?.mesaId || 0) === 0
       && String(selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '').toLowerCase() === 'retirada'
     );
+  const hasTableConversion = !selectedIsQuickSale && selectedKanbanOrder.mesaId > 0;
+  const checkingConversion = checkingFulfillment && !canChangeFulfillment && !hasTableConversion;
+  const conversionLabel = fulfillmentCheckFailed && !hasTableConversion
+    ? 'Tentar verificar alteração de tipo'
+    : checkingConversion ? 'Verificando alteração de tipo' : 'Tipo e endereço';
   const selectedNormalizedFulfillment = String(
     selectedKanbanOrder?.modalidade || selectedKanbanOrder?.tipo || '',
   ).trim().toLowerCase();
@@ -254,7 +263,7 @@ export function KanbanOrderDetails({
           <div className="orders-detail-modal__hero-side">
             <strong>{formatCurrency(selectedOrderTotal)}</strong>
             <div className="kd-hero-controls">
-            {(canChangeFulfillment || (!selectedIsQuickSale && selectedKanbanOrder.mesaId > 0)) && <button type="button" className="kd-hero-change" disabled={transfer.isTransferring} onClick={actions.convertDeliveryToPickup} aria-label="Tipo e endereço" title="Alterar tipo ou endereço"><CashierDetailActionArt kind="change" /></button>}
+            {(canChangeFulfillment || checkingFulfillment || fulfillmentCheckFailed || hasTableConversion) && <button type="button" className="kd-hero-change" disabled={transfer.isTransferring || checkingConversion} onClick={actions.convertDeliveryToPickup} aria-label={conversionLabel} title={conversionLabel}><CashierDetailActionArt kind="change" /></button>}
             <button
               type="button"
               onClick={actions.close}
@@ -418,9 +427,11 @@ export function KanbanOrderDetails({
           {hasPrinting === false && selectedKanbanOrder.mesaId > 0 && <DigitalReceiptAction order={{ mesaId: selectedKanbanOrder.mesaId, identificador: selectedKanbanOrder.identificador, itens: selectedKanbanOrder.itens as any, valorPago: selectedKanbanOrder.amountPaid || 0, telefone: selectedKanbanOrder.telefone }} restaurantConfig={restaurantConfig} taxaServicoAtiva={taxaServicoAtiva} serviceTaxRate={serviceTaxRate} onToast={onToast} label="Compartilhar conta" />}
           {selectedKanbanOrder.mesaId > 0 && (selectedKanbanOrder.contextoSalao || salonActions) && <CashierTableDestinations source={selectedKanbanOrder.mesaId} transfer={transfer} actions={actions} />}
           {selectedCanAssociateTable && <CashierTableDestinations association source={0} transfer={transfer} actions={actions} />}
-          <button type="button" onClick={selectedKanbanOrder.mesaId > 0 ? actions.cancelConsumption : actions.cancelOrder} className="kd-action kd-action--cancel">
+          {selectedIsDelivery && selectedDeliveryStatus === 'finalizado' && !(selectedKanbanOrder.mesaId > 0)
+            ? <p className="text-sm text-koma-secondary">Entrega concluída.{Number(selectedKanbanOrder.amountDue || 0) > 0 && ' Registre o pagamento pendente no Caixa.'}</p>
+            : <button type="button" onClick={selectedKanbanOrder.mesaId > 0 ? actions.cancelConsumption : actions.cancelOrder} className="kd-action kd-action--cancel">
             <CashierDetailActionArt kind="cancel" /><span>{selectedKanbanOrder.contextoSalao ? 'Cancelar toda a mesa e liberar' : selectedKanbanOrder.mesaId > 0 ? 'Cancelar somente este pedido' : 'Cancelar pedido'}</span>
-          </button>
+          </button>}
         </footer>
     </KanbanDetailFrame>
   );

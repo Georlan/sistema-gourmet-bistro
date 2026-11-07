@@ -23,8 +23,8 @@ test('painel lateral oferece timeline, historico e envio de mensagem', () => {
   assert.match(panel, /api\/cardapio\/pedidos\/acompanhar/);
   assert.match(panel, /new EventSource/);
   assert.match(panel, /\/messages/);
-  assert.match(panel, /Chat e acompanhamento sem sair do cardápio/);
-  assert.match(panel, /\["Recebido", "Em preparo", "Pronto", "Saiu", "Concluído"\]/);
+  assert.match(panel, /Conversa com o restaurante/);
+  assert.match(panel, /orderProgress\(state\)/);
 });
 
 test('fallback do chat nao gera polling com a aba oculta e reconcilia ao voltar', () => {

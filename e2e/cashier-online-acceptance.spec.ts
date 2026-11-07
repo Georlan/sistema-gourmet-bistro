@@ -118,3 +118,37 @@ test('pedido agendado chega no painel online com data e horário antes do prepar
 });
 
 });
+
+test('aceite com resposta compacta não exibe somente a taxa enquanto atualiza', async ({ page }) => {
+  await setup(page);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/comandas/delivery/ativos', async route => { await gate; await route.fulfill({ json: [] }).catch(() => {}); });
+  await page.route('**/comandas/delivery/pendentes', async route => { await gate; await route.fulfill({ json: [] }).catch(() => {}); });
+  await page.route('**/comandas/online-1/delivery/status?*', route => route.fulfill({ json: {
+    id: 'online-1', tipo: 'Delivery', identificador: 'Cliente online-1', fechada: false,
+    delivery_status: 'aceito', delivery_taxa: 5, valor_pago: 0,
+  } }));
+  try {
+    await page.getByRole('button', { name: 'Aceitar', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Novos pedidos' })).toHaveCount(0);
+    const card = page.locator('.orders-card--digital').filter({ hasText: 'Cliente online-1' });
+    await expect(card).toContainText('R$ 47,00');
+    await expect(card).not.toContainText('R$ 5,00');
+  } finally { release(); }
+});
+
+test('entrega concluída com saldo não oferece cancelamento incompatível', async ({ page }) => {
+  await mockCashierBackend(page); await seedCashierSession(page);
+  const order = { id: 'delivered-open', restaurante_id: 99001, numero_pedido: 99, tipo: 'Delivery', identificador: 'Cliente entregue', fechada: false, valor_pago: 0, delivery_status: 'finalizado', delivery_taxa: 5, delivery_endereco: 'Rua Teste', criado_em: new Date().toISOString(), lancamentos: [{ id: 'delivered-launch', origem: 'cardapio', status: 'finalizado' }], itens: [{ id: 'delivered-item', produto_id: '101', produto: { nome: 'Prato' }, preco_unit: 42, pago: false, status: 'pronto', lancamento_id: 'delivered-launch' }] };
+  await page.route('**/comandas/delivery/ativos', route => route.fulfill({ json: [order] }));
+  await page.route('**/comandas/delivery/pendentes', route => route.fulfill({ json: [] }));
+  await page.route('**/comandas/detalhes/todos?*', route => route.fulfill({ json: [order] }));
+  await page.goto('/?view=caixa');
+  const receivedTab = page.getByRole('tab', { name: /Concluir|recebimento/i });
+  if ((page.viewportSize()?.width || 1366) <= 768) await receivedTab.click();
+  await page.getByRole('button', { name: /pedido 99, ver detalhes/i }).click();
+  const detail = page.locator('.orders-detail-modal');
+  await expect(detail.getByRole('button', { name: 'Cancelar pedido', exact: true })).toHaveCount(0);
+  await expect(detail).toContainText('Entrega concluída');
+});
