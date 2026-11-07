@@ -116,7 +116,9 @@ def setup_teardown_tenant():
         db.close()
 
 
-def test_saas_manual_pix_subscription_full_lifecycle(setup_teardown_tenant):
+def test_saas_manual_pix_subscription_full_lifecycle(setup_teardown_tenant, monkeypatch):
+    # Chave fictícia apenas no teste isolado; produção exige configuração explícita.
+    monkeypatch.setenv("KOMA_SAAS_MANUAL_PIX_KEY", "pagamentos@example.com")
     rest, admin_user = setup_teardown_tenant
     db = SessionLocal()
 
