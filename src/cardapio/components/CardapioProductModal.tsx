@@ -133,7 +133,8 @@ export default function CardapioProductModal({
 
   const reportedViewRef = useRef(false);
   useEffect(() => {
-    if (reportedViewRef.current) return;
+    // Famílias visuais não são produtos reais: aguardar a escolha do SKU.
+    if (reportedViewRef.current || needsVariantSelection) return;
     reportedViewRef.current = true;
     trackAnalyticsEvent('public_product_viewed', {
       restaurant_id: restaurantId || '',
@@ -146,7 +147,7 @@ export default function CardapioProductModal({
         || (effectiveProduct.modifierGroups && effectiveProduct.modifierGroups.length > 0)
       ),
     });
-  }, [effectiveProduct.id, restaurantId]);
+  }, [effectiveProduct.id, restaurantId, needsVariantSelection]);
 
   const galleryImages = useMemo(() => {
     const rawList =
