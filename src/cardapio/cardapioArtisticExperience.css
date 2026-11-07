@@ -116,9 +116,9 @@ html[data-koma-theme="light"] .koma-art-canvas,
 .koma-art-brand-logo {
   width: 44px;
   height: 44px;
-  border-radius: 14px;
-  object-fit: cover;
-  background: #ffffff;
+  border-radius: 50%;
+  object-fit: contain;
+  background: transparent;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   flex-shrink: 0;
 }
