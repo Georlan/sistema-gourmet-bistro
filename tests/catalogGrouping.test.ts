@@ -8,94 +8,43 @@ import {
 } from '../src/cardapio/catalogGrouping';
 import type { Product } from '../src/cardapio/CardapioTypes';
 
-test('groupCategoryProductsForDisplay agrupa Batatas Fritas em um unico card principal para JE Lanches (ID 1)', () => {
+test('Batatas Fritas: cada produto real permanece independente no JE Lanches', () => {
   const batatas: Product[] = [
     {
       id: 'prod-je-08',
-      name: 'Batata Frita',
-      description: 'Batata frita com molho rosê',
-      price: 12.0,
-      image: 'img-08.jpg',
-      category: 'Batatas Fritas',
-      isAvailable: true,
-      modifierGroups: [
-        {
-          id: 'grp-tamanho',
-          name: 'Tamanho',
-          minSelection: 1,
-          maxSelection: 1,
-          type: 'obrigatorio',
-          options: [
-            { id: 'p', name: 'Pequena (200 g)', extraPrice: 0, active: true },
-            { id: 'm', name: 'Média (300 g)', extraPrice: 3, active: true },
-            { id: 'g', name: 'Grande (400 g)', extraPrice: 6, active: true },
-          ],
-        },
-      ],
+      name: 'Batata Frita Pequena (200 g)',
+      description: 'Batata frita com molho rosé, 200 g',
+      price: 12, image: 'img-08.jpg',
+      category: 'Batatas Fritas', isAvailable: true,
     },
     {
-      id: 'prod-je-09',
-      name: 'batata frita especial',
-      description: '300 g com bacon ou calabresa',
-      price: 24.0,
-      image: 'img-09.jpg',
-      category: 'Batatas Fritas',
-      isAvailable: true,
-      modifierGroups: [
-        {
-          id: 'grp-acomp',
-          name: 'Escolha o acompanhamento',
-          minSelection: 1,
-          maxSelection: 1,
-          type: 'obrigatorio',
-          options: [
-            { id: 'bacon', name: 'Bacon', extraPrice: 0, active: true },
-            { id: 'calabresa', name: 'Calabresa', extraPrice: 0, active: true },
-          ],
-        },
-      ],
+      id: 'prod-je-batata-m-300g',
+      name: 'Batata Frita Média (300 g)', description: 'Batata frita com molho rosé, 300 g',
+      price: 15, image: 'img-08.jpg', category: 'Batatas Fritas', isAvailable: true,
     },
     {
-      id: 'prod-je-10',
-      name: 'batata com filé com frita',
-      description: '300 g batata 200 g filé de frango',
-      price: 24.0,
-      image: 'img-10.jpg',
-      category: 'Batatas Fritas',
-      isAvailable: true,
+      id: 'prod-je-batata-g-400g',
+      name: 'Batata Frita Grande (400 g)', description: 'Batata frita com molho rosé, 400 g',
+      price: 18, image: 'img-08.jpg', category: 'Batatas Fritas', isAvailable: true,
     },
     {
-      id: 'prod-je-11',
-      name: 'carne de sol com fritas',
-      description: '300 g batata com carne de sol e queijo coalho',
-      price: 28.0,
-      image: 'img-11.jpg',
-      category: 'Batatas Fritas',
-      isAvailable: true,
+      id: 'prod-je-09', name: 'Batata Frita Especial (300 g)',
+      description: 'Com bacon ou calabresa', price: 24,
+      image: 'img-09.jpg', category: 'Batatas Fritas', isAvailable: true,
+      modifierGroups: [{
+        id: 'grp-acomp', name: 'Escolha o acompanhamento', minSelection: 1, maxSelection: 1,
+        type: 'obrigatorio', options: [
+          { id: 'bacon', name: 'Bacon', extraPrice: 0, active: true },
+          { id: 'calabresa', name: 'Calabresa', extraPrice: 0, active: true },
+        ],
+      }],
     },
   ];
-
-  const grouped = groupCategoryProductsForDisplay('Batatas Fritas', batatas, '1');
-  assert.equal(grouped.length, 1);
-  const card = grouped[0];
-  assert.ok(isGroupedProduct(card));
-  assert.equal(card.name, 'Batata Frita');
-  assert.equal(card.minPrice, 12.0);
-  assert.equal(card.hasVariablePrice, true);
-  assert.equal(card.variants.length, 4);
-
-  // Labels amigáveis
-  assert.equal(card.variants[0].label, 'Tradicional (com Molho Rosê)');
-  assert.equal(card.variants[1].label, 'Especial (Bacon ou Calabresa)');
-  assert.equal(card.variants[2].label, 'Com Filé de Frango (200 g)');
-  assert.equal(card.variants[3].label, 'Com Carne de Sol e Queijo Coalho');
-
-  // Cada variante preserva o produto real com seus modificadores
-  assert.equal(card.variants[0].product.id, 'prod-je-08');
-  assert.equal(card.variants[0].product.modifierGroups?.length, 1);
-  assert.equal(card.variants[1].product.id, 'prod-je-09');
-  assert.equal(card.variants[1].product.modifierGroups?.length, 1);
-  assert.equal(card.variants[3].product.id, 'prod-je-11');
+  const items = groupCategoryProductsForDisplay('Batatas Fritas', batatas, '1');
+  assert.deepEqual(items.map(item => item.id), batatas.map(item => item.id));
+  assert.ok(items.every(item => !isGroupedProduct(item)));
+  assert.deepEqual(items.map(item => item.price), [12, 15, 18, 24]);
+  assert.equal(items[3].modifierGroups?.[0].options.length, 2);
 });
 
 test('groupCategoryProductsForDisplay preserva produtos individuais para outros restaurantes (IDs !== 1)', () => {
@@ -167,43 +116,20 @@ test('calculateProductMinStartingPrice computa escolhas obrigatórias e ignora o
   assert.equal(minStarting, 32.0);
 });
 
-test('groupCategoryProductsForDisplay calcula preco inicial considerando apenas variantes disponiveis', () => {
+test('Batatas Fritas mantém cada disponibilidade e preço sem criar preço de família', () => {
   const batatas: Product[] = [
-    {
-      id: 'b1',
-      name: 'Batata Pequena',
-      description: '200g',
-      price: 10.0,
-      image: '',
-      category: 'Batatas Fritas',
-      isAvailable: false, // INDISPONÍVEL!
-    },
-    {
-      id: 'b2',
-      name: 'Batata Média',
-      description: '300g',
-      price: 15.0,
-      image: '',
-      category: 'Batatas Fritas',
-      isAvailable: true,
-    },
-    {
-      id: 'b3',
-      name: 'Batata Grande',
-      description: '400g',
-      price: 20.0,
-      image: '',
-      category: 'Batatas Fritas',
-      isAvailable: true,
-    },
+    { id: 'b1', name: 'Batata Pequena', description: '200 g', price: 12,
+      image: '', category: 'Batatas Fritas', isAvailable: false },
+    { id: 'b2', name: 'Batata Média', description: '300 g', price: 15,
+      image: '', category: 'Batatas Fritas', isAvailable: true },
+    { id: 'b3', name: 'Batata Grande', description: '400 g', price: 18,
+      image: '', category: 'Batatas Fritas', isAvailable: true },
   ];
-
-  const grouped = groupCategoryProductsForDisplay('Batatas Fritas', batatas, '1');
-  assert.equal(grouped.length, 1);
-  const card = grouped[0] as GroupedDisplayProduct;
-  // O menor preço entre as DISPONÍVEIS é 15 (a de 10 está desativada)
-  assert.equal(card.minPrice, 15.0);
-  assert.equal(card.hasVariablePrice, true);
+  const visible = groupCategoryProductsForDisplay('Batatas Fritas', batatas, 1);
+  assert.equal(visible.length, 3);
+  assert.deepEqual(visible.map(p => p.isAvailable), [false, true, true]);
+  assert.deepEqual(visible.map(p => p.price), [12, 15, 18]);
+  assert.ok(visible.every(p => !isGroupedProduct(p)));
 });
 
 test('groupCategoryProductsForDisplay agrupa Pasteis unificando os 6 sabores', () => {
