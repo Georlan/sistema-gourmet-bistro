@@ -51,6 +51,20 @@ test('logo da loja mantém avatar circular sem moldura branca no cabeçalho e no
   expect(await logo.evaluate((element) => getComputedStyle(element).objectFit)).toBe('contain');
 });
 
+test('link de rota usa Google Maps quando cadastrado somente o Plus Code', async ({ page }) => {
+  await menu(page, payload => {
+    payload.restaurante.google_maps_url = 'Q4H9+CQ, Limoeiro do Norte - CE, 62930-000';
+  });
+  await page.locator('#header-brand-info-trigger').click();
+  const mapsLink = page.locator('#btn-google-maps-link');
+  await expect(mapsLink).toBeVisible();
+  await expect(mapsLink).toHaveAttribute(
+    'href',
+    'https://www.google.com/maps/dir/?api=1&destination=Q4H9%2BCQ%2C%20Limoeiro%20do%20Norte%20-%20CE%2C%2062930-000',
+  );
+  await expect(mapsLink).toHaveAttribute('target', '_blank');
+});
+
  test('ranking real, IDs únicos e consulta única ao navegar', async({page})=>{
   const state=await menu(page);
   await expect(page.locator('#koma-art-hero-showcase')).toContainText('Vinho Tinto');
