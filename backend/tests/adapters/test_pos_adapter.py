@@ -280,3 +280,22 @@ class TestPosAdapter:
             config.tipos_pedido_ativos = old_modes
             db.commit()
             db.close()
+
+    def test_pos_adapter_modifier_selection_limit_error_returns_422(self, char_client, char_setup):
+        """[REGRESSÃO P0] ModifierSelectionLimitError retorna 422 em vez de 500 no PDV."""
+        from app.domain.orders.errors import ModifierSelectionLimitError
+
+        headers = char_setup["headers"]
+        payload = {
+            "tipo": "balcao",
+            "itens": [{"produto_id": "prod-char-simples"}],
+        }
+
+        with patch.object(
+            OrderApplicationService,
+            "create_order",
+            side_effect=ModifierSelectionLimitError("Hambúrguer Especial", 1, 2),
+        ):
+            res = char_client.post("/comandas/venda-direta", headers=headers, json=payload)
+            assert res.status_code == 422
+            assert "escolha entre 1 e 2 opções no grupo de complementos" in res.json()["detail"]

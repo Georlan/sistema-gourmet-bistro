@@ -11,6 +11,7 @@ from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..application.orders.lifecycle import OrderLifecycleCoordinator
@@ -99,7 +100,12 @@ def get_online_order_control(
     del current_user
     rid = require_tenant_id()
     result = operational_status(db, rid)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        result = operational_status(db, rid)
+        db.commit()
     return result
 
 

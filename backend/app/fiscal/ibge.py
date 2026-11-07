@@ -39,9 +39,22 @@ def _cached(key: str) -> object | None:
             return None
         expires_at, value = item
         if expires_at <= now:
-            _cache.pop(key, None)
             return None
         return value
+
+
+def _get_stale_cache(key: str) -> object | None:
+    with _cache_lock:
+        item = _cache.get(key)
+        return item[1] if item is not None else None
+
+
+def _get_ceara_fallback_tuple() -> tuple[IbgeMunicipality, ...]:
+    from .ceara_municipalities_fallback import CEARA_MUNICIPALITIES_DATA
+    return tuple(
+        IbgeMunicipality(code=c, name=n, uf=u)
+        for c, n, u in CEARA_MUNICIPALITIES_DATA
+    )
 
 
 def _store_cache(key: str, value: object) -> None:
@@ -99,9 +112,19 @@ def get_ibge_municipality(code: str) -> IbgeMunicipality:
     cached = _cached(key)
     if isinstance(cached, IbgeMunicipality):
         return cached
-    municipality = parse_ibge_municipality(_request_json(f"/municipios/{code}"))
-    _store_cache(key, municipality)
-    return municipality
+    try:
+        municipality = parse_ibge_municipality(_request_json(f"/municipios/{code}"))
+        _store_cache(key, municipality)
+        return municipality
+    except Exception as exc:
+        stale = _get_stale_cache(key)
+        if isinstance(stale, IbgeMunicipality):
+            return stale
+        fallback_tuple = _get_ceara_fallback_tuple()
+        fallback_match = next((m for m in fallback_tuple if m.code == code), None)
+        if fallback_match is not None:
+            return fallback_match
+        raise
 
 
 def list_ibge_municipalities_for_uf(uf_code: str = "23") -> tuple[IbgeMunicipality, ...]:
@@ -110,11 +133,21 @@ def list_ibge_municipalities_for_uf(uf_code: str = "23") -> tuple[IbgeMunicipali
     if isinstance(cached, tuple):
         return cached
 
-    payload = _request_json(f"/estados/{uf_code}/municipios?orderBy=nome")
-    if not isinstance(payload, list):
-        raise OfficialLocationMismatch("Lista de municípios do IBGE inválida.")
-    municipalities = tuple(parse_ibge_municipality(item) for item in payload)
-    if not municipalities:
-        raise OfficialLocationMismatch("IBGE retornou lista de municípios vazia.")
-    _store_cache(key, municipalities)
-    return municipalities
+    try:
+        payload = _request_json(f"/estados/{uf_code}/municipios?orderBy=nome")
+        if not isinstance(payload, list):
+            raise OfficialLocationMismatch("Lista de municípios do IBGE inválida.")
+        municipalities = tuple(parse_ibge_municipality(item) for item in payload)
+        if not municipalities:
+            raise OfficialLocationMismatch("IBGE retornou lista de municípios vazia.")
+        _store_cache(key, municipalities)
+        return municipalities
+    except Exception as exc:
+        stale = _get_stale_cache(key)
+        if isinstance(stale, tuple) and stale:
+            return stale
+        if str(uf_code).strip() in ("23", "CE"):
+            fallback_ceara = _get_ceara_fallback_tuple()
+            _store_cache(key, fallback_ceara)
+            return fallback_ceara
+        raise
