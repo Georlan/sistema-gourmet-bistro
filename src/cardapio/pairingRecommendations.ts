@@ -7,6 +7,18 @@ import type { Product } from './CardapioTypes';
 
 export type ProductClassification = 'main' | 'side' | 'beverage' | 'dessert' | 'other';
 
+export type CommercialRole =
+  | 'Principal'
+  | 'Acompanhamento'
+  | 'Bebida'
+  | 'Sobremesa'
+  | 'Outro'
+  | 'main'
+  | 'side'
+  | 'beverage'
+  | 'dessert'
+  | 'other';
+
 const normalize = (value: string) =>
   (value || '')
     .normalize('NFD')
@@ -27,6 +39,24 @@ const MAIN_MATCHER =
   /(^|\b)(burger|burgers|hamburguer|hamburgueres|pizza|pizzas|marmita|marmitas|marmitaria|prato|pratos|refeicao|refeicoes|lanche|lanches|sanduiche|sanduiches|combo|combos|smash|poke|salada|saladas)(\b|$)/i;
 
 export function classifyProduct(product: Product): ProductClassification {
+  // Classificação comercial explícita via propriedade ou metadata
+  const explicitRole =
+    (product as any).commercial_role ||
+    (product as any).commercialRole ||
+    (product as any).papel_comercial ||
+    (product as any).papelComercial ||
+    (product as any).metadata?.papel_comercial ||
+    (product as any).metadata?.commercial_role;
+
+  if (explicitRole && typeof explicitRole === 'string') {
+    const norm = normalize(explicitRole);
+    if (norm === 'principal' || norm === 'main') return 'main';
+    if (norm === 'acompanhamento' || norm === 'side' || norm === 'porcao' || norm === 'porcoes') return 'side';
+    if (norm === 'bebida' || norm === 'beverage' || norm === 'bebidas') return 'beverage';
+    if (norm === 'sobremesa' || norm === 'dessert' || norm === 'sobremesas' || norm === 'doce') return 'dessert';
+    if (norm === 'outro' || norm === 'other') return 'other';
+  }
+
   const cat = normalize(product.category);
   const name = normalize(product.name);
 
@@ -37,6 +67,49 @@ export function classifyProduct(product: Product): ProductClassification {
   if (DESSERT_MATCHER.test(cat) || DESSERT_MATCHER.test(name)) return 'dessert';
   if (MAIN_MATCHER.test(cat) || MAIN_MATCHER.test(name)) return 'main';
   return 'other';
+}
+
+/**
+ * Identifica a subfamília ou sabor de um item para evitar recomendar múltiplos
+ * produtos muito semelhantes (ex.: dois sucos de sabores diferentes) na mesma vitrine de sugestões.
+ */
+export function getProductFamilyDiscriminator(product: Product): string {
+  const n = normalize(product.name);
+  if (n.startsWith('suco')) return 'suco';
+  if (n.startsWith('vitamina')) return 'vitamina';
+  if (
+    n.startsWith('refrigerante') ||
+    n.includes('coca') ||
+    n.includes('guarana') ||
+    n.includes('sukita') ||
+    n.includes('pepsi') ||
+    n.includes('fanta')
+  ) {
+    return 'refrigerante';
+  }
+  if (n.includes('batata') || n.includes('frita')) return 'batata';
+  if (n.includes('sorvete') || n.includes('pudim') || n.includes('acai') || n.includes('brownie')) return 'doce';
+  return product.id ? String(product.id) : n;
+}
+
+function diversifyByFamily(products: Product[]): Product[] {
+  const families: Record<string, Product[]> = {};
+  for (const p of products) {
+    const key = getProductFamilyDiscriminator(p);
+    if (!families[key]) families[key] = [];
+    families[key].push(p);
+  }
+  const keys = Object.keys(families);
+  const result: Product[] = [];
+  const maxLen = Math.max(0, ...keys.map((k) => families[k].length));
+  for (let i = 0; i < maxLen; i++) {
+    for (const key of keys) {
+      if (families[key][i]) {
+        result.push(families[key][i]);
+      }
+    }
+  }
+  return result;
 }
 
 export interface PairingRecommendationsParams {
@@ -89,15 +162,30 @@ export function getPairingRecommendations({
     const kind = classifyProduct(product);
     if (kind === 'side' || kind === 'beverage' || kind === 'dessert') groups[kind].push(product);
   }
+
+  // Diversifica subfamílias para evitar recomendar múltiplos sabores da mesma família/bebida
+  const diversifiedBeverages = diversifyByFamily(groups.beverage);
+  const diversifiedSides = diversifyByFamily(groups.side);
+  const diversifiedDesserts = diversifyByFamily(groups.dessert);
+
   // A lista persistente não depende da sacola: trocar + por quantidade não
   // desloca cards nem remove o item que o cliente acabou de adicionar.
   const kinds = ['side', 'beverage', 'dessert'] as const;
   const cartIds = new Set(cartProductIds.map(String));
   const present = new Set(catalog.filter(p => cartIds.has(String(p.id))).map(classifyProduct));
   const firstKinds = excludeCartItems ? kinds.filter(kind => !present.has(kind)) : kinds;
+
+  const firstItems = firstKinds.map((kind) => {
+    if (kind === 'side') return diversifiedSides[0];
+    if (kind === 'beverage') return diversifiedBeverages[0];
+    return diversifiedDesserts[0];
+  });
+
   const candidates = [
-    ...firstKinds.map(kind => groups[kind][0]),
-    ...groups.beverage, ...groups.side, ...groups.dessert,
+    ...firstItems,
+    ...diversifiedBeverages,
+    ...diversifiedSides,
+    ...diversifiedDesserts,
   ];
   const seen = new Set<string>();
   return candidates.filter((product): product is Product => {
