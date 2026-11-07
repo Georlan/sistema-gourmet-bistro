@@ -7,6 +7,7 @@ import {
   StoredOrder,
   fallbackOrderState,
   fetchOrderLiveStatus,
+  mergeLocalOrderSnapshots,
   loadStoredOrders,
   removeStoredOrder,
   orderFulfillmentLabel,
@@ -314,4 +315,27 @@ test('fulfillment label distinguishes dine-in from pickup', () => {
   assert.equal(orderFulfillmentLabel('delivery'), 'Delivery');
   assert.equal(orderFulfillmentLabel('pickup'), 'Retirada');
   assert.equal(orderFulfillmentLabel('dine_in'), 'Consumo local');
+});
+
+
+test('restauração local preserva código só para o mesmo pedido e credencial ativa', () => {
+  const current = { id: 'a', restaurante_id: 8, timestamp: Date.now(), tipo: 'Delivery', status: 'aceito', tracking_token: 'token-a', delivery_receipt_code: '007' } as StoredOrder;
+  const { delivery_receipt_code: _code, ...local } = current;
+  assert.equal(mergeLocalOrderSnapshots([local], [current])[0].delivery_receipt_code, '007');
+  assert.equal(mergeLocalOrderSnapshots([{ ...local, tracking_token: 'other' }], [current])[0].delivery_receipt_code, undefined);
+  assert.equal(mergeLocalOrderSnapshots([{ ...local, restaurante_id: 6 }], [current])[0].delivery_receipt_code, undefined);
+  assert.equal(mergeLocalOrderSnapshots([{ ...local, status: 'finalizado' }], [current])[0].delivery_receipt_code, undefined);
+  assert.equal(mergeLocalOrderSnapshots([{ ...local, delivery_receipt_code: null }], [current])[0].delivery_receipt_code, null);
+});
+
+test('acesso negado remove código da memória; falha temporária não o apaga', async () => {
+  const originalFetch = globalThis.fetch;
+  const order = { id: 'a', restaurante_id: 8, timestamp: Date.now(), tipo: 'Delivery', status: 'aceito', tracking_token: 'token-a', delivery_receipt_code: '007' } as StoredOrder;
+  try {
+    for (const status of [401, 403, 503]) {
+      globalThis.fetch = (async () => new Response(null, { status })) as typeof fetch;
+      const result = await fetchOrderLiveStatus(order, 'https://example.test');
+      assert.equal(result?.delivery_receipt_code, status === 503 ? '007' : null);
+    }
+  } finally { globalThis.fetch = originalFetch; }
 });

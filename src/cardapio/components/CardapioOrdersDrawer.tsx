@@ -142,7 +142,13 @@ export default function CardapioOrdersDrawer({
             `${API_BASE_URL}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(token)}/summary`,
             { cache: "no-store" },
           );
-          if (!response.ok) return null;
+          if (!response.ok) {
+            if ([401, 403, 404].includes(response.status)) {
+              setReceiptByOrder(current => ({ ...current, [order.id]: null }));
+              onRealtimeStatus?.(order.id, order.status || 'pendente', null, order.tipo, order.state, null);
+            }
+            return null;
+          }
           const payload = await response.json() as {
             delivery_receipt_code?: string | null;
             status?: string;
