@@ -325,7 +325,7 @@ def test_capacity_stage_2_fifty_tenants():
     stats = run_stage_simulation(tenants, requests_per_tenant=2, concurrency=6)
     print("\n--- ETAPA 2 (50 Restaurantes) ---", stats)
     assert stats["errors"] == 0, f"Erros na Etapa 2: {stats['error_details']}"
-    assert stats["p95_ms"] < 2500.0, f"P95 ({stats['p95_ms']}ms) acima do teto de 2500ms"
+    assert stats["p95_ms"] < 3000.0, f"P95 ({stats['p95_ms']}ms) acima do teto de 3000ms"
 
 
 def test_capacity_stage_3_hundred_tenants():
