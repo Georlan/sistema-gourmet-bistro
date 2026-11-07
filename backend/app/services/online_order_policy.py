@@ -304,20 +304,6 @@ def evaluate_online_order_policy(
             source="provisional_preparation",
         )
 
-    if is_provisional is None:
-        db = _restaurant_session(restaurante)
-        if db is not None:
-            from .restaurant_provisioning import is_provisional_preparation
-            rest_id = getattr(restaurante, "id", None)
-            if rest_id is not None and is_provisional_preparation(db, rest_id):
-                return OnlineOrderPolicy(
-                    accepting_orders=False,
-                    delivery_enabled=False,
-                    pickup_enabled=False,
-                    reason="Restaurante em fase de preparação. Operação comercial não liberada.",
-                    source="provisional_preparation",
-                )
-
     override = _normalize_text(getattr(restaurante, "status_override", "automatico"))
     configured_delivery = (
         getattr(configuracao, "delivery_ativo", True)
@@ -347,6 +333,19 @@ def evaluate_online_order_policy(
 
     cash_shift_open = _infer_open_cash_shift(restaurante) if cash_open is None else cash_open
     if not cash_shift_open:
+        if is_provisional is None:
+            db = _restaurant_session(restaurante)
+            if db is not None:
+                from .restaurant_provisioning import is_provisional_preparation
+                rest_id = getattr(restaurante, "id", None)
+                if rest_id is not None and is_provisional_preparation(db, rest_id):
+                    return OnlineOrderPolicy(
+                        accepting_orders=False,
+                        delivery_enabled=False,
+                        pickup_enabled=False,
+                        reason="Restaurante em fase de preparação. Operação comercial não liberada.",
+                        source="provisional_preparation",
+                    )
         return OnlineOrderPolicy(
             accepting_orders=False,
             delivery_enabled=delivery_enabled,
