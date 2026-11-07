@@ -321,6 +321,14 @@ function friendlyUsbConnectionError(status: number, detail?: string): string {
   );
 }
 
+function isMobileClientDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return (
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent))
+  );
+}
+
 export function PrintMonitorPanel({
   isWsConnected = false,
   apiBaseUrl,
@@ -330,6 +338,7 @@ export function PrintMonitorPanel({
   children,
   advancedTestsSlot
 }: PrintMonitorPanelProps) {
+  const isMobileClient = isMobileClientDevice();
   const authorization = authHeaders.Authorization || authHeaders.authorization || '';
   const connectionScope = `${apiBaseUrl}|${authorization}`;
   const activeScopeRef = useRef(connectionScope); activeScopeRef.current = connectionScope;
@@ -511,11 +520,6 @@ export function PrintMonitorPanel({
         <= (monitorData?.online_threshold_seconds || 90) * 1000
     );
   }, [monitorData]);
-
-  const isMobileClient = typeof navigator !== 'undefined' && (
-    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-    || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent))
-  );
 
   const isPrinterReady = (printer: DetectedPrinter): boolean => {
     if (
