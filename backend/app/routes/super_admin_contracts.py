@@ -645,7 +645,8 @@ def activate_contract(
                                 status_code=409,
                                 detail="Vincule uma autorização financeira real ou selecione Pix pós-teste explicitamente.",
                             )
-                        SaaSBillingSetup.__table__.create(db.get_bind(), checkfirst=True)
+                        if db.get_bind().dialect.name == "sqlite":
+                            SaaSBillingSetup.__table__.create(db.get_bind(), checkfirst=True)
                         upsert_billing_setup(
                             db,
                             protocol=normalized,
@@ -742,7 +743,8 @@ def activate_contract(
         ):
             raw_cycle = str(acceptance.get("billing_cycle") or "mensal").strip().lower()
             canonical_cycle = "annual" if raw_cycle in {"annual", "anual"} else "monthly"
-            SaaSBillingSetup.__table__.create(db.get_bind(), checkfirst=True)
+            if db.get_bind().dialect.name == "sqlite":
+                SaaSBillingSetup.__table__.create(db.get_bind(), checkfirst=True)
             upsert_billing_setup(
                 db,
                 protocol=normalized,
@@ -900,7 +902,8 @@ def link_contract(
                             detail="Cartão exige autorização do provedor; só Pix pós-teste pode ser selecionado sem gateway.",
                         )
                     from ..services.billing_service import upsert_billing_setup
-                    SaaSBillingSetup.__table__.create(db.get_bind(), checkfirst=True)
+                    if db.get_bind().dialect.name == "sqlite":
+                        SaaSBillingSetup.__table__.create(db.get_bind(), checkfirst=True)
                     upsert_billing_setup(
                         db,
                         protocol=payload.protocol,
