@@ -27,9 +27,21 @@ test('recomendações, destaques e ofertas renderizam a imagem canônica do cat�
 test('imagem ausente usa fallback local; falha de carregamento recupera sem repetir indefinidamente', () => {
   const element = CatalogProductImage({});
   assert.equal(element.props.src, LOCAL_PRODUCT_PLACEHOLDER);
+  assert.equal(element.props.loading, 'lazy');
+  assert.equal(element.props.decoding, 'async');
+  assert.equal(element.props.fetchPriority, undefined);
   const target = { src: image };
   element.props.onError({ currentTarget: target } as any);
   assert.equal(target.src, LOCAL_PRODUCT_PLACEHOLDER);
   element.props.onError({ currentTarget: target } as any);
   assert.equal(target.src, LOCAL_PRODUCT_PLACEHOLDER);
 });
+
+test('CatalogProductImage prioriza carregamento somente quando solicitado para imagem crítica', () => {
+  const hero = CatalogProductImage({ image, priority: true, width: 640, height: 480 });
+  assert.equal(hero.props.loading, 'eager');
+  assert.equal(hero.props.fetchPriority, 'high');
+  assert.equal(hero.props.width, 640);
+  assert.equal(hero.props.height, 480);
+});
+

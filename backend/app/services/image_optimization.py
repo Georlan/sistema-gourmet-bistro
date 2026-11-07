@@ -2,6 +2,7 @@
 from dataclasses import dataclass
 from io import BytesIO
 import threading
+import time
 import warnings
 
 from PIL import Image, ImageCms, ImageOps, UnidentifiedImageError
@@ -12,6 +13,8 @@ register_heif_opener()
 MAX_SOURCE_PIXELS = 24_000_000
 # One decode/encode per backend process; uploads must not exhaust operational RAM.
 _encoder_slot = threading.BoundedSemaphore(1)
+_metrics_lock = threading.Lock()
+_optimization_metrics: dict[str, dict[str, int | float]] = {}
 
 
 class InvalidImage(ValueError):
@@ -49,6 +52,39 @@ class OptimizedImage:
     extension: str = 'webp'
 
 
+def _record_metric(kind: str, input_bytes: int, output_bytes: int, duration_ms: float, passthrough: bool) -> None:
+    saved = max(0, input_bytes - output_bytes)
+    with _metrics_lock:
+        bucket = _optimization_metrics.setdefault(
+            kind,
+            {
+                'count': 0,
+                'passthrough_count': 0,
+                'input_bytes': 0,
+                'output_bytes': 0,
+                'saved_bytes': 0,
+                'total_duration_ms': 0.0,
+            },
+        )
+        bucket['count'] = int(bucket['count']) + 1
+        if passthrough:
+            bucket['passthrough_count'] = int(bucket['passthrough_count']) + 1
+        bucket['input_bytes'] = int(bucket['input_bytes']) + int(input_bytes)
+        bucket['output_bytes'] = int(bucket['output_bytes']) + int(output_bytes)
+        bucket['saved_bytes'] = int(bucket['saved_bytes']) + int(saved)
+        bucket['total_duration_ms'] = round(float(bucket['total_duration_ms']) + duration_ms, 3)
+
+
+def get_optimization_metrics() -> dict[str, dict[str, int | float]]:
+    with _metrics_lock:
+        return {k: dict(v) for k, v in _optimization_metrics.items()}
+
+
+def reset_optimization_metrics() -> None:
+    with _metrics_lock:
+        _optimization_metrics.clear()
+
+
 def _encode(image: Image.Image, *, quality: int, lossless: bool = False) -> bytes:
     output = BytesIO()
     image.save(output, format='WEBP', quality=quality, lossless=lossless,
@@ -56,7 +92,21 @@ def _encode(image: Image.Image, *, quality: int, lossless: bool = False) -> byte
     return output.getvalue()
 
 
+def _normalize_alpha(image: Image.Image) -> tuple[Image.Image, bool]:
+    """Convert fully opaque RGBA images to RGB and zero hidden RGB noise under A=0."""
+    alpha_channel = image.getchannel('A')
+    min_alpha, max_alpha = alpha_channel.getextrema()
+    if min_alpha == 255 and max_alpha == 255:
+        return image.convert('RGB'), False
+    if min_alpha == 0:
+        mask = alpha_channel.point(lambda a: 255 if a else 0)
+        blank = Image.new('RGBA', image.size, (0, 0, 0, 0))
+        return Image.composite(image, blank, mask), True
+    return image, True
+
+
 def optimize_image(content: bytes, kind: str) -> OptimizedImage:
+    started = time.perf_counter()
     budget = IMAGE_BUDGETS[kind]
     formats = ['PNG', 'JPEG', 'WEBP']
     if kind == 'catalog_source':
@@ -73,15 +123,20 @@ def optimize_image(content: bytes, kind: str) -> OptimizedImage:
                     raise InvalidImage('Use uma imagem estática, sem animação.')
                 source.verify()
             with Image.open(BytesIO(content), formats=formats) as source:
+                orig_width, orig_height = source.size
                 # Already-normalized WebP keeps its exact bytes and quality.
                 if (source.format == 'WEBP' and len(content) <= budget.max_bytes
                         and max(source.size) <= budget.max_edge
                         and not any(source.info.get(key) for key in ('exif', 'icc_profile', 'xmp'))):
                     source.load()
-                    return OptimizedImage(content, *source.size)
+                    result = OptimizedImage(content, *source.size)
+                    _record_metric(kind, len(content), len(result.content), (time.perf_counter() - started) * 1000.0, True)
+                    return result
                 # Resize before copying/converting: keep peak memory bounded, including PNGs.
                 source.thumbnail((budget.max_edge, budget.max_edge), Image.Resampling.LANCZOS)
-                image = ImageOps.exif_transpose(source)
+                ImageOps.exif_transpose(source, in_place=True)
+                image = source
+                was_resized = image.size != (orig_width, orig_height)
                 alpha = image.mode in ('RGBA', 'LA') or 'transparency' in image.info
                 mode = 'RGBA' if alpha else 'RGB'
                 profile = image.info.get('icc_profile')
@@ -90,20 +145,49 @@ def optimize_image(content: bytes, kind: str) -> OptimizedImage:
                         image, ImageCms.ImageCmsProfile(BytesIO(profile)),
                         ImageCms.createProfile('sRGB'), outputMode=mode,
                     )
-                else:
+                elif image.mode != mode:
                     image = image.convert(mode)
+                if image.mode == 'RGBA':
+                    image, alpha = _normalize_alpha(image)
                 # No EXIF/GPS, XMP, source filenames or color profiles in public output.
                 image.info.clear()
+                # When converting an image already within dimension & byte limits, prefer a
+                # quality step that also reduces byte size below the input file (down to 16 KiB floor).
+                preferred_bytes = (
+                    min(budget.max_bytes, max(16 * 1024, int(len(content) * 0.95)))
+                    if not was_resized and len(content) < budget.max_bytes and kind != 'catalog_source'
+                    else budget.max_bytes
+                )
+                first_scale_pass = True
                 while True:
-                    if kind == 'logo':
+                    if kind == 'logo' and (alpha or max(image.size) <= 256):
                         encoded = _encode(image, quality=80, lossless=True)
-                        if len(encoded) <= budget.max_bytes:
-                            return OptimizedImage(encoded, *image.size)
-                    qualities = (94, 92, 90) if kind == 'catalog_source' else ((90, 86, 82) if kind == 'logo' else (86, 82, 78))
+                        if len(encoded) <= preferred_bytes:
+                            result = OptimizedImage(encoded, *image.size)
+                            _record_metric(kind, len(content), len(result.content), (time.perf_counter() - started) * 1000.0, False)
+                            return result
+                    qualities = (
+                        (94, 92, 90)
+                        if kind == 'catalog_source'
+                        else ((90, 86, 82, 78) if kind == 'logo' else (86, 82, 78, 74))
+                    )
+                    best_within_budget: bytes | None = None
                     for quality in qualities:
                         encoded = _encode(image, quality=quality)
-                        if len(encoded) <= budget.max_bytes:
-                            return OptimizedImage(encoded, *image.size)
+                        if len(encoded) <= preferred_bytes:
+                            result = OptimizedImage(encoded, *image.size)
+                            _record_metric(kind, len(content), len(result.content), (time.perf_counter() - started) * 1000.0, False)
+                            return result
+                        if len(encoded) <= budget.max_bytes and (
+                            best_within_budget is None or len(encoded) < len(best_within_budget)
+                        ):
+                            best_within_budget = encoded
+                    if first_scale_pass and best_within_budget is not None:
+                        result = OptimizedImage(best_within_budget, *image.size)
+                        _record_metric(kind, len(content), len(result.content), (time.perf_counter() - started) * 1000.0, False)
+                        return result
+                    first_scale_pass = False
+                    preferred_bytes = budget.max_bytes
                     edge = max(image.size)
                     if edge <= budget.min_edge:
                         raise InvalidImage('A imagem é muito complexa para o limite de publicação. Escolha outra foto.')

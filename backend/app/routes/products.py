@@ -24,6 +24,10 @@ from ..schemas import (
     CardapioUpdate,
     CardapiosListResponse,
 )
+from ..services.storage_paths import (
+    normalize_gallery_references,
+    validate_tenant_storage_reference,
+)
 from ..websocket_manager import manager
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 import re
@@ -33,6 +37,31 @@ router = APIRouter(
     prefix="/produtos",
     tags=["Produtos e Categorias"]
 )
+
+
+def _validate_product_media_fields(
+    rest_id: int,
+    imagem: str | None = None,
+    imagens_galeria: list[str] | None = None,
+) -> tuple[str | None, list[str] | None]:
+    try:
+        clean_image = (
+            validate_tenant_storage_reference(imagem, rest_id, "products")
+            if imagem is not None
+            else None
+        )
+        clean_gallery = (
+            normalize_gallery_references(imagens_galeria, rest_id, clean_image)
+            if imagens_galeria is not None
+            else None
+        )
+        return clean_image, clean_gallery
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
 
 def notify_catalog_update(
     background_tasks: BackgroundTasks,
@@ -744,6 +773,15 @@ def create_produto(
         )
 
     payload = produto_data.model_dump()
+    clean_img, clean_gal = _validate_product_media_fields(
+        rest_id,
+        payload.get("imagem"),
+        payload.get("imagens_galeria"),
+    )
+    if clean_img is not None:
+        payload["imagem"] = clean_img
+    if clean_gal is not None:
+        payload["imagens_galeria"] = clean_gal
     if payload.get("cardapio_id"):
         cardapio = db.query(Cardapio).filter(
             Cardapio.restaurante_id == rest_id,
@@ -798,6 +836,16 @@ def update_produto(
         )
 
     data = update_data.model_dump(exclude_unset=True)
+    if "imagem" in data or "imagens_galeria" in data:
+        clean_img, clean_gal = _validate_product_media_fields(
+            rest_id,
+            data.get("imagem") if "imagem" in data else None,
+            data.get("imagens_galeria") if "imagens_galeria" in data else None,
+        )
+        if "imagem" in data and clean_img is not None:
+            data["imagem"] = clean_img
+        if "imagens_galeria" in data and clean_gal is not None:
+            data["imagens_galeria"] = clean_gal
 
     if "cardapio_id" in data and data["cardapio_id"]:
         cardapio = db.query(Cardapio).filter(
@@ -953,10 +1001,20 @@ def importar_cardapio(
                     db.add(cat)
                 else:
                     cat.nome = cat_nome
+                    destino = category_data.destino_impressao if not isinstance(category_data, str) else destino
                     cat.destino_impressao = destino
             db.flush()
     else:
         produtos_data = payload
+
+    # Validate all product media references before mutating DB state.
+    validated_media_by_id: dict[str, tuple[str | None, list[str] | None]] = {}
+    for item in produtos_data:
+        validated_media_by_id[item.id] = _validate_product_media_fields(
+            rest_id,
+            item.imagem,
+            item.imagens_galeria,
+        )
 
     if not isinstance(payload, CardapioImportPayload) or payload.mode == "replace":
         db.query(Produto).filter(Produto.restaurante_id == rest_id).update({Produto.ativo: False})
@@ -964,6 +1022,7 @@ def importar_cardapio(
     imported_products = []
 
     for item in produtos_data:
+        clean_img, clean_gal = validated_media_by_id[item.id]
         cat_id = item.categoria_id
         cat = db.query(Categoria).filter(
             Categoria.restaurante_id == rest_id,
@@ -997,10 +1056,10 @@ def importar_cardapio(
             existente.categoria_id = item.categoria_id
             if item.descricao is not None:
                 existente.descricao = item.descricao
-            if item.imagem is not None:
-                existente.imagem = item.imagem
-            if item.imagens_galeria is not None:
-                existente.imagens_galeria = item.imagens_galeria
+            if clean_img is not None:
+                existente.imagem = clean_img
+            if clean_gal is not None:
+                existente.imagens_galeria = clean_gal
             existente.ativo = item.ativo if item.ativo is not None else True
             imported_products.append(existente)
         else:
@@ -1011,8 +1070,8 @@ def importar_cardapio(
                 preco=item.preco,
                 categoria_id=item.categoria_id,
                 descricao=item.descricao or "",
-                imagem=item.imagem or "",
-                imagens_galeria=item.imagens_galeria or [],
+                imagem=clean_img or "",
+                imagens_galeria=clean_gal or [],
                 ativo=item.ativo if item.ativo is not None else True
             )
             db.add(novo)

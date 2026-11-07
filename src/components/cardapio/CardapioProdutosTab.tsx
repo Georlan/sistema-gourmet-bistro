@@ -683,7 +683,7 @@ export function CardapioProdutosTab({
                     )}
                     <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
                       {product.imagem ? (
-                        <img src={product.imagem} alt="" className="h-full w-full object-cover" />
+                        <img src={product.imagem} alt="" loading="lazy" decoding="async" width={44} height={44} className="h-full w-full object-cover" />
                       ) : (
                         <ImageIcon size={19} />
                       )}
