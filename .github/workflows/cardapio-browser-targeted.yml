@@ -39,7 +39,7 @@ on:
 
 concurrency:
   group: cardapio-browser-${{ github.event.pull_request.head.ref || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -49,7 +49,7 @@ jobs:
     name: Cardapio browser smoke
     # Playwright 1.58.2 cannot install Chromium deps on ubuntu26.04 runners.
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -63,10 +63,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
-      - name: Run focused cardapio browser regressions
+      - name: Install Chromium
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
+          fi
+
+      - name: Run focused cardapio catalog and promotion browser regressions
         env:
           KOMA_E2E_PORT: '4287'
         run: >-
@@ -85,6 +97,64 @@ jobs:
           e2e/cardapio-benefits.spec.ts
           e2e/cardapio-marmitaria-complements.spec.ts
           e2e/marmitaria-product-onboarding.spec.ts
+          --project=mobile-390
+          --project=desktop-1366
+          --workers=2
+
+      - name: Verify hybrid catalog across all nine responsive widths
+        env:
+          KOMA_E2E_PORT: '4289'
+        run: >-
+          npm run test:e2e --
+          e2e/cardapio-mobile-layout.spec.ts
+          --workers=2
+
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cardapio-playwright-catalog-${{ github.run_id }}
+          path: playwright-report/
+          if-no-files-found: warn
+          retention-days: 7
+
+  cardapio-fulfillment-browser:
+    name: Cardapio fulfillment, chat and Firefox smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-firefox-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Chromium and Firefox
+        run: |
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium firefox
+          else
+            npx playwright install --with-deps chromium firefox
+          fi
+
+      - name: Run focused marmitaria, order tracking, chat and checkout browser regressions
+        env:
+          KOMA_E2E_PORT: '4287'
+        run: >-
+          npm run test:e2e --
           e2e/marmitaria-optional-salad.spec.ts
           e2e/marmitaria-daily-menu.spec.ts
           e2e/linked-complements.spec.ts
@@ -102,21 +172,12 @@ jobs:
           --project=desktop-1366
           --workers=2
 
-      - name: Verify hybrid catalog across all nine responsive widths
-        env:
-          KOMA_E2E_PORT: '4289'
-        run: >-
-          npm run test:e2e --
-          e2e/cardapio-mobile-layout.spec.ts
-          --workers=2
-
       - name: Verify native contact input in Firefox production build
         env:
           KOMA_E2E_PORT: '4288'
           KOMA_E2E_FIREFOX: 'true'
           KOMA_E2E_PREVIEW: 'true'
         run: |
-          npx playwright install --with-deps firefox
           npm run build
           npm run test:e2e -- e2e/cardapio-artistic-parity.spec.ts --grep "contato preserva" --project=firefox-390 --workers=2
 
@@ -124,7 +185,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: cardapio-playwright-${{ github.run_id }}
+          name: cardapio-playwright-fulfillment-${{ github.run_id }}
           path: playwright-report/
           if-no-files-found: warn
           retention-days: 7
