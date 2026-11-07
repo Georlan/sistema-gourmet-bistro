@@ -16,7 +16,7 @@ export interface DisplayVariant {
 
 export interface GroupedDisplayProduct extends Product {
   isGrouped: true;
-  groupKind: 'pasteis' | 'sucos' | 'vitaminas' | 'refrigerantes' | 'generic';
+  groupKind: 'size' | 'pasteis' | 'sucos' | 'vitaminas' | 'refrigerantes' | 'generic';
   groupTitle: string;
   groupDescription: string;
   minPrice: number;
@@ -97,6 +97,71 @@ function formatVariantLabel(name: string, kind: string): string {
   return name;
 }
 
+/**
+ * Agrupa apenas o MESMO produto vendido em gramagens distintas. A identificação
+ * vem do nome/gramagem dos SKUs cadastrados, nunca do ID do tenant, do produto
+ * ou de um preço hardcoded. Batatas especiais e acompanhadas não correspondem
+ * ao padrão e permanecem produtos independentes.
+ */
+function groupSizedFries(products: Product[]): CatalogDisplayItem[] {
+  const details = new Map<Product, { base: string; size: string; grams: number }>();
+  const families = new Map<string, Product[]>();
+  for (const product of products) {
+    const match = normalize(product.name).match(/^(batata frita)\s+(pequena|media|grande)\s*\(\s*(\d+)\s*g\s*\)$/);
+    if (!match) continue;
+    const key = match[1];
+    details.set(product, { base: key, size: match[2], grams: Number(match[3]) });
+    families.set(key, [...(families.get(key) || []), product]);
+  }
+
+  const shownFamilies = new Set<string>();
+  return products.flatMap((product): CatalogDisplayItem[] => {
+    const parsed = details.get(product);
+    if (!parsed) return [product];
+    const members = families.get(parsed.base) || [];
+    if (members.length < 2 || new Set(members.map((item) => details.get(item)?.size)).size < 2) {
+      return [product];
+    }
+    if (shownFamilies.has(parsed.base)) return [];
+    shownFamilies.add(parsed.base);
+
+    const sizeLabels: Record<string, string> = { pequena: 'Pequena', media: 'Média', grande: 'Grande' };
+    const order: Record<string, number> = { pequena: 0, media: 1, grande: 2 };
+    const variants: DisplayVariant[] = [...members]
+      .sort((a, b) => (order[details.get(a)!.size] ?? 99) - (order[details.get(b)!.size] ?? 99))
+      .map((item) => {
+        const size = details.get(item)!;
+        return {
+          id: item.id,
+          label: `${sizeLabels[size.size]} (${size.grams} g)`,
+          description: item.description,
+          price: calculateProductMinStartingPrice(item),
+          product: item,
+          isAvailable: item.isAvailable !== false,
+        };
+      });
+    const available = variants.filter((variant) => variant.isAvailable);
+    const prices = (available.length ? available : variants).map((variant) => variant.price);
+    const title = product.name.replace(/\s+(Pequena|Média|Media|Grande)\s*\(\s*\d+\s*g\s*\)$/i, '');
+    const family: GroupedDisplayProduct = {
+      ...product,
+      id: `family-size-${parsed.base.replace(/\s+/g, '-')}`,
+      name: title,
+      description: 'Escolha o tamanho da porção.',
+      price: Math.min(...prices),
+      isGrouped: true,
+      groupKind: 'size',
+      groupTitle: title,
+      groupDescription: 'Escolha o tamanho:',
+      minPrice: Math.min(...prices),
+      hasVariablePrice: Math.max(...prices) > Math.min(...prices),
+      variants,
+      isAvailable: variants.some((variant) => variant.isAvailable),
+    };
+    return [family];
+  });
+}
+
 export function groupCategoryProductsForDisplay(
   categoryName: string,
   products: Product[],
@@ -104,22 +169,18 @@ export function groupCategoryProductsForDisplay(
 ): CatalogDisplayItem[] {
   if (!products || products.length === 0) return [];
 
-  // O agrupamento visual por famílias foi validado inicialmente para o JE Lanches (ID 1).
-  // Para outros restaurantes da plataforma, mantemos 100% o comportamento padrão e retrocompatibilidade,
-  // preservando a flexibilidade de configurar famílias de produtos por tenant futuramente.
+  // Agrupamento genérico de tamanhos configurados como SKUs reais: independente de tenant.
+  const catNorm = normalize(categoryName);
+  if (catNorm.includes('batata') || catNorm.includes('frita')) return groupSizedFries(products);
+
+  // Famílias legadas de outras categorias permanecem restritas ao piloto,
+  // sem estender agrupamentos artificiais aos demais restaurantes.
   const isEligibleRestaurant = restaurantId !== undefined && restaurantId !== null && String(restaurantId) === '1';
   if (!isEligibleRestaurant) {
     return products;
   }
 
-  const catNorm = normalize(categoryName);
-
-  // Batatas são produtos individuais: quantidade, tamanho e preço devem estar
-  // visíveis no catálogo, sem uma etapa de seleção de família. Não converta
-  // produtos reais em opções sintéticas nem oculte suas descrições.
-  if (catNorm.includes('batata') || catNorm.includes('frita')) return products;
-
-  // 2. Grupo Pastéis
+  // Grupo Pastéis
   if (catNorm.includes('pastel') || catNorm.includes('pasteis')) {
     const pasteis = products.filter((p) => normalize(p.name).includes('pastel'));
     if (pasteis.length >= 2) {
@@ -143,13 +204,13 @@ export function groupCategoryProductsForDisplay(
       const grouped: GroupedDisplayProduct = {
         ...leadProduct,
         id: 'family-pasteis',
-        name: 'Pastéis (Médio e Pastelão)',
-        description: 'Pastel crocante e sequinho frito na hora. Escolha o tamanho (Médio ou Pastelão) e seu sabor favorito.',
+        name: 'Pastel / Pastelão',
+        description: 'Escolha o tamanho e o sabor do seu pastel.',
         price: minPrice,
         isGrouped: true,
         groupKind: 'pasteis',
-        groupTitle: 'Pastéis (Médio e Pastelão)',
-        groupDescription: 'Escolha seu sabor favorito e o tamanho do pastel:',
+        groupTitle: 'Pastel / Pastelão',
+        groupDescription: 'Escolha o sabor:',
         minPrice,
         hasVariablePrice: true, // Pastéis têm opção Pastelão com acréscimo
         variants,
