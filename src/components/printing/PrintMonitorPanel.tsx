@@ -388,11 +388,17 @@ export function PrintMonitorPanel({
   });
 
   const localAgents = useMemo(
-    () => (
-      localAgentId
-        ? (monitorData?.agents || []).filter(agent => agent.agent_id === localAgentId)
-        : []
-    ),
+    () => {
+      if (localAgentId) {
+        return (monitorData?.agents || []).filter(agent => agent.agent_id === localAgentId);
+      }
+      const allAgents = monitorData?.agents || [];
+      const onlineAgents = allAgents.filter(agent => agent.online);
+      if (onlineAgents.length > 0) {
+        return onlineAgents;
+      }
+      return allAgents.slice(0, 1);
+    },
     [localAgentId, monitorData]
   );
 
@@ -743,7 +749,7 @@ export function PrintMonitorPanel({
     if (startingAgentRef.current) return;
     startingAgentRef.current = true;
     setStartingAgent(true);
-    setActionMessage('Preparando a impressão neste computador…');
+    setActionMessage('Preparando a impressão…');
     setActionSuccessful(null);
     const result = await localConnection.connect();
     if (result !== 'unavailable') {
@@ -752,8 +758,33 @@ export function PrintMonitorPanel({
       setActionMessage('');
       return;
     }
+
+    let targetUrl = 'koma-print://start';
+    try {
+      const suffix = Math.random().toString(36).substring(2, 7);
+      const requestedAgentId = `android-bt-${suffix}`;
+      const response = await fetch(`${apiBaseUrl}/api/print-agents/register`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ agent_id: requestedAgentId }),
+      });
+      const data = await response.json().catch(() => null);
+      if (response.ok && data?.agent_token) {
+        const tenantId = data.restaurante_id || 1;
+        const agentId = data.agent_id || requestedAgentId;
+        const agentToken = data.agent_token;
+        const restaurantName = monitorData?.restaurant_name || 'KOMA GOURMET';
+        targetUrl = `koma-print://connect?backend=${encodeURIComponent(apiBaseUrl)}&tenant=${tenantId}&name=${encodeURIComponent(restaurantName)}&agent_id=${encodeURIComponent(agentId)}&token=${encodeURIComponent(agentToken)}`;
+      }
+    } catch {
+      // Fallback para koma-print://start
+    }
+
     const launcher = document.createElement('a');
-    launcher.href = 'koma-print://start';
+    launcher.href = targetUrl;
     launcher.click();
     window.setTimeout(() => {
       startingAgentRef.current = false;
@@ -873,17 +904,17 @@ export function PrintMonitorPanel({
         detail: 'Toque em Conectar KÔMA Print e permita o acesso solicitado pelo navegador. Seu vínculo e suas impressoras serão preservados.'
       };
     }
-    if (!localAgentId) {
+    if (!localAgentId && !hasOnlineAgent) {
       return {
         tone: 'danger',
-        title: 'KÔMA Print não identificado neste computador',
-        detail: 'Clique em “Preparar impressão” para conectar somente este computador.'
+        title: 'KÔMA Print não conectado',
+        detail: 'Clique em “Preparar impressão” para conectar a impressora deste caixa.'
       };
     }
     if (!hasOnlineAgent) {
       return {
         tone: 'danger',
-        title: 'Impressão indisponível neste computador',
+        title: 'Impressão indisponível',
         detail: 'Clique em “Preparar impressão” e tente conectar novamente.'
       };
     }
@@ -1173,12 +1204,13 @@ export function PrintMonitorPanel({
                 <button
                   type="button"
                   onClick={() => {
-                    if (localAgentId) void onTestPrint(localAgentId);
+                    const targetId = localAgentId || onlineAgents[0]?.agent_id;
+                    if (targetId) void onTestPrint(targetId);
                   }}
-                  disabled={testInProgress || !hasDispatchablePrinter || !localAgentId}
+                  disabled={testInProgress || !hasDispatchablePrinter || (!localAgentId && !hasOnlineAgent)}
                   title={
-                    !localAgentId
-                      ? 'Este computador ainda não foi identificado pelo KÔMA Print'
+                    !localAgentId && !hasOnlineAgent
+                      ? 'Nenhum agente de impressão identificado ou conectado'
                       : hasReadyPrinter
                         ? 'Enviar um cupom real para a impressora deste computador'
                         : hasDispatchablePrinter
