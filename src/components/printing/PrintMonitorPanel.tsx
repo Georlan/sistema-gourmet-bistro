@@ -348,7 +348,14 @@ export function PrintMonitorPanel({
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   const localConnection = useLocalPrintAgent(connectionScope);
-  const localAgentId = localConnection.identity?.agent_id || null;
+  const detectedMobileAgentId = useMemo(() => {
+    if (!isMobileClient) return null;
+    const stored = typeof window !== 'undefined' ? localStorage.getItem('koma_print_mobile_agent_id') : null;
+    if (stored) return stored;
+    return (monitorData?.agents || []).find(a => a.online && (a.agent_id.startsWith('android-') || a.role === 'bluetooth' || a.role === 'mobile'))?.agent_id
+      || (monitorData?.agents || []).find(a => a.online)?.agent_id || null;
+  }, [monitorData]);
+  const localAgentId = localConnection.identity?.agent_id || detectedMobileAgentId || null;
   const localAgentResolved = localConnection.status !== 'checking';
   const connectionNeedsPermission = localConnection.status === 'permission_prompt' || localConnection.status === 'permission_denied';
 
@@ -388,17 +395,11 @@ export function PrintMonitorPanel({
   });
 
   const localAgents = useMemo(
-    () => {
-      if (localAgentId) {
-        return (monitorData?.agents || []).filter(agent => agent.agent_id === localAgentId);
-      }
-      const allAgents = monitorData?.agents || [];
-      const onlineAgents = allAgents.filter(agent => agent.online);
-      if (onlineAgents.length > 0) {
-        return onlineAgents;
-      }
-      return allAgents.slice(0, 1);
-    },
+    () => (
+      localAgentId
+        ? (monitorData?.agents || []).filter(agent => agent.agent_id === localAgentId)
+        : []
+    ),
     [localAgentId, monitorData]
   );
 
@@ -512,13 +513,11 @@ export function PrintMonitorPanel({
   );
 
   const isPrinterReady = (printer: DetectedPrinter): boolean => {
-    if (printer.connection === 'bluetooth') {
-      return Boolean(
-        printer.configured
-        && printer.paired
-        && (printer.spp ?? true)
-        && (printer.dispatchable ?? true)
-      );
+    if (
+      printer.connection === 'bluetooth'
+      && !(printer.paired && (printer.spp ?? true))
+    ) {
+      return false;
     }
     return Boolean(
       printer.available
@@ -787,6 +786,9 @@ export function PrintMonitorPanel({
         const tenantId = data.restaurante_id || 1;
         const agentId = data.agent_id || requestedAgentId;
         const agentToken = data.agent_token;
+        if (isMobileClient && typeof window !== 'undefined') {
+          localStorage.setItem('koma_print_mobile_agent_id', agentId);
+        }
         const restaurantName = monitorData?.restaurant_name || 'KOMA GOURMET';
         targetUrl = `koma-print://connect?backend=${encodeURIComponent(apiBaseUrl)}&tenant=${tenantId}&name=${encodeURIComponent(restaurantName)}&agent_id=${encodeURIComponent(agentId)}&token=${encodeURIComponent(agentToken)}`;
       }
@@ -798,7 +800,7 @@ export function PrintMonitorPanel({
       window.location.href = targetUrl;
     } else {
       const launcher = document.createElement('a');
-      launcher.href = targetUrl;
+      launcher.href = 'koma-print://start';
       launcher.click();
     }
 
@@ -1230,13 +1232,12 @@ export function PrintMonitorPanel({
                 <button
                   type="button"
                   onClick={() => {
-                    const targetId = localAgentId || onlineAgents[0]?.agent_id;
-                    if (targetId) void onTestPrint(targetId);
+                    if (localAgentId) void onTestPrint(localAgentId);
                   }}
-                  disabled={testInProgress || !hasDispatchablePrinter || (!localAgentId && !hasOnlineAgent)}
+                  disabled={testInProgress || !hasDispatchablePrinter || !localAgentId}
                   title={
-                    !localAgentId && !hasOnlineAgent
-                      ? 'Nenhum agente de impressão identificado ou conectado'
+                    !localAgentId
+                      ? 'Este computador ainda não foi identificado pelo KÔMA Print'
                       : hasReadyPrinter
                         ? 'Enviar um cupom real para a impressora deste computador'
                         : hasDispatchablePrinter
