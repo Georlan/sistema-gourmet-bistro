@@ -26,7 +26,15 @@ def main() -> int:
     try:
         with single_instance():
             configure_file_logging()
-            return run(config)
+            exit_code = run(config)
+            # No Windows, o Agendador de Tarefas executa pythonw main.py em background.
+            # Se o processo retornar código != 0, o Windows considera falha e aciona
+            # RestartCount 999 a cada 1 minuto. Encerrar o processo com 0 quando
+            # a pausa foi intencional (pareamento necessário) informa ao Windows que
+            # a tarefa foi concluída normalmente e interrompe o loop de reinício.
+            if sys.platform == "win32" and exit_code == PAIRING_REQUIRED_EXIT:
+                return 0
+            return exit_code
     except AgentAlreadyRunning:
         print("[KÔMA] O conector já está aberto neste computador.")
         return 0
