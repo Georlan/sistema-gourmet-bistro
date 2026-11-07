@@ -240,26 +240,29 @@ def generate_manual_pix_payload(
     from .online_payments.direct_pix import brcode, normalize_key, merchant_text
     from ..config import settings
 
-    raw_key = getattr(settings, "KOMA_SAAS_MANUAL_PIX_KEY", None) or os.getenv("KOMA_SAAS_MANUAL_PIX_KEY") or "pix@komafood.com.br"
+    # Jamais gerar BR Code para uma chave presumida: pode direcionar dinheiro a terceiro.
+    raw_key = str(getattr(settings, "KOMA_SAAS_MANUAL_PIX_KEY", None) or os.getenv("KOMA_SAAS_MANUAL_PIX_KEY") or "").strip()
     raw_name = getattr(settings, "KOMA_SAAS_MANUAL_PIX_HOLDER", None) or os.getenv("KOMA_SAAS_MANUAL_PIX_HOLDER") or "KOMA GOURMET BISTRO"
     raw_city = getattr(settings, "KOMA_SAAS_MANUAL_PIX_CITY", None) or os.getenv("KOMA_SAAS_MANUAL_PIX_CITY") or "FORTALEZA"
 
-    key_kind = "email" if "@" in raw_key else "cnpj" if len(re.sub(r"\D", "", raw_key)) == 14 else "random"
-    clean_key = normalize_key(key_kind, raw_key)
-    clean_name = merchant_text(raw_name, 25)
-    clean_city = merchant_text(raw_city, 15)
+    qr_payload = None
+    if raw_key:
+        key_kind = "email" if "@" in raw_key else "cnpj" if len(re.sub(r"\\D", "", raw_key)) == 14 else "random"
+        clean_key = normalize_key(key_kind, raw_key)
+        clean_name = merchant_text(raw_name, 25)
+        clean_city = merchant_text(raw_city, 15)
 
-    txid = re.sub(r"[^A-Za-z0-9]", "", f"KOMA{restaurant_id}I{invoice.id}")[:25]
-    if len(txid) < 1:
-        txid = f"KOMA{restaurant_id}"[:25]
+        txid = re.sub(r"[^A-Za-z0-9]", "", f"KOMA{restaurant_id}I{invoice.id}")[:25]
+        if len(txid) < 1:
+            txid = f"KOMA{restaurant_id}"[:25]
 
-    qr_payload = brcode(
-        key=clean_key,
-        name=clean_name,
-        city=clean_city,
-        amount=amount.quantize(Decimal(".01")),
-        txid=txid,
-    )
+        qr_payload = brcode(
+            key=clean_key,
+            name=clean_name,
+            city=clean_city,
+            amount=amount.quantize(Decimal(".01")),
+            txid=txid,
+        )
 
     return {
         "invoiceId": invoice.id,
@@ -276,7 +279,12 @@ def generate_manual_pix_payload(
         "paymentMethodType": "pix",
         "provider": "manual_pix",
         "automaticRenewal": False,
-        "message": "Cobrança Pix manual gerada com sucesso. Realize a transferência e envie o comprovante ao suporte para confirmação administrativa.",
+        "message": (
+            "Cobrança manual pendente. Solicite a chave Pix oficial do KÔMA pelo canal combinado; "
+            "não há QR Code automático disponível. A quitação será conferida administrativamente."
+            if qr_payload is None else
+            "Cobrança Pix manual disponível. Confira o recebedor antes de pagar e envie a referência para confirmação administrativa."
+        ),
     }
 
 
