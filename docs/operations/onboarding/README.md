@@ -5,6 +5,12 @@ registre responsável, data e evidência. Não marque testes físicos como aprov
 por status de software. A primeira cliente provavelmente será Pocket: confirme
 isso na contratação antes de conceder qualquer benefício.
 
+## Primeiro acesso sem burocracia prematura
+
+Para um novo restaurante, **comece pelo [Onboarding rápido](fast-track.md)**: criar/retomar tenant, disponibilizar login controlado, preparar catálogo e testar no celular. Esta fase **não** deve iniciar os sete dias nem fingir contratação ou cobrança.
+
+O checklist mestre abaixo cobre a **ativação comercial completa**. Dados jurídicos realmente exigíveis, aceite autêntico e condições de billing continuam obrigatórios no momento aplicável; a simplificação do trial sem gateway é uma **proposta a implementar**, não um desvio dos controles atuais. Não confundir “criado e configurável” com “liberado para pedidos reais”.
+
 ## Checklist mestre
 
 | Feito | Etapa | Conferir antes de avançar |
