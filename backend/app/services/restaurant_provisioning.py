@@ -603,6 +603,20 @@ def is_provisional_preparation(db: Session, restaurante_id: int) -> bool:
     if restaurante_id is None or restaurante_id <= 0:
         return False
 
+    audit = (
+        db.query(SuperAdminAuditLog)
+        .filter(
+            SuperAdminAuditLog.restaurante_id == restaurante_id,
+            SuperAdminAuditLog.action == "SUPERADMIN_TENANT_ONBOARD",
+        )
+        .order_by(SuperAdminAuditLog.id.desc())
+        .first()
+    )
+    if audit is None or not isinstance(audit.after_data, dict):
+        return False
+    if audit.after_data.get("trial_status") != "pending_setup":
+        return False
+
     sub_exists = (
         db.query(SaaSSubscription.id)
         .filter(SaaSSubscription.restaurante_id == restaurante_id)
@@ -620,18 +634,5 @@ def is_provisional_preparation(db: Session, restaurante_id: int) -> bool:
     if contract_exists is not None:
         return False
 
-    audit = (
-        db.query(SuperAdminAuditLog)
-        .filter(
-            SuperAdminAuditLog.restaurante_id == restaurante_id,
-            SuperAdminAuditLog.action == "SUPERADMIN_TENANT_ONBOARD",
-        )
-        .order_by(SuperAdminAuditLog.id.desc())
-        .first()
-    )
-    if audit is not None and isinstance(audit.after_data, dict):
-        if audit.after_data.get("trial_status") == "pending_setup":
-            return True
-
-    return False
+    return True
 

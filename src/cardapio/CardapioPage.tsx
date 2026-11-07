@@ -1303,13 +1303,15 @@ export default function CardapioPage() {
         {activeBrand.storeStatus === "closed" && (
           <div id="menu-availability" className="cardapio-availability-note">
             <strong>
-              {activeBrand.availabilitySource === "schedule"
-                ? activeBrand.nextOpeningLabel
-                  ? `Estabelecimento fechado. Abre ${activeBrand.nextOpeningLabel}.`
-                  : "Estabelecimento fechado."
-                : activeBrand.availabilitySource === "cash_closed"
-                  ? "Estabelecimento fechado. Aguardando abertura do caixa."
-                  : "Pedidos pausados."}
+              {activeBrand.availabilitySource === "provisional_preparation"
+                ? "Estabelecimento em fase de preparação."
+                : activeBrand.availabilitySource === "schedule"
+                  ? activeBrand.nextOpeningLabel
+                    ? `Estabelecimento fechado. Abre ${activeBrand.nextOpeningLabel}.`
+                    : "Estabelecimento fechado."
+                  : activeBrand.availabilitySource === "cash_closed"
+                    ? "Estabelecimento fechado. Aguardando abertura do caixa."
+                    : "Pedidos pausados."}
             </strong>
             {!["schedule", "cash_closed"].includes(activeBrand.availabilitySource || "") && orderingMessage ? ` ${orderingMessage} ` : " "}
             O cardápio continua disponível para consulta.

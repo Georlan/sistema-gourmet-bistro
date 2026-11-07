@@ -279,6 +279,7 @@ def evaluate_online_order_policy(
     modalidade: str | None = None,
     now: datetime.datetime | None = None,
     cash_open: bool | None = None,
+    is_provisional: bool | None = None,
 ) -> OnlineOrderPolicy:
     """Calcula se o servidor aceita um novo pedido e qual taxa deve aplicar.
 
@@ -286,9 +287,22 @@ def evaluate_online_order_policy(
     aberto neste restaurante, inclusive com override legado Forçado Aberto.
     A pausa operacional e o fechamento manual continuam bloqueando pedidos.
 
+    Restaurantes em fase de preparação provisória têm a operação comercial
+    bloqueada por padrão, impedindo que o cardápio público anuncie recebimento
+    ativo enquanto o backend rejeita pedidos.
+
     Restrições específicas, como delivery desativado, continuam valendo mesmo
     com caixa aberto.
     """
+
+    if is_provisional is True:
+        return OnlineOrderPolicy(
+            accepting_orders=False,
+            delivery_enabled=False,
+            pickup_enabled=False,
+            reason="Restaurante em fase de preparação. Operação comercial não liberada.",
+            source="provisional_preparation",
+        )
 
     override = _normalize_text(getattr(restaurante, "status_override", "automatico"))
     configured_delivery = (
@@ -319,6 +333,19 @@ def evaluate_online_order_policy(
 
     cash_shift_open = _infer_open_cash_shift(restaurante) if cash_open is None else cash_open
     if not cash_shift_open:
+        if is_provisional is None:
+            db = _restaurant_session(restaurante)
+            if db is not None:
+                from .restaurant_provisioning import is_provisional_preparation
+                rest_id = getattr(restaurante, "id", None)
+                if rest_id is not None and is_provisional_preparation(db, rest_id):
+                    return OnlineOrderPolicy(
+                        accepting_orders=False,
+                        delivery_enabled=False,
+                        pickup_enabled=False,
+                        reason="Restaurante em fase de preparação. Operação comercial não liberada.",
+                        source="provisional_preparation",
+                    )
         return OnlineOrderPolicy(
             accepting_orders=False,
             delivery_enabled=delivery_enabled,
