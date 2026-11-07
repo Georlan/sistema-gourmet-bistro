@@ -8,7 +8,7 @@ import {
 } from '../src/cardapio/catalogGrouping';
 import type { Product } from '../src/cardapio/CardapioTypes';
 
-test('batatas são seis produtos legíveis, sem etapa de família ou tamanho duplicada', () => {
+test('batata tradicional seleciona tamanho em um card e preserva especial como SKU real', () => {
   const entries = [
     ['p', 'Batata Frita Pequena (200 g)', 12],
     ['m', 'Batata Frita Média (300 g)', 15],
@@ -19,13 +19,19 @@ test('batatas são seis produtos legíveis, sem etapa de família ou tamanho dup
   ] as const;
   const products: Product[] = entries.map(([id, name, price]) => ({
     id, name, price, image: '', category: 'Batatas Fritas',
-    description: 'Porção de batatas fritas', isAvailable: true,
+    description: 'Porção de batatas fritas com molho rosé', isAvailable: true,
   }));
   const items = groupCategoryProductsForDisplay('Batatas Fritas', products, '1');
-  assert.equal(items.length, 6);
-  assert.deepEqual(items.map(item => item.id), entries.map(entry => entry[0]));
-  assert.deepEqual(items.map(item => item.price), [12, 15, 18, 24, 24, 28]);
-  assert.ok(items.every(item => !isGroupedProduct(item)));
+  assert.deepEqual(items.map(item => item.id), ['family-batata-tradicional', 'especial', 'file', 'sol']);
+  const family = items[0] as GroupedDisplayProduct;
+  assert.ok(isGroupedProduct(family));
+  assert.equal(family.name, 'Batata Frita Tradicional');
+  assert.equal(family.requiresExplicitVariantSelection, true);
+  assert.equal(family.minPrice, 12);
+  assert.equal(family.hasVariablePrice, true);
+  assert.deepEqual(family.variants.map(v => [v.id, v.label, v.price]),
+    [['p', 'Pequena · 200 g', 12], ['m', 'Média · 300 g', 15], ['g', 'Grande · 400 g', 18]]);
+  assert.ok(items.slice(1).every(item => !isGroupedProduct(item)));
 });
 
 test('groupCategoryProductsForDisplay preserva produtos individuais para outros restaurantes (IDs !== 1)', () => {
@@ -97,38 +103,45 @@ test('calculateProductMinStartingPrice computa escolhas obrigatórias e ignora o
   assert.equal(minStarting, 32.0);
 });
 
-test('batatas indisponíveis permanecem identificáveis individualmente, sem falsear preço inicial', () => {
+test('batata indisponível permanece selecionável somente se disponível, sem falsear preço inicial', () => {
   const products: Product[] = [
-    { id: 'p', name: 'Batata Pequena', description: '200 g', price: 12, image: '', category: 'Batatas Fritas', isAvailable: false },
-    { id: 'm', name: 'Batata Média', description: '300 g', price: 15, image: '', category: 'Batatas Fritas', isAvailable: true },
+    { id: 'p', name: 'Batata Frita Pequena (200 g)', description: '200 g', price: 12, image: '', category: 'Batatas Fritas', isAvailable: false },
+    { id: 'm', name: 'Batata Frita Média (300 g)', description: '300 g', price: 15, image: '', category: 'Batatas Fritas', isAvailable: true },
   ];
-  const items = groupCategoryProductsForDisplay('Batatas Fritas', products, '1');
-  assert.deepEqual(items.map(item => item.price), [12, 15]);
-  assert.deepEqual(items.map(item => item.isAvailable), [false, true]);
-  assert.ok(items.every(item => !isGroupedProduct(item)));
+  const result = groupCategoryProductsForDisplay('Batatas Fritas', products, '1');
+  assert.equal(result.length, 1);
+  assert.ok(isGroupedProduct(result[0]));
+  const family = result[0] as GroupedDisplayProduct;
+  assert.equal(family.price, 15);
+  assert.deepEqual(family.variants.map(v => v.isAvailable), [false, true]);
 });
 
-test('groupCategoryProductsForDisplay agrupa Pasteis unificando os 6 sabores', () => {
-  const pasteis: Product[] = [
-    { id: 'prod-je-12', name: 'Pastel de Carne de Sol', description: 'carne de sol, queijo e catupiry', price: 7.0, image: 'img-12.jpg', category: 'Pastelões e Pastel Médio', isAvailable: true },
-    { id: 'prod-je-13', name: 'Pastel Mistão', description: 'frango, catupiry, calabresa e queijo', price: 7.0, image: 'img-13.jpg', category: 'Pastelões e Pastel Médio', isAvailable: true },
-    { id: 'prod-je-14', name: 'Pastel de Carne Moída', description: 'carne moída, queijo, catupiry e ovo', price: 7.0, image: 'img-14.jpg', category: 'Pastelões e Pastel Médio', isAvailable: true },
-    { id: 'prod-je-15', name: 'Pastel Sabor Pizza', description: 'queijo, presunto, calabresa e catupiry', price: 7.0, image: 'img-15.jpg', category: 'Pastelões e Pastel Médio', isAvailable: true },
-    { id: 'prod-je-16', name: 'Pastel de Frango', description: 'frango, catupiry e queijo', price: 7.0, image: 'img-16.jpg', category: 'Pastelões e Pastel Médio', isAvailable: true },
-    { id: 'prod-je-17', name: 'Pastel Três Queijos', description: 'queijo coalho, cheddar e mussarela', price: 7.0, image: 'img-17.jpg', category: 'Pastelões e Pastel Médio', isAvailable: true },
+test('pastel médio e pastelão são dois cards e cada um oferece só sabores com preços reais', () => {
+  const flavors = [
+    { name: 'Carne de Sol', medium: 7, large: 17 },
+    { name: 'Mistão', medium: 7, large: 16 },
+    { name: 'Carne Moída', medium: 7, large: 16 },
+    { name: 'Sabor Pizza', medium: 7, large: 16 },
+    { name: 'Frango', medium: 7, large: 16 },
+    { name: 'Três Queijos', medium: 7, large: 16 },
   ];
-
-  const grouped = groupCategoryProductsForDisplay('Pastelões e Pastel Médio', pasteis, '1');
-  assert.equal(grouped.length, 1);
-  const card = grouped[0];
-  assert.ok(isGroupedProduct(card));
-  assert.equal(card.name, 'Pastéis (Médio e Pastelão)');
-  assert.equal(card.minPrice, 7.0);
-  assert.equal(card.hasVariablePrice, true);
-  assert.equal(card.variants.length, 6);
-  assert.equal(card.variants[0].label, 'Carne de Sol');
-  assert.equal(card.variants[1].label, 'Mistão');
-  assert.equal(card.variants[2].label, 'Carne Moída');
+  const products: Product[] = flavors.flatMap((f, i) => [
+    { id: `m-${i}`, name: `Pastel Médio de ${f.name}`, description: f.name, price: f.medium, image: '', category: 'Pastelões e Pastel Médio', isAvailable: true },
+    { id: `g-${i}`, name: `Pastelão de ${f.name}`, description: f.name, price: f.large, image: '', category: 'Pastelões e Pastel Médio', isAvailable: true },
+  ]);
+  const grouped = groupCategoryProductsForDisplay('Pastelões e Pastel Médio', products, '1');
+  assert.deepEqual(grouped.map(card => card.name), ['Pastel Médio', 'Pastelão']);
+  assert.ok(grouped.every(isGroupedProduct));
+  const medio = grouped[0] as GroupedDisplayProduct, grande = grouped[1] as GroupedDisplayProduct;
+  assert.equal(medio.price, 7);
+  assert.equal(grande.price, 16);
+  assert.equal(grande.hasVariablePrice, true);
+  assert.equal(medio.requiresExplicitVariantSelection, true);
+  assert.equal(grande.requiresExplicitVariantSelection, true);
+  assert.deepEqual(medio.variants.map(v => v.price), [7,7,7,7,7,7]);
+  assert.deepEqual(grande.variants.map(v => v.price), [17,16,16,16,16,16]);
+  assert.deepEqual(medio.variants.map(v => v.label), ['Carne de Sol','Mistão','Carne Moída','Pizza','Frango','Três Queijos']);
+  assert.ok(grouped.every(card => !(card as GroupedDisplayProduct).variants.some(v => Boolean(v.product.modifierGroups?.length))));
 });
 
 test('groupCategoryProductsForDisplay separa Sucos e Vitaminas em dois cards limpos', () => {
