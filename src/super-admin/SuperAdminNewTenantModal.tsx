@@ -246,7 +246,7 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
                   {isPendingSetup ? "Restaurante criado em modo de preparação" : "Tenant administrativo criado"}
                 </h3>
                 <p className="mt-1 text-xs text-koma-muted">
-                  Tenant #{created.id} pronto para configurar perfil, horários, produtos e adicionais no celular sem consumir os 7 dias.
+                  Tenant #{created.id} pronto para configurar perfil, horários, produtos e adicionais no celular sem consumir os 7 dias. Nenhum preço ou taxa comercial foi contratado neste fluxo.
                 </p>
               </div>
             </div>
