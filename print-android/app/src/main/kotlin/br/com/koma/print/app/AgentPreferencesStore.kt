@@ -49,6 +49,13 @@ class AgentPreferencesStore(context: Context) {
             .apply()
     }
 
+    fun clearCredentials() {
+        prefs.edit()
+            .remove(KEY_AGENT_TOKEN)
+            .putString(KEY_LAST_STATUS, "Desconectado pelo operador.")
+            .apply()
+    }
+
     fun savePreferredPrinter(name: String, address: String) {
         prefs.edit()
             .putString(KEY_PRINTER_NAME, name.trim())

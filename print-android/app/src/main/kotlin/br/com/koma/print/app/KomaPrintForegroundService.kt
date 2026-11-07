@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.util.Log
 import br.com.koma.print.core.AgentRevokedException
 import br.com.koma.print.core.AndroidPrintWorker
 import br.com.koma.print.core.FilePrintJournal
@@ -43,6 +44,7 @@ class KomaPrintForegroundService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action.orEmpty()
         val store = AgentPreferencesStore(this)
+        Log.i(TAG, "onStartCommand: action=$action")
         if (action == ACTION_STOP) {
             store.setAutoStartEnabled(false)
             store.updateLastStatus("Serviço de impressão automática pausado pelo operador.")
@@ -54,6 +56,7 @@ class KomaPrintForegroundService : Service() {
         store.setAutoStartEnabled(true)
         promoteToForeground("KÔMA Print 58mm ativo (tela bloqueada liberada)")
         startForegroundLoopIfNeeded()
+        Log.i(TAG, "Serviço KomaPrintForegroundService iniciado e promovido a primeiro plano.")
         return START_STICKY
     }
 
@@ -248,6 +251,7 @@ class KomaPrintForegroundService : Service() {
     }
 
     companion object {
+        private const val TAG = "KomaPrintService"
         const val ACTION_START = "br.com.koma.print.app.action.START"
         const val ACTION_STOP = "br.com.koma.print.app.action.STOP"
         private const val CHANNEL_ID = "koma_print_foreground_channel"

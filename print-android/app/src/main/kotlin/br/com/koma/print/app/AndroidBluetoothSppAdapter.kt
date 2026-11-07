@@ -9,6 +9,7 @@ import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import br.com.koma.print.core.BluetoothPrinterDevice
 import br.com.koma.print.core.BluetoothReconnectPolicy
 import br.com.koma.print.core.BluetoothSppTransport
@@ -78,27 +79,28 @@ class AndroidBluetoothSppAdapter(
                     .thenBy { it.name.lowercase() },
             )
 
-        if (mapped.isNotEmpty()) {
-            return mapped.mapIndexed { idx, p -> p.copy(isDefault = idx == 0) }
+        val result = if (mapped.isNotEmpty()) {
+            mapped.mapIndexed { idx, p -> p.copy(isDefault = idx == 0) }
+        } else {
+            bonded.mapIndexed { idx, device ->
+                val name = runCatching { device.name }.getOrNull()?.takeIf { it.isNotBlank() }
+                    ?: "Bluetooth ${device.address}"
+                BluetoothPrinterDevice(
+                    name = name,
+                    address = device.address,
+                    paired = true,
+                    connected = btEnabled,
+                    sppSupported = true,
+                    configured = true,
+                    isDefault = idx == 0,
+                    bluetoothEnabled = btEnabled,
+                    permissionGranted = true,
+                    profile = PrinterPaperProfile.infer(name),
+                )
+            }
         }
-
-        // Caso o usuário tenha pareado uma impressora que não anuncia classe IMAGING, lista todos os pareados
-        return bonded.mapIndexed { idx, device ->
-            val name = runCatching { device.name }.getOrNull()?.takeIf { it.isNotBlank() }
-                ?: "Bluetooth ${device.address}"
-            BluetoothPrinterDevice(
-                name = name,
-                address = device.address,
-                paired = true,
-                connected = btEnabled,
-                sppSupported = true,
-                configured = true,
-                isDefault = idx == 0,
-                bluetoothEnabled = btEnabled,
-                permissionGranted = true,
-                profile = PrinterPaperProfile.infer(name),
-            )
-        }
+        Log.i(TAG, "listPairedSppPrinters: ${result.size} impressora(s): ${result.map { "${it.name} (${it.address})" }}")
+        return result
     }
 
     @SuppressLint("MissingPermission")
@@ -221,5 +223,9 @@ class AndroidBluetoothSppAdapter(
         val majorClass = runCatching { device.bluetoothClass?.majorDeviceClass }.getOrNull()
         return majorClass == BluetoothClass.Device.Major.IMAGING ||
             majorClass == BluetoothClass.Device.Major.UNCATEGORIZED
+    }
+
+    companion object {
+        private const val TAG = "KomaPrintBT"
     }
 }
