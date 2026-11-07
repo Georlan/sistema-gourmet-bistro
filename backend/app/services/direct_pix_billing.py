@@ -168,11 +168,131 @@ def reconcile_invoice_payment(db: Session, *, restaurant_id: int, invoice_id: st
     return True
 
 
-def create_invoice_pix(db: Session, *, restaurant_id: int, invoice_id: str, payer_email: str) -> dict:
+def ensure_subscription_invoice(
+    db: Session,
+    *,
+    restaurant_id: int,
+    due_at: dt.datetime,
+    amount: Decimal | None = None,
+) -> DirectPixFeeInvoice:
+    """Garante fatura única para o ciclo/mensalidade SaaS sem depender de gateways externos.
+
+    Idempotente: reutiliza a fatura aberta existente para o período/vencimento.
+    """
+    if due_at.tzinfo is None:
+        due_at = due_at.replace(tzinfo=dt.timezone.utc)
+    period = due_at.strftime("%Y-%m")
+
+    # Busca fatura única para o período
+    existing = (
+        db.query(DirectPixFeeInvoice)
+        .filter(
+            DirectPixFeeInvoice.restaurante_id == restaurant_id,
+            DirectPixFeeInvoice.period == period,
+        )
+        .with_for_update()
+        .one_or_none()
+    )
+    if existing is not None:
+        return existing
+
+    if amount is None:
+        terms = tenant_commercial_terms(db, restaurant_id)
+        if terms is None:
+            raise ValueError("Não é possível emitir mensalidade sem termos comerciais vinculados.")
+        amount = terms.billing_amount
+
+    invoice = DirectPixFeeInvoice(
+        restaurante_id=restaurant_id,
+        period=period,
+        fees=Decimal("0.00"),
+        subscription_amount=amount,
+        subscription_due_at=due_at,
+        due_at=due_at,
+        status="open",
+    )
+    db.add(invoice)
+    db.flush()
+    if amount > 0:
+        from .signup_notifications import enqueue_billing_owner
+        enqueue_billing_owner(
+            db,
+            tenant_id=restaurant_id,
+            invoice_id=invoice.id,
+            period=period,
+            event="issued",
+            amount=amount,
+        )
+    return invoice
+
+
+def generate_manual_pix_payload(
+    *,
+    restaurant_id: int,
+    invoice: DirectPixFeeInvoice,
+    amount: Decimal,
+    due_at: dt.datetime | None = None,
+) -> dict:
+    """Gera payload EMV BR Code padronizado para Pix manual sem requisição externa."""
+    import re
+    import os
+    from .online_payments.direct_pix import brcode, normalize_key, merchant_text
+    from ..config import settings
+
+    # Jamais gerar BR Code para uma chave presumida: pode direcionar dinheiro a terceiro.
+    raw_key = str(getattr(settings, "KOMA_SAAS_MANUAL_PIX_KEY", None) or os.getenv("KOMA_SAAS_MANUAL_PIX_KEY") or "").strip()
+    raw_name = getattr(settings, "KOMA_SAAS_MANUAL_PIX_HOLDER", None) or os.getenv("KOMA_SAAS_MANUAL_PIX_HOLDER") or "KOMA GOURMET BISTRO"
+    raw_city = getattr(settings, "KOMA_SAAS_MANUAL_PIX_CITY", None) or os.getenv("KOMA_SAAS_MANUAL_PIX_CITY") or "FORTALEZA"
+
+    qr_payload = None
+    if raw_key:
+        key_kind = "email" if "@" in raw_key else "cnpj" if len(re.sub(r"\\D", "", raw_key)) == 14 else "random"
+        clean_key = normalize_key(key_kind, raw_key)
+        clean_name = merchant_text(raw_name, 25)
+        clean_city = merchant_text(raw_city, 15)
+
+        txid = re.sub(r"[^A-Za-z0-9]", "", f"KOMA{restaurant_id}I{invoice.id}")[:25]
+        if len(txid) < 1:
+            txid = f"KOMA{restaurant_id}"[:25]
+
+        qr_payload = brcode(
+            key=clean_key,
+            name=clean_name,
+            city=clean_city,
+            amount=amount.quantize(Decimal(".01")),
+            txid=txid,
+        )
+
+    return {
+        "invoiceId": invoice.id,
+        "status": "pending",
+        "paymentId": f"manual-{invoice.id}",
+        "amount": str(amount.quantize(Decimal(".01"))),
+        "fees": str(invoice.fees),
+        "subscriptionAmount": str(invoice.subscription_amount),
+        "dueAt": due_at.isoformat() if due_at else None,
+        "qrCode": qr_payload,
+        "qrCodeBase64": "",
+        "ticketUrl": None,
+        "expiresAt": (due_at + dt.timedelta(days=7)).isoformat() if due_at else None,
+        "paymentMethodType": "pix",
+        "provider": "manual_pix",
+        "automaticRenewal": False,
+        "message": (
+            "Cobrança manual pendente. Solicite a chave Pix oficial do KÔMA pelo canal combinado; "
+            "não há QR Code automático disponível. A quitação será conferida administrativamente."
+            if qr_payload is None else
+            "Cobrança Pix manual disponível. Confira o recebedor antes de pagar e envie a referência para confirmação administrativa."
+        ),
+    }
+
+
+def create_invoice_pix(db: Session, *, restaurant_id: int, invoice_id: str, payer_email: str, manual: bool = False) -> dict:
     import uuid
+    import os
     from ..config import settings
     from .saas_mercadopago import default_saas_mp_service as provider, SaasMercadoPagoError
-    provider._ensure_provider_ready()
+
     row = db.query(DirectPixFeeInvoice).filter(DirectPixFeeInvoice.restaurante_id == restaurant_id,
         DirectPixFeeInvoice.id == invoice_id).with_for_update().one_or_none()
     if row is None:
@@ -186,29 +306,58 @@ def create_invoice_pix(db: Session, *, restaurant_id: int, invoice_id: str, paye
         if sub and (sub.status == 'onboarding' or trial_end and dt.datetime.now(dt.timezone.utc) < trial_end):
             return {'invoiceId': row.id, 'status': 'not_due', 'amount': str(amount),
                 'paymentMethodType': 'pix', 'message': 'O Pix da mensalidade só será gerado depois dos 7 dias grátis.'}
+
+    # Se a cobrança for manual (sem gateway externo):
+    if row.provider_payment_id and str(row.provider_payment_id).startswith("manual-"):
+        if row.status == "paid":
+            return {"invoiceId": row.id, "status": "approved", "amount": str(amount), "paymentMethodType": "pix"}
+        if row.payment_payload:
+            return row.payment_payload
+
+    # Segue fluxo com gateway Mercado Pago quando configurado e ativo
     reference = f"KOMA-FEE-{restaurant_id}-{row.id}"
     if row.provider_payment_id:
         payment = provider.get_payment(row.provider_payment_id)
-        paid = reconcile_invoice_payment(db,restaurant_id=restaurant_id,invoice_id=row.id,payment=payment)
+        paid = reconcile_invoice_payment(db, restaurant_id=restaurant_id, invoice_id=row.id, payment=payment)
         if paid:
             db.commit()
-            return {'invoiceId':row.id,'status':'approved','amount':str(amount),'paymentMethodType':'pix'}
-        if payment.get('status') in {'pending','in_process'}:
-            # Return the original charge; never create a second charge while an older one can be paid.
+            return {"invoiceId": row.id, "status": "approved", "amount": str(amount), "paymentMethodType": "pix"}
+        if payment.get("status") in {"pending", "in_process"}:
             if row.payment_payload:
                 return row.payment_payload
-        elif payment.get('status') in {'cancelled','rejected','expired'}:
-            # Only an authoritative terminal state permits another attempt.
-            row.previous_payment_ids = [*(row.previous_payment_ids or []),row.provider_payment_id]
-            row.payment_attempt = (row.payment_attempt or 0)+1
+        elif payment.get("status") in {"cancelled", "rejected", "expired"}:
+            row.previous_payment_ids = [*(row.previous_payment_ids or []), row.provider_payment_id]
+            row.payment_attempt = (row.payment_attempt or 0) + 1
             row.provider_payment_id = None
             row.payment_payload = None
             db.flush()
         else:
-            raise ValueError('O gateway ainda não confirmou o encerramento da cobrança anterior.')
+            raise ValueError("O gateway ainda não confirmou o encerramento da cobrança anterior.")
+
+    # Verifica se o Mercado Pago está apto; se não estiver ou se modo manual for forçado, usa Pix manual seguro
+    mp_ready = False
+    if not manual:
+        try:
+            provider._ensure_provider_ready()
+            mp_ready = True
+        except (SaasMercadoPagoError, Exception):
+            mp_ready = False
+
+    now = dt.datetime.now(dt.timezone.utc)
+    if manual or not mp_ready:
+        manual_payload = generate_manual_pix_payload(
+            restaurant_id=restaurant_id,
+            invoice=row,
+            amount=amount,
+            due_at=row.due_at or now,
+        )
+        row.provider_payment_id = f"manual-{row.id}"
+        row.payment_payload = manual_payload
+        db.flush()
+        db.commit()
+        return manual_payload
     if not payer_email or '@' not in payer_email:
         raise ValueError('E-mail do administrador inválido para cobrança.')
-    now = dt.datetime.now(dt.timezone.utc)
     expiration = now+dt.timedelta(days=7)
     payload = {'transaction_amount':float(amount),'description':f'KÔMA — fatura {row.period}',
         'payment_method_id':'pix','payer':{'email':payer_email},'external_reference':reference,
