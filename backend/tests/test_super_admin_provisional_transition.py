@@ -313,3 +313,229 @@ def test_provisional_onboarding_blocks_commercial_operations_and_transitions_cle
         assert sub.status == "trialing"
         assert sub.trial_started_at is not None
         assert sub.trial_ends_at is not None
+
+
+def test_je_lanches_progressive_onboarding_activate_inplace_and_manual_pix(monkeypatch):
+    """Regressão completa do caso real JE Lanches:
+    - Etapa A: provisionamento com defer_trial=True, login provisório, 28 produtos com famílias,
+      benefícios permanentes (printing + courier_app no Pocket), estado 'preparando' sem iniciar 7 dias.
+    - Etapa B: contrato eletrônico aceito sem gateway conectado -> ativação in-place no ID existente
+      via POST /api/super-admin/contracts/{protocol}/activate com payment_method_type='pix' ->
+      liberação comercial iniciando exatamente 7 dias sem zerar catálogo nem benefícios.
+    - Etapa C: atualização cadastral posterior não reinicia os 7 dias; troca de admin e confirmação
+      manual de Pix pós-teste mantêm o restaurante ativo.
+    """
+    monkeypatch.setenv("SUPERADMIN_BOOTSTRAP_ADMINS", "owner@komafood.com.br")
+    test_tenant_id = 990102
+    protocol = "KOMA-2026-JELANCHES-01"
+    acceptance_id = str(uuid.uuid4())
+
+    with SessionLocal() as db:
+        _cleanup_tenant(db, test_tenant_id)
+        db.query(RestaurantContractAcceptance).filter(
+            RestaurantContractAcceptance.protocol == protocol
+        ).delete(synchronize_session=False)
+        db.commit()
+
+    admin_headers = _superadmin_headers()
+
+    # 1. Etapa A: Super Admin cria JE Lanches com defer_trial=True
+    res_prov = client.post(
+        "/api/super-admin/restaurantes/provisionar",
+        headers=admin_headers,
+        json={
+            "restaurant_id": test_tenant_id,
+            "name": "JE Lanches",
+            "subdomain": "je-lanches-test",
+            "plan": "pocket",
+            "operation_profile": "generic",
+            "admin_name": "Admin Provisório JE",
+            "admin_email": "provisorio@jelanches.test",
+            "temporary_password": "Password123!",
+            "defer_trial": True,
+        },
+    )
+    assert res_prov.status_code == 201, res_prov.text
+    prov_data = res_prov.json()
+    assert prov_data["trial"]["status"] == "pending_setup"
+
+    # 2. Configurar perfil (sem exigir endereço definitivo), horários, modalidades,
+    #    28 produtos (com tags [familia: ...]) e benefícios permanentes no Pocket
+    with SessionLocal() as db:
+        rest = db.query(Restaurante).filter(Restaurante.id == test_tenant_id).one()
+        rest.socials = {"whatsapp": "85988887777"}
+        rest.horarios_funcionamento = [{"days": "Seg a Dom", "hours": "18:00 - 23:30"}]
+        rest.configuracoes_operacionais = {
+            "onboarding": {"order_types": ["retirada", "delivery"]},
+            "capability_overrides": {"printing": True, "courier_app": True},
+        }
+        cat = CategoriaCardapio(
+            id="cat-je-acai",
+            restaurante_id=test_tenant_id,
+            nome="Açaí & Lanches",
+            ordem=1,
+            ativo=True,
+        )
+        db.add(cat)
+        for idx in range(1, 29):
+            familia_tag = " [familia: Açaí Tradicional]" if idx <= 4 else ""
+            db.add(
+                Produto(
+                    id=f"prod-je-{idx}",
+                    restaurante_id=test_tenant_id,
+                    nome=f"Item JE {idx}",
+                    preco=15.0 + idx,
+                    categoria="Açaí & Lanches",
+                    descricao=f"Delicioso item {idx}{familia_tag}",
+                    ativo=True,
+                )
+            )
+        db.commit()
+
+        from app.routes.onboarding import _build_onboarding_status
+        status_prep = _build_onboarding_status(db, test_tenant_id)
+        assert status_prep["onboarding"]["stage"] == "preparando"
+        assert status_prep["onboarding"]["provisionalPreparation"] is True
+        assert status_prep["onboarding"]["contractLinked"] is False
+        assert status_prep["trial"]["status"] == "setup"
+        assert status_prep["steps"]["profile"] is True
+        assert status_prep["steps"]["hours"] is True
+        assert status_prep["steps"]["catalog"] is True
+        assert status_prep["steps"]["operations"] is True
+        assert status_prep["counts"]["activeProducts"] == 28
+        assert status_prep["onboarding"]["operationReleased"] is False
+
+    # 3. Etapa B: Aceite contratual registrado (sem gateway conectado, billing pending)
+    now = datetime.now(timezone.utc)
+    with SessionLocal() as db:
+        acc = RestaurantContractAcceptance(
+            id=acceptance_id,
+            protocol=protocol,
+            restaurante_id=None,
+            restaurant_name="JE Lanches",
+            contracting_party_name="JE Lanches LTDA",
+            contracting_party_tax_id_encrypted="enc_doc",
+            contracting_party_tax_id_hash="hash_doc_je",
+            contracting_party_tax_id_last4="0001",
+            representative_name="João Proprietário",
+            representative_tax_id_encrypted="enc_cpf",
+            representative_tax_id_hash="hash_cpf_je",
+            representative_tax_id_last4="9999",
+            representative_role="Sócio-Administrador",
+            email="joao@jelanches.test",
+            phone="85988887777",
+            selected_plan="pocket",
+            billing_cycle="monthly",
+            fixed_monthly_price=Decimal("139.00"),
+            billing_amount=Decimal("139.00"),
+            annual_monthly_equivalent=Decimal("139.00"),
+            marketplace_rate=Decimal("0.0199"),
+            trial_days=7,
+            legal_version="2026-04-14",
+            terms_hash="h1",
+            commercial_terms_hash="h2",
+            dpa_hash="h3",
+            privacy_hash="h4",
+            accepted_declarations={"termsAccepted": True},
+            accepted_at=now,
+            created_at=now,
+        )
+        db.add(acc)
+        db.commit()
+
+    # Selecionar Pix pós-teste sem precisar de gateway Mercado Pago conectado
+    res_pix = client.post(f"/api/contracts/{protocol}/billing/pix/select")
+    assert res_pix.status_code == 200, res_pix.text
+    assert res_pix.json()["paymentMethod"] == "pix"
+
+    # Ativar o contrato in-place no ID provisório existente
+    res_act = client.post(
+        f"/api/super-admin/contracts/{protocol}/activate",
+        headers=admin_headers,
+        json={
+            "restaurant_id": test_tenant_id,
+            "payment_method_type": "pix",
+            "reason": "Transição in-place JE Lanches",
+        },
+    )
+    assert res_act.status_code == 200, res_act.text
+    assert res_act.json()["restaurantId"] == str(test_tenant_id)
+
+    # Verificar que está 'pronto_para_teste' com 28 produtos e overrides intactos, e trial ainda não iniciado
+    with SessionLocal() as db:
+        from app.routes.onboarding import _build_onboarding_status
+        status_ready = _build_onboarding_status(db, test_tenant_id)
+        assert status_ready["onboarding"]["stage"] == "pronto_para_teste"
+        assert status_ready["onboarding"]["provisionalPreparation"] is False
+        assert status_ready["onboarding"]["contractLinked"] is True
+        assert status_ready["readyForRelease"] is True
+        assert status_ready["counts"]["activeProducts"] == 28
+        rest = db.query(Restaurante).filter(Restaurante.id == test_tenant_id).one()
+        assert rest.configuracoes_operacionais["capability_overrides"] == {
+            "printing": True,
+            "courier_app": True,
+        }
+
+    # 4. Liberar operação e iniciar os 7 dias
+    res_rel = client.post(
+        f"/api/super-admin/onboarding/restaurantes/{test_tenant_id}/release",
+        headers=admin_headers,
+        json={"payment_method_type": "pix"},
+    )
+    assert res_rel.status_code == 200, res_rel.text
+    rel_data = res_rel.json()
+    assert rel_data["trialStarted"] is True
+    first_started_at = rel_data["subscription"]["trialStartedAt"]
+    first_ends_at = rel_data["subscription"]["trialEndsAt"]
+    assert first_started_at is not None
+    assert first_ends_at is not None
+
+    # 5. Etapa C: Completar endereço definitivo depois e chamar release de novo NÃO reinicia os 7 dias
+    with SessionLocal() as db:
+        rest = db.query(Restaurante).filter(Restaurante.id == test_tenant_id).one()
+        rest.endereco = "Av. Principal, 500 - Centro"
+        db.commit()
+
+    res_rel_again = client.post(
+        f"/api/super-admin/onboarding/restaurantes/{test_tenant_id}/release",
+        headers=admin_headers,
+    )
+    assert res_rel_again.status_code == 200, res_rel_again.text
+    assert res_rel_again.json()["subscription"]["trialStartedAt"] == first_started_at
+    assert res_rel_again.json()["subscription"]["trialEndsAt"] == first_ends_at
+
+    # 6. Substituição futura do administrador provisório pelo proprietário definitivo
+    res_admin = client.post(
+        f"/api/super-admin/restaurantes/{test_tenant_id}/admin",
+        headers=admin_headers,
+        json={
+            "name": "João Proprietário Definitivo",
+            "email": "joao.dono@jelanches.test",
+            "temporary_password": "NewOwnerPassword123!",
+            "reason": "Entrega do acesso definitivo ao proprietário",
+        },
+    )
+    assert res_admin.status_code == 201, res_admin.text
+    assert res_admin.json()["email"] == "joao.dono@jelanches.test"
+
+    # 7. Cobrança manual via Pix após o teste (confirm-manual-pix)
+    res_manual_pix = client.post(
+        f"/api/super-admin/restaurantes/{test_tenant_id}/subscription/confirm-manual-pix",
+        headers=admin_headers,
+        json={
+            "amount_received": "139.00",
+            "payment_reference": "E2E-PIX-JELANCHES-001",
+            "reason": "Confirmação manual do primeiro ciclo pós-trial via Pix",
+        },
+    )
+    assert res_manual_pix.status_code == 200, res_manual_pix.text
+    manual_pix_data = res_manual_pix.json()
+    assert manual_pix_data["status"] == "active"
+
+    with SessionLocal() as db:
+        _cleanup_tenant(db, test_tenant_id)
+        db.query(RestaurantContractAcceptance).filter(
+            RestaurantContractAcceptance.protocol == protocol
+        ).delete(synchronize_session=False)
+        db.commit()
+

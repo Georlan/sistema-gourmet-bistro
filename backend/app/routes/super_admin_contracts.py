@@ -35,6 +35,7 @@ class ContractLinkRequest(BaseModel):
     restaurant_id: int = Field(gt=0)
     protocol: str = Field(min_length=20, max_length=64)
     reason: str = Field(min_length=3, max_length=1000)
+    payment_method_type: str | None = Field(default=None, max_length=32)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -46,6 +47,17 @@ class ContractLinkRequest(BaseModel):
             raise ValueError("Protocolo contratual inválido")
         return normalized
 
+    @field_validator("payment_method_type")
+    @classmethod
+    def validate_payment_method_type(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        from ..services.saas_billing_policy import is_checkout_payment_method
+        normalized = value.strip().lower()
+        if not is_checkout_payment_method(normalized):
+            raise ValueError("Forma de pagamento inválida para contratação")
+        return normalized
+
 
 class ContractActivationRequest(BaseModel):
     reason: str = Field(
@@ -54,8 +66,21 @@ class ContractActivationRequest(BaseModel):
         max_length=1000,
     )
     restaurant_id: int | None = Field(default=None, ge=1, le=2_147_483_647)
+    payment_method_type: str | None = Field(default=None, max_length=32)
 
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("payment_method_type")
+    @classmethod
+    def validate_payment_method_type(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        from ..services.saas_billing_policy import is_checkout_payment_method
+        normalized = value.strip().lower()
+        if not is_checkout_payment_method(normalized):
+            raise ValueError("Forma de pagamento inválida para contratação")
+        return normalized
+
 
 
 def _decimal_text(value: Any, quantum: str) -> str | None:
@@ -570,8 +595,167 @@ def activate_contract(
                 idempotent=True,
             )
 
+        from ..services.restaurant_provisioning import is_provisional_preparation
+        from ..services.billing_service import (
+            link_billing_setup_to_tenant,
+            upsert_billing_setup,
+        )
+
+        # Unificação do fluxo provisório -> comercial: se restaurant_id aponta para um
+        # restaurante existente em modo de preparação provisória (ex: ID 1), vincula o
+        # contrato e cria a assinatura em onboarding sem recriar nem perder produtos/acessos.
+        if payload.restaurant_id is not None:
+            requested_tid = int(payload.restaurant_id)
+            with tenant_session_scope(db, requested_tid):
+                existing_rest = (
+                    db.query(Restaurante)
+                    .filter(Restaurante.id == requested_tid)
+                    .one_or_none()
+                )
+                if existing_rest is not None and is_provisional_preparation(db, requested_tid):
+                    current_contract = (
+                        db.query(RestaurantContractAcceptance)
+                        .filter(RestaurantContractAcceptance.restaurante_id == requested_tid)
+                        .first()
+                    )
+                    if current_contract is not None:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail="Este restaurante já possui autoridade contratual vinculada.",
+                        )
+                    if str(existing_rest.plano or "").lower() != str(acceptance["plan"]).lower():
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail=(
+                                "O plano do tenant não corresponde ao plano congelado no aceite. "
+                                "Corrija o plano antes de ativar."
+                            ),
+                        )
+                    raw_cycle = str(acceptance.get("billing_cycle") or "mensal").strip().lower()
+                    canonical_cycle = "annual" if raw_cycle in {"annual", "anual"} else "monthly"
+                    billing_setup = get_billing_setup(db, normalized)
+                    effective_method = (
+                        billing_setup.payment_method_type
+                        if billing_setup is not None and billing_setup.payment_method_type
+                        else payload.payment_method_type
+                    )
+                    if billing_setup is None and contract_fixed_billing_required(db, normalized):
+                        if effective_method != "pix":
+                            raise HTTPException(
+                                status_code=409,
+                                detail="Vincule uma autorização financeira real ou selecione Pix pós-teste explicitamente.",
+                            )
+                        if db.get_bind().dialect.name == "sqlite":
+                            SaaSBillingSetup.__table__.create(db.get_bind(), checkfirst=True)
+                        upsert_billing_setup(
+                            db,
+                            protocol=normalized,
+                            contract_acceptance_id=str(acceptance["acceptance_id"]),
+                            provider="mercado_pago",
+                            payment_method_type=effective_method,
+                            status="ready",
+                            billing_cycle=canonical_cycle,
+                            restaurante_id=requested_tid,
+                        )
+                        billing_setup = get_billing_setup(db, normalized)
+                    elif billing_setup is not None:
+                        link_billing_setup_to_tenant(db, normalized, requested_tid)
+
+                    db.add(
+                        RestaurantContractAcceptance(
+                            id=str(uuid.uuid4()),
+                            restaurante_id=requested_tid,
+                            acceptance_id=str(acceptance["acceptance_id"]),
+                            linked_at=datetime.datetime.now(datetime.timezone.utc),
+                        )
+                    )
+                    db.add(
+                        SaaSSubscription(
+                            restaurante_id=requested_tid,
+                            provider=(
+                                billing_setup.provider
+                                if billing_setup is not None
+                                else "mercado_pago"
+                            ),
+                            provider_customer_id=(
+                                billing_setup.provider_customer_id
+                                if billing_setup is not None
+                                else None
+                            ),
+                            provider_subscription_id=(
+                                billing_setup.provider_subscription_id
+                                if billing_setup is not None
+                                else None
+                            ),
+                            payment_method_type=(
+                                effective_method
+                                if contract_fixed_billing_required(db, normalized)
+                                else None
+                            ),
+                            status=(
+                                "onboarding"
+                                if contract_fixed_billing_required(db, normalized)
+                                else "active"
+                            ),
+                            trial_started_at=None,
+                            trial_ends_at=None,
+                            billing_cycle=canonical_cycle,
+                        )
+                    )
+                    db.add(
+                        SuperAdminAuditLog(
+                            restaurante_id=requested_tid,
+                            actor=str(admin.get("user") or "superadmin"),
+                            action="SUPERADMIN_CONTRACT_ACTIVATE",
+                            reason=clean_reason,
+                            before_data={"provisional_preparation": True},
+                            after_data={
+                                "protocol": normalized,
+                                "acceptance_id": str(acceptance["acceptance_id"]),
+                                "restaurante_id": requested_tid,
+                                "transition_from_provisional": True,
+                                "plan": acceptance["plan"],
+                                "billing_cycle": canonical_cycle,
+                                "payment_method_type": effective_method,
+                                "subscription_status": "onboarding",
+                                "credential_delivery": "preserved_existing_admin",
+                            },
+                        )
+                    )
+                    db.commit()
+                    latest = resolve_activation_acceptance(db, normalized) or acceptance
+                    latest["billing_status"] = "ready" if contract_fixed_billing_required(db, normalized) else "not_required"
+                    latest["payment_method_type"] = effective_method if contract_fixed_billing_required(db, normalized) else None
+                    return _activation_response(
+                        latest,
+                        requested_tid,
+                        slug=str(existing_rest.slug or ""),
+                        idempotent=False,
+                        credential_delivery="preserved_existing_admin",
+                    )
+
         # A flag global também controla o acesso de tenants legados. Um novo
         # contrato com componente fixo nunca pode ser ativado sem billing pronto.
+        if (
+            contract_fixed_billing_required(db, normalized)
+            and not is_billing_ready(db, normalized)
+            and payload.payment_method_type == "pix"
+        ):
+            raw_cycle = str(acceptance.get("billing_cycle") or "mensal").strip().lower()
+            canonical_cycle = "annual" if raw_cycle in {"annual", "anual"} else "monthly"
+            if db.get_bind().dialect.name == "sqlite":
+                SaaSBillingSetup.__table__.create(db.get_bind(), checkfirst=True)
+            upsert_billing_setup(
+                db,
+                protocol=normalized,
+                contract_acceptance_id=str(acceptance["acceptance_id"]),
+                provider="mercado_pago",
+                payment_method_type="pix",
+                status="ready",
+                billing_cycle=canonical_cycle,
+            )
+            db.commit()
+
         if contract_fixed_billing_required(db, normalized) and not is_billing_ready(db, normalized):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -706,13 +890,40 @@ def link_contract(
                 .one_or_none()
             )
             created_subscription = False
+            raw_cycle = str(acceptance.get("billing_cycle") or "monthly").strip().lower()
+            canonical_cycle = "annual" if raw_cycle in {"annual", "anual"} else "monthly"
             if existing_subscription is None:
                 # Transição canônica de restaurante provisório para cliente comercial
                 billing_setup = get_billing_setup(db, payload.protocol)
-                if billing_setup is not None:
+                if billing_setup is None and payload.payment_method_type is not None:
+                    if payload.payment_method_type != "pix":
+                        raise HTTPException(
+                            status_code=409,
+                            detail="Cartão exige autorização do provedor; só Pix pós-teste pode ser selecionado sem gateway.",
+                        )
+                    from ..services.billing_service import upsert_billing_setup
+                    if db.get_bind().dialect.name == "sqlite":
+                        SaaSBillingSetup.__table__.create(db.get_bind(), checkfirst=True)
+                    upsert_billing_setup(
+                        db,
+                        protocol=payload.protocol,
+                        contract_acceptance_id=str(acceptance["acceptance_id"]),
+                        provider="mercado_pago",
+                        payment_method_type=payload.payment_method_type,
+                        status="ready",
+                        billing_cycle=canonical_cycle,
+                        restaurante_id=tenant_id,
+                    )
+                    billing_setup = get_billing_setup(db, payload.protocol)
+                elif billing_setup is not None:
                     from ..services.billing_service import link_billing_setup_to_tenant
                     link_billing_setup_to_tenant(db, payload.protocol, tenant_id)
 
+                sub_payment_method = (
+                    billing_setup.payment_method_type
+                    if billing_setup is not None and billing_setup.payment_method_type
+                    else payload.payment_method_type
+                )
                 sub = SaaSSubscription(
                     restaurante_id=tenant_id,
                     provider=(
@@ -730,11 +941,7 @@ def link_contract(
                         if billing_setup is not None
                         else None
                     ),
-                    payment_method_type=(
-                        billing_setup.payment_method_type
-                        if billing_setup is not None
-                        else None
-                    ),
+                    payment_method_type=sub_payment_method,
                     status="onboarding",
                     trial_started_at=None,
                     trial_ends_at=None,
@@ -742,6 +949,8 @@ def link_contract(
                 )
                 db.add(sub)
                 created_subscription = True
+            elif payload.payment_method_type is not None and not existing_subscription.payment_method_type:
+                existing_subscription.payment_method_type = payload.payment_method_type
 
             db.add(
                 SuperAdminAuditLog(
@@ -755,6 +964,7 @@ def link_contract(
                         "acceptance_id": str(acceptance["acceptance_id"]),
                         "plan": acceptance["plan"],
                         "billing_cycle": acceptance["billing_cycle"],
+                        "payment_method_type": payload.payment_method_type,
                         "created_subscription": created_subscription,
                         "subscription_status": "onboarding" if created_subscription else getattr(existing_subscription, "status", None),
                     },
@@ -767,6 +977,7 @@ def link_contract(
             "protocol": payload.protocol,
             "plan": acceptance["plan"],
             "billingCycle": acceptance["billing_cycle"],
+            "paymentMethodType": payload.payment_method_type,
             "subscriptionStatus": "onboarding" if created_subscription else getattr(existing_subscription, "status", None),
             "message": "Aceite contratual vinculado ao restaurante com auditoria.",
         }
@@ -783,3 +994,4 @@ def link_contract(
         ) from exc
     finally:
         db.close()
+

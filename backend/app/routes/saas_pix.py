@@ -92,7 +92,8 @@ def _checkout_methods_payload() -> dict[str, Any]:
     pix_ready, capabilities = _pix_available()
     return {
         "credit_card": bool(capabilities.get("credit_card")),
-        "pix": pix_ready,
+        "pix": True,
+        "pixAutomaticConfirmationAvailable": pix_ready,
         "account_money": False,  # descontinuado para novas inscrições; preserva assinaturas existentes
         "publicKey": str(capabilities.get("publicKey") or ""),
         "providerAuthReady": capabilities.get("providerAuthReady"),
@@ -101,7 +102,7 @@ def _checkout_methods_payload() -> dict[str, Any]:
         "isTestMode": bool(capabilities.get("isTestMode")),
         "trialDays": SAAS_TRIAL_DAYS,
         "upfrontPaymentAllowed": False,
-        "pixMode": "universal_qr",
+        "pixMode": "universal_qr" if pix_ready else "manual_post_trial",
         "pixInteroperable": True,
         "pixAutomatic": False,
     }
@@ -117,8 +118,6 @@ def available_checkout_methods():
 def select_contract_pix(protocol: str, db: Session = Depends(get_db)):
     """Seleciona Pix universal sem criar cobrança durante onboarding/trial."""
     pix_ready, _ = _pix_available()
-    if not pix_ready:
-        raise HTTPException(503, "Pix está temporariamente indisponível; sua inscrição continua salva.")
 
     normalized_protocol = _normalize_protocol(protocol)
     acceptance = resolve_activation_acceptance(db, normalized_protocol)
@@ -185,11 +184,16 @@ def select_contract_pix(protocol: str, db: Session = Depends(get_db)):
             "amountDueToday": 0,
             "trialDays": SAAS_TRIAL_DAYS,
             "message": (
-                "Pix anual selecionado. Nenhum valor é cobrado hoje; depois da implantação e dos 7 dias grátis, "
-                "um único QR do valor anual será gerado e quitará os próximos 12 meses."
-                if canonical_cycle == "annual"
-                else "Pix mensal selecionado. Nenhum valor é cobrado hoje; depois da implantação e dos 7 dias grátis, "
-                "o QR da primeira mensalidade será gerado no vencimento."
+                "Pix selecionado sem cobrança hoje. Após a implantação e os 7 dias grátis, "
+                "a cobrança será comunicada pelo KÔMA para pagamento e confirmação administrativa."
+                if not pix_ready
+                else (
+                    "Pix anual selecionado. Nenhum valor é cobrado hoje; depois da implantação e dos 7 dias grátis, "
+                    "um único QR do valor anual será gerado e quitará os próximos 12 meses."
+                    if canonical_cycle == "annual"
+                    else "Pix mensal selecionado. Nenhum valor é cobrado hoje; depois da implantação e dos 7 dias grátis, "
+                    "o QR da primeira mensalidade será gerado no vencimento."
+                )
             ),
         }
 
