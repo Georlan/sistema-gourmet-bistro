@@ -1,5 +1,12 @@
 # KÔMA — contexto de trabalho
 
+## Onboarding de restaurantes — caminho rápido obrigatório
+
+- **Antes de qualquer novo cadastro/implantação**, leia `docs/operations/onboarding/fast-track.md`. O padrão é **primeiro acesso + cardápio configurável no celular**, depois autorização de trial e formalização comercial no momento exigível; NÃO confundir esses marcos.
+- Reutilize tenants já criados, prefira o menor ID elegível sugerido (não force reutilização histórica sem necessidade), use dados mínimos e um único fluxo progressivo. Não transforme CPF/CNPJ, gateway SaaS, impressão Bluetooth ou integrações opcionais em requisito para a **preparação**, sem razão legal/operacional comprovada.
+- **Nunca** forje contrato, consentimento, identidade, Pix, pagamento ou login de terceiro. A possibilidade de postergar dados fiscais/billing **para após o início do trial** é objetivo de produto a validar juridicamente e implementar com segurança, **não** autorização para ignorar controles atuais. Trial real só por liberação canônica explícita; preparação não consome dias.
+- Verifique o percurso real no celular e se a política pública de pedidos coincide com o bloqueio backend. Uma entrega deve trazer `Concluído / Bloqueia agora / Pode ficar para depois`; cada bloqueio vira correção focal, PR, CI e merge seguro. Evite novas auditorias gerais e fluxos paralelos de cadastro.
+
 ## Entrega e evidência
 
 - Trabalhar em branch e PR; nunca fazer push direto em `main`, force-push ou contornar checks/proteção.
