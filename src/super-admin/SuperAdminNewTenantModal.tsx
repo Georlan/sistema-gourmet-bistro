@@ -130,6 +130,7 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
   const [adminName, setAdminName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [temporaryPassword, setTemporaryPassword] = useState("");
+  const [deferTrial, setDeferTrial] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<OnboardingResponse | null>(null);
@@ -197,6 +198,7 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
         admin_name: adminName.trim(),
         admin_email: adminEmail.trim(),
         temporary_password: temporaryPassword,
+        defer_trial: deferTrial,
       };
       if (parsedRestaurantId !== null) {
         requestBody.restaurant_id = parsedRestaurantId;
@@ -229,6 +231,7 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
     const operationalUrl = getOperationalAppUrl();
     const menuUrl = getTenantPublicMenuUrl(created.subdomain);
     const officialCreatedPlan = SUBSCRIPTION_PLANS.find(item => item.id === created.plan);
+    const isPendingSetup = created.trial.status === "pending_setup" || !created.trial.endsAt;
 
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
@@ -239,8 +242,12 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
                 <CheckCircle2 className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-koma-foreground">Tenant administrativo criado</h3>
-                <p className="mt-1 text-xs text-koma-muted">Tenant #{created.id} provisionado para operação/QA. Nenhum preço ou taxa comercial foi contratado neste fluxo.</p>
+                <h3 className="text-base font-bold text-koma-foreground">
+                  {isPendingSetup ? "Restaurante criado em modo de preparação" : "Tenant administrativo criado"}
+                </h3>
+                <p className="mt-1 text-xs text-koma-muted">
+                  Tenant #{created.id} pronto para configurar perfil, horários, produtos e adicionais no celular sem consumir os 7 dias.
+                </p>
               </div>
             </div>
             <button type="button" onClick={close} className="text-koma-subtle hover:text-koma-foreground"><X className="h-5 w-5" /></button>
@@ -253,9 +260,13 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
           </div>
 
           <div className="mt-4 rounded-lg border border-emerald-800/40 bg-emerald-950/20 p-4 text-xs">
-            <p className="font-bold text-emerald-200">Janela administrativa de homologação</p>
+            <p className="font-bold text-emerald-200">
+              {isPendingSetup ? "Etapa A — Em preparação (7 dias preservados)" : "Janela administrativa de homologação"}
+            </p>
             <p className="mt-1 text-[10px] leading-relaxed text-emerald-100/70">
-              {created.trial.daysRemaining} dias disponíveis · termina em {formatTrialEnd(created.trial.endsAt)}. Esta janela não representa trial comercial do componente fixo e não cria contrato, cobrança recorrente ou taxa KÔMA contratada.
+              {isPendingSetup
+                ? "Os 7 dias de teste gratuito ainda não começaram. O proprietário já pode entrar no celular, cadastrar produtos e testar a sacola no cardápio público; pedidos reais permanecem bloqueados até a liberação comercial."
+                : `${created.trial.daysRemaining} dias disponíveis · termina em ${formatTrialEnd(created.trial.endsAt)}. Esta janela não representa trial comercial do componente fixo e não cria contrato, cobrança recorrente ou taxa KÔMA contratada.`}
             </p>
           </div>
 
