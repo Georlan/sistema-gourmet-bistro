@@ -356,7 +356,7 @@ export default function CashierCatalog({
     resetProductImageState(product.imagem || gallery[0] || '');
     setProdFormAtivo(product.ativo !== false);
     setProdFormSomentePromocao(product.somente_promocao === true);
-    setProdFormCardapioId(product.cardapio_id || selectedCardapioId || cardapios?.[0]?.id || '');
+    setProdFormCardapioId(product.cardapio_id || '');
     setShowProductModal(true);
   };
 
@@ -481,7 +481,7 @@ export default function CashierCatalog({
               resetProductImageState('');
               setProdFormAtivo(true);
               setProdFormSomentePromocao(false);
-              setProdFormCardapioId(product.cardapio_id || selectedCardapioId || cardapios?.[0]?.id || '');
+              setProdFormCardapioId(product.cardapio_id || '');
               setShowProductModal(true);
             }}
             onRemoveProduct={async (product) => {
@@ -1036,6 +1036,7 @@ export default function CashierCatalog({
                     onChange={(e) => setProdFormCardapioId(e.target.value)}
                     className="w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"
                   >
+                    <option value="">Sem cardápio específico</option>
                     {cardapios.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.nome} {activeMenuIds.includes(c.id) ? '★ (Ativo no momento)' : ''}
@@ -1295,14 +1296,14 @@ export default function CashierCatalog({
               {!isMarmitaria && (
                 <section aria-label="Personalizações deste produto" className="space-y-3 rounded-xl border border-koma-border bg-koma-panel p-3">
                   <div className="space-y-1">
-                    <h4 className="text-sm font-bold text-koma-foreground">O cliente pode personalizar?</h4>
+                    <h4 className="text-sm font-bold text-koma-foreground">{hasVariants ? 'Personalizações compartilhadas' : 'O cliente pode personalizar?'}</h4>
                     <p className="text-xs text-koma-muted">
-                      Escolha o que aparece neste produto. Opções a R$ 0 já estão incluídas no preço;
-                      adicionais pagos somam ao total. Tamanhos e sabores são variações do produto, não adicionais.
+                      {hasVariants ? 'As escolhas marcadas valem para todos os sabores ou tamanhos. Cada opção mantém seu preço próprio.' :
+                        'Escolha o que aparece neste produto. Opções grátis não aumentam o preço; adicionais pagos somam ao total.'}
                     </p>
                   </div>
                   {loadingCustomizations && <p className="text-xs text-koma-muted">Carregando escolhas e adicionais…</p>}
-                  {customizationError && <p role="alert" className="text-xs text-rose-400">{customizationError} O produto pode ser salvo sem alterar seus vínculos.</p>}
+                  {customizationError && <p role="alert" className="text-xs text-rose-400">{customizationError} {hasVariants ? 'Reabra o produto antes de salvar.' : 'O produto simples pode ser salvo sem alterar seus vínculos.'}</p>}
                   {!loadingCustomizations && customizationsLoaded && customizationGroups.length === 0 && (
                     <p className="text-xs text-koma-muted">Ainda não há escolhas cadastradas. Crie grupos reutilizáveis na aba Complementos.</p>
                   )}
@@ -1373,7 +1374,7 @@ export default function CashierCatalog({
                     />
                   </button>
                 </div>
-              </div>
+              </div>}
 
               <div className={"fixed inset-x-0 bottom-0 z-20 flex gap-2 border-t border-koma-border bg-koma-card/95 p-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] backdrop-blur-md sm:sticky sm:-mx-1 sm:bottom-0 sm:rounded-xl sm:border sm:p-2"}>
                 <button
@@ -1385,10 +1386,10 @@ export default function CashierCatalog({
                 </button>
                 <button
                   type="submit"
-                  disabled={isLoading || apiCategorias.length === 0}
+                  disabled={isLoading || apiCategorias.length === 0 || (hasVariants && (loadingFamily || loadingCustomizations || !customizationsLoaded || Boolean(familyError) || Boolean(customizationError)))}
                   className={"flex-1 min-h-11 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl font-bold cursor-pointer transition-colors disabled:opacity-50"}
                 >
-                  {isLoading ? 'Salvando…' : editingProduct ? 'Salvar alterações' : 'Criar produto'}
+                  {isLoading ? 'Salvando…' : editingProduct || editingFamilyId ? 'Salvar alterações' : 'Criar produto'}
                 </button>
               </div>
             </form>
