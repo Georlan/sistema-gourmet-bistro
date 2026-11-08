@@ -220,6 +220,55 @@ def test_provisional_onboarding_blocks_commercial_operations_and_transitions_cle
     assert res_release_fail.status_code == 409, res_release_fail.text
     assert "sem assinatura comercial" in res_release_fail.json()["detail"].lower()
 
+    # 3d. QA não é contratação: somente Super Admin pode liberar temporariamente.
+    unauthorized = client.post(
+        f"/api/super-admin/onboarding/restaurantes/{test_tenant_id}/operational-qa",
+        headers=tenant_headers,
+        json={"action": "start", "hours": 24, "reason": "Teste operacional do tenant provisório."},
+    )
+    assert unauthorized.status_code in {401, 403}
+
+    qa = client.post(
+        f"/api/super-admin/onboarding/restaurantes/{test_tenant_id}/operational-qa",
+        headers=admin_headers,
+        json={"action": "start", "hours": 24, "reason": "Homologação controlada de caixa e pedidos."},
+    )
+    assert qa.status_code == 200, qa.text
+    assert qa.json()["qaActive"] is True
+    assert qa.json()["commercialContractCreated"] is False
+    assert qa.json()["saasTrialStarted"] is False
+
+    with SessionLocal() as db:
+        assert is_provisional_preparation(db, test_tenant_id) is False
+        assert db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == test_tenant_id).first() is None
+        assert db.execute(
+            restaurant_trials.select().where(restaurant_trials.c.restaurante_id == test_tenant_id)
+        ).mappings().one_or_none() is None
+
+    duplicate = client.post(
+        f"/api/super-admin/onboarding/restaurantes/{test_tenant_id}/operational-qa",
+        headers=admin_headers,
+        json={"action": "start", "hours": 24, "reason": "Repetição sem revogação não permitida."},
+    )
+    assert duplicate.status_code == 409
+
+    end_qa = client.post(
+        f"/api/super-admin/onboarding/restaurantes/{test_tenant_id}/operational-qa",
+        headers=admin_headers,
+        json={"action": "end", "reason": "Encerrar a homologação antes de contratar."},
+    )
+    assert end_qa.status_code == 200, end_qa.text
+    with SessionLocal() as db:
+        assert is_provisional_preparation(db, test_tenant_id) is True
+
+    # O bloqueio operacional volta após revogação, sem afetar o tenant.
+    res_after_qa = client.post(
+        "/caixa/turno/abrir",
+        headers=tenant_headers,
+        json={"saldo_inicial": 100.0},
+    )
+    assert res_after_qa.status_code == 403
+
     # 4. Simular formalização legítima: criação de aceite contratual real via API
     res_accept = client.post(
         "/api/contracts/accept",
