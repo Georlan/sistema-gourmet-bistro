@@ -1,7 +1,7 @@
 """Family membership preserves each SKU's fiscal/operational identity and tenant isolation."""
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from app.database import Base, current_restaurante_id
@@ -98,7 +98,10 @@ def test_cross_tenant_variant_is_never_linked(db):
     assert exc.value.status_code == 404
     db.rollback()
     assert db.query(ProdutoFamilia).filter_by(restaurante_id=91).count() == 0
-    assert db.query(Produto).filter_by(id="batata-loja-92").one().familia_id is None
+    # Tenant 91's ORM scope must not expose tenant 92's SKU.
+    assert db.query(Produto).filter_by(id="batata-loja-92").count() == 0
+    # Inspect isolated SQLite fixture state without disabling the ORM tenant guard.
+    assert db.execute(text("SELECT familia_id FROM produtos WHERE id = 'batata-loja-92'")).scalar_one() is None
 
 
 def test_new_variant_is_real_purchasable_sku(db):
@@ -107,7 +110,9 @@ def test_new_variant_is_real_purchasable_sku(db):
     assert product.nome == "Batata Frita Tradicional - Pequena · 200 g"
     assert product.preco == 12
     assert product.familia_id == saved["id"]
-    assert db.query(Produto).filter_by(restaurante_id=92).count() == 1
+    # ORM queries under tenant 91 intentionally hide tenant 92.
+    assert db.query(Produto).filter_by(restaurante_id=92).count() == 0
+    assert db.execute(text("SELECT count(*) FROM produtos WHERE restaurante_id = 92")).scalar_one() == 1
 
 
 def test_family_model_respects_tenant_context():
