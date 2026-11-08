@@ -20,9 +20,9 @@ test('snapshot operacional mantém familia_id e rótulo para reabrir a família 
       familia_id: 'pastel-family', variacao_rotulo: 'Queijo' },
     { id: 'avulso', nome: 'Pastel avulso', categoria_id: 'pasteis', preco: 9 },
   ] });
-  assert.equal(snapshot.produtos[0].familia_id, 'pastel-family');
-  assert.equal(snapshot.produtos[0].variacao_rotulo, 'Carne Moída');
-  assert.equal(snapshot.produtos[1].familia_id, 'pastel-family');
-  assert.equal(snapshot.produtos[1].preco, 8);
-  assert.equal(snapshot.produtos[2].familia_id, null);
+  assert.equal(snapshot.produtos.find(p => p.id === 'carne')?.familia_id, 'pastel-family');
+  assert.equal(snapshot.produtos.find(p => p.id === 'carne')?.variacao_rotulo, 'Carne Moída');
+  assert.equal(snapshot.produtos.find(p => p.id === 'queijo')?.familia_id, 'pastel-family');
+  assert.equal(snapshot.produtos.find(p => p.id === 'queijo')?.preco, 8);
+  assert.equal(snapshot.produtos.find(p => p.id === 'avulso')?.familia_id, null);
 });
