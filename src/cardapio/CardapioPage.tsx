@@ -289,6 +289,12 @@ export default function CardapioPage() {
 
       const mapPublicProduct = (product: Record<string, any>): Product => ({
         marmitaria: product.marmitaria === true,
+        familyId: typeof product.familia_id === 'string' ? product.familia_id : null,
+        familyName: typeof product.familia_nome === 'string' ? product.familia_nome : null,
+        familyDescription: typeof product.familia_descricao === 'string' ? product.familia_descricao : null,
+        familyAxis: ['tamanho', 'sabor', 'outra'].includes(product.familia_eixo) ? product.familia_eixo : null,
+        familyImage: typeof product.familia_imagem === 'string' ? getProductImageUrl(product.familia_imagem) : null,
+        variantLabel: typeof product.variacao_rotulo === 'string' ? product.variacao_rotulo : null,
         id: String(product.id),
         name: String(product.nome || ""),
         description: String(product.descricao || ""),
