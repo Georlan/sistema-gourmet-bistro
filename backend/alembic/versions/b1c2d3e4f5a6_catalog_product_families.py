@@ -1,12 +1,12 @@
 """Explicit multitenant product families with real purchasable variant SKUs.
 
-Revision ID: b1c2d3e4f5a6
+Revision ID: f1c4e7a9b2d3
 Revises: f0a1b2c3d4e5
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = "b1c2d3e4f5a6"
+revision = "f1c4e7a9b2d3"
 down_revision = "f0a1b2c3d4e5"
 branch_labels = None
 depends_on = None
