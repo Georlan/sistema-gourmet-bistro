@@ -100,7 +100,7 @@ function formatVariantLabel(name: string, kind: string): string {
   return name;
 }
 
-export function groupCategoryProductsForDisplay(
+function legacyGroupCategoryProductsForDisplay(
   categoryName: string,
   products: Product[],
   restaurantId?: string | number,
@@ -336,4 +336,87 @@ export function groupCategoryProductsForDisplay(
 
   // Para qualquer outra categoria (ex: Hambúrgueres), cada produto é individual
   return products;
+}
+
+
+/**
+ * Explicit persisted families take precedence over the JE legacy name fallback.
+ * The family is a display-only card; every variant retains its own sellable SKU.
+ * The old heuristic only sees as-yet-unmigrated products, avoiding duplicate cards.
+ */
+export function groupCategoryProductsForDisplay(
+  categoryName: string,
+  products: Product[],
+  restaurantId?: string | number,
+): CatalogDisplayItem[] {
+  if (!products?.length) return [];
+
+  const byFamily = new Map<string, Product[]>();
+  for (const product of products) {
+    if (!product.familia_id || !product.familia_nome) continue;
+    const group = byFamily.get(product.familia_id) || [];
+    group.push(product);
+    byFamily.set(product.familia_id, group);
+  }
+  if (!byFamily.size) return legacyGroupCategoryProductsForDisplay(categoryName, products, restaurantId);
+
+  const native = new Map<string, GroupedDisplayProduct>();
+  for (const [familyId, members] of byFamily) {
+    const lead = members[0];
+    const variants: DisplayVariant[] = members.map((product) => ({
+      id: String(product.id),
+      label: product.variacao_rotulo || product.name,
+      description: product.description,
+      price: calculateProductMinStartingPrice(product),
+      product,
+      isAvailable: product.isAvailable !== false,
+    }));
+    const available = variants.filter(variant => variant.isAvailable);
+    const prices = (available.length ? available : variants).map(variant => variant.price);
+    const minPrice = Math.min(...prices);
+    native.set(familyId, {
+      ...lead,
+      id: `family-${familyId}`,
+      name: lead.familia_nome!,
+      description: lead.familia_descricao || lead.description,
+      image: lead.familia_imagem || lead.image,
+      price: minPrice,
+      isGrouped: true,
+      groupKind: 'generic',
+      requiresExplicitVariantSelection: variants.length > 1,
+      groupTitle: lead.familia_nome!,
+      groupDescription: lead.familia_eixo === 'tamanho' ? 'Escolha o tamanho:' :
+        lead.familia_eixo === 'sabor' ? 'Escolha o sabor:' : 'Escolha a opção:',
+      minPrice,
+      hasVariablePrice: Math.max(...prices) > minPrice,
+      variants,
+      isAvailable: variants.some(variant => variant.isAvailable),
+    });
+  }
+
+  // Legacy fallback is limited to products with no explicit family association.
+  const ungrouped = products.filter(product => !product.familia_id || !byFamily.has(product.familia_id));
+  const legacy = legacyGroupCategoryProductsForDisplay(categoryName, ungrouped, restaurantId);
+  const legacyBySku = new Map<string, CatalogDisplayItem>();
+  for (const display of legacy) {
+    if (isGroupedProduct(display)) {
+      for (const variant of display.variants) legacyBySku.set(variant.id, display);
+    } else {
+      legacyBySku.set(display.id, display);
+    }
+  }
+
+  // Preserve category order as configured, using the first variant as the card anchor.
+  const emitted = new Set<string>();
+  const result: CatalogDisplayItem[] = [];
+  for (const product of products) {
+    const display = product.familia_id && native.has(product.familia_id)
+      ? native.get(product.familia_id)!
+      : legacyBySku.get(product.id) || product;
+    const identity = isGroupedProduct(display) ? `family:${display.id}` : `sku:${display.id}`;
+    if (emitted.has(identity)) continue;
+    emitted.add(identity);
+    result.push(display);
+  }
+  return result;
 }

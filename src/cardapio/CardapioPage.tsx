@@ -289,6 +289,12 @@ export default function CardapioPage() {
 
       const mapPublicProduct = (product: Record<string, any>): Product => ({
         marmitaria: product.marmitaria === true,
+        familia_id: product.familia_id ? String(product.familia_id) : null,
+        familia_nome: product.familia_nome ? String(product.familia_nome) : null,
+        familia_descricao: product.familia_descricao ? String(product.familia_descricao) : null,
+        familia_eixo: product.familia_eixo || null,
+        familia_imagem: product.familia_imagem ? getProductImageUrl(String(product.familia_imagem)) : null,
+        variacao_rotulo: product.variacao_rotulo ? String(product.variacao_rotulo) : null,
         id: String(product.id),
         name: String(product.nome || ""),
         description: String(product.descricao || ""),
@@ -1364,7 +1370,7 @@ export default function CardapioPage() {
             const products = activeBrand.products
               .filter((product) => (
                 product.category === category
-                && smartSearchMatch(`${product.name} ${product.description || ""}`, searchQuery)
+                && smartSearchMatch(`${product.name} ${product.familia_nome || ""} ${product.description || ""}`, searchQuery)
               ))
               .sort((a, b) => {
                 const orderA = a.ordem_exibicao ?? Number.MAX_SAFE_INTEGER;

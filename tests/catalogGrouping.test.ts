@@ -204,3 +204,39 @@ test('groupCategoryProductsForDisplay mantem Hambúrgueres como produtos individ
   assert.equal(isGroupedProduct(grouped[0]), false);
   assert.equal(isGroupedProduct(grouped[1]), false);
 });
+
+
+test('família persistida agrupa sabores com preços por SKU, também fora do JE', () => {
+  const products: Product[] = [
+    { id: 'sol', name: 'Pastel médio Carne de Sol', description: '', price: 7,
+      image: '', category: 'Pastéis', familia_id: 'persisted-1', familia_nome: 'Pastel Médio',
+      familia_eixo: 'sabor', variacao_rotulo: 'Carne de Sol' },
+    { id: 'queijo', name: 'Pastel médio Queijo', description: '', price: 8,
+      image: '', category: 'Pastéis', familia_id: 'persisted-1', familia_nome: 'Pastel Médio',
+      familia_eixo: 'sabor', variacao_rotulo: 'Queijo' },
+    { id: 'outro', name: 'Pastel de Frango', description: '', price: 9, image: '', category: 'Pastéis' },
+  ];
+  const cards = groupCategoryProductsForDisplay('Pastéis', products, '999');
+  assert.deepEqual(cards.map(item => item.id), ['family-persisted-1', 'outro']);
+  assert.ok(isGroupedProduct(cards[0]));
+  const family = cards[0] as GroupedDisplayProduct;
+  assert.equal(family.groupDescription, 'Escolha o sabor:');
+  assert.equal(family.requiresExplicitVariantSelection, true);
+  assert.deepEqual(family.variants.map(v => ({ id: v.product.id, label: v.label, price: v.price })),
+    [{ id: 'sol', label: 'Carne de Sol', price: 7 }, { id: 'queijo', label: 'Queijo', price: 8 }]);
+});
+
+test('família persistida tem precedência e não duplica produto com fallback legado', () => {
+  const products: Product[] = [
+    { id: 'p', name: 'Batata Frita Pequena (200 g)', description: '', price: 12, image: '',
+      category: 'Batatas Fritas', familia_id: 'batata-family', familia_nome: 'Batata Frita Tradicional',
+      familia_eixo: 'tamanho', variacao_rotulo: '200 g' },
+    { id: 'm', name: 'Batata Frita Média (300 g)', description: '', price: 15, image: '',
+      category: 'Batatas Fritas', familia_id: 'batata-family', familia_nome: 'Batata Frita Tradicional',
+      familia_eixo: 'tamanho', variacao_rotulo: '300 g' },
+    { id: 'especial', name: 'Batata especial', description: '', price: 20, image: '', category: 'Batatas Fritas' },
+  ];
+  const cards = groupCategoryProductsForDisplay('Batatas Fritas', products, '1');
+  assert.deepEqual(cards.map(c => c.id), ['family-batata-family', 'especial']);
+  assert.equal((cards[0] as GroupedDisplayProduct).variants[1].product.id, 'm');
+});

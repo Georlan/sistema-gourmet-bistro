@@ -71,3 +71,102 @@ test('editar produto associa adicional sem alterar escolha herdada da categoria'
   });
   await expect(dialog).toHaveCount(0);
 });
+
+
+test('cadastro único cria sabores com preços por SKU e grupos compartilhados no mobile', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_active_tab', 'cardapio');
+    sessionStorage.setItem('koma_active_subtab', 'produtos');
+  });
+  await page.route('**/cardapio/modificadores/grupos', route => route.fulfill({ json: [
+    { id: 'molhos', nome: 'Molhos', min_selecoes: 0, max_selecoes: 2, tipo: 'opcional',
+      produto_ids: [], categoria_ids: [], opcoes: [
+        { id: 'molho-rose', nome: 'Molho Rosé', preco_adicional: 0, ativo: true },
+      ] },
+  ] }));
+  let savedFamily: Record<string, any> | undefined;
+  await page.route('**/produto-familias', route => {
+    if (route.request().method() !== 'POST') return route.fulfill({ json: [] });
+    savedFamily = route.request().postDataJSON();
+    return route.fulfill({ status: 201, json: {
+      id: 'family-created', grupo_ids: savedFamily?.grupo_ids || [],
+      variantes: (savedFamily?.variantes || []).map((variant: any, index: number) => ({
+        ...variant, produto_id: `pastel-${index + 1}`,
+      })),
+    } });
+  });
+  await page.goto('/?view=caixa');
+  await page.getByRole('button', { name: 'Novo produto', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Novo produto' });
+  await dialog.locator('#product-name').fill('Pastel Médio');
+  await dialog.getByRole('switch', { name: 'Este produto tem sabores ou tamanhos?' }).check();
+  await dialog.getByRole('textbox', { name: 'Nome da opção 1' }).fill('Carne Moída');
+  await dialog.locator('#variant-price-0').fill('700');
+  await dialog.getByRole('button', { name: 'Adicionar sabor' }).click();
+  await dialog.getByRole('textbox', { name: 'Nome da opção 2' }).fill('Queijo');
+  await dialog.locator('#variant-price-1').fill('800');
+  const molho = dialog.getByRole('checkbox', { name: 'Associar Molhos ao produto' });
+  await expect(molho).toBeVisible();
+  await molho.check();
+  await dialog.getByRole('button', { name: 'Criar produto', exact: true }).click();
+  await expect.poll(() => savedFamily).toBeTruthy();
+  expect(savedFamily?.eixo).toBe('sabor');
+  expect(savedFamily?.nome).toBe('Pastel Médio');
+  expect(savedFamily?.variantes.map((v: any) => [v.rotulo, v.preco])).toEqual([
+    ['Carne Moída', 7], ['Queijo', 8],
+  ]);
+  expect(savedFamily?.grupo_ids).toEqual(['molhos']);
+  await expect(dialog).toHaveCount(0);
+});
+
+test('editar variante existente abre a família e preserva IDs dos sabores', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_active_tab', 'cardapio');
+    sessionStorage.setItem('koma_active_subtab', 'produtos');
+  });
+  const products = [
+    { id: 'pastel-carne', nome: 'Pastel Carne', preco: 7, categoria_id: 'cat-pratos',
+      ativo: true, familia_id: 'pastel-family', variacao_rotulo: 'Carne Moída' },
+    { id: 'pastel-queijo', nome: 'Pastel Queijo', preco: 8, categoria_id: 'cat-pratos',
+      ativo: true, familia_id: 'pastel-family', variacao_rotulo: 'Queijo' },
+  ];
+  await page.route('**/produtos/catalogo', route => route.fulfill({
+    json: { categorias: [{ id: 'cat-pratos', nome: 'Pratos' }], produtos: products },
+  }));
+  await page.route('**/cardapio/modificadores/grupos', route => route.fulfill({ json: [] }));
+  await page.route('**/produto-familias', route => route.fulfill({ json: [{
+    id: 'pastel-family', nome: 'Pastel Médio', descricao: '', eixo: 'sabor',
+    categoria_id: 'cat-pratos', cardapio_id: null, imagem: '',
+    variantes: [
+      { produto_id: 'pastel-carne', rotulo: 'Carne Moída', preco: 7, ativo: true },
+      { produto_id: 'pastel-queijo', rotulo: 'Queijo', preco: 8, ativo: true },
+    ],
+  }] }));
+  await page.route('**/produto-familias/pastel-family/personalizacoes',
+    route => route.fulfill({ json: { familia_id: 'pastel-family', grupo_ids: [] } }));
+  let update: Record<string, any> | undefined;
+  await page.route('**/produto-familias/pastel-family', route => {
+    update = route.request().postDataJSON();
+    return route.fulfill({ json: {
+      id: 'pastel-family', grupo_ids: [], variantes: update?.variantes || [],
+    } });
+  });
+  await page.goto('/?view=caixa');
+  const card = page.locator('article').filter({
+    has: page.getByRole('heading', { name: 'Pastel Carne', exact: true }),
+  });
+  await card.getByRole('button', { name: 'Editar', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Editar produto' });
+  await expect(dialog.getByRole('textbox', { name: 'Nome da opção 2' })).toHaveValue('Queijo');
+  await dialog.locator('#variant-price-1').fill('900');
+  await dialog.getByRole('button', { name: 'Salvar alterações', exact: true }).click();
+  await expect.poll(() => update).toBeTruthy();
+  expect(update?.variantes.map((v: any) => [v.produto_id, v.preco])).toEqual([
+    ['pastel-carne', 7], ['pastel-queijo', 9],
+  ]);
+  await expect(dialog).toHaveCount(0);
+});

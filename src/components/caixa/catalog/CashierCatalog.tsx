@@ -48,6 +48,22 @@ interface ProductCustomizationGroup {
   categoria_ids: string[];
 }
 
+interface FamilyVariantDraft {
+  produto_id?: string;
+  rotulo: string;
+  preco: number | '';
+  ativo: boolean;
+}
+interface CatalogProductFamily {
+  id: string;
+  nome: string;
+  descricao: string;
+  eixo: 'sabor' | 'tamanho' | 'outra';
+  categoria_id: string;
+  cardapio_id: string | null;
+  imagem: string;
+  variantes: { produto_id: string; rotulo: string; preco: number; ativo: boolean }[];
+}
 const PRODUCT_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
 const PRODUCT_IMAGE_MAX_SIZE = MAX_IMAGE_UPLOAD_SOURCE_BYTES;
 
@@ -86,7 +102,15 @@ export default function CashierCatalog({
 
   const [showCategoryModal, setShowCategoryModal] = useState(false);
 
-  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [hasVariants, setHasVariants] = useState(false);
+  const [variantAxis, setVariantAxis] = useState<'sabor' | 'tamanho'>('sabor');
+  const [variantRows, setVariantRows] = useState<FamilyVariantDraft[]>([]);
+  const [editingFamilyId, setEditingFamilyId] = useState<string | null>(null);
+  const [familyImage, setFamilyImage] = useState('');
+  const [loadingFamily, setLoadingFamily] = useState(false);
+  const [familyError, setFamilyError] = useState('');
+  const [existingVariantId, setExistingVariantId] = useState('');
 
   const [cardapioCategoryFocus, setCardapioCategoryFocus] = useState<string | null>(null);
 
@@ -145,7 +169,9 @@ export default function CashierCatalog({
     const requests: Promise<Response>[] = [
       fetch(`${apiBaseUrl}/cardapio/modificadores/grupos`, { headers }),
     ];
-    if (editingProduct?.id) {
+    if (hasVariants && editingFamilyId) {
+      requests.push(fetch(`${apiBaseUrl}/produto-familias/${encodeURIComponent(editingFamilyId)}/personalizacoes`, { headers }));
+    } else if (!hasVariants && editingProduct?.id) {
       requests.push(fetch(`${apiBaseUrl}/produtos/${encodeURIComponent(editingProduct.id)}/personalizacoes`, { headers }));
     }
     Promise.all(requests).then(async responses => {
@@ -153,16 +179,47 @@ export default function CashierCatalog({
       const [groups, links] = await Promise.all(responses.map(response => response.json()));
       if (cancelled) return;
       setCustomizationGroups(Array.isArray(groups) ? groups : []);
-      setPreviousCustomizationIds(links?.grupos_diretos || []);
-      setSelectedCustomizationIds(links?.grupos_diretos || []);
-      setInheritedCustomizationIds(links?.grupos_herdados || []);
+      const direct = hasVariants ? (links?.grupo_ids || []) : (links?.grupos_diretos || []);
+      setPreviousCustomizationIds(direct);
+      setSelectedCustomizationIds(direct);
+      setInheritedCustomizationIds(hasVariants ? [] : (links?.grupos_herdados || []));
       setCustomizationsLoaded(true);
     }).catch(error => {
       if (!cancelled) setCustomizationError(error instanceof Error ? error.message : 'Erro ao carregar personalizações.');
     }).finally(() => { if (!cancelled) setLoadingCustomizations(false); });
     return () => { cancelled = true; };
     // A autorização é a identidade de leitura; mudanças no formulário não disparam novas consultas.
-  }, [showProductModal, editingProduct?.id, apiBaseUrl, authorization, isMarmitaria]);
+  }, [showProductModal, editingProduct?.id, editingFamilyId, hasVariants, apiBaseUrl, authorization, isMarmitaria]);
+
+  // Existing families load into the same editor; no second product form.
+  useEffect(() => {
+    if (!showProductModal || !editingFamilyId || isMarmitaria) return;
+    let cancelled = false;
+    setLoadingFamily(true);
+    setFamilyError('');
+    const headers = authorization ? { Authorization: authorization } : authHeaders;
+    fetch(`${apiBaseUrl}/produto-familias`, { headers })
+      .then(async response => {
+        if (!response.ok) throw new Error('Não foi possível carregar os sabores ou tamanhos.');
+        const families = await response.json() as CatalogProductFamily[];
+        const family = families.find(item => item.id === editingFamilyId);
+        if (!family) throw new Error('Produto com variações não encontrado. Atualize o cardápio.');
+        if (cancelled) return;
+        setProdFormNome(family.nome);
+        setProdFormDescricao(family.descricao || '');
+        setProdFormCategoriaId(family.categoria_id);
+        setProdFormCardapioId(family.cardapio_id || '');
+        setVariantAxis(family.eixo === 'tamanho' ? 'tamanho' : 'sabor');
+        setFamilyImage(family.imagem || '');
+        setVariantRows(family.variantes.map(variant => ({
+          produto_id: variant.produto_id, rotulo: variant.rotulo,
+          preco: variant.preco, ativo: variant.ativo,
+        })));
+      })
+      .catch(error => { if (!cancelled) setFamilyError(error instanceof Error ? error.message : 'Não foi possível carregar o produto.'); })
+      .finally(() => { if (!cancelled) setLoadingFamily(false); });
+    return () => { cancelled = true; };
+  }, [showProductModal, editingFamilyId, isMarmitaria, apiBaseUrl, authorization]);
 
   const handlePublishCardapio = async (targetMenuId: string, targetMenuNome: string) => {
     if (isPublishingMenu) return;
@@ -262,6 +319,13 @@ export default function CashierCatalog({
   const isMarmita = (product: Product) => Boolean(product.marmitaria_tamanho) || apiCategorias.some(category => category.id === product.categoria_id && isMarmitaCategory(category));
   const startProduct = () => {
     setEditingProduct(null);
+    setHasVariants(false);
+    setEditingFamilyId(null);
+    setVariantRows([]);
+    setVariantAxis('sabor');
+    setFamilyImage('');
+    setFamilyError('');
+    setExistingVariantId('');
     setProdFormId(suggestedProductCode);
     setProdFormNome('');
     setProdFormPreco('');
@@ -276,6 +340,13 @@ export default function CashierCatalog({
 
   const editProductDetails = (product: Product) => {
     setEditingProduct(product);
+    setHasVariants(Boolean(product.familia_id));
+    setEditingFamilyId(product.familia_id || null);
+    setVariantRows([]);
+    setVariantAxis('sabor');
+    setFamilyImage('');
+    setFamilyError('');
+    setExistingVariantId('');
     setProdFormId(product.id);
     setProdFormNome(product.nome);
     setProdFormPreco(Number(product.preco) || 0);
@@ -285,7 +356,7 @@ export default function CashierCatalog({
     resetProductImageState(product.imagem || gallery[0] || '');
     setProdFormAtivo(product.ativo !== false);
     setProdFormSomentePromocao(product.somente_promocao === true);
-    setProdFormCardapioId(product.cardapio_id || selectedCardapioId || cardapios?.[0]?.id || '');
+    setProdFormCardapioId(product.cardapio_id || '');
     setShowProductModal(true);
   };
 
@@ -396,6 +467,12 @@ export default function CashierCatalog({
             onDuplicateProduct={(product) => {
               if (isMarmitaria && isMarmita(product)) { showToast('Cada tamanho tem um único cadastro. Edite a marmita existente na lista de produtos.', 'error'); return; }
               setEditingProduct(null);
+              setHasVariants(false);
+              setEditingFamilyId(null);
+              setVariantRows([]);
+              setFamilyImage('');
+              setFamilyError('');
+              setExistingVariantId('');
               setProdFormId(suggestedProductCode);
               setProdFormNome(`${product.nome} (Cópia)`);
               setProdFormPreco(Number(product.preco) || 0);
@@ -404,10 +481,14 @@ export default function CashierCatalog({
               resetProductImageState('');
               setProdFormAtivo(true);
               setProdFormSomentePromocao(false);
-              setProdFormCardapioId(product.cardapio_id || selectedCardapioId || cardapios?.[0]?.id || '');
+              setProdFormCardapioId(product.cardapio_id || '');
               setShowProductModal(true);
             }}
             onRemoveProduct={async (product) => {
+              if (product.familia_id) {
+                showToast('Esta opção pertence a um produto com sabores ou tamanhos. Edite o produto principal para alterar sua disponibilidade.', 'error');
+                return;
+              }
               if (!confirm(`Remover "${product.nome}" dos canais de venda? O histórico das vendas será preservado.`))
                 return;
               try {
@@ -615,6 +696,86 @@ export default function CashierCatalog({
                     cardapio_id: prodFormCardapioId || null,
                   };
 
+                  if (hasVariants && !isMarmitaria) {
+                    if (loadingFamily || familyError || loadingCustomizations || !customizationsLoaded || customizationError) {
+                      showToast(familyError || customizationError || 'Conclua o carregamento das opções antes de salvar.', 'error');
+                      return;
+                    }
+                    const labels = variantRows.map(row => row.rotulo.trim().toLocaleLowerCase('pt-BR'));
+                    if (!variantRows.length || variantRows.some(row => !row.rotulo.trim() || Number(row.preco) <= 0)
+                      || new Set(labels).size !== labels.length) {
+                      showToast('Informe nome e preço válido para cada opção, sem repetir nomes.', 'error');
+                      return;
+                    }
+                    // A family is only presentation. Each variant is a real
+                    // sellable SKU with independent price, inventory and order ID.
+                    const familyPayload = {
+                      nome: payload.nome,
+                      descricao: payload.descricao,
+                      eixo: variantAxis,
+                      categoria_id: payload.categoria_id,
+                      cardapio_id: payload.cardapio_id,
+                      imagem: familyImage,
+                      variantes: variantRows.map(row => ({
+                        ...(row.produto_id ? { produto_id: row.produto_id } : {}),
+                        rotulo: row.rotulo.trim(),
+                        preco: Number(row.preco),
+                        ativo: row.ativo,
+                      })),
+                      grupo_ids: selectedCustomizationIds,
+                      grupos_anteriores: previousCustomizationIds,
+                    };
+                    const familyResponse = await fetch(
+                      `${apiBaseUrl}/produto-familias${editingFamilyId ? `/${encodeURIComponent(editingFamilyId)}` : ''}`,
+                      {
+                        method: editingFamilyId ? 'PUT' : 'POST',
+                        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(familyPayload),
+                      },
+                    );
+                    const family = await familyResponse.json().catch(() => ({}));
+                    if (!familyResponse.ok) {
+                      showToast(family.detail || 'Não foi possível salvar os sabores ou tamanhos.', 'error');
+                      return;
+                    }
+                    // The family and shared choices commit together. If an
+                    // optional photo upload fails, retry updates the same IDs.
+                    setEditingFamilyId(String(family.id));
+                    setPreviousCustomizationIds(family.grupo_ids || selectedCustomizationIds);
+                    setVariantRows((family.variantes || []).map((variant: {
+                      produto_id: string; rotulo: string; preco: number; ativo: boolean;
+                    }) => ({
+                      produto_id: variant.produto_id, rotulo: variant.rotulo,
+                      preco: variant.preco, ativo: variant.ativo,
+                    })));
+                    const firstSkuId = family.variantes?.[0]?.produto_id;
+                    if (firstSkuId && (preparedImage || prodFormImageRemoveRequested)) {
+                      const uploadHeaders = { ...authHeaders };
+                      delete uploadHeaders['Content-Type'];
+                      const formData = new FormData();
+                      if (preparedImage) formData.append('file', preparedImage);
+                      const imageResponse = await fetch(
+                        `${apiBaseUrl}/api/cardapio-digital/assets/product/${encodeURIComponent(firstSkuId)}`,
+                        {
+                          method: preparedImage ? 'POST' : 'DELETE',
+                          headers: uploadHeaders,
+                          ...(preparedImage ? { body: formData } : {}),
+                        },
+                      );
+                      const imageData = await imageResponse.json().catch(() => ({}));
+                      if (!imageResponse.ok) {
+                        await fetchProdutos();
+                        showToast(imageData.detail || 'Opções salvas, mas a foto não foi atualizada. Tente novamente.', 'error');
+                        return;
+                      }
+                      resetProductImageState(String(imageData.imagem || ''));
+                    }
+                    await fetchProdutos();
+                    setShowProductModal(false);
+                    showToast('Produto e opções salvos. Cada opção tem seu próprio preço.');
+                    return;
+                  }
+
                   let res;
                   if (editingProduct) {
                     res = await fetch(`${apiBaseUrl}/produtos/${editingProduct.id}`, {
@@ -805,7 +966,7 @@ export default function CashierCatalog({
               </div>
 
               <div className={"grid grid-cols-1 sm:grid-cols-2 gap-3"}>
-                <div className="space-y-1.5">
+                {!hasVariants && <div className="space-y-1.5">
                   <label
                     htmlFor="product-price"
                     className={"text-[10px] font-bold text-koma-secondary block"}
@@ -820,7 +981,7 @@ export default function CashierCatalog({
                     onValueChange={setProdFormPreco}
                     className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-[11px]"}
                   />
-                </div>
+                </div>}
                 <div className="space-y-1.5">
                   <label
                     htmlFor="product-category"
@@ -831,7 +992,7 @@ export default function CashierCatalog({
                   <div className={"flex gap-1.5"}>
                     <select
                       id="product-category"
-                      disabled={isMarmitaria && Boolean(editingProduct) && isMarmita(editingProduct)}
+                      disabled={Boolean(editingFamilyId) || (isMarmitaria && Boolean(editingProduct) && isMarmita(editingProduct))}
                       required
                       value={prodFormCategoriaId}
                       onChange={(e) => setProdFormCategoriaId(e.target.value)}
@@ -849,6 +1010,7 @@ export default function CashierCatalog({
                     <button
                       type="button"
                       onClick={() => setShowCategoryModal(true)}
+                      disabled={Boolean(editingFamilyId)}
                       title="Criar nova categoria"
                       aria-label="Criar nova categoria"
                       className={"inline-flex items-center gap-1 px-2.5 bg-emerald-500/15 hover:bg-[#10b981]/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 rounded-xl font-bold text-[9px] cursor-pointer transition-colors"}
@@ -870,9 +1032,11 @@ export default function CashierCatalog({
                   <select
                     id="product-cardapio"
                     value={prodFormCardapioId}
+                    disabled={Boolean(editingFamilyId)}
                     onChange={(e) => setProdFormCardapioId(e.target.value)}
                     className="w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"
                   >
+                    <option value="">Sem cardápio específico</option>
                     {cardapios.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.nome} {activeMenuIds.includes(c.id) ? '★ (Ativo no momento)' : ''}
@@ -905,7 +1069,123 @@ export default function CashierCatalog({
                 </p>
               </div>
 
-              {!(isMarmitaria && editingProduct && isMarmita(editingProduct)) && (
+              {!isMarmitaria && (
+                <section aria-label="Sabores e tamanhos do produto" className="space-y-3 rounded-xl border border-koma-border bg-koma-panel p-3">
+                  <label className="flex min-h-11 items-center justify-between gap-3 text-xs font-bold text-koma-foreground">
+                    <span>Este produto tem sabores ou tamanhos?</span>
+                    <input type="checkbox" role="switch" aria-label="Este produto tem sabores ou tamanhos?"
+                      checked={hasVariants} disabled={Boolean(editingFamilyId) || isLoading}
+                      onChange={event => {
+                        const enabled = event.target.checked;
+                        setHasVariants(enabled);
+                        setVariantRows(enabled
+                          ? [{ ...(editingProduct?.id ? { produto_id: editingProduct.id } : {}),
+                              rotulo: editingProduct ? editingProduct.nome : '',
+                              preco: editingProduct ? Number(editingProduct.preco) : '', ativo: true }]
+                          : []);
+                        setExistingVariantId('');
+                      }} />
+                  </label>
+                  {editingFamilyId && <p className="text-[11px] text-koma-muted">As opções estão vinculadas a este produto. Edite-as sem alterar os pedidos anteriores.</p>}
+                  {loadingFamily && <p className="text-xs text-koma-muted">Carregando sabores e tamanhos…</p>}
+                  {familyError && <p role="alert" className="text-xs text-rose-400">{familyError}</p>}
+                  {hasVariants && !loadingFamily && (
+                    <>
+                      <div className="flex gap-2" aria-label="Tipo de variação">
+                        {(['sabor', 'tamanho'] as const).map(axis => (
+                          <button key={axis} type="button" aria-pressed={variantAxis === axis}
+                            onClick={() => setVariantAxis(axis)}
+                            className={`min-h-10 flex-1 rounded-xl border px-3 text-xs font-bold ${variantAxis === axis
+                              ? 'border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                              : 'border-koma-border text-koma-secondary'}`}>
+                            {axis === 'sabor' ? 'Sabores' : 'Tamanhos'}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="space-y-2">
+                        {variantRows.map((row, index) => (
+                          <div key={row.produto_id || `novo-${index}`} className="flex flex-col gap-2 rounded-xl border border-koma-border bg-koma-card p-2 sm:flex-row sm:items-center">
+                            <label className="min-w-0 flex-1 text-[10px] font-bold text-koma-muted">
+                              {variantAxis === 'sabor' ? 'Sabor' : 'Tamanho'} {index + 1}
+                              <input required value={row.rotulo} aria-label={`Nome da opção ${index + 1}`}
+                                onChange={event => setVariantRows(rows => rows.map((v, i) => i === index ? { ...v, rotulo: event.target.value } : v))}
+                                placeholder={variantAxis === 'sabor' ? 'Carne de Sol' : 'Média · 300 g'}
+                                className="mt-1 h-11 w-full rounded-lg border border-koma-border bg-koma-panel px-3 text-base font-normal text-koma-foreground sm:text-sm" />
+                            </label>
+                            <label className="w-full text-[10px] font-bold text-koma-muted sm:w-32">
+                              Preço
+                              <MoneyInput id={`variant-price-${index}`} value={row.preco} required
+                                onValueChange={value => setVariantRows(rows => rows.map((v, i) => i === index ? { ...v, preco: value } : v))}
+                                className="mt-1 h-11 w-full rounded-lg border border-koma-border bg-koma-panel px-3 text-sm text-koma-foreground" />
+                            </label>
+                            <label className="flex items-center gap-2 text-[11px] text-koma-muted sm:pt-4">
+                              <input type="checkbox" checked={row.ativo}
+                                onChange={event => setVariantRows(rows => rows.map((v, i) => i === index ? { ...v, ativo: event.target.checked } : v))} />
+                              À venda
+                            </label>
+                            {!row.produto_id && variantRows.length > 1 && (
+                              <button type="button" aria-label={`Remover opção ${index + 1}`}
+                                onClick={() => setVariantRows(rows => rows.filter((_, i) => i !== index))}
+                                className="grid h-10 w-10 place-items-center self-end rounded-lg text-rose-500 hover:bg-rose-500/10 sm:self-auto">
+                                <Trash2 size={15} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button" className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-koma-border text-xs font-bold text-koma-secondary"
+                        onClick={() => setVariantRows(rows => [...rows, { rotulo: '', preco: '', ativo: true }])}>
+                        <Plus size={15} /> Adicionar {variantAxis === 'sabor' ? 'sabor' : 'tamanho'}
+                      </button>
+                      {apiProdutos.some(product => !product.familia_id && !product.marmitaria_tamanho
+                        && !product.somente_promocao && product.categoria_id === prodFormCategoriaId
+                        && (product.cardapio_id || null) === (prodFormCardapioId || null)
+                        && !variantRows.some(row => row.produto_id === product.id)
+                        && product.id !== editingProduct?.id) && (
+                        <details className="rounded-xl border border-koma-border px-3 py-2">
+                          <summary className="cursor-pointer text-xs font-bold text-koma-secondary">Vincular produto já cadastrado</summary>
+                          <p className="mt-2 text-[11px] text-koma-muted">Mantém o cadastro, estoque e histórico do produto existente.</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <select aria-label="Selecionar produto existente" value={existingVariantId}
+                              onChange={event => setExistingVariantId(event.target.value)}
+                              className="min-h-11 min-w-0 flex-1 rounded-xl border border-koma-border bg-koma-panel px-2 text-sm text-koma-foreground">
+                              <option value="">Escolha um produto…</option>
+                              {apiProdutos.filter(product => !product.familia_id && !product.marmitaria_tamanho
+                                && !product.somente_promocao && product.categoria_id === prodFormCategoriaId
+                                && (product.cardapio_id || null) === (prodFormCardapioId || null)
+                                && !variantRows.some(row => row.produto_id === product.id)
+                                && product.id !== editingProduct?.id).map(product => (
+                                <option key={product.id} value={product.id}>{product.nome} · R$ {Number(product.preco).toFixed(2).replace('.', ',')}</option>
+                              ))}
+                            </select>
+                            <button type="button" disabled={!existingVariantId}
+                              onClick={() => {
+                                const product = apiProdutos.find(item => item.id === existingVariantId);
+                                if (!product) return;
+                                const linked = {
+                                  produto_id: product.id, rotulo: product.nome,
+                                  preco: Number(product.preco), ativo: product.ativo !== false,
+                                };
+                                // An empty starter row is a prompt, not a
+                                // mandatory extra SKU when reusing existing items.
+                                setVariantRows(rows => rows.length === 1
+                                  && !rows[0].produto_id && !rows[0].rotulo.trim() && rows[0].preco === ''
+                                  ? [linked] : [...rows, linked]);
+                                setExistingVariantId('');
+                              }}
+                              className="min-h-11 rounded-xl bg-emerald-500 px-3 text-xs font-bold text-emerald-950 disabled:opacity-50">
+                              Vincular
+                            </button>
+                          </div>
+                        </details>
+                      )}
+                      <p className="text-[11px] text-koma-muted">Cada opção possui preço próprio. O cliente verá somente um produto com suas escolhas.</p>
+                    </>
+                  )}
+                </section>
+              )}
+
+              {!hasVariants && !(isMarmitaria && editingProduct && isMarmita(editingProduct)) && (
                 <label className="flex items-start gap-3 rounded-xl border border-koma-border bg-koma-card p-3 text-xs text-koma-foreground">
                   <input type="checkbox" checked={prodFormSomentePromocao}
                     onChange={event => setProdFormSomentePromocao(event.target.checked)}
@@ -916,7 +1196,7 @@ export default function CashierCatalog({
                 </label>
               )}
 
-              {!editingProduct && (
+              {!hasVariants && !editingProduct && (
                 <details className="group overflow-hidden rounded-xl border border-koma-border bg-koma-panel">
                   <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between px-3 text-[10px] font-bold text-koma-secondary">
                     <span>Mais opções</span>
@@ -1021,14 +1301,14 @@ export default function CashierCatalog({
               {!isMarmitaria && (
                 <section aria-label="Personalizações deste produto" className="space-y-3 rounded-xl border border-koma-border bg-koma-panel p-3">
                   <div className="space-y-1">
-                    <h4 className="text-sm font-bold text-koma-foreground">O cliente pode personalizar?</h4>
+                    <h4 className="text-sm font-bold text-koma-foreground">{hasVariants ? 'Personalizações compartilhadas' : 'O cliente pode personalizar?'}</h4>
                     <p className="text-xs text-koma-muted">
-                      Escolha o que aparece neste produto. Opções a R$ 0 já estão incluídas no preço;
-                      adicionais pagos somam ao total. Tamanhos e sabores são variações do produto, não adicionais.
+                      {hasVariants ? 'As escolhas marcadas valem para todos os sabores ou tamanhos. Cada opção mantém seu preço próprio.' :
+                        'Escolha o que aparece neste produto. Opções grátis não aumentam o preço; adicionais pagos somam ao total.'}
                     </p>
                   </div>
                   {loadingCustomizations && <p className="text-xs text-koma-muted">Carregando escolhas e adicionais…</p>}
-                  {customizationError && <p role="alert" className="text-xs text-rose-400">{customizationError} O produto pode ser salvo sem alterar seus vínculos.</p>}
+                  {customizationError && <p role="alert" className="text-xs text-rose-400">{customizationError} {hasVariants ? 'Reabra o produto antes de salvar.' : 'O produto simples pode ser salvo sem alterar seus vínculos.'}</p>}
                   {!loadingCustomizations && customizationsLoaded && customizationGroups.length === 0 && (
                     <p className="text-xs text-koma-muted">Ainda não há escolhas cadastradas. Crie grupos reutilizáveis na aba Complementos.</p>
                   )}
@@ -1071,7 +1351,7 @@ export default function CashierCatalog({
                 </section>
               )}
 
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-koma-border bg-koma-panel p-3">
+              {!hasVariants && <div className="flex items-center justify-between gap-3 rounded-xl border border-koma-border bg-koma-panel p-3">
                 <span>
                   <strong className="block text-[10px] text-koma-foreground">Produto à venda</strong>
                   <span className="mt-0.5 block text-[9px] text-koma-muted">
@@ -1099,7 +1379,7 @@ export default function CashierCatalog({
                     />
                   </button>
                 </div>
-              </div>
+              </div>}
 
               <div className={"fixed inset-x-0 bottom-0 z-20 flex gap-2 border-t border-koma-border bg-koma-card/95 p-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] backdrop-blur-md sm:sticky sm:-mx-1 sm:bottom-0 sm:rounded-xl sm:border sm:p-2"}>
                 <button
@@ -1111,10 +1391,10 @@ export default function CashierCatalog({
                 </button>
                 <button
                   type="submit"
-                  disabled={isLoading || apiCategorias.length === 0}
+                  disabled={isLoading || apiCategorias.length === 0 || (hasVariants && (loadingFamily || loadingCustomizations || !customizationsLoaded || Boolean(familyError) || Boolean(customizationError)))}
                   className={"flex-1 min-h-11 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl font-bold cursor-pointer transition-colors disabled:opacity-50"}
                 >
-                  {isLoading ? 'Salvando…' : editingProduct ? 'Salvar alterações' : 'Criar produto'}
+                  {isLoading ? 'Salvando…' : editingProduct || editingFamilyId ? 'Salvar alterações' : 'Criar produto'}
                 </button>
               </div>
             </form>

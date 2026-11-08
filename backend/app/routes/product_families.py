@@ -41,6 +41,9 @@ class FamilyWrite(BaseModel):
     cardapio_id: str | None = None
     imagem: str = ""
     variantes: list[VariantWrite] = Field(min_length=1, max_length=100)
+    # Optional atomic update; older callers that omit it keep existing links intact.
+    grupo_ids: list[str] | None = Field(default=None, max_length=100)
+    grupos_anteriores: list[str] | None = Field(default=None, max_length=100)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -206,6 +209,38 @@ def _write_family(
     labels = [variant.rotulo.casefold() for variant in payload.variantes]
     if len(labels) != len(set(labels)):
         raise HTTPException(422, "Cada variação precisa de um nome diferente.")
+    # Validate a shared group edit BEFORE writing any member SKU. This makes
+    # the single editor save one transaction (family + variants + choices).
+    shared_links: list[ProdutoFamiliaGrupoModificador] = []
+    shared_requested: set[str] | None = None
+    if payload.grupo_ids is not None:
+        requested_groups = [value.strip() for value in payload.grupo_ids]
+        previous_groups = [value.strip() for value in (payload.grupos_anteriores or [])]
+        if any(not value for value in requested_groups + previous_groups):
+            raise HTTPException(422, "Identificador de personalização inválido.")
+        if len(set(requested_groups)) != len(requested_groups) or len(set(previous_groups)) != len(previous_groups):
+            raise HTTPException(422, "Não repita a mesma personalização.")
+        if existing is not None:
+            shared_links = db.query(ProdutoFamiliaGrupoModificador).filter(
+                ProdutoFamiliaGrupoModificador.restaurante_id == tenant,
+                ProdutoFamiliaGrupoModificador.familia_id == existing.id,
+            ).with_for_update().all()
+            if {str(row.grupo_id) for row in shared_links} != set(previous_groups):
+                raise HTTPException(409, "As personalizações mudaram em outro acesso. Reabra o produto.")
+        elif previous_groups:
+            raise HTTPException(409, "Não existem personalizações anteriores nesta família.")
+        shared_requested = set(requested_groups)
+        valid_groups = {
+            str(group.id)
+            for group in db.query(GrupoModificador).filter(
+                GrupoModificador.restaurante_id == tenant,
+                GrupoModificador.id.in_(shared_requested),
+                GrupoModificador.tipo.in_(("opcional", "obrigatorio", "meio_a_meio")),
+            ).all()
+        } if shared_requested else set()
+        if shared_requested != valid_groups:
+            raise HTTPException(422, "Grupo inválido ou pertencente a outro restaurante.")
+
     requested_ids = [v.produto_id for v in payload.variantes if v.produto_id]
     if len(requested_ids) != len(set(requested_ids)):
         raise HTTPException(422, "Um SKU não pode aparecer duas vezes.")
@@ -290,11 +325,22 @@ def _write_family(
         sku.preco = float(variant.preco)
         sku.ativo = variant.ativo
 
+    if shared_requested is not None:
+        for row in shared_links:
+            if row.grupo_id not in shared_requested:
+                db.delete(row)
+        previous_ids = {str(row.grupo_id) for row in shared_links}
+        for group_id in shared_requested - previous_ids:
+            db.add(ProdutoFamiliaGrupoModificador(
+                restaurante_id=tenant, familia_id=existing.id, grupo_id=group_id,
+            ))
     db.flush()
     members = db.query(Produto).filter(
         Produto.restaurante_id == tenant, Produto.familia_id == existing.id,
     ).all()
     response = _family_response(existing, members)
+    if shared_requested is not None:
+        response["grupo_ids"] = sorted(shared_requested)
     db.commit()
     return response
 
