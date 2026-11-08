@@ -194,3 +194,42 @@ export function getPairingRecommendations({
     return true;
   }).slice(0, limit);
 }
+
+/** Ordered tenant picks have priority in the cart. No duplicate family,
+ * unavailable SKU, already bought item or guessed price can slip in. */
+export function getCartRecommendationCandidates({
+  catalog,
+  cartProductIds = [],
+  curatedProductIds = [],
+  limit = 12,
+}: {
+  catalog: Product[];
+  cartProductIds?: (string | number)[];
+  curatedProductIds?: string[];
+  limit?: number;
+}): Product[] {
+  if (limit <= 0 || catalog.length === 0) return [];
+  const cartIds = new Set(cartProductIds.map(String));
+  const familiesInCart = new Set(catalog
+    .filter(product => cartIds.has(String(product.id)) && product.familia_id)
+    .map(product => product.familia_id));
+  const eligible = (product: Product) =>
+    product.isAvailable !== false
+    && !cartIds.has(String(product.id))
+    && (!product.familia_id || !familiesInCart.has(product.familia_id));
+
+  if (curatedProductIds.length) {
+    const catalogById = new Map(catalog.map(product => [String(product.id), product]));
+    const seen = new Set<string>();
+    return curatedProductIds.flatMap(id => {
+      const product = catalogById.get(String(id));
+      if (!product || !eligible(product) || seen.has(String(product.id))) return [];
+      seen.add(String(product.id));
+      return [product];
+    }).slice(0, limit);
+  }
+
+  return getPairingRecommendations({
+    catalog, cartProductIds, limit: catalog.length, excludeCartItems: true,
+  }).filter(eligible).slice(0, limit);
+}
