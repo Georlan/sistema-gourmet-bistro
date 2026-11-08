@@ -38,6 +38,16 @@ interface Props {
   cardapioAtivoNome?: string | null;
 }
 
+interface ProductCustomizationGroup {
+  id: string;
+  nome: string;
+  min_selecoes: number;
+  max_selecoes: number;
+  opcoes: { id: string; nome: string; preco_adicional: number; ativo: boolean }[];
+  produto_ids: string[];
+  categoria_ids: string[];
+}
+
 const PRODUCT_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
 const PRODUCT_IMAGE_MAX_SIZE = MAX_IMAGE_UPLOAD_SOURCE_BYTES;
 
@@ -101,6 +111,13 @@ export default function CashierCatalog({
   const [prodFormAtivo, setProdFormAtivo] = useState(true);
   const [prodFormSomentePromocao, setProdFormSomentePromocao] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [customizationGroups, setCustomizationGroups] = useState<ProductCustomizationGroup[]>([]);
+  const [selectedCustomizationIds, setSelectedCustomizationIds] = useState<string[]>([]);
+  const [previousCustomizationIds, setPreviousCustomizationIds] = useState<string[]>([]);
+  const [inheritedCustomizationIds, setInheritedCustomizationIds] = useState<string[]>([]);
+  const [loadingCustomizations, setLoadingCustomizations] = useState(false);
+  const [customizationError, setCustomizationError] = useState('');
+  const [customizationsLoaded, setCustomizationsLoaded] = useState(false);
 
   const [selectedCardapioId, setSelectedCardapioId] = useState<string | null>(
     () => cardapioAtivoId || (cardapios && cardapios.length > 0 ? cardapios[0].id : null),
@@ -115,6 +132,37 @@ export default function CashierCatalog({
       }
     }
   }, [cardapios, cardapioAtivoId]);
+
+  // Carrega os grupos quando o editor é aberto. Não altera regras por categoria:
+  // só os vínculos explícitos deste produto são editáveis.
+  useEffect(() => {
+    if (!showProductModal || isMarmitaria) return;
+    let cancelled = false;
+    setLoadingCustomizations(true);
+    setCustomizationsLoaded(false);
+    setCustomizationError('');
+    const headers = authorization ? { Authorization: authorization } : authHeaders;
+    const requests: Promise<Response>[] = [
+      fetch(`${apiBaseUrl}/cardapio/modificadores/grupos`, { headers }),
+    ];
+    if (editingProduct?.id) {
+      requests.push(fetch(`${apiBaseUrl}/produtos/${encodeURIComponent(editingProduct.id)}/personalizacoes`, { headers }));
+    }
+    Promise.all(requests).then(async responses => {
+      if (!responses.every(response => response.ok)) throw new Error('Não foi possível carregar as personalizações.');
+      const [groups, links] = await Promise.all(responses.map(response => response.json()));
+      if (cancelled) return;
+      setCustomizationGroups(Array.isArray(groups) ? groups : []);
+      setPreviousCustomizationIds(links?.grupos_diretos || []);
+      setSelectedCustomizationIds(links?.grupos_diretos || []);
+      setInheritedCustomizationIds(links?.grupos_herdados || []);
+      setCustomizationsLoaded(true);
+    }).catch(error => {
+      if (!cancelled) setCustomizationError(error instanceof Error ? error.message : 'Erro ao carregar personalizações.');
+    }).finally(() => { if (!cancelled) setLoadingCustomizations(false); });
+    return () => { cancelled = true; };
+    // A autorização é a identidade de leitura; mudanças no formulário não disparam novas consultas.
+  }, [showProductModal, editingProduct?.id, apiBaseUrl, authorization, isMarmitaria]);
 
   const handlePublishCardapio = async (targetMenuId: string, targetMenuNome: string) => {
     if (isPublishingMenu) return;
@@ -595,6 +643,41 @@ export default function CashierCatalog({
                     savedProduct.id || editingProduct?.id || prodFormId.trim() || suggestedProductCode,
                   );
 
+                  // Um cadastro, dois recursos: o SKU é salvo primeiro; os vínculos
+                  // diretos são atualizados com verificação de concorrência.
+                  // Se a segunda etapa falhar, mantemos o editor aberto e editamos
+                  // o produto recém-criado, evitando criar uma duplicata no retry.
+                  const selected = [...selectedCustomizationIds].sort();
+                  const previous = [...previousCustomizationIds].sort();
+                  const changedLinks = customizationsLoaded
+                    && (selected.length !== previous.length
+                      || selected.some((id, index) => id !== previous[index]));
+                  if (changedLinks) {
+                    const linkResponse = await fetch(
+                      `${apiBaseUrl}/produtos/${encodeURIComponent(savedProductId)}/personalizacoes`,
+                      {
+                        method: 'PUT',
+                        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          grupo_ids: selected,
+                          grupos_diretos_anteriores: previous,
+                        }),
+                      },
+                    );
+                    if (!linkResponse.ok) {
+                      const errorPayload = await linkResponse.json().catch(() => ({}));
+                      setEditingProduct(savedProduct);
+                      setProdFormId(savedProductId);
+                      await fetchProdutos();
+                      showToast(
+                        `Produto salvo, mas as personalizações não foram vinculadas: ${errorPayload.detail || 'Reabra o cadastro e tente novamente.'}`,
+                        'error',
+                      );
+                      return;
+                    }
+                    setPreviousCustomizationIds(selected);
+                  }
+
                   if (preparedImage) {
                     const formData = new FormData();
                     formData.append('file', preparedImage);
@@ -934,6 +1017,59 @@ export default function CashierCatalog({
                   }}
                 />
               </section>
+
+              {!isMarmitaria && (
+                <section aria-label="Personalizações deste produto" className="space-y-3 rounded-xl border border-koma-border bg-koma-panel p-3">
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-bold text-koma-foreground">O cliente pode personalizar?</h4>
+                    <p className="text-xs text-koma-muted">
+                      Escolha o que aparece neste produto. Opções a R$ 0 já estão incluídas no preço;
+                      adicionais pagos somam ao total. Tamanhos e sabores são variações do produto, não adicionais.
+                    </p>
+                  </div>
+                  {loadingCustomizations && <p className="text-xs text-koma-muted">Carregando escolhas e adicionais…</p>}
+                  {customizationError && <p role="alert" className="text-xs text-rose-400">{customizationError} O produto pode ser salvo sem alterar seus vínculos.</p>}
+                  {!loadingCustomizations && customizationsLoaded && customizationGroups.length === 0 && (
+                    <p className="text-xs text-koma-muted">Ainda não há escolhas cadastradas. Crie grupos reutilizáveis na aba Complementos.</p>
+                  )}
+                  {customizationsLoaded && (
+                    <div className="space-y-2">
+                      {customizationGroups.map(group => {
+                        const inherited = inheritedCustomizationIds.includes(group.id);
+                        const selected = selectedCustomizationIds.includes(group.id);
+                        const anyPaid = group.opcoes.some(option => option.ativo !== false && Number(option.preco_adicional) > 0);
+                        return (
+                          <label key={group.id} className="flex min-h-12 items-start gap-3 rounded-xl border border-koma-border bg-koma-card px-3 py-2.5 text-xs cursor-pointer">
+                            <input
+                              type="checkbox"
+                              className="mt-0.5"
+                              checked={selected || inherited}
+                              disabled={isLoading || inherited}
+                              onChange={event => setSelectedCustomizationIds(ids =>
+                                event.target.checked ? [...ids, group.id] : ids.filter(id => id !== group.id)
+                              )}
+                              aria-label={`Associar ${group.nome} ao produto`}
+                            />
+                            <span className="min-w-0 space-y-1">
+                              <strong className="block text-koma-foreground">{group.nome}</strong>
+                              <span className="block text-koma-muted">
+                                {anyPaid ? 'Contém adicionais pagos' : 'Escolhas incluídas no preço'}
+                                {' · '}
+                                {group.min_selecoes > 0 ? 'Obrigatória' : 'Opcional'}
+                              </span>
+                              <span className="block text-koma-secondary leading-relaxed">
+                                {inherited ? 'Já vinculada pela categoria — altere em Complementos.' :
+                                  group.opcoes.filter(option => option.ativo !== false).slice(0,4).map(option => option.nome).join(', ') || 'Sem opções disponíveis'}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <p className="text-[11px] text-koma-muted">Para criar novas escolhas ou definir limites de múltiplas seleções, use Cardápio → Complementos.</p>
+                </section>
+              )}
 
               <div className="flex items-center justify-between gap-3 rounded-xl border border-koma-border bg-koma-panel p-3">
                 <span>
