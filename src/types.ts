@@ -14,6 +14,7 @@ export interface Product {
   familia_descricao?: string | null;
   familia_eixo?: 'tamanho' | 'sabor' | 'outra' | null;
   familia_imagem?: string | null;
+  familia_variantes?: number;
   variacao_rotulo?: string | null;
   somente_promocao?: boolean;
   preco: number;
