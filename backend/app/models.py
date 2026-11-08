@@ -1175,6 +1175,9 @@ class ConfiguracaoRestaurante(Base):
     tabela_taxas_km = Column(JSON, default=list)
     # Campanhas por restaurante; componentes referenciam os produtos reais.
     promocoes = Column(JSON, nullable=False, default=list, server_default="[]")
+    # Optional ordered SKU IDs curated by the tenant for public cart suggestions.
+    # NULL/empty means automatic recommendations; no product data is duplicated.
+    recomendacoes_sacola_ids = Column(JSON, nullable=True)
     taxa_servico_ativa = Column(Boolean, default=True)
     taxa_servico_padrao = Column(Float, default=10.0)
     meta_mensal = Column(Numeric(14, 2, asdecimal=False), default=0.0)
