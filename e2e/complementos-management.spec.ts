@@ -194,7 +194,7 @@ test('o dono diferencia escolhas incluídas de adicionais pagos sem mexer em reg
     max_selecoes: 1,
     opcoes: [{ nome: 'Mal passado', preco_adicional: 0, ativo: true }],
   });
-  await expect(page.getByText('Escolhas incluídas no preço')).toBeVisible();
+  await expect(page.getByText('Escolhas incluídas no preço · Seleção obrigatória', { exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Novo Grupo', exact: true }).click();
   await dialog.getByLabel('Nome do Grupo').fill('Extras do hambúrguer');
@@ -208,5 +208,5 @@ test('o dono diferencia escolhas incluídas de adicionais pagos sem mexer em reg
     max_selecoes: 1,
     opcoes: [{ nome: 'Bacon extra', preco_adicional: 2, ativo: true }],
   });
-  await expect(page.getByText('Adicionais pagos', { exact: true })).toBeVisible();
+  await expect(page.getByText('Adicionais pagos · Seleção opcional', { exact: true })).toBeVisible();
 });
