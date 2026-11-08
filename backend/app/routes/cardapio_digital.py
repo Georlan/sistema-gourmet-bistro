@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session, load_only, raiseload, lazyload
 
 from ..promotions import active_promotions, money, promotion_status
 from ..catalog_addons import effective_modifier_payloads_by_product
+from ..services.catalog_family_metadata import family_metadata_for_products
 from ..marmitaria_catalog import enabled as marmitaria_enabled, size_category
 from ..restaurant_profile_models import RestauranteOperationProfile
 from ..services.customer_whatsapp_dispatch import customer_notices_enabled, customer_notice_transport_config
@@ -321,7 +322,10 @@ def _public_category_payload(category: Categoria) -> dict:
     }
 
 
-def _public_product_payload(product: Produto, modifier_groups: Optional[list[dict]] = None, *, marmitaria: bool = False) -> dict:
+def _public_product_payload(
+    product: Produto, modifier_groups: Optional[list[dict]] = None,
+    *, marmitaria: bool = False, family_metadata: dict | None = None,
+) -> dict:
     return {
         "id": product.id,
         "nome": product.nome,
@@ -334,6 +338,9 @@ def _public_product_payload(product: Produto, modifier_groups: Optional[list[dic
         "grupos_modificadores": modifier_groups or [],
         "marmitaria": marmitaria,
         "ordem_exibicao": product.ordem_exibicao,
+        "familia_id": product.familia_id,
+        "variacao_rotulo": product.variacao_rotulo,
+        **(family_metadata or {}),
     }
 
 
@@ -410,6 +417,7 @@ def obter_produtos_cardapio_digital(
         produtos = prod_query.all()
         produtos = _ordered_products(produtos)
         modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
+        family_metadata = family_metadata_for_products(db, rest_id, produtos)
         is_marmitaria_tenant = marmitaria_enabled(db, rest_id)
         categorias = db.query(Categoria).filter(Categoria.restaurante_id == rest_id).all()
         categories_by_id = {cat.id: cat for cat in categorias}
@@ -428,6 +436,7 @@ def obter_produtos_cardapio_digital(
                     product,
                     modifier_payloads.get(str(product.id), []),
                     marmitaria=is_product_marmita(product),
+                    family_metadata=family_metadata.get(str(product.id)),
                 ),
                 "ativo": True,
             }
@@ -470,6 +479,7 @@ def obter_cardapio_publico(
         produtos = prod_query.all()
         produtos = _ordered_products(produtos)
         modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, produtos)
+        family_metadata = family_metadata_for_products(db, rest_id, produtos)
         profile_key = db.query(RestauranteOperationProfile.profile_key).filter(
             RestauranteOperationProfile.restaurante_id == rest_id,
         ).scalar()
@@ -521,6 +531,7 @@ def obter_cardapio_publico(
                     product,
                     modifier_payloads.get(str(product.id), []),
                     marmitaria=is_product_marmita(product),
+                    family_metadata=family_metadata.get(str(product.id)),
                 )
                 for product in products_regular
             ],
@@ -529,6 +540,7 @@ def obter_cardapio_publico(
                     product,
                     modifier_payloads.get(str(product.id), []),
                     marmitaria=is_product_marmita(product),
+                    family_metadata=family_metadata.get(str(product.id)),
                 ) for product in exclusive_parts
             ],
             "promocoes": active_offers,
