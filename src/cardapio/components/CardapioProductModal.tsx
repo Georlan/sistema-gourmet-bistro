@@ -117,7 +117,15 @@ export default function CardapioProductModal({
   }, [isGrouped, product, selectedVariantId, requiresExplicitVariant]);
   const needsVariantSelection = requiresExplicitVariant && !activeVariant;
 
-  const effectiveProduct: Product = activeVariant ? activeVariant.product : (product as Product);
+  // A family may have one commercial photo; switching the sellable SKU
+  // must not blank the customer's image when that SKU has no separate photo.
+  const effectiveProduct: Product = activeVariant ? {
+    ...activeVariant.product,
+    image: activeVariant.product.image || product.image,
+    imagesGallery: (activeVariant.product.imagesGallery || []).some(Boolean)
+      ? activeVariant.product.imagesGallery
+      : [product.image].filter(Boolean),
+  } : (product as Product);
 
   const groupRefs = useRef(new Map<string, HTMLElement>());
   const [quantity, setQuantity] = useState(1);
