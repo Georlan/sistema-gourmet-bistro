@@ -414,12 +414,15 @@ export default function CardapioCartDrawer({
       .filter((item) => item.isAvailable !== false);
   }, [allProducts, cart, restaurantId, brandConfig?.cartRecommendationSkuIds]);
 
-  const emptyCartSuggestions = useMemo(() => resolvePairingDisplay(
-    allProducts,
-    allProducts.filter((product) => product.isAvailable !== false),
-    restaurantId,
-    3,
-  ).filter((item) => item.isAvailable !== false), [allProducts, restaurantId]);
+  const emptyCartSuggestions = useMemo(() => {
+    const manualIds = brandConfig?.cartRecommendationSkuIds;
+    const candidates = manualIds?.length
+      ? manualIds.map((skuId) => allProducts.find((product) => String(product.id) === skuId))
+        .filter((product): product is Product => Boolean(product && product.isAvailable !== false))
+      : allProducts.filter((product) => product.isAvailable !== false);
+    return resolvePairingDisplay(allProducts, candidates, restaurantId, 3)
+      .filter((item) => item.isAvailable !== false);
+  }, [allProducts, restaurantId, brandConfig?.cartRecommendationSkuIds]);
 
   const upsellHeading = useMemo(() => {
     const types = new Set(upsellSuggestions.map(classifyProduct));
