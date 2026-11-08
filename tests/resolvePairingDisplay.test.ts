@@ -75,3 +75,24 @@ test('sem agrupamento, recomendação de outro restaurante continua individual',
   ];
   assert.deepEqual(resolvePairingDisplay(catalog, catalog, '2').map(p => p.id), ['a', 'b']);
 });
+
+
+test('famílias nativas permanecem um único card nas recomendações sem perder SKU ou preço', () => {
+  const a = { ...product('b200', 'Batata Tradicional 200g', 'Batatas Fritas', 12),
+    familia_id: 'f-batatas', familia_nome: 'Batata Tradicional', variacao_rotulo: '200 g', familia_eixo: 'tamanho' as const };
+  const b = { ...product('b400', 'Batata Tradicional 400g', 'Batatas Fritas', 18),
+    familia_id: 'f-batatas', familia_nome: 'Batata Tradicional', variacao_rotulo: '400 g', familia_eixo: 'tamanho' as const };
+  const third = product('agua', 'Água mineral', 'Bebidas', 4);
+  const items = resolvePairingDisplay([a, b, third], [b, a, third], '6', 3);
+  assert.deepEqual(items.map(p => p.id), ['family-f-batatas', 'agua']);
+  assert.ok(isGroupedProduct(items[0]));
+  if (!isGroupedProduct(items[0])) return;
+  assert.equal(items[0].requiresExplicitVariantSelection, true);
+  assert.equal(items[0].price, 12);
+  assert.equal(items[0].hasVariablePrice, true);
+  assert.deepEqual(items[0].variants.map(v => [v.id, v.price, v.label, v.product.id]), [
+    ['b200', 12, '200 g', 'b200'],
+    ['b400', 18, '400 g', 'b400'],
+  ]);
+  assert.equal(resolveCatalogDisplayProduct([a, b, third], b, '6').id, items[0].id);
+});

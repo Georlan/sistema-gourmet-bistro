@@ -21,6 +21,40 @@ async function menu(page:Page, mutate?:(payload:any)=>void, rankingGate?:Promise
   return {payload,orders,rankingRequests:()=>rankingRequests};
 }
 
+
+test('sacola usa o mesmo card de família nativa, exige tamanho e conserva preço por SKU', async ({ page }) => {
+  await menu(page, payload => {
+    payload.categorias.push({ id: 30, nome: 'Batatas Fritas' });
+    payload.produtos.push(
+      { id: 'b200', nome: 'Batata Tradicional 200g', descricao: 'Porção de 200 g', preco: 12,
+        categoria_id: 30, imagem_url: '', familia_id: 'f-batatas',
+        familia_nome: 'Batata Tradicional', familia_eixo: 'tamanho', variacao_rotulo: '200 g',
+        grupos_modificadores: [] },
+      { id: 'b400', nome: 'Batata Tradicional 400g', descricao: 'Porção de 400 g', preco: 18,
+        categoria_id: 30, imagem_url: '', familia_id: 'f-batatas',
+        familia_nome: 'Batata Tradicional', familia_eixo: 'tamanho', variacao_rotulo: '400 g',
+        grupos_modificadores: [] },
+    );
+  });
+  await page.locator('#btn-fast-add-301').click();
+  await page.locator('#btn-cart-header').click();
+  const cart = page.locator('#cart-drawer-container');
+  await expect(cart).toBeVisible();
+  const family = cart.locator('#upsell-card-family-f-batatas');
+  await expect(family).toBeVisible();
+  await expect(family).toContainText('Batata Tradicional');
+  await expect(family).toContainText('A partir de R$ 12,00');
+  await expect(cart.locator('#upsell-card-b200')).toHaveCount(0);
+  await expect(cart.locator('#upsell-card-b400')).toHaveCount(0);
+  await family.locator('#btn-upsell-add-family-f-batatas').click();
+  const modal = page.locator('#product-details-modal');
+  await expect(modal).toBeVisible();
+  await modal.locator('#btn-add-to-cart-action').click();
+  await expect(modal).toContainText('Escolha o tamanho antes de adicionar');
+  await modal.locator('#variant-btn-b400').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 18,00');
+});
+
 test('logo da loja mantém avatar circular sem moldura branca no cabeçalho e no painel', async ({ page }) => {
   const logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#101010"/><circle cx="32" cy="32" r="24" fill="#ffd12b"/></svg>';
   await menu(page, payload => {
