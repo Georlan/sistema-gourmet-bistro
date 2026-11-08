@@ -65,6 +65,32 @@ test('link de rota usa Google Maps quando cadastrado somente o Plus Code', async
   await expect(mapsLink).toHaveAttribute('target', '_blank');
 });
 
+test('família nativa funciona para qualquer restaurante e categoria sem hardcode', async ({ page }) => {
+  await menu(page, payload => {
+    payload.restaurante.id = 2;
+    payload.categorias.push({ id: 70, nome: 'Alimentos Personalizados' });
+    payload.produtos.push(
+      { id: 'sku-a', nome: 'Versão A', descricao: 'Porção A', preco: 9, categoria_id: 70, imagem_url: '',
+        familia_id: 'family-universal', familia_nome: 'Oferta da Casa', familia_descricao: 'Escolha o tamanho',
+        familia_eixo: 'tamanho', variacao_rotulo: 'Pequena', grupos_modificadores: [] },
+      { id: 'sku-b', nome: 'Outro nome', descricao: 'Porção B', preco: 14, categoria_id: 70, imagem_url: '',
+        familia_id: 'family-universal', familia_nome: 'Oferta da Casa', familia_descricao: 'Escolha o tamanho',
+        familia_eixo: 'tamanho', variacao_rotulo: 'Grande', grupos_modificadores: [] },
+    );
+  });
+  const category = page.locator('[data-menu-category="Alimentos Personalizados"]');
+  await expect(category.locator('[id^="product-card-"]')).toHaveCount(1);
+  await category.locator('#product-card-family-family-universal').click();
+  const modal = page.locator('#product-details-modal');
+  await expect(modal).toContainText('Oferta da Casa');
+  await expect(modal.locator('#variant-btn-sku-a')).toContainText('Pequena');
+  await expect(modal.locator('#variant-btn-sku-b')).toContainText('Grande');
+  await modal.locator('#btn-add-to-cart-action').click();
+  await expect(modal).toContainText('Escolha o tamanho antes de adicionar');
+  await modal.locator('#variant-btn-sku-b').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 14,00');
+});
+
 test('batata tradicional usa um único card com tamanho obrigatório na categoria e na sugestão', async ({ page }) => {
   await menu(page, payload => {
     payload.restaurante.id = 1;
