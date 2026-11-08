@@ -262,6 +262,32 @@ export default function CashierCatalog({
     finally { setIsPublishingMenu(false); }
   };
 
+  const [familyLabels, setFamilyLabels] = useState<Record<string, string>>({});
+  // Reuse the family API that already powers the editor. Fetch only for
+  // native families; the legacy JE catalog stays unchanged until T6.
+  useEffect(() => {
+    if (activeSubTab !== 'produtos' || isMarmitaria) return;
+    if (!apiProdutos.some((product) => Boolean(product.familia_id))) {
+      setFamilyLabels({});
+      return;
+    }
+    let cancelled = false;
+    const headers = authorization ? { Authorization: authorization } : authHeaders;
+    fetch(`${apiBaseUrl}/produto-familias`, { headers })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Famílias indisponíveis.');
+        const families = await response.json() as CatalogProductFamily[];
+        if (!cancelled) setFamilyLabels(Object.fromEntries(
+          families.map((family) => [family.id, family.nome]),
+        ));
+      })
+      .catch(() => {
+        if (!cancelled) setFamilyLabels({});
+      });
+    return () => { cancelled = true; };
+    // Refreshing the canonical catalog also refreshes the family labels.
+  }, [activeSubTab, apiBaseUrl, apiProdutos, authorization, isMarmitaria]);
+
   const displayedProdutos = useMemo(() => {
     if (!cardapios || cardapios.length === 0 || !selectedCardapioId) {
       return apiProdutos;
@@ -458,6 +484,7 @@ export default function CashierCatalog({
           <CardapioProdutosTab
             produtos={displayedProdutos}
             categorias={apiCategorias}
+            familyLabels={familyLabels}
             promotionsConfig={{ apiBaseUrl, authHeaders }}
             catalogReady={catalogReady || apiProdutos.length > 0 || apiCategorias.length > 0}
             previewUrl={

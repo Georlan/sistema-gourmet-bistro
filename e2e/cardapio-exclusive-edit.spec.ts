@@ -160,10 +160,16 @@ test('editar variante existente abre a família e preserva IDs dos sabores', asy
     } });
   });
   await page.goto('/?view=caixa');
-  const card = page.locator('article').filter({
-    has: page.getByRole('heading', { name: 'Pastel Carne', exact: true }),
-  });
-  await card.getByRole('button', { name: 'Editar', exact: true }).click();
+  const card = page.locator('article[data-family-id="pastel-family"]');
+  await expect(card).toHaveCount(1);
+  await expect(card.getByRole('heading', { name: 'Pastel Médio', exact: true })).toBeVisible();
+  await expect(card).toContainText('Carne Moída');
+  await expect(card).toContainText('Queijo');
+  await expect(card).toContainText('R$ 7,00');
+  await expect(card).toContainText('R$ 8,00');
+  // No destructive single-SKU controls on a family card.
+  await expect(card.getByRole('button', { name: 'Excluir', exact: true })).toHaveCount(0);
+  await card.getByRole('button', { name: 'Editar variações de Pastel Médio' }).click();
   const dialog = page.getByRole('dialog', { name: 'Editar produto' });
   await dialog.getByRole('tab', { name: 'Variações' }).click();
   await expect(dialog.getByRole('textbox', { name: 'Nome da opção 2' })).toHaveValue('Queijo');
@@ -174,6 +180,11 @@ test('editar variante existente abre a família e preserva IDs dos sabores', asy
     ['pastel-carne', 7], ['pastel-queijo', 9],
   ]);
   await expect(dialog).toHaveCount(0);
+  // Batch mode still works with individual SKUs, not synthetic family IDs.
+  await page.getByRole('button', { name: 'Selecionar produtos' }).click();
+  await expect(page.locator('article[data-family-id="pastel-family"]')).toHaveCount(0);
+  await expect(page.getByRole('checkbox', { name: 'Selecionar Pastel Carne' })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: 'Selecionar Pastel Queijo' })).toBeVisible();
 });
 
 
