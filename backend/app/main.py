@@ -484,6 +484,8 @@ app.include_router(auth.router)
 from .routes import password_recovery
 app.include_router(password_recovery.router)
 app.include_router(products.router)
+from .routes import product_families
+app.include_router(product_families.router)
 app.include_router(atendimentos.router)
 app.include_router(atendimento_printing.router)
 app.include_router(tables.router)

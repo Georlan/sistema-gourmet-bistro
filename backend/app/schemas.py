@@ -197,6 +197,8 @@ class ProdutoUpdate(BaseModel):
     ordem_exibicao: Optional[int] = None
 
 class ProdutoResponse(ProdutoBase):
+    familia_id: Optional[str] = None
+    variacao_rotulo: Optional[str] = None
     marmitaria_tamanho: Optional[str] = None
     categoria: Optional[CategoriaResponse] = None
     model_config = ConfigDict(from_attributes=True)
@@ -1008,6 +1010,12 @@ class CardapioPublicCategoryResponse(BaseModel):
 
 
 class CardapioPublicProductResponse(BaseModel):
+    familia_id: Optional[str] = None
+    familia_nome: Optional[str] = None
+    familia_descricao: Optional[str] = None
+    familia_eixo: Optional[str] = None
+    familia_imagem: Optional[str] = None
+    variacao_rotulo: Optional[str] = None
     marmitaria: bool = False
     id: str
     nome: str

@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional, Union, Literal
 from ..catalog_addons import effective_modifier_payloads_by_product
+from ..services.catalog_family_metadata import family_metadata_for_products
 from ..catalog_ordering import (
     LEGACY_CATEGORY_DISPLAY_ORDER as CATEGORY_DISPLAY_ORDER,
     ordered_categories,
@@ -167,9 +168,14 @@ class EdicaoLoteResponse(BaseModel):
     categoria_id: Optional[str] = None
 
 
-def _serialize_product_with_modifiers(product: Produto, modifier_payloads: dict[str, list[dict]]) -> dict:
+def _serialize_product_with_modifiers(
+    product: Produto, modifier_payloads: dict[str, list[dict]],
+    family_metadata: dict[str, dict] | None = None,
+) -> dict:
     payload = ProdutoResponse.model_validate(product).model_dump()
     payload["grupos_modificadores"] = modifier_payloads.get(str(product.id), [])
+    if family_metadata:
+        payload.update(family_metadata.get(str(product.id), {}))
     return payload
 
 
@@ -387,7 +393,8 @@ def get_produtos(db: Session = Depends(get_db), current_user: Usuario = Depends(
     )
     products = ordered_products(products)
     modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, products)
-    return [_serialize_product_with_modifiers(product, modifier_payloads) for product in products]
+    family_metadata = family_metadata_for_products(db, rest_id, products)
+    return [_serialize_product_with_modifiers(product, modifier_payloads, family_metadata) for product in products]
 
 @router.get("/catalogo", response_model=CatalogoResponse)
 def get_catalogo(
@@ -412,6 +419,7 @@ def get_catalogo(
     )
     products = ordered_products(products)
     modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, products)
+    family_metadata = family_metadata_for_products(db, rest_id, products)
     config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == rest_id).first()
     cardapios = (
         db.query(Cardapio)
@@ -425,7 +433,7 @@ def get_catalogo(
     return {
         "categorias": categorias,
         "produtos": [
-            _serialize_product_with_modifiers(product, modifier_payloads)
+            _serialize_product_with_modifiers(product, modifier_payloads, family_metadata)
             for product in products
         ],
         "cardapio_ativo_id": cardapio_ativo_id,
@@ -600,6 +608,8 @@ def move_produto_cardapio(
     ).first()
     if not produto:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Produto não encontrado.")
+    if produto.familia_id:
+        raise HTTPException(status_code=409, detail="Mova a família inteira, não uma variante isolada.")
 
     if data.cardapio_id:
         cardapio = db.query(Cardapio).filter(
@@ -942,6 +952,8 @@ def update_produto(
         )
 
     data = update_data.model_dump(exclude_unset=True)
+    if db_produto.familia_id and any(key in data for key in ("categoria_id", "cardapio_id", "somente_promocao")):
+        raise HTTPException(409, "As variantes usam categoria e cardápio comuns. Edite a família.")
     if "imagem" in data or "imagens_galeria" in data:
         clean_img, clean_gal = _validate_product_media_fields(
             rest_id,

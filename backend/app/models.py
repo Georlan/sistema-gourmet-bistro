@@ -228,6 +228,36 @@ class Categoria(Base):
     observacoes_predefinidas = relationship("ObservacaoPredefinida", back_populates="categoria")
 
 
+class ProdutoFamilia(Base):
+    """One visual offer containing purchasable SKUs, scoped to one tenant."""
+
+    __tablename__ = "produto_familias"
+    __table_args__ = (
+        UniqueConstraint("restaurante_id", "id", name="uq_produto_familias_tenant_id"),
+        ForeignKeyConstraint(
+            ["restaurante_id", "categoria_id"],
+            ["categorias.restaurante_id", "categorias.id"],
+            name="fk_produto_familias_categoria_tenant",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["restaurante_id", "cardapio_id"],
+            ["cardapios.restaurante_id", "cardapios.id"],
+            name="fk_produto_familias_cardapio_tenant",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("eixo IN ('tamanho', 'sabor', 'outra')", name="ck_produto_familias_eixo"),
+    )
+    id = Column(String(36), primary_key=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="RESTRICT"), default=lambda: current_restaurante_id.get(), nullable=False)
+    nome = Column(String(160), nullable=False)
+    descricao = Column(Text, nullable=False, default="")
+    eixo = Column(String(20), nullable=False)
+    categoria_id = Column(String, nullable=False)
+    cardapio_id = Column(String(36), nullable=True)
+    imagem = Column(Text, nullable=False, default="")
+
+
 class Produto(Base):
     __tablename__ = "produtos"
     __table_args__ = (
@@ -244,6 +274,21 @@ class Produto(Base):
             ['cardapios.restaurante_id', 'cardapios.id'],
             name='fk_produtos_cardapio_tenant',
             ondelete='SET NULL',
+        ),
+        ForeignKeyConstraint(
+            ['restaurante_id', 'familia_id'],
+            ['produto_familias.restaurante_id', 'produto_familias.id'],
+            name='fk_produtos_familia_tenant',
+            ondelete='RESTRICT',
+        ),
+        CheckConstraint(
+            "(familia_id IS NULL AND variacao_rotulo IS NULL) OR "
+            "(familia_id IS NOT NULL AND variacao_rotulo IS NOT NULL AND length(trim(variacao_rotulo)) > 0)",
+            name="ck_produtos_familia_rotulo",
+        ),
+        Index(
+            "uq_produtos_tenant_familia_rotulo",
+            "restaurante_id", "familia_id", "variacao_rotulo", unique=True,
         ),
         CheckConstraint(
             "preco >= 0",
@@ -274,6 +319,8 @@ class Produto(Base):
     ativo = Column(Boolean, default=True)  # Toggle product availability
     somente_promocao = Column(Boolean, nullable=False, default=False, server_default='false')
     ordem_exibicao = Column(Integer, nullable=True, default=None)
+    familia_id = Column(String(36), nullable=True)
+    variacao_rotulo = Column(String(100), nullable=True)
     
     # Relationships
     categoria = relationship("Categoria", back_populates="produtos")
