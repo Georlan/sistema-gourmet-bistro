@@ -130,3 +130,45 @@ def test_stale_edits_and_foreign_groups_cannot_change_family_links(menu):
     assert foreign.value.status_code == 422
     assert get_family_personalizations(family_id, db=db, current_user=object())["grupo_ids"] == ["molhos"]
     assert db.query(ProdutoFamiliaGrupoModificador).filter_by(restaurante_id=92).count() == 0
+
+
+def test_one_save_creates_family_skus_and_shared_groups_atomically(menu):
+    db, _ = menu
+    original_count = db.query(ProdutoFamiliaGrupoModificador).filter_by(restaurante_id=91).count()
+    response = _write_family(db, 91, FamilyWrite(
+        nome="Batatas", categoria_id="pasteis-91", eixo="tamanho",
+        variantes=[{"rotulo": "300 g", "preco": "15.00"}, {"rotulo": "400 g", "preco": "18.00"}],
+        grupo_ids=["molhos"], grupos_anteriores=[],
+    ), None)
+    assert response["grupo_ids"] == ["molhos"]
+    assert {variant["preco"] for variant in response["variantes"]} == {15, 18}
+    assert db.query(ProdutoFamiliaGrupoModificador).filter_by(restaurante_id=91).count() == original_count + 1
+
+    with pytest.raises(HTTPException) as invalid:
+        _write_family(db, 91, FamilyWrite(
+            nome="Pastel inválido", categoria_id="pasteis-91", eixo="sabor",
+            variantes=[{"rotulo": "Carne", "preco": "7.00"}],
+            grupo_ids=["outro-tenant"], grupos_anteriores=[],
+        ), None)
+    assert invalid.value.status_code == 422
+    # Validation precedes the family insert; no partial new records exist.
+    assert db.query(Produto).filter_by(restaurante_id=91).count() == 4
+
+
+def test_atomic_family_edit_checks_shared_group_snapshot(menu):
+    db, family_id = menu
+    save_groups(db, family_id, ["molhos"])
+    from app.models import ProdutoFamilia
+    family_record = db.query(ProdutoFamilia).filter_by(id=family_id, restaurante_id=91).one()
+    with pytest.raises(HTTPException) as stale:
+        _write_family(db, 91, FamilyWrite(
+            nome="Pastel renomeado", categoria_id="pasteis-91", eixo="sabor",
+            variantes=[
+                {"produto_id": "pastel-carne", "rotulo": "Carne de Sol", "preco": "9.00"},
+                {"produto_id": "pastel-queijo", "rotulo": "Queijo", "preco": "8.00"},
+            ],
+            grupo_ids=[], grupos_anteriores=[],
+        ), family_record)
+    assert stale.value.status_code == 409
+    assert db.query(Produto).filter_by(id="pastel-carne").one().preco == 7
+    assert db.query(ProdutoFamilia).filter_by(id=family_id).one().nome == "Pastel Médio"
