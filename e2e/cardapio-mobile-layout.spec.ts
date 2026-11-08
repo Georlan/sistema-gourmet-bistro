@@ -134,7 +134,10 @@ test('contato, Instagram e compartilhar permanecem acessíveis no cabeçalho mob
 });
 
 
-test('vitrine padrão do JE mantém contato e compartilhar visíveis no mobile artístico', async ({ page }) => {
+test('vitrine padrão do JE mantém contato e compartilhar visíveis no mobile artístico', async ({ page }, testInfo) => {
+  // This case already changes viewport through a full width matrix; run it
+  // once rather than repeating the same matrix in all nine Playwright projects.
+  test.skip(testInfo.project.name !== 'mobile-390', 'Width matrix covered by mobile-390');
   await page.routeWebSocket('**/ws/**', () => {});
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'share', {
