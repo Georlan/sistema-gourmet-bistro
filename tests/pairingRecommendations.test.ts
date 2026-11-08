@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   classifyProduct,
   getPairingRecommendations,
+  getCartRecommendationCandidates,
 } from '../src/cardapio/pairingRecommendations';
 import type { Product } from '../src/cardapio/CardapioTypes';
 
@@ -246,4 +247,38 @@ test('getPairingRecommendations diversifica sabores e nao recomenda multiplos su
   const names = recs.map((r) => r.name);
   assert.ok(names.some((n) => n.startsWith('suco')));
   assert.ok(names.some((n) => n.startsWith('refrigerante')));
+});
+
+
+test('escolha manual na sacola respeita prioridade, disponibilidade e itens já comprados', () => {
+  const picks = getCartRecommendationCandidates({
+    catalog: mockCatalog,
+    curatedProductIds: ['5', '6', '2', '3', '1'],
+    cartProductIds: ['3'],
+    limit: 4,
+  });
+  // Manual choices may include a main product; unavailable and in-cart never appear.
+  assert.deepEqual(picks.map(product => product.id), ['5', '2', '1']);
+});
+
+test('seleção manual evita recomendar a mesma família quando outra variante já está na sacola', () => {
+  const catalog = [
+    { ...mockCatalog[1], id: 'b200', familia_id: 'f1', variacao_rotulo: '200 g' },
+    { ...mockCatalog[1], id: 'b400', familia_id: 'f1', variacao_rotulo: '400 g' },
+    mockCatalog[2],
+  ];
+  const picks = getCartRecommendationCandidates({
+    catalog, curatedProductIds: ['b200', 'b400', '3'],
+    cartProductIds: ['b400'],
+  });
+  assert.deepEqual(picks.map(item => item.id), ['3']);
+});
+
+test('ausência de escolha manual conserva modo automático, sem recomendar item já adicionado', () => {
+  const picks = getCartRecommendationCandidates({
+    catalog: mockCatalog, curatedProductIds: [], cartProductIds: ['2'], limit: 4,
+  });
+  assert.ok(picks.length > 0);
+  assert.ok(!picks.some(product => product.id === '2'));
+  assert.ok(!picks.some(product => product.id === '1'));
 });
