@@ -133,11 +133,12 @@ def atualizar_recomendacoes_sacola(
             str(row[0]) for row in db.query(Produto.id).filter(
                 Produto.restaurante_id == tenant,
                 Produto.id.in_(ids),
+                Produto.ativo.is_(True),
                 Produto.somente_promocao.is_(False),
             ).all()
         }
         if valid != set(ids):
-            raise HTTPException(422, "Produto inexistente, exclusivo de promoção ou de outro restaurante.")
+            raise HTTPException(422, "Produto inexistente, pausado, exclusivo de promoção ou de outro restaurante.")
 
     config = db.query(ConfiguracaoRestaurante).filter(
         ConfiguracaoRestaurante.restaurante_id == tenant,
