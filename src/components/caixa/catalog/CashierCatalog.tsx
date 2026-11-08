@@ -39,6 +39,13 @@ interface Props {
   cardapioAtivoNome?: string | null;
 }
 
+type SimpleCustomizationGroup = {
+  id: string;
+  nome: string;
+  produto_ids: string[];
+  opcoes: Array<{ nome: string; preco_adicional: number; ativo: boolean }>;
+};
+
 const PRODUCT_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
 const PRODUCT_IMAGE_MAX_SIZE = MAX_IMAGE_UPLOAD_SOURCE_BYTES;
 
@@ -101,6 +108,10 @@ export default function CashierCatalog({
   const [prodFormImageError, setProdFormImageError] = useState('');
   const productImageInputRef = useRef<HTMLInputElement | null>(null);
 
+  const [customGroups, setCustomGroups] = useState<SimpleCustomizationGroup[]>([]);
+  const [selectedCustomGroupIds, setSelectedCustomGroupIds] = useState<string[]>([]);
+  const [customGroupsLoaded, setCustomGroupsLoaded] = useState(false);
+  const [customGroupError, setCustomGroupError] = useState('');
   const [prodFormAtivo, setProdFormAtivo] = useState(true);
   const [prodFormSomentePromocao, setProdFormSomentePromocao] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -118,6 +129,27 @@ export default function CashierCatalog({
       }
     }
   }, [cardapios, cardapioAtivoId]);
+
+  useEffect(() => {
+    if (!showProductModal || isMarmitaria) return;
+    let cancelled = false;
+    setCustomGroupsLoaded(false);
+    setCustomGroupError('');
+    fetch(`${apiBaseUrl}/cardapio/modificadores/grupos`, {
+      headers: authHeaders,
+    }).then(async response => {
+      if (!response.ok) throw new Error('Não foi possível carregar os complementos.');
+      const groups = await response.json() as SimpleCustomizationGroup[];
+      if (!cancelled) {
+        setCustomGroups(groups);
+        setSelectedCustomGroupIds(groups.filter(g => g.produto_ids?.includes(editingProduct?.id)).map(g => g.id));
+        setCustomGroupsLoaded(true);
+      }
+    }).catch((error: unknown) => {
+      if (!cancelled) setCustomGroupError(error instanceof Error ? error.message : 'Erro ao carregar complementos.');
+    });
+    return () => { cancelled = true; };
+  }, [showProductModal, isMarmitaria, editingProduct?.id, apiBaseUrl, authorization]);
 
   const handlePublishCardapio = async (targetMenuId: string, targetMenuNome: string) => {
     if (isPublishingMenu) return;
@@ -587,6 +619,7 @@ export default function CashierCatalog({
                     ativo: prodFormAtivo,
                     somente_promocao: prodFormSomentePromocao,
                     cardapio_id: prodFormCardapioId || null,
+                    ...(!isMarmitaria && customGroupsLoaded ? { grupo_ids: selectedCustomGroupIds } : {}),
                   };
 
                   let res;
@@ -883,6 +916,34 @@ export default function CashierCatalog({
                     </p>
                   </div>
                 </details>
+              )}
+
+              {!isMarmitaria && (
+                <section className="space-y-3 rounded-xl border border-koma-border bg-koma-panel p-3">
+                  <div>
+                    <h4 className="text-xs font-black text-koma-foreground">Escolhas e adicionais</h4>
+                    <p className="mt-1 text-[11px] text-koma-muted">Marque o que o cliente pode escolher neste produto. Não é necessário editar vínculos técnicos.</p>
+                  </div>
+                  {customGroupError && <p role="alert" className="text-xs text-rose-400">{customGroupError} O produto pode ser salvo sem alterar associações.</p>}
+                  {!customGroupsLoaded && !customGroupError && <p className="text-xs text-koma-muted">Carregando escolhas...</p>}
+                  {customGroupsLoaded && customGroups.length === 0 && <p className="text-xs text-koma-muted">Nenhum grupo cadastrado.</p>}
+                  {customGroups.map(group => {
+                    const hasPaid = group.opcoes.some(option => option.ativo && Number(option.preco_adicional) > 0);
+                    return <label key={group.id} className="flex min-h-11 items-center gap-3 rounded-lg border border-koma-border bg-koma-card p-3">
+                      <input type="checkbox" checked={selectedCustomGroupIds.includes(group.id)}
+                        onChange={event => setSelectedCustomGroupIds(previous =>
+                          event.target.checked ? [...previous, group.id] : previous.filter(value => value !== group.id)
+                        )}/>
+                      <span className="text-xs"><strong className="block">{group.nome}</strong>
+                        <span className="text-koma-muted">{hasPaid ? 'Contém adicionais pagos' : 'Escolha incluída no preço'}</span>
+                      </span>
+                    </label>;
+                  })}
+                  <button type="button" className="min-h-10 text-xs font-bold text-emerald-500 underline"
+                    onClick={() => { setShowProductModal(false); setActiveSubTab('complementos'); }}>
+                    Criar outro complemento ou adicional
+                  </button>
+                </section>
               )}
 
               <section className="rounded-xl border border-koma-border bg-koma-panel p-3">
