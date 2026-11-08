@@ -58,7 +58,7 @@ import DeliveryAddressFields from "../../components/shared/DeliveryAddressFields
 import { getDeliveryMinimumRemaining, getDeliveryQuote } from "../deliveryPresentation";
 import CardapioPaymentOptions from "./CardapioPaymentOptions";
 import { getCheckoutPaymentMethods, getPaymentSelectionError, resolvePaymentSelection, type PaymentMethod } from "../paymentMethods";
-import { getPairingRecommendations, classifyProduct } from "../pairingRecommendations";
+import { getCartRecommendationCandidates, classifyProduct } from "../pairingRecommendations";
 import { resolvePairingDisplay } from "../resolvePairingDisplay";
 import { isGroupedProduct } from "../catalogGrouping";
 import { KomaPrimaryAction } from "./KomaActionPrimitives";
@@ -399,25 +399,28 @@ export default function CardapioCartDrawer({
   const upsellSuggestions = useMemo(() => {
     if (!allProducts || allProducts.length === 0) return [];
     const cartProductIds = cart.map((item) => item.product.id);
-    const candidates = getPairingRecommendations({
+    const candidates = getCartRecommendationCandidates({
       catalog: allProducts,
       cartProductIds,
+      curatedProductIds: brandConfig?.cartRecommendationIds || [],
       limit: 12,
-      excludeCartItems: false,
     });
     // The cart and artistic showcase must use the same family card and real SKUs.
     return resolvePairingDisplay(allProducts, candidates, restaurantId, 4)
       .filter((item) => item.isAvailable !== false);
-  }, [allProducts, cart, restaurantId]);
+  }, [allProducts, cart, restaurantId, brandConfig?.cartRecommendationIds]);
 
-  const emptyCartSuggestions = useMemo(() => resolvePairingDisplay(
-    allProducts,
-    allProducts.filter((product) => product.isAvailable !== false),
-    restaurantId,
-    3,
-  ).filter((item) => item.isAvailable !== false), [allProducts, restaurantId]);
+  const emptyCartSuggestions = useMemo(() => {
+    const picks = brandConfig?.cartRecommendationIds || [];
+    const source = picks.length
+      ? getCartRecommendationCandidates({ catalog: allProducts, curatedProductIds: picks, limit: 12 })
+      : allProducts.filter((product) => product.isAvailable !== false);
+    return resolvePairingDisplay(allProducts, source, restaurantId, 3)
+      .filter((item) => item.isAvailable !== false);
+  }, [allProducts, restaurantId, brandConfig?.cartRecommendationIds]);
 
   const upsellHeading = useMemo(() => {
+    if (brandConfig?.cartRecommendationIds?.length) return "Escolhas do restaurante para acompanhar";
     const types = new Set(upsellSuggestions.map(classifyProduct));
     if (types.has("beverage") && (types.has("dessert") || types.has("side"))) {
       return "Bebida ou acompanhamento para sua refeição?";
@@ -435,7 +438,7 @@ export default function CardapioCartDrawer({
       return "Um acompanhamento para seu pedido?";
     }
     return "Combina com seu pedido";
-  }, [upsellSuggestions]);
+  }, [upsellSuggestions, brandConfig?.cartRecommendationIds]);
 
   // Handle Coupon Validation
   const handleApplyCoupon = async (e?: React.FormEvent) => {
