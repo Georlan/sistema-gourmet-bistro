@@ -966,7 +966,7 @@ export default function CashierCatalog({
               </div>
 
               <div className={"grid grid-cols-1 sm:grid-cols-2 gap-3"}>
-                <div className="space-y-1.5">
+                {!hasVariants && <div className="space-y-1.5">
                   <label
                     htmlFor="product-price"
                     className={"text-[10px] font-bold text-koma-secondary block"}
@@ -981,7 +981,7 @@ export default function CashierCatalog({
                     onValueChange={setProdFormPreco}
                     className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-[11px]"}
                   />
-                </div>
+                </div>}
                 <div className="space-y-1.5">
                   <label
                     htmlFor="product-category"
@@ -992,7 +992,7 @@ export default function CashierCatalog({
                   <div className={"flex gap-1.5"}>
                     <select
                       id="product-category"
-                      disabled={isMarmitaria && Boolean(editingProduct) && isMarmita(editingProduct)}
+                      disabled={Boolean(editingFamilyId) || (isMarmitaria && Boolean(editingProduct) && isMarmita(editingProduct))}
                       required
                       value={prodFormCategoriaId}
                       onChange={(e) => setProdFormCategoriaId(e.target.value)}
@@ -1010,6 +1010,7 @@ export default function CashierCatalog({
                     <button
                       type="button"
                       onClick={() => setShowCategoryModal(true)}
+                      disabled={Boolean(editingFamilyId)}
                       title="Criar nova categoria"
                       aria-label="Criar nova categoria"
                       className={"inline-flex items-center gap-1 px-2.5 bg-emerald-500/15 hover:bg-[#10b981]/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 rounded-xl font-bold text-[9px] cursor-pointer transition-colors"}
@@ -1031,6 +1032,7 @@ export default function CashierCatalog({
                   <select
                     id="product-cardapio"
                     value={prodFormCardapioId}
+                    disabled={Boolean(editingFamilyId)}
                     onChange={(e) => setProdFormCardapioId(e.target.value)}
                     className="w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"
                   >
@@ -1066,7 +1068,118 @@ export default function CashierCatalog({
                 </p>
               </div>
 
-              {!(isMarmitaria && editingProduct && isMarmita(editingProduct)) && (
+              {!isMarmitaria && (
+                <section aria-label="Sabores e tamanhos do produto" className="space-y-3 rounded-xl border border-koma-border bg-koma-panel p-3">
+                  <label className="flex min-h-11 items-center justify-between gap-3 text-xs font-bold text-koma-foreground">
+                    <span>Este produto tem sabores ou tamanhos?</span>
+                    <input type="checkbox" role="switch" aria-label="Este produto tem sabores ou tamanhos?"
+                      checked={hasVariants} disabled={Boolean(editingFamilyId) || isLoading}
+                      onChange={event => {
+                        const enabled = event.target.checked;
+                        setHasVariants(enabled);
+                        setVariantRows(enabled
+                          ? [{ ...(editingProduct?.id ? { produto_id: editingProduct.id } : {}),
+                              rotulo: editingProduct ? editingProduct.nome : '',
+                              preco: editingProduct ? Number(editingProduct.preco) : '', ativo: true }]
+                          : []);
+                        setExistingVariantId('');
+                      }} />
+                  </label>
+                  {editingFamilyId && <p className="text-[11px] text-koma-muted">As opções estão vinculadas a este produto. Edite-as sem alterar os pedidos anteriores.</p>}
+                  {loadingFamily && <p className="text-xs text-koma-muted">Carregando sabores e tamanhos…</p>}
+                  {familyError && <p role="alert" className="text-xs text-rose-400">{familyError}</p>}
+                  {hasVariants && !loadingFamily && (
+                    <>
+                      <div className="flex gap-2" aria-label="Tipo de variação">
+                        {(['sabor', 'tamanho'] as const).map(axis => (
+                          <button key={axis} type="button" aria-pressed={variantAxis === axis}
+                            onClick={() => setVariantAxis(axis)}
+                            className={`min-h-10 flex-1 rounded-xl border px-3 text-xs font-bold ${variantAxis === axis
+                              ? 'border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                              : 'border-koma-border text-koma-secondary'}`}>
+                            {axis === 'sabor' ? 'Sabores' : 'Tamanhos'}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="space-y-2">
+                        {variantRows.map((row, index) => (
+                          <div key={row.produto_id || `novo-${index}`} className="flex flex-col gap-2 rounded-xl border border-koma-border bg-koma-card p-2 sm:flex-row sm:items-center">
+                            <label className="min-w-0 flex-1 text-[10px] font-bold text-koma-muted">
+                              {variantAxis === 'sabor' ? 'Sabor' : 'Tamanho'} {index + 1}
+                              <input required value={row.rotulo} aria-label={`Nome da opção ${index + 1}`}
+                                onChange={event => setVariantRows(rows => rows.map((v, i) => i === index ? { ...v, rotulo: event.target.value } : v))}
+                                placeholder={variantAxis === 'sabor' ? 'Carne de Sol' : 'Média · 300 g'}
+                                className="mt-1 h-11 w-full rounded-lg border border-koma-border bg-koma-panel px-3 text-base font-normal text-koma-foreground sm:text-sm" />
+                            </label>
+                            <label className="w-full text-[10px] font-bold text-koma-muted sm:w-32">
+                              Preço
+                              <MoneyInput id={`variant-price-${index}`} value={row.preco} required
+                                onValueChange={value => setVariantRows(rows => rows.map((v, i) => i === index ? { ...v, preco: value } : v))}
+                                className="mt-1 h-11 w-full rounded-lg border border-koma-border bg-koma-panel px-3 text-sm text-koma-foreground" />
+                            </label>
+                            <label className="flex items-center gap-2 text-[11px] text-koma-muted sm:pt-4">
+                              <input type="checkbox" checked={row.ativo}
+                                onChange={event => setVariantRows(rows => rows.map((v, i) => i === index ? { ...v, ativo: event.target.checked } : v))} />
+                              À venda
+                            </label>
+                            {!row.produto_id && variantRows.length > 1 && (
+                              <button type="button" aria-label={`Remover opção ${index + 1}`}
+                                onClick={() => setVariantRows(rows => rows.filter((_, i) => i !== index))}
+                                className="grid h-10 w-10 place-items-center self-end rounded-lg text-rose-500 hover:bg-rose-500/10 sm:self-auto">
+                                <Trash2 size={15} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button" className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-koma-border text-xs font-bold text-koma-secondary"
+                        onClick={() => setVariantRows(rows => [...rows, { rotulo: '', preco: '', ativo: true }])}>
+                        <Plus size={15} /> Adicionar {variantAxis === 'sabor' ? 'sabor' : 'tamanho'}
+                      </button>
+                      {apiProdutos.some(product => !product.familia_id && !product.marmitaria_tamanho
+                        && !product.somente_promocao && product.categoria_id === prodFormCategoriaId
+                        && (product.cardapio_id || null) === (prodFormCardapioId || null)
+                        && !variantRows.some(row => row.produto_id === product.id)
+                        && product.id !== editingProduct?.id) && (
+                        <details className="rounded-xl border border-koma-border px-3 py-2">
+                          <summary className="cursor-pointer text-xs font-bold text-koma-secondary">Vincular produto já cadastrado</summary>
+                          <p className="mt-2 text-[11px] text-koma-muted">Mantém o cadastro, estoque e histórico do produto existente.</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <select aria-label="Selecionar produto existente" value={existingVariantId}
+                              onChange={event => setExistingVariantId(event.target.value)}
+                              className="min-h-11 min-w-0 flex-1 rounded-xl border border-koma-border bg-koma-panel px-2 text-sm text-koma-foreground">
+                              <option value="">Escolha um produto…</option>
+                              {apiProdutos.filter(product => !product.familia_id && !product.marmitaria_tamanho
+                                && !product.somente_promocao && product.categoria_id === prodFormCategoriaId
+                                && (product.cardapio_id || null) === (prodFormCardapioId || null)
+                                && !variantRows.some(row => row.produto_id === product.id)
+                                && product.id !== editingProduct?.id).map(product => (
+                                <option key={product.id} value={product.id}>{product.nome} · R$ {Number(product.preco).toFixed(2).replace('.', ',')}</option>
+                              ))}
+                            </select>
+                            <button type="button" disabled={!existingVariantId}
+                              onClick={() => {
+                                const product = apiProdutos.find(item => item.id === existingVariantId);
+                                if (!product) return;
+                                setVariantRows(rows => [...rows, {
+                                  produto_id: product.id, rotulo: product.nome,
+                                  preco: Number(product.preco), ativo: product.ativo !== false,
+                                }]);
+                                setExistingVariantId('');
+                              }}
+                              className="min-h-11 rounded-xl bg-emerald-500 px-3 text-xs font-bold text-emerald-950 disabled:opacity-50">
+                              Vincular
+                            </button>
+                          </div>
+                        </details>
+                      )}
+                      <p className="text-[11px] text-koma-muted">Cada opção possui preço próprio. O cliente verá somente um produto com suas escolhas.</p>
+                    </>
+                  )}
+                </section>
+              )}
+
+              {!hasVariants && !(isMarmitaria && editingProduct && isMarmita(editingProduct)) && (
                 <label className="flex items-start gap-3 rounded-xl border border-koma-border bg-koma-card p-3 text-xs text-koma-foreground">
                   <input type="checkbox" checked={prodFormSomentePromocao}
                     onChange={event => setProdFormSomentePromocao(event.target.checked)}
@@ -1077,7 +1190,7 @@ export default function CashierCatalog({
                 </label>
               )}
 
-              {!editingProduct && (
+              {!hasVariants && !editingProduct && (
                 <details className="group overflow-hidden rounded-xl border border-koma-border bg-koma-panel">
                   <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between px-3 text-[10px] font-bold text-koma-secondary">
                     <span>Mais opções</span>
@@ -1232,7 +1345,7 @@ export default function CashierCatalog({
                 </section>
               )}
 
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-koma-border bg-koma-panel p-3">
+              {!hasVariants && <div className="flex items-center justify-between gap-3 rounded-xl border border-koma-border bg-koma-panel p-3">
                 <span>
                   <strong className="block text-[10px] text-koma-foreground">Produto à venda</strong>
                   <span className="mt-0.5 block text-[9px] text-koma-muted">
