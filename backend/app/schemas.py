@@ -182,9 +182,10 @@ class ProdutoBase(BaseModel):
         return v
 
 class ProdutoCreate(ProdutoBase):
-    pass
+    grupo_ids: Optional[List[str]] = None
 
 class ProdutoUpdate(BaseModel):
+    grupo_ids: Optional[List[str]] = None
     nome: Optional[str] = None
     categoria_id: Optional[str] = None
     cardapio_id: Optional[str] = None
