@@ -97,7 +97,7 @@ export default function CardapioProductModal({
   const requiresExplicitVariant = isGrouped && product.requiresExplicitVariantSelection === true;
   // Native families carry their own selection axis. Never infer this from a
   // tenant-specific product name or from the generic display kind.
-  const isSizeVariant = isGrouped && (product.familia_eixo === 'tamanho' || product.groupKind === 'batata-tradicional');
+  const isSizeVariant = isGrouped && product.familia_eixo === 'tamanho';
   const defaultVariantId = useMemo(() => {
     if (!isGrouped || requiresExplicitVariant) return "";
     const avail = product.variants.find((v) => v.isAvailable);
