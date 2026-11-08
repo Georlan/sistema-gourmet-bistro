@@ -696,6 +696,86 @@ export default function CashierCatalog({
                     cardapio_id: prodFormCardapioId || null,
                   };
 
+                  if (hasVariants && !isMarmitaria) {
+                    if (loadingFamily || familyError || loadingCustomizations || !customizationsLoaded || customizationError) {
+                      showToast(familyError || customizationError || 'Conclua o carregamento das opções antes de salvar.', 'error');
+                      return;
+                    }
+                    const labels = variantRows.map(row => row.rotulo.trim().toLocaleLowerCase('pt-BR'));
+                    if (!variantRows.length || variantRows.some(row => !row.rotulo.trim() || Number(row.preco) <= 0)
+                      || new Set(labels).size !== labels.length) {
+                      showToast('Informe nome e preço válido para cada opção, sem repetir nomes.', 'error');
+                      return;
+                    }
+                    // A family is only presentation. Each variant is a real
+                    // sellable SKU with independent price, inventory and order ID.
+                    const familyPayload = {
+                      nome: payload.nome,
+                      descricao: payload.descricao,
+                      eixo: variantAxis,
+                      categoria_id: payload.categoria_id,
+                      cardapio_id: payload.cardapio_id,
+                      imagem: familyImage,
+                      variantes: variantRows.map(row => ({
+                        ...(row.produto_id ? { produto_id: row.produto_id } : {}),
+                        rotulo: row.rotulo.trim(),
+                        preco: Number(row.preco),
+                        ativo: row.ativo,
+                      })),
+                      grupo_ids: selectedCustomizationIds,
+                      grupos_anteriores: previousCustomizationIds,
+                    };
+                    const familyResponse = await fetch(
+                      `${apiBaseUrl}/produto-familias${editingFamilyId ? `/${encodeURIComponent(editingFamilyId)}` : ''}`,
+                      {
+                        method: editingFamilyId ? 'PUT' : 'POST',
+                        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                        body: JSON.stringify(familyPayload),
+                      },
+                    );
+                    const family = await familyResponse.json().catch(() => ({}));
+                    if (!familyResponse.ok) {
+                      showToast(family.detail || 'Não foi possível salvar os sabores ou tamanhos.', 'error');
+                      return;
+                    }
+                    // The family and shared choices commit together. If an
+                    // optional photo upload fails, retry updates the same IDs.
+                    setEditingFamilyId(String(family.id));
+                    setPreviousCustomizationIds(family.grupo_ids || selectedCustomizationIds);
+                    setVariantRows((family.variantes || []).map((variant: {
+                      produto_id: string; rotulo: string; preco: number; ativo: boolean;
+                    }) => ({
+                      produto_id: variant.produto_id, rotulo: variant.rotulo,
+                      preco: variant.preco, ativo: variant.ativo,
+                    })));
+                    const firstSkuId = family.variantes?.[0]?.produto_id;
+                    if (firstSkuId && (preparedImage || prodFormImageRemoveRequested)) {
+                      const uploadHeaders = { ...authHeaders };
+                      delete uploadHeaders['Content-Type'];
+                      const formData = new FormData();
+                      if (preparedImage) formData.append('file', preparedImage);
+                      const imageResponse = await fetch(
+                        `${apiBaseUrl}/api/cardapio-digital/assets/product/${encodeURIComponent(firstSkuId)}`,
+                        {
+                          method: preparedImage ? 'POST' : 'DELETE',
+                          headers: uploadHeaders,
+                          ...(preparedImage ? { body: formData } : {}),
+                        },
+                      );
+                      const imageData = await imageResponse.json().catch(() => ({}));
+                      if (!imageResponse.ok) {
+                        await fetchProdutos();
+                        showToast(imageData.detail || 'Opções salvas, mas a foto não foi atualizada. Tente novamente.', 'error');
+                        return;
+                      }
+                      resetProductImageState(String(imageData.imagem || ''));
+                    }
+                    await fetchProdutos();
+                    setShowProductModal(false);
+                    showToast('Produto e opções salvos. Cada opção tem seu próprio preço.');
+                    return;
+                  }
+
                   let res;
                   if (editingProduct) {
                     res = await fetch(`${apiBaseUrl}/produtos/${editingProduct.id}`, {
