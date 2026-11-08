@@ -99,6 +99,11 @@ export default function CashierCatalog({
   const [showMarmitaCreate, setShowMarmitaCreate] = useState(false);
   const [creatingType, setCreatingType] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
+  // One editor and one draft: tabs only organize the existing fields.
+  const [productEditorTab, setProductEditorTab] = useState<'produto' | 'variacoes' | 'adicionais' | 'mais'>('produto');
+  useEffect(() => {
+    if (showProductModal) setProductEditorTab('produto');
+  }, [showProductModal]);
 
   const [showCategoryModal, setShowCategoryModal] = useState(false);
 
@@ -674,12 +679,39 @@ export default function CashierCatalog({
               </button>
             </div>
 
+            {!isMarmitaria && (
+              <div role="tablist" aria-label="Seções do produto"
+                className="sticky top-16 z-10 -mx-4 grid grid-cols-4 gap-1 border-b border-koma-border bg-koma-card/95 px-4 py-2 backdrop-blur-md sm:top-0 sm:mx-0 sm:px-0">
+                {([
+                  ['produto', 'Produto'],
+                  ['variacoes', 'Variações'],
+                  ['adicionais', 'Adicionais'],
+                  ['mais', 'Mais'],
+                ] as const).map(([tab, label]) => (
+                  <button key={tab} type="button" role="tab" aria-selected={productEditorTab === tab}
+                    onClick={() => setProductEditorTab(tab)}
+                    className={`min-h-11 rounded-lg border px-1 text-[11px] font-bold transition-colors sm:text-xs ${productEditorTab === tab
+                      ? 'border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                      : 'border-transparent text-koma-secondary hover:bg-koma-raised'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
                 const submitter = (e.nativeEvent as SubmitEvent).submitter;
                 const openComposition = submitter instanceof HTMLButtonElement && submitter.value === 'composition';
                 if (isLoading) return;
+                // Hidden tabs cannot rely on native required-field validation.
+                // Validate the basic draft before any request, then show its tab.
+                if (!prodFormNome.trim() || !prodFormCategoriaId || (!hasVariants && prodFormPreco === '')) {
+                  setProductEditorTab('produto');
+                  showToast('Informe nome, categoria e preço antes de salvar.', 'error');
+                  return;
+                }
                 setIsLoading(true);
                 try {
                   const preparedImage = prodFormImageFile
@@ -704,6 +736,7 @@ export default function CashierCatalog({
                     const labels = variantRows.map(row => row.rotulo.trim().toLocaleLowerCase('pt-BR'));
                     if (!variantRows.length || variantRows.some(row => !row.rotulo.trim() || Number(row.preco) <= 0)
                       || new Set(labels).size !== labels.length) {
+                      setProductEditorTab('variacoes');
                       showToast('Informe nome e preço válido para cada opção, sem repetir nomes.', 'error');
                       return;
                     }
@@ -903,6 +936,7 @@ export default function CashierCatalog({
               }}
               className={"space-y-5 text-xs"}
             >
+              <div hidden={!isMarmitaria && productEditorTab !== 'produto'} className="space-y-5">
               {apiCategorias.length === 0 && (
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-[10px] text-amber-800 dark:text-amber-200">
                   <span>{isMarmitaria ? 'Crie uma categoria, como Sobremesas ou Bebidas, para este produto.' : 'Crie uma categoria antes de salvar o primeiro produto.'}</span>
@@ -957,7 +991,7 @@ export default function CashierCatalog({
                   type="text"
                   id="product-name"
                   readOnly={isMarmitaria && Boolean(editingProduct) && isMarmita(editingProduct)}
-                  required
+                  required={isMarmitaria || productEditorTab === 'produto'}
                   placeholder={isMarmitaria ? 'Ex: Pudim ou refrigerante' : 'Ex: Cheeseburger Duplo'}
                   value={prodFormNome}
                   onChange={(e) => setProdFormNome(e.target.value)}
@@ -975,7 +1009,7 @@ export default function CashierCatalog({
                   </label>
                   <MoneyInput
                     id="product-price"
-                    required
+                    required={isMarmitaria || productEditorTab === 'produto'}
                     placeholder="25.90"
                     value={prodFormPreco}
                     onValueChange={setProdFormPreco}
@@ -993,7 +1027,7 @@ export default function CashierCatalog({
                     <select
                       id="product-category"
                       disabled={Boolean(editingFamilyId) || (isMarmitaria && Boolean(editingProduct) && isMarmita(editingProduct))}
-                      required
+                      required={isMarmitaria || productEditorTab === 'produto'}
                       value={prodFormCategoriaId}
                       onChange={(e) => setProdFormCategoriaId(e.target.value)}
                       className={"flex-1 px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
@@ -1021,34 +1055,6 @@ export default function CashierCatalog({
                 </div>
               </div>
 
-              {cardapios && cardapios.length > 0 && (
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor="product-cardapio"
-                    className="text-[10px] font-bold text-koma-secondary block"
-                  >
-                    Cardápio Operacional
-                  </label>
-                  <select
-                    id="product-cardapio"
-                    value={prodFormCardapioId}
-                    disabled={Boolean(editingFamilyId)}
-                    onChange={(e) => setProdFormCardapioId(e.target.value)}
-                    className="w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"
-                  >
-                    <option value="">Sem cardápio específico</option>
-                    {cardapios.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nome} {activeMenuIds.includes(c.id) ? '★ (Ativo no momento)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[9px] text-koma-muted">
-                    Cada produto pertence exclusivamente a um cardápio operacional.
-                  </p>
-                </div>
-              )}
-
               <div className="space-y-1.5">
                 <label
                   htmlFor="product-description"
@@ -1069,6 +1075,8 @@ export default function CashierCatalog({
                 </p>
               </div>
 
+              </div>
+              <div hidden={isMarmitaria || productEditorTab !== 'variacoes'} className="space-y-5">
               {!isMarmitaria && (
                 <section aria-label="Sabores e tamanhos do produto" className="space-y-3 rounded-xl border border-koma-border bg-koma-panel p-3">
                   <label className="flex min-h-11 items-center justify-between gap-3 text-xs font-bold text-koma-foreground">
@@ -1107,14 +1115,14 @@ export default function CashierCatalog({
                           <div key={row.produto_id || `novo-${index}`} className="flex flex-col gap-2 rounded-xl border border-koma-border bg-koma-card p-2 sm:flex-row sm:items-center">
                             <label className="min-w-0 flex-1 text-[10px] font-bold text-koma-muted">
                               {variantAxis === 'sabor' ? 'Sabor' : 'Tamanho'} {index + 1}
-                              <input required value={row.rotulo} aria-label={`Nome da opção ${index + 1}`}
+                              <input required={productEditorTab === 'variacoes'} value={row.rotulo} aria-label={`Nome da opção ${index + 1}`}
                                 onChange={event => setVariantRows(rows => rows.map((v, i) => i === index ? { ...v, rotulo: event.target.value } : v))}
                                 placeholder={variantAxis === 'sabor' ? 'Carne de Sol' : 'Média · 300 g'}
                                 className="mt-1 h-11 w-full rounded-lg border border-koma-border bg-koma-panel px-3 text-base font-normal text-koma-foreground sm:text-sm" />
                             </label>
                             <label className="w-full text-[10px] font-bold text-koma-muted sm:w-32">
                               Preço
-                              <MoneyInput id={`variant-price-${index}`} value={row.preco} required
+                              <MoneyInput id={`variant-price-${index}`} value={row.preco} required={productEditorTab === 'variacoes'}
                                 onValueChange={value => setVariantRows(rows => rows.map((v, i) => i === index ? { ...v, preco: value } : v))}
                                 className="mt-1 h-11 w-full rounded-lg border border-koma-border bg-koma-panel px-3 text-sm text-koma-foreground" />
                             </label>
@@ -1185,6 +1193,37 @@ export default function CashierCatalog({
                 </section>
               )}
 
+              </div>
+              <div hidden={!isMarmitaria && productEditorTab !== 'mais'} className="space-y-5">
+              {cardapios && cardapios.length > 0 && (
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="product-cardapio"
+                    className="text-[10px] font-bold text-koma-secondary block"
+                  >
+                    Cardápio Operacional
+                  </label>
+                  <select
+                    id="product-cardapio"
+                    value={prodFormCardapioId}
+                    disabled={Boolean(editingFamilyId)}
+                    onChange={(e) => setProdFormCardapioId(e.target.value)}
+                    className="w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"
+                  >
+                    <option value="">Sem cardápio específico</option>
+                    {cardapios.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome} {activeMenuIds.includes(c.id) ? '★ (Ativo no momento)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[9px] text-koma-muted">
+                    Cada produto pertence exclusivamente a um cardápio operacional.
+                  </p>
+                </div>
+              )}
+
+
               {!hasVariants && !(isMarmitaria && editingProduct && isMarmita(editingProduct)) && (
                 <label className="flex items-start gap-3 rounded-xl border border-koma-border bg-koma-card p-3 text-xs text-koma-foreground">
                   <input type="checkbox" checked={prodFormSomentePromocao}
@@ -1226,6 +1265,8 @@ export default function CashierCatalog({
                 </details>
               )}
 
+              </div>
+              <div hidden={!isMarmitaria && productEditorTab !== 'produto'} className="space-y-5">
               <section className="rounded-xl border border-koma-border bg-koma-panel p-3">
                 <div className="mb-3">
                   <strong className="block text-[10px] text-koma-foreground">Foto do produto <span className="font-normal text-koma-muted">(opcional)</span></strong>
@@ -1298,6 +1339,8 @@ export default function CashierCatalog({
                 />
               </section>
 
+              </div>
+              <div hidden={isMarmitaria || productEditorTab !== 'adicionais'} className="space-y-5">
               {!isMarmitaria && (
                 <section aria-label="Personalizações deste produto" className="space-y-3 rounded-xl border border-koma-border bg-koma-panel p-3">
                   <div className="space-y-1">
@@ -1351,6 +1394,8 @@ export default function CashierCatalog({
                 </section>
               )}
 
+              </div>
+              <div hidden={!isMarmitaria && productEditorTab !== 'produto'} className="space-y-5">
               {!hasVariants && <div className="flex items-center justify-between gap-3 rounded-xl border border-koma-border bg-koma-panel p-3">
                 <span>
                   <strong className="block text-[10px] text-koma-foreground">Produto à venda</strong>
@@ -1380,6 +1425,8 @@ export default function CashierCatalog({
                   </button>
                 </div>
               </div>}
+
+              </div>
 
               <div className={"fixed inset-x-0 bottom-0 z-20 flex gap-2 border-t border-koma-border bg-koma-card/95 p-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] backdrop-blur-md sm:sticky sm:-mx-1 sm:bottom-0 sm:rounded-xl sm:border sm:p-2"}>
                 <button
