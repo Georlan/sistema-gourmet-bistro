@@ -21,10 +21,13 @@ export default function CartRecommendationsSettings({ produtos, apiBaseUrl, auth
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const byId = useMemo(() => new Map(produtos.map(product => [String(product.id), product])), [produtos]);
+  // Parent can reconstruct its headers object after catalog WebSocket events;
+  // avoid discarding unsaved selections because the object reference changed.
+  const authSignature = JSON.stringify(authHeaders);
 
   useEffect(() => {
     let active = true;
-    fetch(`${apiBaseUrl}/api/cardapio-digital/recomendacoes`, { headers: authHeaders })
+    fetch(`${apiBaseUrl}/api/cardapio-digital/recomendacoes`, { headers: JSON.parse(authSignature) })
       .then(async res => {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.detail || 'Não foi possível carregar as recomendações.');
@@ -34,7 +37,7 @@ export default function CartRecommendationsSettings({ produtos, apiBaseUrl, auth
       .catch(err => { if (active) setError(err instanceof Error ? err.message : 'Falha ao carregar.'); })
       .finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
-  }, [apiBaseUrl, authHeaders]);
+  }, [apiBaseUrl, authSignature]);
 
   const options = useMemo(() => produtos
     .filter(product => product.ativo !== false && product.somente_promocao !== true)
@@ -146,7 +149,7 @@ export default function CartRecommendationsSettings({ produtos, apiBaseUrl, auth
         </div>
         <footer className="flex shrink-0 gap-2 border-t border-slate-200 p-3 dark:border-white/10">
           <button type="button" onClick={onClose} disabled={saving} className="min-h-11 flex-1 rounded-xl border border-slate-300 px-4 text-xs font-bold dark:border-white/20">Cancelar</button>
-          <button type="button" onClick={() => void save()} disabled={busy || saving || Boolean(error && !selected.length)}
+          <button type="button" onClick={() => void save()} disabled={busy || saving}
             className="min-h-11 flex-1 rounded-xl bg-emerald-500 px-4 text-xs font-black text-emerald-950 disabled:opacity-50">
             {saving ? 'Salvando...' : 'Salvar recomendações'}
           </button>
