@@ -7,6 +7,7 @@ import type { CatalogCategory } from '../../../catalog/catalog';
 import { Product, CardapioMenu } from '../../../types';
 import { CardapioCategoriasTab } from '../../cardapio/CardapioCategoriasTab';
 import { CardapioProdutosTab } from '../../cardapio/CardapioProdutosTab';
+import ProductFamilyEditor from '../../cardapio/ProductFamilyEditor';
 import { CategoriaModal } from '../../cardapio/CategoriaModal';
 import ComplementosTab from '../../cardapio/ComplementosTab';
 import MoneyInput from '../../MoneyInput';
@@ -73,6 +74,8 @@ export default function CashierCatalog({
   const [showMarmitaCreate, setShowMarmitaCreate] = useState(false);
   const [creatingType, setCreatingType] = useState(false);
   const [showProductModal, setShowProductModal] = useState(false);
+  const [showFamilyEditor, setShowFamilyEditor] = useState(false);
+  const [editingFamilyId, setEditingFamilyId] = useState<string | null>(null);
 
   const [showCategoryModal, setShowCategoryModal] = useState(false);
 
@@ -342,9 +345,15 @@ export default function CashierCatalog({
                 : undefined
             }
             onCreateProduct={() => isMarmitaria ? setShowProductType(true) : startProduct()}
+            onCreateFamily={!isMarmitaria ? () => { setEditingFamilyId(null); setShowFamilyEditor(true); } : undefined}
             onEditProduct={(product) => {
-              editProductDetails(product);
-            }}
+              if (product.familia_id) {
+                setEditingFamilyId(product.familia_id);
+                setShowFamilyEditor(true);
+              } else {
+                editProductDetails(product);
+              }
+            }
             onDuplicateProduct={(product) => {
               if (isMarmitaria && isMarmita(product)) { showToast('Cada tamanho tem um único cadastro. Edite a marmita existente na lista de produtos.', 'error'); return; }
               setEditingProduct(null);
@@ -506,6 +515,19 @@ export default function CashierCatalog({
           <button type="button" onClick={() => setShowMarmitaCreate(false)}>Fechar</button>
         </div>
       </div>}
+      {showFamilyEditor && !isMarmitaria && (
+        <ProductFamilyEditor
+          apiBaseUrl={apiBaseUrl}
+          authHeaders={authHeaders}
+          products={apiProdutos}
+          categories={apiCategorias}
+          menus={cardapios}
+          selectedMenuId={selectedCardapioId}
+          familyId={editingFamilyId}
+          onSaved={async () => { await fetchProdutos(); showToast('Produto e variações salvos.'); }}
+          onClose={() => { setShowFamilyEditor(false); setEditingFamilyId(null); }}
+        />
+      )}
       {showProductModal && (
         <div
           onClick={(e) => {
