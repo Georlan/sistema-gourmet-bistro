@@ -288,3 +288,86 @@ def test_importacao_composta_cardapio():
     assert any(category["nome"] == "Refrescos Finos" for category in catalog["categorias"])
     assert any(p["id"] == "prod-limonada" and p["ativo"] for p in catalog["produtos"])
     db.close()
+
+
+def test_universal_product_family_sells_only_real_skus_and_preserves_tenant_isolation():
+    """Products remain real IDs; families only change catalog presentation."""
+    client = TestClient(app)
+    response = client.post("/auth/login", json={"username": "admin", "password": "123"})
+    assert response.status_code == 200
+    headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+    new_family = {
+        "nome": "Porção do dia",
+        "descricao": "Fritas artesanais com molho",
+        "eixo": "tamanho",
+        "categoria_id": "cat-comidas",
+        "cardapio_id": None,
+        "imagem": "",
+        "variantes": [
+            {"rotulo": "Pequena (200 g)", "preco": 12, "ativo": True},
+            {"rotulo": "Grande (400 g)", "preco": 18, "ativo": True},
+        ],
+    }
+    created = client.post("/produto-familias", json=new_family, headers=headers)
+    assert created.status_code == 201, created.text
+    family = created.json()
+    assert family["nome"] == "Porção do dia"
+    assert family["eixo"] == "tamanho"
+    assert len(family["variantes"]) == 2
+    first, second = family["variantes"]
+    assert first["produto_id"] != second["produto_id"]
+
+    menu = client.get("/api/cardapio-digital/public?restaurante_id=1")
+    assert menu.status_code == 200, menu.text
+    created_items = {
+        product["id"]: product for product in menu.json()["produtos"]
+        if product["id"] in (first["produto_id"], second["produto_id"])
+    }
+    assert len(created_items) == 2
+    assert {item["preco"] for item in created_items.values()} == {12, 18}
+    assert all(item["familia_id"] == family["id"] for item in created_items.values())
+    assert {item["variacao_rotulo"] for item in created_items.values()} == {
+        "Pequena (200 g)", "Grande (400 g)",
+    }
+    assert all(item["familia_nome"] == "Porção do dia" for item in created_items.values())
+    assert {product["id"] for product in client.get("/produtos/catalogo", headers=headers).json()["produtos"]}.issuperset(created_items)
+
+    # No silent deletion of variants with potential sale history.
+    partial = {**new_family, "variantes": [
+        {"produto_id": first["produto_id"], "rotulo": "Pequena", "preco": 14, "ativo": True}
+    ]}
+    blocked = client.put(f"/produto-familias/{family['id']}", json=partial, headers=headers)
+    assert blocked.status_code == 409
+    assert len(client.get("/produto-familias", headers=headers).json()[0]["variantes"]) == 2
+
+    # Editing one variant keeps real SKU IDs and can pause it without deleting.
+    updated = {**new_family, "nome": "Porção especial", "variantes": [
+        {"produto_id": first["produto_id"], "rotulo": "P (200 g)", "preco": 12, "ativo": True},
+        {"produto_id": second["produto_id"], "rotulo": "G (400 g)", "preco": 19, "ativo": False},
+    ]}
+    result = client.put(f"/produto-familias/{family['id']}", json=updated, headers=headers)
+    assert result.status_code == 200, result.text
+    assert {variant["produto_id"] for variant in result.json()["variantes"]} == {
+        first["produto_id"], second["produto_id"],
+    }
+    assert {variant["preco"] for variant in result.json()["variantes"]} == {12, 19}
+
+    with TestingSessionLocal() as db:
+        db.add(Restaurante(id=2, nome="Outra loja", plano="pocket"))
+        db.flush()
+        db.add(Categoria(id="cat-comidas", restaurante_id=2, nome="Comidas"))
+        db.add(Usuario(id="u-admin2", restaurante_id=2, nome="Outro admin",
+                       usuario="outro-admin", senha_hash=get_password_hash("456"),
+                       role="admin", status="ativo"))
+        db.commit()
+
+    other_login = client.post("/auth/login", json={"username": "outro-admin", "password": "456"})
+    assert other_login.status_code == 200, other_login.text
+    other_headers = {"Authorization": f"Bearer {other_login.json()['access_token']}"}
+    assert client.get("/produto-familias", headers=other_headers).json() == []
+    assert client.put(f"/produto-familias/{family['id']}", json=updated, headers=other_headers).status_code == 404
+    cross_tenant = {**new_family, "variantes": [
+        {"produto_id": first["produto_id"], "rotulo": "Usar item externo", "preco": 12, "ativo": True}
+    ]}
+    assert client.post("/produto-familias", json=cross_tenant, headers=other_headers).status_code == 404
