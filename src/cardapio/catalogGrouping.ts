@@ -17,6 +17,7 @@ export interface DisplayVariant {
 export interface GroupedDisplayProduct extends Product {
   isGrouped: true;
   groupKind: 'batata-tradicional' | 'pastel-medio' | 'pastelao' | 'sucos' | 'vitaminas' | 'refrigerantes' | 'generic';
+  choiceKind?: 'tamanho' | 'sabor' | 'opção';
   /** Exige escolha consciente antes de adicionar o SKU real à sacola. */
   requiresExplicitVariantSelection?: boolean;
   groupTitle: string;
@@ -106,6 +107,56 @@ export function groupCategoryProductsForDisplay(
   restaurantId?: string | number,
 ): CatalogDisplayItem[] {
   if (!products || products.length === 0) return [];
+
+  // Famílias nativas têm precedência: não dependem de restaurante, categoria
+  // nomeada ou regex. Os SKUs persistidos continuam sendo os itens vendidos.
+  const families = new Map<string, Product[]>();
+  for (const product of products) {
+    if (!product.familyId) continue;
+    const members = families.get(product.familyId) || [];
+    members.push(product);
+    families.set(product.familyId, members);
+  }
+  if (families.size > 0) {
+    const grouped: CatalogDisplayItem[] = [];
+    for (const [familyId, members] of families) {
+      const lead = members[0];
+      const variants: DisplayVariant[] = members.map((product) => ({
+        id: product.id,
+        label: product.variantLabel || product.name,
+        description: product.description,
+        price: calculateProductMinStartingPrice(product),
+        product,
+        isAvailable: product.isAvailable !== false,
+      }));
+      const available = variants.filter((variant) => variant.isAvailable);
+      const amounts = (available.length > 0 ? available : variants).map((variant) => variant.price);
+      const axis = lead.familyAxis || 'outra';
+      const choiceKind = axis === 'tamanho' ? 'tamanho' : axis === 'sabor' ? 'sabor' : 'opção';
+      grouped.push({
+        ...lead,
+        id: `family-${familyId}`,
+        name: lead.familyName || lead.name,
+        description: lead.familyDescription || lead.description,
+        image: lead.familyImage || lead.image,
+        isGrouped: true,
+        groupKind: 'generic',
+        choiceKind,
+        requiresExplicitVariantSelection: true,
+        groupTitle: lead.familyName || lead.name,
+        groupDescription: `Escolha ${choiceKind === 'opção' ? 'uma opção' : `o ${choiceKind}`}:`,
+        price: Math.min(...amounts),
+        minPrice: Math.min(...amounts),
+        hasVariablePrice: Math.max(...amounts) > Math.min(...amounts),
+        variants,
+        isAvailable: available.length > 0,
+      });
+    }
+    const unlinked = products.filter((product) => !product.familyId);
+    // Compatibilidade temporária dos cards legados do JE Lanches enquanto
+    // os vínculos atuais migram. Novas lojas usam só famílias explícitas.
+    return [...grouped, ...groupCategoryProductsForDisplay(categoryName, unlinked, restaurantId)];
+  }
 
   // O agrupamento visual por famílias foi validado inicialmente para o JE Lanches (ID 1).
   // Para outros restaurantes da plataforma, mantemos 100% o comportamento padrão e retrocompatibilidade,
