@@ -1162,10 +1162,15 @@ export default function CashierCatalog({
                               onClick={() => {
                                 const product = apiProdutos.find(item => item.id === existingVariantId);
                                 if (!product) return;
-                                setVariantRows(rows => [...rows, {
+                                const linked = {
                                   produto_id: product.id, rotulo: product.nome,
                                   preco: Number(product.preco), ativo: product.ativo !== false,
-                                }]);
+                                };
+                                // An empty starter row is a prompt, not a
+                                // mandatory extra SKU when reusing existing items.
+                                setVariantRows(rows => rows.length === 1
+                                  && !rows[0].produto_id && !rows[0].rotulo.trim() && rows[0].preco === ''
+                                  ? [linked] : [...rows, linked]);
                                 setExistingVariantId('');
                               }}
                               className="min-h-11 rounded-xl bg-emerald-500 px-3 text-xs font-bold text-emerald-950 disabled:opacity-50">
