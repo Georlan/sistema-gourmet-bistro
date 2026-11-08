@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
 from ..marmitaria_catalog import enabled as marmitaria_enabled
-from ..models import Cardapio, Categoria, Produto, ProdutoFamilia, Usuario
+from ..models import Cardapio, Categoria, GrupoModificador, Produto, ProdutoFamilia, ProdutoGrupoModificador, Usuario
 from ..security import get_current_user, require_permission
 from ..services.storage_paths import validate_tenant_storage_reference
 from .products import notify_catalog_update
@@ -41,6 +41,7 @@ class FamilyWrite(BaseModel):
     cardapio_id: str | None = None
     imagem: str = ""
     variantes: list[VariantWrite] = Field(min_length=1, max_length=100)
+    grupo_ids: list[str] | None = None  # Explicit selection of included choices and paid extras
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -52,7 +53,7 @@ class FamilyWrite(BaseModel):
         return value.strip()
 
 
-def _family_response(family: ProdutoFamilia, products: list[Produto]) -> dict:
+def _family_response(family: ProdutoFamilia, products: list[Produto], direct_groups: list[str] | None = None) -> dict:
     return {
         "id": family.id,
         "nome": family.nome,
@@ -61,6 +62,7 @@ def _family_response(family: ProdutoFamilia, products: list[Produto]) -> dict:
         "categoria_id": family.categoria_id,
         "cardapio_id": family.cardapio_id,
         "imagem": family.imagem,
+        "grupo_ids": sorted(set(direct_groups or [])),
         "variantes": [
             {
                 "produto_id": product.id,
@@ -85,7 +87,18 @@ def list_families(
     if not families:
         return []
     products = db.query(Produto).filter(Produto.restaurante_id == tenant, Produto.familia_id.in_([f.id for f in families])).all()
-    return [_family_response(f, products) for f in families]
+    direct_links = db.query(ProdutoGrupoModificador).filter(
+        ProdutoGrupoModificador.restaurante_id == tenant,
+        ProdutoGrupoModificador.produto_id.in_([p.id for p in products]),
+    ).all() if products else []
+    groups_by_product: dict[str, set[str]] = {}
+    for link in direct_links:
+        groups_by_product.setdefault(link.produto_id, set()).add(link.grupo_id)
+    return [
+        _family_response(f, products, [gid for product in products if product.familia_id == f.id
+                                      for gid in groups_by_product.get(product.id, set())])
+        for f in families
+    ]
 
 
 def _write_family(
@@ -110,6 +123,16 @@ def _write_family(
     labels = [variant.rotulo.casefold() for variant in payload.variantes]
     if len(labels) != len(set(labels)):
         raise HTTPException(422, "Cada variação precisa de um nome diferente.")
+    if payload.grupo_ids is not None:
+        if len(payload.grupo_ids) != len(set(payload.grupo_ids)):
+            raise HTTPException(422, "Não repita o mesmo grupo de personalização.")
+        groups = db.query(GrupoModificador.id).filter(
+            GrupoModificador.restaurante_id == tenant,
+            GrupoModificador.id.in_(payload.grupo_ids),
+            GrupoModificador.tipo != "__archived__",
+        ).all() if payload.grupo_ids else []
+        if len(groups) != len(payload.grupo_ids):
+            raise HTTPException(404, "Grupo de personalização não encontrado neste restaurante.")
     requested_ids = [v.produto_id for v in payload.variantes if v.produto_id]
     if len(requested_ids) != len(set(requested_ids)):
         raise HTTPException(422, "Um SKU não pode aparecer duas vezes.")
@@ -198,7 +221,24 @@ def _write_family(
     members = db.query(Produto).filter(
         Produto.restaurante_id == tenant, Produto.familia_id == existing.id,
     ).all()
-    response = _family_response(existing, members)
+    if payload.grupo_ids is not None:
+        member_ids = [member.id for member in members]
+        direct_links = db.query(ProdutoGrupoModificador).filter(
+            ProdutoGrupoModificador.restaurante_id == tenant,
+            ProdutoGrupoModificador.produto_id.in_(member_ids),
+        ).with_for_update().all()
+        if any(link.min_selecoes is not None or link.max_selecoes is not None for link in direct_links):
+            raise HTTPException(409, "Existem regras específicas por produto. Revise-as antes de sincronizar a família.")
+        wanted = set(payload.grupo_ids)
+        for link in direct_links:
+            if link.grupo_id not in wanted:
+                db.delete(link)
+        by_pair = {(link.produto_id, link.grupo_id) for link in direct_links}
+        for member in members:
+            for group_id in wanted:
+                if (member.id, group_id) not in by_pair:
+                    db.add(ProdutoGrupoModificador(restaurante_id=tenant, produto_id=member.id, grupo_id=group_id))
+    response = _family_response(existing, members, payload.grupo_ids)
     db.commit()
     return response
 
