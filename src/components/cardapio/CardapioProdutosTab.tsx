@@ -528,7 +528,7 @@ export function CardapioProdutosTab({
             <span className="px-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Fotos</span>
             {mediaOptions.map((option) => {
               const count = option.value === 'TODAS'
-                ? produtos.length
+                ? listProducts.length
                 : option.value === 'SEM_FOTO'
                   ? mediaStats.missing
                   : option.value === 'UMA_FOTO'
@@ -834,7 +834,7 @@ export function CardapioProdutosTab({
                         >
                           {isAvailable ? <PauseCircle size={14} /> : <PlayCircle size={14} />}
                           {pendingProductId === product.id ? 'Salvando...' : isAvailable ? 'Pausar venda' : 'Voltar a vender'}
-                        </button>}
+                        </button>}}
                       </div>
                     )}
                   </div>
