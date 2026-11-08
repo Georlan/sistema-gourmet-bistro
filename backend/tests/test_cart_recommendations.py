@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from app.database import Base, current_restaurante_id
 from app.models import Categoria, ConfiguracaoRestaurante, Produto, Restaurante
 from app.routes.cardapio_digital import (
+    _public_configuration,
+    _public_restaurant_payload,
     CartRecommendationsWrite,
     obter_recomendacoes_sacola,
     salvar_recomendacoes_sacola,
@@ -58,6 +60,9 @@ def test_curated_skus_preserve_order_and_reset_to_automatic(catalog):
     assert obter_recomendacoes_sacola(db=db, current_user=object()) == {"produto_ids": ["queijo", "carne"]}
     config = db.query(ConfiguracaoRestaurante).filter_by(restaurante_id=91).one()
     assert config.recomendacoes_sacola_ids == ["queijo", "carne"]
+    public_config = _public_configuration(db, 91)
+    payload = _public_restaurant_payload(db.query(Restaurante).filter_by(id=91).one(), public_config)
+    assert payload["recomendacoes_sacola_ids"] == ["queijo", "carne"]
     assert update(db, [], ["queijo", "carne"]) == {"produto_ids": []}
     db.refresh(config)
     assert config.recomendacoes_sacola_ids is None
