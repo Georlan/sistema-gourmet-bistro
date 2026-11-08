@@ -128,6 +128,10 @@ export function normalizeCatalogSnapshot(payload: unknown): CatalogSnapshot {
         grupos_modificadores: normalizeModifierGroups(item.grupos_modificadores),
         ativo: item.ativo !== false,
         cardapio_id: typeof item.cardapio_id === 'string' ? item.cardapio_id : null,
+        // Preserve explicit family identity through the one operational catalog
+        // owner. Losing this field makes the editor open a variant as a product.
+        familia_id: typeof item.familia_id === 'string' ? item.familia_id : null,
+        variacao_rotulo: typeof item.variacao_rotulo === 'string' ? item.variacao_rotulo : null,
       } satisfies CatalogProduct;
     })
     .filter((item) => item.id && item.nome && item.categoria_id && Number.isFinite(item.preco))
