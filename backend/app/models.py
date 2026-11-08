@@ -258,6 +258,34 @@ class ProdutoFamilia(Base):
     imagem = Column(Text, nullable=False, default="")
 
 
+class ProdutoFamiliaGrupoModificador(Base):
+    """A reusable customization group selected once for an entire product family.
+
+    Variant-specific quantity limits remain in ProdutoGrupoModificador. The
+    SKU itself, never this family link, is the item sold and priced.
+    """
+
+    __tablename__ = "produto_familia_grupo_modificadores"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["restaurante_id", "familia_id"],
+            ["produto_familias.restaurante_id", "produto_familias.id"],
+            name="fk_produto_familia_grupo_familia_tenant",
+            ondelete="CASCADE",
+        ),
+    )
+
+    restaurante_id = Column(
+        Integer, ForeignKey("restaurantes.id"), primary_key=True,
+        default=lambda: current_restaurante_id.get(), nullable=False,
+    )
+    familia_id = Column(String(36), primary_key=True)
+    grupo_id = Column(
+        String, ForeignKey("grupo_modificadores.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+
 class Produto(Base):
     __tablename__ = "produtos"
     __table_args__ = (

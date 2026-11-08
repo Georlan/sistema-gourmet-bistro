@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db, require_tenant_id
 from ..marmitaria_catalog import enabled as marmitaria_enabled
-from ..models import Cardapio, Categoria, Produto, ProdutoFamilia, Usuario
+from ..models import Cardapio, Categoria, GrupoModificador, Produto, ProdutoFamilia, ProdutoFamiliaGrupoModificador, Usuario
 from ..security import get_current_user, require_permission
 from ..services.storage_paths import validate_tenant_storage_reference
 from .products import notify_catalog_update
@@ -52,6 +52,24 @@ class FamilyWrite(BaseModel):
         return value.strip()
 
 
+class FamilyPersonalizationsUpdate(BaseModel):
+    """The shared choices visible in every variant (not the flavor/size)."""
+
+    model_config = ConfigDict(extra="forbid")
+    grupo_ids: list[str] = Field(default_factory=list, max_length=100)
+    grupos_anteriores: list[str] = Field(default_factory=list, max_length=100)
+
+
+def _family_group_ids(db: Session, tenant: int, family_id: str) -> list[str]:
+    return sorted({
+        str(row.grupo_id)
+        for row in db.query(ProdutoFamiliaGrupoModificador).filter(
+            ProdutoFamiliaGrupoModificador.restaurante_id == tenant,
+            ProdutoFamiliaGrupoModificador.familia_id == family_id,
+        ).all()
+    })
+
+
 def _family_response(family: ProdutoFamilia, products: list[Produto]) -> dict:
     return {
         "id": family.id,
@@ -88,6 +106,83 @@ def list_families(
     # Group inheritance belongs to the existing canonical modifier resolver.
     # Family membership never duplicates or unions per-SKU personalization.
     return [_family_response(f, products) for f in families]
+
+
+@router.get("/{family_id}/personalizacoes")
+def get_family_personalizations(
+    family_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    del current_user
+    tenant = require_tenant_id()
+    family = db.query(ProdutoFamilia).filter(
+        ProdutoFamilia.id == family_id,
+        ProdutoFamilia.restaurante_id == tenant,
+    ).first()
+    if family is None:
+        raise HTTPException(404, "Produto com variações não encontrado.")
+    return {"familia_id": family_id, "grupo_ids": _family_group_ids(db, tenant, family_id)}
+
+
+@router.put("/{family_id}/personalizacoes")
+def update_family_personalizations(
+    family_id: str,
+    payload: FamilyPersonalizationsUpdate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Reuse existing groups without copying them into each variant's SKU."""
+    del current_user
+    tenant = require_tenant_id()
+    if marmitaria_enabled(db, tenant):
+        raise HTTPException(409, "A composição de marmitas tem regras próprias.")
+    family = db.query(ProdutoFamilia).filter(
+        ProdutoFamilia.id == family_id,
+        ProdutoFamilia.restaurante_id == tenant,
+    ).with_for_update().first()
+    if family is None:
+        raise HTTPException(404, "Produto com variações não encontrado.")
+
+    requested = [value.strip() for value in payload.grupo_ids]
+    expected = [value.strip() for value in payload.grupos_anteriores]
+    if any(not value for value in requested + expected):
+        raise HTTPException(422, "Identificador de personalização inválido.")
+    if len(set(requested)) != len(requested) or len(set(expected)) != len(expected):
+        raise HTTPException(422, "Não repita a mesma personalização.")
+
+    existing = db.query(ProdutoFamiliaGrupoModificador).filter(
+        ProdutoFamiliaGrupoModificador.restaurante_id == tenant,
+        ProdutoFamiliaGrupoModificador.familia_id == family_id,
+    ).with_for_update().all()
+    existing_ids = {str(link.grupo_id) for link in existing}
+    if existing_ids != set(expected):
+        raise HTTPException(409, "As personalizações mudaram em outro acesso. Reabra o produto.")
+
+    valid = {
+        str(group.id)
+        for group in db.query(GrupoModificador).filter(
+            GrupoModificador.restaurante_id == tenant,
+            GrupoModificador.id.in_(requested),
+            GrupoModificador.tipo.in_(("opcional", "obrigatorio", "meio_a_meio")),
+        ).all()
+    } if requested else set()
+    if valid != set(requested):
+        raise HTTPException(422, "Grupo inválido ou pertencente a outro restaurante.")
+
+    for link in existing:
+        if link.grupo_id not in requested:
+            db.delete(link)
+    for group_id in set(requested) - existing_ids:
+        db.add(ProdutoFamiliaGrupoModificador(
+            restaurante_id=tenant, familia_id=family_id, grupo_id=group_id,
+        ))
+    db.commit()
+    notify_catalog_update(background_tasks, "Escolhas do produto com variações atualizadas", tenant)
+    return {"familia_id": family_id, "grupo_ids": sorted(set(requested))}
+
+
 
 def _write_family(
     db: Session,
