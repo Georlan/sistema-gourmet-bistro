@@ -23,8 +23,8 @@ test('CardapioProductModal - modificadores e adicionais visíveis e validação 
   );
   assert.match(
     modalSource,
-    /const hasUnsatisfied = unsatisfiedModifiers\.length > 0;/,
-    'Deve expor hasUnsatisfied para feedback visual em tempo real',
+    /const hasUnsatisfied = needsVariantSelection \|\| unsatisfiedModifiers\.length > 0;/,
+    'Deve expor hasUnsatisfied para modificadores ou variante obrigatória ainda não escolhidos',
   );
 
   // 3. Bloqueio no avanço (handleAdd) se houver grupos obrigatórios não satisfeitos
@@ -37,8 +37,20 @@ test('CardapioProductModal - modificadores e adicionais visíveis e validação 
   // 4. Indicador visual antes do botão principal quando faltar opção obrigatória
   assert.match(
     modalSource,
-    /Escolha \{unsatisfiedModifiers\.map\(\(m\) => m\.title\)\.join\(", "\)\} para continuar/,
-    'Deve exibir aviso orientando a seleção do modificador obrigatório',
+    /Escolha \$\{unsatisfiedModifiers\.map\(\(m\) => m\.title\)\.join\(", "\)\} para continuar/,
+    'Deve exibir aviso orientando a seleção de modificadores obrigatórios',
+  );
+
+  // 4b. A variante (tamanho/sabor) é tão obrigatória quanto os modificadores.
+  assert.match(
+    modalSource,
+    /if \(needsVariantSelection\) \{[\s\S]*setFeedback\([\s\S]*return;/,
+    'Deve bloquear a inclusão de família sem escolha do tamanho ou sabor',
+  );
+  assert.match(
+    modalSource,
+    /Escolha o tamanho para continuar[\s\S]*Escolha o sabor para continuar/,
+    'Deve informar qual escolha está faltando no modal',
   );
 
   // 5. Botão de adicionar comunica a pendência e estiliza estado de aviso

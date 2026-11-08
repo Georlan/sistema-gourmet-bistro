@@ -2,21 +2,25 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Product } from '../src/cardapio/CardapioTypes';
 import { isGroupedProduct } from '../src/cardapio/catalogGrouping';
-import { resolvePairingDisplay } from '../src/cardapio/resolvePairingDisplay';
+import { resolveCatalogDisplayProduct, resolvePairingDisplay } from '../src/cardapio/resolvePairingDisplay';
 
 function product(id: string, name: string, category: string, price: number): Product {
   return { id, name, category, price, description: '', image: '', isAvailable: true };
 }
 
-test('batatas individuais são a mesma identidade na vitrine e nas sugestões', () => {
+test('batatas tradicionais sugeridas abrem o seletor do mesmo card do catálogo', () => {
   const catalog = [
     product('p', 'Batata Frita Pequena (200 g)', 'Batatas Fritas', 12),
     product('m', 'Batata Frita Média (300 g)', 'Batatas Fritas', 15),
+    product('g', 'Batata Frita Grande (400 g)', 'Batatas Fritas', 18),
     product('esp', 'Batata Frita Especial (300 g)', 'Batatas Fritas', 24),
   ];
-  const result = resolvePairingDisplay(catalog, [catalog[0], catalog[1]], '1', 4);
-  assert.deepEqual(result.map(item => item.id), ['p', 'm']);
-  assert.ok(result.every(item => !isGroupedProduct(item)));
+  const result = resolvePairingDisplay(catalog, [catalog[0], catalog[1], catalog[3]], '1', 4);
+  assert.deepEqual(result.map(item => item.id), ['family-batata-tradicional', 'esp']);
+  assert.ok(isGroupedProduct(result[0]));
+  assert.equal(result[0].requiresExplicitVariantSelection, true);
+  assert.equal(resolveCatalogDisplayProduct(catalog, catalog[2], '1').id, 'family-batata-tradicional');
+  assert.equal(resolveCatalogDisplayProduct(catalog, catalog[3], '1').id, 'esp');
 });
 
 test('batata especial mantém somente sua escolha real de bacon ou calabresa', () => {
@@ -49,6 +53,19 @@ test('quando catálogo usa família, sugestão abre o mesmo produto agrupado', (
   assert.equal(result[0].id, 'family-sucos-300ml');
   assert.equal(result[1].id, 'batata-p');
   assert.equal(isGroupedProduct(result[1]), false);
+});
+
+test('pastéis sugeridos e em destaque usam o seletor do tamanho correto', () => {
+  const catalog = [
+    product('m-sol', 'Pastel Médio de Carne de Sol', 'Pastelões e Pastel Médio', 7),
+    product('m-frango', 'Pastel Médio de Frango', 'Pastelões e Pastel Médio', 7),
+    product('g-sol', 'Pastelão de Carne de Sol', 'Pastelões e Pastel Médio', 17),
+    product('g-frango', 'Pastelão de Frango', 'Pastelões e Pastel Médio', 16),
+  ];
+  assert.equal(resolveCatalogDisplayProduct(catalog, catalog[0], '1').id, 'family-pastel-medio');
+  assert.equal(resolveCatalogDisplayProduct(catalog, catalog[3], '1').id, 'family-pastelao');
+  assert.deepEqual(resolvePairingDisplay(catalog, [catalog[0], catalog[2], catalog[3]], '1').map(p => p.id),
+    ['family-pastel-medio', 'family-pastelao']);
 });
 
 test('sem agrupamento, recomendação de outro restaurante continua individual', () => {

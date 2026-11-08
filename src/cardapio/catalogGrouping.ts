@@ -16,7 +16,9 @@ export interface DisplayVariant {
 
 export interface GroupedDisplayProduct extends Product {
   isGrouped: true;
-  groupKind: 'pasteis' | 'sucos' | 'vitaminas' | 'refrigerantes' | 'generic';
+  groupKind: 'batata-tradicional' | 'pastel-medio' | 'pastelao' | 'sucos' | 'vitaminas' | 'refrigerantes' | 'generic';
+  /** Exige escolha consciente antes de adicionar o SKU real à sacola. */
+  requiresExplicitVariantSelection?: boolean;
   groupTitle: string;
   groupDescription: string;
   minPrice: number;
@@ -78,11 +80,12 @@ export function calculateProductMinStartingPrice(product: Product): number {
 }
 
 function formatVariantLabel(name: string, kind: string): string {
-  const norm = normalize(name);
-  if (kind === 'pasteis') {
+  if (kind === 'pastel-medio' || kind === 'pastelao') {
     return name
-      .replace(/^pastel\s*(medio|médio|ao|ão)?\s*(de\s*)?/i, '')
-      .replace(/^pastel\s*/i, '')
+      .replace(/^pastel\s+m[eé]dio\s*/i, '')
+      .replace(/^pastel[aã]o\s*/i, '')
+      .replace(/^de\s+/i, '')
+      .replace(/^sabor\s+/i, '')
       .replace(/^\w/, (c) => c.toUpperCase());
   }
   if (kind === 'sucos') {
@@ -114,50 +117,93 @@ export function groupCategoryProductsForDisplay(
 
   const catNorm = normalize(categoryName);
 
-  // Batatas são produtos individuais: quantidade, tamanho e preço devem estar
-  // visíveis no catálogo, sem uma etapa de seleção de família. Não converta
-  // produtos reais em opções sintéticas nem oculte suas descrições.
-  if (catNorm.includes('batata') || catNorm.includes('frita')) return products;
+  // Agrupa apenas tamanhos do MESMO preparo, identificados nos produtos reais.
+  // Outras batatas (especial, frango, carne de sol) ficam com seu próprio SKU.
+  if (catNorm.includes('batata') || catNorm.includes('frita')) {
+    const sizes = products.flatMap((p) => {
+      const match = normalize(p.name).match(/^batata frita (pequena|media|grande)\s*\((\d+)\s*g\)$/);
+      return match ? [{ product: p, size: match[1], grams: Number(match[2]) }] : [];
+    }).sort((a, b) => a.grams - b.grams);
 
-  // 2. Grupo Pastéis
-  if (catNorm.includes('pastel') || catNorm.includes('pasteis')) {
-    const pasteis = products.filter((p) => normalize(p.name).includes('pastel'));
-    if (pasteis.length >= 2) {
-      const remaining = products.filter((p) => !pasteis.includes(p));
-      const variants: DisplayVariant[] = pasteis.map((p) => ({
-        id: p.id,
-        label: formatVariantLabel(p.name, 'pasteis'),
+    if (sizes.length >= 2) {
+      const groupedProducts = new Set(sizes.map((entry) => entry.product));
+      const variants: DisplayVariant[] = sizes.map(({ product: p, size, grams }) => ({
+        id: String(p.id),
+        label: `${size === 'pequena' ? 'Pequena' : size === 'media' ? 'Média' : 'Grande'} · ${grams} g`,
         description: p.description,
         price: calculateProductMinStartingPrice(p),
         product: p,
         isAvailable: p.isAvailable !== false,
       }));
-
-      const availableVariants = variants.filter((v) => v.isAvailable);
-      const pricingPool = availableVariants.length > 0 ? availableVariants : variants;
-      const prices = pricingPool.map((v) => v.price);
-      const minPrice = Math.min(...prices);
-      const maxPrice = Math.max(...prices);
-      const leadProduct = pasteis.find((p) => normalize(p.name).includes('carne de sol')) || pasteis[0];
-
+      const available = variants.filter((variant) => variant.isAvailable);
+      const values = (available.length > 0 ? available : variants).map((variant) => variant.price);
+      const lead = sizes[0].product;
       const grouped: GroupedDisplayProduct = {
-        ...leadProduct,
-        id: 'family-pasteis',
-        name: 'Pastéis (Médio e Pastelão)',
-        description: 'Pastel crocante e sequinho frito na hora. Escolha o tamanho (Médio ou Pastelão) e seu sabor favorito.',
+        ...lead,
+        id: 'family-batata-tradicional',
+        name: 'Batata Frita Tradicional',
+        description: 'Batata frita com molho rosé. Escolha o tamanho da porção.',
+        price: Math.min(...values),
+        isGrouped: true,
+        groupKind: 'batata-tradicional',
+        requiresExplicitVariantSelection: true,
+        groupTitle: 'Batata Frita Tradicional',
+        groupDescription: 'Escolha o tamanho:',
+        minPrice: Math.min(...values),
+        hasVariablePrice: Math.max(...values) > Math.min(...values),
+        variants,
+        isAvailable: variants.some((variant) => variant.isAvailable),
+      };
+      return [grouped, ...products.filter((p) => !groupedProducts.has(p))];
+    }
+    return products;
+  }
+
+  // Pastéis: o tamanho já é a identidade do card. Dentro dele escolhe-se
+  // apenas um sabor. Não criar escolhas de tamanho duplicadas no modal.
+  if (catNorm.includes('pastel') || catNorm.includes('pasteis')) {
+    const groups = [
+      { kind: 'pastel-medio' as const, title: 'Pastel Médio', matcher: /^pastel medio(?:\s|$)/ },
+      { kind: 'pastelao' as const, title: 'Pastelão', matcher: /^pastelao(?:\s|$)/ },
+    ];
+    const groupedProducts = new Set<Product>();
+    const display: CatalogDisplayItem[] = [];
+
+    for (const group of groups) {
+      const flavors = products.filter((p) => group.matcher.test(normalize(p.name)));
+      if (flavors.length < 2) continue;
+      const variants: DisplayVariant[] = flavors.map((p) => ({
+        id: String(p.id),
+        label: formatVariantLabel(p.name, group.kind),
+        description: p.description,
+        price: calculateProductMinStartingPrice(p),
+        product: p,
+        isAvailable: p.isAvailable !== false,
+      }));
+      const available = variants.filter((v) => v.isAvailable);
+      const values = (available.length ? available : variants).map((v) => v.price);
+      const minPrice = Math.min(...values);
+      flavors.forEach((p) => groupedProducts.add(p));
+      display.push({
+        ...flavors[0],
+        id: `family-${group.kind}`,
+        name: group.title,
+        description: group.kind === 'pastel-medio'
+          ? 'Pastel médio crocante e preparado na hora. Escolha o recheio.'
+          : 'Pastelão crocante e preparado na hora. Escolha o recheio.',
         price: minPrice,
         isGrouped: true,
-        groupKind: 'pasteis',
-        groupTitle: 'Pastéis (Médio e Pastelão)',
-        groupDescription: 'Escolha seu sabor favorito e o tamanho do pastel:',
+        groupKind: group.kind,
+        requiresExplicitVariantSelection: true,
+        groupTitle: group.title,
+        groupDescription: 'Escolha o sabor:',
         minPrice,
-        hasVariablePrice: true, // Pastéis têm opção Pastelão com acréscimo
+        hasVariablePrice: Math.max(...values) > minPrice,
         variants,
         isAvailable: variants.some((v) => v.isAvailable),
-      };
-
-      return [grouped, ...remaining];
+      });
     }
+    return [...display, ...products.filter((p) => !groupedProducts.has(p))];
   }
 
   // 3. Grupo Vitaminas e Sucos

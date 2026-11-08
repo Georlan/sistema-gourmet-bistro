@@ -65,7 +65,7 @@ test('link de rota usa Google Maps quando cadastrado somente o Plus Code', async
   await expect(mapsLink).toHaveAttribute('target', '_blank');
 });
 
-test('batata sugerida e batata do catálogo abrem o mesmo SKU sem seleção duplicada', async ({ page }) => {
+test('batata tradicional usa um único card com tamanho obrigatório na categoria e na sugestão', async ({ page }) => {
   await menu(page, payload => {
     payload.restaurante.id = 1;
     payload.categorias.push({ id: 30, nome: 'Batatas Fritas' });
@@ -73,23 +73,79 @@ test('batata sugerida e batata do catálogo abrem o mesmo SKU sem seleção dupl
       { id: 'batata-p', nome: 'Batata Frita Pequena (200 g)', descricao: 'Com molho rosé', preco: 12, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
       { id: 'batata-m', nome: 'Batata Frita Média (300 g)', descricao: 'Com molho rosé', preco: 15, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
       { id: 'batata-g', nome: 'Batata Frita Grande (400 g)', descricao: 'Com molho rosé', preco: 18, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
+      { id: 'especial', nome: 'Batata Frita Especial (300 g)', descricao: 'Escolha bacon ou calabresa', preco: 24, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
     );
   });
   const catalog = page.locator('[data-menu-category="Batatas Fritas"]');
-  await expect(catalog.locator('[id^="product-card-"]')).toHaveCount(3);
-  await expect(page.locator('#pairing-card-batata-p')).toBeVisible();
+  await expect(catalog.locator('[id^="product-card-"]')).toHaveCount(2);
+  await expect(catalog.locator('#product-card-family-batata-tradicional')).toContainText('A partir de R$');
+  await expect(page.locator('#pairing-card-family-batata-tradicional')).toBeVisible();
 
-  await page.locator('#pairing-card-batata-p').click();
+  await page.locator('#pairing-card-family-batata-tradicional').click();
   const modal = page.locator('#product-details-modal');
-  await expect(modal).toContainText('Batata Frita Pequena (200 g)');
-  await expect(modal).not.toContainText('Escolha a preparação');
-  await expect(modal).not.toContainText('Tamanho');
+  await expect(modal).toContainText('Batata Frita Tradicional');
+  await expect(modal.locator('#variant-btn-batata-p')).toContainText('Pequena · 200 g');
+  await expect(modal.locator('#variant-btn-batata-m')).toContainText('Média · 300 g');
+  await expect(modal.locator('#variant-btn-batata-g')).toContainText('Grande · 400 g');
+  await modal.locator('#btn-add-to-cart-action').click();
+  await expect(modal).toContainText('Escolha o tamanho antes de adicionar');
+  await modal.locator('#variant-btn-batata-m').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 15,00');
   await modal.locator('#btn-close-modal').click();
 
-  await catalog.locator('#product-card-batata-p').click();
-  await expect(modal).toContainText('Batata Frita Pequena (200 g)');
+  await catalog.locator('#product-card-family-batata-tradicional').click();
+  await expect(modal).toContainText('Escolha o tamanho:');
+  await modal.locator('#variant-btn-batata-g').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 18,00');
+});
+
+test('destaque da batata abre o mesmo seletor sem fast-add de produto sintético', async ({ page }) => {
+  await menu(page, payload => {
+    payload.restaurante.id = 1;
+    payload.produtos = payload.produtos.filter((product: any) => product.id !== 201);
+    payload.categorias.push({ id: 30, nome: 'Batatas Fritas' });
+    payload.produtos.push(
+      { id: 201, nome: 'Batata Frita Pequena (200 g)', descricao: 'Com molho rosé', preco: 12, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
+      { id: 'batata-m', nome: 'Batata Frita Média (300 g)', descricao: 'Com molho rosé', preco: 15, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
+      { id: 'batata-g', nome: 'Batata Frita Grande (400 g)', descricao: 'Com molho rosé', preco: 18, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
+    );
+  });
+  const hero = page.locator('#koma-art-hero-showcase');
+  await expect(hero).toContainText('Batata Frita Tradicional');
+  await hero.locator('#btn-hero-fast-add-family-batata-tradicional').click();
+  const modal = page.locator('#product-details-modal');
+  await expect(modal).toContainText('Escolha o tamanho:');
+  await modal.locator('#variant-btn-batata-g').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 18,00');
+});
+
+test('pastel médio e pastelão oferecem somente sabores com preço correspondente', async ({ page }) => {
+  await menu(page, payload => {
+    payload.restaurante.id = 1;
+    payload.categorias.push({ id: 40, nome: 'Pastelões e Pastel Médio' });
+    payload.produtos.push(
+      { id: 'pastel-m-sol', nome: 'Pastel Médio de Carne de Sol', descricao: 'Carne de sol, queijo e catupiry', preco: 7, categoria_id: 40, imagem_url: '', grupos_modificadores: [] },
+      { id: 'pastel-m-frango', nome: 'Pastel Médio de Frango', descricao: 'Frango, catupiry e queijo', preco: 7, categoria_id: 40, imagem_url: '', grupos_modificadores: [] },
+      { id: 'pastel-g-sol', nome: 'Pastelão de Carne de Sol', descricao: 'Carne de sol, queijo e catupiry', preco: 17, categoria_id: 40, imagem_url: '', grupos_modificadores: [] },
+      { id: 'pastel-g-frango', nome: 'Pastelão de Frango', descricao: 'Frango, catupiry e queijo', preco: 16, categoria_id: 40, imagem_url: '', grupos_modificadores: [] },
+    );
+  });
+  const catalog = page.locator('[data-menu-category="Pastelões e Pastel Médio"]');
+  await expect(catalog.locator('[id^="product-card-"]')).toHaveCount(2);
+  await catalog.locator('#product-card-family-pastelao').click();
+  const modal = page.locator('#product-details-modal');
+  await expect(modal).toContainText('Pastelão');
+  await expect(modal).toContainText('Escolha o sabor:');
   await expect(modal).not.toContainText('Tamanho');
-  await expect(modal.locator('#btn-add-to-cart-action')).toBeEnabled();
+  await modal.locator('#btn-add-to-cart-action').click();
+  await expect(modal).toContainText('Escolha o sabor antes de adicionar');
+  await modal.locator('#variant-btn-pastel-g-sol').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 17,00');
+  await modal.locator('#btn-close-modal').click();
+  await catalog.locator('#product-card-family-pastel-medio').click();
+  await expect(modal).toContainText('Pastel Médio');
+  await modal.locator('#variant-btn-pastel-m-frango').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 7,00');
 });
 
  test('ranking real, IDs únicos e consulta única ao navegar', async({page})=>{

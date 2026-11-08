@@ -7,6 +7,25 @@ import {
 } from './catalogGrouping';
 
 /**
+ * Resolve também o destaque/hero para a identidade canônica do catálogo.
+ * O objeto agrupado continua exibindo SKUs reais ao escolher sua variante.
+ */
+export function resolveCatalogDisplayProduct(
+  catalog: Product[],
+  product: Product,
+  restaurantId?: string | number,
+): CatalogDisplayItem {
+  const categoryProducts = catalog.filter((candidate) => candidate.category === product.category);
+  const entries = groupCategoryProductsForDisplay(product.category, categoryProducts, restaurantId);
+  for (const item of entries) {
+    if (isGroupedProduct(item) && item.variants.some((variant) => String(variant.id) === String(product.id))) {
+      return item;
+    }
+  }
+  return product;
+}
+
+/**
  * Recomendações e catálogo devem abrir a MESMA montagem.
  *
  * Se o catálogo mostra uma família configurada, converte qualquer variante
