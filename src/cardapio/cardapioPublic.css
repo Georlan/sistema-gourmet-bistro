@@ -315,6 +315,10 @@
   cursor: pointer;
 }
 
+.cardapio-public-mobile-share {
+  display: none;
+}
+
 .cardapio-public-contact-link {
   display: inline-flex;
   height: 38px;
@@ -1739,8 +1743,39 @@
     grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .cardapio-public-header__context,
+  .cardapio-public-header__context {
+    display: none;
+  }
+
+  /* Contact methods are real actions, not extra catalog content.
+     Keep them visible below the search field on narrow screens. */
+  .cardapio-public-header__searchrow {
+    flex-wrap: wrap;
+  }
+
   .cardapio-public-contact-actions {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .cardapio-public-contact-link {
+    min-height: 40px;
+  }
+
+  .cardapio-public-contact-actions .cardapio-public-social-link {
+    width: 40px;
+    height: 40px;
+  }
+
+  .cardapio-public-mobile-share {
+    display: inline-grid;
+  }
+
+  /* Only one share control is visible per breakpoint. */
+  #btn-share-header {
     display: none;
   }
 
