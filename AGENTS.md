@@ -7,6 +7,13 @@
 - **Nunca** forje contrato, consentimento, identidade, Pix, pagamento ou login de terceiro. A possibilidade de postergar dados fiscais/billing **para após o início do trial** é objetivo de produto a validar juridicamente e implementar com segurança, **não** autorização para ignorar controles atuais. Trial real só por liberação canônica explícita; preparação não consome dias.
 - Verifique o percurso real no celular e se a política pública de pedidos coincide com o bloqueio backend. Uma entrega deve trazer `Concluído / Bloqueia agora / Pode ficar para depois`; cada bloqueio vira correção focal, PR, CI e merge seguro. Evite novas auditorias gerais e fluxos paralelos de cadastro.
 
+## Cardápio — cadastro simples e limpeza obrigatória
+
+- Antes de adicionar/migrar produtos, tamanhos, sabores ou complementos, consulte `docs/architecture/cardapio-cadastro-simples-sem-redundancia.md`.
+- **Nunca deixe registros redundantes apenas pausados após substituí-los.** Faça limpeza com verificação de referências: exclusão física somente se não houver histórico/dependências; caso contrário, arquive e oculte da gestão ativa preservando pedidos, fiscal e auditoria. Pausa temporária não é exclusão.
+- Produto, variação (tamanho/sabor), escolha incluída e adicional pago são conceitos distintos. O dono deve configurar tudo em linguagem simples, sem hardcode de tenant, regex de nomes ou grupos técnicos artificiais. Regras avançadas devem ser opcionais.
+- O agrupamento atual do ID1 é transitório; não confundi-lo com famílias nativas editáveis e não alterar a lógica específica da Marmitaria (P/M/G são produtos, limites por tamanho).
+
 ## Entrega e evidência
 
 - Trabalhar em branch e PR; nunca fazer push direto em `main`, force-push ou contornar checks/proteção.
