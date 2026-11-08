@@ -132,3 +132,65 @@ test('contato, Instagram e compartilhar permanecem acessíveis no cabeçalho mob
   await expect(shareMobile).toBeHidden();
   await expect(page.locator('#btn-share-header')).toBeVisible();
 });
+
+
+test('vitrine padrão do JE mantém contato e compartilhar visíveis no mobile artístico', async ({ page }) => {
+  await page.routeWebSocket('**/ws/**', () => {});
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'share', {
+      configurable: true,
+      value: async () => { document.documentElement.dataset.komaShareInvoked = 'true'; },
+    });
+  });
+  await page.route('http://127.0.0.1:8000/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/api/cardapio-digital/public') {
+      return route.fulfill({ json: {
+        restaurante: {
+          id: 905, nome: 'JE LANCHES QA', slug: 'qa-je-mobile',
+          aceitando_pedidos: true, status_override: 'Forçado Aberto',
+          delivery_ativo: false, formas_pagamento_aceitas: ['Dinheiro'],
+          socials: { whatsapp: '5588999112233', instagram: 'loja_contatos' },
+        },
+        categorias: [{ id: 1, nome: 'Pastéis' }],
+        produtos: [{ id: 901, nome: 'Pastel Médio de Carne Moída', preco: 7,
+          categoria_id: 1, grupos_modificadores: [] }],
+      } });
+    }
+    if (path === '/api/cardapio-digital/populares') return route.fulfill({ json: { produtos: [] } });
+    return route.fulfill({ json: {} });
+  });
+
+  // No ?vitrine=editorial override: match the real /c/je-lanches default.
+  await page.setViewportSize({ width: 390, height: 760 });
+  await page.goto('/c/qa-je-mobile');
+  await expect(page.locator('#koma-artistic-canopy')).toBeVisible();
+
+  const whatsapp = page.locator('#btn-whatsapp-mobile');
+  const instagram = page.locator('#btn-instagram-mobile');
+  const share = page.locator('#btn-share-mobile');
+  for (const width of [320, 390, 412, 600, 767]) {
+    await page.setViewportSize({ width, height: 760 });
+    await expect(whatsapp).toBeVisible();
+    await expect(instagram).toBeVisible();
+    await expect(share).toBeVisible();
+    await expect(page.locator('#btn-whatsapp-header')).toBeHidden();
+    await expect(page.locator('#btn-share-header')).toBeHidden();
+    const row = page.getByRole('navigation', { name: 'Contato e compartilhamento' });
+    const box = await row.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await expect(whatsapp).toHaveAttribute('href', 'https://wa.me/5588999112233');
+  await expect(instagram).toHaveAttribute('href', 'https://instagram.com/loja_contatos');
+  await share.click();
+  await expect(page.locator('html')).toHaveAttribute('data-koma-share-invoked', 'true');
+
+  await page.setViewportSize({ width: 768, height: 760 });
+  await expect(page.getByRole('navigation', { name: 'Contato e compartilhamento' })).toBeHidden();
+  await expect(page.locator('#btn-whatsapp-header')).toBeVisible();
+  await expect(page.locator('#btn-instagram-header')).toBeVisible();
+  await expect(page.locator('#btn-share-header')).toBeVisible();
+});
