@@ -851,6 +851,9 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         setIsWsConnected(true);
         currentDelay = 2000;
         if (isReconnect) {
+          // Catalog updates can be missed while this socket is disconnected.
+          // Reuse the existing shared catalog owner; never create a second cache.
+          scheduleRealtimeRefresh({ catalog: true });
           fetchConfig();
           fetchTables();
           fetchOrdersFromAPI();
@@ -1040,7 +1043,11 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     const handleVisibilityChange = () => {
       if (document.hidden || stopped) return;
       const socket = wsRef.current;
-      if (!socket || socket.readyState === WebSocket.CLOSED) {
+      if (socket?.readyState === WebSocket.OPEN) {
+        // A backgrounded tab may miss messages despite a seemingly healthy socket.
+        scheduleRealtimeRefresh({ catalog: true });
+      } else if (!socket || socket.readyState === WebSocket.CLOSED) {
+        // Reconnect performs the catalog reconciliation on the next onopen.
         currentDelay = 2000;
         connectWS();
       }
