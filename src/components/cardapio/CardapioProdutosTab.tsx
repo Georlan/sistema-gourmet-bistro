@@ -25,6 +25,7 @@ import { clsx } from 'clsx';
 import type { Product } from '../../types';
 import type { CatalogCategory } from '../../catalog/catalog';
 import PromotionsSettings from './PromotionsSettings';
+import CartRecommendationsSettings from './CartRecommendationsSettings';
 import { smartSearchMatch } from '../../domain';
 
 interface CardapioProdutosTabProps {
@@ -47,9 +48,11 @@ interface CardapioProdutosTabProps {
   promotionsConfig?: { apiBaseUrl: string; authHeaders: Record<string, string> };
   /** Names returned by the existing /produto-familias API. No SKU name parsing. */
   familyLabels?: Record<string, string>;
+  recommendationProducts?: Product[];
 }
 
 const PROMOTIONS_VIRTUAL_CATEGORY = '__KOMA_PROMOTIONS__';
+const RECOMMENDATIONS_VIRTUAL_CATEGORY = '__KOMA_CART_RECOMMENDATIONS__';
 
 type AvailabilityFilter = 'TODOS' | 'DISPONIVEIS' | 'PAUSADOS';
 type MediaFilter = 'TODAS' | 'SEM_FOTO' | 'UMA_FOTO' | 'GALERIA';
@@ -96,11 +99,13 @@ export function CardapioProdutosTab({
   onFocusCategoryHandled,
   promotionsConfig,
   familyLabels = {},
+  recommendationProducts,
 }: CardapioProdutosTabProps) {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('TODAS');
   const [promotionCount, setPromotionCount] = useState<number | null>(null);
   const isPromotionsView = Boolean(promotionsConfig && categoryFilter === PROMOTIONS_VIRTUAL_CATEGORY);
+  const isRecommendationsView = Boolean(promotionsConfig && categoryFilter === RECOMMENDATIONS_VIRTUAL_CATEGORY);
   const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>('TODOS');
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('TODAS');
   const [showPhotoFilters, setShowPhotoFilters] = useState(false);
@@ -367,6 +372,25 @@ export function CardapioProdutosTab({
               {promotionCount !== null && <span className="text-xs font-bold opacity-60">{promotionCount}</span>}
             </button>
           )}
+          {promotionsConfig && (
+            <button type="button"
+              onClick={() => {
+                if (selectionMode) leaveSelectionMode();
+                setSearch('');
+                setCategoryFilter(RECOMMENDATIONS_VIRTUAL_CATEGORY);
+              }}
+              aria-pressed={isRecommendationsView}
+              className={clsx(
+                'flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-left transition-colors',
+                isRecommendationsView
+                  ? 'border-emerald-500 bg-emerald-50 text-emerald-900 dark:border-emerald-500/60 dark:bg-emerald-500/15 dark:text-emerald-100'
+                  : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-300 dark:border-white/10 dark:bg-transparent dark:text-slate-300',
+              )}
+            >
+              <Gift size={16} aria-hidden="true" />
+              <span className="font-black">Recomendações</span>
+            </button>
+          )}
           {categorias.map((category) => {
             const stats = categoryStats.get(category.id) ?? { total: 0, available: 0, paused: 0 };
             const active = categoryFilter === String(category.id);
@@ -396,7 +420,13 @@ export function CardapioProdutosTab({
         </div>
       </section>
 
-      {isPromotionsView && promotionsConfig ? (
+      {isRecommendationsView && promotionsConfig ? (
+        <CartRecommendationsSettings
+          apiBaseUrl={promotionsConfig.apiBaseUrl}
+          authHeaders={promotionsConfig.authHeaders}
+          products={recommendationProducts || produtos}
+        />
+      ) : isPromotionsView && promotionsConfig ? (
         <PromotionsSettings
           apiBaseUrl={promotionsConfig.apiBaseUrl}
           authHeaders={promotionsConfig.authHeaders}

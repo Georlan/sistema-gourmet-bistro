@@ -1,7 +1,7 @@
 from ..services.online_payments.service import OnlinePaymentService
 from contextlib import contextmanager
 import logging
-from typing import Optional
+from typing import Optional, Literal
 from urllib.parse import quote
 import uuid
 from decimal import Decimal
@@ -85,6 +85,71 @@ def notify_cardapio_config_update(
         {"event": "config_updated"},
         restaurante_id,
     )
+
+
+class CartRecommendationsUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    modo: Literal["automatico", "manual"]
+    produto_ids: list[str] = Field(default_factory=list, max_length=4)
+
+
+@router.get("/recomendacoes-sacola")
+def obter_recomendacoes_sacola(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    del current_user
+    tenant = require_tenant_id()
+    config = db.query(ConfiguracaoRestaurante.recomendacoes_sacola_ids).filter(
+        ConfiguracaoRestaurante.restaurante_id == tenant,
+    ).first()
+    ids = config[0] if config is not None else None
+    return {"modo": "manual" if ids else "automatico", "produto_ids": ids or []}
+
+
+@router.put("/recomendacoes-sacola")
+def atualizar_recomendacoes_sacola(
+    payload: CartRecommendationsUpdate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Store an ordered tenant-owned SKU list; public consumers filter availability.
+
+    No item price or commercial family is copied into the configuration.
+    """
+    del current_user
+    tenant = require_tenant_id()
+    ids = [value.strip() for value in payload.produto_ids]
+    if len(set(ids)) != len(ids) or any(not value for value in ids):
+        raise HTTPException(422, "Selecione produtos sem repetir opções.")
+    if payload.modo == "manual" and not ids:
+        raise HTTPException(422, "Escolha pelo menos um produto para a recomendação manual.")
+    if payload.modo == "automatico" and ids:
+        raise HTTPException(422, "No modo automático não envie produtos selecionados.")
+
+    if ids:
+        valid = {
+            str(row[0]) for row in db.query(Produto.id).filter(
+                Produto.restaurante_id == tenant,
+                Produto.id.in_(ids),
+                Produto.ativo.is_(True),
+                Produto.somente_promocao.is_(False),
+            ).all()
+        }
+        if valid != set(ids):
+            raise HTTPException(422, "Produto inexistente, pausado, exclusivo de promoção ou de outro restaurante.")
+
+    config = db.query(ConfiguracaoRestaurante).filter(
+        ConfiguracaoRestaurante.restaurante_id == tenant,
+    ).with_for_update().first()
+    if config is None:
+        config = ConfiguracaoRestaurante(restaurante_id=tenant)
+        db.add(config)
+    config.recomendacoes_sacola_ids = ids if payload.modo == "manual" else None
+    db.commit()
+    notify_cardapio_config_update(background_tasks, tenant)
+    return {"modo": payload.modo, "produto_ids": ids}
 
 
 def _validate_asset_content(content_type: str, content: bytes) -> str:
@@ -234,6 +299,7 @@ def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoResta
         ConfiguracaoRestaurante.tabela_taxas_bairros,
         ConfiguracaoRestaurante.tabela_taxas_km,
         ConfiguracaoRestaurante.promocoes,
+        ConfiguracaoRestaurante.recomendacoes_sacola_ids,
         ConfiguracaoRestaurante.cardapio_ativo_id,
         ConfiguracaoRestaurante.cardapios_adicionais_ids,
     )
@@ -311,6 +377,7 @@ def _public_restaurant_payload(
         "taxa_entrega_padrao": float(configuracao.taxa_entrega_fixa) if configuracao and configuracao.taxa_entrega_fixa is not None else None,
         "cardapio_ativo_id": cardapio_ativo_id or (getattr(configuracao, "cardapio_ativo_id", None) if configuracao else None),
         "cardapio_ativo_nome": cardapio_ativo_nome,
+        "recomendacoes_sacola_ids": configuracao.recomendacoes_sacola_ids if configuracao else None,
     }
 
 

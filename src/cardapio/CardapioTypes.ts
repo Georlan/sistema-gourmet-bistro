@@ -121,6 +121,8 @@ export interface BrandConfig {
   categories: string[];
   products: Product[];
   popularProductIds?: string[];
+  /** Optional ordered real SKU IDs; absent means automatic cart recommendations. */
+  cartRecommendationSkuIds?: string[] | null;
   promotions?: CatalogPromotion[];
   explicitPromotionComposition?: boolean;
   promotionProducts?: Product[];
