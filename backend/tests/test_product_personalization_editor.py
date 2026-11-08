@@ -22,19 +22,18 @@ def catalog_db():
     token = current_restaurante_id.set(1)
     try:
         with Session(engine) as db:
-            db.add_all([
-                Restaurante(id=1, nome="Loja A", plano="pocket"),
-                Restaurante(id=2, nome="Loja B", plano="pocket"),
-            ])
+            # Base.metadata.after_create already seeds Restaurante(id=1).
+            # Only create the second tenant; never duplicate the global seed.
+            db.add(Restaurante(id=2, nome="Loja B", plano="pocket"))
             db.flush()
             db.add_all([
                 Categoria(id="cat", nome="Lanches", restaurante_id=1),
-                Categoria(id="cat", nome="Lanches", restaurante_id=2),
+                Categoria(id="cat-other", nome="Lanches", restaurante_id=2),
             ])
             db.flush()
             db.add_all([
                 Produto(id="burger", restaurante_id=1, categoria_id="cat", nome="Hambúrguer", preco=15),
-                Produto(id="burger", restaurante_id=2, categoria_id="cat", nome="Outra loja", preco=20),
+                Produto(id="burger-other", restaurante_id=2, categoria_id="cat-other", nome="Outra loja", preco=20),
                 GrupoModificador(id="included", restaurante_id=1, nome="Ponto", tipo="obrigatorio",
                                  min_selecoes=1, max_selecoes=1),
                 GrupoModificador(id="paid", restaurante_id=1, nome="Adicionais", tipo="opcional",
