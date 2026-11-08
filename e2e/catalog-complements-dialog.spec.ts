@@ -57,3 +57,59 @@ for (const profile of ['generic', 'marmitaria', 'pizzaria', 'acai', 'churrasco']
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 }
+
+
+test('o dono diferencia escolhas incluídas de adicionais pagos sem mexer em regras avançadas', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_active_tab', 'cardapio');
+    sessionStorage.setItem('koma_active_subtab', 'complementos');
+  });
+  await page.route('**/caixa/configuracoes', route => route.fulfill({
+    json: { ...cashierConfig, operation_profile: 'generic' },
+  }));
+  await page.route('**/cardapio/modificadores/categorias-hierarquia', route => route.fulfill({ json: [] }));
+  const groups: any[] = [];
+  const saved: any[] = [];
+  await page.route('**/cardapio/modificadores/grupos', route => {
+    if (route.request().method() === 'POST') {
+      const payload = route.request().postDataJSON();
+      saved.push(payload);
+      const created = { ...payload, id: `group-${saved.length}`, opcoes: payload.opcoes.map((item: any, i: number) => ({ ...item, id: `option-${saved.length}-${i}` })) };
+      groups.push(created);
+      return route.fulfill({ status: 201, json: created });
+    }
+    return route.fulfill({ json: groups });
+  });
+  await page.goto('/?view=caixa');
+  await page.getByRole('button', { name: 'Novo Grupo', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Novo Grupo de Complementos' });
+  await expect(dialog.getByLabel('Mínimo de seleções do grupo')).not.toBeVisible();
+  await dialog.getByLabel('Nome do Grupo').fill('Ponto da carne');
+  await dialog.getByRole('button', { name: 'Obrigatória · escolha uma' }).click();
+  await dialog.getByLabel('Nome da opção 1').fill('Mal passado');
+  await dialog.getByRole('button', { name: 'Criar Grupo' }).click();
+  await expect.poll(() => saved.length).toBe(1);
+  expect(saved[0]).toMatchObject({
+    tipo: 'obrigatorio',
+    min_selecoes: 1,
+    max_selecoes: 1,
+    opcoes: [{ nome: 'Mal passado', preco_adicional: 0, ativo: true }],
+  });
+  await expect(page.getByText('Escolhas incluídas no preço')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Novo Grupo', exact: true }).click();
+  await dialog.getByLabel('Nome do Grupo').fill('Extras do hambúrguer');
+  await dialog.getByLabel('Nome da opção 1').fill('Bacon extra');
+  await dialog.locator('input[step="0.01"]').first().fill('2');
+  await dialog.getByRole('button', { name: 'Criar Grupo' }).click();
+  await expect.poll(() => saved.length).toBe(2);
+  expect(saved[1]).toMatchObject({
+    tipo: 'opcional',
+    min_selecoes: 0,
+    max_selecoes: 1,
+    opcoes: [{ nome: 'Bacon extra', preco_adicional: 2, ativo: true }],
+  });
+  await expect(page.getByText('Adicionais pagos', { exact: false })).toBeVisible();
+});
