@@ -33,7 +33,6 @@ interface CardapioProdutosTabProps {
   catalogReady: boolean;
   previewUrl?: string;
   onCreateProduct: () => void;
-  onCreateFamily?: () => void;
   onEditProduct: (product: Product) => void;
   onDuplicateProduct: (product: Product) => void;
   onRemoveProduct: (product: Product) => Promise<void>;
@@ -85,7 +84,6 @@ export function CardapioProdutosTab({
   catalogReady,
   previewUrl,
   onCreateProduct,
-  onCreateFamily,
   onEditProduct,
   onDuplicateProduct,
   onRemoveProduct,
@@ -111,37 +109,6 @@ export function CardapioProdutosTab({
   const [productDetailId, setProductDetailId] = useState<string | null>(null);
   const [batchPriceAdjustment, setBatchPriceAdjustment] = useState('');
   const [batchCategoryId, setBatchCategoryId] = useState('');
-  // Para o dono, família = um produto. Os SKUs continuam intactos em dados
-  // operacionais, filtros em lote e histórico; só a gestão normal é agrupada.
-  const organizedProducts = useMemo<Product[]>(() => {
-    const seen = new Set<string>();
-    const members = new Map<string, Product[]>();
-    produtos.forEach((product) => {
-      if (!product.familia_id) return;
-      const family = members.get(product.familia_id) || [];
-      family.push(product);
-      members.set(product.familia_id, family);
-    });
-    return produtos.flatMap((product): Product[] => {
-      if (!product.familia_id) return [product];
-      if (seen.has(product.familia_id)) return [];
-      seen.add(product.familia_id);
-      const variants = members.get(product.familia_id) || [product];
-      const available = variants.filter(item => item.ativo !== false);
-      const priceSet = available.length > 0 ? available : variants;
-      return [{
-        ...product,
-        nome: product.familia_nome || product.nome,
-        descricao: product.familia_descricao || product.descricao,
-        imagem: product.familia_imagem || product.imagem,
-        preco: Math.min(...priceSet.map(item => Number(item.preco))),
-        ativo: available.length > 0,
-        familia_variantes: variants.length,
-      }];
-    });
-  }, [produtos]);
-  const listProducts = selectionMode ? produtos : organizedProducts;
-
 
   useEffect(() => {
     if (!focusCategoryId) return;
@@ -155,7 +122,7 @@ export function CardapioProdutosTab({
   const categoryStats = useMemo(() => {
     const stats = new Map<string, { total: number; available: number; paused: number }>();
     categorias.forEach((category) => stats.set(category.id, { total: 0, available: 0, paused: 0 }));
-    listProducts.forEach((product) => {
+    produtos.forEach((product) => {
       const categoryId = String(product.categoria_id || '');
       if (!categoryId) return;
       const current = stats.get(categoryId) ?? { total: 0, available: 0, paused: 0 };
@@ -165,10 +132,10 @@ export function CardapioProdutosTab({
       stats.set(categoryId, current);
     });
     return stats;
-  }, [categorias, listProducts]);
+  }, [categorias, produtos]);
 
   const mediaStats = useMemo(() => {
-    return listProducts.reduce(
+    return produtos.reduce(
       (stats, product) => {
         const count = productMediaCount(product);
         if (count === 0) stats.missing += 1;
@@ -178,11 +145,11 @@ export function CardapioProdutosTab({
       },
       { missing: 0, single: 0, gallery: 0 },
     );
-  }, [listProducts]);
+  }, [produtos]);
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = search.trim();
-    return listProducts
+    return produtos
       .filter((product) => {
         const categoryName = categorias.find(
           (category) => String(category.id) === String(product.categoria_id),
@@ -191,10 +158,7 @@ export function CardapioProdutosTab({
           || smartSearchMatch(product.nome, normalizedSearch)
           || smartSearchMatch(product.descricao || '', normalizedSearch)
           || smartSearchMatch(product.id, normalizedSearch)
-          || smartSearchMatch(categoryName, normalizedSearch)
-          || Boolean(product.familia_id && produtos.some(member =>
-            member.familia_id === product.familia_id && smartSearchMatch(member.nome, normalizedSearch)
-          ));
+          || smartSearchMatch(categoryName, normalizedSearch);
         const matchesCategory = categoryFilter === 'TODAS'
           || String(product.categoria_id) === categoryFilter;
         const isAvailable = product.ativo !== false;
@@ -220,7 +184,7 @@ export function CardapioProdutosTab({
         }
         return a.nome.localeCompare(b.nome, 'pt-BR');
       });
-  }, [availabilityFilter, categorias, categoryFilter, mediaFilter, listProducts, produtos, search]);
+  }, [availabilityFilter, categorias, categoryFilter, mediaFilter, produtos, search]);
 
   const selectedCategory = categoryFilter === 'TODAS'
     ? null
@@ -235,10 +199,10 @@ export function CardapioProdutosTab({
   const visibleIds = filteredProducts.map((product) => product.id);
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedProductIds.has(id));
   const selectedCount = selectedProductIds.size;
-  const activeCount = listProducts.filter((product) => product.ativo !== false).length;
-  const pausedCount = listProducts.length - activeCount;
+  const activeCount = produtos.filter((product) => product.ativo !== false).length;
+  const pausedCount = produtos.length - activeCount;
   const productsWithMedia = mediaStats.single + mediaStats.gallery;
-  const mediaCoverage = listProducts.length > 0 ? Math.round((productsWithMedia / listProducts.length) * 100) : 100;
+  const mediaCoverage = produtos.length > 0 ? Math.round((productsWithMedia / produtos.length) * 100) : 100;
   const parsedBatchPriceAdjustment = Number(batchPriceAdjustment.replace(',', '.'));
   const batchPriceAdjustmentValid = batchPriceAdjustment.trim() !== ''
     && Number.isFinite(parsedBatchPriceAdjustment)
@@ -463,13 +427,6 @@ export function CardapioProdutosTab({
                 <Eye size={16} /> Ver cardápio
               </a>
             )}
-
-            {onCreateFamily && (
-              <button type="button" onClick={onCreateFamily}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 px-3 text-xs font-black text-emerald-700 dark:text-emerald-300">
-                <Plus size={16} /> Com tamanhos ou sabores
-              </button>
-            )}
             <button
               type="button"
               onClick={onCreateProduct}
@@ -528,7 +485,7 @@ export function CardapioProdutosTab({
             <span className="px-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Fotos</span>
             {mediaOptions.map((option) => {
               const count = option.value === 'TODAS'
-                ? listProducts.length
+                ? produtos.length
                 : option.value === 'SEM_FOTO'
                   ? mediaStats.missing
                   : option.value === 'UMA_FOTO'
@@ -733,7 +690,6 @@ export function CardapioProdutosTab({
                     </div>
                     <div className="min-w-0 flex-1 pr-16">
                       <h3 className="line-clamp-2 text-sm font-black text-slate-950 dark:text-white">{product.nome}</h3>
-                      {product.familia_id && <p className="mt-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-300">{product.familia_variantes} variações · edite tudo em um lugar</p>}
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         {product.categoria && (
                           <span className="max-w-full truncate rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-black text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
@@ -765,7 +721,7 @@ export function CardapioProdutosTab({
                         >
                           <Info size={14} />
                         </button>
-                        {!product.familia_id && <details className="absolute right-3 top-3 z-30">
+                        <details className="absolute right-3 top-3 z-30">
                           <summary className="grid h-8 w-8 cursor-pointer list-none place-items-center rounded-lg border border-slate-200 bg-white/95 text-slate-500 transition hover:border-slate-400 hover:text-slate-900 dark:border-white/10 dark:bg-[#141b16]/95 dark:hover:text-white" aria-label={`Mais ações para ${product.nome}`}>
                             <MoreHorizontal size={16} />
                           </summary>
@@ -777,7 +733,7 @@ export function CardapioProdutosTab({
                               <Trash2 size={14} /> Excluir
                             </button>
                           </div>
-                        </details>}
+                        </details>
                       </>
                     )}
                   </div>
@@ -821,7 +777,7 @@ export function CardapioProdutosTab({
                         >
                           <Edit3 size={14} /> Editar
                         </button>
-                        {!product.familia_id && <button
+                        <button
                           type="button"
                           onClick={() => void handleProductAvailability(product)}
                           disabled={pendingProductId === product.id || pendingBatchAction || pendingCategoryAction}
@@ -834,7 +790,7 @@ export function CardapioProdutosTab({
                         >
                           {isAvailable ? <PauseCircle size={14} /> : <PlayCircle size={14} />}
                           {pendingProductId === product.id ? 'Salvando...' : isAvailable ? 'Pausar venda' : 'Voltar a vender'}
-                        </button>}
+                        </button>
                       </div>
                     )}
                   </div>

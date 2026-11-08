@@ -249,7 +249,7 @@ class ProdutoFamilia(Base):
         CheckConstraint("eixo IN ('tamanho', 'sabor', 'outra')", name="ck_produto_familias_eixo"),
     )
     id = Column(String(36), primary_key=True)
-    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="RESTRICT"), nullable=False)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="RESTRICT"), default=lambda: current_restaurante_id.get(), nullable=False)
     nome = Column(String(160), nullable=False)
     descricao = Column(Text, nullable=False, default="")
     eixo = Column(String(20), nullable=False)

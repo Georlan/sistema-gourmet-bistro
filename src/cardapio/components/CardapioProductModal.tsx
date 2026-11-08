@@ -313,11 +313,9 @@ export default function CardapioProductModal({
 
   const handleAdd = () => {
     if (needsVariantSelection) {
-      setFeedback(isGrouped && (product.groupKind === 'batata-tradicional' || product.choiceKind === 'tamanho')
+      setFeedback(isGrouped && product.groupKind === 'batata-tradicional'
         ? 'Escolha o tamanho antes de adicionar.'
-        : isGrouped && product.choiceKind === 'opção'
-          ? 'Escolha uma opção antes de adicionar.'
-          : 'Escolha o sabor antes de adicionar.');
+        : 'Escolha o sabor antes de adicionar.');
       return;
     }
     if (unsatisfiedModifiers.length > 0) {
@@ -744,11 +742,7 @@ export default function CardapioProductModal({
             <p className="mb-2 text-xs font-bold text-amber-400 flex items-center gap-1.5 animate-pulse" role="status">
               <AlertCircle className="h-3.5 w-3.5 shrink-0" />
               {needsVariantSelection
-                ? (isGrouped && (product.groupKind === 'batata-tradicional' || product.choiceKind === 'tamanho')
-                  ? 'Escolha o tamanho para continuar'
-                  : isGrouped && product.choiceKind === 'opção'
-                    ? 'Escolha uma opção para continuar'
-                    : 'Escolha o sabor para continuar')
+                ? (isGrouped && product.groupKind === 'batata-tradicional' ? 'Escolha o tamanho para continuar' : 'Escolha o sabor para continuar')
                 : `Escolha ${unsatisfiedModifiers.map((m) => m.title).join(", ")} para continuar`}
             </p>
           ) : (

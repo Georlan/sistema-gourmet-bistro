@@ -9,13 +9,6 @@ export interface Product {
   categoria: string;
   categoria_id?: string;
   marmitaria_tamanho?: string | null;
-  familia_id?: string | null;
-  familia_nome?: string | null;
-  familia_descricao?: string | null;
-  familia_eixo?: 'tamanho' | 'sabor' | 'outra' | null;
-  familia_imagem?: string | null;
-  familia_variantes?: number;
-  variacao_rotulo?: string | null;
   somente_promocao?: boolean;
   preco: number;
   descricao: string;

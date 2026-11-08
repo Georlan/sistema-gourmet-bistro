@@ -179,36 +179,6 @@ def _serialize_product_with_modifiers(
     return payload
 
 
-def _set_product_customizations(db: Session, tenant: int, product: Produto, group_ids: list[str]) -> None:
-    """Direct group assignments; no changes to the global group or other products."""
-    if product.familia_id:
-        raise HTTPException(409, "Configure as personalizações no produto com variações.")
-    if len(group_ids) != len(set(group_ids)):
-        raise HTTPException(422, "O mesmo grupo foi selecionado mais de uma vez.")
-    valid = db.query(GrupoModificador.id).filter(
-        GrupoModificador.restaurante_id == tenant,
-        GrupoModificador.id.in_(group_ids),
-        GrupoModificador.tipo != "__archived__",
-    ).all() if group_ids else []
-    if len(valid) != len(group_ids):
-        raise HTTPException(404, "Personalização não encontrada neste restaurante.")
-    existing = db.query(ProdutoGrupoModificador).filter(
-        ProdutoGrupoModificador.restaurante_id == tenant,
-        ProdutoGrupoModificador.produto_id == product.id,
-    ).with_for_update().all()
-    if any(link.min_selecoes is not None or link.max_selecoes is not None for link in existing):
-        raise HTTPException(409, "Este produto tem limites próprios. Edite as escolhas específicas antes de alterar os vínculos.")
-    wanted = set(group_ids)
-    for link in existing:
-        if link.grupo_id not in wanted:
-            db.delete(link)
-    assigned = {link.grupo_id for link in existing}
-    for group_id in wanted - assigned:
-        db.add(ProdutoGrupoModificador(
-            restaurante_id=tenant, produto_id=product.id, grupo_id=group_id,
-        ))
-
-
 # ─── CATEGORIES ENDPOINTS ─────────────────────────────────────────────────────
 @router.get("/categorias", response_model=List[CategoriaResponse])
 def get_categorias(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
@@ -658,6 +628,112 @@ def move_produto_cardapio(
     return produto
 
 
+class ProdutoPersonalizacoesUpdate(BaseModel):
+    """Vínculos diretos apenas; vínculos herdados por categoria não são apagados."""
+    model_config = ConfigDict(extra="forbid")
+    grupo_ids: List[str] = Field(default_factory=list, max_length=100)
+    grupos_diretos_anteriores: List[str] = Field(default_factory=list, max_length=100)
+
+
+def _produto_personalizacoes(db: Session, rest_id: int, produto: Produto) -> dict:
+    diretos = sorted({
+        str(row.grupo_id)
+        for row in db.query(ProdutoGrupoModificador).filter(
+            ProdutoGrupoModificador.restaurante_id == rest_id,
+            ProdutoGrupoModificador.produto_id == produto.id,
+        ).all()
+    })
+    efetivos = {
+        str(group["id"])
+        for group in effective_modifier_payloads_by_product(db, rest_id, [produto]).get(str(produto.id), [])
+    }
+    return {
+        "produto_id": str(produto.id),
+        "grupos_diretos": diretos,
+        "grupos_herdados": sorted(efetivos - set(diretos)),
+    }
+
+
+@router.get("/{produto_id}/personalizacoes")
+def get_produto_personalizacoes(
+    produto_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Permite editar opções por produto sem acessar a tela técnica de grupos."""
+    del current_user
+    rest_id = require_tenant_id()
+    produto = db.query(Produto).filter(
+        Produto.id == produto_id, Produto.restaurante_id == rest_id,
+    ).first()
+    if produto is None:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    return _produto_personalizacoes(db, rest_id, produto)
+
+
+@router.put("/{produto_id}/personalizacoes")
+def atualizar_produto_personalizacoes(
+    produto_id: str,
+    payload: ProdutoPersonalizacoesUpdate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Salva só vínculos diretos em transação, preservando regras legadas.
+
+    A resolução pública continua centralizada em catalog_addons.
+    Marmitas P/M/G usam o editor de composição próprio.
+    """
+    del current_user
+    rest_id = require_tenant_id()
+    produto = db.query(Produto).filter(
+        Produto.id == produto_id, Produto.restaurante_id == rest_id,
+    ).with_for_update().first()
+    if produto is None:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    if produto.marmitaria_tamanho:
+        raise HTTPException(status_code=409, detail="Configure a composição desta marmita em Marmitas.")
+
+    requested = [group_id.strip() for group_id in payload.grupo_ids]
+    before = [group_id.strip() for group_id in payload.grupos_diretos_anteriores]
+    if any(not group_id for group_id in requested + before):
+        raise HTTPException(status_code=422, detail="Identificador de personalização inválido.")
+    if len(requested) != len(set(requested)) or len(before) != len(set(before)):
+        raise HTTPException(status_code=422, detail="Não repita a mesma personalização.")
+
+    existing = db.query(ProdutoGrupoModificador).filter(
+        ProdutoGrupoModificador.restaurante_id == rest_id,
+        ProdutoGrupoModificador.produto_id == produto_id,
+    ).all()
+    existing_ids = {str(link.grupo_id) for link in existing}
+    if existing_ids != set(before):
+        raise HTTPException(status_code=409, detail="As personalizações foram alteradas em outro acesso. Reabra o produto.")
+
+    if requested:
+        valid = {
+            str(group.id)
+            for group in db.query(GrupoModificador).filter(
+                GrupoModificador.restaurante_id == rest_id,
+                GrupoModificador.id.in_(requested),
+                GrupoModificador.tipo.in_(("opcional", "obrigatorio", "meio_a_meio")),
+            ).all()
+        }
+        if valid != set(requested):
+            raise HTTPException(status_code=422, detail="Uma personalização não pertence ao restaurante ativo.")
+
+    for link in existing:
+        if str(link.grupo_id) not in requested:
+            db.delete(link)
+    for group_id in requested:
+        if group_id not in existing_ids:
+            db.add(ProdutoGrupoModificador(
+                restaurante_id=rest_id, produto_id=produto_id, grupo_id=group_id,
+            ))
+    db.commit()
+    notify_catalog_update(background_tasks, "Personalizações do produto atualizadas", rest_id)
+    return _produto_personalizacoes(db, rest_id, produto)
+
+
 @router.get("/{produto_id}", response_model=ProdutoResponse)
 def get_produto(produto_id: str, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """Busca um produto específico no cardápio do restaurante ativo pelo ID."""
@@ -813,7 +889,6 @@ def create_produto(
         )
 
     payload = produto_data.model_dump()
-    groups_to_link = payload.pop("grupo_ids", None)
     clean_img, clean_gal = _validate_product_media_fields(
         rest_id,
         payload.get("imagem"),
@@ -851,9 +926,6 @@ def create_produto(
         restaurante_id=rest_id,
     )
     db.add(novo_produto)
-    db.flush()
-    if groups_to_link is not None:
-        _set_product_customizations(db, rest_id, novo_produto, groups_to_link)
     db.commit()
     db.refresh(novo_produto)
     notify_catalog_update(background_tasks, "Produto criado", require_tenant_id())
@@ -880,11 +952,8 @@ def update_produto(
         )
 
     data = update_data.model_dump(exclude_unset=True)
-    groups_to_link = data.pop("grupo_ids", None)
     if db_produto.familia_id and any(key in data for key in ("categoria_id", "cardapio_id", "somente_promocao")):
-        raise HTTPException(
-            409, "Produtos com variações usam uma única categoria e cardápio. Edite a família."
-        )
+        raise HTTPException(409, "As variantes usam categoria e cardápio comuns. Edite a família.")
     if "imagem" in data or "imagens_galeria" in data:
         clean_img, clean_gal = _validate_product_media_fields(
             rest_id,
@@ -936,8 +1005,6 @@ def update_produto(
         ensure_marmitas_available(db, rest_id, [db_produto])
     for key, value in data.items():
         setattr(db_produto, key, value)
-    if groups_to_link is not None:
-        _set_product_customizations(db, rest_id, db_produto, groups_to_link)
 
     db.commit()
     db.refresh(db_produto)
