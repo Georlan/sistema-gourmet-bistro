@@ -1775,7 +1775,9 @@
   }
 
   /* Only one share control is visible per breakpoint. */
-  #btn-share-header {
+  /* This rule belongs to the classic public header only. The artistic
+     storefront has its own desktop share control at tablet widths. */
+  .cardapio-public-header #btn-share-header {
     display: none;
   }
 
