@@ -4,7 +4,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db
-from app.models import Restaurante, Usuario, Produto, Categoria, Item, Comanda, Lancamento, Mesa
+from app.models import Restaurante, Usuario, Produto, Categoria, Item, Comanda, Lancamento, Mesa, GrupoModificador, OpcaoModificador, ProdutoGrupoModificador
 from app.security import get_password_hash
 from app.main import app
 
@@ -297,7 +297,16 @@ def test_universal_product_family_sells_only_real_skus_and_preserves_tenant_isol
     assert response.status_code == 200
     headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
 
+    with TestingSessionLocal() as db:
+        db.add(GrupoModificador(id="group-included", restaurante_id=1, nome="Ponto da carne", tipo="obrigatorio", min_selecoes=1, max_selecoes=1))
+        db.add(GrupoModificador(id="group-paid", restaurante_id=1, nome="Extras", tipo="opcional", min_selecoes=0, max_selecoes=2))
+        db.flush()
+        db.add(OpcaoModificador(id="rare", restaurante_id=1, grupo_id="group-included", nome="Mal passado", preco_adicional=0, ativo=True))
+        db.add(OpcaoModificador(id="bacon", restaurante_id=1, grupo_id="group-paid", nome="Bacon extra", preco_adicional=2, ativo=True))
+        db.commit()
+
     new_family = {
+        "grupo_ids": ["group-included", "group-paid"],
         "nome": "Porção do dia",
         "descricao": "Fritas artesanais com molho",
         "eixo": "tamanho",
@@ -315,7 +324,17 @@ def test_universal_product_family_sells_only_real_skus_and_preserves_tenant_isol
     assert family["nome"] == "Porção do dia"
     assert family["eixo"] == "tamanho"
     assert len(family["variantes"]) == 2
+    assert set(family["grupo_ids"]) == {"group-included", "group-paid"}
     first, second = family["variantes"]
+    with TestingSessionLocal() as db:
+        links = db.query(ProdutoGrupoModificador).filter(
+            ProdutoGrupoModificador.restaurante_id == 1,
+            ProdutoGrupoModificador.produto_id.in_([first["produto_id"], second["produto_id"]]),
+        ).all()
+        assert {(row.produto_id, row.grupo_id) for row in links} == {
+            (sku, group) for sku in (first["produto_id"], second["produto_id"])
+            for group in ("group-included", "group-paid")
+        }
     assert first["produto_id"] != second["produto_id"]
 
     menu = client.get("/api/cardapio-digital/public?restaurante_id=1")
@@ -342,7 +361,7 @@ def test_universal_product_family_sells_only_real_skus_and_preserves_tenant_isol
     assert len(client.get("/produto-familias", headers=headers).json()[0]["variantes"]) == 2
 
     # Editing one variant keeps real SKU IDs and can pause it without deleting.
-    updated = {**new_family, "nome": "Porção especial", "variantes": [
+    updated = {**new_family, "grupo_ids": ["group-included"], "nome": "Porção especial", "variantes": [
         {"produto_id": first["produto_id"], "rotulo": "P (200 g)", "preco": 12, "ativo": True},
         {"produto_id": second["produto_id"], "rotulo": "G (400 g)", "preco": 19, "ativo": False},
     ]}
@@ -352,6 +371,13 @@ def test_universal_product_family_sells_only_real_skus_and_preserves_tenant_isol
         first["produto_id"], second["produto_id"],
     }
     assert {variant["preco"] for variant in result.json()["variantes"]} == {12, 19}
+    with TestingSessionLocal() as db:
+        links = db.query(ProdutoGrupoModificador).filter(
+            ProdutoGrupoModificador.restaurante_id == 1,
+            ProdutoGrupoModificador.produto_id.in_([first["produto_id"], second["produto_id"]]),
+        ).all()
+        assert {link.grupo_id for link in links} == {"group-included"}
+        assert len(links) == 2
 
     with TestingSessionLocal() as db:
         db.add(Restaurante(id=2, nome="Outra loja", plano="pocket"))
@@ -371,3 +397,33 @@ def test_universal_product_family_sells_only_real_skus_and_preserves_tenant_isol
         {"produto_id": first["produto_id"], "rotulo": "Usar item externo", "preco": 12, "ativo": True}
     ]}
     assert client.post("/produto-familias", json=cross_tenant, headers=other_headers).status_code == 404
+
+
+def test_single_product_customizations_configurable_without_editing_global_group():
+    client = TestClient(app)
+    with TestingSessionLocal() as db:
+        db.add(GrupoModificador(id="single-free", restaurante_id=1, nome="Molhos", tipo="opcional", min_selecoes=0, max_selecoes=1))
+        db.add(GrupoModificador(id="single-paid", restaurante_id=1, nome="Extras", tipo="opcional", min_selecoes=0, max_selecoes=1))
+        db.commit()
+
+    login = client.post("/auth/login", json={"username": "admin", "password": "123"})
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    created = client.post("/produtos/", headers=headers, json={
+        "id": "sku-custom", "nome": "Hambúrguer com escolhas", "categoria_id": "cat-comidas",
+        "preco": 20, "grupo_ids": ["single-free", "single-paid"],
+    })
+    assert created.status_code == 201, created.text
+    with TestingSessionLocal() as db:
+        linked = db.query(ProdutoGrupoModificador).filter_by(restaurante_id=1, produto_id="sku-custom").all()
+        assert {row.grupo_id for row in linked} == {"single-free", "single-paid"}
+
+    edited = client.put("/produtos/sku-custom", headers=headers, json={"grupo_ids": ["single-free"]})
+    assert edited.status_code == 200, edited.text
+    with TestingSessionLocal() as db:
+        linked = db.query(ProdutoGrupoModificador).filter_by(restaurante_id=1, produto_id="sku-custom").all()
+        assert {row.grupo_id for row in linked} == {"single-free"}
+
+    invalid = client.put("/produtos/sku-custom", headers=headers, json={"grupo_ids": ["foreign-tenant-group"]})
+    assert invalid.status_code == 404
+    with TestingSessionLocal() as db:
+        assert {row.grupo_id for row in db.query(ProdutoGrupoModificador).filter_by(restaurante_id=1, produto_id="sku-custom")} == {"single-free"}
