@@ -16,6 +16,7 @@ import {
   PlayCircle,
   Plus,
   Search,
+  Sparkles,
   SlidersHorizontal,
   Trash2,
   X,
@@ -25,6 +26,7 @@ import { clsx } from 'clsx';
 import type { Product } from '../../types';
 import type { CatalogCategory } from '../../catalog/catalog';
 import PromotionsSettings from './PromotionsSettings';
+import CartRecommendationsSettings from './CartRecommendationsSettings';
 import { smartSearchMatch } from '../../domain';
 
 interface CardapioProdutosTabProps {
@@ -95,6 +97,7 @@ export function CardapioProdutosTab({
   promotionsConfig,
 }: CardapioProdutosTabProps) {
   const [search, setSearch] = useState('');
+  const [showCartRecommendations, setShowCartRecommendations] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('TODAS');
   const [promotionCount, setPromotionCount] = useState<number | null>(null);
   const isPromotionsView = Boolean(promotionsConfig && categoryFilter === PROMOTIONS_VIRTUAL_CATEGORY);
@@ -400,6 +403,15 @@ export function CardapioProdutosTab({
             )}
           </label>
           <div className="cardapio-products-actions flex flex-wrap items-center gap-2">
+            {promotionsConfig && (
+              <button
+                type="button"
+                onClick={() => setShowCartRecommendations(true)}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500/40 px-3 text-xs font-black text-emerald-700 transition hover:bg-emerald-500/10 dark:text-emerald-300"
+              >
+                <Sparkles size={16} aria-hidden="true" /> Recomendações
+              </button>
+            )}
             <button
               type="button"
               onClick={() => {
@@ -801,6 +813,14 @@ export function CardapioProdutosTab({
         </section>
       )}
         </>
+      )}
+      {showCartRecommendations && promotionsConfig && (
+        <CartRecommendationsSettings
+          produtos={produtos}
+          apiBaseUrl={promotionsConfig.apiBaseUrl}
+          authHeaders={promotionsConfig.authHeaders}
+          onClose={() => setShowCartRecommendations(false)}
+        />
       )}
     </div>
   );
