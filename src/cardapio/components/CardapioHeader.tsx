@@ -39,6 +39,8 @@ const getSocialIcon = (platform: string) => {
       return <KomaSocialCameraIcon size={15} aria-hidden="true" />;
     case "facebook":
       return <Facebook size={15} aria-hidden="true" />;
+    case "whatsapp":
+      return <Phone size={15} aria-hidden="true" />;
     default:
       return <Globe size={15} aria-hidden="true" />;
   }
@@ -282,7 +284,9 @@ export default function CardapioHeader({
                   <Phone size={14} aria-hidden="true" /> WhatsApp
                 </a>
               )}
-              {activeBrand.socials?.filter((social) => social.active).slice(0, 2).map((social) => (
+              {activeBrand.socials?.filter((social) => social.active
+                && !(activeBrand.phone && social.platform.toLocaleLowerCase("pt-BR") === "whatsapp"))
+                .slice(0, 2).map((social) => (
                 <a
                   key={`${social.platform}-${social.url}`}
                   href={social.url}
@@ -295,6 +299,16 @@ export default function CardapioHeader({
                   {getSocialIcon(social.platform)}
                 </a>
               ))}
+              <button
+                type="button"
+                onClick={handleShare}
+                className="cardapio-public-social-link cardapio-public-mobile-share"
+                title="Compartilhar cardápio"
+                aria-label="Compartilhar cardápio"
+                id="btn-share-mobile"
+              >
+                <KomaShareIcon size={16} aria-hidden="true" />
+              </button>
             </div>
           </div>
         </div>
