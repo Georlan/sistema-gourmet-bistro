@@ -37,7 +37,7 @@ def pg():
     engine = create_engine(url.set(database=name))
     try:
         metadata = MetaData()
-        for model in (Restaurante, Categoria, Cardapio, Produto):
+        for model in (Restaurante, Categoria, Cardapio, ProdutoFamilia, Produto):
             model.__table__.to_metadata(metadata)
         metadata.create_all(engine)
         spec = importlib.util.spec_from_file_location('retention_migration', Path(__file__).parents[1] / 'alembic/versions/82c7a941d5ef_product_image_retention.py')
