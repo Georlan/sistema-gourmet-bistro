@@ -1002,6 +1002,7 @@ class CardapioPublicRestaurantResponse(BaseModel):
     taxa_entrega_padrao: Optional[float] = None
     cardapio_ativo_id: Optional[str] = None
     cardapio_ativo_nome: Optional[str] = None
+    recomendacoes_sacola_ids: List[str] = Field(default_factory=list)
 
 
 class CardapioPublicCategoryResponse(BaseModel):
