@@ -29,19 +29,20 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["restaurante_id", "cardapio_id"], ["cardapios.restaurante_id", "cardapios.id"], ondelete="RESTRICT", name="fk_produto_familias_cardapio_tenant"),
         sa.CheckConstraint("eixo IN ('tamanho', 'sabor', 'outra')", name="ck_produto_familias_eixo"),
     )
-    op.add_column("produtos", sa.Column("familia_id", sa.String(36), nullable=True))
-    op.add_column("produtos", sa.Column("variacao_rotulo", sa.String(100), nullable=True))
-    op.create_foreign_key(
-        "fk_produtos_familia_tenant", "produtos", "produto_familias",
-        ["restaurante_id", "familia_id"], ["restaurante_id", "id"],
-        ondelete="RESTRICT",
-    )
-    op.create_check_constraint(
-        "ck_produtos_familia_rotulo",
-        "produtos",
-        "(familia_id IS NULL AND variacao_rotulo IS NULL) OR "
-        "(familia_id IS NOT NULL AND variacao_rotulo IS NOT NULL AND length(trim(variacao_rotulo)) > 0)",
-    )
+    # batch_alter_table mantém compatibilidade com migrações SQLite de testes.
+    with op.batch_alter_table("produtos") as batch:
+        batch.add_column(sa.Column("familia_id", sa.String(36), nullable=True))
+        batch.add_column(sa.Column("variacao_rotulo", sa.String(100), nullable=True))
+        batch.create_foreign_key(
+            "fk_produtos_familia_tenant", "produto_familias",
+            ["restaurante_id", "familia_id"], ["restaurante_id", "id"],
+            ondelete="RESTRICT",
+        )
+        batch.create_check_constraint(
+            "ck_produtos_familia_rotulo",
+            "(familia_id IS NULL AND variacao_rotulo IS NULL) OR "
+            "(familia_id IS NOT NULL AND variacao_rotulo IS NOT NULL AND length(trim(variacao_rotulo)) > 0)",
+        )
     op.create_index(
         "uq_produtos_tenant_familia_rotulo", "produtos",
         ["restaurante_id", "familia_id", "variacao_rotulo"], unique=True,
@@ -60,8 +61,9 @@ def downgrade() -> None:
     # A reversão estrutural elimina a organização em famílias, mas NUNCA apaga
     # os SKUs de produtos, pedidos ou históricos; planejar rollback antes de usar.
     op.drop_index("uq_produtos_tenant_familia_rotulo", table_name="produtos")
-    op.drop_constraint("ck_produtos_familia_rotulo", "produtos", type_="check")
-    op.drop_constraint("fk_produtos_familia_tenant", "produtos", type_="foreignkey")
-    op.drop_column("produtos", "variacao_rotulo")
-    op.drop_column("produtos", "familia_id")
+    with op.batch_alter_table("produtos") as batch:
+        batch.drop_constraint("ck_produtos_familia_rotulo", type_="check")
+        batch.drop_constraint("fk_produtos_familia_tenant", type_="foreignkey")
+        batch.drop_column("variacao_rotulo")
+        batch.drop_column("familia_id")
     op.drop_table("produto_familias")
