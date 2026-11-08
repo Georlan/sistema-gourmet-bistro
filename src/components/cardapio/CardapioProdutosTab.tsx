@@ -834,7 +834,7 @@ export function CardapioProdutosTab({
                         >
                           {isAvailable ? <PauseCircle size={14} /> : <PlayCircle size={14} />}
                           {pendingProductId === product.id ? 'Salvando...' : isAvailable ? 'Pausar venda' : 'Voltar a vender'}
-                        </button>}}
+                        </button>}
                       </div>
                     )}
                   </div>
