@@ -48,6 +48,22 @@ interface ProductCustomizationGroup {
   categoria_ids: string[];
 }
 
+interface FamilyVariantDraft {
+  produto_id?: string;
+  rotulo: string;
+  preco: number | '';
+  ativo: boolean;
+}
+interface CatalogProductFamily {
+  id: string;
+  nome: string;
+  descricao: string;
+  eixo: 'sabor' | 'tamanho' | 'outra';
+  categoria_id: string;
+  cardapio_id: string | null;
+  imagem: string;
+  variantes: { produto_id: string; rotulo: string; preco: number; ativo: boolean }[];
+}
 const PRODUCT_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
 const PRODUCT_IMAGE_MAX_SIZE = MAX_IMAGE_UPLOAD_SOURCE_BYTES;
 
@@ -86,7 +102,15 @@ export default function CashierCatalog({
 
   const [showCategoryModal, setShowCategoryModal] = useState(false);
 
-  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [hasVariants, setHasVariants] = useState(false);
+  const [variantAxis, setVariantAxis] = useState<'sabor' | 'tamanho'>('sabor');
+  const [variantRows, setVariantRows] = useState<FamilyVariantDraft[]>([]);
+  const [editingFamilyId, setEditingFamilyId] = useState<string | null>(null);
+  const [familyImage, setFamilyImage] = useState('');
+  const [loadingFamily, setLoadingFamily] = useState(false);
+  const [familyError, setFamilyError] = useState('');
+  const [existingVariantId, setExistingVariantId] = useState('');
 
   const [cardapioCategoryFocus, setCardapioCategoryFocus] = useState<string | null>(null);
 
@@ -145,7 +169,9 @@ export default function CashierCatalog({
     const requests: Promise<Response>[] = [
       fetch(`${apiBaseUrl}/cardapio/modificadores/grupos`, { headers }),
     ];
-    if (editingProduct?.id) {
+    if (hasVariants && editingFamilyId) {
+      requests.push(fetch(`${apiBaseUrl}/produto-familias/${encodeURIComponent(editingFamilyId)}/personalizacoes`, { headers }));
+    } else if (!hasVariants && editingProduct?.id) {
       requests.push(fetch(`${apiBaseUrl}/produtos/${encodeURIComponent(editingProduct.id)}/personalizacoes`, { headers }));
     }
     Promise.all(requests).then(async responses => {
@@ -153,16 +179,47 @@ export default function CashierCatalog({
       const [groups, links] = await Promise.all(responses.map(response => response.json()));
       if (cancelled) return;
       setCustomizationGroups(Array.isArray(groups) ? groups : []);
-      setPreviousCustomizationIds(links?.grupos_diretos || []);
-      setSelectedCustomizationIds(links?.grupos_diretos || []);
-      setInheritedCustomizationIds(links?.grupos_herdados || []);
+      const direct = hasVariants ? (links?.grupo_ids || []) : (links?.grupos_diretos || []);
+      setPreviousCustomizationIds(direct);
+      setSelectedCustomizationIds(direct);
+      setInheritedCustomizationIds(hasVariants ? [] : (links?.grupos_herdados || []));
       setCustomizationsLoaded(true);
     }).catch(error => {
       if (!cancelled) setCustomizationError(error instanceof Error ? error.message : 'Erro ao carregar personalizações.');
     }).finally(() => { if (!cancelled) setLoadingCustomizations(false); });
     return () => { cancelled = true; };
     // A autorização é a identidade de leitura; mudanças no formulário não disparam novas consultas.
-  }, [showProductModal, editingProduct?.id, apiBaseUrl, authorization, isMarmitaria]);
+  }, [showProductModal, editingProduct?.id, editingFamilyId, hasVariants, apiBaseUrl, authorization, isMarmitaria]);
+
+  // Existing families load into the same editor; no second product form.
+  useEffect(() => {
+    if (!showProductModal || !editingFamilyId || isMarmitaria) return;
+    let cancelled = false;
+    setLoadingFamily(true);
+    setFamilyError('');
+    const headers = authorization ? { Authorization: authorization } : authHeaders;
+    fetch(`${apiBaseUrl}/produto-familias`, { headers })
+      .then(async response => {
+        if (!response.ok) throw new Error('Não foi possível carregar os sabores ou tamanhos.');
+        const families = await response.json() as CatalogProductFamily[];
+        const family = families.find(item => item.id === editingFamilyId);
+        if (!family) throw new Error('Produto com variações não encontrado. Atualize o cardápio.');
+        if (cancelled) return;
+        setProdFormNome(family.nome);
+        setProdFormDescricao(family.descricao || '');
+        setProdFormCategoriaId(family.categoria_id);
+        setProdFormCardapioId(family.cardapio_id || '');
+        setVariantAxis(family.eixo === 'tamanho' ? 'tamanho' : 'sabor');
+        setFamilyImage(family.imagem || '');
+        setVariantRows(family.variantes.map(variant => ({
+          produto_id: variant.produto_id, rotulo: variant.rotulo,
+          preco: variant.preco, ativo: variant.ativo,
+        })));
+      })
+      .catch(error => { if (!cancelled) setFamilyError(error instanceof Error ? error.message : 'Não foi possível carregar o produto.'); })
+      .finally(() => { if (!cancelled) setLoadingFamily(false); });
+    return () => { cancelled = true; };
+  }, [showProductModal, editingFamilyId, isMarmitaria, apiBaseUrl, authorization]);
 
   const handlePublishCardapio = async (targetMenuId: string, targetMenuNome: string) => {
     if (isPublishingMenu) return;
@@ -262,6 +319,13 @@ export default function CashierCatalog({
   const isMarmita = (product: Product) => Boolean(product.marmitaria_tamanho) || apiCategorias.some(category => category.id === product.categoria_id && isMarmitaCategory(category));
   const startProduct = () => {
     setEditingProduct(null);
+    setHasVariants(false);
+    setEditingFamilyId(null);
+    setVariantRows([]);
+    setVariantAxis('sabor');
+    setFamilyImage('');
+    setFamilyError('');
+    setExistingVariantId('');
     setProdFormId(suggestedProductCode);
     setProdFormNome('');
     setProdFormPreco('');
@@ -276,6 +340,13 @@ export default function CashierCatalog({
 
   const editProductDetails = (product: Product) => {
     setEditingProduct(product);
+    setHasVariants(Boolean(product.familia_id));
+    setEditingFamilyId(product.familia_id || null);
+    setVariantRows([]);
+    setVariantAxis('sabor');
+    setFamilyImage('');
+    setFamilyError('');
+    setExistingVariantId('');
     setProdFormId(product.id);
     setProdFormNome(product.nome);
     setProdFormPreco(Number(product.preco) || 0);
@@ -396,6 +467,12 @@ export default function CashierCatalog({
             onDuplicateProduct={(product) => {
               if (isMarmitaria && isMarmita(product)) { showToast('Cada tamanho tem um único cadastro. Edite a marmita existente na lista de produtos.', 'error'); return; }
               setEditingProduct(null);
+              setHasVariants(false);
+              setEditingFamilyId(null);
+              setVariantRows([]);
+              setFamilyImage('');
+              setFamilyError('');
+              setExistingVariantId('');
               setProdFormId(suggestedProductCode);
               setProdFormNome(`${product.nome} (Cópia)`);
               setProdFormPreco(Number(product.preco) || 0);
@@ -408,6 +485,10 @@ export default function CashierCatalog({
               setShowProductModal(true);
             }}
             onRemoveProduct={async (product) => {
+              if (product.familia_id) {
+                showToast('Esta opção pertence a um produto com sabores ou tamanhos. Edite o produto principal para alterar sua disponibilidade.', 'error');
+                return;
+              }
               if (!confirm(`Remover "${product.nome}" dos canais de venda? O histórico das vendas será preservado.`))
                 return;
               try {
