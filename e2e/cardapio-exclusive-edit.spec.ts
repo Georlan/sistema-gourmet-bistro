@@ -103,10 +103,10 @@ test('cadastro único cria sabores com preços por SKU e grupos compartilhados n
   await dialog.locator('#product-name').fill('Pastel Médio');
   await dialog.getByRole('switch', { name: 'Este produto tem sabores ou tamanhos?' }).check();
   await dialog.getByRole('textbox', { name: 'Nome da opção 1' }).fill('Carne Moída');
-  await dialog.locator('#variant-price-0').fill('7');
+  await dialog.locator('#variant-price-0').fill('700');
   await dialog.getByRole('button', { name: 'Adicionar sabor' }).click();
   await dialog.getByRole('textbox', { name: 'Nome da opção 2' }).fill('Queijo');
-  await dialog.locator('#variant-price-1').fill('8');
+  await dialog.locator('#variant-price-1').fill('800');
   const molho = dialog.getByRole('checkbox', { name: 'Associar Molhos ao produto' });
   await expect(molho).toBeVisible();
   await molho.check();
@@ -162,7 +162,7 @@ test('editar variante existente abre a família e preserva IDs dos sabores', asy
   await card.getByRole('button', { name: 'Editar', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Editar produto' });
   await expect(dialog.getByRole('textbox', { name: 'Nome da opção 2' })).toHaveValue('Queijo');
-  await dialog.locator('#variant-price-1').fill('9');
+  await dialog.locator('#variant-price-1').fill('900');
   await dialog.getByRole('button', { name: 'Salvar alterações', exact: true }).click();
   await expect.poll(() => update).toBeTruthy();
   expect(update?.variantes.map((v: any) => [v.produto_id, v.preco])).toEqual([
