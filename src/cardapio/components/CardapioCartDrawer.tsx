@@ -399,16 +399,20 @@ export default function CardapioCartDrawer({
   const upsellSuggestions = useMemo(() => {
     if (!allProducts || allProducts.length === 0) return [];
     const cartProductIds = cart.map((item) => item.product.id);
-    const candidates = getPairingRecommendations({
-      catalog: allProducts,
-      cartProductIds,
-      limit: 12,
-      excludeCartItems: false,
-    });
+    const manualIds = brandConfig?.cartRecommendationSkuIds;
+    const candidates = manualIds?.length
+      ? manualIds.map((skuId) => allProducts.find((product) => String(product.id) === skuId))
+        .filter((product): product is Product => Boolean(product && product.isAvailable !== false))
+      : getPairingRecommendations({
+          catalog: allProducts,
+          cartProductIds,
+          limit: 12,
+          excludeCartItems: false,
+        });
     // The cart and artistic showcase must use the same family card and real SKUs.
     return resolvePairingDisplay(allProducts, candidates, restaurantId, 4)
       .filter((item) => item.isAvailable !== false);
-  }, [allProducts, cart, restaurantId]);
+  }, [allProducts, cart, restaurantId, brandConfig?.cartRecommendationSkuIds]);
 
   const emptyCartSuggestions = useMemo(() => resolvePairingDisplay(
     allProducts,
