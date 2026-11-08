@@ -39,6 +39,13 @@ export interface ProductModifier {
 
 export interface Product {
   marmitaria?: boolean;
+  /** IDs are persisted by the backend. Never infer a family from a name. */
+  familyId?: string | null;
+  familyName?: string | null;
+  familyDescription?: string | null;
+  familyAxis?: 'tamanho' | 'sabor' | 'outra' | null;
+  familyImage?: string | null;
+  variantLabel?: string | null;
   id: string;
   name: string;
   description: string;
