@@ -202,3 +202,34 @@ test('edição em abas preserva o rascunho sem salvar ao navegar', async ({ page
   await expect(dialog.getByRole('textbox', { name: 'Nome da opção 1' })).toHaveValue('Carne Moída');
   await expect(dialog.getByRole('tab', { name: 'Variações' })).toHaveAttribute('aria-selected', 'true');
 });
+
+
+test('dono seleciona recomendações existentes sem cadastrar produtos novamente', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_active_tab', 'cardapio');
+    sessionStorage.setItem('koma_active_subtab', 'produtos');
+  });
+  let stored: string[] = [];
+  await page.route('**/api/cardapio-digital/recomendacoes', route => {
+    if (route.request().method() === 'PUT') {
+      const body = route.request().postDataJSON();
+      expect(body.anteriores).toEqual([]);
+      stored = body.produto_ids;
+      return route.fulfill({ json: { produto_ids: stored } });
+    }
+    return route.fulfill({ json: { produto_ids: stored } });
+  });
+
+  await page.goto('/?view=caixa');
+  await page.getByRole('button', { name: 'Recomendações', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Recomendações na sacola' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('Sugestões automáticas');
+  await dialog.getByRole('button', { name: 'Recomendar Risoto da casa' }).click();
+  await expect(dialog).toContainText('Escolhidos (1/6)');
+  await dialog.getByRole('button', { name: 'Salvar recomendações' }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(stored).toEqual(['101']);
+});
