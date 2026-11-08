@@ -36,6 +36,8 @@ def catalog():
                 Produto(id="batata", restaurante_id=91, categoria_id="cat-91", nome="Batata", preco=15),
                 Produto(id="exclusivo", restaurante_id=91, categoria_id="cat-91",
                         nome="Só combo", preco=2, somente_promocao=True),
+                Produto(id="pausado", restaurante_id=91, categoria_id="cat-91",
+                        nome="Pausado", preco=3, ativo=False),
                 Produto(id="outro", restaurante_id=92, categoria_id="cat-92", nome="Outro", preco=4),
             ])
             db.commit()
@@ -73,7 +75,7 @@ def test_manual_product_order_is_persisted_and_publicly_projected(catalog):
 
 
 @pytest.mark.parametrize("ids", [
-    ["outro"], ["exclusivo"], ["desconhecido"], ["suco", "suco"],
+    ["outro"], ["exclusivo"], ["pausado"], ["desconhecido"], ["suco", "suco"],
 ])
 def test_foreign_exclusive_missing_and_duplicate_skus_rejected(catalog, ids):
     with pytest.raises(HTTPException) as error:
