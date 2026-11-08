@@ -208,9 +208,14 @@ test('Hambúrguer e outros perfis mantêm os limites globais de Complementos', a
   await page.route('**/cardapio/modificadores/categorias-hierarquia', route => route.fulfill({ json: [] }));
   await page.goto('/?view=caixa');
   await page.getByRole('button', { name: 'Novo Grupo', exact: true }).click();
-  await expect(page.getByText('Tipo', { exact: true })).toBeVisible();
-  await expect(page.getByText('Mínimo', { exact: true })).toBeVisible();
-  await expect(page.getByText('Máximo', { exact: true })).toBeVisible();
+  // O editor genérico apresenta presets para o dono e mantém as regras globais em Avançado.
+  await expect(page.getByRole('button', { name: 'Opcional · até uma escolha' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Obrigatória · escolha uma' })).toBeVisible();
+  await expect(page.getByLabel('Mínimo de seleções do grupo')).not.toBeVisible();
+  await page.getByRole('button', { name: 'Permitir múltiplas escolhas (avançado)' }).click();
+  await expect(page.getByLabel('Tipo de seleção do grupo')).toBeVisible();
+  await expect(page.getByLabel('Mínimo de seleções do grupo')).toBeVisible();
+  await expect(page.getByLabel('Máximo de seleções do grupo')).toBeVisible();
 });
 test('adiciona sobremesa e suco na lista das marmitas e reaproveita categorias', async ({ page }) => {
   await mockCashierBackend(page);
