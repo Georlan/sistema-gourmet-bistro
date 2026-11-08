@@ -255,7 +255,7 @@ export default function CashierCatalog({
             accent="fáceis de controlar"
             description="Selecione produtos para pausar, reajustar preços ou mover de categoria sem abrir item por item."
             metrics={[
-              { label: 'produtos', value: displayedProdutos.length },
+              { label: 'produtos', value: new Set(displayedProdutos.map(item => item.familia_id ? `family:${item.familia_id}` : item.id)).size },
               { label: 'disponíveis', value: displayedProdutos.filter((item) => item.ativo !== false).length },
               {
                 label: displayedProdutos.filter((item) => item.ativo === false).length === 1 ? 'pausado' : 'pausados',
