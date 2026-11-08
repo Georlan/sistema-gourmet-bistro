@@ -393,6 +393,9 @@ export default function CardapioPage() {
         },
         categories: payload.categorias.map((category) => String(category.nome || "")).filter(Boolean),
         products,
+        cartRecommendationSkuIds: Array.isArray(restaurant.recomendacoes_sacola_ids)
+          ? restaurant.recomendacoes_sacola_ids.filter((value: unknown): value is string => typeof value === 'string')
+          : null,
         promotionProducts,
         explicitPromotionComposition: payload.promocao_composicao_explicita === true,
         promotions: Array.isArray(payload.promocoes) ? payload.promocoes
