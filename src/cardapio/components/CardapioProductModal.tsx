@@ -95,6 +95,9 @@ export default function CardapioProductModal({
   }, []);
   const isGrouped = isGroupedProduct(product);
   const requiresExplicitVariant = isGrouped && product.requiresExplicitVariantSelection === true;
+  // Native families carry their own selection axis. Never infer this from a
+  // tenant-specific product name or from the generic display kind.
+  const isSizeVariant = isGrouped && (product.familia_eixo === 'tamanho' || product.groupKind === 'batata-tradicional');
   const defaultVariantId = useMemo(() => {
     if (!isGrouped || requiresExplicitVariant) return "";
     const avail = product.variants.find((v) => v.isAvailable);
@@ -321,7 +324,7 @@ export default function CardapioProductModal({
 
   const handleAdd = () => {
     if (needsVariantSelection) {
-      setFeedback(isGrouped && product.groupKind === 'batata-tradicional'
+      setFeedback(isSizeVariant
         ? 'Escolha o tamanho antes de adicionar.'
         : 'Escolha o sabor antes de adicionar.');
       return;
@@ -750,7 +753,7 @@ export default function CardapioProductModal({
             <p className="mb-2 text-xs font-bold text-amber-400 flex items-center gap-1.5 animate-pulse" role="status">
               <AlertCircle className="h-3.5 w-3.5 shrink-0" />
               {needsVariantSelection
-                ? (isGrouped && product.groupKind === 'batata-tradicional' ? 'Escolha o tamanho para continuar' : 'Escolha o sabor para continuar')
+                ? (isSizeVariant ? 'Escolha o tamanho para continuar' : 'Escolha o sabor para continuar')
                 : `Escolha ${unsatisfiedModifiers.map((m) => m.title).join(", ")} para continuar`}
             </p>
           ) : (
