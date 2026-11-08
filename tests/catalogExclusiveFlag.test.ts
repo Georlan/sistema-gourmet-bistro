@@ -10,3 +10,19 @@ test('catálogo administrativo preserva exclusividade ao listar e reabrir produt
   assert.equal(result.produtos.find(p => p.id === 'exclusive')?.somente_promocao, true);
   assert.equal(result.produtos.find(p => p.id === 'regular')?.somente_promocao, false);
 });
+
+
+test('snapshot operacional mantém familia_id e rótulo para reabrir a família inteira', () => {
+  const snapshot = normalizeCatalogSnapshot({ categorias: [{ id: 'pasteis', nome: 'Pastéis' }], produtos: [
+    { id: 'carne', nome: 'Pastel Médio Carne', categoria_id: 'pasteis', preco: 7,
+      familia_id: 'pastel-family', variacao_rotulo: 'Carne Moída' },
+    { id: 'queijo', nome: 'Pastel Médio Queijo', categoria_id: 'pasteis', preco: 8,
+      familia_id: 'pastel-family', variacao_rotulo: 'Queijo' },
+    { id: 'avulso', nome: 'Pastel avulso', categoria_id: 'pasteis', preco: 9 },
+  ] });
+  assert.equal(snapshot.produtos[0].familia_id, 'pastel-family');
+  assert.equal(snapshot.produtos[0].variacao_rotulo, 'Carne Moída');
+  assert.equal(snapshot.produtos[1].familia_id, 'pastel-family');
+  assert.equal(snapshot.produtos[1].preco, 8);
+  assert.equal(snapshot.produtos[2].familia_id, null);
+});
