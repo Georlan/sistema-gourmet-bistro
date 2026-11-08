@@ -12,6 +12,7 @@ type Variant = {
   preco: string;
   ativo: boolean;
 };
+type CustomizationGroup = { id: string; nome: string; tipo: string; opcoes: Array<{ nome: string; preco_adicional: number; ativo: boolean }> };
 type Family = {
   id: string;
   nome: string;
@@ -21,6 +22,7 @@ type Family = {
   cardapio_id: string | null;
   imagem: string;
   variantes: Array<{ produto_id: string; rotulo: string; preco: number; ativo: boolean }>;
+  grupo_ids?: string[];
 };
 interface Props {
   apiBaseUrl: string;
@@ -56,12 +58,24 @@ export default function ProductFamilyEditor({
   const [variants, setVariants] = useState<Variant[]>([emptyVariant(), emptyVariant()]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [groups, setGroups] = useState<CustomizationGroup[]>([]);
+  const [groupIds, setGroupIds] = useState<string[]>([]);
+  const [groupsLoaded, setGroupsLoaded] = useState(false);
+  const authorization = authHeaders.Authorization || authHeaders.authorization || '';
 
   useEffect(() => {
-    if (!familyId) return;
     let canceled = false;
     setBusy(true);
-    fetch(`${apiBaseUrl}/produto-familias`, { headers: authHeaders })
+    setGroupsLoaded(false);
+    fetch(`${apiBaseUrl}/cardapio/modificadores/grupos`, { headers: { Authorization: authorization } })
+      .then(async response => {
+        if (!response.ok) throw new Error('Não foi possível carregar complementos e adicionais.');
+        const data = await response.json() as CustomizationGroup[];
+        if (!canceled) { setGroups(data); setGroupsLoaded(true); }
+      })
+      .catch(failure => { if (!canceled) setError(failure instanceof Error ? failure.message : 'Erro ao carregar grupos.'); });
+    if (!familyId) { setBusy(false); return () => { canceled = true; }; }
+    fetch(`${apiBaseUrl}/produto-familias`, { headers: { Authorization: authorization } })
       .then(async (response) => {
         if (!response.ok) throw new Error('Não foi possível carregar os tamanhos e sabores.');
         const families = await response.json() as Family[];
@@ -74,6 +88,7 @@ export default function ProductFamilyEditor({
         setCategoryId(selected.categoria_id);
         setMenuId(selected.cardapio_id || '');
         setImage(selected.imagem || '');
+        setGroupIds(selected.grupo_ids || []);
         setVariants(selected.variantes.map(v => ({
           key: v.produto_id,
           produto_id: v.produto_id,
@@ -85,7 +100,7 @@ export default function ProductFamilyEditor({
       .catch((failure: unknown) => { if (!canceled) setError(failure instanceof Error ? failure.message : 'Erro de conexão.'); })
       .finally(() => { if (!canceled) setBusy(false); });
     return () => { canceled = true; };
-  }, [familyId, apiBaseUrl, authHeaders]);
+  }, [familyId, apiBaseUrl, authorization]);
 
   const usableProducts = useMemo(
     () => products.filter(product =>
@@ -101,7 +116,7 @@ export default function ProductFamilyEditor({
     setVariants(current => current.map(variant => variant.key === key ? { ...variant, ...patch } : variant));
 
   const handleSave = async () => {
-    if (busy) return;
+    if (busy || !groupsLoaded) return;
     setError('');
     const checked = variants.map(variant => ({ ...variant, rotulo: variant.rotulo.trim(), preco: moneyInputToNumber(variant.preco) }));
     if (!name.trim() || !categoryId || checked.length < 1 || checked.some(variant =>
@@ -124,7 +139,7 @@ export default function ProductFamilyEditor({
           body: JSON.stringify({
             nome: name.trim(), descricao: description.trim(), eixo: axis,
             categoria_id: categoryId, cardapio_id: menuId || null,
-            imagem: image,
+            imagem: image, grupo_ids: groupIds,
             variantes: checked.map(variant => ({
               produto_id: variant.produto_id, rotulo: variant.rotulo,
               preco: variant.preco, ativo: variant.ativo,
@@ -238,12 +253,30 @@ export default function ProductFamilyEditor({
               <Plus size={16}/> Adicionar {axis==='tamanho'?'tamanho':axis==='sabor'?'sabor':'opção'}
             </button>
           </section>
-          <p className="text-xs text-koma-muted">As personalizações incluídas e adicionais pagos continuam na biblioteca de Complementos. Variantes não são adicionais.</p>
+          <section className="space-y-3 rounded-xl border border-koma-border bg-koma-panel p-3">
+            <h3 className="font-black">Personalizações deste produto</h3>
+            <p className="text-xs text-koma-muted">Associe as escolhas incluídas no preço ou os adicionais cobrados. Elas aparecerão em todos os tamanhos ou sabores deste produto.</p>
+            {groups.length === 0 && <p className="text-xs text-koma-muted">Sem grupos cadastrados. Crie primeiro uma escolha ou adicional na aba Complementos.</p>}
+            {groups.map(group => {
+              const activeOptions = group.opcoes.filter(option => option.ativo);
+              const hasCharge = activeOptions.some(option => Number(option.preco_adicional) > 0);
+              const amount = activeOptions.length;
+              return (
+                <label key={group.id} className="flex min-h-11 items-center gap-3 rounded-lg border border-koma-border bg-koma-card p-3">
+                  <input type="checkbox" checked={groupIds.includes(group.id)} onChange={event => setGroupIds(previous => event.target.checked ? [...previous, group.id] : previous.filter(id => id !== group.id))}/>
+                  <span className="min-w-0 flex-1">
+                    <strong className="block text-sm">{group.nome}</strong>
+                    <span className="text-xs text-koma-muted">{hasCharge ? 'Contém adicionais pagos' : 'Escolhas incluídas no preço'} · {amount} {amount === 1 ? 'opção' : 'opções'}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </section>
           {error && <p role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs font-semibold text-rose-400">{error}</p>}
         </div>
         <footer className="flex shrink-0 gap-2 border-t border-koma-border bg-koma-card p-3 pb-[calc(.75rem+env(safe-area-inset-bottom))]">
           <button type="button" disabled={busy} onClick={onClose} className="min-h-11 flex-1 rounded-xl border border-koma-border font-bold">Cancelar</button>
-          <button type="button" disabled={busy} onClick={()=>void handleSave()} className="min-h-11 flex-1 rounded-xl bg-emerald-500 font-black text-emerald-950 disabled:opacity-60">
+          <button type="button" disabled={busy || !groupsLoaded} onClick={()=>void handleSave()} className="min-h-11 flex-1 rounded-xl bg-emerald-500 font-black text-emerald-950 disabled:opacity-60">
             {busy?'Salvando...':'Salvar produto'}
           </button>
         </footer>
