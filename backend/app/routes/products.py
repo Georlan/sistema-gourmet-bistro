@@ -13,7 +13,7 @@ from ..catalog_ordering import (
 from ..marmitaria_catalog import enabled as marmitaria_enabled, size_category, size_key
 import uuid
 from ..database import get_db, require_tenant_id
-from ..models import Produto, Categoria, ObservacaoPredefinida, Usuario, Cardapio, ConfiguracaoRestaurante
+from ..models import Produto, Categoria, ObservacaoPredefinida, Usuario, Cardapio, ConfiguracaoRestaurante, GrupoModificador, ProdutoGrupoModificador
 from ..security import get_current_user, require_permission
 from ..schemas import (
     ProdutoResponse,
@@ -177,6 +177,36 @@ def _serialize_product_with_modifiers(
     if family_metadata:
         payload.update(family_metadata.get(str(product.id), {}))
     return payload
+
+
+def _set_product_customizations(db: Session, tenant: int, product: Produto, group_ids: list[str]) -> None:
+    """Direct group assignments; no changes to the global group or other products."""
+    if product.familia_id:
+        raise HTTPException(409, "Configure as personalizações no produto com variações.")
+    if len(group_ids) != len(set(group_ids)):
+        raise HTTPException(422, "O mesmo grupo foi selecionado mais de uma vez.")
+    valid = db.query(GrupoModificador.id).filter(
+        GrupoModificador.restaurante_id == tenant,
+        GrupoModificador.id.in_(group_ids),
+        GrupoModificador.tipo != "__archived__",
+    ).all() if group_ids else []
+    if len(valid) != len(group_ids):
+        raise HTTPException(404, "Personalização não encontrada neste restaurante.")
+    existing = db.query(ProdutoGrupoModificador).filter(
+        ProdutoGrupoModificador.restaurante_id == tenant,
+        ProdutoGrupoModificador.produto_id == product.id,
+    ).with_for_update().all()
+    if any(link.min_selecoes is not None or link.max_selecoes is not None for link in existing):
+        raise HTTPException(409, "Este produto tem limites próprios. Edite as escolhas específicas antes de alterar os vínculos.")
+    wanted = set(group_ids)
+    for link in existing:
+        if link.grupo_id not in wanted:
+            db.delete(link)
+    assigned = {link.grupo_id for link in existing}
+    for group_id in wanted - assigned:
+        db.add(ProdutoGrupoModificador(
+            restaurante_id=tenant, produto_id=product.id, grupo_id=group_id,
+        ))
 
 
 # ─── CATEGORIES ENDPOINTS ─────────────────────────────────────────────────────
@@ -783,6 +813,7 @@ def create_produto(
         )
 
     payload = produto_data.model_dump()
+    groups_to_link = payload.pop("grupo_ids", None)
     clean_img, clean_gal = _validate_product_media_fields(
         rest_id,
         payload.get("imagem"),
@@ -820,6 +851,9 @@ def create_produto(
         restaurante_id=rest_id,
     )
     db.add(novo_produto)
+    db.flush()
+    if groups_to_link is not None:
+        _set_product_customizations(db, rest_id, novo_produto, groups_to_link)
     db.commit()
     db.refresh(novo_produto)
     notify_catalog_update(background_tasks, "Produto criado", require_tenant_id())
@@ -846,6 +880,7 @@ def update_produto(
         )
 
     data = update_data.model_dump(exclude_unset=True)
+    groups_to_link = data.pop("grupo_ids", None)
     if db_produto.familia_id and any(key in data for key in ("categoria_id", "cardapio_id", "somente_promocao")):
         raise HTTPException(
             409, "Produtos com variações usam uma única categoria e cardápio. Edite a família."
@@ -901,6 +936,8 @@ def update_produto(
         ensure_marmitas_available(db, rest_id, [db_produto])
     for key, value in data.items():
         setattr(db_produto, key, value)
+    if groups_to_link is not None:
+        _set_product_customizations(db, rest_id, db_produto, groups_to_link)
 
     db.commit()
     db.refresh(db_produto)
