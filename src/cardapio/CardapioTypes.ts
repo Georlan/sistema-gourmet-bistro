@@ -121,6 +121,8 @@ export interface BrandConfig {
   categories: string[];
   products: Product[];
   popularProductIds?: string[];
+  /** Optional priority list of real SKU IDs for the cart, no prices/costs. */
+  cartRecommendationIds?: string[];
   promotions?: CatalogPromotion[];
   explicitPromotionComposition?: boolean;
   promotionProducts?: Product[];
