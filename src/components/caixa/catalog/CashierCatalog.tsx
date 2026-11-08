@@ -353,7 +353,7 @@ export default function CashierCatalog({
               } else {
                 editProductDetails(product);
               }
-            }
+            }}
             onDuplicateProduct={(product) => {
               if (isMarmitaria && isMarmita(product)) { showToast('Cada tamanho tem um único cadastro. Edite a marmita existente na lista de produtos.', 'error'); return; }
               setEditingProduct(null);
