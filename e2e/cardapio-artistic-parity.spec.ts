@@ -215,6 +215,22 @@ test('pastel médio e pastelão oferecem somente sabores com preço corresponden
   await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 7,00');
 });
 
+ test('recomendação manual da sacola usa SKU escolhido em vez do motor automático',async({page})=>{
+  await menu(page, payload => {
+    // Pizza de batata é prato principal; o motor automático não a escolheria.
+    payload.restaurante.recomendacoes_sacola_ids = ['301'];
+  });
+  await page.locator('#btn-hero-fast-add-201').click();
+  if (!await page.locator('#cart-drawer-container').isVisible()) {
+    await page.locator('#btn-cart-header').click();
+  }
+  const cart = page.locator('#cart-drawer-container');
+  await expect(cart).toBeVisible();
+  await expect(cart.locator('#upsell-card-301')).toBeVisible();
+  await expect(cart.locator('[id^="upsell-card-"]')).toHaveCount(1);
+  await expect(cart.locator('#upsell-card-301')).toContainText('Pizza de batata');
+ });
+
  test('ranking real, IDs únicos e consulta única ao navegar', async({page})=>{
   const state=await menu(page);
   await expect(page.locator('#koma-art-hero-showcase')).toContainText('Vinho Tinto');
