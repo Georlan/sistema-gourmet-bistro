@@ -60,6 +60,7 @@ export default function ComplementosTab({
   const [dailyMode, setDailyMode] = useState(true);
   const [dailyPending, setDailyPending] = useState(false);
   const [showGroupRules, setShowGroupRules] = useState(false);
+  const [showAdvancedRules, setShowAdvancedRules] = useState(false);
   const [catalogError, setCatalogError] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -171,6 +172,11 @@ export default function ComplementosTab({
 
   const handleOpenModal = (grupo?: GrupoModificador) => {
     setShowGroupRules(false);
+    // Existing complex group policies must remain visible and unchanged until edited.
+    setShowAdvancedRules(Boolean(grupo && (
+      grupo.tipo === 'meio_a_meio' || grupo.max_selecoes !== 1
+      || grupo.min_selecoes > 1
+    )));
     setOptionSearch('');
     setNewOptionName('');
     setNewOptionPrice('0');
@@ -411,17 +417,17 @@ export default function ComplementosTab({
       {catalogError && <div role="alert" className="rounded-2xl border border-rose-500/40 p-5 text-sm text-koma-foreground">Não foi possível conferir o cadastro atual. <button onClick={() => void fetchCatalogBindings()} className="underline">Tentar novamente</button></div>}
       {marmitariaCadastro && dailyMode && !catalogError && (loading ? <p role="status" className="p-6 text-koma-muted">Carregando cardápio do dia…</p> : <CardapioDiarioEditor grupos={grupos} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onEditGroup={handleOpenModal} onDirtyChange={setDailyPending} onReload={fetchCatalogBindings} onSaved={async () => { onShowNotification?.('Cardápio do dia salvo.', 'success'); await fetchCatalogBindings(); }} />)}
       {(!marmitariaCadastro || !dailyMode) && !catalogError && <details open className="space-y-4">
-        <summary className="cursor-pointer font-bold text-koma-foreground">Complementos e adicionais</summary>
+        <summary className="cursor-pointer font-bold text-koma-foreground">Escolhas do produto e adicionais</summary>
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-koma-card border border-koma-border p-5 rounded-2xl">
         <div>
           <div className="flex items-center gap-2 text-emerald-500 font-bold text-sm">
             <Layers className="w-5 h-5" />
-            <span>Grupos de Complementos & Adicionais</span>
+            <span>Personalizações dos produtos</span>
           </div>
           <p className="text-xs text-koma-muted mt-1 max-w-2xl">
             {marmitariaCadastro
               ? 'Cadastre proteínas, acompanhamentos e escolhas de outros produtos, como sabores de bebidas. Os limites das quentinhas são definidos em cada tamanho na aba Produtos.'
-              : 'Vincule grupos às categorias e subcategorias, ou a produtos específicos. Pause as opções que não serão servidas hoje.'}
+              : 'Crie escolhas incluídas no preço (ex.: ponto da carne, molho) ou adicionais pagos (ex.: bacon extra). Defina onde aparecem e pause opções indisponíveis.'}
           </p>
         </div>
 
@@ -452,7 +458,7 @@ export default function ComplementosTab({
       ) : filteredGrupos.length === 0 ? (
         <div className="py-12 text-center bg-koma-card border border-koma-border rounded-2xl">
           <Layers className="w-10 h-10 mx-auto text-koma-muted opacity-40 mb-3" />
-          <h3 className="text-sm font-bold text-koma-foreground">Nenhum grupo de adicionais criado</h3>
+          <h3 className="text-sm font-bold text-koma-foreground">Nenhuma escolha ou adicional cadastrado</h3>
           <p className="text-xs text-koma-muted mt-1 max-w-md mx-auto">
             Cadastre os grupos e adicionais manualmente para manter o cardápio sob seu controle.
           </p>
@@ -464,23 +470,26 @@ export default function ComplementosTab({
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    {!marmitariaCadastro && <>
-                    <span className={clsx(
-                      'inline-block px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider',
-                      group.tipo === 'obrigatorio'
-                        ? 'bg-amber-500/15 text-amber-400'
-                        : 'bg-emerald-500/15 text-emerald-400',
-                    )}>
-                      {group.tipo === 'obrigatorio' ? 'Obrigatório' : 'Opcional'}
-                    </span>
-                    </>}
+                    {!marmitariaCadastro && (
+                      <p className="text-[11px] font-semibold text-koma-muted">
+                        {group.opcoes.some(option => Number(option.preco_adicional) > 0)
+                          ? group.opcoes.every(option => Number(option.preco_adicional) > 0)
+                            ? 'Adicionais pagos'
+                            : 'Escolhas gratuitas e pagas'
+                          : 'Escolhas incluídas no preço'}
+                        {' · '}
+                        {group.min_selecoes > 0 ? 'Seleção obrigatória' : 'Seleção opcional'}
+                      </p>
+                    )}
                     <h4 className="mt-1.5 font-black text-sm text-koma-foreground">{group.nome}</h4>
                     <p className="text-[11px] text-koma-muted mt-0.5">
                       {marmitariaCadastro
                         ? <>{group.opcoes.length} {group.opcoes.length === 1 ? 'opção cadastrada' : 'opções cadastradas'}</>
-                        : group.min_selecoes === group.max_selecoes
-                          ? `Escolha ${group.min_selecoes} opção`
-                          : `De ${group.min_selecoes} a ${group.max_selecoes} opções`}
+                        : group.min_selecoes === 0
+                          ? `Até ${group.max_selecoes} ${group.max_selecoes === 1 ? 'opção' : 'opções'}`
+                          : group.min_selecoes === group.max_selecoes
+                            ? `Escolha ${group.min_selecoes} ${group.min_selecoes === 1 ? 'opção' : 'opções'}`
+                            : `Escolha de ${group.min_selecoes} a ${group.max_selecoes} opções`}
                     </p>
                   </div>
                   <div className="flex items-center gap-1">
@@ -594,9 +603,38 @@ export default function ComplementosTab({
 
               {marmitariaCadastro && <button type="button" aria-expanded={showGroupRules} onClick={() => setShowGroupRules(value => !value)} className="text-xs font-bold text-emerald-700 dark:text-emerald-300 underline">Limites e produtos vinculados</button>}
               {marmitariaCadastro && showGroupRules && <p className="text-xs text-koma-muted">Para sabores e escolhas de outros produtos, defina os limites e vincule somente os produtos correspondentes. Nas quentinhas, os limites definidos em Produtos continuam valendo.</p>}
-              <div className={marmitariaCadastro && !showGroupRules ? 'hidden' : 'grid grid-cols-3 gap-3'}>
+              {!marmitariaCadastro && (
+                <div className="rounded-xl border border-koma-border bg-koma-raised/30 p-3 space-y-3">
+                  <div>
+                    <p className="text-xs font-bold text-koma-foreground">Como o cliente escolhe?</p>
+                    <p className="mt-1 text-[11px] text-koma-muted">Escolhas sem cobrança e adicionais pagos usam o mesmo cadastro. O preço de cada opção define se há acréscimo; a obrigatoriedade é outra regra.</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      aria-pressed={tipo === 'opcional' && minSelecoes === '0' && maxSelecoes === '1'}
+                      onClick={() => { setTipo('opcional'); setMinSelecoes('0'); setMaxSelecoes('1'); setShowAdvancedRules(false); }}
+                      className={clsx('min-h-11 rounded-lg border px-3 py-2 text-left text-xs font-bold', tipo === 'opcional' && minSelecoes === '0' && maxSelecoes === '1' ? 'border-emerald-500 text-koma-foreground' : 'border-koma-border text-koma-muted')}
+                    >
+                      Opcional · até uma escolha
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={tipo === 'obrigatorio' && minSelecoes === '1' && maxSelecoes === '1'}
+                      onClick={() => { setTipo('obrigatorio'); setMinSelecoes('1'); setMaxSelecoes('1'); setShowAdvancedRules(false); }}
+                      className={clsx('min-h-11 rounded-lg border px-3 py-2 text-left text-xs font-bold', tipo === 'obrigatorio' && minSelecoes === '1' && maxSelecoes === '1' ? 'border-emerald-500 text-koma-foreground' : 'border-koma-border text-koma-muted')}
+                    >
+                      Obrigatória · escolha uma
+                    </button>
+                  </div>
+                  <button type="button" className="text-[11px] font-semibold text-koma-secondary underline" aria-expanded={showAdvancedRules} onClick={() => setShowAdvancedRules(value => !value)}>
+                    {showAdvancedRules ? 'Ocultar regras avançadas' : 'Permitir múltiplas escolhas (avançado)'}
+                  </button>
+                </div>
+              )}
+              <div className={(marmitariaCadastro && !showGroupRules) || (!marmitariaCadastro && !showAdvancedRules) ? 'hidden' : 'grid grid-cols-3 gap-3'}>
                 <div>
-                  <label className="block text-xs font-bold text-koma-muted mb-1">Tipo</label>
+                  <label className="block text-xs font-bold text-koma-muted mb-1">Regra de seleção</label>
                   <select
                     aria-label="Tipo de seleção do grupo"
                     value={tipo}
@@ -656,7 +694,7 @@ export default function ComplementosTab({
               </div>}
               <div className="space-y-2 pt-2 border-t border-koma-border">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-koma-muted">Opções / Adicionais</label>
+                  <label className="text-xs font-bold text-koma-muted">Opções que o cliente poderá escolher</label>
                   {!marmitariaCadastro && <button
                     type="button"
                     onClick={handleAddOpcao}
@@ -667,7 +705,7 @@ export default function ComplementosTab({
                   </button>}
                 </div>
                 <label className="block text-xs text-koma-muted">Buscar opção neste grupo<input aria-label="Buscar opção neste grupo" value={optionSearch} onChange={event => setOptionSearch(event.target.value)} placeholder="Ex.: costela" className="mt-1 w-full rounded-lg border border-koma-border bg-koma-raised px-3 py-2 text-sm text-koma-foreground" /></label>
-                <p className="text-xs text-koma-muted">Opções em ordem alfabética. Remover retira do cadastro e preserva os pedidos antigos.</p>
+                <p className="text-xs text-koma-muted">R$ 0 = escolha incluída no preço (como mal passado). Um valor maior que zero = adicional cobrado. Remover preserva pedidos antigos.</p>
                 <div className="space-y-2">
                   {opcoes.map((option, index) => ({ option, index })).filter(({ option }) => !option.nome || option.nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').includes(optionSearch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR'))).map(({ option, index }) => (
                     <div key={`${option.id || 'new'}-${index}`} className="flex items-center gap-2 bg-koma-card p-2 rounded-xl border border-koma-border">
