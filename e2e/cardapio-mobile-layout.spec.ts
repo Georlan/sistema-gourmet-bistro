@@ -84,3 +84,51 @@ for (const [profile, category, product] of [
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
+
+
+test('contato, Instagram e compartilhar permanecem acessíveis no cabeçalho mobile', async ({ page }) => {
+  await page.route('http://127.0.0.1:8000/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/api/cardapio-digital/public') {
+      return route.fulfill({ json: {
+        restaurante: {
+          id: 905, nome: 'Loja Contatos', slug: 'qa-contatos',
+          aceitando_pedidos: true, status_override: 'Forçado Aberto',
+          delivery_ativo: false, formas_pagamento_aceitas: ['Dinheiro'],
+          socials: JSON.stringify({ whatsapp: '+55 (88) 99911-2233', instagram: '@loja_contatos' }),
+        },
+        categorias: [{ id: 1, nome: 'Lanches' }],
+        produtos: [{ id: 901, nome: 'Pastel da casa', preco: 8, categoria_id: 1, grupos_modificadores: [] }],
+      } });
+    }
+    if (path === '/api/cardapio-digital/populares') return route.fulfill({ json: { produtos: [] } });
+    return route.fulfill({ json: {} });
+  });
+
+  await page.setViewportSize({ width: 390, height: 760 });
+  await page.goto('/c/qa-contatos?vitrine=editorial');
+  const whatsApp = page.getByRole('link', { name: 'WhatsApp', exact: true });
+  const instagram = page.getByRole('link', { name: 'Instagram', exact: true });
+  const shareMobile = page.locator('#btn-share-mobile');
+
+  for (const width of [320, 390, 412, 768]) {
+    await page.setViewportSize({ width, height: 760 });
+    await expect(whatsApp).toBeVisible();
+    await expect(instagram).toBeVisible();
+    await expect(shareMobile).toBeVisible();
+    await expect(page.locator('#btn-share-header')).toBeHidden();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await expect(whatsApp).toHaveAttribute('href', 'https://wa.me/5588999112233');
+  await expect(instagram).toHaveAttribute('href', 'https://instagram.com/loja_contatos');
+  await expect(whatsApp).toHaveCount(1);
+  await expect(instagram).toHaveCount(1);
+  await expect(shareMobile).toHaveAttribute('aria-label', 'Compartilhar cardápio');
+
+  // Wide header retains its existing actions; mobile share isn't duplicated.
+  await page.setViewportSize({ width: 1366, height: 850 });
+  await expect(whatsApp).toBeVisible();
+  await expect(instagram).toBeVisible();
+  await expect(shareMobile).toBeHidden();
+  await expect(page.locator('#btn-share-header')).toBeVisible();
+});
