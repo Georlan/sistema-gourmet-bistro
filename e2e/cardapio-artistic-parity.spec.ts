@@ -104,9 +104,9 @@ test('batata tradicional usa um único card com tamanho obrigatório na categori
     payload.restaurante.id = 1;
     payload.categorias.push({ id: 30, nome: 'Batatas Fritas' });
     payload.produtos.push(
-      { id: 'batata-p', nome: 'Batata Frita Pequena (200 g)', descricao: 'Com molho rosé', preco: 12, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Pequena · 200 g', grupos_modificadores: [] }
-      { id: 'batata-m', nome: 'Batata Frita Média (300 g)', descricao: 'Com molho rosé', preco: 15, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Média · 300 g', grupos_modificadores: [] }
-      { id: 'batata-g', nome: 'Batata Frita Grande (400 g)', descricao: 'Com molho rosé', preco: 18, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Grande · 400 g', grupos_modificadores: [] }
+      { id: 'batata-p', nome: 'Batata Frita Pequena (200 g)', descricao: 'Com molho rosé', preco: 12, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Pequena · 200 g', grupos_modificadores: [] },
+      { id: 'batata-m', nome: 'Batata Frita Média (300 g)', descricao: 'Com molho rosé', preco: 15, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Média · 300 g', grupos_modificadores: [] },
+      { id: 'batata-g', nome: 'Batata Frita Grande (400 g)', descricao: 'Com molho rosé', preco: 18, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Grande · 400 g', grupos_modificadores: [] },
       { id: 'especial', nome: 'Batata Frita Especial (300 g)', descricao: 'Escolha bacon ou calabresa', preco: 24, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
     );
   });
@@ -172,9 +172,9 @@ test('destaque da batata abre o mesmo seletor sem fast-add de produto sintético
     payload.produtos = payload.produtos.filter((product: any) => product.id !== 201);
     payload.categorias.push({ id: 30, nome: 'Batatas Fritas' });
     payload.produtos.push(
-      { id: 201, nome: 'Batata Frita Pequena (200 g)', descricao: 'Com molho rosé', preco: 12, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Pequena · 200 g', grupos_modificadores: [] }
-      { id: 'batata-m', nome: 'Batata Frita Média (300 g)', descricao: 'Com molho rosé', preco: 15, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Média · 300 g', grupos_modificadores: [] }
-      { id: 'batata-g', nome: 'Batata Frita Grande (400 g)', descricao: 'Com molho rosé', preco: 18, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Grande · 400 g', grupos_modificadores: [] }
+      { id: 201, nome: 'Batata Frita Pequena (200 g)', descricao: 'Com molho rosé', preco: 12, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Pequena · 200 g', grupos_modificadores: [] },
+      { id: 'batata-m', nome: 'Batata Frita Média (300 g)', descricao: 'Com molho rosé', preco: 15, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Média · 300 g', grupos_modificadores: [] },
+      { id: 'batata-g', nome: 'Batata Frita Grande (400 g)', descricao: 'Com molho rosé', preco: 18, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Grande · 400 g', grupos_modificadores: [] },
     );
   });
   const hero = page.locator('#koma-art-hero-showcase');
@@ -191,10 +191,10 @@ test('pastel médio e pastelão oferecem somente sabores com preço corresponden
     payload.restaurante.id = 1;
     payload.categorias.push({ id: 40, nome: 'Pastelões e Pastel Médio' });
     payload.produtos.push(
-      { id: 'pastel-m-sol', nome: 'Pastel Médio de Carne de Sol', descricao: 'Carne de sol, queijo e catupiry', preco: 7, categoria_id: 40, imagem_url: '', familia_id: 'pastel-medio', familia_nome: 'Pastel Médio', familia_eixo: 'sabor', variacao_rotulo: 'Carne de Sol', grupos_modificadores: [] }
-      { id: 'pastel-m-frango', nome: 'Pastel Médio de Frango', descricao: 'Frango, catupiry e queijo', preco: 7, categoria_id: 40, imagem_url: '', familia_id: 'pastel-medio', familia_nome: 'Pastel Médio', familia_eixo: 'sabor', variacao_rotulo: 'Frango', grupos_modificadores: [] }
-      { id: 'pastel-g-sol', nome: 'Pastelão de Carne de Sol', descricao: 'Carne de sol, queijo e catupiry', preco: 17, categoria_id: 40, imagem_url: '', familia_id: 'pastelao', familia_nome: 'Pastelão', familia_eixo: 'sabor', variacao_rotulo: 'Carne de Sol', grupos_modificadores: [] }
-      { id: 'pastel-g-frango', nome: 'Pastelão de Frango', descricao: 'Frango, catupiry e queijo', preco: 16, categoria_id: 40, imagem_url: '', familia_id: 'pastelao', familia_nome: 'Pastelão', familia_eixo: 'sabor', variacao_rotulo: 'Frango', grupos_modificadores: [] }
+      { id: 'pastel-m-sol', nome: 'Pastel Médio de Carne de Sol', descricao: 'Carne de sol, queijo e catupiry', preco: 7, categoria_id: 40, imagem_url: '', familia_id: 'pastel-medio', familia_nome: 'Pastel Médio', familia_eixo: 'sabor', variacao_rotulo: 'Carne de Sol', grupos_modificadores: [] },
+      { id: 'pastel-m-frango', nome: 'Pastel Médio de Frango', descricao: 'Frango, catupiry e queijo', preco: 7, categoria_id: 40, imagem_url: '', familia_id: 'pastel-medio', familia_nome: 'Pastel Médio', familia_eixo: 'sabor', variacao_rotulo: 'Frango', grupos_modificadores: [] },
+      { id: 'pastel-g-sol', nome: 'Pastelão de Carne de Sol', descricao: 'Carne de sol, queijo e catupiry', preco: 17, categoria_id: 40, imagem_url: '', familia_id: 'pastelao', familia_nome: 'Pastelão', familia_eixo: 'sabor', variacao_rotulo: 'Carne de Sol', grupos_modificadores: [] },
+      { id: 'pastel-g-frango', nome: 'Pastelão de Frango', descricao: 'Frango, catupiry e queijo', preco: 16, categoria_id: 40, imagem_url: '', familia_id: 'pastelao', familia_nome: 'Pastelão', familia_eixo: 'sabor', variacao_rotulo: 'Frango', grupos_modificadores: [] },
     );
   });
   const catalog = page.locator('[data-menu-category="Pastelões e Pastel Médio"]');
