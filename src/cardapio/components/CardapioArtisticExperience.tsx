@@ -498,6 +498,47 @@ export function CardapioArtisticExperience({
             </label>
           </div>
 
+          {/* The default public vitrine owns this header (not CardapioHeader).
+              Keep real configured contact actions reachable below the search on phones. */}
+          <nav className="koma-art-mobile-contacts" aria-label="Contato e compartilhamento">
+            {whatsappUrl && (
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="koma-art-mobile-contact-action"
+                aria-label="Falar no WhatsApp"
+                id="btn-whatsapp-mobile"
+              >
+                <Phone size={15} aria-hidden="true" />
+                <span>WhatsApp</span>
+              </a>
+            )}
+            {instagramSocial && (
+              <a
+                href={instagramSocial.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="koma-art-mobile-contact-action"
+                aria-label="Instagram do restaurante"
+                id="btn-instagram-mobile"
+              >
+                <KomaSocialCameraIcon size={15} />
+                <span>Instagram</span>
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={handleShare}
+              className="koma-art-mobile-contact-action"
+              aria-label="Compartilhar cardápio"
+              id="btn-share-mobile"
+            >
+              <KomaShareIcon size={15} />
+              <span>Compartilhar</span>
+            </button>
+          </nav>
+
           {/* Barra de Hospitalidade Integrada */}
           <div className="koma-art-hospitality-strip">
             <div className="koma-art-hospitality-status">
