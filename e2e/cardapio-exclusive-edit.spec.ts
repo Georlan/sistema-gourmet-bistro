@@ -58,6 +58,7 @@ test('editar produto associa adicional sem alterar escolha herdada da categoria'
   const card = page.locator('article').filter({has:page.getByRole('heading',{name:'Risoto da casa',exact:true})});
   await card.getByRole('button',{name:'Editar',exact:true}).click();
   const dialog = page.getByRole('dialog',{name:'Editar produto'});
+  await dialog.getByRole('tab', { name: 'Adicionais' }).click();
   const categoryChoice = dialog.getByRole('checkbox',{name:'Associar Molho da casa ao produto'});
   const addOnChoice = dialog.getByRole('checkbox',{name:'Associar Adicionais ao produto'});
   await expect(categoryChoice).toBeChecked();
@@ -101,12 +102,15 @@ test('cadastro único cria sabores com preços por SKU e grupos compartilhados n
   await page.getByRole('button', { name: 'Novo produto', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Novo produto' });
   await dialog.locator('#product-name').fill('Pastel Médio');
+  await dialog.getByRole('tab', { name: 'Variações' }).click();
+  await expect(dialog.locator('#product-name')).toBeHidden();
   await dialog.getByRole('switch', { name: 'Este produto tem sabores ou tamanhos?' }).check();
   await dialog.getByRole('textbox', { name: 'Nome da opção 1' }).fill('Carne Moída');
   await dialog.locator('#variant-price-0').fill('700');
   await dialog.getByRole('button', { name: 'Adicionar sabor' }).click();
   await dialog.getByRole('textbox', { name: 'Nome da opção 2' }).fill('Queijo');
   await dialog.locator('#variant-price-1').fill('800');
+  await dialog.getByRole('tab', { name: 'Adicionais' }).click();
   const molho = dialog.getByRole('checkbox', { name: 'Associar Molhos ao produto' });
   await expect(molho).toBeVisible();
   await molho.check();
@@ -161,6 +165,7 @@ test('editar variante existente abre a família e preserva IDs dos sabores', asy
   });
   await card.getByRole('button', { name: 'Editar', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Editar produto' });
+  await dialog.getByRole('tab', { name: 'Variações' }).click();
   await expect(dialog.getByRole('textbox', { name: 'Nome da opção 2' })).toHaveValue('Queijo');
   await dialog.locator('#variant-price-1').fill('900');
   await dialog.getByRole('button', { name: 'Salvar alterações', exact: true }).click();
@@ -169,4 +174,31 @@ test('editar variante existente abre a família e preserva IDs dos sabores', asy
     ['pastel-carne', 7], ['pastel-queijo', 9],
   ]);
   await expect(dialog).toHaveCount(0);
+});
+
+
+test('edição em abas preserva o rascunho sem salvar ao navegar', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_active_tab', 'cardapio');
+    sessionStorage.setItem('koma_active_subtab', 'produtos');
+  });
+  await page.route('**/cardapio/modificadores/grupos', route => route.fulfill({ json: [] }));
+  await page.goto('/?view=caixa');
+  await page.getByRole('button', { name: 'Novo produto', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Novo produto' });
+  await dialog.locator('#product-name').fill('Pastel Médio');
+  await dialog.getByRole('tab', { name: 'Variações' }).click();
+  await dialog.getByRole('switch', { name: 'Este produto tem sabores ou tamanhos?' }).check();
+  await dialog.getByRole('textbox', { name: 'Nome da opção 1' }).fill('Carne Moída');
+  await dialog.locator('#variant-price-0').fill('700');
+  await dialog.getByRole('tab', { name: 'Adicionais' }).click();
+  await expect(dialog.getByText('O cliente pode personalizar?')).toHaveCount(0);
+  await expect(dialog.getByText('Personalizações compartilhadas')).toBeVisible();
+  await dialog.getByRole('tab', { name: 'Produto' }).click();
+  await expect(dialog.locator('#product-name')).toHaveValue('Pastel Médio');
+  await dialog.getByRole('tab', { name: 'Variações' }).click();
+  await expect(dialog.getByRole('textbox', { name: 'Nome da opção 1' })).toHaveValue('Carne Moída');
+  await expect(dialog.getByRole('tab', { name: 'Variações' })).toHaveAttribute('aria-selected', 'true');
 });
