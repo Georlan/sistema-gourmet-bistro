@@ -485,6 +485,7 @@ export default function CashierCatalog({
             produtos={displayedProdutos}
             categorias={apiCategorias}
             familyLabels={familyLabels}
+            recommendationProducts={apiProdutos}
             promotionsConfig={{ apiBaseUrl, authHeaders }}
             catalogReady={catalogReady || apiProdutos.length > 0 || apiCategorias.length > 0}
             previewUrl={
