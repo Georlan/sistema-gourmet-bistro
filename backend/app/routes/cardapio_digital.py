@@ -234,6 +234,7 @@ def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoResta
         ConfiguracaoRestaurante.tabela_taxas_bairros,
         ConfiguracaoRestaurante.tabela_taxas_km,
         ConfiguracaoRestaurante.promocoes,
+        ConfiguracaoRestaurante.recomendacoes_sacola_ids,
         ConfiguracaoRestaurante.cardapio_ativo_id,
         ConfiguracaoRestaurante.cardapios_adicionais_ids,
     )
@@ -311,6 +312,7 @@ def _public_restaurant_payload(
         "taxa_entrega_padrao": float(configuracao.taxa_entrega_fixa) if configuracao and configuracao.taxa_entrega_fixa is not None else None,
         "cardapio_ativo_id": cardapio_ativo_id or (getattr(configuracao, "cardapio_ativo_id", None) if configuracao else None),
         "cardapio_ativo_nome": cardapio_ativo_nome,
+        "recomendacoes_sacola_ids": list(configuracao.recomendacoes_sacola_ids or []) if configuracao else [],
     }
 
 
@@ -342,6 +344,85 @@ def _public_product_payload(
         "variacao_rotulo": product.variacao_rotulo,
         **(family_metadata or {}),
     }
+
+
+class CartRecommendationsWrite(BaseModel):
+    """Only real SKU IDs. Manual priority follows the operator's chosen order."""
+
+    model_config = ConfigDict(extra="forbid")
+    produto_ids: list[str] = Field(default_factory=list, max_length=6)
+    anteriores: list[str] = Field(default_factory=list, max_length=6)
+
+
+@router.get("/recomendacoes")
+def obter_recomendacoes_sacola(
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    del current_user
+    tenant = require_tenant_id()
+    config = db.query(ConfiguracaoRestaurante).filter(
+        ConfiguracaoRestaurante.restaurante_id == tenant,
+    ).first()
+    return {"produto_ids": list(config.recomendacoes_sacola_ids or []) if config else []}
+
+
+@router.put("/recomendacoes")
+def salvar_recomendacoes_sacola(
+    payload: CartRecommendationsWrite,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Tenant-scoped ordered choices; no new products, hidden prices or caches."""
+    del current_user
+    tenant = require_tenant_id()
+    requested = [value.strip() for value in payload.produto_ids]
+    previous = [value.strip() for value in payload.anteriores]
+    if any(not value for value in requested + previous):
+        raise HTTPException(422, "Identificador de produto inválido.")
+    if len(set(requested)) != len(requested) or len(set(previous)) != len(previous):
+        raise HTTPException(422, "Não repita o mesmo produto.")
+
+    # Lock the tenant even if a new restaurant has no configuration yet;
+    # concurrent first writes cannot create parallel configuration rows.
+    restaurant = db.query(Restaurante).filter(
+        Restaurante.id == tenant,
+    ).with_for_update().first()
+    if restaurant is None:
+        raise HTTPException(404, "Restaurante não encontrado.")
+    config = db.query(ConfiguracaoRestaurante).filter(
+        ConfiguracaoRestaurante.restaurante_id == tenant,
+    ).with_for_update().first()
+    current = list(config.recomendacoes_sacola_ids or []) if config else []
+    if current != previous:
+        raise HTTPException(409, "As recomendações mudaram em outro acesso. Reabra a configuração.")
+
+    if requested:
+        products = db.query(Produto).filter(
+            Produto.restaurante_id == tenant,
+            Produto.id.in_(requested),
+            Produto.ativo.is_(True),
+            Produto.somente_promocao.is_(False),
+        ).all()
+        active_ids = (
+            [config.cardapio_ativo_id, *(config.cardapios_adicionais_ids or [])]
+            if config and config.cardapio_ativo_id else []
+        )
+        accepted = {
+            str(p.id) for p in products
+            if not active_ids or p.cardapio_id in active_ids
+        }
+        if accepted != set(requested):
+            raise HTTPException(422, "Selecione somente produtos ativos do cardápio atual.")
+
+    if config is None:
+        config = ConfiguracaoRestaurante(restaurante_id=tenant)
+        db.add(config)
+    config.recomendacoes_sacola_ids = requested or None
+    db.commit()
+    notify_catalog_update(background_tasks, "Recomendações da sacola atualizadas", tenant)
+    return {"produto_ids": requested}
 
 
 @router.get("/config", response_model=CardapioPublicRestaurantResponse)
