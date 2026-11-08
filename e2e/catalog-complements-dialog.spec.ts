@@ -111,5 +111,5 @@ test('o dono diferencia escolhas incluídas de adicionais pagos sem mexer em reg
     max_selecoes: 1,
     opcoes: [{ nome: 'Bacon extra', preco_adicional: 2, ativo: true }],
   });
-  await expect(page.getByText('Adicionais pagos', { exact: false })).toBeVisible();
+  await expect(page.getByText('Adicionais pagos', { exact: true })).toBeVisible();
 });
