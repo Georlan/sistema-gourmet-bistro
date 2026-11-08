@@ -133,6 +133,39 @@ test('batata tradicional usa um único card com tamanho obrigatório na categori
   await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 18,00');
 });
 
+test('família nativa conserva um único card e envia o SKU real para a sacola artística', async ({ page }) => {
+  await menu(page, payload => {
+    payload.restaurante.id = 6; // No JE-specific grouping or name regex allowed.
+    payload.categorias.push({ id: 40, nome: 'Pastéis' });
+    payload.produtos.push(
+      { id: 'p-carne', nome: 'Pastel Médio de Carne Moída', descricao: '', preco: 7, categoria_id: 40,
+        familia_id: 'f-pastel', familia_nome: 'Pastel Médio', familia_eixo: 'sabor',
+        variacao_rotulo: 'Carne Moída', imagem_url: '', grupos_modificadores: [] },
+      { id: 'p-queijo', nome: 'Pastel Médio de Queijo', descricao: '', preco: 8, categoria_id: 40,
+        familia_id: 'f-pastel', familia_nome: 'Pastel Médio', familia_eixo: 'sabor',
+        variacao_rotulo: 'Queijo', imagem_url: '', grupos_modificadores: [] },
+    );
+  });
+  const category = page.locator('[data-menu-category="Pastéis"]');
+  await expect(category.locator('[id^="product-card-"]')).toHaveCount(1);
+  await expect(category.locator('#product-card-family-f-pastel')).toBeVisible();
+  await category.locator('#product-card-family-f-pastel').click();
+  const modal = page.locator('#product-details-modal');
+  await expect(modal).toContainText('Escolha o sabor:');
+  await modal.locator('#btn-add-to-cart-action').click();
+  await expect(modal).toContainText('Escolha o sabor antes de adicionar');
+  await modal.locator('#variant-btn-p-queijo').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 8,00');
+  await modal.locator('#btn-add-to-cart-action').click();
+  if (!await page.locator('#cart-drawer-container').isVisible()) {
+    await page.locator('#btn-cart-header').click();
+  }
+  const cart = page.locator('#cart-drawer-container');
+  await expect(cart).toContainText('Pastel Médio de Queijo');
+  await expect(cart).toContainText('R$ 8,00');
+  await expect(cart).not.toContainText('Pastel Médio de Carne Moída');
+});
+
 test('destaque da batata abre o mesmo seletor sem fast-add de produto sintético', async ({ page }) => {
   await menu(page, payload => {
     payload.restaurante.id = 1;
