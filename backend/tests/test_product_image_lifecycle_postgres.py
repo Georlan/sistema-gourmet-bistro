@@ -15,7 +15,7 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app.database import TenantSession, tenant_session_scope
-from app.models import Restaurante, Categoria, Cardapio, Produto, ProductImageRetirement
+from app.models import Restaurante, Categoria, Cardapio, Produto, ProdutoFamilia, ProductImageRetirement
 from app.services.product_image_lifecycle import collect, reconcile
 
 NOW = datetime(2026, 10, 4, 12)
