@@ -250,7 +250,9 @@ export function CardapioArtisticExperience({
 
   const pairingHint = useMemo(() => {
     const types = new Set(pairingProducts.map(classifyProduct));
+    if (types.size > 2) return 'Opções para acompanhar';
     if (types.has('beverage') && types.has('dessert')) return 'Bebidas e sobremesas';
+    if (types.has('beverage') && types.has('side')) return 'Bebidas e acompanhamentos';
     if (types.has('beverage')) return 'Bebidas geladas para harmonizar';
     if (types.has('dessert')) return 'Sobremesas artesanais';
     if (types.has('side')) return 'Acompanhamentos e porções';

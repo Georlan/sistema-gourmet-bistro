@@ -35,7 +35,8 @@
   background-color: var(--art-bg);
   color: var(--art-text-main);
   font-family: inherit;
-  overflow-x: hidden;
+  /* clip avoids creating a scroll container that traps the sticky categories. */
+  overflow-x: clip;
   padding-bottom: 96px;
   position: relative;
 }
