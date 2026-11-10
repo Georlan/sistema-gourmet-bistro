@@ -6,6 +6,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Facebook, Gift, Globe, Phone, RotateCcw } from "lucide-react";
 import { BrandConfig, LOCAL_LOGO_PLACEHOLDER } from "../CardapioTypes";
+import { buildWhatsAppContactUrl } from "../../config/whatsappUtils";
 import "../cardapioPublic.css";
 import {
   KomaBagIcon,
@@ -274,9 +275,9 @@ export default function CardapioHeader({
             </label>
 
             <div className="cardapio-public-contact-actions">
-              {activeBrand.phone && (
+              {buildWhatsAppContactUrl(activeBrand.phone) && (
                 <a
-                  href={`https://wa.me/${activeBrand.phone.replace(/\D/g, "")}`}
+                  href={buildWhatsAppContactUrl(activeBrand.phone)}
                   target="_blank"
                   rel="noreferrer"
                   className="cardapio-public-contact-link"

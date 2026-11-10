@@ -21,6 +21,13 @@ async function menu(page:Page, mutate?:(payload:any)=>void, rankingGate?:Promise
   return {payload,orders,rankingRequests:()=>rankingRequests};
 }
 
+test('contato WhatsApp inclui DDI brasileiro no cabeçalho e nas informações da loja', async ({ page }) => {
+  await menu(page, payload => { payload.restaurante.socials = { whatsapp: '(88) 99961-6937' }; });
+  await expect(page.locator('#btn-whatsapp-mobile')).toHaveAttribute('href', 'https://wa.me/5588999616937');
+  await page.locator('#header-brand-info-trigger').click();
+  await expect(page.locator('#store-info-whatsapp-link')).toHaveAttribute('href', 'https://wa.me/5588999616937');
+});
+
 
 test('sacola usa o mesmo card de família nativa, exige tamanho e conserva preço por SKU', async ({ page }) => {
   await menu(page, payload => {
