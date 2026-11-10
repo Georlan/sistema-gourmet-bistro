@@ -224,12 +224,15 @@ export function CardapioArtisticExperience({
     const catalog = activeBrand.products || [];
     if (catalog.length === 0) return null;
     const effectivePopularIds = popularIds.length > 0 ? popularIds : (activeBrand.popularProductIds || []);
+    const manual = activeBrand.manualHighlightProductId
+      ? catalog.find((p) => String(p.id) === activeBrand.manualHighlightProductId && p.isAvailable !== false)
+      : null;
     const top = effectivePopularIds.length > 0
       ? catalog.find((p) => String(p.id) === String(effectivePopularIds[0]) && p.isAvailable !== false)
       : null;
-    const source = top || catalog.find((p) => p.isAvailable !== false);
+    const source = manual || top || catalog.find((p) => p.isAvailable !== false);
     return source ? resolveCatalogDisplayProduct(catalog, source, activeBrand.id) : null;
-  }, [activeBrand.products, activeBrand.id, popularIds, activeBrand.popularProductIds]);
+  }, [activeBrand.products, activeBrand.id, popularIds, activeBrand.popularProductIds, activeBrand.manualHighlightProductId]);
 
   // Produtos de harmonização / recomendação complementar contextual
   const pairingProducts = useMemo<CatalogDisplayItem[]>(() => {
@@ -276,7 +279,13 @@ export function CardapioArtisticExperience({
       ? heroProduct.variants.reduce((sum, variant) => sum + getProductCartQuantity(variant.id), 0)
       : getProductCartQuantity(heroProduct.id))
     : 0;
+  const isManualHighlight = Boolean(heroProduct && activeBrand.manualHighlightProductId &&
+    activeBrand.products.some(p => String(p.id) === activeBrand.manualHighlightProductId && p.isAvailable !== false) &&
+    (isGroupedProduct(heroProduct)
+      ? heroProduct.variants.some(v => String(v.id) === activeBrand.manualHighlightProductId)
+      : String(heroProduct.id) === activeBrand.manualHighlightProductId));
   const isVerifiedTopRanked = Boolean(
+    !isManualHighlight &&
     popularIds.length > 0 &&
     heroProduct &&
     (isGroupedProduct(heroProduct)

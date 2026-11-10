@@ -242,3 +242,30 @@ test('dono escolhe manualmente as sugestões da sacola sem alterar cadastro do p
   await expect.poll(() => saved).toEqual({ modo: 'manual', produto_ids: ['101'] });
   await expect(settings.getByRole('status')).toContainText('Recomendações salvas');
 });
+
+test('dono escolhe ou remove destaque no Caixa', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_active_tab', 'cardapio');
+    sessionStorage.setItem('koma_active_subtab', 'produtos');
+  });
+  let saved: Record<string, unknown> | undefined;
+  await page.route('**/api/cardapio-digital/destaque', route => {
+    if (route.request().method() === 'PUT') {
+      saved = route.request().postDataJSON();
+      return route.fulfill({ json: saved });
+    }
+    return route.fulfill({ json: { produto_id: null } });
+  });
+  await page.goto('/?view=caixa');
+  await page.getByRole('button', { name: 'Recomendações', exact: true }).click();
+  const settings = page.getByRole('region', { name: 'Configurar destaque do cardápio' });
+  await settings.getByLabel('Produto em destaque').selectOption('101');
+  await settings.getByRole('button', { name: 'Salvar destaque' }).click();
+  await expect.poll(() => saved).toEqual({ produto_id: '101' });
+  await expect(settings.getByRole('status')).toContainText('Destaque salvo');
+  await settings.getByLabel('Produto em destaque').selectOption('');
+  await settings.getByRole('button', { name: 'Salvar destaque' }).click();
+  await expect.poll(() => saved).toEqual({ produto_id: null });
+});

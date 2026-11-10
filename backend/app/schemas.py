@@ -1004,6 +1004,7 @@ class CardapioPublicRestaurantResponse(BaseModel):
     cardapio_ativo_nome: Optional[str] = None
     # None = automatic suggestions, ordered SKU IDs = manually selected in the cart.
     recomendacoes_sacola_ids: Optional[List[str]] = None
+    destaque_cardapio_produto_id: Optional[str] = None
 
 
 class CardapioPublicCategoryResponse(BaseModel):

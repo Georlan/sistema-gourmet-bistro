@@ -393,6 +393,8 @@ export default function CardapioPage() {
         },
         categories: payload.categorias.map((category) => String(category.nome || "")).filter(Boolean),
         products,
+        manualHighlightProductId: typeof restaurant.destaque_cardapio_produto_id === 'string'
+          ? restaurant.destaque_cardapio_produto_id : null,
         cartRecommendationSkuIds: Array.isArray(restaurant.recomendacoes_sacola_ids)
           ? restaurant.recomendacoes_sacola_ids.filter((value: unknown): value is string => typeof value === 'string')
           : null,

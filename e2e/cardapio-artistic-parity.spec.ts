@@ -21,6 +21,20 @@ async function menu(page:Page, mutate?:(payload:any)=>void, rankingGate?:Promise
   return {payload,orders,rankingRequests:()=>rankingRequests};
 }
 
+test('destaque escolhido pelo restaurante substitui ranking sem alegar ser o mais vendido', async ({ page }) => {
+  await menu(page, payload => { payload.restaurante.destaque_cardapio_produto_id = '101'; });
+  const hero = page.locator('#koma-art-hero-showcase');
+  await expect(hero).toContainText('Pizza Margherita Especial');
+  await expect(hero).toContainText('DESTAQUE DA CASA');
+  await expect(hero).not.toContainText('Nº 1 MAIS PEDIDO');
+});
+
+test('destaque indisponível retorna ao ranking automático', async ({ page }) => {
+  await menu(page, payload => { payload.restaurante.destaque_cardapio_produto_id = 'inexistente'; });
+  await expect(page.locator('#koma-art-hero-showcase')).toContainText('Vinho Tinto');
+  await expect(page.locator('#koma-art-hero-showcase')).toContainText('Nº 1 MAIS PEDIDO');
+});
+
 
 test('sacola usa o mesmo card de família nativa, exige tamanho e conserva preço por SKU', async ({ page }) => {
   await menu(page, payload => {
