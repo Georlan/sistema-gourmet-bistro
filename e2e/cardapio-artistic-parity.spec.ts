@@ -21,6 +21,20 @@ async function menu(page:Page, mutate?:(payload:any)=>void, rankingGate?:Promise
   return {payload,orders,rankingRequests:()=>rankingRequests};
 }
 
+test('destaque escolhido pelo restaurante substitui ranking sem alegar ser o mais vendido', async ({ page }) => {
+  await menu(page, payload => { payload.restaurante.destaque_cardapio_produto_id = '101'; });
+  const hero = page.locator('#koma-art-hero-showcase');
+  await expect(hero).toContainText('Pizza Margherita Especial');
+  await expect(hero).toContainText('DESTAQUE DA CASA');
+  await expect(hero).not.toContainText('Nº 1 MAIS PEDIDO');
+});
+
+test('destaque indisponível retorna ao ranking automático', async ({ page }) => {
+  await menu(page, payload => { payload.restaurante.destaque_cardapio_produto_id = 'inexistente'; });
+  await expect(page.locator('#koma-art-hero-showcase')).toContainText('Vinho Tinto');
+  await expect(page.locator('#koma-art-hero-showcase')).toContainText('Nº 1 MAIS PEDIDO');
+});
+
 test('contato WhatsApp inclui DDI brasileiro no cabeçalho e nas informações da loja', async ({ page }) => {
   await menu(page, payload => { payload.restaurante.socials = { whatsapp: '(88) 99961-6937' }; });
   await expect(page.locator('#btn-whatsapp-mobile')).toHaveAttribute('href', 'https://wa.me/5588999616937');

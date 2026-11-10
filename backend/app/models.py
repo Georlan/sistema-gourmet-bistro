@@ -1178,6 +1178,8 @@ class ConfiguracaoRestaurante(Base):
     # NULL = automatic recommendation engine. Ordered SKU IDs = manual cart picks.
     # Public catalog filtering prevents unavailable/foreign/hidden products.
     recomendacoes_sacola_ids = Column(JSON, nullable=True)
+    # NULL keeps the automatic popularity ranking.
+    destaque_cardapio_produto_id = Column(String, nullable=True)
     taxa_servico_ativa = Column(Boolean, default=True)
     taxa_servico_padrao = Column(Float, default=10.0)
     meta_mensal = Column(Numeric(14, 2, asdecimal=False), default=0.0)

@@ -93,6 +93,41 @@ class CartRecommendationsUpdate(BaseModel):
     produto_ids: list[str] = Field(default_factory=list, max_length=4)
 
 
+class MenuHighlightUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    produto_id: str | None = Field(default=None, min_length=1, max_length=100)
+
+
+@router.get('/destaque')
+def obter_destaque_cardapio(db: Session = Depends(get_db), current_user: Usuario = Depends(require_permission('catalogo:administrar'))):
+    del current_user
+    config = db.query(ConfiguracaoRestaurante.destaque_cardapio_produto_id).filter(
+        ConfiguracaoRestaurante.restaurante_id == require_tenant_id(),
+    ).first()
+    return {'produto_id': config[0] if config else None}
+
+
+@router.put('/destaque')
+def atualizar_destaque_cardapio(payload: MenuHighlightUpdate, background_tasks: BackgroundTasks,
+                                db: Session = Depends(get_db), current_user: Usuario = Depends(require_permission('catalogo:administrar'))):
+    del current_user
+    tenant = require_tenant_id()
+    product_id = payload.produto_id.strip() if payload.produto_id else None
+    if payload.produto_id is not None and (not product_id or not db.query(Produto.id).filter(
+        Produto.restaurante_id == tenant, Produto.id == product_id, Produto.ativo.is_(True),
+        Produto.somente_promocao.is_(False),
+    ).first()):
+        raise HTTPException(422, 'Escolha um produto disponível do seu restaurante.')
+    config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == tenant).with_for_update().first()
+    if config is None:
+        config = ConfiguracaoRestaurante(restaurante_id=tenant)
+        db.add(config)
+    config.destaque_cardapio_produto_id = product_id
+    db.commit()
+    notify_cardapio_config_update(background_tasks, tenant)
+    return {'produto_id': product_id}
+
+
 @router.get("/recomendacoes-sacola")
 def obter_recomendacoes_sacola(
     db: Session = Depends(get_db),
@@ -300,6 +335,7 @@ def _public_configuration(db: Session, restaurante_id: int) -> ConfiguracaoResta
         ConfiguracaoRestaurante.tabela_taxas_km,
         ConfiguracaoRestaurante.promocoes,
         ConfiguracaoRestaurante.recomendacoes_sacola_ids,
+        ConfiguracaoRestaurante.destaque_cardapio_produto_id,
         ConfiguracaoRestaurante.cardapio_ativo_id,
         ConfiguracaoRestaurante.cardapios_adicionais_ids,
     )
@@ -378,6 +414,7 @@ def _public_restaurant_payload(
         "cardapio_ativo_id": cardapio_ativo_id or (getattr(configuracao, "cardapio_ativo_id", None) if configuracao else None),
         "cardapio_ativo_nome": cardapio_ativo_nome,
         "recomendacoes_sacola_ids": configuracao.recomendacoes_sacola_ids if configuracao else None,
+        "destaque_cardapio_produto_id": configuracao.destaque_cardapio_produto_id if configuracao else None,
     }
 
 

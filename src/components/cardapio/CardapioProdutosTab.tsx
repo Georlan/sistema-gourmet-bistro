@@ -26,6 +26,7 @@ import type { Product } from '../../types';
 import type { CatalogCategory } from '../../catalog/catalog';
 import PromotionsSettings from './PromotionsSettings';
 import CartRecommendationsSettings from './CartRecommendationsSettings';
+import MenuHighlightSettings from './MenuHighlightSettings';
 import { smartSearchMatch } from '../../domain';
 
 interface CardapioProdutosTabProps {
@@ -421,11 +422,18 @@ export function CardapioProdutosTab({
       </section>
 
       {isRecommendationsView && promotionsConfig ? (
+        <>
+        <MenuHighlightSettings
+          apiBaseUrl={promotionsConfig.apiBaseUrl}
+          authHeaders={promotionsConfig.authHeaders}
+          products={recommendationProducts || produtos}
+        />
         <CartRecommendationsSettings
           apiBaseUrl={promotionsConfig.apiBaseUrl}
           authHeaders={promotionsConfig.authHeaders}
           products={recommendationProducts || produtos}
         />
+        </>
       ) : isPromotionsView && promotionsConfig ? (
         <PromotionsSettings
           apiBaseUrl={promotionsConfig.apiBaseUrl}

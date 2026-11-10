@@ -8,7 +8,8 @@ test('home consome ranking público cacheado e mantém catálogo como fonte de v
   const conditions = source('../src/cardapio/components/CardapioOrderConditions.tsx');
   assert.match(conditions, /\/api\/cardapio-digital\/populares\?restaurante_id=/);
   assert.match(conditions, /brand\.products\.map/);
-  assert.match(conditions, /rankedIds\.map/);
+  assert.match(conditions, /ids\.map\(\(id\) => byId\.get\(id\)\)/);
+  assert.match(conditions, /rankedIds\.filter/);
   assert.doesNotMatch(conditions, /escolhas[^\n]*price|preco[^\n]*escolhas/i);
 });
 
@@ -17,7 +18,8 @@ test('Mais escolhidos só renderiza quando o ranking resolve para produtos atuai
   assert.match(conditions, /if \(products\.length === 0\) return null/);
   assert.match(conditions, /id="popular-products-home"/);
   assert.match(conditions, />Mais escolhidos</);
-  assert.match(conditions, /product-card-\$\{product\.id\}/);
+  assert.match(conditions, /resolveCatalogDisplayProduct\(brand\.products, product, brand\.id\)/);
+  assert.match(conditions, /product-card-\$\{displayProduct\.id\}/);
 });
 
 test('ranking é uma melhoria progressiva e falha sem bloquear a home', () => {
