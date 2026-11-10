@@ -22,6 +22,7 @@ import {
 import { buildKomaAttributionUrl } from "../komaAttribution";
 import { getRestaurantMapsUrl } from "../getRestaurantMapsUrl";
 import { KomaSocialCameraIcon } from "./KomaPublicIcons";
+import { buildWhatsAppContactUrl } from "../../config/whatsappUtils";
 
 interface CardapioStoreInfoDrawerProps {
   brand: BrandConfig;
@@ -307,9 +308,9 @@ export default function CardapioStoreInfoDrawer({
               </h3>
             </div>
             <div className="mt-2.5 flex flex-wrap gap-2">
-              {brand.phone && (
+              {buildWhatsAppContactUrl(brand.phone) && (
                 <a
-                  href={`https://wa.me/${String(brand.phone).replace(/\D/g, "")}`}
+                  href={buildWhatsAppContactUrl(brand.phone)}
                   target="_blank"
                   rel="noreferrer"
                   id="store-info-whatsapp-link"

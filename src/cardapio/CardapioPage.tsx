@@ -7,6 +7,7 @@ import { QRCodeSVG } from 'qrcode.react';
  */
 
 import type { CardapioFulfillment } from "./fulfillment";
+import { buildWhatsAppContactUrl } from "../config/whatsappUtils";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
@@ -339,13 +340,13 @@ export default function CardapioPage() {
             let url = String(value || "");
             if (platform === "instagram" && !url.startsWith("http")) url = `https://instagram.com/${url.replace("@", "")}`;
             if (platform === "whatsapp") {
-              whatsappNumber = url.replace(/\D/g, "");
-              url = `https://wa.me/${whatsappNumber}`;
+              url = buildWhatsAppContactUrl(url);
+              whatsappNumber = url ? url.slice('https://wa.me/'.length) : '';
             }
             return {
               platform: platform === "instagram" ? "Instagram" : platform === "whatsapp" ? "WhatsApp" : platform,
               url,
-              active: true,
+              active: Boolean(url),
             };
           });
       }

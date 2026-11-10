@@ -11,10 +11,26 @@ export function formatWhatsAppPhone(phone?: string | null): string {
   if (!phone) return '';
   const digits = String(phone).replace(/\D/g, '');
   if (!digits) return '';
-  if ((digits.length === 10 || digits.length === 11) && !digits.startsWith('55')) {
+  if ((digits.length === 10 || digits.length === 11) && !String(phone).trim().startsWith('+')) {
     return `55${digits}`;
   }
   return digits;
+}
+
+/** Constrói apenas destinos de contato válidos, inclusive números com DDD 55. */
+export function buildWhatsAppContactUrl(value?: string | null): string {
+  let number = String(value || '').trim();
+  if (!number) return '';
+  if (/^https?:\/\//i.test(number)) {
+    try {
+      const url = new URL(number);
+      if (url.hostname === 'wa.me') number = `+${url.pathname.replace(/^\/+/, '')}`;
+      else if (url.hostname === 'api.whatsapp.com' && url.pathname === '/send') number = `+${url.searchParams.get('phone') || ''}`;
+      else return '';
+    } catch { return ''; }
+  }
+  const phone = formatWhatsAppPhone(number);
+  return /^\d{12,15}$/.test(phone) ? `https://wa.me/${phone}` : '';
 }
 
 /**

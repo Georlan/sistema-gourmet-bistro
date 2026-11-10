@@ -8,6 +8,7 @@ import { useActivePromotions } from '../useActivePromotions';
 import { getFulfillmentAvailability } from '../fulfillment';
 import { smartSearchMatch } from '../../domain';
 import { API_BASE_URL } from '../../config/api';
+import { buildWhatsAppContactUrl } from '../../config/whatsappUtils';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
@@ -210,7 +211,7 @@ export function CardapioArtisticExperience({
   // Canais de contato verificados
   const whatsappUrl = useMemo(() => {
     if (!activeBrand.phone) return null;
-    return `https://wa.me/${String(activeBrand.phone).replace(/\D/g, '')}`;
+    return buildWhatsAppContactUrl(activeBrand.phone);
   }, [activeBrand.phone]);
 
   const instagramSocial = useMemo(() => {
