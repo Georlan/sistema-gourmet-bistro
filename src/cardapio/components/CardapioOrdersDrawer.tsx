@@ -1,5 +1,6 @@
 import { DeliveryReceiptCode } from "./DeliveryReceiptCode";
 import PixCopyCode from "./PixCopyCode";
+import { ManualPixReceiptContact } from "./ManualPixReceiptContact";
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -31,6 +32,8 @@ import {
 import CardapioOrderChatPanel from "./CardapioOrderChatPanel";
 
 interface CardapioOrdersDrawerProps {
+  restaurantId?: string | number | null;
+  restaurantPhone?: string | null;
   isOpen: boolean;
   onClose: () => void;
   orders: StoredOrder[];
@@ -83,6 +86,8 @@ function requestedPushOrderFromHash(): RequestedPushOrder | null {
 }
 
 export default function CardapioOrdersDrawer({
+  restaurantId,
+  restaurantPhone,
   isOpen,
   onClose,
   orders,
@@ -973,6 +978,8 @@ export default function CardapioOrdersDrawer({
             )}
 
             {pixModalOrder.pagamento.qr_code && <PixCopyCode code={pixModalOrder.pagamento.qr_code} />}
+
+            <ManualPixReceiptContact order={pixModalOrder} phone={restaurantPhone} restaurantId={restaurantId} />
 
             {pixModalOrder.pagamento.ticket_url && (
               <a

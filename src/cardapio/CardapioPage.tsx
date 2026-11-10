@@ -57,6 +57,7 @@ import CardapioDigital from "./components/CardapioDigital";
 import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
 import { CardapioConditionsSummary } from "./components/CardapioOrderConditions";
 import CardapioOrdersDrawer from "./components/CardapioOrdersDrawer";
+import { ManualPixReceiptContact } from "./components/ManualPixReceiptContact";
 import CardapioArtisticExperience from "./components/CardapioArtisticExperience";
 import { KomaLoading } from "../components/app/KomaLoading";
 import { API_BASE_URL, WS_BASE_URL } from "../config/api";
@@ -1654,6 +1655,8 @@ export default function CardapioPage() {
       <CardapioStoreInfoDrawer brand={activeBrand} isOpen={isStoreInfoOpen} onClose={() => setIsStoreInfoOpen(false)} />
 
       <CardapioOrdersDrawer
+        restaurantId={activeBrand?.id}
+        restaurantPhone={activeBrand?.phone}
         isOpen={isOrdersDrawerOpen}
         onClose={() => setIsOrdersDrawerOpen(false)}
         orders={storedOrders}
@@ -1736,6 +1739,8 @@ export default function CardapioPage() {
             )}
 
             {pixModalOrder.pagamento.qr_code && <PixCopyCode code={pixModalOrder.pagamento.qr_code} />}
+
+            <ManualPixReceiptContact order={pixModalOrder} phone={activeBrand?.phone} restaurantId={activeBrand?.id} />
 
             {pixModalOrder.pagamento.ticket_url && (
               <a
