@@ -469,3 +469,14 @@ test('contato preserva foco quando a navegação chega atrasada',async({page})=>
   await page.locator('#input-guest-name').fill('Cliente local');
   await expect(page.locator('#input-guest-phone')).toHaveValue('(85) 99999-9999');
 });
+
+test('categorias permanecem visíveis ao navegar pelo cardápio', async ({page}) => {
+  await menu(page);
+  const nav = page.locator('#koma-art-category-nav');
+  await page.locator('#koma-art-catalog').scrollIntoViewIfNeeded();
+  await expect.poll(async () => (await nav.boundingBox())?.y ?? -100).toBeGreaterThanOrEqual(-1);
+  await expect.poll(async () => (await nav.boundingBox())?.y ?? 100).toBeLessThanOrEqual(2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await nav.getByRole('button', {name: 'Bebidas', exact: true}).click();
+  await expect.poll(async () => (await page.locator('#cat-bebidas').boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(50);
+});
