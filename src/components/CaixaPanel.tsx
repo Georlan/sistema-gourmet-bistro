@@ -872,27 +872,27 @@ export function CaixaPanel({
 
           <div ref={cashierContentRef} className={"cashier-content min-w-0 min-h-0 flex-1 p-5 pb-20 lg:pb-5 relative"}>
             {activeTab === 'operacao' && cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
-              <div className={"absolute inset-0 bg-black/80 backdrop-blur-xs z-30 flex flex-col items-center justify-center text-center p-8 space-y-4"}>
+              <div data-testid="cashier-shift-blocker" className={"absolute inset-0 bg-black/90 backdrop-blur-xs z-50 flex flex-col items-center justify-center text-center p-6 space-y-4"}>
                 <div className={clsx('p-4 bg-koma-panel rounded-full border', cashShiftUiState === 'closed' ? 'border-amber-500/20 text-amber-500' : 'border-koma-border text-koma-muted')}>
                   {cashShiftUiState === 'loading' ? <Loader2 size={32} className="animate-spin" /> : <Lock size={32} />}
                 </div>
-                <h3 className={"font-serif text-base font-bold text-koma-foreground"}>
+                <h3 className={"text-base font-bold text-white"}>
                   {cashShiftUiState === 'closed'
-                    ? 'Turno de Caixa Fechado'
+                    ? 'Turno de caixa fechado'
                     : cashShiftUiState === 'error'
                       ? 'Não foi possível confirmar o turno'
                       : 'Sincronizando turno de caixa'}
                 </h3>
-                <p className={"max-w-md text-[10px] text-koma-subtle leading-relaxed"}>
+                <p className={"max-w-md text-sm text-slate-200 leading-relaxed"}>
                   {cashShiftUiState === 'closed'
-                    ? 'Você precisa abrir o caixa digitando o fundo de troco inicial da noite para poder acessar as telas de vendas e comandas.'
+                    ? 'Abra o caixa para acessar vendas e pedidos.'
                     : cashShiftUiState === 'error'
                       ? 'O sistema não vai presumir que o caixa está aberto ou fechado enquanto o estado real estiver indisponível.'
                       : 'Confirmando o turno atual. Nenhum estado operacional é presumido antes da resposta do servidor.'}
                 </p>
                 {cashShiftUiState === 'closed' && (
-                  <button onClick={() => setShowAbrirModal(true)} className={"px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all cursor-pointer text-[10px] uppercase tracking-wider"}>
-                    Abrir Caixa Agora
+                  <button onClick={() => setShowAbrirModal(true)} className={"min-h-11 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl transition-all cursor-pointer text-sm"}>
+                    Abrir caixa
                   </button>
                 )}
                 {cashShiftUiState === 'error' && (
