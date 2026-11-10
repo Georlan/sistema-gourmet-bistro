@@ -313,6 +313,12 @@ export function SuperAdminRestaurant360({
   const [loading, setLoading] = useState(true);
   const [trialOpen, setTrialOpen] = useState(false);
   const [releaseOpen, setReleaseOpen] = useState(false);
+  const [qaOpen, setQaOpen] = useState(false);
+  const [qaHours, setQaHours] = useState(24);
+  const [qaReason, setQaReason] = useState("");
+  const [qaBusy, setQaBusy] = useState(false);
+  const [qaNotice, setQaNotice] = useState<string | null>(null);
+  const [qaError, setQaError] = useState<string | null>(null);
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -542,6 +548,30 @@ export function SuperAdminRestaurant360({
         ? current.filter(item => item !== mode)
         : [...current, mode]
     ));
+  };
+
+  const startOperationalQa = async () => {
+    if (qaBusy || qaReason.trim().length < 10 || qaHours < 1 || qaHours > 72 || !Number.isInteger(qaHours)) return;
+    setQaBusy(true);
+    setQaError(null);
+    setQaNotice(null);
+    try {
+      const response = await superAdminFetch(`/api/super-admin/onboarding/restaurantes/${tenant.id}/operational-qa`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start", hours: qaHours, reason: qaReason.trim() }),
+      });
+      const body = await response.json();
+      if (!response.ok || body?.qaActive !== true) throw new Error(body?.detail || "Não foi possível liberar a homologação.");
+      setQaNotice(`Homologação liberada até ${formatDate(body.expiresAt)}. O trial comercial não foi iniciado.`);
+      setQaOpen(false);
+      setQaReason("");
+      await loadData();
+    } catch (error) {
+      setQaError(superAdminErrorMessage(error));
+    } finally {
+      setQaBusy(false);
+    }
   };
 
   const saveOperationModes = async () => {
@@ -1087,6 +1117,21 @@ export function SuperAdminRestaurant360({
 
       {section === "implementation" && (
         <div className="space-y-5">
+          {release?.onboarding?.mode === "administrative" && (
+            <section className="rounded-xl border border-emerald-800/50 bg-koma-card p-5" aria-label="Homologação operacional">
+              <h3 className="text-sm font-bold text-koma-foreground">Homologação operacional</h3>
+              <p className="mt-1 text-xs text-koma-muted">Liberação temporária de até 72 horas para testes. Não inicia o trial comercial nem abre o caixa.</p>
+              {qaNotice && <p role="status" className="mt-3 text-sm text-emerald-300">{qaNotice}</p>}
+              {qaError && <p role="alert" className="mt-3 text-sm text-rose-300">{qaError}</p>}
+              {!qaOpen ? <button type="button" onClick={() => { setQaOpen(true); setQaError(null); }} className="mt-3 rounded-lg border border-emerald-700 px-3 py-2 text-sm font-bold text-emerald-200">Preparar liberação de teste</button> : (
+                <div className="mt-3 space-y-3">
+                  <label className="block text-sm text-koma-foreground">Duração em horas (1 a 72)<input type="number" min={1} max={72} value={qaHours} onChange={event => setQaHours(Number(event.target.value))} className="ml-2 w-20 rounded border border-zinc-600 bg-koma-page p-2" /></label>
+                  <label className="block text-sm text-koma-foreground">Motivo <textarea value={qaReason} onChange={event => setQaReason(event.target.value)} className="mt-1 block w-full rounded border border-zinc-600 bg-koma-page p-2" /></label>
+                  <div className="flex gap-2"><button type="button" disabled={qaBusy || qaReason.trim().length < 10 || !Number.isInteger(qaHours) || qaHours < 1 || qaHours > 72} onClick={() => void startOperationalQa()} className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-bold text-black disabled:opacity-50">{qaBusy ? "Liberando…" : "Liberar para testes"}</button><button type="button" disabled={qaBusy} onClick={() => setQaOpen(false)} className="rounded-lg border border-zinc-600 px-3 py-2 text-sm">Cancelar</button></div>
+                </div>
+              )}
+            </section>
+          )}
           <div className="rounded-xl border border-zinc-800 bg-koma-card p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
