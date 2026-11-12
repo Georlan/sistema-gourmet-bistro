@@ -129,16 +129,15 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   useEffect(() => {
     if (activeSubTab !== 'balcao') return;
     const handleShortcutCapture = (event: KeyboardEvent) => {
-      if (configProduct || event.repeat || !['F2','F3','F4','F8'].includes(event.key)) return;
-      if (event.key === 'F4' && pdvCart.length === 0) return;
-      // First F4 opens review: the canonical submit button is not mounted in
-      // cart stage. A second F4 is handled by useCashierPdv as before.
+      if (configProduct || event.repeat || !['F2', 'F3', 'F8'].includes(event.key)) return;
+      // Modality shortcuts reveal the review fields before the canonical
+      // hook changes the selected destination and focuses the corresponding input.
       setCheckoutStage('review');
       setBalcaoMobileView('carrinho');
     };
     window.addEventListener('keydown', handleShortcutCapture, true);
     return () => window.removeEventListener('keydown', handleShortcutCapture, true);
-  }, [activeSubTab, configProduct, pdvCart.length, setBalcaoMobileView]);
+  }, [activeSubTab, configProduct, setBalcaoMobileView]);
 
   const configGroups = modifierGroupsFor(configProduct);
   const configModifiers = useMemo(
