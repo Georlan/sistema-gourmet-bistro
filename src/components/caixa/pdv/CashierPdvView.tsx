@@ -1,10 +1,9 @@
 import clsx from 'clsx';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PAYMENT_LABELS, type PaymentMethod } from '../../../cardapio/paymentMethods';
-import { Check, ChevronLeft, ChevronRight, Edit3, Minus, Package, Plus, Search, ShoppingCart, Trash2, X } from 'lucide-react';
+import { ArrowRight, Check, ChevronLeft, ChevronRight, Minus, Package, Plus, Search, ShoppingCart, X } from 'lucide-react';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
-import { getProductPresets } from '../../../domain/catalogPresentation';
 import {
   changeModifierQuantitySelection,
   modifierGroupSelectionValid,
@@ -18,6 +17,7 @@ import { formatCurrency } from '../cashierPresentation';
 import { pdvCartItemUnitPrice, type PdvModifierSelection, type useCashierPdv } from './useCashierPdv';
 import { usePdvCategoryNavigation } from './usePdvCategoryNavigation';
 import { CashierPdvProductCard } from './CashierPdvProductCard';
+import { CashierPdvCartLine } from './CashierPdvCartLine';
 
 type ProductWithModifiers = Product & { grupos_modificadores?: CatalogModifierGroup[] };
 
@@ -41,19 +41,6 @@ const modifierSelectionsFor = (groups: CatalogModifierGroup[], selectedIds: stri
       preco: Number(option.preco_adicional || 0),
     }];
   });
-};
-
-const summarizeModifierSelections = (modifiers: PdvModifierSelection[]) => {
-  const summary = new Map<string, { modifier: PdvModifierSelection; quantity: number }>();
-  modifiers.forEach((modifier) => {
-    const current = summary.get(modifier.id);
-    if (current) {
-      current.quantity += 1;
-      return;
-    }
-    summary.set(modifier.id, { modifier, quantity: 1 });
-  });
-  return Array.from(summary.values());
 };
 
 interface Props {
@@ -125,6 +112,33 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   const [configQty, setConfigQty] = useState(1);
   const [configObs, setConfigObs] = useState('');
   const [configModifierIds, setConfigModifierIds] = useState<string[]>([]);
+  // Presentation-only step. Never clone the cart, modality or customer state.
+  const [checkoutStage, setCheckoutStage] = useState<'cart' | 'review'>('cart');
+  const reviewHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const previousCountRef = useRef(pdvCart.length);
+
+  useEffect(() => {
+    if (previousCountRef.current > 0 && pdvCart.length === 0) setCheckoutStage('cart');
+    previousCountRef.current = pdvCart.length;
+  }, [pdvCart.length]);
+
+  useEffect(() => {
+    if (checkoutStage === 'review' && balcaoMobileView === 'carrinho') reviewHeadingRef.current?.focus();
+  }, [checkoutStage, balcaoMobileView]);
+
+  useEffect(() => {
+    if (activeSubTab !== 'balcao') return;
+    const handleShortcutCapture = (event: KeyboardEvent) => {
+      if (configProduct || event.repeat || !['F2','F3','F4','F8'].includes(event.key)) return;
+      if (event.key === 'F4' && pdvCart.length === 0) return;
+      // First F4 opens review: the canonical submit button is not mounted in
+      // cart stage. A second F4 is handled by useCashierPdv as before.
+      setCheckoutStage('review');
+      setBalcaoMobileView('carrinho');
+    };
+    window.addEventListener('keydown', handleShortcutCapture, true);
+    return () => window.removeEventListener('keydown', handleShortcutCapture, true);
+  }, [activeSubTab, configProduct, pdvCart.length, setBalcaoMobileView]);
 
   const configGroups = modifierGroupsFor(configProduct);
   const configModifiers = useMemo(
@@ -202,6 +216,14 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   };
 
   const cartTotal = pdvCart.reduce((sum, item) => sum + pdvCartItemUnitPrice(item) * item.quantity, 0);
+  const currentModalityLabel = pdvOrderType === 'pickup' ? 'Retirada'
+    : pdvOrderType === 'delivery' ? 'Delivery' : 'Consumo local';
+  const changeCartObservation = (index: number, observation: string) => {
+    setPdvCart((current) => current.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, obs: observation } : item));
+  };
+  const showOrderItems = () => setCheckoutStage('cart');
+  const showOrderReview = () => { setCheckoutStage('review'); setBalcaoMobileView('carrinho'); };
   // Aggregate once per cart update, rather than scanning every cart line for each visible product.
   const cartQuantitiesByProduct = useMemo(() => {
     const quantities = new Map<string, number>();
@@ -264,7 +286,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
             <div className="cashier-pdv-mobile-switch xl:hidden" role="group" aria-label="Visualização do novo pedido">
               <button
                 type="button"
-                onClick={() => setBalcaoMobileView('produtos')}
+                onClick={() => { setBalcaoMobileView('produtos'); showOrderItems(); }}
                 aria-current={balcaoMobileView === 'produtos' ? 'page' : undefined}
                 aria-controls="pdv-products-panel"
                 className={clsx('cashier-pdv-mobile-switch__button', balcaoMobileView === 'produtos' && 'is-active')}
@@ -274,7 +296,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               </button>
               <button
                 type="button"
-                onClick={() => setBalcaoMobileView('carrinho')}
+                onClick={() => { setBalcaoMobileView('carrinho'); showOrderItems(); }}
                 aria-current={balcaoMobileView === 'carrinho' ? 'page' : undefined}
                 aria-controls="pdv-order-panel"
                 className={clsx('cashier-pdv-mobile-switch__button', balcaoMobileView === 'carrinho' && 'is-active')}
@@ -486,25 +508,31 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               id="pdv-order-panel"
               className={`cashier-pdv-cart w-full xl:w-[350px] 2xl:w-[380px] bg-koma-panel border border-koma-border rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden xl:flex'} ${pdvCart.length === 0 ? 'xl:self-start' : ''} flex-col overflow-hidden shrink-0 shadow-sm`}
             >
-              <div
-                className={"cashier-pdv-cart__header bg-koma-raised px-4 py-3.5 border-b border-koma-border flex justify-between items-center shrink-0"}
-              >
-                <span className={"font-semibold text-koma-foreground flex items-center gap-2"}>
-                  <span
-                    className={"w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 inline-flex items-center justify-center"}
-                  >
-                    <ShoppingCart size={15} className="text-emerald-700 dark:text-emerald-400" />
-                  </span>
-                  <span>Pedido atual</span>
-                </span>
-                <span
-                  className="cashier-pdv-cart__count bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 font-bold px-2.5 py-1 rounded-full"
-                >
-                  {pdvCartItemCount} itens
-                </span>
+              <div className="cashier-pdv-cart__header">
+                {checkoutStage === 'review' ? (
+                  <div className="cashier-pdv-cart__review-heading">
+                    <button type="button" aria-label="Voltar aos itens do pedido" onClick={showOrderItems} className="cashier-pdv-cart__back">
+                      <ChevronLeft size={20} aria-hidden="true" />
+                    </button>
+                    <div>
+                      <span className="cashier-pdv-cart__eyebrow">Etapa 2 de 2</span>
+                      <h3 ref={reviewHeadingRef} tabIndex={-1}>Finalizar pedido</h3>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="cashier-pdv-cart__cart-heading">
+                    <div className="cashier-pdv-cart__heading-icon" aria-hidden="true"><ShoppingCart size={20} /></div>
+                    <div className="cashier-pdv-cart__heading-text">
+                      <span className="cashier-pdv-cart__eyebrow">Etapa 1 de 2</span>
+                      <h3>Itens do pedido</h3>
+                    </div>
+                    <span className="cashier-pdv-cart__count">{pdvCartItemCount} {pdvCartItemCount === 1 ? 'item' : 'itens'}</span>
+                  </div>
+                )}
               </div>
 
-              <div className={"cashier-pdv-cart-scroll min-h-[180px] flex-1 overflow-y-auto p-3 space-y-2"}>
+              {checkoutStage === 'cart' && (
+              <div className="cashier-pdv-cart-scroll">
                 {pdvCart.length === 0 ? (
                   <div className="cashier-pdv-cart__empty h-full flex flex-col items-center justify-center text-center px-5">
                     <img src="/brand/cashier/pdv-empty-cart-v1.svg" alt="" width="100" height="80" loading="lazy" />
@@ -513,148 +541,58 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   </div>
                 ) : (
                   pdvCart.map((item, idx) => (
-                    <div
+                    <CashierPdvCartLine
                       key={`${item.product.id}-${idx}`}
-                      className={"cashier-pdv-cart__line bg-white/[0.025] p-3 rounded-xl border border-koma-border-subtle space-y-2.5"}
-                    >
-                      <div className={"flex justify-between items-start gap-2"}>
-                        <div className="min-w-0 space-y-0.5">
-                          <strong className={"text-koma-foreground text-xs block truncate max-w-48"}>
-                            {item.product.nome}
-                          </strong>
-                          <span className="cashier-pdv-cart__unit-price block">
-                            {formatCurrency(pdvCartItemUnitPrice(item))} / un.
-                          </span>
-                          {(() => {
-                            const unav = checkCartItemAvailability(item);
-                            if (!unav.unavailable) return null;
-                            return (
-                              <div
-                                id={`pdv-cart-item-unavailable-${idx}`}
-                                data-testid={`pdv-cart-item-unavailable-${idx}`}
-                                className="mt-0.5 inline-flex items-center gap-1 text-[9px] font-bold text-rose-400 bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 rounded-md"
-                              >
-                                <span>{unav.reason === 'paused' ? 'Produto pausado' : 'Indisponível no cardápio ativo'}</span>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => openConfig(item.product, idx)}
-                            className="cashier-pdv-cart__item-action text-koma-muted hover:text-koma-foreground rounded-lg hover:bg-koma-raised"
-                            aria-label={`Editar ${item.product.nome}`}
-                            title="Editar item e adicionais"
-                          >
-                            <Edit3 size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handlePdvRemoveCartItem(idx)}
-                            className="cashier-pdv-cart__item-action text-koma-muted hover:text-rose-500 rounded-lg"
-                            aria-label={`Remover ${item.product.nome}`}
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      </div>
-
-                      {(item.modifiers || []).length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {summarizeModifierSelections(item.modifiers || []).map(({ modifier, quantity }) => (
-                            <span key={modifier.id} className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-400">
-                              + {quantity > 1 ? `${quantity}x ` : ''}{modifier.nome}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className={"flex justify-between items-center gap-2"}>
-                        <div
-                          className={"flex items-center bg-koma-input border border-koma-border rounded-lg overflow-hidden"}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => handlePdvUpdateCartQty(idx, -1)}
-                            aria-label={`Diminuir quantidade de ${item.product.nome}`}
-                            className="cashier-pdv-cart__qty-button text-koma-subtle hover:text-koma-foreground hover:bg-koma-raised"
-                          >
-                            -
-                          </button>
-                          <span
-                            className="cashier-pdv-cart__qty-value px-2 font-bold text-koma-foreground"
-                          >
-                            {item.quantity}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handlePdvUpdateCartQty(idx, 1)}
-                            aria-label={`Aumentar quantidade de ${item.product.nome}`}
-                            className="cashier-pdv-cart__qty-button text-koma-subtle hover:text-koma-foreground hover:bg-koma-raised"
-                          >
-                            +
-                          </button>
-                        </div>
-                        <input
-                          type="text"
-                          aria-label={`Observação de ${item.product.nome}`}
-                          placeholder="Observação do item"
-                          value={item.obs}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setPdvCart((prev) => prev.map((entry, index) => index === idx ? { ...entry, obs: val } : entry));
-                          }}
-                          className="cashier-pdv-cart__observation min-w-0 flex-1 bg-koma-input border border-koma-border rounded-lg text-koma-foreground"
-                        />
-                      </div>
-
-                      {(() => {
-                        const presets = getProductPresets(item.product);
-                        if (presets.length === 0) return null;
-                        const parts = item.obs ? item.obs.split(',').map((p) => p.trim()) : [];
-                        return (
-                          <div className={"flex flex-wrap gap-1 mt-2 justify-end"}>
-                            {presets.map((preset) => {
-                              const isActive = parts.some((p) => p.toLowerCase() === preset.toLowerCase());
-                              return (
-                                <button
-                                  key={preset}
-                                  type="button"
-                                  onClick={() => {
-                                    const currentParts = item.obs ? item.obs.split(',').map((p) => p.trim()) : [];
-                                    const exists = currentParts.some((p) => p.toLowerCase() === preset.toLowerCase());
-                                    const updatedParts = exists
-                                      ? currentParts.filter((p) => p.toLowerCase() !== preset.toLowerCase() && p !== '')
-                                      : [...currentParts.filter((p) => p !== ''), preset];
-
-                                    const updatedObs = updatedParts.join(', ');
-                                    setPdvCart((prev) => prev.map((entry, index) => index === idx ? { ...entry, obs: updatedObs } : entry));
-                                  }}
-                                  className={`px-1.5 py-0.5 text-[8px] rounded border transition-colors cursor-pointer font-medium ${
-                                    isActive
-                                      ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-400'
-                                      : 'bg-koma-raised hover:bg-emerald-600/25 text-koma-subtle hover:text-white border-koma-border'
-                                  }`}
-                                >
-                                  {isActive ? preset : `+${preset}`}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
-                    </div>
+                      item={item}
+                      index={idx}
+                      availability={checkCartItemAvailability(item)}
+                      onEdit={(index) => openConfig(pdvCart[index].product, index)}
+                      onRemove={handlePdvRemoveCartItem}
+                      onChangeQuantity={handlePdvUpdateCartQty}
+                      onChangeObservation={changeCartObservation}
+                    />
                   ))
                 )}
               </div>
+              )}
 
+              {checkoutStage === 'cart' && (
+                <div className="cashier-pdv-cart__cart-footer">
+                  <div className="cashier-pdv-cart__context">
+                    <div><span>Atendimento</span><strong>{currentModalityLabel}</strong></div>
+                    <button type="button" onClick={showOrderReview}>Alterar</button>
+                  </div>
+                  <div className="cashier-pdv-cart__cart-total">
+                    <span>Subtotal dos itens</span><strong>{formatCurrency(cartTotal)}</strong>
+                  </div>
+                  {cartHasUnavailableItems && (
+                    <p className="cashier-pdv-cart__unavailable" role="alert">Remova os itens indisponíveis para continuar.</p>
+                  )}
+                  <button
+                    type="button"
+                    id="pdv-review-btn"
+                    className="cashier-pdv-cart__next"
+                    disabled={pdvCart.length === 0 || isLoading || cartHasUnavailableItems}
+                    onClick={showOrderReview}
+                  >
+                    <span>Continuar para finalizar</span>
+                    <ArrowRight size={18} aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+
+              {checkoutStage === 'review' && (
               <form
                 onSubmit={handlePdvSubmitOrder}
                 noValidate
-                className={"cashier-pdv-cart__form min-h-0 max-h-[48%] shrink-0 border-t border-koma-border bg-koma-panel/40 flex flex-col"}
+                aria-label="Finalização do pedido"
+                className="cashier-pdv-cart__form"
               >
-                <div className="min-h-0 overflow-y-auto p-3 space-y-3 overscroll-contain">
+                <div className="cashier-pdv-cart__review-fields">
+                  <div className="cashier-pdv-cart__review-intro">
+                    <strong>Como o pedido será atendido?</strong>
+                    <p>Escolha a modalidade e informe somente os dados necessários.</p>
+                  </div>
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between gap-3">
                       <label className={"text-[8px] text-koma-subtle font-bold uppercase tracking-wider block"}>
@@ -688,23 +626,6 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           {type.label}
                         </button>
                       ))}
-                    </div>
-                  </div>
-
-                  <div aria-label="Resumo do pedido" className="cashier-pdv-cart__summary grid grid-cols-3 gap-1.5 rounded-xl border border-koma-border bg-koma-input p-2">
-                    <div>
-                      <span className="block text-[7px] font-bold uppercase tracking-wider text-koma-muted">Modalidade</span>
-                      <strong className="text-[9px] text-koma-foreground">
-                        {pdvOrderType === 'pickup' ? 'Retirada' : pdvOrderType === 'delivery' ? 'Delivery' : 'Consumo local'}
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="block text-[7px] font-bold uppercase tracking-wider text-koma-muted">Itens</span>
-                      <strong className="font-mono text-[9px] text-koma-foreground">{pdvCartItemCount}</strong>
-                    </div>
-                    <div className="text-right">
-                      <span className="block text-[7px] font-bold uppercase tracking-wider text-koma-muted">Total</span>
-                      <strong className="font-mono text-[9px] text-emerald-600 dark:text-emerald-300">{formatCurrency(cartTotal)}</strong>
                     </div>
                   </div>
 
@@ -949,17 +870,18 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       <span>Lançar Pedido</span>
                     </div>
                     <span className="text-[7.5px] text-emerald-600 dark:text-emerald-300/80 font-mono font-normal">
-                      Pressione [F4] para finalizar
+                      F4 para finalizar
                     </span>
                   </button>
                 </div>
               </form>
+              )}
             </div>
 
             {pdvCart.length > 0 && balcaoMobileView === 'produtos' && (
               <button
                 type="button"
-                onClick={() => setBalcaoMobileView('carrinho')}
+                onClick={() => { setBalcaoMobileView('carrinho'); showOrderItems(); }}
                 aria-label={`Ver pedido com ${pdvCartItemCount} ${pdvCartItemCount === 1 ? 'item' : 'itens'}, total ${formatCurrency(cartTotal)}`}
                 className="cashier-pdv-mobile-cart-cta xl:hidden"
               >
