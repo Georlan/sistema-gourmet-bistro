@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createElement } from 'react';
+import type { ComponentProps } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { CashierMobileBottomBar } from '../src/components/caixa/navigation/CashierMobileBottomBar';
 
-const renderDock = (overrides: Partial<React.ComponentProps<typeof CashierMobileBottomBar>> = {}) =>
+const renderDock = (overrides: Partial<ComponentProps<typeof CashierMobileBottomBar>> = {}) =>
   renderToStaticMarkup(
     createElement(CashierMobileBottomBar, {
       activeTab: 'operacao',
