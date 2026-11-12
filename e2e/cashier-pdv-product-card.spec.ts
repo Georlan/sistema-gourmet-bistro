@@ -327,14 +327,16 @@ test('PDV mobile reclaims catalog space while all sales destinations remain reac
   const compactTop = (await product.boundingBox())?.y ?? 0;
 
   await toggle.click();
-  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+  const collapse = page.getByRole('button', { name: 'Ocultar telas de Vendas' });
+  await expect(collapse).toHaveAttribute('aria-expanded', 'true');
   await expect(navigation).toBeVisible();
   await expect(navigation.getByRole('button', { name: 'Retiradas' })).toBeVisible();
   const expandedTop = (await product.boundingBox())?.y ?? 0;
   expect(expandedTop - compactTop).toBeGreaterThanOrEqual(40);
 
-  await toggle.click();
+  await collapse.click();
   await expect(navigation).toBeHidden();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
   await expect(page.getByRole('group', { name: 'Navegação e atendimento do novo pedido' })).toBeVisible();
   await expect(page.locator('.cashier-mobile-bottom-bar')).toBeVisible();
 
