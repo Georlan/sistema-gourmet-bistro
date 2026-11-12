@@ -82,7 +82,10 @@ for (const [tab, subTab] of [
       }, edge);
       // Cross the scroll event, React state update and ResizeObserver cycle.
       await page.waitForTimeout(250);
-      expect(await strip.evaluate(el => el.scrollLeft)).toBeCloseTo(target, 0);
+      // Chromium rounds fractional scroll pixels differently after hiding
+      // the scrollbar; one CSS pixel is within the same geometric position.
+      const actual = await strip.evaluate(el => el.scrollLeft);
+      expect(Math.abs(actual - target)).toBeLessThanOrEqual(1);
       const bounds = await strip.boundingBox();
       expect(bounds!.x).toBeCloseTo(geometry!.x, 0);
       expect(bounds!.width).toBeCloseTo(geometry!.width, 0);
