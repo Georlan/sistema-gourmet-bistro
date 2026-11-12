@@ -557,58 +557,37 @@
   .cashier-shell .cashier-feedback-inline { display: block; position: fixed; top: .75rem; left: 50%; z-index: 80; transform: translateX(-50%); width: max-content; max-width: min(90vw, 24rem); padding: .65rem .85rem; border: 1px solid var(--koma-border-strong); border-radius: .75rem; background: var(--koma-surface-raised); color: var(--koma-text-primary); box-shadow: 0 4px 16px #00170c55; white-space: normal; text-align: center; }
 }
 
-/* Novo pedido on phones: preserve every sales destination, but keep the
-   product catalog in view. The global five-action dock remains untouched.
-   Disclosure is only a view concern; no checkout or navigation routes change. */
+/* Horizontal management tabs: the track belongs to the content, not the
+   browser scrollbar. Keep native touch/trackpad scrolling and keyboard focus;
+   do not trade usability for a permanently visible grey indicator. */
+.cashier-shell .cashier-subnav--shared {
+  justify-content: flex-start;
+}
+.cashier-shell .cashier-subnav__scroll {
+  justify-content: flex-start;
+  scrollbar-width: none;             /* Firefox */
+  -ms-overflow-style: none;          /* legacy Edge */
+  overscroll-behavior-x: contain;
+}
+.cashier-shell .cashier-subnav__scroll::-webkit-scrollbar {
+  display: none;                    /* Chrome, Android, Safari */
+  width: 0;
+  height: 0;
+}
 @media (max-width: 767px) {
-  .cashier-shell.cashier-shell--pdv-focus .cashier-subnav--pdv-context:not(.is-open) {
+  /* Sales already has a swipeable strip: reserve no empty 44px arrow gutter
+     before Pedidos, while keeping each actual tab >=44px high. */
+  .cashier-shell .cashier-subnav--sales .cashier-subnav__arrow {
     display: none;
   }
-  .cashier-shell.cashier-shell--pdv-focus .cashier-topbar__identity,
-  .cashier-shell.cashier-shell--pdv-focus .cashier-topbar__identity > h2 {
-    overflow: visible;
-    min-width: 0;
+  .cashier-shell .cashier-subnav--sales {
+    gap: 0 !important;
+    padding-inline: .5rem !important;
   }
-  .cashier-shell.cashier-shell--pdv-focus .cashier-topbar .cashier-topbar__sales-toggle {
-    display: inline-flex;
-    min-width: 2.75rem;
-    max-width: 100%;
-    min-height: 2.75rem;
-    align-items: center;
-    justify-content: flex-start;
-    gap: .25rem;
-    padding: .25rem .35rem;
-    border: 1px solid transparent;
-    border-radius: .625rem;
-    background: transparent;
-    box-shadow: none;
-    color: var(--koma-text-primary);
-    font-family: var(--koma-font-display);
-    font-size: 1.05rem;
-    font-weight: 700;
-    line-height: 1.2;
-    cursor: pointer;
-    touch-action: manipulation;
+  .cashier-shell .cashier-subnav--sales .cashier-subnav__scroll {
+    flex: 1 1 auto;
+    width: 100%;
+    margin: 0;
+    padding: 0;
   }
-  .cashier-shell--pdv-focus .cashier-topbar__sales-toggle span {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .cashier-shell--pdv-focus .cashier-topbar__sales-toggle > svg {
-    flex: 0 0 auto;
-    color: var(--koma-text-secondary);
-    transition: transform 150ms ease;
-  }
-  .cashier-shell--pdv-focus .cashier-topbar__sales-toggle[aria-expanded="true"] > svg {
-    transform: rotate(180deg);
-  }
-  .cashier-shell--pdv-focus .cashier-topbar__sales-toggle:focus-visible {
-    outline: 2px solid var(--koma-focus-ring);
-    outline-offset: -2px;
-  }
-}
-@media (max-width: 767px) and (prefers-reduced-motion: reduce) {
-  .cashier-shell--pdv-focus .cashier-topbar__sales-toggle > svg { transition: none; }
 }
