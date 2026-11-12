@@ -49,3 +49,37 @@ PR pequeno e reversível; TypeScript/testes unitários/build e regressões Playw
 - [ ] Etapa 3 — modal e complementos.
 - [ ] Etapa 4 — desktop.
 - [ ] Etapa 5 — limpeza e métricas.
+
+
+## Etapa adicional — localização da modalidade (12/11, revisão de 398 px)
+
+### Diagnóstico
+As capturas após #1302/#1303 mostram que a alternância Produtos/Carrinho, o cartão de busca/categorias, o contexto de atendimento e o formulário da revisão ainda ocupam muito espaço. O operador precisa entrar na revisão para mudar a modalidade, mesmo sabendo de antemão se é Retirada, Delivery ou Consumo local.
+
+### Simulações funcionais (comparação de tarefa)
+
+**A — Modalidade sempre expandida, antes do catálogo:**
+`[ Retirada ][ Delivery ][ Consumo local ]` em uma faixa completa acima da busca.
+- + Descoberta instantânea, um toque para escolher.
+- - Usa uma linha de 44–60 px o tempo todo, repetindo o contexto do checkout e encurtando a lista de produtos.
+
+**B — Seletor compacto no mesmo eixo das tarefas (selecionado):**
+`[ Itens ][ Pedido (4) ]  [ Retirada ⌄ ]` na única faixa da navegação mobile.
+- + Mantém uma faixa, usa seletor nativo do sistema (acessível, sem script para modal), permite trocar o tipo antes ou depois de adicionar produtos.
+- + No mobile, dispensa repetir três botões de modalidade na revisão. Só aparecem os campos para a modalidade escolhida.
+- - Requer dois gestos para alterar o tipo e exige rótulo claro do seletor. O estado corrente está sempre visível.
+
+### Contratos preservados
+- Retirada: identificação não obrigatória; se preenchida, nome e telefone validados pelo hook antes do envio.
+- Delivery: nome e telefone obrigatórios + snapshot de endereço validado; mudança para delivery limpa mesa alvo, como antes.
+- Consumo local: seleção de mesa opcional quando permitido; disponibilidade e status das mesas não mudam.
+- F2/F3/F8 atualizam o seletor existente e revelam os campos na revisão; F4 continua exigindo revisão antes do envio.
+- Opções disponíveis são filtradas por `allowedPdvOrderTypes`. Nada de nova API, estado duplicado ou dependência.
+- Desktop mantém os três botões na revisão; mobile/tablet usa um seletor nativo persistente na faixa de tarefas.
+
+### Critérios de validação
+- Teste de mudança de tipo durante o catálogo e a revisão, preservando os itens e voltando ao catálogo.
+- A mesma linha de navegação deve caber em 320/390/430 px sem overflow horizontal; seletor deve ter no mínimo 44px de altura.
+- Conferir delivery, mesa, tipo permitido, navegação por teclado e os dois temas.
+- CI focal e pós-merge verdes antes de declarar conclusão; nenhum pedido real em produção.
+
