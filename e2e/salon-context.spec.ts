@@ -145,7 +145,11 @@ test('Novo pedido preserva o carrinho e adapta os dados operacionais por modalid
   await paymentDetails.locator('summary').click();
   await expect(panel.getByRole('button', { name: 'Lançar Pedido', exact: false })).toBeEnabled();
 
-  await panel.getByRole('button', { name: 'Delivery', exact: true }).click();
+  if ((page.viewportSize()?.width ?? 1366) < 1280) {
+    await page.getByRole('combobox', { name: 'Tipo de atendimento' }).selectOption('delivery');
+  } else {
+    await panel.getByRole('button', { name: 'Delivery', exact: true }).click();
+  }
   await expect(panel.locator('#pdv-customer-phone-input')).toBeVisible();
   await expect(panel.locator('#pdv-customer-name-input')).toBeVisible();
   await expect(panel.getByText('Editar entrega', { exact: true })).toBeVisible();
@@ -156,7 +160,11 @@ test('Novo pedido preserva o carrinho e adapta os dados operacionais por modalid
   await expect(panel.locator('#pdv-delivery-address-logradouro')).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Lançar Pedido', exact: false })).toBeVisible();
 
-  await panel.getByRole('button', { name: 'Consumo local', exact: true }).click();
+  if ((page.viewportSize()?.width ?? 1366) < 1280) {
+    await page.getByRole('combobox', { name: 'Tipo de atendimento' }).selectOption('dine_in');
+  } else {
+    await panel.getByRole('button', { name: 'Consumo local', exact: true }).click();
+  }
   await expect(panel.locator('#pdv-target-table')).toBeVisible();
   await expect(panel.locator('#pdv-customer-phone-input')).toHaveCount(0);
   await expect(panel.getByText(/Pagamento \(opcional agora\)/)).toHaveCount(0);
