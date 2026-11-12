@@ -231,7 +231,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   return (
     <>
       {activeSubTab === 'balcao' && (
-        <div className={"orders-workspace cashier-pdv-view h-full min-h-0 flex flex-col gap-3 sm:gap-4"}>
+        <div className={clsx("orders-workspace cashier-pdv-view h-full min-h-0 flex flex-col gap-3 sm:gap-4", balcaoMobileView === "produtos" && pdvCartItemCount > 0 && "has-mobile-cart-cta")}>
           <OperationalBanner
             id="counter-heading"
             eyebrow="VENDA"
@@ -261,17 +261,13 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
           <div
             className={"cashier-pdv-layout min-h-0 flex-1 flex flex-col xl:flex-row gap-3 sm:gap-4 overflow-hidden relative"}
           >
-            <div
-              className={"flex xl:hidden gap-1 p-1 bg-white/[0.025] border border-koma-border rounded-xl shrink-0"}
-            >
+            <div className="cashier-pdv-mobile-switch xl:hidden" role="group" aria-label="Visualização do novo pedido">
               <button
                 type="button"
                 onClick={() => setBalcaoMobileView('produtos')}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  balcaoMobileView === 'produtos'
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-koma-muted hover:text-koma-foreground'
-                }`}
+                aria-current={balcaoMobileView === 'produtos' ? 'page' : undefined}
+                aria-controls="pdv-products-panel"
+                className={clsx('cashier-pdv-mobile-switch__button', balcaoMobileView === 'produtos' && 'is-active')}
               >
                 <Package size={14} />
                 <span>Escolher itens</span>
@@ -279,11 +275,9 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               <button
                 type="button"
                 onClick={() => setBalcaoMobileView('carrinho')}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  balcaoMobileView === 'carrinho'
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-koma-muted hover:text-koma-foreground'
-                }`}
+                aria-current={balcaoMobileView === 'carrinho' ? 'page' : undefined}
+                aria-controls="pdv-order-panel"
+                className={clsx('cashier-pdv-mobile-switch__button', balcaoMobileView === 'carrinho' && 'is-active')}
               >
                 <ShoppingCart size={14} />
                 <span>Carrinho ({pdvCartItemCount})</span>
@@ -291,6 +285,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
             </div>
 
             <div
+              id="pdv-products-panel"
               className={`cashier-pdv-catalog min-w-0 flex-1 ${balcaoMobileView === 'produtos' ? 'flex' : 'hidden xl:flex'} flex-col gap-3 overflow-hidden w-full`}
             >
               <div
@@ -303,11 +298,13 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   />
                   <input
                     id="pdv-product-search-input"
-                    type="text"
+                    type="search"
+                    autoComplete="off"
+                    aria-label="Buscar produtos do cardápio"
                     placeholder="Buscar item, descrição ou código"
                     value={pdvSearch}
                     onChange={(e) => setPdvSearch(e.target.value)}
-                    className={"w-full bg-koma-input border border-koma-border focus:border-emerald-500/60 text-koma-foreground placeholder:text-koma-muted rounded-xl py-2.5 pl-10 pr-8 text-xs outline-none transition-all"}
+                    className="cashier-pdv-search-input w-full bg-koma-input border border-koma-border text-koma-foreground placeholder:text-koma-muted rounded-xl py-2.5 pl-10 pr-8 text-xs outline-none transition-colors"
                   />
                   {pdvSearch && (
                     <button
@@ -484,6 +481,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
             </div>
 
             <div
+              id="pdv-order-panel"
               className={`cashier-pdv-cart w-full xl:w-[350px] 2xl:w-[380px] bg-koma-panel border border-koma-border rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden xl:flex'} ${pdvCart.length === 0 ? 'xl:self-start' : ''} flex-col overflow-hidden shrink-0 shadow-sm`}
             >
               <div
@@ -498,7 +496,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   <span>Pedido atual</span>
                 </span>
                 <span
-                  className={"cashier-pdv-cart__count bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 font-bold px-2.5 py-1 rounded-full font-mono text-[9px]"}
+                  className="cashier-pdv-cart__count bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 font-bold px-2.5 py-1 rounded-full"
                 >
                   {pdvCartItemCount} itens
                 </span>
@@ -507,7 +505,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               <div className={"cashier-pdv-cart-scroll min-h-[180px] flex-1 overflow-y-auto p-3 space-y-2"}>
                 {pdvCart.length === 0 ? (
                   <div className="cashier-pdv-cart__empty h-full flex flex-col items-center justify-center text-center px-5">
-                    <img src="/brand/cashier/order-ticket-v1.svg" alt="" width="60" height="60" loading="lazy" />
+                    <img src="/brand/cashier/pdv-empty-cart-v1.svg" alt="" width="100" height="80" loading="lazy" />
                     <strong>Comece escolhendo um item</strong>
                     <p>+ Adicionar é rápido. Toque no produto para personalizar.</p>
                   </div>
@@ -522,7 +520,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           <strong className={"text-koma-foreground text-xs block truncate max-w-48"}>
                             {item.product.nome}
                           </strong>
-                          <span className={"cashier-pdv-cart__unit-price text-[9px] text-[#4fe0bc] font-mono block"}>
+                          <span className="cashier-pdv-cart__unit-price block">
                             {formatCurrency(pdvCartItemUnitPrice(item))} / un.
                           </span>
                           {(() => {
@@ -543,7 +541,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           <button
                             type="button"
                             onClick={() => openConfig(item.product, idx)}
-                            className={"text-koma-muted hover:text-emerald-400 p-1 cursor-pointer rounded-lg hover:bg-koma-raised"}
+                            className="cashier-pdv-cart__item-action text-koma-muted hover:text-koma-foreground rounded-lg hover:bg-koma-raised"
                             aria-label={`Editar ${item.product.nome}`}
                             title="Editar item e adicionais"
                           >
@@ -552,7 +550,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           <button
                             type="button"
                             onClick={() => handlePdvRemoveCartItem(idx)}
-                            className={"text-koma-muted hover:text-rose-500 p-1 cursor-pointer rounded-lg"}
+                            className="cashier-pdv-cart__item-action text-koma-muted hover:text-rose-500 rounded-lg"
                             aria-label={`Remover ${item.product.nome}`}
                           >
                             <Trash2 size={12} />
@@ -577,32 +575,35 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           <button
                             type="button"
                             onClick={() => handlePdvUpdateCartQty(idx, -1)}
-                            className={"px-2 py-1 text-koma-subtle hover:text-koma-foreground cursor-pointer hover:bg-koma-raised"}
+                            aria-label={`Diminuir quantidade de ${item.product.nome}`}
+                            className="cashier-pdv-cart__qty-button text-koma-subtle hover:text-koma-foreground hover:bg-koma-raised"
                           >
                             -
                           </button>
                           <span
-                            className={"px-2 text-[10px] font-bold font-mono text-koma-foreground"}
+                            className="cashier-pdv-cart__qty-value px-2 font-bold text-koma-foreground"
                           >
                             {item.quantity}
                           </span>
                           <button
                             type="button"
                             onClick={() => handlePdvUpdateCartQty(idx, 1)}
-                            className={"px-2 py-1 text-koma-subtle hover:text-koma-foreground cursor-pointer hover:bg-koma-raised"}
+                            aria-label={`Aumentar quantidade de ${item.product.nome}`}
+                            className="cashier-pdv-cart__qty-button text-koma-subtle hover:text-koma-foreground hover:bg-koma-raised"
                           >
                             +
                           </button>
                         </div>
                         <input
                           type="text"
-                          placeholder="Obs..."
+                          aria-label={`Observação de ${item.product.nome}`}
+                          placeholder="Observação do item"
                           value={item.obs}
                           onChange={(e) => {
                             const val = e.target.value;
                             setPdvCart((prev) => prev.map((entry, index) => index === idx ? { ...entry, obs: val } : entry));
                           }}
-                          className={"min-w-0 flex-1 px-1.5 py-1 text-[9px] bg-koma-input border border-koma-border rounded focus:outline-none focus:border-[#10b981] text-koma-foreground"}
+                          className="cashier-pdv-cart__observation min-w-0 flex-1 bg-koma-input border border-koma-border rounded-lg text-koma-foreground"
                         />
                       </div>
 
@@ -957,14 +958,15 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               <button
                 type="button"
                 onClick={() => setBalcaoMobileView('carrinho')}
-                className={"xl:hidden fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] lg:bottom-4 left-4 right-4 z-40 min-h-12 py-3 px-5 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] font-bold rounded-2xl shadow-2xl flex items-center justify-between border border-[#4fe0bc]/30 animate-fade-in cursor-pointer"}
+                aria-label={`Ver pedido com ${pdvCartItemCount} ${pdvCartItemCount === 1 ? 'item' : 'itens'}, total ${formatCurrency(cartTotal)}`}
+                className="cashier-pdv-mobile-cart-cta xl:hidden"
               >
-                <span className={"text-xs flex items-center gap-2"}>
+                <span className="cashier-pdv-mobile-cart-cta__label">
                   <ShoppingCart size={16} />
                   <span>{pdvCartItemCount} itens no carrinho</span>
                 </span>
                 <span
-                  className={"text-xs font-mono font-extrabold bg-black/30 px-3 py-1 rounded-xl"}
+                  className="cashier-pdv-mobile-cart-cta__total"
                 >
                   {formatCurrency(cartTotal)} →
                 </span>
