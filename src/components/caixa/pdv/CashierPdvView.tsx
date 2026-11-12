@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PAYMENT_LABELS, type PaymentMethod } from '../../../cardapio/paymentMethods';
-import { Check, ChevronDown, ChevronLeft, ChevronRight, Minus, Package, Plus, Search, ShoppingCart, X } from 'lucide-react';
+import { Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Package, Search, ShoppingCart, X } from 'lucide-react';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import {
@@ -11,13 +11,13 @@ import {
 import type { Product } from '../../../types';
 import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
 import DeliveryAddressFields from '../../shared/DeliveryAddressFields';
-import ModifierPicker from '../../shared/ModifierPicker';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import { formatCurrency } from '../cashierPresentation';
 import { pdvCartItemUnitPrice, type PdvModifierSelection, type PdvOrderType, type useCashierPdv } from './useCashierPdv';
 import { usePdvCategoryNavigation } from './usePdvCategoryNavigation';
 import { CashierPdvProductCard } from './CashierPdvProductCard';
 import { CashierPdvCartLine } from './CashierPdvCartLine';
+import { CashierPdvConfigurator } from './CashierPdvConfigurator';
 
 type ProductWithModifiers = Product & { grupos_modificadores?: CatalogModifierGroup[] };
 
@@ -112,6 +112,15 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   const [configQty, setConfigQty] = useState(1);
   const [configObs, setConfigObs] = useState('');
   const [configModifierIds, setConfigModifierIds] = useState<string[]>([]);
+  const [addedNotice, setAddedNotice] = useState<{ productId: string; name: string; token: number; edited: boolean } | null>(null);
+  const addNoticeSequence = useRef(0);
+
+  useEffect(() => {
+    if (!addedNotice) return;
+    const timeout = window.setTimeout(() => setAddedNotice(null), 1500);
+    return () => window.clearTimeout(timeout);
+  }, [addedNotice]);
+
   const deliveryAddressDisclosureRef = useRef<HTMLDetailsElement | null>(null);
 
   // Reveal a missing delivery address when that modality is selected, but
@@ -160,9 +169,20 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     setPdvProductDetailId(null);
   };
 
+  const reportCartChange = (product: Product, edited = false) => {
+    addNoticeSequence.current += 1;
+    setAddedNotice({
+      productId: String(product.id),
+      name: product.nome,
+      token: addNoticeSequence.current,
+      edited,
+    });
+  };
+
   const handleQuickAddProduct = (product: Product) => {
     setPdvProductDetailId(null);
     handlePdvAddToCart(product);
+    reportCartChange(product);
   };
 
   const toggleProductDetails = (productId: string) => {
@@ -207,6 +227,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
       }
       return [...current, nextItem];
     });
+    reportCartChange(configProduct, configCartIndex !== null);
     closeConfig();
   };
 
@@ -302,7 +323,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               >
                 <ShoppingCart size={16} aria-hidden="true" />
                 <span>Pedido</span>
-                {pdvCartItemCount > 0 && <span className="cashier-pdv-mobile-switch__count">{pdvCartItemCount > 99 ? '99+' : pdvCartItemCount}</span>}
+                {pdvCartItemCount > 0 && <span key={addedNotice?.token ?? 0} className={clsx('cashier-pdv-mobile-switch__count', addedNotice && 'is-bumped')}>{pdvCartItemCount > 99 ? '99+' : pdvCartItemCount}</span>}
               </button>
               <div className="cashier-pdv-mobile-service">
                 <label htmlFor="pdv-mobile-service-type" className="sr-only">Tipo de atendimento</label>
@@ -321,6 +342,19 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                 <ChevronDown size={14} aria-hidden="true" />
               </div>
             </div>
+
+            {addedNotice && (
+              <div
+                key={addedNotice.token}
+                className="cashier-pdv-feedback"
+                role="status"
+                aria-live="polite"
+                data-testid="pdv-added-feedback"
+              >
+                <CheckCircle2 size={17} aria-hidden="true" />
+                <span>{addedNotice.edited ? 'Item atualizado' : 'Item adicionado'} · {addedNotice.name}</span>
+              </div>
+            )}
 
             <div
               id="pdv-products-panel"
@@ -443,6 +477,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                         key={product.id}
                         product={product}
                         cartQuantity={cartQuantitiesByProduct.get(String(product.id)) ?? 0}
+                        recentlyAdded={addedNotice?.productId === String(product.id)}
                         detailsOpen={pdvProductDetailId === String(product.id)}
                         onConfigure={openConfig}
                         onQuickAdd={handleQuickAddProduct}
@@ -858,90 +893,22 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
       )}
 
       {configProduct && (
-        <div
-          className="fixed inset-0 z-[100] flex items-end justify-center bg-koma-overlay p-0 sm:items-center sm:p-4"
-          onClick={(event) => event.target === event.currentTarget && closeConfig()}
-        >
-          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-koma-border bg-koma-card p-4 shadow-2xl sm:rounded-3xl sm:p-6">
-            <div className="flex items-start justify-between gap-3 border-b border-koma-border pb-3">
-              <div className="min-w-0">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">
-                  {configCartIndex === null ? 'Personalizar item' : 'Editar item do pedido'}
-                </span>
-                <h3 className="truncate text-lg font-bold text-koma-foreground">{configProduct.nome}</h3>
-              </div>
-              <button type="button" onClick={closeConfig} className="rounded-full p-1.5 text-koma-muted hover:text-koma-foreground" aria-label="Fechar personalização">
-                <X size={18} />
-              </button>
-            </div>
-
-            {configProduct.descricao && (
-              <p className="mt-3 rounded-xl border border-koma-border bg-koma-raised p-3 text-[11px] leading-relaxed text-koma-subtle">
-                {configProduct.descricao}
-              </p>
-            )}
-
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <div>
-                <span className="mb-1 block text-[9px] font-bold uppercase text-koma-muted">Quantidade</span>
-                <div className="flex items-center rounded-xl border border-koma-border bg-koma-input p-1">
-                  <button type="button" onClick={() => setConfigQty((value) => Math.max(1, value - 1))} className="p-2 text-koma-muted hover:text-rose-400">
-                    <Minus size={14} />
-                  </button>
-                  <span className="px-4 font-mono text-sm font-bold text-koma-foreground">{configQty}</span>
-                  <button type="button" onClick={() => setConfigQty((value) => value + 1)} className="p-2 text-koma-muted hover:text-emerald-400">
-                    <Plus size={14} />
-                  </button>
-                </div>
-              </div>
-              <div className="text-right">
-                <span className="block text-[9px] font-bold uppercase text-koma-muted">Total configurado</span>
-                <span className="font-mono text-lg font-bold text-emerald-400">{formatCurrency(configUnitTotal * configQty)}</span>
-              </div>
-            </div>
-
-            {configGroups.length > 0 && (
-              <div className="mt-4 space-y-3 border-t border-koma-border pt-4">
-                <div>
-                  <h4 className="text-xs font-bold text-koma-foreground">Complementos</h4>
-                  <p className="text-[10px] text-koma-muted">Recomendados primeiro. Use a busca para qualquer adicional do restaurante.</p>
-                </div>
-                <ModifierPicker
-                  key={`${configProduct.id}-${configCartIndex ?? 'new'}`}
-                  groups={configGroups}
-                  selectedIds={configModifierIds}
-                  onQuantityChange={changeConfigModifierQuantity}
-                  compact
-                />
-              </div>
-            )}
-
-            <div className="mt-4 space-y-2 border-t border-koma-border pt-4">
-              <label htmlFor="pdv-config-obs" className="text-[9px] font-bold uppercase text-koma-muted">Observação de preparo</label>
-              <input
-                id="pdv-config-obs"
-                value={configObs}
-                onChange={(event) => setConfigObs(event.target.value)}
-                placeholder="Ex: sem cebola, bem passado, molho à parte..."
-                className="w-full rounded-xl border border-koma-border bg-koma-input px-3 py-2 text-xs text-koma-foreground outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            <div className="mt-4 flex items-center gap-3 border-t border-koma-border pt-4">
-              <button type="button" onClick={closeConfig} className="flex-1 rounded-xl border border-koma-border py-2.5 text-xs font-bold text-koma-muted hover:text-koma-foreground">
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={saveConfiguredItem}
-                disabled={!configValid}
-                className="flex-1 rounded-xl bg-emerald-500 py-2.5 text-xs font-extrabold text-zinc-950 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {!configValid ? 'Complete as escolhas' : configCartIndex === null ? 'Adicionar ao pedido' : 'Salvar alterações'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <CashierPdvConfigurator
+          key={String(configProduct.id) + ':' + String(configCartIndex ?? 'new')}
+          product={configProduct}
+          isEditing={configCartIndex !== null}
+          quantity={configQty}
+          onQuantityChange={setConfigQty}
+          observation={configObs}
+          onObservationChange={setConfigObs}
+          groups={configGroups}
+          selectedIds={configModifierIds}
+          onModifierChange={changeConfigModifierQuantity}
+          total={configUnitTotal * configQty}
+          valid={configValid}
+          onSave={saveConfiguredItem}
+          onClose={closeConfig}
+        />
       )}
     </>
   );
