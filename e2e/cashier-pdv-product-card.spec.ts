@@ -57,3 +57,56 @@ test('PDV: readable product action and visible focus without horizontal overflow
   const outline = await focusButton.evaluate(el => getComputedStyle(el).outlineStyle);
   expect(outline).not.toBe('none');
 });
+
+test('PDV mobile cart dock stays above bottom navigation and supports a quick return to the catalog', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1366) >= 1024, 'Touch dock contract for narrow phone viewports');
+  await openNewOrder(page);
+
+  const switcher = page.getByRole('group', { name: 'Visualização do novo pedido' });
+  await expect(switcher.getByRole('button', { name: 'Escolher itens' })).toHaveAttribute('aria-current', 'page');
+
+  const card = page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Risoto da casa' }).first();
+  await card.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
+
+  const dock = page.locator('.cashier-pdv-mobile-cart-cta');
+  const navigation = page.locator('.cashier-mobile-bottom-bar');
+  await expect(dock).toBeVisible();
+  await expect(navigation).toBeVisible();
+
+  const dockBox = await dock.boundingBox();
+  const navBox = await navigation.boundingBox();
+  expect(dockBox).not.toBeNull();
+  expect(navBox).not.toBeNull();
+  expect((dockBox?.y ?? 0) + (dockBox?.height ?? 0)).toBeLessThanOrEqual((navBox?.y ?? 0) + 1);
+
+  await dock.click();
+  await expect(page.locator('#pdv-order-panel')).toBeVisible();
+  await expect(dock).toHaveCount(0);
+  await expect(switcher.getByRole('button', { name: /Carrinho \(1\)/ })).toHaveAttribute('aria-current', 'page');
+
+  const cartRow = page.locator('.cashier-pdv-cart__line').first();
+  await expect(cartRow).toContainText('Risoto da casa');
+  await cartRow.getByRole('button', { name: 'Aumentar quantidade de Risoto da casa' }).click();
+  await expect(page.locator('.cashier-pdv-cart__total')).toContainText('84,00');
+
+  await switcher.getByRole('button', { name: 'Escolher itens' }).click();
+  await expect(card.locator('.cashier-pdv-product-card__quantity')).toHaveText('2');
+  await expect(dock).toBeVisible();
+});
+
+test('PDV mobile search and quantity controls remain comfortably touchable', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1366) >= 1024, 'Phone touch-target contract');
+  await openNewOrder(page);
+  const search = page.getByPlaceholder('Buscar item, descrição ou código');
+  const searchBox = await search.boundingBox();
+  expect(searchBox).not.toBeNull();
+  expect(searchBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+
+  const categories = page.locator('.cashier-pdv-category');
+  await expect(categories.first()).toHaveAttribute('aria-pressed', 'true');
+  const categoryBox = await categories.first().boundingBox();
+  expect(categoryBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+});
