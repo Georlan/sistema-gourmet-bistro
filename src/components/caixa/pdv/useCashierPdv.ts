@@ -242,7 +242,7 @@ export function useCashierPdv({
 
       if (e.key === 'F1') {
         e.preventDefault();
-        const searchInput = document.getElementById('pdv-search-input');
+        const searchInput = document.getElementById('pdv-product-search-input');
         if (searchInput) {
           searchInput.focus();
           (searchInput as HTMLInputElement).select();
@@ -271,8 +271,15 @@ export function useCashierPdv({
       } else if (e.key === 'F4') {
         e.preventDefault();
         if (pdvCart.length > 0) {
-          const submitBtn = document.getElementById('pdv-submit-btn');
-          if (submitBtn) submitBtn.click();
+          // First F4 reveals the contextual checkout instead of submitting a
+          // hidden form. A second F4 uses the canonical submit button.
+          const reviewBtn = document.getElementById('pdv-review-btn') as HTMLButtonElement | null;
+          if (reviewBtn) {
+            if (!reviewBtn.disabled) reviewBtn.click();
+            return;
+          }
+          const submitBtn = document.getElementById('pdv-submit-btn') as HTMLButtonElement | null;
+          if (submitBtn && !submitBtn.disabled) submitBtn.click();
         }
       } else if (e.key === 'Escape') {
         if (isInput) {
