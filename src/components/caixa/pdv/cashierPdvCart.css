@@ -1,0 +1,439 @@
+/* KÔMA POS / Novo pedido — assembly and review are separate views of the
+ * same canonical cart. These rules are scoped; they do not affect Garçom,
+ * Pedidos, public menu or payment contracts. */
+.cashier-pdv-view .cashier-pdv-cart {
+  min-height: 0;
+  border-radius: 1rem;
+  background: var(--koma-surface-panel);
+  border: 1px solid var(--koma-border-default);
+}
+.cashier-pdv-view .cashier-pdv-cart__header {
+  flex: 0 0 auto;
+  min-height: 4rem;
+  padding: .75rem;
+  border-bottom: 1px solid var(--koma-border-default);
+  background: var(--koma-surface-raised);
+}
+.cashier-pdv-view .cashier-pdv-cart__cart-heading,
+.cashier-pdv-view .cashier-pdv-cart__review-heading {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  min-width: 0;
+}
+.cashier-pdv-view .cashier-pdv-cart__heading-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: .75rem;
+  background: var(--koma-accent-soft);
+  color: var(--koma-accent-text);
+}
+.cashier-pdv-view .cashier-pdv-cart__heading-text { min-width: 0; flex: 1 1 auto; }
+.cashier-pdv-view .cashier-pdv-cart__eyebrow {
+  display: block;
+  color: var(--koma-text-secondary);
+  font-size: .6875rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+.cashier-pdv-view .cashier-pdv-cart__header h3 {
+  margin: 0;
+  color: var(--koma-text-primary);
+  font-family: var(--koma-font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.cashier-pdv-view .cashier-pdv-cart__header h3:focus { outline: none; }
+.cashier-pdv-view .cashier-pdv-cart__count {
+  flex: 0 0 auto;
+  padding: .3rem .55rem;
+  border: 1px solid var(--koma-accent-border);
+  border-radius: 999px;
+  background: var(--koma-accent-soft);
+  color: var(--koma-accent-text);
+  font-size: .75rem;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.cashier-pdv-view .cashier-pdv-cart__back {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 1px solid var(--koma-border-default);
+  border-radius: .75rem;
+  background: var(--koma-surface-panel);
+  color: var(--koma-text-primary);
+  cursor: pointer;
+}
+.cashier-pdv-view .cashier-pdv-cart-scroll {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: .625rem;
+  min-height: 10rem;
+  padding: .75rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.cashier-pdv-view .cashier-pdv-cart__line {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  min-width: 0;
+  padding: .875rem;
+  border: 1px solid var(--koma-border-default);
+  border-radius: .875rem;
+  background: var(--koma-surface-card);
+  box-shadow: none;
+}
+.cashier-pdv-view .cashier-pdv-cart__line-heading,
+.cashier-pdv-view .cashier-pdv-cart__line-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .625rem;
+  min-width: 0;
+}
+.cashier-pdv-view .cashier-pdv-cart__line-heading { align-items: flex-start; }
+.cashier-pdv-view .cashier-pdv-cart__line-name { min-width: 0; }
+.cashier-pdv-view .cashier-pdv-cart__line-name strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--koma-text-primary);
+  font-size: .875rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.cashier-pdv-view .cashier-pdv-cart__unit-price {
+  display: block;
+  margin-top: .2rem;
+  color: var(--koma-text-secondary);
+  font-size: .75rem;
+  font-weight: 500;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+.cashier-pdv-view .cashier-pdv-cart__line-tools {
+  display: flex;
+  flex: 0 0 auto;
+  gap: .125rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__item-action {
+  display: inline-grid;
+  place-items: center;
+  width: 2.5rem;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0;
+  border-radius: .625rem;
+  color: var(--koma-text-secondary);
+  cursor: pointer;
+}
+.cashier-pdv-view .cashier-pdv-cart__item-action:hover {
+  background: var(--koma-surface-raised);
+  color: var(--koma-text-primary);
+}
+.cashier-pdv-view .cashier-pdv-cart__item-action--danger:hover { color: #bd4444; }
+.cashier-pdv-view .cashier-pdv-cart__modifiers {
+  overflow-wrap: anywhere;
+  color: var(--koma-text-secondary);
+  font-size: .75rem;
+  line-height: 1.4;
+}
+.cashier-pdv-view .cashier-pdv-cart__quantity {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border: 1px solid var(--koma-border-default);
+  border-radius: .75rem;
+  background: var(--koma-surface-raised);
+}
+.cashier-pdv-view .cashier-pdv-cart__qty-button {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  min-height: 2.5rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--koma-text-primary);
+  cursor: pointer;
+}
+.cashier-pdv-view .cashier-pdv-cart__qty-button:hover { background: var(--koma-accent-soft); }
+.cashier-pdv-view .cashier-pdv-cart__qty-value {
+  display: block;
+  min-width: 1.75rem;
+  padding: 0 .2rem;
+  color: var(--koma-text-primary);
+  font-size: .875rem;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.cashier-pdv-view .cashier-pdv-cart__line-total {
+  color: var(--koma-accent-text);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cashier-pdv-view .cashier-pdv-cart__notes {
+  min-width: 0;
+  padding-top: .4rem;
+  border-top: 1px solid var(--koma-border-default);
+}
+.cashier-pdv-view .cashier-pdv-cart__notes > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .625rem;
+  min-height: 2.5rem;
+  color: var(--koma-text-secondary);
+  cursor: pointer;
+  font-size: .75rem;
+  font-weight: 500;
+  line-height: 1.35;
+  list-style: none;
+}
+.cashier-pdv-view .cashier-pdv-cart__notes > summary::-webkit-details-marker { display: none; }
+.cashier-pdv-view .cashier-pdv-cart__notes > summary > span {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.cashier-pdv-view .cashier-pdv-cart__notes[open] > summary svg { transform: rotate(180deg); }
+.cashier-pdv-view .cashier-pdv-cart__notes-content {
+  display: flex;
+  flex-direction: column;
+  gap: .625rem;
+  padding: .4rem 0 .25rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__observation {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: .65rem .75rem;
+  border: 1px solid var(--koma-border-default);
+  border-radius: .625rem;
+  background: var(--koma-surface-raised);
+  color: var(--koma-text-primary);
+  font-size: .875rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__preset {
+  min-height: 2.25rem;
+  padding: .375rem .55rem;
+  border: 1px solid var(--koma-border-default);
+  border-radius: .5rem;
+  background: var(--koma-surface-raised);
+  color: var(--koma-text-secondary);
+  font-size: .75rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.cashier-pdv-view .cashier-pdv-cart__preset[aria-pressed="true"] {
+  border-color: var(--koma-accent-border);
+  background: var(--koma-accent-soft);
+  color: var(--koma-accent-text);
+  font-weight: 600;
+}
+.cashier-pdv-view .cashier-pdv-cart__unavailable {
+  padding: .5rem .625rem;
+  border-radius: .5rem;
+  background: var(--koma-status-error-soft, #fbe8e8);
+  color: var(--koma-status-error-text, #a52929);
+  font-size: .75rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.cashier-pdv-view .cashier-pdv-cart__cart-footer {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: .625rem;
+  padding: .875rem;
+  border-top: 1px solid var(--koma-border-default);
+  background: var(--koma-surface-panel);
+}
+.cashier-pdv-view .cashier-pdv-cart__context,
+.cashier-pdv-view .cashier-pdv-cart__cart-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__context {
+  padding-bottom: .625rem;
+  border-bottom: 1px solid var(--koma-border-default);
+}
+.cashier-pdv-view .cashier-pdv-cart__context > div {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__context span,
+.cashier-pdv-view .cashier-pdv-cart__cart-total span {
+  color: var(--koma-text-secondary);
+  font-size: .75rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__context strong {
+  color: var(--koma-text-primary);
+  font-size: .875rem;
+  font-weight: 600;
+}
+.cashier-pdv-view .cashier-pdv-cart__context button {
+  min-width: 3.5rem;
+  min-height: 2.5rem;
+  border-radius: .625rem;
+  background: var(--koma-accent-soft);
+  color: var(--koma-accent-text);
+  font-size: .75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cashier-pdv-view .cashier-pdv-cart__cart-total strong {
+  color: var(--koma-accent-text);
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.cashier-pdv-view .cashier-pdv-cart__next {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  min-height: 3rem;
+  padding: .7rem 1rem;
+  border: none;
+  border-radius: .75rem;
+  background: var(--koma-action-bg);
+  color: var(--koma-action-text);
+  font-size: .875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.cashier-pdv-view .cashier-pdv-cart__next:hover:not(:disabled) { background: var(--koma-action-hover); }
+.cashier-pdv-view .cashier-pdv-cart__next:disabled {
+  background: var(--koma-surface-raised);
+  color: var(--koma-text-secondary);
+  cursor: not-allowed;
+}
+.cashier-pdv-view .cashier-pdv-cart__form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  background: var(--koma-surface-panel);
+}
+.cashier-pdv-view .cashier-pdv-cart__review-fields {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: .875rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.cashier-pdv-view .cashier-pdv-cart__review-fields > * + * { margin-top: .875rem; }
+.cashier-pdv-view .cashier-pdv-cart__review-intro strong {
+  display: block;
+  color: var(--koma-text-primary);
+  font-family: var(--koma-font-display);
+  font-size: .9375rem;
+  font-weight: 600;
+}
+.cashier-pdv-view .cashier-pdv-cart__review-intro p {
+  margin-top: .25rem;
+  color: var(--koma-text-secondary);
+  font-size: .75rem;
+  line-height: 1.45;
+}
+.cashier-pdv-view .cashier-pdv-cart__review-fields label {
+  color: var(--koma-text-secondary);
+  font-size: .75rem;
+  font-weight: 600;
+}
+.cashier-pdv-view .cashier-pdv-cart__review-fields details summary {
+  color: var(--koma-text-primary);
+  font-size: .875rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__review-fields :is(input, select) { font-size: .875rem; }
+.cashier-pdv-view .cashier-pdv-cart__review-fields button { min-height: 2.5rem; }
+.cashier-pdv-view .cashier-pdv-cart__footer {
+  flex: 0 0 auto;
+  padding: .875rem;
+  border-top: 1px solid var(--koma-border-default);
+  background: var(--koma-surface-panel);
+  box-shadow: none;
+}
+.cashier-pdv-view .cashier-pdv-cart__total {
+  font-size: .8125rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__total > span:last-child { font-size: 1.25rem; }
+.cashier-pdv-view #pdv-submit-btn {
+  min-height: 3rem;
+  border-radius: .75rem;
+  font-size: .875rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__back:focus-visible,
+.cashier-pdv-view .cashier-pdv-cart__next:focus-visible,
+.cashier-pdv-view .cashier-pdv-cart__item-action:focus-visible,
+.cashier-pdv-view .cashier-pdv-cart__qty-button:focus-visible,
+.cashier-pdv-view .cashier-pdv-cart__notes summary:focus-visible,
+.cashier-pdv-view .cashier-pdv-cart__observation:focus-visible,
+.cashier-pdv-view .cashier-pdv-cart__preset:focus-visible {
+  outline: 2px solid var(--koma-focus-ring);
+  outline-offset: 2px;
+}
+@media (min-width: 1280px) {
+  .cashier-pdv-view .cashier-pdv-cart {
+    align-self: flex-start;
+    max-height: min(calc(100dvh - 12rem), 49rem);
+  }
+}
+@media (max-width: 1279px) {
+  .cashier-pdv-view .cashier-pdv-cart { max-height: none; }
+  .cashier-pdv-view .cashier-pdv-cart-scroll,
+  .cashier-pdv-view .cashier-pdv-cart__review-fields,
+  .cashier-pdv-view .cashier-pdv-cart__form { overflow-y: visible; }
+}
+@media (max-width: 767px) {
+  .cashier-pdv-view .cashier-pdv-cart__cart-footer,
+  .cashier-pdv-view .cashier-pdv-cart__footer {
+    position: sticky;
+    z-index: 2;
+    bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+  .cashier-pdv-view .cashier-pdv-cart__review-fields :is(input, select) {
+    min-height: 2.75rem;
+    font-size: 1rem;
+  }
+  .cashier-pdv-view .cashier-pdv-cart__review-fields button { min-height: 2.75rem; }
+  .cashier-pdv-view .cashier-pdv-cart__qty-button,
+  .cashier-pdv-view .cashier-pdv-cart__item-action {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+  .cashier-pdv-view .cashier-pdv-cart__presets button { min-height: 2.75rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cashier-pdv-view .cashier-pdv-cart__notes svg { transition: none; }
+}
