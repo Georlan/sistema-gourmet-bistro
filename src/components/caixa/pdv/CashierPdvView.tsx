@@ -223,7 +223,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
             eyebrow="VENDA"
             title="Novo pedido"
             accent="rápido e simples"
-            description="+ Adicionar lança rápido. Clique no card para personalizar; no pedido, use o lápis para editar."
+            description="Toque em um item para adicioná-lo ou escolher opções."
             metrics={
               pdvMenuInsights.pausedCount > 0
                 ? [
@@ -400,6 +400,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           tabIndex={0}
                           onClick={() => groups.length === 0 ? handlePdvAddToCart(p) : openConfig(p)}
                           onKeyDown={(event) => {
+                            if (event.target !== event.currentTarget) return;
                             if (event.key === 'Enter' || event.key === ' ') {
                               event.preventDefault();
                               if (groups.length === 0) handlePdvAddToCart(p);
@@ -409,13 +410,13 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           className={"group relative min-h-[96px] sm:min-h-[112px] bg-koma-panel border border-koma-border hover:border-emerald-500/60 rounded-xl sm:rounded-2xl transition-colors shadow-sm cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"}
                           title={groups.length === 0 ? "Adicionar ao pedido" : "Personalizar item"}
                         >
-                          <div className={"flex h-full w-full flex-col justify-between gap-2 sm:gap-3 p-2.5 sm:p-3.5 text-left rounded-xl sm:rounded-2xl"}>
+                          <div className={"flex h-full w-full flex-col justify-between gap-2 p-2 sm:p-3 text-left rounded-xl sm:rounded-2xl"}>
                             {p.imagem && (
                               <img
                                 src={p.imagem}
                                 alt=""
                                 loading="lazy"
-                                className={"w-full h-16 sm:h-20 object-cover rounded-lg sm:rounded-xl"}
+                                className={"w-full h-14 sm:h-16 object-cover rounded-lg sm:rounded-xl"}
                               />
                             )}
                             <div className="min-h-[28px] sm:min-h-[34px] pr-6">
@@ -614,7 +615,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   >
                     <ShoppingCart size={22} className={"mb-3 opacity-60"} />
                     <p className={"text-xs font-semibold text-koma-subtle"}>Comece escolhendo um item</p>
-                    <p className={"text-[9px] mt-1"}>+ Adicionar é rápido. O card abre a personalização.</p>
+                    <p className={"text-[10px] mt-1"}>Toque em um produto para começar.</p>
                   </div>
                 ) : (
                   pdvCart.map((item, idx) => (
