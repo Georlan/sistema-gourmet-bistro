@@ -35,13 +35,14 @@ export function CashierPdvModifierChoices({ groups, selectedIds, onQuantityChang
     [groups],
   );
   const extraGroups = ordered.filter((group) => group.recomendado === false && Number(group.min_selecoes || 0) === 0);
+  const hasPrimaryGroups = ordered.some((group) => group.recomendado !== false || Number(group.min_selecoes || 0) > 0);
   const normalizedQuery = normalize(query);
   const visibleGroups = ordered.filter((group) => {
     if (normalizedQuery) {
       return normalize(group.nome).includes(normalizedQuery)
         || group.opcoes.some((option) => normalize(option.nome).includes(normalizedQuery));
     }
-    return showAll || group.recomendado !== false || Number(group.min_selecoes || 0) > 0
+    return !hasPrimaryGroups || showAll || group.recomendado !== false || Number(group.min_selecoes || 0) > 0
       || group.opcoes.some((option) => selectedIds.includes(option.id));
   });
   const totalOptions = ordered.reduce((total, group) => total + group.opcoes.filter((option) => option.ativo !== false).length, 0);
@@ -158,7 +159,7 @@ export function CashierPdvModifierChoices({ groups, selectedIds, onQuantityChang
           </section>
         );
       })}
-      {!normalizedQuery && extraGroups.length > 0 && (
+      {!normalizedQuery && hasPrimaryGroups && extraGroups.length > 0 && (
         <button className="cashier-pdv-choices__more" type="button" onClick={() => setShowAll((current) => !current)}>
           {showAll ? 'Mostrar apenas recomendados' : 'Ver outros complementos'}
           {showAll ? <ChevronUp size={17} aria-hidden="true" /> : <ChevronDown size={17} aria-hidden="true" />}
