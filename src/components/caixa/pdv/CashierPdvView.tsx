@@ -202,6 +202,15 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   };
 
   const cartTotal = pdvCart.reduce((sum, item) => sum + pdvCartItemUnitPrice(item) * item.quantity, 0);
+  // Aggregate once per cart update, rather than scanning every cart line for each visible product.
+  const cartQuantitiesByProduct = useMemo(() => {
+    const quantities = new Map<string, number>();
+    for (const item of pdvCart) {
+      const id = String(item.product.id);
+      quantities.set(id, (quantities.get(id) ?? 0) + item.quantity);
+    }
+    return quantities;
+  }, [pdvCart]);
   const deliveryAddressSummary = [
     pdvDeliveryAddressDraft.logradouro,
     pdvDeliveryAddressDraft.numero,
@@ -396,6 +405,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       <CashierPdvProductCard
                         key={product.id}
                         product={product}
+                        cartQuantity={cartQuantitiesByProduct.get(String(product.id)) ?? 0}
                         detailsOpen={pdvProductDetailId === String(product.id)}
                         onConfigure={openConfig}
                         onQuickAdd={handleQuickAddProduct}
