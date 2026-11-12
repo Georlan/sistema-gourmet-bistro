@@ -315,7 +315,9 @@ test('PDV mobile reclaims catalog space while all sales destinations remain reac
   test.skip((page.viewportSize()?.width ?? 1366) >= 768, 'Phone-only contextual navigation');
   await openNewOrder(page);
 
-  const navigation = page.getByRole('navigation', { name: 'Telas desta área' });
+  // Role queries intentionally omit display:none elements. Use the DOM
+  // locator to assert the same navigation exists while being collapsed.
+  const navigation = page.locator('nav[aria-label="Telas desta área"]');
   const toggle = page.getByRole('button', { name: 'Mostrar telas de Vendas' });
   await expect(toggle).toBeVisible();
   await expect(toggle).toHaveAttribute('aria-expanded', 'false');
