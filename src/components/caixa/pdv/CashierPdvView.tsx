@@ -423,7 +423,11 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                             </span>
                             <button
                               type="button"
-                              onClick={() => { setPdvProductDetailId(null); handlePdvAddToCart(p); }}
+                              onClick={() => {
+                                setPdvProductDetailId(null);
+                                if (groups.every((group) => modifierGroupSelectionValid(group, []))) handlePdvAddToCart(p);
+                                else openConfig(p);
+                              }}
                               className="inline-flex min-h-10 min-w-10 items-center justify-center gap-1 rounded-lg bg-emerald-500 px-2.5 text-[10px] font-bold text-zinc-950 hover:bg-emerald-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
                               aria-label={`Adicionar ${productLabel.name} rapidamente`}
                             >
