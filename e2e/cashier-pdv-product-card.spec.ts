@@ -32,7 +32,7 @@ test('PDV: quick-add and personalize are independent on desktop and mobile', asy
     await page.getByRole('button', { name: /Carrinho \(1\)/ }).click();
   }
   await expect(page.locator('.cashier-pdv-cart__line').first()).toContainText('Risoto da casa');
-  await expect(page.locator('.cashier-pdv-cart__total')).toContainText('42,00');
+  await expect(page.locator('.cashier-pdv-cart__cart-total')).toContainText('42,00');
 
   if ((page.viewportSize()?.width ?? 1366) < 1280) {
     await page.getByRole('button', { name: 'Escolher itens' }).click();
@@ -87,7 +87,7 @@ test('PDV mobile cart dock stays above bottom navigation and supports a quick re
   const cartRow = page.locator('.cashier-pdv-cart__line').first();
   await expect(cartRow).toContainText('Risoto da casa');
   await cartRow.getByRole('button', { name: 'Aumentar quantidade de Risoto da casa' }).click();
-  await expect(page.locator('.cashier-pdv-cart__total')).toContainText('84,00');
+  await expect(page.locator('.cashier-pdv-cart__cart-total')).toContainText('84,00');
 
   await switcher.getByRole('button', { name: 'Escolher itens' }).click();
   await expect(card.locator('.cashier-pdv-product-card__quantity')).toHaveText('2');
@@ -109,4 +109,65 @@ test('PDV mobile search and quantity controls remain comfortably touchable', asy
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('PDV review keeps modality and customer fields separate from order item editing', async ({ page }) => {
+  await openNewOrder(page);
+  const card = page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Risoto da casa' }).first();
+  await card.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
+
+  if ((page.viewportSize()?.width ?? 1366) < 1280) {
+    await page.getByRole('button', { name: /Carrinho \(1\)/ }).click();
+  }
+  await expect(page.getByRole('heading', { name: 'Itens do pedido' })).toBeVisible();
+  await expect(page.locator('.cashier-pdv-cart__line')).toHaveCount(1);
+  await expect(page.getByText('Identificação do cliente', { exact: true })).toHaveCount(0);
+
+  const line = page.getByTestId('cashier-pdv-cart-line');
+  await line.locator('.cashier-pdv-cart__notes summary').click();
+  await line.getByRole('textbox', { name: 'Observação de Risoto da casa' }).fill('Sem cebola');
+  await expect(line.locator('.cashier-pdv-cart__notes summary')).toContainText('Sem cebola');
+
+  await page.getByRole('button', { name: 'Continuar para finalizar' }).click();
+  await expect(page.getByRole('heading', { name: 'Finalizar pedido' })).toBeVisible();
+  await expect(page.getByText('Identificação do cliente', { exact: true })).toBeVisible();
+  await expect(page.locator('.cashier-pdv-cart__line')).toHaveCount(0);
+  await expect(page.locator('.cashier-pdv-cart__total')).toContainText('42,00');
+
+  await page.getByRole('button', { name: 'Voltar aos itens do pedido' }).click();
+  await expect(line).toContainText('Sem cebola');
+  await expect(page.getByRole('heading', { name: 'Itens do pedido' })).toBeVisible();
+});
+
+test('PDV F4 reviews the destination before submission and allows modality shortcuts', async ({ page }) => {
+  await openNewOrder(page);
+  await page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Risoto da casa' }).first()
+    .getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
+
+  await page.keyboard.press('F4');
+  await expect(page.getByRole('heading', { name: 'Finalizar pedido' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Lançar Pedido/i })).toBeVisible();
+
+  await page.keyboard.press('F3');
+  await expect(page.getByRole('button', { name: 'Consumo local' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByLabel('Mesa', { exact: true })).toBeVisible();
+
+  await page.keyboard.press('F2');
+  await expect(page.getByRole('button', { name: 'Retirada' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('PDV on 320px and 430px has no horizontal overflow in cart and review', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1366) >= 1024, 'Mobile-only widths');
+  for (const width of [320, 430]) {
+    await page.setViewportSize({ width, height: 760 });
+    await openNewOrder(page);
+    const card = page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Risoto da casa' }).first();
+    await card.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
+    await page.getByRole('button', { name: /Carrinho \(1\)/ }).click();
+    for (const stage of ['cart', 'review'] as const) {
+      if (stage === 'review') await page.getByRole('button', { name: 'Continuar para finalizar' }).click();
+      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+      expect(overflow).toBeLessThanOrEqual(1);
+    }
+  }
 });
