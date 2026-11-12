@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PAYMENT_LABELS, type PaymentMethod } from '../../../cardapio/paymentMethods';
 import { Check, ChevronDown, ChevronLeft, ChevronRight, Minus, Package, Plus, Search, ShoppingCart, X } from 'lucide-react';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
@@ -112,6 +112,17 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   const [configQty, setConfigQty] = useState(1);
   const [configObs, setConfigObs] = useState('');
   const [configModifierIds, setConfigModifierIds] = useState<string[]>([]);
+  const deliveryAddressDisclosureRef = useRef<HTMLDetailsElement | null>(null);
+
+  // Reveal a missing delivery address when that modality is selected, but
+  // allow operators to collapse the native disclosure afterward.
+  useEffect(() => {
+    if (pdvOrderType !== 'delivery') return;
+    if (!pdvDeliveryAddressDraft.logradouro || !pdvDeliveryAddressDraft.numero) {
+      if (deliveryAddressDisclosureRef.current) deliveryAddressDisclosureRef.current.open = true;
+    }
+  }, [pdvOrderType, pdvDeliveryAddressDraft.logradouro, pdvDeliveryAddressDraft.numero]);
+
   // Destination shortcuts open the same order surface; no duplicated
   // cart, checkout or fulfillment state is needed.
   useEffect(() => {
@@ -725,7 +736,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       )}
                       <details
                         className="group rounded-xl border border-koma-border bg-koma-card/40"
-                        defaultOpen={!pdvDeliveryAddressDraft.logradouro || !pdvDeliveryAddressDraft.numero}
+                        ref={deliveryAddressDisclosureRef}
                       >
                         <summary className="cursor-pointer list-none px-3 py-2.5">
                           <div className="flex items-center justify-between gap-3">
