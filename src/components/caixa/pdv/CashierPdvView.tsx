@@ -408,7 +408,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                             {p.imagem && (
                               <img src={p.imagem} alt="" loading="lazy" className="h-14 w-full rounded-lg object-cover sm:h-16" />
                             )}
-                            <span className="min-w-0 pr-6 text-xs font-semibold leading-snug text-koma-foreground sm:text-sm">
+                            <span className="min-w-0 pr-10 text-xs font-semibold leading-snug text-koma-foreground sm:text-sm">
                               {productLabel.name}
                             </span>
                             {groups.length > 0 && (
@@ -444,7 +444,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                                 <Info size={15} />
                               </button>
                               {pdvProductDetailId === productDetailKey && (
-                                <div id={`pdv-product-details-${productDetailKey}`} role="note" className="absolute inset-x-2 top-12 z-10 rounded-xl border border-koma-border bg-koma-dialog p-3 text-left shadow-xl">
+                                <div id={`pdv-product-details-${productDetailKey}`} role="note" className="mx-2.5 mb-2.5 rounded-lg border border-koma-border bg-koma-dialog p-3 text-left">
                                   <span className="block text-[10px] font-bold text-emerald-700 dark:text-emerald-300">Ingredientes e detalhes</span>
                                   {productLabel.code && <span className="mt-1 block text-[10px] text-koma-muted">Cód. {productLabel.code}</span>}
                                   <p className="mt-1 text-xs leading-relaxed text-koma-secondary">{p.descricao || 'Sem descrição cadastrada.'}</p>
