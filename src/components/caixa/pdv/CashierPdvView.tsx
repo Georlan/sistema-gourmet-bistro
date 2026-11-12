@@ -850,7 +850,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                     disabled={pdvCart.length === 0 || isLoading || cartHasUnavailableItems}
                     title={cartHasUnavailableItems ? 'Remova os itens indisponíveis antes de lançar o pedido' : undefined}
                     aria-label={cartHasUnavailableItems ? 'Remova os itens indisponíveis para lançar' : undefined}
-                    className="w-full min-h-11 py-2 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] rounded-xl border border-transparent font-bold text-[10px] uppercase tracking-wider transition-colors cursor-pointer flex flex-col items-center justify-center gap-0.5 disabled:cursor-not-allowed disabled:border-[#272c29] disabled:bg-koma-card disabled:text-zinc-600"
+                    className="cashier-pdv-cart__submit w-full min-h-11 rounded-xl border font-bold cursor-pointer flex flex-col items-center justify-center gap-0.5"
                   >
                     <div className="flex items-center gap-1">
                       <Check size={12} />
