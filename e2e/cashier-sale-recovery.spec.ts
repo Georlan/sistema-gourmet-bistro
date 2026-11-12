@@ -37,7 +37,11 @@ for (const status of [503, 422, 502]) {
       await newOrder().click();
       await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente', exact: true }).click();
       await showCart();
-      await page.getByRole('button', { name: 'Consumo local', exact: true }).click();
+      if ((page.viewportSize()?.width ?? 1366) < 1280) {
+        await page.getByRole('combobox', { name: 'Tipo de atendimento' }).selectOption('dine_in');
+      } else {
+        await page.getByRole('button', { name: 'Consumo local', exact: true }).click();
+      }
       await page.locator('#pdv-target-table').selectOption('10');
       await page.locator('#pdv-submit-btn').click();
       const message = status === 502 ? 'Falha no servidor. Tente novamente.'

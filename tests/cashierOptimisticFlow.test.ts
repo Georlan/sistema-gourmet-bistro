@@ -166,7 +166,9 @@ test('PDV models fulfillment separately from optional table association', () => 
 
   assert.match(view, /pdvOrderType === 'dine_in'/);
   assert.match(view, /<option value="">Sem mesa<\/option>/);
-  assert.match(view, /type\.id === 'delivery'\) setPdvTargetMesaId\(0\)/);
+  assert.match(view, /const changeServiceType = \(next: PdvOrderType\)/);
+  assert.match(view, /if \(next === 'delivery'\) setPdvTargetMesaId\(0\)/);
+  assert.match(view, /changeServiceType\(event\.target\.value as PdvOrderType\)/);
   assert.match(view, /id: 'dine_in', label: 'Consumo local'/);
 });
 

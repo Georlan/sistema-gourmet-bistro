@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PAYMENT_LABELS, type PaymentMethod } from '../../../cardapio/paymentMethods';
-import { ArrowRight, Check, ChevronLeft, ChevronRight, Minus, Package, Plus, Search, ShoppingCart, X } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, ChevronLeft, ChevronRight, Minus, Package, Plus, Search, ShoppingCart, X } from 'lucide-react';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import {
@@ -14,7 +14,7 @@ import DeliveryAddressFields from '../../shared/DeliveryAddressFields';
 import ModifierPicker from '../../shared/ModifierPicker';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import { formatCurrency } from '../cashierPresentation';
-import { pdvCartItemUnitPrice, type PdvModifierSelection, type useCashierPdv } from './useCashierPdv';
+import { pdvCartItemUnitPrice, type PdvModifierSelection, type PdvOrderType, type useCashierPdv } from './useCashierPdv';
 import { usePdvCategoryNavigation } from './usePdvCategoryNavigation';
 import { CashierPdvProductCard } from './CashierPdvProductCard';
 import { CashierPdvCartLine } from './CashierPdvCartLine';
@@ -242,6 +242,10 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     { id: 'delivery', label: 'Delivery' },
     { id: 'dine_in', label: 'Consumo local' },
   ] as const).filter((type) => allowedPdvOrderTypes.includes(type.id));
+  const changeServiceType = (next: PdvOrderType) => {
+    setPdvOrderType(next);
+    if (next === 'delivery') setPdvTargetMesaId(0);
+  };
   const shortcutLabels = [
     allowedPdvOrderTypes.includes('pickup') ? 'F2 Retirada' : null,
     allowedPdvOrderTypes.includes('dine_in') ? 'F3 Consumo local' : null,
@@ -282,27 +286,46 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
           <div
             className={"cashier-pdv-layout min-h-0 flex-1 flex flex-col xl:flex-row gap-3 sm:gap-4 overflow-hidden relative"}
           >
-            <div className="cashier-pdv-mobile-switch xl:hidden" role="group" aria-label="Visualização do novo pedido">
+            <div className="cashier-pdv-mobile-switch xl:hidden" role="group" aria-label="Navegação e atendimento do novo pedido">
               <button
                 type="button"
+                aria-label="Escolher itens"
                 onClick={() => { setBalcaoMobileView('produtos'); showOrderItems(); }}
                 aria-current={balcaoMobileView === 'produtos' ? 'page' : undefined}
                 aria-controls="pdv-products-panel"
                 className={clsx('cashier-pdv-mobile-switch__button', balcaoMobileView === 'produtos' && 'is-active')}
               >
-                <Package size={14} />
-                <span>Escolher itens</span>
+                <Package size={16} aria-hidden="true" />
+                <span>Itens</span>
               </button>
               <button
                 type="button"
+                aria-label={`Carrinho (${pdvCartItemCount})`}
                 onClick={() => { setBalcaoMobileView('carrinho'); showOrderItems(); }}
                 aria-current={balcaoMobileView === 'carrinho' ? 'page' : undefined}
                 aria-controls="pdv-order-panel"
                 className={clsx('cashier-pdv-mobile-switch__button', balcaoMobileView === 'carrinho' && 'is-active')}
               >
-                <ShoppingCart size={14} />
-                <span>Carrinho ({pdvCartItemCount})</span>
+                <ShoppingCart size={16} aria-hidden="true" />
+                <span>Pedido</span>
+                {pdvCartItemCount > 0 && <span className="cashier-pdv-mobile-switch__count">{pdvCartItemCount > 99 ? '99+' : pdvCartItemCount}</span>}
               </button>
+              <div className="cashier-pdv-mobile-service">
+                <label htmlFor="pdv-mobile-service-type" className="sr-only">Tipo de atendimento</label>
+                <select
+                  id="pdv-mobile-service-type"
+                  aria-label="Tipo de atendimento"
+                  value={pdvOrderType}
+                  onChange={(event) => changeServiceType(event.target.value as PdvOrderType)}
+                >
+                  {modalityOptions.map((type) => (
+                    <option key={type.id} value={type.id}>
+                      {type.id === 'delivery' ? 'Entrega' : type.id === 'dine_in' ? 'No local' : 'Retirada'}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={14} aria-hidden="true" />
+              </div>
             </div>
 
             <div
@@ -310,7 +333,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               className={`cashier-pdv-catalog min-w-0 flex-1 ${balcaoMobileView === 'produtos' ? 'flex' : 'hidden xl:flex'} flex-col gap-3 overflow-hidden w-full`}
             >
               <div
-                className={"shrink-0 rounded-2xl border border-koma-border bg-koma-panel p-2.5 sm:p-3 space-y-2.5"}
+                className="cashier-pdv-catalog-controls shrink-0 rounded-2xl border border-koma-border bg-koma-panel p-2.5 sm:p-3 space-y-2.5"
               >
                 <div className="relative">
                   <Search
@@ -589,10 +612,10 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               >
                 <div className="cashier-pdv-cart__review-fields">
                   <div className="cashier-pdv-cart__review-intro">
-                    <strong>Como o pedido será atendido?</strong>
-                    <p>Escolha a modalidade e informe somente os dados necessários.</p>
+                    <strong>Dados para finalizar</strong>
+                    <p>Informe apenas o que for necessário para {currentModalityLabel.toLowerCase()}.</p>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="cashier-pdv-cart__modality-section space-y-1.5">
                     <div className="flex items-center justify-between gap-3">
                       <label className={"text-[8px] text-koma-subtle font-bold uppercase tracking-wider block"}>
                         Modalidade
@@ -614,8 +637,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           type="button"
                           aria-pressed={pdvOrderType === type.id}
                           onClick={() => {
-                            setPdvOrderType(type.id);
-                            if (type.id === 'delivery') setPdvTargetMesaId(0);
+                            changeServiceType(type.id);
                           }}
                           className={clsx('cashier-pdv-cart__modality-option', pdvOrderType === type.id && 'is-active')}
                         >
@@ -874,12 +896,12 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               >
                 <span className="cashier-pdv-mobile-cart-cta__label">
                   <ShoppingCart size={16} />
-                  <span>{pdvCartItemCount} itens no carrinho</span>
+                  <span>Ver pedido · {pdvCartItemCount} {pdvCartItemCount === 1 ? 'item' : 'itens'}</span>
                 </span>
                 <span
                   className="cashier-pdv-mobile-cart-cta__total"
                 >
-                  {formatCurrency(cartTotal)} →
+                  {formatCurrency(cartTotal)}
                 </span>
               </button>
             )}

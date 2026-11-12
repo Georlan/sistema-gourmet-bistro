@@ -522,3 +522,19 @@
   outline: 2px solid var(--koma-focus-ring);
   outline-offset: 2px;
 }
+
+/* When the mobile context selector is present, do not repeat the whole
+ * modality picker or "Alterar" card inside the cart/review. */
+@media (max-width: 1279px) {
+  .cashier-pdv-view .cashier-pdv-cart__context,
+  .cashier-pdv-view .cashier-pdv-cart__modality-section,
+  .cashier-pdv-view .cashier-pdv-cart__review-intro {
+    display: none;
+  }
+  .cashier-pdv-view .cashier-pdv-cart__cart-footer {
+    gap: .5rem;
+  }
+  .cashier-pdv-view .cashier-pdv-cart__review-fields {
+    padding-top: .625rem;
+  }
+}
