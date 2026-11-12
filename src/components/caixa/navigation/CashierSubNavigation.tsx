@@ -11,11 +11,9 @@ interface Props {
   setupMode: boolean;
   onNavigate: (id: string) => void;
   counts?: Record<string, number>;
-  /** Reveal the existing sales destinations only when requested in phone PDV. */
-  mobilePdvOpen?: boolean;
 }
 
-export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlements, setupMode, onNavigate, counts = {}, mobilePdvOpen = false }: Props) {
+export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlements, setupMode, onNavigate, counts = {} }: Props) {
   const items = getCashierHorizontalItems(activeTab, planId, entitlements, setupMode);
   const scrollRef = useRef<HTMLDivElement>(null);
   const position = useRef({ userPositioned: false, revealed: 0 });
@@ -42,6 +40,15 @@ export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlem
       frame = requestAnimationFrame(() => { frame = 0; update(); });
     };
     const revealSelected = () => {
+      // On phones, entering Novo pedido must start at Pedidos on the left;
+      // automatically revealing its second tab after a prior swipe can open
+      // the entire strip far to the right. A deliberate swipe still persists.
+      if (isPdvContext && window.matchMedia('(max-width: 767px)').matches) {
+        scroller.scrollLeft = 0;
+        position.current.revealed = 0;
+        update();
+        return;
+      }
       const selected = scroller.querySelector<HTMLElement>('[aria-current="page"]');
       if (selected) {
         // The positioned scroller is the button offset parent. Its own
@@ -82,11 +89,11 @@ export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlem
       scroller.removeEventListener('pointerdown', preserveUserPosition);
       scroller.removeEventListener('wheel', preserveUserPosition);
     };
-  }, [activeTab, activeSubTab, itemKey, mobilePdvOpen]);
+  }, [activeTab, activeSubTab, itemKey, isPdvContext]);
 
   if (!items.length) return null;
   return (
-    <nav id="cashier-sales-subnav" className={`cashier-subnav cashier-subnav--shared flex shrink-0 border-b border-koma-border${isPdvContext ? " cashier-subnav--pdv-context" : ""}${mobilePdvOpen ? " is-open" : ""}`} aria-label="Telas desta área">
+    <nav id="cashier-sales-subnav" className={`cashier-subnav cashier-subnav--shared flex shrink-0 border-b border-koma-border${isPdvContext ? " cashier-subnav--pdv-context" : ""}`} aria-label="Telas desta área">
       <button type="button" className={`cashier-subnav__arrow${!edges.left && !edges.right ? ' is-unneeded' : ''}`} aria-label="Ver abas anteriores" disabled={!edges.left} onClick={() => scrollRef.current?.scrollBy({ left: -240, behavior: 'smooth' })}><ChevronLeft size={16} /></button>
       <div ref={scrollRef} className="cashier-subnav__scroll">
         {items.map(item => {
