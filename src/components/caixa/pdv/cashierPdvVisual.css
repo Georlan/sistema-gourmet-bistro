@@ -54,16 +54,16 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: .625rem;
+  gap: .4375rem;
   height: 100%;
-  min-height: 10.75rem;
-  padding: .75rem;
+  min-height: 9.6rem;
+  padding: .625rem;
   pointer-events: none;
 }
 .cashier-pdv-product-card__image {
   display: block;
   width: 100%;
-  height: 5.5rem;
+  height: 5.25rem;
   aspect-ratio: 16 / 7;
   object-fit: cover;
   border-radius: .625rem;
@@ -108,25 +108,13 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
-.cashier-pdv-product-card__choices {
-  display: inline-flex;
-  align-items: center;
-  margin-top: .375rem;
-  padding: .1875rem .375rem;
-  border-radius: .375rem;
-  background: var(--koma-accent-soft);
-  color: var(--koma-accent-text);
-  font-size: .6875rem;
-  font-weight: 600;
-  line-height: 1.25;
-}
 .cashier-pdv-view .cashier-pdv-product-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: .375rem;
-  padding-top: .625rem;
+  padding-top: .4375rem;
   border-top: 1px solid var(--pdv-line);
 }
 .cashier-pdv-product-card__price {
@@ -165,8 +153,8 @@
 .cashier-pdv-product-card__info {
   position: absolute;
   z-index: 3;
-  top: .625rem;
-  right: .625rem;
+  top: .4375rem;
+  right: .4375rem;
   display: grid;
   place-items: center;
   width: 2rem;
@@ -480,4 +468,15 @@
     font-size: .6875rem;
     padding-left: .4rem;
   }
+}
+
+/* Dense menu cards: image/name/price/action remain readable while repetitive
+ * category labels and vertical chrome no longer consume the first fold. */
+@media (max-width: 639px) {
+  .cashier-pdv-view .cashier-pdv-product-grid { gap: .5rem; }
+  .cashier-pdv-product-card__content { padding: .5rem; gap: .375rem; }
+  .cashier-pdv-product-card__image { height: 4.75rem; }
+  .cashier-pdv-product-card__name { min-height: 2.2em; line-height: 1.25; }
+  .cashier-pdv-view .cashier-pdv-product-actions { gap: .25rem; padding-top: .375rem; }
+  .cashier-pdv-product-card__add { min-height: 2.75rem; }
 }
