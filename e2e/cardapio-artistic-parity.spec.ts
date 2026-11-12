@@ -480,3 +480,33 @@ test('categorias permanecem visíveis ao navegar pelo cardápio', async ({page})
   await nav.getByRole('button', {name: 'Bebidas', exact: true}).click();
   await expect.poll(async () => (await page.locator('#cat-bebidas').boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(50);
 });
+
+for (const width of [320, 360, 390, 430]) {
+  test(`a categoria ativa acompanha a rolagem no celular de ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await menu(page, payload => {
+      for (let i = 1; i <= 5; i++) {
+        payload.categorias.push({ id: 100 + i, nome: `Categoria longa ${i}` });
+        payload.produtos.push({ id: 500 + i, nome: `Produto ${i}`, preco: 10, categoria_id: 100 + i, grupos_modificadores: [] });
+      }
+    });
+    const nav = page.locator('#koma-art-category-nav');
+    const strip = nav.locator('.koma-art-category-scroll');
+    const target = page.locator('[data-menu-category="Categoria longa 4"]');
+    await target.evaluate(el => window.scrollTo(0, window.scrollY + el.getBoundingClientRect().top - 120));
+    const active = nav.getByRole('button', { name: 'Categoria longa 4', exact: true });
+    await expect(active).toHaveAttribute('aria-current', 'true');
+    await expect.poll(async () => {
+      const [button, container] = await Promise.all([active.boundingBox(), strip.boundingBox()]);
+      return !!button && !!container && button.x >= container.x - 1 && button.x + button.width <= container.x + container.width + 1;
+    }).toBe(true);
+    await page.locator('[data-menu-category="Categoria longa 1"]').evaluate(el => window.scrollTo(0, window.scrollY + el.getBoundingClientRect().top - 120));
+    const previous = nav.getByRole('button', { name: 'Categoria longa 1', exact: true });
+    await expect(previous).toHaveAttribute('aria-current', 'true');
+    await expect.poll(async () => {
+      const [button, container] = await Promise.all([previous.boundingBox(), strip.boundingBox()]);
+      return !!button && !!container && button.x >= container.x - 1 && button.x + button.width <= container.x + container.width + 1;
+    }).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  });
+}

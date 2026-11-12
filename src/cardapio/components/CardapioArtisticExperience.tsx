@@ -9,7 +9,7 @@ import { getFulfillmentAvailability } from '../fulfillment';
 import { smartSearchMatch } from '../../domain';
 import { API_BASE_URL } from '../../config/api';
 import { buildWhatsAppContactUrl } from '../../config/whatsappUtils';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   CheckCircle2,
@@ -159,6 +159,7 @@ export function CardapioArtisticExperience({
   orderingMessage = '',
 }: CardapioArtisticExperienceProps) {
   const [shareToastVisible, setShareToastVisible] = useState(false);
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
 
   // Compartilhar cardápio com feedback ao usuário
   const handleShare = async () => {
@@ -234,6 +235,27 @@ export function CardapioArtisticExperience({
     const source = manual || top || catalog.find((p) => p.isAvailable !== false);
     return source ? resolveCatalogDisplayProduct(catalog, source, activeBrand.id) : null;
   }, [activeBrand.products, activeBrand.id, popularIds, activeBrand.popularProductIds, activeBrand.manualHighlightProductId]);
+
+  // Mantém a categoria ativa visível sem deslocar a página verticalmente.
+  useEffect(() => {
+    const strip = categoryScrollRef.current;
+    const active = strip?.querySelector<HTMLButtonElement>('[aria-current="true"]');
+    if (!strip || !active) return;
+    const container = strip.getBoundingClientRect();
+    const button = active.getBoundingClientRect();
+    const inset = 12;
+    const delta = button.left < container.left + inset
+      ? button.left - container.left - inset
+      : button.right > container.right - inset
+        ? button.right - container.right + inset
+        : 0;
+    if (delta !== 0) {
+      strip.scrollBy({
+        left: delta,
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      });
+    }
+  }, [selectedCategory, searchQuery]);
 
   // Produtos de harmonização / recomendação complementar contextual
   const pairingProducts = useMemo<CatalogDisplayItem[]>(() => {
@@ -796,7 +818,7 @@ export function CardapioArtisticExperience({
           ZONA 2: FITA ORGÂNICA DE CATEGORIAS (STICKY E FLUIDA)
           ======================================================== */}
       <nav className="koma-art-category-bar" aria-label="Categorias do cardápio" id="koma-art-category-nav">
-        <div className="koma-art-category-scroll">
+        <div ref={categoryScrollRef} className="koma-art-category-scroll">
           {(() => {
             const hasDestaquesCategory = visibleCategories.some((c) => c.trim().toLowerCase() === 'destaques');
             const highlightsLabel = hasDestaquesCategory ? 'Início' : '★ Destaques';
