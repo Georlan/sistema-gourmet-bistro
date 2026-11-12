@@ -67,3 +67,33 @@ test('PDV highlights products already in the cart with an accessible quantity ma
   assert.match(capped, /99\+/);
   assert.match(capped, /aria-label="105 unidades no pedido"/);
 });
+
+
+test('PDV requires visible choices before adding a product with mandatory modifiers', () => {
+  const mandatory: Product = {
+    ...product,
+    id: 'required-plate',
+    nome: 'Marmita P',
+    grupos_modificadores: [{
+      id: 'protein',
+      nome: 'Escolha a proteína',
+      min_selecoes: 1,
+      max_selecoes: 1,
+      tipo: 'obrigatorio',
+      opcoes: [{ id: 'chicken', grupo_id: 'protein', nome: 'Frango', preco_adicional: 0, ativo: true }],
+    }],
+  } as unknown as Product;
+  const html = renderProduct(false, mandatory);
+  assert.match(html, /aria-label="Escolher opções de Marmita P"/);
+  assert.match(html, />Escolher opções<\/span>/);
+  assert.doesNotMatch(html, /Adicionar Marmita P rapidamente/);
+
+  const optional: Product = {
+    ...mandatory,
+    grupos_modificadores: [{
+      ...(mandatory as Product & { grupos_modificadores: Array<{ min_selecoes: number }> }).grupos_modificadores[0],
+      min_selecoes: 0,
+    }],
+  } as unknown as Product;
+  assert.match(renderProduct(false, optional), /Adicionar Marmita P rapidamente/);
+});
