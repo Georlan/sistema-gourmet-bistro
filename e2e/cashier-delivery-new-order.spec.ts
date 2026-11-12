@@ -69,3 +69,25 @@ test('item simples entra no pedido ao tocar no cartão sem nova consulta ao cat�
   await expect(page.locator('#pdv-submit-btn')).toBeVisible();
   expect(catalogRequests).toBe(initialRequests);
 });
+
+test('produto com escolha obrigatória abre configuração também pelo atalho de adicionar', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_active_tab', 'operacao');
+    sessionStorage.setItem('koma_active_subtab', 'balcao');
+  });
+  await page.route('**/produtos/catalogo', route => route.fulfill({ json: {
+    categorias: [{ id: 'cat-pratos', nome: 'Pratos', destino_impressao: 'COZINHA' }],
+    produtos: [{
+      id: '101', nome: 'Risoto da casa', preco: 42, categoria_id: 'cat-pratos', ativo: true,
+      grupos_modificadores: [{ id: 'g1', nome: 'Ponto', min_selecoes: 1, max_selecoes: 1, tipo: 'obrigatorio',
+        opcoes: [{ id: 'o1', grupo_id: 'g1', nome: 'Bem passado', preco_adicional: 0, ativo: true }] }],
+    }],
+  }}));
+  await page.goto('/?view=caixa');
+  await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente', exact: true }).click();
+  await expect(page.getByText('Personalizar item', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Complete as escolhas' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Adicionar ao pedido', exact: true })).toHaveCount(0);
+});
