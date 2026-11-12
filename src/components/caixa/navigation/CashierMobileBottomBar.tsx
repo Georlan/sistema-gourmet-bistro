@@ -1,6 +1,6 @@
 import React from 'react';
-import clsx from 'clsx';
-import { ChefHat, DollarSign, Menu, PlusCircle, ShoppingBag } from 'lucide-react';
+import { ChefHat, CirclePlus, Menu, ReceiptText, Wallet } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { CashierTab } from '../cashierContracts';
 
 interface CashierMobileBottomBarProps {
@@ -14,6 +14,63 @@ interface CashierMobileBottomBarProps {
   shiftOpen?: boolean;
 }
 
+interface DockActionProps {
+  label: string;
+  icon: LucideIcon;
+  active?: boolean;
+  onClick: () => void;
+  count?: number;
+  countTone?: 'orders' | 'kitchen';
+  shiftOpen?: boolean;
+  ariaLabel?: string;
+}
+
+const DockAction: React.FC<DockActionProps> = ({
+  label,
+  icon: Icon,
+  active = false,
+  onClick,
+  count = 0,
+  countTone = 'orders',
+  shiftOpen,
+  ariaLabel,
+}) => (
+  <button
+    type="button"
+    className="cashier-mobile-bottom-bar__action"
+    onClick={onClick}
+    aria-current={active ? 'page' : undefined}
+    aria-label={ariaLabel ?? label}
+    aria-describedby={shiftOpen === undefined ? undefined : 'cashier-mobile-shift-status'}
+  >
+    <span className="cashier-mobile-bottom-bar__icon" aria-hidden="true">
+      <Icon size={22} strokeWidth={2} />
+      {count > 0 && (
+        <span
+          className={`cashier-mobile-bottom-bar__count cashier-mobile-bottom-bar__count--${countTone}`}
+        >
+          {count > 99 ? '99+' : count}
+        </span>
+      )}
+      {shiftOpen !== undefined && (
+        <span
+          className={`cashier-mobile-bottom-bar__shift ${shiftOpen ? 'is-open' : 'is-closed'}`}
+        />
+      )}
+    </span>
+    <span className="cashier-mobile-bottom-bar__label">{label}</span>
+    {shiftOpen !== undefined && (
+      <span id="cashier-mobile-shift-status" className="sr-only">
+        {shiftOpen ? 'Turno aberto' : 'Turno fechado'}
+      </span>
+    )}
+  </button>
+);
+
+/**
+ * Main mobile shortcuts. Keep the five destinations and their permission-aware
+ * navigation callbacks independent from the presentation of the dock.
+ */
 export const CashierMobileBottomBar: React.FC<CashierMobileBottomBarProps> = ({
   activeTab,
   activeSubTab,
@@ -30,99 +87,42 @@ export const CashierMobileBottomBar: React.FC<CashierMobileBottomBarProps> = ({
   const isCaixaActive = activeTab === 'financeiro';
 
   return (
-    <nav
-      aria-label="Navegação móvel principal"
-      className="cashier-mobile-bottom-bar lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-koma-panel/95 backdrop-blur-lg border-t border-koma-border safe-area-pb shadow-lg"
-    >
-      <div className="grid grid-cols-5 h-14 items-center max-w-md mx-auto px-1">
-        {/* 1. Vendas / Pedidos */}
-        <button
-          type="button"
+    <nav aria-label="Navegação móvel principal" className="cashier-mobile-bottom-bar lg:hidden">
+      <div className="cashier-mobile-bottom-bar__items">
+        <DockAction
+          icon={ReceiptText}
+          label="Pedidos"
+          active={isPedidosActive}
           onClick={() => onNavigate('vendas_pedidos')}
-          className={clsx(
-            'flex flex-col items-center justify-center py-1 relative transition-all min-h-[44px]',
-            isPedidosActive ? 'text-emerald-500 font-bold' : 'text-koma-muted hover:text-koma-foreground'
-          )}
-          aria-current={isPedidosActive ? 'page' : undefined}
-        >
-          <div className="relative">
-            <ShoppingBag size={18} />
-            {orderCount > 0 && (
-              <span className="absolute -top-1.5 -right-2 bg-emerald-500 text-[#101411] text-[9px] font-black rounded-full px-1 min-w-[14px] h-3.5 flex items-center justify-center leading-none">
-                {orderCount}
-              </span>
-            )}
-          </div>
-          <span className="text-[10px] mt-0.5 tracking-tight">Pedidos</span>
-        </button>
-
-        {/* 2. Novo Pedido (PDV Balcão) */}
-        <button
-          type="button"
+          count={orderCount}
+        />
+        <DockAction
+          icon={CirclePlus}
+          label="+ Pedido"
+          active={isPdvActive}
           onClick={() => onNavigate('vendas_novo_pedido')}
-          className={clsx(
-            'flex flex-col items-center justify-center py-1 relative transition-all min-h-[44px]',
-            isPdvActive ? 'text-emerald-500 font-bold' : 'text-koma-muted hover:text-koma-foreground'
-          )}
-          aria-current={isPdvActive ? 'page' : undefined}
-        >
-          <PlusCircle size={18} />
-          <span className="text-[10px] mt-0.5 tracking-tight">+ Pedido</span>
-        </button>
-
-        {/* 3. Cozinha (Fila na Tela) */}
-        <button
-          type="button"
+        />
+        <DockAction
+          icon={ChefHat}
+          label={dedicatedKds ? 'Cozinha' : 'Preparo'}
+          active={isCozinhaActive}
           onClick={() => onNavigate('vendas_cozinha')}
-          className={clsx(
-            'flex flex-col items-center justify-center py-1 relative transition-all min-h-[44px]',
-            isCozinhaActive ? 'text-emerald-500 font-bold' : 'text-koma-muted hover:text-koma-foreground'
-          )}
-          aria-current={isCozinhaActive ? 'page' : undefined}
-        >
-          <div className="relative">
-            <ChefHat size={18} />
-            {kitchenCount > 0 && (
-              <span className="absolute -top-1.5 -right-2 bg-amber-500 text-[#101411] text-[9px] font-black rounded-full px-1 min-w-[14px] h-3.5 flex items-center justify-center leading-none">
-                {kitchenCount}
-              </span>
-            )}
-          </div>
-          <span className="text-[10px] mt-0.5 tracking-tight">{dedicatedKds ? 'Cozinha' : 'Preparo'}</span>
-        </button>
-
-        {/* 4. Caixa / Turno */}
-        <button
-          type="button"
+          count={kitchenCount}
+          countTone="kitchen"
+        />
+        <DockAction
+          icon={Wallet}
+          label="Caixa"
+          active={isCaixaActive}
           onClick={() => onNavigate('caixa_turno_atual')}
-          className={clsx(
-            'flex flex-col items-center justify-center py-1 relative transition-all min-h-[44px]',
-            isCaixaActive ? 'text-emerald-500 font-bold' : 'text-koma-muted hover:text-koma-foreground'
-          )}
-          aria-current={isCaixaActive ? 'page' : undefined}
-        >
-          <div className="relative">
-            <DollarSign size={18} />
-            <span
-              className={clsx(
-                'absolute -top-0.5 -right-1 w-2 h-2 rounded-full ring-2 ring-koma-panel',
-                shiftOpen ? 'bg-emerald-500' : 'bg-amber-500'
-              )}
-            />
-          </div>
-          <span className="text-[10px] mt-0.5 tracking-tight">Caixa</span>
-        </button>
-
-        {/* 5. Menu Completo (Sidebar) */}
-        <button
-          type="button"
+          shiftOpen={shiftOpen}
+        />
+        <DockAction
+          icon={Menu}
+          label="Mais"
+          ariaLabel="Abrir menu completo"
           onClick={onOpenMenu}
-          className="flex flex-col items-center justify-center py-1 relative text-koma-muted hover:text-koma-foreground transition-all min-h-[44px]"
-          aria-label="Abrir menu completo"
-        >
-          <Menu size={18} />
-          <span className="text-[10px] mt-0.5 tracking-tight">Mais</span>
-        </button>
+        />
       </div>
     </nav>
   );
