@@ -394,126 +394,65 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       const groups = modifierGroupsFor(p);
                       const recommendedCount = groups.filter((group) => group.recomendado !== false).length;
                       return (
-                        <div
+                        <article
                           key={p.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => groups.length === 0 ? handlePdvAddToCart(p) : openConfig(p)}
-                          onKeyDown={(event) => {
-                            if (event.target !== event.currentTarget) return;
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault();
-                              if (groups.length === 0) handlePdvAddToCart(p);
-                              else openConfig(p);
-                            }
-                          }}
-                          className={"group relative min-h-[96px] sm:min-h-[112px] bg-koma-panel border border-koma-border hover:border-emerald-500/60 rounded-xl sm:rounded-2xl transition-colors shadow-sm cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"}
-                          title={groups.length === 0 ? "Adicionar ao pedido" : "Personalizar item"}
+                          className="relative flex min-w-0 flex-col overflow-hidden rounded-xl border border-koma-border bg-koma-panel transition-colors hover:border-emerald-500/60"
                         >
-                          <div className={"flex h-full w-full flex-col justify-between gap-2 p-2 sm:p-3 text-left rounded-xl sm:rounded-2xl"}>
+                          <button
+                            type="button"
+                            role="button"
+                            onClick={() => groups.length === 0 ? handlePdvAddToCart(p) : openConfig(p)}
+                            aria-label={groups.length === 0 ? `Adicionar ${productLabel.name}` : `Personalizar ${productLabel.name}`}
+                            className="flex min-w-0 flex-1 flex-col gap-2 p-2.5 pb-1 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-500 sm:p-3 sm:pb-1"
+                          >
                             {p.imagem && (
-                              <img
-                                src={p.imagem}
-                                alt=""
-                                loading="lazy"
-                                className={"w-full h-14 sm:h-16 object-cover rounded-lg sm:rounded-xl"}
-                              />
+                              <img src={p.imagem} alt="" loading="lazy" className="h-14 w-full rounded-lg object-cover sm:h-16" />
                             )}
-                            <div className="min-h-[28px] sm:min-h-[34px] pr-6">
-                              <h4
-                                className={"font-semibold text-koma-foreground text-xs sm:text-[13px] leading-snug line-clamp-2"}
-                              >
-                                {productLabel.name}
-                              </h4>
-                              {groups.length > 0 && (
-                                <span className="mt-1 inline-flex rounded bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
-                                  Personalizável{recommendedCount > 0 ? ` · ${recommendedCount} recomendados` : ''}
-                                </span>
-                              )}
-                            </div>
-                            <div
-                              className={"cashier-pdv-product-actions flex justify-between items-center border-t border-koma-border pt-2 sm:pt-2.5 gap-2"}
-                            >
-                              <span
-                                className={"font-bold text-emerald-700 dark:text-emerald-400 font-mono text-xs"}
-                              >
-                                R$ {p.preco.toFixed(2).replace('.', ',')}
+                            <span className="min-w-0 pr-6 text-xs font-semibold leading-snug text-koma-foreground sm:text-sm">
+                              {productLabel.name}
+                            </span>
+                            {groups.length > 0 && (
+                              <span className="text-[10px] font-medium text-koma-muted">
+                                {recommendedCount > 0 ? 'Escolher opções' : 'Personalizável'}
                               </span>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setPdvProductDetailId(null);
-                                  handlePdvAddToCart(p);
-                                }}
-                                className={"inline-flex min-h-8 items-center gap-1 rounded-lg bg-emerald-500 px-2 text-[9px] font-extrabold text-zinc-950 hover:bg-emerald-400"}
-                                aria-label={`Adicionar ${productLabel.name} rapidamente`}
-                              >
-                                <Plus size={13} /> <span className="hidden min-[380px]:inline">Adicionar</span>
-                              </button>
-                            </div>
+                            )}
+                          </button>
+                          <div className="cashier-pdv-product-actions flex items-center justify-between gap-2 px-2.5 pb-2.5 pt-1 sm:px-3 sm:pb-3">
+                            <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                              {formatCurrency(Number(p.preco) || 0)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => { setPdvProductDetailId(null); handlePdvAddToCart(p); }}
+                              className="inline-flex min-h-10 min-w-10 items-center justify-center gap-1 rounded-lg bg-emerald-500 px-2.5 text-[10px] font-bold text-zinc-950 hover:bg-emerald-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+                              aria-label={`Adicionar ${productLabel.name} rapidamente`}
+                            >
+                              <Plus size={15} /><span className="hidden min-[380px]:inline">Adicionar</span>
+                            </button>
                           </div>
-
                           {hasProductDetails && (
                             <>
                               <button
                                 type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setPdvProductDetailId((current) =>
-                                    current === productDetailKey ? null : productDetailKey,
-                                  );
-                                }}
+                                onClick={() => setPdvProductDetailId((current) => current === productDetailKey ? null : productDetailKey)}
                                 aria-expanded={pdvProductDetailId === productDetailKey}
                                 aria-controls={`pdv-product-details-${productDetailKey}`}
                                 aria-label={`Ver ingredientes e detalhes de ${productLabel.name}`}
                                 title="Ver ingredientes e detalhes"
-                                className={"absolute right-2 top-2 z-20 flex size-7 items-center justify-center rounded-lg border border-koma-border bg-koma-card/95 text-koma-muted hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-300"}
+                                className="absolute right-2 top-2 z-20 flex size-9 items-center justify-center rounded-lg border border-koma-border bg-koma-card text-koma-muted hover:text-koma-foreground"
                               >
-                                <Info size={13} />
+                                <Info size={15} />
                               </button>
-                              <div
-                                id={`pdv-product-details-${productDetailKey}`}
-                                role="note"
-                                className={clsx(
-                                  'pointer-events-none',
-                                  'absolute',
-                                  'inset-x-2',
-                                  'top-10',
-                                  'z-10',
-                                  'rounded-xl',
-                                  'border',
-                                  'border-koma-border',
-                                  'bg-koma-dialog/95',
-                                  'backdrop-blur-md',
-                                  'p-2.5',
-                                  'text-left',
-                                  'shadow-xl',
-                                  'translate-y-1',
-                                  'opacity-0',
-                                  'transition-all',
-                                  'group-hover:translate-y-0',
-                                  'group-hover:opacity-100',
-                                  pdvProductDetailId === productDetailKey && 'translate-y-0 opacity-100',
-                                )}
-                              >
-                                <span
-                                  className={"block text-[8px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300"}
-                                >
-                                  Ingredientes e detalhes
-                                </span>
-                                {productLabel.code && (
-                                  <span className={"mt-1 block font-mono text-[8px] text-koma-muted"}>
-                                    Cód. {productLabel.code}
-                                  </span>
-                                )}
-                                <p className={"mt-1 text-[10px] leading-relaxed text-koma-secondary"}>
-                                  {p.descricao || 'Sem descrição cadastrada.'}
-                                </p>
-                              </div>
+                              {pdvProductDetailId === productDetailKey && (
+                                <div id={`pdv-product-details-${productDetailKey}`} role="note" className="absolute inset-x-2 top-12 z-10 rounded-xl border border-koma-border bg-koma-dialog p-3 text-left shadow-xl">
+                                  <span className="block text-[10px] font-bold text-emerald-700 dark:text-emerald-300">Ingredientes e detalhes</span>
+                                  {productLabel.code && <span className="mt-1 block text-[10px] text-koma-muted">Cód. {productLabel.code}</span>}
+                                  <p className="mt-1 text-xs leading-relaxed text-koma-secondary">{p.descricao || 'Sem descrição cadastrada.'}</p>
+                                </div>
+                              )}
                             </>
                           )}
-                        </div>
+                        </article>
                       );
                     })}
                   </div>
