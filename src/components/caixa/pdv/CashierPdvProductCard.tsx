@@ -7,6 +7,7 @@ interface CashierPdvProductCardProps {
   product: Product;
   cartQuantity?: number;
   detailsOpen: boolean;
+  recentlyAdded?: boolean;
   onConfigure: (product: Product) => void;
   onQuickAdd: (product: Product) => void;
   onToggleDetails: (productId: string) => void;
@@ -26,6 +27,7 @@ export function CashierPdvProductCard({
   product,
   cartQuantity = 0,
   detailsOpen,
+  recentlyAdded = false,
   onConfigure,
   onQuickAdd,
   onToggleDetails,
@@ -36,7 +38,7 @@ export function CashierPdvProductCard({
   const detailsId = `pdv-product-details-${productId}`;
 
   return (
-    <article className={clsx("cashier-pdv-product-card group", cartQuantity > 0 && "is-in-cart")} data-testid="cashier-pdv-product-card">
+    <article className={clsx("cashier-pdv-product-card group", cartQuantity > 0 && "is-in-cart", recentlyAdded && "is-just-added")} data-testid="cashier-pdv-product-card">
       <button
         type="button"
         className="cashier-pdv-product-card__open"
