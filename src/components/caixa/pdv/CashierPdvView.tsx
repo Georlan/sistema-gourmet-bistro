@@ -349,11 +349,12 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   >
                     <button
                       type="button"
+                      aria-pressed={pdvSelectedCategory === 'todos'}
                       onClick={() => {
                         setPdvSelectedCategory('todos');
                         setPdvProductDetailId(null);
                       }}
-                      className={`h-8 px-3 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-colors border ${
+                      className={`cashier-pdv-category h-8 px-3 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-colors border ${
                         pdvSelectedCategory === 'todos'
                           ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                           : 'bg-transparent border-koma-border text-koma-muted hover:text-koma-foreground hover:bg-koma-raised'
@@ -365,11 +366,12 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       <button
                         key={catObj.id || catObj.nome}
                         type="button"
+                        aria-pressed={pdvSelectedCategory === catObj.nome}
                         onClick={() => {
                           setPdvSelectedCategory(catObj.nome);
                           setPdvProductDetailId(null);
                         }}
-                        className={`h-8 px-3 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-colors border ${
+                        className={`cashier-pdv-category h-8 px-3 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-colors border ${
                           pdvSelectedCategory === catObj.nome
                             ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                             : 'bg-transparent border-koma-border text-koma-muted hover:text-koma-foreground hover:bg-koma-raised'
