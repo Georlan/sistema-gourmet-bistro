@@ -1,6 +1,6 @@
 import React from 'react';
 import clsx from 'clsx';
-import { ChefHat, DollarSign, Menu, PlusCircle, ShoppingBag } from 'lucide-react';
+import { CashIcon, KitchenIcon, MoreIcon, NewOrderIcon, OrdersIcon } from './CashierMobileIcons';
 import type { CashierTab } from '../cashierContracts';
 
 interface CashierMobileBottomBarProps {
@@ -46,7 +46,7 @@ export const CashierMobileBottomBar: React.FC<CashierMobileBottomBarProps> = ({
           aria-current={isPedidosActive ? 'page' : undefined}
         >
           <div className="relative">
-            <ShoppingBag size={18} />
+            <OrdersIcon />
             {orderCount > 0 && (
               <span className="absolute -top-1.5 -right-2 bg-emerald-500 text-[#101411] text-[9px] font-black rounded-full px-1 min-w-[14px] h-3.5 flex items-center justify-center leading-none">
                 {orderCount}
@@ -66,7 +66,7 @@ export const CashierMobileBottomBar: React.FC<CashierMobileBottomBarProps> = ({
           )}
           aria-current={isPdvActive ? 'page' : undefined}
         >
-          <PlusCircle size={18} />
+          <NewOrderIcon />
           <span className="text-[10px] mt-0.5 tracking-tight">+ Pedido</span>
         </button>
 
@@ -81,7 +81,7 @@ export const CashierMobileBottomBar: React.FC<CashierMobileBottomBarProps> = ({
           aria-current={isCozinhaActive ? 'page' : undefined}
         >
           <div className="relative">
-            <ChefHat size={18} />
+            <KitchenIcon />
             {kitchenCount > 0 && (
               <span className="absolute -top-1.5 -right-2 bg-amber-500 text-[#101411] text-[9px] font-black rounded-full px-1 min-w-[14px] h-3.5 flex items-center justify-center leading-none">
                 {kitchenCount}
@@ -102,7 +102,7 @@ export const CashierMobileBottomBar: React.FC<CashierMobileBottomBarProps> = ({
           aria-current={isCaixaActive ? 'page' : undefined}
         >
           <div className="relative">
-            <DollarSign size={18} />
+            <CashIcon />
             <span
               className={clsx(
                 'absolute -top-0.5 -right-1 w-2 h-2 rounded-full ring-2 ring-koma-panel',
@@ -120,7 +120,7 @@ export const CashierMobileBottomBar: React.FC<CashierMobileBottomBarProps> = ({
           className="flex flex-col items-center justify-center py-1 relative text-koma-muted hover:text-koma-foreground transition-all min-h-[44px]"
           aria-label="Abrir menu completo"
         >
-          <Menu size={18} />
+          <MoreIcon />
           <span className="text-[10px] mt-0.5 tracking-tight">Mais</span>
         </button>
       </div>
