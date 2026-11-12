@@ -261,11 +261,11 @@ export function CaixaPanel({
   const [mobileSalesNavOpen, setMobileSalesNavOpen] = useState(false);
   const cashierContentRef = useRef<HTMLDivElement>(null);
 
-  // Moving to a different destination restores the default product-first
-  // navigation when the operator returns to Novo pedido.
-  useEffect(() => setMobileSalesNavOpen(false), [activeTab, activeSubTab]);
-
   useLayoutEffect(() => {
+    // Reuse the existing destination-change effect. The cashier composition
+    // has a strict non-growing effects budget and navigation authority stays
+    // with useCashierNavigation.
+    setMobileSalesNavOpen(false);
     if (!window.matchMedia('(max-width: 1023px)').matches) return;
     cashierContentRef.current?.scrollTo(0, 0);
     window.scrollTo(0, 0);
@@ -898,10 +898,7 @@ export function CaixaPanel({
             entitlements={planEntitlements}
             setupMode={setupMode}
             mobilePdvOpen={mobileSalesNavOpen}
-            onNavigate={(navigationId) => {
-              setMobileSalesNavOpen(false);
-              handleSidebarNavigation(navigationId);
-            }}
+            onNavigate={handleSidebarNavigation}
             counts={{ cardapio_produtos: apiProdutos.length, cardapio_preparo: apiCategorias.length }}
           />
 
