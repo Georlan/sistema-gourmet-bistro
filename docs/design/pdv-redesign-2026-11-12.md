@@ -83,3 +83,21 @@ As capturas após #1302/#1303 mostram que a alternância Produtos/Carrinho, o ca
 - Conferir delivery, mesa, tipo permitido, navegação por teclado e os dois temas.
 - CI focal e pós-merge verdes antes de declarar conclusão; nenhum pedido real em produção.
 
+
+
+## Nova etapa — carrinho unificado e densidade operacional (12/11/2026)
+
+**Problema observado nas capturas:** depois de adicionar itens, o usuário mobile precisava alternar Itens → Carrinho → Continuar para finalizar → Lançar Pedido. O checkout ocupava outra tela apesar de modalidade, itens e cliente já pertencerem ao mesmo pedido. No catálogo, quase todos os produtos repetiam um selo "Personalizável".
+
+**Implementação:**
+- Uma só tela do pedido e um único `<form>`: linhas editáveis, observações por item, modalidade, campos contextuais, subtotal/total e botão de lançamento. O carrinho não é copiado para um estado de checkout.
+- O CTA persistente "Ver pedido" abre o mesmo carrinho no celular; a ação "Continuar para finalizar" e os estados de etapa foram removidos. O clique explícito em "Lançar Pedido" continua obrigatório.
+- Pickup mantém identificação e pagamento opcionais recolhidos por `<details>`. Delivery mostra telefone/nome e expande o endereço ausente imediatamente. Consumo local exibe a mesa, que segue opcional conforme regras existentes.
+- No mobile, modalidade continua na faixa fixa de tarefas; no desktop, os botões da modalidade seguem no carrinho.
+- F4 não envia na primeira tecla: do catálogo abre/foca o carrinho; dentro do pedido primeiro foca o botão, e somente outro F4 com o botão já focado confirma. F2/F3/F8 preservados.
+- Cards: remover selo repetitivo, reduzir espaços sem retirar imagem, nome, preço ou o botão de adição. Alvos de toque mantidos com 44px em coarse pointer.
+- CSS antigo de navegação entre etapas removido. Nenhuma chamada de rede, dependência, asset adicional nem alteração em regras de preço, status, pagamento, estoque ou idempotência.
+
+**Verificações essenciais:** tests de unit/static markup, browser mobile 320/390/430, desktop, delivery obrigatório e erro 422, salão/mesa, falhas 502/503 com retry idempotente, tecla F4, temas e Cloudflare pós-merge. Comparar manualmente número de toques para pedido de retirada: **antes** selecionar item → Ver carrinho → Continuar → Lançar; **agora** selecionar item → Ver pedido → Lançar. Não realizar venda real durante revisão estética.
+
+**Próximos refinamentos:** modal de personalização, medição real de bundle/performance e contraste em tema escuro. Mudanças arquiteturais maiores somente com testes de domínio separados.

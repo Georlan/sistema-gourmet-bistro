@@ -30,8 +30,6 @@ for (const status of [503, 422, 502]) {
       const showCart = async () => {
         const cart = page.getByRole('button', { name: /^Carrinho \(/ });
         if (await cart.isVisible()) await cart.click();
-        const review = page.getByRole('button', { name: 'Continuar para finalizar' });
-        if (await review.isVisible()) await review.click();
         await expect(page.locator('#pdv-submit-btn')).toBeVisible();
       };
       await newOrder().click();

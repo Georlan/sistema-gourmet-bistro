@@ -23,7 +23,6 @@ test('delivery envia endereço simplificado e mostra erro legível preservando c
   if ((page.viewportSize()?.width || 1366) < 1280) {
     await page.getByRole('button', { name: 'Carrinho (1)', exact: true }).click();
   }
-  await page.getByRole('button', { name: 'Continuar para finalizar' }).click();
   if ((page.viewportSize()?.width ?? 1366) < 1280) {
     await page.getByRole('combobox', { name: 'Tipo de atendimento' }).selectOption('delivery');
   } else {
@@ -32,7 +31,8 @@ test('delivery envia endereço simplificado e mostra erro legível preservando c
   await page.locator('#pdv-customer-phone-input').fill('85999991234');
   await expect(page.getByText('Novo número — o cliente será criado ao lançar o pedido.', { exact: true })).toBeVisible();
   await page.locator('#pdv-customer-name-input').fill('Maria Delivery');
-  await page.getByText('Editar entrega', { exact: true }).click();
+  // An empty delivery address is expanded automatically.
+  await expect(page.locator('#pdv-delivery-address-logradouro')).toBeVisible();
   await page.locator('#pdv-delivery-address-logradouro').fill('Rua das Flores');
   await page.locator('#pdv-delivery-address-numero').fill('123');
   await page.locator('#pdv-submit-btn').click();
@@ -48,9 +48,6 @@ test('delivery envia endereço simplificado e mostra erro legível preservando c
   if ((page.viewportSize()?.width || 1366) < 1280) {
     await page.getByRole('button', { name: 'Carrinho (1)', exact: true }).click();
   }
-  const back = page.getByRole('button', { name: 'Voltar aos itens do pedido' });
-  if (await back.isVisible()) await back.click();
   await expect(page.getByRole('button', { name: 'Remover Risoto da casa', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Continuar para finalizar' }).click();
   await expect(page.locator('#pdv-customer-name-input')).toHaveValue('Maria Delivery');
 });

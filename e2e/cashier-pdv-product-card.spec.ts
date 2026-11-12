@@ -32,7 +32,7 @@ test('PDV: quick-add and personalize are independent on desktop and mobile', asy
     await page.getByRole('button', { name: /Carrinho \(1\)/ }).click();
   }
   await expect(page.locator('.cashier-pdv-cart__line').first()).toContainText('Risoto da casa');
-  await expect(page.locator('.cashier-pdv-cart__cart-total')).toContainText('42,00');
+  await expect(page.locator('.cashier-pdv-cart__total')).toContainText('42,00');
 
   if ((page.viewportSize()?.width ?? 1366) < 1280) {
     await page.getByRole('button', { name: 'Escolher itens' }).click();
@@ -87,7 +87,7 @@ test('PDV mobile cart dock stays above bottom navigation and supports a quick re
   const cartRow = page.locator('.cashier-pdv-cart__line').first();
   await expect(cartRow).toContainText('Risoto da casa');
   await cartRow.getByRole('button', { name: 'Aumentar quantidade de Risoto da casa' }).click();
-  await expect(page.locator('.cashier-pdv-cart__cart-total')).toContainText('84,00');
+  await expect(page.locator('.cashier-pdv-cart__total')).toContainText('84,00');
 
   await switcher.getByRole('button', { name: 'Escolher itens' }).click();
   await expect(card.locator('.cashier-pdv-product-card__quantity')).toHaveText('2');
@@ -111,42 +111,47 @@ test('PDV mobile search and quantity controls remain comfortably touchable', asy
   expect(overflow).toBeLessThanOrEqual(1);
 });
 
-test('PDV review keeps modality and customer fields separate from order item editing', async ({ page }) => {
+test('PDV lets the operator edit items and launch from a single order view', async ({ page }) => {
   await openNewOrder(page);
   const card = page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Risoto da casa' }).first();
   await card.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
 
   if ((page.viewportSize()?.width ?? 1366) < 1280) {
-    await page.getByRole('button', { name: /Carrinho \(1\)/ }).click();
+    await page.getByRole('button', { name: 'Carrinho (1)' }).click();
   }
-  await expect(page.getByRole('heading', { name: 'Itens do pedido' })).toBeVisible();
-  await expect(page.locator('.cashier-pdv-cart__line')).toHaveCount(1);
-  await expect(page.getByText('Identificação do cliente', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Pedido atual' })).toBeVisible();
+  const panel = page.locator('.cashier-pdv-cart');
+  const line = panel.getByTestId('cashier-pdv-cart-line');
+  await expect(line).toHaveCount(1);
+  await expect(panel.getByText('Identificação do cliente', { exact: true })).toBeVisible();
+  await expect(panel.locator('#pdv-submit-btn')).toBeEnabled();
+  await expect(page.locator('#pdv-review-btn')).toBeHidden();
 
-  const line = page.getByTestId('cashier-pdv-cart-line');
   await line.locator('.cashier-pdv-cart__notes summary').click();
   await line.getByRole('textbox', { name: 'Observação de Risoto da casa' }).fill('Sem cebola');
   await expect(line.locator('.cashier-pdv-cart__notes summary')).toContainText('Sem cebola');
+  await expect(panel.locator('.cashier-pdv-cart__total')).toContainText('42,00');
 
-  await page.getByRole('button', { name: 'Continuar para finalizar' }).click();
-  await expect(page.getByRole('heading', { name: 'Finalizar pedido' })).toBeVisible();
-  await expect(page.getByText('Identificação do cliente', { exact: true })).toBeVisible();
-  await expect(page.locator('.cashier-pdv-cart__line')).toHaveCount(0);
-  await expect(page.locator('.cashier-pdv-cart__total')).toContainText('42,00');
-
-  await page.getByRole('button', { name: 'Voltar aos itens do pedido' }).click();
-  await expect(line).toContainText('Sem cebola');
-  await expect(page.getByRole('heading', { name: 'Itens do pedido' })).toBeVisible();
+  if ((page.viewportSize()?.width ?? 1366) < 1280) {
+    await page.getByRole('button', { name: 'Escolher itens' }).click();
+    await expect(card.locator('.cashier-pdv-product-card__quantity')).toHaveText('1');
+    await page.getByRole('button', { name: 'Carrinho (1)' }).click();
+    await expect(line).toContainText('Sem cebola');
+    await expect(panel.locator('#pdv-submit-btn')).toBeVisible();
+  }
 });
 
-test('PDV F4 reviews the destination before submission and allows modality shortcuts', async ({ page }) => {
+test('PDV F4 first exposes or focuses the submit button without launching a sale', async ({ page }) => {
   await openNewOrder(page);
+  let saleCount = 0;
+  page.on('request', request => { if (request.url().includes('/cardapio/modificadores/venda-direta')) saleCount += 1; });
   await page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Risoto da casa' }).first()
     .getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
 
   await page.keyboard.press('F4');
-  await expect(page.getByRole('heading', { name: 'Finalizar pedido' })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Lançar Pedido/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pedido atual' })).toBeVisible();
+  await expect(page.locator('#pdv-submit-btn')).toBeFocused();
+  expect(saleCount).toBe(0);
 
   await page.keyboard.press('F3');
   const mobile = (page.viewportSize()?.width ?? 1366) < 1280;
@@ -163,9 +168,10 @@ test('PDV F4 reviews the destination before submission and allows modality short
   } else {
     await expect(page.locator('.cashier-pdv-cart__modality-option').filter({ hasText: 'Retirada' })).toHaveAttribute('aria-pressed', 'true');
   }
+  expect(saleCount).toBe(0);
 });
 
-test('PDV on 320px and 430px has no horizontal overflow in cart and review', async ({ page }) => {
+test('PDV has no horizontal overflow at 320px and 430px with optional fields', async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1366) >= 1024, 'Mobile-only widths');
   for (const width of [320, 430]) {
     await page.setViewportSize({ width, height: 760 });
@@ -173,39 +179,39 @@ test('PDV on 320px and 430px has no horizontal overflow in cart and review', asy
     const card = page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Risoto da casa' }).first();
     await card.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
     await page.getByRole('button', { name: /Carrinho \(1\)/ }).click();
-    for (const stage of ['cart', 'review'] as const) {
-      if (stage === 'review') await page.getByRole('button', { name: 'Continuar para finalizar' }).click();
-      const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-      expect(overflow).toBeLessThanOrEqual(1);
-    }
+    await expect(page.locator('#pdv-submit-btn')).toBeVisible();
+    const overflow = async () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(await overflow()).toBeLessThanOrEqual(1);
+    await page.getByRole('combobox', { name: 'Tipo de atendimento' }).selectOption('delivery');
+    await expect(page.locator('#pdv-customer-phone-input')).toBeVisible();
+    await expect(page.locator('#pdv-delivery-address-logradouro')).toBeVisible();
+    expect(await overflow()).toBeLessThanOrEqual(1);
   }
 });
 
-test('mobile operator changes service context without opening the checkout form', async ({ page }) => {
+test('mobile operator changes fulfillment without leaving the editable cart', async ({ page }) => {
   test.skip((page.viewportSize()?.width ?? 1366) >= 1280, 'Mobile and tablet task switcher');
   await openNewOrder(page);
   const service = page.getByRole('combobox', { name: 'Tipo de atendimento' });
-  await expect(service).toBeVisible();
   await expect(service).toHaveValue('pickup');
   const card = page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Risoto da casa' }).first();
-
   await service.selectOption('dine_in');
-  await expect(service).toHaveValue('dine_in');
   await card.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
   await page.getByRole('button', { name: 'Carrinho (1)' }).click();
-  await expect(page.getByRole('button', { name: 'Continuar para finalizar' })).toBeVisible();
-  await expect(page.locator('.cashier-pdv-cart__modality-section')).toBeHidden();
-  await page.getByRole('button', { name: 'Continuar para finalizar' }).click();
+  await expect(page.locator('#pdv-submit-btn')).toBeVisible();
   await expect(page.locator('#pdv-target-table')).toBeVisible();
+  await expect(page.locator('.cashier-pdv-cart__modality-section')).toBeHidden();
 
   await service.selectOption('delivery');
   await expect(page.locator('#pdv-target-table')).toHaveCount(0);
   await expect(page.locator('#pdv-customer-phone-input')).toBeVisible();
   await expect(page.locator('#pdv-customer-name-input')).toBeVisible();
+  await expect(page.locator('#pdv-delivery-address-logradouro')).toBeVisible();
   await expect(page.locator('.cashier-pdv-cart__modality-section')).toBeHidden();
-  await expect(page.locator('.cashier-pdv-cart__review-intro')).toBeHidden();
-  await page.getByRole('button', { name: 'Voltar aos itens do pedido' }).click();
   await expect(page.getByTestId('cashier-pdv-cart-line')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Escolher itens' }).click();
+  await expect(card.locator('.cashier-pdv-product-card__quantity')).toHaveText('1');
+  await page.getByRole('button', { name: 'Carrinho (1)' }).click();
   await expect(service).toHaveValue('delivery');
 });
 
@@ -226,4 +232,19 @@ test('mobile service control and tasks share one row without horizontal overflow
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);
   }
+});
+
+
+test('mobile unified checkout retains a sticky launch footer', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1366) >= 768, 'Phone-only sticky confirmation');
+  await openNewOrder(page);
+  await page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Risoto da casa' }).first()
+    .getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
+  await page.getByRole('button', { name: 'Carrinho (1)' }).click();
+  const footer = page.locator('.cashier-pdv-cart__footer');
+  await expect(footer).toBeVisible();
+  await expect(page.locator('#pdv-submit-btn')).toBeEnabled();
+  const position = await footer.evaluate((element) => getComputedStyle(element).position);
+  expect(position).toBe('sticky');
+  await expect(page.locator('.cashier-mobile-bottom-bar')).toBeVisible();
 });

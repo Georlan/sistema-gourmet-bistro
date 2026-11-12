@@ -54,14 +54,12 @@ test('adicionar consumo abre o PDV na mesa correta e mantém o carrinho ao volta
   await preparedDishButton.click();
   const cart = page.getByRole('button', { name: /^Carrinho \(/ });
   if (await cart.isVisible()) await cart.click();
-  await page.getByRole('button', { name: 'Continuar para finalizar' }).click();
   await expect(page.locator('#pdv-target-table')).toHaveValue('7');
   const main = page.getByRole('main');
   await main.getByRole('button', { name: 'Salão', exact: true }).click();
   if ((page.viewportSize()?.width ?? 1366) < 1024) await page.locator('.cashier-mobile-bottom-bar').getByRole('button', { name: '+ Pedido', exact: true }).click();
   else await main.getByRole('button', { name: 'Novo pedido', exact: true }).click();
   if (await cart.isVisible()) await cart.click();
-  await page.getByRole('button', { name: 'Continuar para finalizar' }).click();
   await expect(page.locator('#pdv-target-table')).toHaveValue('7');
   await expect(page.locator('#pdv-submit-btn').locator('..')).toContainText('112,00');
   expect(state.actions.filter(action => /lancamentos|pagar|transferir/.test(action.path))).toEqual([]);
@@ -127,8 +125,8 @@ test('Novo pedido preserva o carrinho e adapta os dados operacionais por modalid
 
   const panel = page.locator('.cashier-pdv-cart');
   await expect(panel).toBeVisible();
-  await expect(panel.locator('.cashier-pdv-cart__context')).toContainText('Retirada');
-  await panel.getByRole('button', { name: 'Continuar para finalizar' }).click();
+  await expect(panel.getByRole('heading', { name: 'Pedido atual' })).toBeVisible();
+  await expect(panel.locator('#pdv-submit-btn')).toBeEnabled();
   await expect(panel.getByText('Identificação do cliente', { exact: true })).toBeVisible();
   await expect(panel.locator('#pdv-customer-phone-input')).toBeHidden();
   const customerDetails = panel.locator('details').filter({ hasText: 'Identificação do cliente' });
@@ -152,11 +150,7 @@ test('Novo pedido preserva o carrinho e adapta os dados operacionais por modalid
   }
   await expect(panel.locator('#pdv-customer-phone-input')).toBeVisible();
   await expect(panel.locator('#pdv-customer-name-input')).toBeVisible();
-  await expect(panel.getByText('Editar entrega', { exact: true })).toBeVisible();
-  await expect(panel.locator('#pdv-delivery-address-logradouro')).toBeHidden();
-  const deliveryDetails = panel.locator('details').filter({ hasText: 'Entrega' });
-  await deliveryDetails.locator('summary').click();
-  await expect(deliveryDetails.getByText('Fechar', { exact: true })).toBeVisible();
+  // Missing delivery address is immediately editable, with no extra step.
   await expect(panel.locator('#pdv-delivery-address-logradouro')).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Lançar Pedido', exact: false })).toBeVisible();
 

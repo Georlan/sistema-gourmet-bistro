@@ -22,8 +22,6 @@ async function open(page: Page) {
 async function showCart(page: Page) {
   const cart = page.getByRole('button', { name: /^Carrinho \(/ });
   if (await cart.isVisible()) await cart.click();
-  const review = page.getByRole('button', { name: 'Continuar para finalizar' });
-  if (await review.isVisible()) await review.click();
   await expect(page.locator('#pdv-submit-btn')).toBeVisible();
 }
 
