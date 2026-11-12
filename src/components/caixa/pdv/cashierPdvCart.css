@@ -454,7 +454,6 @@
   font-size: .75rem;
 }
 .cashier-pdv-view .cashier-pdv-cart__footer {
-  position: relative;
   z-index: 2;
 }
 .cashier-pdv-view .cashier-pdv-cart__total {
