@@ -40,8 +40,12 @@ test('mobile scroll exposes delivery and retains order creation in the same stri
   await nav.getByRole('button', { name: 'Entregas', exact: true }).click();
   await expect(nav.getByRole('button', { name: 'Entregas', exact: true })).toHaveAttribute('aria-current', 'page');
   await nav.getByRole('button', { name: 'Novo pedido', exact: true }).click();
-  await expect(nav.getByRole('button', { name: 'Novo pedido', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByPlaceholder('Buscar item, descrição ou código')).toBeVisible();
+  await expect(nav).toBeHidden();
+  // The selected destination is unchanged; the phone PDV now lets the
+  // operator reveal secondary sales tabs on demand from the topbar.
+  await page.getByRole('button', { name: 'Mostrar telas de Vendas' }).click();
+  await expect(nav.getByRole('button', { name: 'Novo pedido', exact: true })).toHaveAttribute('aria-current', 'page');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
 
