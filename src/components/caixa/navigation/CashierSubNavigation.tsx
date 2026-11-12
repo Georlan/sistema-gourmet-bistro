@@ -93,7 +93,7 @@ export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlem
 
   if (!items.length) return null;
   return (
-    <nav id="cashier-sales-subnav" className={`cashier-subnav cashier-subnav--shared flex shrink-0 border-b border-koma-border${isPdvContext ? " cashier-subnav--pdv-context" : ""}`} aria-label="Telas desta área">
+    <nav id="cashier-sales-subnav" className={`cashier-subnav cashier-subnav--shared flex shrink-0 border-b border-koma-border${activeTab === "operacao" ? " cashier-subnav--sales" : ""}${isPdvContext ? " cashier-subnav--pdv-context" : ""}`} aria-label="Telas desta área">
       <button type="button" className={`cashier-subnav__arrow${!edges.left && !edges.right ? ' is-unneeded' : ''}`} aria-label="Ver abas anteriores" disabled={!edges.left} onClick={() => scrollRef.current?.scrollBy({ left: -240, behavior: 'smooth' })}><ChevronLeft size={16} /></button>
       <div ref={scrollRef} className="cashier-subnav__scroll">
         {items.map(item => {
