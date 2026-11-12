@@ -375,10 +375,9 @@ test('CashierPdvView blocks submitting order when cart has items from an inactiv
   assert.match(html, /id="pdv-cart-unavailable-warning"/);
   assert.match(html, /Há itens indisponíveis no carrinho\. Remova-os para continuar\./);
 
-  // 3. Na etapa de itens não há botão de envio: o avanço já está bloqueado.
-  // A etapa de revisão preserva o mesmo gate canônico de disponibilidade.
-  assert.match(html, /id="pdv-review-btn"[^>]*disabled/);
-  assert.doesNotMatch(html, /id="pdv-submit-btn"/);
+  // 3. A ação canônica de envio está sempre visível, mas indisponível
+  // enquanto houver itens sem disponibilidade confirmada.
+  assert.match(html, /id="pdv-submit-btn"[^>]*disabled/);
 });
 
 test('CashierPdvView renders unavailable search matches with active menu status during search', () => {
