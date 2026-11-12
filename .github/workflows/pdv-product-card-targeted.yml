@@ -7,6 +7,9 @@ on:
       - 'src/components/caixa/pdv/**'
       - 'src/index.css'
       - 'e2e/cashier-pdv-product-card.spec.ts'
+      - 'e2e/cashier-sale-recovery.spec.ts'
+      - 'e2e/cashier-delivery-new-order.spec.ts'
+      - 'tests/cashierPdvCartLine.test.ts'
       - '.github/workflows/pdv-product-card-targeted.yml'
   workflow_dispatch:
 
@@ -15,7 +18,7 @@ permissions:
 
 jobs:
   browser:
-    name: PDV cart and catalog on mobile + desktop
+    name: PDV cart and checkout on mobile + desktop
     runs-on: ubuntu-22.04
     timeout-minutes: 12
     steps:
@@ -26,10 +29,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Confirm independent product actions and readable states
+      - name: Confirm cart, checkout, recovery and delivery with fixtures
         run: >-
           KOMA_E2E_PORT=4283 npm run test:e2e --
           e2e/cashier-pdv-product-card.spec.ts
+          e2e/cashier-sale-recovery.spec.ts
+          e2e/cashier-delivery-new-order.spec.ts
           --project=mobile-390
           --project=desktop-1366
           --workers=2

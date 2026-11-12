@@ -23,6 +23,7 @@ test('delivery envia endereço simplificado e mostra erro legível preservando c
   if ((page.viewportSize()?.width || 1366) < 1280) {
     await page.getByRole('button', { name: 'Carrinho (1)', exact: true }).click();
   }
+  await page.getByRole('button', { name: 'Continuar para finalizar' }).click();
   await page.getByRole('button', { name: 'Delivery', exact: true }).click();
   await page.locator('#pdv-customer-phone-input').fill('85999991234');
   await expect(page.getByText('Novo número — o cliente será criado ao lançar o pedido.', { exact: true })).toBeVisible();
@@ -43,6 +44,9 @@ test('delivery envia endereço simplificado e mostra erro legível preservando c
   if ((page.viewportSize()?.width || 1366) < 1280) {
     await page.getByRole('button', { name: 'Carrinho (1)', exact: true }).click();
   }
+  const back = page.getByRole('button', { name: 'Voltar aos itens do pedido' });
+  if (await back.isVisible()) await back.click();
   await expect(page.getByRole('button', { name: 'Remover Risoto da casa', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Continuar para finalizar' }).click();
   await expect(page.locator('#pdv-customer-name-input')).toHaveValue('Maria Delivery');
 });
