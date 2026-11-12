@@ -91,3 +91,21 @@ test('produto com escolha obrigatória abre configuração também pelo atalho d
   await expect(page.getByRole('button', { name: 'Complete as escolhas' })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Adicionar ao pedido', exact: true })).toHaveCount(0);
 });
+
+test('modalidades do pedido permanecem legíveis e disponíveis no carrinho', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_active_tab', 'operacao');
+    sessionStorage.setItem('koma_active_subtab', 'balcao');
+  });
+  await page.goto('/?view=caixa');
+  await page.getByRole('button', { name: 'Adicionar Risoto da casa', exact: true }).click();
+  const cart = page.getByRole('button', { name: 'Carrinho (1)', exact: true });
+  if (await cart.isVisible()) await cart.click();
+  const pickup = page.getByRole('button', { name: 'Retirada', exact: true });
+  await expect(pickup).toBeVisible();
+  expect(await pickup.evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(12);
+  await expect(page.getByRole('button', { name: 'Delivery', exact: true })).toBeVisible();
+  await expect(page.locator('#pdv-submit-btn')).toBeVisible();
+});
