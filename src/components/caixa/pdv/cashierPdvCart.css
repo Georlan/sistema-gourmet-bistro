@@ -1,6 +1,5 @@
-/* KÔMA POS / Novo pedido — assembly and review are separate views of the
- * same canonical cart. These rules are scoped; they do not affect Garçom,
- * Pedidos, public menu or payment contracts. */
+/* KÔMA POS / Novo pedido: one unified cart, contextual fulfillment and a
+ * sticky intentional submit. Domain rules remain in the canonical PDV hook. */
 .cashier-pdv-view .cashier-pdv-cart {
   min-height: 0;
   border-radius: 1rem;
@@ -14,8 +13,7 @@
   border-bottom: 1px solid var(--koma-border-default);
   background: var(--koma-surface-raised);
 }
-.cashier-pdv-view .cashier-pdv-cart__cart-heading,
-.cashier-pdv-view .cashier-pdv-cart__review-heading {
+.cashier-pdv-view .cashier-pdv-cart__cart-heading {
   display: flex;
   align-items: center;
   gap: .75rem;
@@ -60,34 +58,21 @@
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
-.cashier-pdv-view .cashier-pdv-cart__back {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 2.75rem;
-  height: 2.75rem;
-  border: 1px solid var(--koma-border-default);
-  border-radius: .75rem;
-  background: var(--koma-surface-panel);
-  color: var(--koma-text-primary);
-  cursor: pointer;
-}
 .cashier-pdv-view .cashier-pdv-cart-scroll {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   flex-direction: column;
-  gap: .625rem;
-  min-height: 10rem;
-  padding: .75rem;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  gap: .5rem;
+  min-height: 0;
+  padding: .625rem;
+  overflow: visible;
 }
 .cashier-pdv-view .cashier-pdv-cart__line {
   display: flex;
   flex-direction: column;
-  gap: .75rem;
+  gap: .5rem;
   min-width: 0;
-  padding: .875rem;
+  padding: .625rem;
   border: 1px solid var(--koma-border-default);
   border-radius: .875rem;
   background: var(--koma-surface-card);
@@ -264,78 +249,6 @@
   font-weight: 600;
   line-height: 1.4;
 }
-.cashier-pdv-view .cashier-pdv-cart__cart-footer {
-  display: flex;
-  flex: 0 0 auto;
-  flex-direction: column;
-  gap: .625rem;
-  padding: .875rem;
-  border-top: 1px solid var(--koma-border-default);
-  background: var(--koma-surface-panel);
-}
-.cashier-pdv-view .cashier-pdv-cart__context,
-.cashier-pdv-view .cashier-pdv-cart__cart-total {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .75rem;
-}
-.cashier-pdv-view .cashier-pdv-cart__context {
-  padding-bottom: .625rem;
-  border-bottom: 1px solid var(--koma-border-default);
-}
-.cashier-pdv-view .cashier-pdv-cart__context > div {
-  display: flex;
-  flex-direction: column;
-  gap: .15rem;
-}
-.cashier-pdv-view .cashier-pdv-cart__context span,
-.cashier-pdv-view .cashier-pdv-cart__cart-total span {
-  color: var(--koma-text-secondary);
-  font-size: .75rem;
-}
-.cashier-pdv-view .cashier-pdv-cart__context strong {
-  color: var(--koma-text-primary);
-  font-size: .875rem;
-  font-weight: 600;
-}
-.cashier-pdv-view .cashier-pdv-cart__context button {
-  min-width: 3.5rem;
-  min-height: 2.5rem;
-  border-radius: .625rem;
-  background: var(--koma-accent-soft);
-  color: var(--koma-accent-text);
-  font-size: .75rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.cashier-pdv-view .cashier-pdv-cart__cart-total strong {
-  color: var(--koma-accent-text);
-  font-size: 1.25rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.cashier-pdv-view .cashier-pdv-cart__next {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: .5rem;
-  min-height: 3rem;
-  padding: .7rem 1rem;
-  border: none;
-  border-radius: .75rem;
-  background: var(--koma-action-bg);
-  color: var(--koma-action-text);
-  font-size: .875rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-.cashier-pdv-view .cashier-pdv-cart__next:hover:not(:disabled) { background: var(--koma-action-hover); }
-.cashier-pdv-view .cashier-pdv-cart__next:disabled {
-  background: var(--koma-surface-raised);
-  color: var(--koma-text-secondary);
-  cursor: not-allowed;
-}
 .cashier-pdv-view .cashier-pdv-cart__form {
   display: flex;
   flex: 1 1 auto;
@@ -345,27 +258,22 @@
   overflow: hidden;
   background: var(--koma-surface-panel);
 }
-.cashier-pdv-view .cashier-pdv-cart__review-fields {
+.cashier-pdv-view .cashier-pdv-cart__body {
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
   min-height: 0;
-  padding: .875rem;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+.cashier-pdv-view .cashier-pdv-cart__review-fields {
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: .625rem .75rem .75rem;
+  border-top: 1px solid var(--koma-border-default);
+  overflow: visible;
+}
 .cashier-pdv-view .cashier-pdv-cart__review-fields > * + * { margin-top: .875rem; }
-.cashier-pdv-view .cashier-pdv-cart__review-intro strong {
-  display: block;
-  color: var(--koma-text-primary);
-  font-family: var(--koma-font-display);
-  font-size: .9375rem;
-  font-weight: 600;
-}
-.cashier-pdv-view .cashier-pdv-cart__review-intro p {
-  margin-top: .25rem;
-  color: var(--koma-text-secondary);
-  font-size: .75rem;
-  line-height: 1.45;
-}
 .cashier-pdv-view .cashier-pdv-cart__review-fields label {
   color: var(--koma-text-secondary);
   font-size: .75rem;
@@ -393,8 +301,6 @@
   border-radius: .75rem;
   font-size: .875rem;
 }
-.cashier-pdv-view .cashier-pdv-cart__back:focus-visible,
-.cashier-pdv-view .cashier-pdv-cart__next:focus-visible,
 .cashier-pdv-view .cashier-pdv-cart__item-action:focus-visible,
 .cashier-pdv-view .cashier-pdv-cart__qty-button:focus-visible,
 .cashier-pdv-view .cashier-pdv-cart__notes summary:focus-visible,
@@ -411,12 +317,10 @@
 }
 @media (max-width: 1279px) {
   .cashier-pdv-view .cashier-pdv-cart { max-height: none; }
-  .cashier-pdv-view .cashier-pdv-cart-scroll,
-  .cashier-pdv-view .cashier-pdv-cart__review-fields,
+  .cashier-pdv-view .cashier-pdv-cart__body,
   .cashier-pdv-view .cashier-pdv-cart__form { overflow: visible; }
 }
 @media (max-width: 767px) {
-  .cashier-pdv-view .cashier-pdv-cart__cart-footer,
   .cashier-pdv-view .cashier-pdv-cart__footer {
     position: sticky;
     z-index: 2;
@@ -523,18 +427,56 @@
   outline-offset: 2px;
 }
 
-/* When the mobile context selector is present, do not repeat the whole
- * modality picker or "Alterar" card inside the cart/review. */
+/* The shared mobile selector already communicates the fulfillment type. */
 @media (max-width: 1279px) {
-  .cashier-pdv-view .cashier-pdv-cart__context,
   .cashier-pdv-view .cashier-pdv-cart__modality-section,
-  .cashier-pdv-view .cashier-pdv-cart__review-intro {
+  .cashier-pdv-view .cashier-pdv-cart__eyebrow {
     display: none;
   }
-  .cashier-pdv-view .cashier-pdv-cart__cart-footer {
-    gap: .5rem;
+}
+
+/* Fulfillment fields are secondary to the items; native disclosures keep
+ * optional pickup identity and payment off the primary path. */
+.cashier-pdv-view .cashier-pdv-cart__review-fields > * + * { margin-top: .5rem; }
+.cashier-pdv-view .cashier-pdv-cart__review-fields details > summary {
+  min-height: 2.75rem;
+  padding-block: .625rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__review-fields details summary strong {
+  font-size: .8125rem;
+  line-height: 1.25;
+}
+.cashier-pdv-view .cashier-pdv-cart__review-fields details summary :is(span, small) {
+  font-size: .6875rem;
+  line-height: 1.35;
+}
+.cashier-pdv-view .cashier-pdv-cart__review-fields details summary :is(span.group-open\\:hidden, span.hidden) {
+  font-size: .75rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__footer {
+  position: relative;
+  z-index: 2;
+}
+.cashier-pdv-view .cashier-pdv-cart__total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__total span:last-child {
+  font-size: 1.125rem;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 767px) {
+  .cashier-pdv-view .cashier-pdv-cart__header {
+    min-height: 3.5rem;
+    padding: .625rem .75rem;
   }
-  .cashier-pdv-view .cashier-pdv-cart__review-fields {
-    padding-top: .625rem;
+  .cashier-pdv-view .cashier-pdv-cart-scroll { padding: .5rem; }
+  .cashier-pdv-view .cashier-pdv-cart__line {
+    gap: .375rem;
+    padding: .625rem;
   }
+  .cashier-pdv-view .cashier-pdv-cart__review-fields { padding: .5rem .625rem .625rem; }
+  .cashier-pdv-view .cashier-pdv-cart__footer { padding: .625rem; }
 }
