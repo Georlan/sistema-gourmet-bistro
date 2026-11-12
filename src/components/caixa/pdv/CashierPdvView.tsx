@@ -598,7 +598,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       <label className={"text-[8px] text-koma-subtle font-bold uppercase tracking-wider block"}>
                         Modalidade
                       </label>
-                      <details className="text-left text-[9px] text-koma-muted">
+                      <details className="cashier-pdv-cart__shortcut-hints text-left text-[9px] text-koma-muted">
                         <summary className="cursor-pointer list-none font-semibold hover:text-koma-secondary">
                           Atalhos
                         </summary>
@@ -606,22 +606,19 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       </details>
                     </div>
                     <div className={clsx(
-                      'grid gap-1 bg-koma-input p-1 rounded-xl border border-koma-border',
+                      'cashier-pdv-cart__modality-options grid gap-1 bg-koma-input p-1 rounded-xl border border-koma-border',
                       modalityOptions.length === 2 ? 'grid-cols-2' : 'grid-cols-3',
                     )}>
                       {modalityOptions.map((type) => (
                         <button
                           key={type.id}
                           type="button"
+                          aria-pressed={pdvOrderType === type.id}
                           onClick={() => {
                             setPdvOrderType(type.id);
                             if (type.id === 'delivery') setPdvTargetMesaId(0);
                           }}
-                          className={`py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${
-                            pdvOrderType === type.id
-                              ? 'bg-[#10b981] text-zinc-950 font-extrabold'
-                              : 'text-koma-subtle hover:text-koma-foreground'
-                          }`}
+                          className={clsx('cashier-pdv-cart__modality-option', pdvOrderType === type.id && 'is-active')}
                         >
                           {type.label}
                         </button>
@@ -644,12 +641,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                         data-table-status={
                           selectedPdvTableOption?.isOccupied ? 'occupied' : selectedPdvTableOption ? 'free' : 'unselected'
                         }
-                        className={clsx(
-                          'min-h-10 w-full rounded-xl border px-3 text-[10px] font-semibold text-koma-foreground outline-none transition-colors focus:ring-2',
-                          selectedPdvTableOption?.isOccupied
-                            ? 'border-[#6b2d37] bg-[#1b1013] focus:border-[#8a3d49] focus:ring-[#6b2d37]/20'
-                            : 'border-koma-border bg-koma-input focus:border-[#00b894]/70 focus:ring-[#00b894]/10',
-                        )}
+                        className="cashier-pdv-cart__table-select w-full rounded-xl border px-3 text-koma-foreground"
                       >
                         <option value="">Sem mesa</option>
                         {pdvTableOptions.map((option) => (
@@ -657,10 +649,6 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                             key={option.table.id}
                             value={option.table.id}
                             data-table-status={option.isOccupied ? 'occupied' : 'free'}
-                            style={{
-                              backgroundColor: option.isOccupied ? '#1b1013' : '#090d0b',
-                              color: option.isOccupied ? '#e4a3ac' : '#d4d4d8',
-                            }}
                           >
                             {option.isOccupied ? '●' : '○'} {option.label}
                             {option.table.nome ? ` · Mesa ${option.table.id}` : ''}
@@ -698,7 +686,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       </summary>
                       <div className="grid grid-cols-2 gap-2 border-t border-koma-border p-3">
                         <div className="space-y-1">
-                          <label className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Telefone</label>
+                          <label htmlFor="pdv-customer-phone-input" className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Telefone</label>
                           <input
                             id="pdv-customer-phone-input"
                             type="tel"
@@ -714,7 +702,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Nome</label>
+                          <label htmlFor="pdv-customer-name-input" className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Nome</label>
                           <input
                             id="pdv-customer-name-input"
                             type="text"
@@ -740,7 +728,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                     <div className="space-y-2">
                       <div className="grid grid-cols-2 gap-2">
                         <div className="space-y-1">
-                          <label className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Telefone</label>
+                          <label htmlFor="pdv-customer-phone-input" className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Telefone</label>
                           <input
                             id="pdv-customer-phone-input"
                             type="tel"
@@ -757,7 +745,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Nome</label>
+                          <label htmlFor="pdv-customer-name-input" className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Nome</label>
                           <input
                             id="pdv-customer-name-input"
                             type="text"
