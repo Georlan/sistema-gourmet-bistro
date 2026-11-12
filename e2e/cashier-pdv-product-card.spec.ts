@@ -248,3 +248,64 @@ test('mobile unified checkout retains a sticky launch footer', async ({ page }) 
   expect(position).toBe('sticky');
   await expect(page.locator('.cashier-mobile-bottom-bar')).toBeVisible();
 });
+
+
+test('PDV customizer is scrollable but retains its total and confirm action at phone widths', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1366) >= 1024, 'Phone-only sizing');
+  for (const width of [320, 390, 430]) {
+    await page.setViewportSize({ width, height: 700 });
+    await openNewOrder(page);
+    await page.getByRole('button', { name: 'Personalizar Risoto da casa' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Risoto da casa' });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Fechar personalização' })).toBeFocused();
+    await dialog.getByRole('button', { name: 'Aumentar quantidade' }).click();
+    await expect(dialog.locator('.cashier-pdv-config__total')).toContainText('84,00');
+    await dialog.getByLabel('Observações (opcional)').fill('Sem cebola');
+    const save = dialog.getByRole('button', { name: 'Adicionar ao pedido' });
+    await expect(save).toBeVisible();
+    const rect = await save.boundingBox();
+    expect(rect).not.toBeNull();
+    expect((rect?.y ?? 0) + (rect?.height ?? 0)).toBeLessThanOrEqual(701);
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
+    await save.click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByTestId('pdv-added-feedback')).toContainText('Item adicionado');
+    await expect(page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Risoto da casa' }).first()
+      .locator('.cashier-pdv-product-card__quantity')).toHaveText('2');
+  }
+});
+
+test('PDV cart feedback respects reduced motion and customization Escape restores focus', async ({ page }) => {
+  await openNewOrder(page);
+  const customize = page.getByRole('button', { name: 'Personalizar Risoto da casa' }).first();
+  await customize.focus();
+  await customize.click();
+  await expect(page.getByRole('dialog', { name: 'Risoto da casa' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Risoto da casa' })).toHaveCount(0);
+  await expect(customize).toBeFocused();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
+  const feedback = page.getByTestId('pdv-added-feedback');
+  await expect(feedback).toBeVisible();
+  await expect(feedback).toContainText('Item adicionado');
+  await expect(feedback).toHaveCSS('animation-name', 'none');
+});
+
+test('PDV optional customer/payment panels preserve checkout context without additional modals', async ({ page }) => {
+  await openNewOrder(page);
+  await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
+  if ((page.viewportSize()?.width ?? 1366) < 1280) {
+    await page.getByRole('button', { name: 'Carrinho (1)' }).click();
+  }
+  const cart = page.locator('.cashier-pdv-cart');
+  await expect(cart.getByText('Identificação do cliente', { exact: true })).toBeVisible();
+  await cart.locator('details').filter({ hasText: 'Identificação do cliente' }).locator('summary').click();
+  await cart.getByLabel('Telefone', { exact: true }).fill('(85) 98888-7777');
+  await cart.getByLabel('Nome', { exact: true }).fill('Maria');
+  await cart.locator('details').filter({ hasText: 'Pagamento' }).locator('summary').click();
+  await expect(cart.getByRole('group', { name: 'Forma de pagamento' })).toBeVisible();
+  await expect(cart.locator('#pdv-submit-btn')).toBeEnabled();
+});
