@@ -101,3 +101,14 @@ As capturas após #1302/#1303 mostram que a alternância Produtos/Carrinho, o ca
 **Verificações essenciais:** tests de unit/static markup, browser mobile 320/390/430, desktop, delivery obrigatório e erro 422, salão/mesa, falhas 502/503 com retry idempotente, tecla F4, temas e Cloudflare pós-merge. Comparar manualmente número de toques para pedido de retirada: **antes** selecionar item → Ver carrinho → Continuar → Lançar; **agora** selecionar item → Ver pedido → Lançar. Não realizar venda real durante revisão estética.
 
 **Próximos refinamentos:** modal de personalização, medição real de bundle/performance e contraste em tema escuro. Mudanças arquiteturais maiores somente com testes de domínio separados.
+
+
+## Revisão de UX após homologação em celular real — guia de Vendas (12/11/2026)
+
+**Decisão aprovada:** a navegação horizontal de Vendas deve permanecer **sempre visível no celular**. O experimento de escondê-la atrás de um toggle "Vendas" (PR #1307) foi rejeitado após teste físico. Recuperar pixels escondendo navegação recorrente gerou um toque extra e piorou a descoberta das telas operacionais.
+
+**Implementação corretiva:** não reverter as melhorias de catálogo/personalização; remover apenas toggle e seu estado/estilos. Começar o strip de Novo pedido com `scrollLeft = 0` ao entrar/retornar ao PDV, sem centralização automática no segundo item; preservar rolagem feita pelo operador. No celular, retirar as setas que reservavam um espaço vazio à esquerda e manter toque/deslize nativos. Ocultar apenas a aparência da barra cinza de scroll (`scrollbar-width: none`, WebKit scrollbar hidden); não desativar `overflow-x: auto`, foco ou navegação por teclado. Outras áreas e desktop mantêm o fluxo de seleção de destino atual.
+
+**Verificação necessária:** mobile 320/360/390/430 com temas claro/escuro, guia presente, primeira aba no início esquerdo, nenhum toggle e nenhum scrollbar cinza, seleção/retorno de Retiradas→Novo pedido, swipe nativo, fontes grandes, sem overflow horizontal na página. Sem mudança de regras de domínio ou endpoints.
+
+**Regra para refinamentos seguintes:** responsividade deve manter navegação essencial evidente; otimizar espaço reduzindo redundâncias e densidade ornamental, não escondendo destinos usados durante operação.
