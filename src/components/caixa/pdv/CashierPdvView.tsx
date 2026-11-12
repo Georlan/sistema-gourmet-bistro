@@ -816,7 +816,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   >
                     <div className="flex items-center gap-2">
                       <Check size={16} aria-hidden="true" />
-                      <span>Lançar pedido</span>
+                      <span>Lançar Pedido</span>
                     </div>
                   </button>
                 </div>
