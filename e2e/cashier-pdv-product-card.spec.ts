@@ -25,6 +25,7 @@ test('PDV: quick-add and personalize are independent on desktop and mobile', asy
   await expect(card.locator('.cashier-pdv-product-card__price')).toContainText('42,00');
 
   await add.click();
+  await expect(card.locator('.cashier-pdv-product-card__quantity')).toHaveText('1');
   await expect(page.getByText('Personalizar item', { exact: true })).toHaveCount(0);
 
   if ((page.viewportSize()?.width ?? 1366) < 1280) {
