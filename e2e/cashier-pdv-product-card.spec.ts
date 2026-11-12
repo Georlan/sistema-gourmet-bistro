@@ -62,7 +62,7 @@ test('PDV mobile cart dock stays above bottom navigation and supports a quick re
   test.skip((page.viewportSize()?.width ?? 1366) >= 1024, 'Touch dock contract for narrow phone viewports');
   await openNewOrder(page);
 
-  const switcher = page.getByRole('group', { name: 'Visualização do novo pedido' });
+  const switcher = page.getByRole('group', { name: 'Navegação e atendimento do novo pedido' });
   await expect(switcher.getByRole('button', { name: 'Escolher itens' })).toHaveAttribute('aria-current', 'page');
 
   const card = page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Risoto da casa' }).first();
