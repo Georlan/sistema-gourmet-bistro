@@ -270,6 +270,8 @@ export function useCashierPdv({
         }, 50);
       } else if (e.key === 'F4') {
         e.preventDefault();
+        // Holding F4 cannot count as a second confirmation.
+        if (e.repeat) return;
         if (pdvCart.length > 0) {
           // The first F4 reveals the order (mobile) or focuses its submission
           // button (desktop). Only another deliberate F4 on that focused
