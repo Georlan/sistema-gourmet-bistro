@@ -341,7 +341,8 @@ test('PDV phone sales tabs are always visible, left-aligned and scrollbar-free',
     expect(geometry.leadingGap).toBeLessThanOrEqual(2);
     expect(geometry.track).toBe('none');
     expect(geometry.overflow).toBeGreaterThan(0);
-    await expect(nav.locator('.cashier-subnav__arrow')).toBeHidden();
+    await expect(nav.locator('.cashier-subnav__arrow').first()).toBeHidden();
+    await expect(nav.locator('.cashier-subnav__arrow').last()).toBeHidden();
 
     await strip.evaluate(el => { el.scrollLeft = el.scrollWidth; });
     await expect.poll(() => strip.evaluate(el => el.scrollLeft)).toBeGreaterThan(40);
