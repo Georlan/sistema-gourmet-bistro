@@ -16,7 +16,7 @@ Construir um PDV mais intuitivo, rápido e reconhecivelmente KÔMA que as refer�
 ## Etapas independentes
 
 1. **Fundação do catálogo e carrinho** — PR #1302 Draft: cards separados do owner de estado, controle independente de personalização vs inclusão rápida, preço/legibilidade, quantidades selecionadas por produto; SVG próprio de carrinho vazio; suporte de toque e navegação móvel, estilos isolados.
-2. **Carrinho e finalização mobile** — simplificar os blocos condicionais e as áreas roláveis sem mudar validação, total, entidade Mesa ou lançamento canônico. Confirmar um único caminho principal com ação persistente acima da navegação do app, inclusive teclado virtual e textos ampliados. Preservar a entrada rápida de observação, alteração de quantidade e remoção.
+2. **Carrinho e finalização mobile** — implementada em PR Draft #1303, dependente de #1302. `CashierPdvCartLine` mostra nome, preço unitário, quantidade, total de linha, editar/remover. Observações e instruções rápidas ficam em `<details>` nativo, preservando observações históricas e personalização. O carrinho apresenta modalidade como contexto e botão **Continuar para finalizar**; no painel de revisão ficam modalidade, cliente, mesa, entrega e pagamento condicionais. F4 abre primeiro a revisão, só então pode enviar. O owner de venda, preços, validações e idempotência permanecem intactos. Estado de revisão não duplica dados de venda. Validar sticky/footer e teclado em aparelho real.
 3. **Modal de produto e complementos** — priorizar foto/descrição somente quando úteis; grupos obrigatórios com estado explícito, adicionais com preço, quantidade e total corretos; folha mobile quase tela cheia com rodapé estável, foco/Escape, leitura por screen reader e recuperação do contexto.
 4. **Desktop e densidade adaptativa** — ajustar largura do carrinho, grade de produtos conforme espaço real, barra de categorias, teclado físico e espaço de trabalho, sem repetir o excesso de cards minúsculos das referências.
 5. **Qualidade, limpeza e medição** — remover regras legadas somente após mapear consumidores; comparar tamanho de bundle, requests, memória/renderizações, tempo de interação e performance com baseline; ambos temas, 320/360/390/430/768/1366 px, texto gigante, baixo desempenho, listas longas e produtos sem foto.
@@ -44,7 +44,8 @@ PR pequeno e reversível; TypeScript/testes unitários/build e regressões Playw
 - [x] Melhoria da ergonomia mobile de busca, chips, carrinho e alvos.
 - [ ] Revalidar os gates no commit final da etapa 1.
 - [ ] Homologar o preview em celular (ambos temas).
-- [ ] Etapa 2 — carrinho/formulários.
+- [x] Etapa 2 — carrinho/formulários implementados na branch (PR #1303 Draft).
+- [ ] Etapa 2 — CI e aprovação estética/operacional em mobile real antes de merge.
 - [ ] Etapa 3 — modal e complementos.
 - [ ] Etapa 4 — desktop.
 - [ ] Etapa 5 — limpeza e métricas.
