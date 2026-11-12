@@ -398,15 +398,16 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           key={p.id}
                           role="button"
                           tabIndex={0}
-                          onClick={() => openConfig(p)}
+                          onClick={() => groups.length === 0 ? handlePdvAddToCart(p) : openConfig(p)}
                           onKeyDown={(event) => {
                             if (event.key === 'Enter' || event.key === ' ') {
                               event.preventDefault();
-                              openConfig(p);
+                              if (groups.length === 0) handlePdvAddToCart(p);
+                              else openConfig(p);
                             }
                           }}
                           className={"group relative min-h-[96px] sm:min-h-[112px] bg-koma-panel border border-koma-border hover:border-emerald-500/60 rounded-xl sm:rounded-2xl transition-colors shadow-sm cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"}
-                          title="Clique no card para personalizar"
+                          title={groups.length === 0 ? "Adicionar ao pedido" : "Personalizar item"}
                         >
                           <div className={"flex h-full w-full flex-col justify-between gap-2 sm:gap-3 p-2.5 sm:p-3.5 text-left rounded-xl sm:rounded-2xl"}>
                             {p.imagem && (
