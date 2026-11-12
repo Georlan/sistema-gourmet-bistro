@@ -153,7 +153,7 @@ test('PDV F4 reviews the destination before submission and allows modality short
   await expect(page.getByLabel('Mesa', { exact: true })).toBeVisible();
 
   await page.keyboard.press('F2');
-  await expect(page.getByRole('button', { name: 'Retirada' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.cashier-pdv-cart__modality-option').filter({ hasText: 'Retirada' })).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('PDV on 320px and 430px has no horizontal overflow in cart and review', async ({ page }) => {
