@@ -233,3 +233,18 @@ test('mobile service control and tasks share one row without horizontal overflow
     expect(overflow).toBeLessThanOrEqual(1);
   }
 });
+
+
+test('mobile unified checkout retains a sticky launch footer', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1366) >= 768, 'Phone-only sticky confirmation');
+  await openNewOrder(page);
+  await page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Risoto da casa' }).first()
+    .getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
+  await page.getByRole('button', { name: 'Carrinho (1)' }).click();
+  const footer = page.locator('.cashier-pdv-cart__footer');
+  await expect(footer).toBeVisible();
+  await expect(page.locator('#pdv-submit-btn')).toBeEnabled();
+  const position = await footer.evaluate((element) => getComputedStyle(element).position);
+  expect(position).toBe('sticky');
+  await expect(page.locator('.cashier-mobile-bottom-bar')).toBeVisible();
+});
