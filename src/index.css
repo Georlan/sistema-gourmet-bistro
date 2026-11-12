@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 @import "./styles/komaFoundation.css";
+@import "./components/caixa/pdv/cashierPdvVisual.css";
 @import "./components/mesas/waiterOperational.css";
 
 @custom-variant dark (&:where([data-koma-theme="dark"], [data-koma-theme="dark"] *));
