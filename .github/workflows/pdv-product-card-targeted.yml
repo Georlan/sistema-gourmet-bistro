@@ -57,7 +57,7 @@ jobs:
     env:
       ENVIRONMENT: test
       PYTHONPATH: backend
-      DATABASE_URL: sqlite:///${{ runner.temp }}/pdv-synthetic-capacity.db
+      DATABASE_URL: sqlite:////tmp/pdv-synthetic-capacity.db
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
