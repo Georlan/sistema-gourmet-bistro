@@ -8,6 +8,7 @@ type ProductWithModifiers = Product & { grupos_modificadores?: CatalogModifierGr
 
 interface CashierPdvProductCardProps {
   product: Product;
+  cartQuantity?: number;
   detailsOpen: boolean;
   onConfigure: (product: Product) => void;
   onQuickAdd: (product: Product) => void;
@@ -26,6 +27,7 @@ const splitProductLabel = (label: string) => {
  */
 export function CashierPdvProductCard({
   product,
+  cartQuantity = 0,
   detailsOpen,
   onConfigure,
   onQuickAdd,
@@ -38,7 +40,7 @@ export function CashierPdvProductCard({
   const detailsId = `pdv-product-details-${productId}`;
 
   return (
-    <article className="cashier-pdv-product-card group" data-testid="cashier-pdv-product-card">
+    <article className={clsx("cashier-pdv-product-card group", cartQuantity > 0 && "is-in-cart")} data-testid="cashier-pdv-product-card">
       <button
         type="button"
         className="cashier-pdv-product-card__open"
@@ -59,7 +61,14 @@ export function CashierPdvProductCard({
           />
         )}
         <div className="cashier-pdv-product-card__identity">
-          <h4 className="cashier-pdv-product-card__name">{name}</h4>
+          <div className="cashier-pdv-product-card__heading">
+            <h4 className="cashier-pdv-product-card__name">{name}</h4>
+            {cartQuantity > 0 && (
+              <span className="cashier-pdv-product-card__quantity" aria-label={`${cartQuantity} ${cartQuantity === 1 ? 'unidade' : 'unidades'} no pedido`}>
+                {cartQuantity > 99 ? '99+' : cartQuantity}
+              </span>
+            )}
+          </div>
           {hasChoices && (
             <span className="cashier-pdv-product-card__choices">Personalizável</span>
           )}
