@@ -565,7 +565,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                     <span>Subtotal dos itens</span><strong>{formatCurrency(cartTotal)}</strong>
                   </div>
                   {cartHasUnavailableItems && (
-                    <p className="cashier-pdv-cart__unavailable" role="alert">Remova os itens indisponíveis para continuar.</p>
+                    <p id="pdv-cart-unavailable-warning" data-testid="pdv-cart-unavailable-warning" className="cashier-pdv-cart__unavailable" role="alert">Há itens indisponíveis no carrinho. Remova-os para continuar.</p>
                   )}
                   <button
                     type="button"
