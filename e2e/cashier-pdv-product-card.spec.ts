@@ -25,7 +25,7 @@ test('PDV: quick-add and personalize are independent on desktop and mobile', asy
   await expect(card.locator('.cashier-pdv-product-card__price')).toContainText('42,00');
 
   await add.click();
-  await expect(page.getByText('PERSONALIZAR ITEM', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Personalizar item', { exact: true })).toHaveCount(0);
 
   if ((page.viewportSize()?.width ?? 1366) < 1280) {
     await page.getByRole('button', { name: /Carrinho \(1\)/ }).click();
@@ -37,7 +37,7 @@ test('PDV: quick-add and personalize are independent on desktop and mobile', asy
     await page.getByRole('button', { name: 'Escolher itens' }).click();
   }
   await customize.click();
-  await expect(page.getByText('PERSONALIZAR ITEM', { exact: true })).toBeVisible();
+  await expect(page.getByText('Personalizar item', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Fechar personalização' }).click();
 });
 
@@ -50,6 +50,7 @@ test('PDV: readable product action and visible focus without horizontal overflow
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.locator('body').evaluate(el => el.clientWidth));
 
   const focusButton = card.getByRole('button', { name: /Personalizar/ });
+  await page.keyboard.press('Tab');
   await focusButton.focus();
   await expect(focusButton).toBeFocused();
   const outline = await focusButton.evaluate(el => getComputedStyle(el).outlineStyle);
