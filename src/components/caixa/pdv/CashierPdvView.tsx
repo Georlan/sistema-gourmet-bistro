@@ -1,5 +1,5 @@
 import clsx from 'clsx';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PAYMENT_LABELS, type PaymentMethod } from '../../../cardapio/paymentMethods';
 import { Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CreditCard, MapPin, Package, Search, ShoppingCart, Truck, UserRound, UtensilsCrossed, X } from 'lucide-react';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
@@ -16,6 +16,7 @@ import { formatCurrency } from '../cashierPresentation';
 import { pdvCartItemUnitPrice, type PdvModifierSelection, type PdvOrderType, type useCashierPdv } from './useCashierPdv';
 import { usePdvCategoryNavigation } from './usePdvCategoryNavigation';
 import { CashierPdvProductCard } from './CashierPdvProductCard';
+import { pdvProductNeedsRequiredChoices } from './pdvProductChoices';
 import { CashierPdvCartLine } from './CashierPdvCartLine';
 import { CashierPdvConfigurator } from './CashierPdvConfigurator';
 import { CashierPdvCustomerFields } from './CashierPdvCustomerFields';
@@ -170,7 +171,18 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     setPdvProductDetailId(null);
   };
 
-  const reportCartChange = (product: Product, edited = false) => {
+  // New-product configuration does not depend on cart edits. Keep this stable
+  // so an existing cart change does not rerender all catalogue cards.
+  const openNewProductConfig = useCallback((product: Product) => {
+    setConfigProduct(product);
+    setConfigCartIndex(null);
+    setConfigQty(1);
+    setConfigObs('');
+    setConfigModifierIds([]);
+    setPdvProductDetailId(null);
+  }, [setPdvProductDetailId]);
+
+  const reportCartChange = useCallback((product: Product, edited = false) => {
     addNoticeSequence.current += 1;
     setAddedNotice({
       productId: String(product.id),
@@ -178,17 +190,23 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
       token: addNoticeSequence.current,
       edited,
     });
-  };
+  }, []);
 
-  const handleQuickAddProduct = (product: Product) => {
+  const handleQuickAddProduct = useCallback((product: Product) => {
+    // Products with mandatory groups must never enter an incomplete cart.
+    // Optional modifiers retain one-tap quick add.
+    if (pdvProductNeedsRequiredChoices(product)) {
+      openNewProductConfig(product);
+      return;
+    }
     setPdvProductDetailId(null);
     handlePdvAddToCart(product);
     reportCartChange(product);
-  };
+  }, [handlePdvAddToCart, openNewProductConfig, reportCartChange, setPdvProductDetailId]);
 
-  const toggleProductDetails = (productId: string) => {
+  const toggleProductDetails = useCallback((productId: string) => {
     setPdvProductDetailId((current) => current === productId ? null : productId);
-  };
+  }, [setPdvProductDetailId]);
 
   const changeConfigModifierQuantity = (
     group: CatalogModifierGroup,
@@ -484,7 +502,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                         cartQuantity={cartQuantitiesByProduct.get(String(product.id)) ?? 0}
                         recentlyAdded={addedNotice?.productId === String(product.id)}
                         detailsOpen={pdvProductDetailId === String(product.id)}
-                        onConfigure={openConfig}
+                        onConfigure={openNewProductConfig}
                         onQuickAdd={handleQuickAddProduct}
                         onToggleDetails={toggleProductDetails}
                       />
