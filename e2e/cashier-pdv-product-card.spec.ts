@@ -415,13 +415,19 @@ test('novice cashier cannot skip a required product choice via quick add', async
   const dialog = page.getByTestId('cashier-pdv-config-dialog');
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Adicionar ao pedido' })).toBeDisabled();
-  await expect(page.getByRole('button', { name: /Carrinho \(0\)/ })).toBeVisible();
+  if ((page.viewportSize()?.width ?? 1366) < 1280) {
+    await expect(page.getByRole('button', { name: /Carrinho \(0\)/ })).toBeVisible();
+  } else {
+    await expect(page.getByTestId('cashier-pdv-cart-line')).toHaveCount(0);
+  }
   await dialog.getByRole('button', { name: 'Selecionar Frango' }).click();
   await expect(dialog.getByRole('button', { name: 'Adicionar ao pedido' })).toBeEnabled();
   await dialog.getByRole('button', { name: 'Adicionar ao pedido' }).click();
   await expect(dialog).toBeHidden();
   await expect(card.locator('.cashier-pdv-product-card__quantity')).toHaveText('1');
-  await page.getByRole('button', { name: /Carrinho \(1\)/ }).click();
+  if ((page.viewportSize()?.width ?? 1366) < 1280) {
+    await page.getByRole('button', { name: /Carrinho \(1\)/ }).click();
+  }
   await expect(page.getByTestId('cashier-pdv-cart-line')).toContainText('Frango');
 });
 
@@ -447,10 +453,8 @@ test('four fixture-only cashiers stay responsive with 240 products and repeated 
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ categorias: categories, produtos: products }) });
     });
     await seedCashierSession(page);
-    await page.addInitScript(() => {
-      sessionStorage.setItem('koma_active_tab', 'operacao');
-      sessionStorage.setItem('koma_active_subtab', 'balcao');
-    });
+    // The shared fixture initializes Pedidos. Navigate explicitly instead
+    // of relying on browser-dependent ordering of multiple init scripts.
     let salePosts = 0;
     page.on('request', request => {
       if (request.method() === 'POST' && request.url().includes('/cardapio/modificadores/venda-direta')) salePosts++;
@@ -460,6 +464,8 @@ test('four fixture-only cashiers stay responsive with 240 products and repeated 
   try {
     const durations = await Promise.all(sessions.map(async ({ page }) => {
       await page.goto('/?view=caixa');
+      const salesNav = page.getByRole('navigation', { name: 'Telas desta área' });
+      await salesNav.getByRole('button', { name: 'Novo pedido', exact: true }).click();
       const search = page.getByRole('searchbox', { name: 'Buscar produtos do cardápio' });
       await expect(search).toBeVisible();
       const card = page.getByTestId('cashier-pdv-product-card').filter({ hasText: /^Produto 0/ }).first();
