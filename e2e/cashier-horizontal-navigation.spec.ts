@@ -36,7 +36,8 @@ test('mobile scroll exposes delivery and retains order creation in the same stri
   const nav = page.getByRole('navigation', { name: 'Telas desta área' });
   await expect(nav.locator('.cashier-subnav__button')).toHaveCount(6);
   const strip = nav.locator('.cashier-subnav__scroll');
-  await expect(nav.locator('.cashier-subnav__arrow')).toBeHidden();
+  await expect(nav.locator('.cashier-subnav__arrow').first()).toBeHidden();
+  await expect(nav.locator('.cashier-subnav__arrow').last()).toBeHidden();
   await strip.evaluate(el => { el.scrollLeft = el.scrollWidth; });
   await expect.poll(() => strip.evaluate(el => el.scrollLeft)).toBeGreaterThan(80);
   await nav.getByRole('button', { name: 'Entregas', exact: true }).click();
