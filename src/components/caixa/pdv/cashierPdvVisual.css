@@ -27,6 +27,9 @@
   box-shadow: 0 2px 0 #0b332215;
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
+.cashier-pdv-product-card.is-in-cart {
+  border-color: var(--koma-accent-border);
+}
 .cashier-pdv-product-card:hover,
 .cashier-pdv-product-card:focus-within {
   border-color: var(--koma-accent-border);
@@ -70,10 +73,33 @@
   flex: 1;
   min-width: 0;
 }
+.cashier-pdv-product-card__heading {
+  display: flex;
+  align-items: flex-start;
+  gap: .375rem;
+  min-width: 0;
+}
+.cashier-pdv-product-card__quantity {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  min-width: 1.375rem;
+  height: 1.375rem;
+  padding: 0 .25rem;
+  border: 1px solid var(--koma-accent-border);
+  border-radius: 999px;
+  background: var(--koma-accent-soft);
+  color: var(--koma-accent-text);
+  font-size: .6875rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
 .cashier-pdv-product-card__name {
   display: -webkit-box;
   overflow: hidden;
   min-height: 2.25em;
+  min-width: 0;
   color: var(--pdv-ink);
   font-size: .875rem;
   font-weight: 600;
