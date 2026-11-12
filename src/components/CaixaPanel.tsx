@@ -3,7 +3,7 @@ import { StaffPushNotifications } from './caixa/realtime/StaffPushNotifications'
 import { DirectPixPendingPanel } from './caixa/orders/DirectPixPendingPanel';
 import { KomaBillingNotice } from './caixa/settings/KomaBillingNotice';
 import clsx from 'clsx';
-import { Loader2, Lock, Maximize2, Menu, MessageSquare, Minimize2 } from 'lucide-react';
+import { ChevronDown, Loader2, Lock, Maximize2, Menu, MessageSquare, Minimize2 } from 'lucide-react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   getSubscriptionPlan,
@@ -257,7 +257,13 @@ export function CaixaPanel({
     handleSidebarNavigation,
   } = useCashierNavigation({ hasOnlineMenu, planId: currentPlanId, entitlements: planEntitlements, showToast });
 
+  const isPdvFocus = activeTab === 'operacao' && activeSubTab === 'balcao';
+  const [mobileSalesNavOpen, setMobileSalesNavOpen] = useState(false);
   const cashierContentRef = useRef<HTMLDivElement>(null);
+
+  // Moving to a different destination restores the default product-first
+  // navigation when the operator returns to Novo pedido.
+  useEffect(() => setMobileSalesNavOpen(false), [activeTab, activeSubTab]);
 
   useLayoutEffect(() => {
     if (!window.matchMedia('(max-width: 1023px)').matches) return;
@@ -732,7 +738,7 @@ export function CaixaPanel({
   return (
     <div
       data-koma-plan={currentPlanId}
-      className={`cashier-shell ${activeTab === 'operacao' && activeSubTab === 'pedidos' ? 'cashier-shell--mobile-orders' : ''} flex w-full bg-koma-page text-koma-foreground font-sans selection:bg-[#10b981]/30 text-xs ${
+      className={`cashier-shell ${activeTab === 'operacao' && activeSubTab === 'pedidos' ? 'cashier-shell--mobile-orders' : ''} ${isPdvFocus ? 'cashier-shell--pdv-focus' : ''} flex w-full bg-koma-page text-koma-foreground font-sans selection:bg-[#10b981]/30 text-xs ${
         fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}
     >
@@ -804,7 +810,24 @@ export function CaixaPanel({
               </button>
               <h2 className={"font-serif font-bold text-xs sm:text-sm tracking-tight text-koma-foreground truncate"}>
                 {(activeTab === 'relatorios' || activeTab === 'dashboard') && 'Relatórios'}
-                {activeTab === 'operacao' && 'Vendas'}
+                {activeTab === 'operacao' && (
+                  <>
+                    <span className={isPdvFocus ? 'hidden md:inline' : undefined}>Vendas</span>
+                    {isPdvFocus && (
+                      <button
+                        type="button"
+                        className="cashier-topbar__sales-toggle md:hidden"
+                        aria-label={mobileSalesNavOpen ? 'Ocultar telas de Vendas' : 'Mostrar telas de Vendas'}
+                        aria-controls="cashier-sales-subnav"
+                        aria-expanded={mobileSalesNavOpen}
+                        onClick={() => setMobileSalesNavOpen((open) => !open)}
+                      >
+                        <span>Vendas</span>
+                        <ChevronDown size={15} aria-hidden="true" />
+                      </button>
+                    )}
+                  </>
+                )}
                 {activeTab === 'cardapio' && 'Cardápio'}
                 {activeTab === 'estoque' && 'Estoque'}
                 {activeTab === 'financeiro' && 'Caixa'}
@@ -868,7 +891,19 @@ export function CaixaPanel({
 
           <KomaBillingNotice apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onOpenBilling={(consolidated)=>{setActiveTab(consolidated ? 'configuracoes' : 'assinatura_pix');setActiveSubTab(consolidated ? 'integracoes' : 'contrato_documentos');}} />
 
-          <CashierSubNavigation activeTab={activeTab} activeSubTab={activeSubTab} planId={currentPlanId} entitlements={planEntitlements} setupMode={setupMode} onNavigate={handleSidebarNavigation} counts={{ cardapio_produtos: apiProdutos.length, cardapio_preparo: apiCategorias.length }} />
+          <CashierSubNavigation
+            activeTab={activeTab}
+            activeSubTab={activeSubTab}
+            planId={currentPlanId}
+            entitlements={planEntitlements}
+            setupMode={setupMode}
+            mobilePdvOpen={mobileSalesNavOpen}
+            onNavigate={(navigationId) => {
+              setMobileSalesNavOpen(false);
+              handleSidebarNavigation(navigationId);
+            }}
+            counts={{ cardapio_produtos: apiProdutos.length, cardapio_preparo: apiCategorias.length }}
+          />
 
           <div ref={cashierContentRef} className={"cashier-content min-w-0 min-h-0 flex-1 p-5 pb-20 lg:pb-5 relative"}>
             {activeTab === 'operacao' && cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
