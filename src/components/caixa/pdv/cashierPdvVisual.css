@@ -494,8 +494,15 @@
   .cashier-pdv-view .cashier-pdv-mobile-cart-cta { display: none; }
 }
 @media (max-width: 767px) {
-  .cashier-pdv-view .cashier-pdv-cart__form :is(input, select) { font-size: 1rem; }
+  .cashier-pdv-view .cashier-pdv-cart__form :is(input, select) { min-height: 2.75rem; font-size: 1rem; }
   .cashier-pdv-view .cashier-pdv-cart__form { max-height: none; }
+  .cashier-pdv-view .cashier-pdv-cart__form label { font-size: .75rem; }
+  .cashier-pdv-view .cashier-pdv-cart__form details summary { font-size: .8125rem; }
+  .cashier-pdv-view .cashier-pdv-cart__form details summary strong { font-size: .875rem; line-height: 1.35; }
+  .cashier-pdv-view .cashier-pdv-cart__form details summary span { font-size: .75rem; line-height: 1.4; }
+  .cashier-pdv-view .cashier-pdv-cart__form button:not(#pdv-submit-btn) { min-height: 2.75rem; font-size: .75rem; }
+  .cashier-pdv-view #pdv-submit-btn { min-height: 3rem; }
+  .cashier-pdv-view #pdv-submit-btn > span:last-child { display: none; }
   .cashier-pdv-view .cashier-pdv-mobile-switch__button { font-size: .875rem; }
   .cashier-pdv-view .cashier-pdv-category { min-height: 2.75rem; }
 }
