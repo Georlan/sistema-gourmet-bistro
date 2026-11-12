@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PAYMENT_LABELS, type PaymentMethod } from '../../../cardapio/paymentMethods';
-import { ArrowRight, Check, ChevronLeft, ChevronRight, Minus, Package, Plus, Search, ShoppingCart, X } from 'lucide-react';
+import { ArrowRight, Check, ChevronDown, ChevronLeft, ChevronRight, Minus, Package, Plus, Search, ShoppingCart, X } from 'lucide-react';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import {
