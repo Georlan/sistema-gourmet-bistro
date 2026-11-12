@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import { useMemo, useState } from 'react';
 import { PAYMENT_LABELS, type PaymentMethod } from '../../../cardapio/paymentMethods';
-import { Check, ChevronLeft, ChevronRight, Edit3, Info, Minus, Package, Plus, Search, ShoppingCart, Trash2, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Edit3, Minus, Package, Plus, Search, ShoppingCart, Trash2, X } from 'lucide-react';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import { getProductPresets } from '../../../domain/catalogPresentation';
@@ -17,11 +17,7 @@ import { OperationalBanner } from '../../shared/OperationalBanner';
 import { formatCurrency } from '../cashierPresentation';
 import { pdvCartItemUnitPrice, type PdvModifierSelection, type useCashierPdv } from './useCashierPdv';
 import { usePdvCategoryNavigation } from './usePdvCategoryNavigation';
-
-const splitProductLabel = (label: string) => {
-  const match = String(label || '').match(/^(\d{2,4})\s*[-–]\s*(.+)$/);
-  return match ? { code: match[1], name: match[2] } : { code: '', name: label };
-};
+import { CashierPdvProductCard } from './CashierPdvProductCard';
 
 type ProductWithModifiers = Product & { grupos_modificadores?: CatalogModifierGroup[] };
 
@@ -155,6 +151,15 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     setPdvProductDetailId(null);
   };
 
+  const handleQuickAddProduct = (product: Product) => {
+    setPdvProductDetailId(null);
+    handlePdvAddToCart(product);
+  };
+
+  const toggleProductDetails = (productId: string) => {
+    setPdvProductDetailId((current) => current === productId ? null : productId);
+  };
+
   const changeConfigModifierQuantity = (
     group: CatalogModifierGroup,
     optionId: string,
@@ -197,6 +202,15 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   };
 
   const cartTotal = pdvCart.reduce((sum, item) => sum + pdvCartItemUnitPrice(item) * item.quantity, 0);
+  // Aggregate once per cart update, rather than scanning every cart line for each visible product.
+  const cartQuantitiesByProduct = useMemo(() => {
+    const quantities = new Map<string, number>();
+    for (const item of pdvCart) {
+      const id = String(item.product.id);
+      quantities.set(id, (quantities.get(id) ?? 0) + item.quantity);
+    }
+    return quantities;
+  }, [pdvCart]);
   const deliveryAddressSummary = [
     pdvDeliveryAddressDraft.logradouro,
     pdvDeliveryAddressDraft.numero,
@@ -217,7 +231,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   return (
     <>
       {activeSubTab === 'balcao' && (
-        <div className={"orders-workspace h-full min-h-0 flex flex-col gap-3 sm:gap-4"}>
+        <div className={clsx("orders-workspace cashier-pdv-view h-full min-h-0 flex flex-col gap-3 sm:gap-4", balcaoMobileView === "produtos" && pdvCartItemCount > 0 && "has-mobile-cart-cta")}>
           <OperationalBanner
             id="counter-heading"
             eyebrow="VENDA"
@@ -247,17 +261,13 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
           <div
             className={"cashier-pdv-layout min-h-0 flex-1 flex flex-col xl:flex-row gap-3 sm:gap-4 overflow-hidden relative"}
           >
-            <div
-              className={"flex xl:hidden gap-1 p-1 bg-white/[0.025] border border-koma-border rounded-xl shrink-0"}
-            >
+            <div className="cashier-pdv-mobile-switch xl:hidden" role="group" aria-label="Visualização do novo pedido">
               <button
                 type="button"
                 onClick={() => setBalcaoMobileView('produtos')}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  balcaoMobileView === 'produtos'
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-koma-muted hover:text-koma-foreground'
-                }`}
+                aria-current={balcaoMobileView === 'produtos' ? 'page' : undefined}
+                aria-controls="pdv-products-panel"
+                className={clsx('cashier-pdv-mobile-switch__button', balcaoMobileView === 'produtos' && 'is-active')}
               >
                 <Package size={14} />
                 <span>Escolher itens</span>
@@ -265,11 +275,9 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               <button
                 type="button"
                 onClick={() => setBalcaoMobileView('carrinho')}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  balcaoMobileView === 'carrinho'
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-koma-muted hover:text-koma-foreground'
-                }`}
+                aria-current={balcaoMobileView === 'carrinho' ? 'page' : undefined}
+                aria-controls="pdv-order-panel"
+                className={clsx('cashier-pdv-mobile-switch__button', balcaoMobileView === 'carrinho' && 'is-active')}
               >
                 <ShoppingCart size={14} />
                 <span>Carrinho ({pdvCartItemCount})</span>
@@ -277,6 +285,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
             </div>
 
             <div
+              id="pdv-products-panel"
               className={`cashier-pdv-catalog min-w-0 flex-1 ${balcaoMobileView === 'produtos' ? 'flex' : 'hidden xl:flex'} flex-col gap-3 overflow-hidden w-full`}
             >
               <div
@@ -289,11 +298,13 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   />
                   <input
                     id="pdv-product-search-input"
-                    type="text"
+                    type="search"
+                    autoComplete="off"
+                    aria-label="Buscar produtos do cardápio"
                     placeholder="Buscar item, descrição ou código"
                     value={pdvSearch}
                     onChange={(e) => setPdvSearch(e.target.value)}
-                    className={"w-full bg-koma-input border border-koma-border focus:border-emerald-500/60 text-koma-foreground placeholder:text-koma-muted rounded-xl py-2.5 pl-10 pr-8 text-xs outline-none transition-all"}
+                    className="cashier-pdv-search-input w-full bg-koma-input border border-koma-border text-koma-foreground placeholder:text-koma-muted rounded-xl py-2.5 pl-10 pr-8 text-xs outline-none transition-colors"
                   />
                   {pdvSearch && (
                     <button
@@ -338,11 +349,12 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   >
                     <button
                       type="button"
+                      aria-pressed={pdvSelectedCategory === 'todos'}
                       onClick={() => {
                         setPdvSelectedCategory('todos');
                         setPdvProductDetailId(null);
                       }}
-                      className={`h-8 px-3 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-colors border ${
+                      className={`cashier-pdv-category h-8 px-3 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-colors border ${
                         pdvSelectedCategory === 'todos'
                           ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                           : 'bg-transparent border-koma-border text-koma-muted hover:text-koma-foreground hover:bg-koma-raised'
@@ -354,11 +366,12 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       <button
                         key={catObj.id || catObj.nome}
                         type="button"
+                        aria-pressed={pdvSelectedCategory === catObj.nome}
                         onClick={() => {
                           setPdvSelectedCategory(catObj.nome);
                           setPdvProductDetailId(null);
                         }}
-                        className={`h-8 px-3 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-colors border ${
+                        className={`cashier-pdv-category h-8 px-3 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-colors border ${
                           pdvSelectedCategory === catObj.nome
                             ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
                             : 'bg-transparent border-koma-border text-koma-muted hover:text-koma-foreground hover:bg-koma-raised'
@@ -385,135 +398,19 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               <div className={"cashier-pdv-product-scroll flex-1 min-h-0 overflow-y-auto pr-1 overscroll-contain"}>
                 {filteredProducts.length > 0 ? (
                   <div
-                    className={"grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-4 gap-2 sm:gap-2.5 pb-2"}
+                    className="cashier-pdv-product-grid"
                   >
-                    {filteredProducts.map((p) => {
-                      const productLabel = splitProductLabel(p.nome);
-                      const productDetailKey = String(p.id);
-                      const hasProductDetails = Boolean(p.descricao || productLabel.code);
-                      const groups = modifierGroupsFor(p);
-                      const recommendedCount = groups.filter((group) => group.recomendado !== false).length;
-                      return (
-                        <div
-                          key={p.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => openConfig(p)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault();
-                              openConfig(p);
-                            }
-                          }}
-                          className={"group relative min-h-[96px] sm:min-h-[112px] bg-koma-panel border border-koma-border hover:border-emerald-500/60 rounded-xl sm:rounded-2xl transition-colors shadow-sm cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"}
-                          title="Clique no card para personalizar"
-                        >
-                          <div className={"flex h-full w-full flex-col justify-between gap-2 sm:gap-3 p-2.5 sm:p-3.5 text-left rounded-xl sm:rounded-2xl"}>
-                            {p.imagem && (
-                              <img
-                                src={p.imagem}
-                                alt=""
-                                loading="lazy"
-                                className={"w-full h-16 sm:h-20 object-cover rounded-lg sm:rounded-xl"}
-                              />
-                            )}
-                            <div className="min-h-[28px] sm:min-h-[34px] pr-6">
-                              <h4
-                                className={"font-semibold text-koma-foreground text-xs sm:text-[13px] leading-snug line-clamp-2"}
-                              >
-                                {productLabel.name}
-                              </h4>
-                              {groups.length > 0 && (
-                                <span className="mt-1 inline-flex rounded bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
-                                  Personalizável{recommendedCount > 0 ? ` · ${recommendedCount} recomendados` : ''}
-                                </span>
-                              )}
-                            </div>
-                            <div
-                              className={"cashier-pdv-product-actions flex justify-between items-center border-t border-koma-border pt-2 sm:pt-2.5 gap-2"}
-                            >
-                              <span
-                                className={"font-bold text-emerald-700 dark:text-emerald-400 font-mono text-xs"}
-                              >
-                                R$ {p.preco.toFixed(2).replace('.', ',')}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setPdvProductDetailId(null);
-                                  handlePdvAddToCart(p);
-                                }}
-                                className={"inline-flex min-h-8 items-center gap-1 rounded-lg bg-emerald-500 px-2 text-[9px] font-extrabold text-zinc-950 hover:bg-emerald-400"}
-                                aria-label={`Adicionar ${productLabel.name} rapidamente`}
-                              >
-                                <Plus size={13} /> <span className="hidden min-[380px]:inline">Adicionar</span>
-                              </button>
-                            </div>
-                          </div>
-
-                          {hasProductDetails && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setPdvProductDetailId((current) =>
-                                    current === productDetailKey ? null : productDetailKey,
-                                  );
-                                }}
-                                aria-expanded={pdvProductDetailId === productDetailKey}
-                                aria-controls={`pdv-product-details-${productDetailKey}`}
-                                aria-label={`Ver ingredientes e detalhes de ${productLabel.name}`}
-                                title="Ver ingredientes e detalhes"
-                                className={"absolute right-2 top-2 z-20 flex size-7 items-center justify-center rounded-lg border border-koma-border bg-koma-card/95 text-koma-muted hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-300"}
-                              >
-                                <Info size={13} />
-                              </button>
-                              <div
-                                id={`pdv-product-details-${productDetailKey}`}
-                                role="note"
-                                className={clsx(
-                                  'pointer-events-none',
-                                  'absolute',
-                                  'inset-x-2',
-                                  'top-10',
-                                  'z-10',
-                                  'rounded-xl',
-                                  'border',
-                                  'border-koma-border',
-                                  'bg-koma-dialog/95',
-                                  'backdrop-blur-md',
-                                  'p-2.5',
-                                  'text-left',
-                                  'shadow-xl',
-                                  'translate-y-1',
-                                  'opacity-0',
-                                  'transition-all',
-                                  'group-hover:translate-y-0',
-                                  'group-hover:opacity-100',
-                                  pdvProductDetailId === productDetailKey && 'translate-y-0 opacity-100',
-                                )}
-                              >
-                                <span
-                                  className={"block text-[8px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300"}
-                                >
-                                  Ingredientes e detalhes
-                                </span>
-                                {productLabel.code && (
-                                  <span className={"mt-1 block font-mono text-[8px] text-koma-muted"}>
-                                    Cód. {productLabel.code}
-                                  </span>
-                                )}
-                                <p className={"mt-1 text-[10px] leading-relaxed text-koma-secondary"}>
-                                  {p.descricao || 'Sem descrição cadastrada.'}
-                                </p>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {filteredProducts.map((product) => (
+                      <CashierPdvProductCard
+                        key={product.id}
+                        product={product}
+                        cartQuantity={cartQuantitiesByProduct.get(String(product.id)) ?? 0}
+                        detailsOpen={pdvProductDetailId === String(product.id)}
+                        onConfigure={openConfig}
+                        onQuickAdd={handleQuickAddProduct}
+                        onToggleDetails={toggleProductDetails}
+                      />
+                    ))}
                   </div>
                 ) : (
                   <div
@@ -586,10 +483,11 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
             </div>
 
             <div
+              id="pdv-order-panel"
               className={`cashier-pdv-cart w-full xl:w-[350px] 2xl:w-[380px] bg-koma-panel border border-koma-border rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden xl:flex'} ${pdvCart.length === 0 ? 'xl:self-start' : ''} flex-col overflow-hidden shrink-0 shadow-sm`}
             >
               <div
-                className={"bg-koma-raised px-4 py-3.5 border-b border-koma-border flex justify-between items-center shrink-0"}
+                className={"cashier-pdv-cart__header bg-koma-raised px-4 py-3.5 border-b border-koma-border flex justify-between items-center shrink-0"}
               >
                 <span className={"font-semibold text-koma-foreground flex items-center gap-2"}>
                   <span
@@ -600,7 +498,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   <span>Pedido atual</span>
                 </span>
                 <span
-                  className={"bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 font-bold px-2.5 py-1 rounded-full font-mono text-[9px]"}
+                  className="cashier-pdv-cart__count bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 font-bold px-2.5 py-1 rounded-full"
                 >
                   {pdvCartItemCount} itens
                 </span>
@@ -608,25 +506,23 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
 
               <div className={"cashier-pdv-cart-scroll min-h-[180px] flex-1 overflow-y-auto p-3 space-y-2"}>
                 {pdvCart.length === 0 ? (
-                  <div
-                    className={"h-full min-h-44 flex flex-col items-center justify-center text-center px-6 text-koma-muted"}
-                  >
-                    <ShoppingCart size={22} className={"mb-3 opacity-60"} />
-                    <p className={"text-xs font-semibold text-koma-subtle"}>Comece escolhendo um item</p>
-                    <p className={"text-[9px] mt-1"}>+ Adicionar é rápido. O card abre a personalização.</p>
+                  <div className="cashier-pdv-cart__empty h-full flex flex-col items-center justify-center text-center px-5">
+                    <img src="/brand/cashier/pdv-empty-cart-v1.svg" alt="" width="100" height="80" loading="lazy" />
+                    <strong>Comece escolhendo um item</strong>
+                    <p>+ Adicionar é rápido. Toque no produto para personalizar.</p>
                   </div>
                 ) : (
                   pdvCart.map((item, idx) => (
                     <div
                       key={`${item.product.id}-${idx}`}
-                      className={"bg-white/[0.025] p-3 rounded-xl border border-koma-border-subtle space-y-2.5"}
+                      className={"cashier-pdv-cart__line bg-white/[0.025] p-3 rounded-xl border border-koma-border-subtle space-y-2.5"}
                     >
                       <div className={"flex justify-between items-start gap-2"}>
                         <div className="min-w-0 space-y-0.5">
                           <strong className={"text-koma-foreground text-xs block truncate max-w-48"}>
                             {item.product.nome}
                           </strong>
-                          <span className={"text-[9px] text-[#4fe0bc] font-mono block"}>
+                          <span className="cashier-pdv-cart__unit-price block">
                             {formatCurrency(pdvCartItemUnitPrice(item))} / un.
                           </span>
                           {(() => {
@@ -647,7 +543,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           <button
                             type="button"
                             onClick={() => openConfig(item.product, idx)}
-                            className={"text-koma-muted hover:text-emerald-400 p-1 cursor-pointer rounded-lg hover:bg-koma-raised"}
+                            className="cashier-pdv-cart__item-action text-koma-muted hover:text-koma-foreground rounded-lg hover:bg-koma-raised"
                             aria-label={`Editar ${item.product.nome}`}
                             title="Editar item e adicionais"
                           >
@@ -656,7 +552,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           <button
                             type="button"
                             onClick={() => handlePdvRemoveCartItem(idx)}
-                            className={"text-koma-muted hover:text-rose-500 p-1 cursor-pointer rounded-lg"}
+                            className="cashier-pdv-cart__item-action text-koma-muted hover:text-rose-500 rounded-lg"
                             aria-label={`Remover ${item.product.nome}`}
                           >
                             <Trash2 size={12} />
@@ -681,32 +577,35 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           <button
                             type="button"
                             onClick={() => handlePdvUpdateCartQty(idx, -1)}
-                            className={"px-2 py-1 text-koma-subtle hover:text-koma-foreground cursor-pointer hover:bg-koma-raised"}
+                            aria-label={`Diminuir quantidade de ${item.product.nome}`}
+                            className="cashier-pdv-cart__qty-button text-koma-subtle hover:text-koma-foreground hover:bg-koma-raised"
                           >
                             -
                           </button>
                           <span
-                            className={"px-2 text-[10px] font-bold font-mono text-koma-foreground"}
+                            className="cashier-pdv-cart__qty-value px-2 font-bold text-koma-foreground"
                           >
                             {item.quantity}
                           </span>
                           <button
                             type="button"
                             onClick={() => handlePdvUpdateCartQty(idx, 1)}
-                            className={"px-2 py-1 text-koma-subtle hover:text-koma-foreground cursor-pointer hover:bg-koma-raised"}
+                            aria-label={`Aumentar quantidade de ${item.product.nome}`}
+                            className="cashier-pdv-cart__qty-button text-koma-subtle hover:text-koma-foreground hover:bg-koma-raised"
                           >
                             +
                           </button>
                         </div>
                         <input
                           type="text"
-                          placeholder="Obs..."
+                          aria-label={`Observação de ${item.product.nome}`}
+                          placeholder="Observação do item"
                           value={item.obs}
                           onChange={(e) => {
                             const val = e.target.value;
                             setPdvCart((prev) => prev.map((entry, index) => index === idx ? { ...entry, obs: val } : entry));
                           }}
-                          className={"min-w-0 flex-1 px-1.5 py-1 text-[9px] bg-koma-input border border-koma-border rounded focus:outline-none focus:border-[#10b981] text-koma-foreground"}
+                          className="cashier-pdv-cart__observation min-w-0 flex-1 bg-koma-input border border-koma-border rounded-lg text-koma-foreground"
                         />
                       </div>
 
@@ -753,7 +652,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               <form
                 onSubmit={handlePdvSubmitOrder}
                 noValidate
-                className={"min-h-0 max-h-[48%] shrink-0 border-t border-koma-border bg-koma-panel/40 flex flex-col"}
+                className={"cashier-pdv-cart__form min-h-0 max-h-[48%] shrink-0 border-t border-koma-border bg-koma-panel/40 flex flex-col"}
               >
                 <div className="min-h-0 overflow-y-auto p-3 space-y-3 overscroll-contain">
                   <div className="space-y-1.5">
@@ -792,7 +691,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                     </div>
                   </div>
 
-                  <div aria-label="Resumo do pedido" className="grid grid-cols-3 gap-1.5 rounded-xl border border-koma-border bg-koma-input p-2">
+                  <div aria-label="Resumo do pedido" className="cashier-pdv-cart__summary grid grid-cols-3 gap-1.5 rounded-xl border border-koma-border bg-koma-input p-2">
                     <div>
                       <span className="block text-[7px] font-bold uppercase tracking-wider text-koma-muted">Modalidade</span>
                       <strong className="text-[9px] text-koma-foreground">
@@ -1023,8 +922,8 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   )}
                 </div>
 
-                <div className="shrink-0 border-t border-koma-border bg-koma-panel p-3 shadow-[0_-10px_24px_rgba(0,0,0,0.12)]">
-                  <div className="mb-2 flex items-center justify-between font-mono text-[11px] font-bold text-koma-foreground">
+                <div className="cashier-pdv-cart__footer shrink-0 border-t border-koma-border bg-koma-panel p-3 shadow-[0_-10px_24px_rgba(0,0,0,0.12)]">
+                  <div className="cashier-pdv-cart__total mb-2 flex items-center justify-between font-mono text-[11px] font-bold text-koma-foreground">
                     <span>Total pedido</span>
                     <span className="text-sm text-emerald-700 dark:text-emerald-400">{formatCurrency(cartTotal)}</span>
                   </div>
@@ -1061,14 +960,15 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               <button
                 type="button"
                 onClick={() => setBalcaoMobileView('carrinho')}
-                className={"xl:hidden fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] lg:bottom-4 left-4 right-4 z-40 min-h-12 py-3 px-5 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] font-bold rounded-2xl shadow-2xl flex items-center justify-between border border-[#4fe0bc]/30 animate-fade-in cursor-pointer"}
+                aria-label={`Ver pedido com ${pdvCartItemCount} ${pdvCartItemCount === 1 ? 'item' : 'itens'}, total ${formatCurrency(cartTotal)}`}
+                className="cashier-pdv-mobile-cart-cta xl:hidden"
               >
-                <span className={"text-xs flex items-center gap-2"}>
+                <span className="cashier-pdv-mobile-cart-cta__label">
                   <ShoppingCart size={16} />
                   <span>{pdvCartItemCount} itens no carrinho</span>
                 </span>
                 <span
-                  className={"text-xs font-mono font-extrabold bg-black/30 px-3 py-1 rounded-xl"}
+                  className="cashier-pdv-mobile-cart-cta__total"
                 >
                   {formatCurrency(cartTotal)} →
                 </span>

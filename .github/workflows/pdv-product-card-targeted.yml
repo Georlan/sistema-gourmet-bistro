@@ -1,0 +1,44 @@
+name: PDV Product Card Browser Targeted
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/components/caixa/pdv/**'
+      - 'src/index.css'
+      - 'e2e/cashier-pdv-product-card.spec.ts'
+      - '.github/workflows/pdv-product-card-targeted.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    name: PDV cart and catalog on mobile + desktop
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Confirm independent product actions and readable states
+        run: >-
+          KOMA_E2E_PORT=4283 npm run test:e2e --
+          e2e/cashier-pdv-product-card.spec.ts
+          --project=mobile-390
+          --project=desktop-1366
+          --workers=2
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: pdv-product-card-regression
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 3

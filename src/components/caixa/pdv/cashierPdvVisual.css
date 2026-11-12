@@ -1,0 +1,516 @@
+/* Novo pedido: a single presentation contract for the PDV catalog and order.
+ * Values are semantic theme tokens; no new images, fonts or requests are needed.
+ * Do not put order submission, validation or pricing rules in this stylesheet. */
+.cashier-pdv-view {
+  --pdv-ink: var(--koma-text-primary);
+  --pdv-secondary: var(--koma-text-secondary);
+  --pdv-line: var(--koma-border-default);
+  --pdv-mint: var(--koma-action-bg);
+  --pdv-on-mint: var(--koma-action-text);
+  font-family: var(--koma-font-body);
+}
+
+.cashier-pdv-view .cashier-pdv-product-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+  padding-bottom: 1rem;
+}
+
+.cashier-pdv-product-card {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  background: var(--koma-surface-card);
+  border: 1px solid var(--pdv-line);
+  border-radius: 1rem;
+  box-shadow: 0 2px 0 #0b332215;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.cashier-pdv-product-card.is-in-cart {
+  border-color: var(--koma-accent-border);
+}
+.cashier-pdv-product-card:hover,
+.cashier-pdv-product-card:focus-within {
+  border-color: var(--koma-accent-border);
+  box-shadow: 0 3px 12px #102d2015;
+}
+.cashier-pdv-product-card__open {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.cashier-pdv-product-card__open:focus-visible {
+  outline: 2px solid var(--koma-focus-ring);
+  outline-offset: -3px;
+}
+.cashier-pdv-product-card__content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: .625rem;
+  height: 100%;
+  min-height: 10.75rem;
+  padding: .75rem;
+  pointer-events: none;
+}
+.cashier-pdv-product-card__image {
+  display: block;
+  width: 100%;
+  height: 5.5rem;
+  aspect-ratio: 16 / 7;
+  object-fit: cover;
+  border-radius: .625rem;
+  background: var(--koma-surface-raised);
+}
+.cashier-pdv-product-card__identity {
+  flex: 1;
+  min-width: 0;
+}
+.cashier-pdv-product-card__heading {
+  display: flex;
+  align-items: flex-start;
+  gap: .375rem;
+  min-width: 0;
+}
+.cashier-pdv-product-card__quantity {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  min-width: 1.375rem;
+  height: 1.375rem;
+  padding: 0 .25rem;
+  border: 1px solid var(--koma-accent-border);
+  border-radius: 999px;
+  background: var(--koma-accent-soft);
+  color: var(--koma-accent-text);
+  font-size: .6875rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.cashier-pdv-product-card__name {
+  display: -webkit-box;
+  overflow: hidden;
+  min-height: 2.25em;
+  min-width: 0;
+  color: var(--pdv-ink);
+  font-size: .875rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -.012em;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.cashier-pdv-product-card__choices {
+  display: inline-flex;
+  align-items: center;
+  margin-top: .375rem;
+  padding: .1875rem .375rem;
+  border-radius: .375rem;
+  background: var(--koma-accent-soft);
+  color: var(--koma-accent-text);
+  font-size: .6875rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.cashier-pdv-view .cashier-pdv-product-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .375rem;
+  padding-top: .625rem;
+  border-top: 1px solid var(--pdv-line);
+}
+.cashier-pdv-product-card__price {
+  color: var(--koma-accent-text);
+  font-size: .8125rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cashier-pdv-product-card__add {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .25rem;
+  min-height: 2.25rem;
+  padding: .375rem .5rem;
+  border: 0;
+  border-radius: .625rem;
+  background: var(--pdv-mint);
+  color: var(--pdv-on-mint);
+  font-size: .75rem;
+  font-weight: 600;
+  line-height: 1.15;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+.cashier-pdv-product-card__add:hover { background: var(--koma-action-hover); }
+.cashier-pdv-product-card__add:focus-visible,
+.cashier-pdv-product-card__info:focus-visible {
+  outline: 2px solid var(--koma-focus-ring);
+  outline-offset: 2px;
+}
+.cashier-pdv-product-card__info {
+  position: absolute;
+  z-index: 3;
+  top: .625rem;
+  right: .625rem;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--pdv-line);
+  border-radius: .625rem;
+  background: var(--koma-surface-panel);
+  color: var(--pdv-secondary);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.cashier-pdv-product-card__info[aria-expanded="true"] {
+  background: var(--koma-accent-soft);
+  color: var(--koma-accent-text);
+  border-color: var(--koma-accent-border);
+}
+.cashier-pdv-product-card__details {
+  position: absolute;
+  z-index: 4;
+  top: 2.95rem;
+  right: .5rem;
+  left: .5rem;
+  visibility: hidden;
+  padding: .75rem;
+  border: 1px solid var(--koma-border-strong);
+  border-radius: .75rem;
+  background: var(--koma-surface-dialog);
+  color: var(--pdv-secondary);
+  box-shadow: 0 8px 18px #08170f3d;
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 130ms ease, transform 130ms ease, visibility 130ms ease;
+}
+.cashier-pdv-product-card__details.is-open {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+}
+@media (hover: hover) {
+  .cashier-pdv-product-card:hover .cashier-pdv-product-card__details {
+    visibility: visible;
+    opacity: 1;
+    transform: none;
+  }
+}
+.cashier-pdv-product-card__details strong {
+  display: block;
+  margin-bottom: .3rem;
+  color: var(--koma-accent-text);
+  font-size: .6875rem;
+  font-weight: 700;
+}
+.cashier-pdv-product-card__details span { display: block; font-size: .6875rem; }
+.cashier-pdv-product-card__details p {
+  margin-top: .3rem;
+  overflow-wrap: anywhere;
+  font-size: .75rem;
+  line-height: 1.45;
+}
+
+.cashier-pdv-view .cashier-pdv-cart {
+  background: var(--koma-surface-panel);
+  border-color: var(--pdv-line);
+}
+.cashier-pdv-view .cashier-pdv-cart__header {
+  padding: .75rem 1rem;
+  background: var(--koma-surface-raised);
+}
+.cashier-pdv-view .cashier-pdv-cart__header > span:first-child {
+  font-size: .875rem;
+  font-weight: 600;
+}
+.cashier-pdv-view .cashier-pdv-cart__count {
+  font-size: .6875rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.cashier-pdv-view .cashier-pdv-cart__empty {
+  min-height: 11rem;
+  gap: .5rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__empty img {
+  display: block;
+  width: 3.75rem;
+  height: 3.75rem;
+  object-fit: contain;
+}
+.cashier-pdv-view .cashier-pdv-cart__empty strong {
+  font-size: .875rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--pdv-ink);
+}
+.cashier-pdv-view .cashier-pdv-cart__empty p {
+  max-width: 16rem;
+  font-size: .75rem;
+  line-height: 1.4;
+  color: var(--pdv-secondary);
+}
+.cashier-pdv-view .cashier-pdv-cart__line { background: var(--koma-surface-card); }
+.cashier-pdv-view .cashier-pdv-cart__line strong {
+  font-size: .8125rem;
+  line-height: 1.35;
+}
+.cashier-pdv-view .cashier-pdv-cart__line .cashier-pdv-cart__unit-price {
+  color: var(--koma-accent-text);
+  font-size: .75rem;
+  font-variant-numeric: tabular-nums;
+}
+.cashier-pdv-view .cashier-pdv-cart__summary {
+  gap: .5rem;
+  padding: .625rem;
+  background: var(--koma-surface-card);
+}
+.cashier-pdv-view .cashier-pdv-cart__summary span {
+  font-size: .625rem;
+  line-height: 1.3;
+}
+.cashier-pdv-view .cashier-pdv-cart__summary strong {
+  font-size: .75rem;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+.cashier-pdv-view .cashier-pdv-cart__form :is(input, select) {
+  font-size: .8125rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__form label {
+  font-size: .6875rem;
+  line-height: 1.3;
+}
+.cashier-pdv-view .cashier-pdv-cart__form details summary {
+  font-size: .6875rem;
+  line-height: 1.35;
+}
+.cashier-pdv-view .cashier-pdv-cart__footer {
+  background: var(--koma-surface-panel);
+}
+.cashier-pdv-view .cashier-pdv-cart__total {
+  font-family: var(--koma-font-body);
+  font-size: .8125rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__total > span:last-child {
+  font-size: 1rem;
+  color: var(--koma-accent-text);
+  font-variant-numeric: tabular-nums;
+}
+.cashier-pdv-view #pdv-submit-btn:not(:disabled) {
+  background: var(--pdv-mint);
+  color: var(--pdv-on-mint);
+  font-size: .8125rem;
+  font-weight: 700;
+}
+.cashier-pdv-view #pdv-submit-btn:not(:disabled):hover {
+  background: var(--koma-action-hover);
+}
+.cashier-pdv-view #pdv-submit-btn:focus-visible {
+  outline: 2px solid var(--koma-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (min-width: 640px) {
+  .cashier-pdv-view .cashier-pdv-product-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr));
+  }
+}
+@media (max-width: 379px) {
+  .cashier-pdv-product-card__content { padding: .5rem; }
+  .cashier-pdv-product-card__name { font-size: .8125rem; }
+  .cashier-pdv-product-card__add { font-size: .6875rem; padding-inline: .35rem; }
+}
+@media (pointer: coarse) {
+  .cashier-pdv-product-card__add,
+  .cashier-pdv-product-card__info { min-height: 2.75rem; }
+  .cashier-pdv-product-card__info { width: 2.75rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cashier-pdv-product-card,
+  .cashier-pdv-product-card__details { transition: none; }
+}
+
+/* PDV mobile work area: the catalog remains the primary task, with
+ * one clear cart action above the shared five-item bottom navigation. */
+.cashier-pdv-view .cashier-pdv-mobile-switch {
+  display: flex;
+  flex: 0 0 auto;
+  gap: .25rem;
+  padding: .25rem;
+  border: 1px solid var(--pdv-line);
+  border-radius: .875rem;
+  background: var(--koma-surface-raised);
+}
+.cashier-pdv-view .cashier-pdv-mobile-switch__button {
+  display: inline-flex;
+  flex: 1 1 0;
+  justify-content: center;
+  align-items: center;
+  gap: .4rem;
+  min-height: 2.75rem;
+  padding: .5rem .625rem;
+  border: 1px solid transparent;
+  border-radius: .625rem;
+  color: var(--pdv-secondary);
+  font-size: .8125rem;
+  font-weight: 600;
+  line-height: 1.25;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.cashier-pdv-view .cashier-pdv-mobile-switch__button.is-active {
+  background: var(--koma-accent-soft);
+  border-color: var(--koma-accent-border);
+  color: var(--koma-accent-text);
+}
+.cashier-pdv-view .cashier-pdv-mobile-switch__button:focus-visible,
+.cashier-pdv-view .cashier-pdv-mobile-cart-cta:focus-visible {
+  outline: 2px solid var(--koma-focus-ring);
+  outline-offset: 2px;
+}
+.cashier-pdv-view .cashier-pdv-search-input {
+  min-height: 2.75rem;
+  font-size: .875rem;
+}
+.cashier-pdv-view .cashier-pdv-search-input:focus-visible {
+  outline: 2px solid var(--koma-focus-ring);
+  outline-offset: -2px;
+}
+.cashier-pdv-view .cashier-pdv-category {
+  min-height: 2.5rem;
+  padding-inline: .75rem;
+  border-radius: .625rem;
+  font-size: .75rem;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  touch-action: pan-x;
+}
+.cashier-pdv-view .cashier-pdv-cart__item-action,
+.cashier-pdv-view .cashier-pdv-cart__qty-button {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: .375rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.cashier-pdv-view .cashier-pdv-cart__item-action:focus-visible,
+.cashier-pdv-view .cashier-pdv-cart__qty-button:focus-visible,
+.cashier-pdv-view .cashier-pdv-cart__observation:focus-visible {
+  outline: 2px solid var(--koma-focus-ring);
+  outline-offset: 2px;
+}
+.cashier-pdv-view .cashier-pdv-cart__qty-value {
+  min-width: 1.5rem;
+  text-align: center;
+  font-size: .875rem;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+.cashier-pdv-view .cashier-pdv-cart__observation {
+  min-height: 2.75rem;
+  padding: .5rem .625rem;
+  font-size: .8125rem;
+  line-height: 1.35;
+}
+.cashier-pdv-view .cashier-pdv-cart__empty img {
+  width: 6.25rem;
+  height: 5rem;
+}
+.cashier-pdv-view .cashier-pdv-mobile-cart-cta {
+  position: fixed;
+  z-index: 35;
+  right: .75rem;
+  bottom: calc(5.25rem + env(safe-area-inset-bottom));
+  left: .75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  min-height: 3.5rem;
+  padding: .75rem 1rem;
+  border: 1px solid var(--koma-accent-border);
+  border-radius: .875rem;
+  background: var(--pdv-mint);
+  color: var(--pdv-on-mint);
+  box-shadow: 0 6px 18px #061e1750;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.cashier-pdv-view .cashier-pdv-mobile-cart-cta:hover { background: var(--koma-action-hover); }
+.cashier-pdv-view .cashier-pdv-mobile-cart-cta__label {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: .5rem;
+  font-size: .875rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.cashier-pdv-view .cashier-pdv-mobile-cart-cta__label svg { flex: 0 0 auto; }
+.cashier-pdv-view .cashier-pdv-mobile-cart-cta__total {
+  flex: 0 0 auto;
+  font-size: .9375rem;
+  font-weight: 700;
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 1279px) {
+  .cashier-pdv-view.has-mobile-cart-cta .cashier-pdv-product-grid {
+    padding-bottom: 7.5rem;
+  }
+}
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .cashier-pdv-view .cashier-pdv-mobile-cart-cta {
+    right: 1rem;
+    bottom: 1rem;
+    left: 1rem;
+  }
+}
+@media (min-width: 1280px) {
+  .cashier-pdv-view .cashier-pdv-mobile-switch,
+  .cashier-pdv-view .cashier-pdv-mobile-cart-cta { display: none; }
+}
+@media (max-width: 767px) {
+  .cashier-pdv-view .cashier-pdv-cart__form :is(input, select) { min-height: 2.75rem; font-size: 1rem; }
+  .cashier-pdv-view .cashier-pdv-cart__form { max-height: none; }
+  .cashier-pdv-view .cashier-pdv-cart__form label { font-size: .75rem; }
+  .cashier-pdv-view .cashier-pdv-cart__form details summary { font-size: .8125rem; }
+  .cashier-pdv-view .cashier-pdv-cart__form details summary strong { font-size: .875rem; line-height: 1.35; }
+  .cashier-pdv-view .cashier-pdv-cart__form details summary span { font-size: .75rem; line-height: 1.4; }
+  .cashier-pdv-view .cashier-pdv-cart__form button:not(#pdv-submit-btn) { min-height: 2.75rem; font-size: .75rem; }
+  .cashier-pdv-view #pdv-submit-btn { min-height: 3rem; }
+  .cashier-pdv-view #pdv-submit-btn > span:last-child { display: none; }
+  .cashier-pdv-view .cashier-pdv-mobile-switch__button { font-size: .875rem; }
+  .cashier-pdv-view .cashier-pdv-category { min-height: 2.75rem; }
+}
+@media (max-width: 359px) {
+  .cashier-pdv-view .cashier-pdv-mobile-cart-cta { gap: .375rem; padding-inline: .625rem; }
+  .cashier-pdv-view .cashier-pdv-mobile-cart-cta__label,
+  .cashier-pdv-view .cashier-pdv-mobile-cart-cta__total { font-size: .8125rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cashier-pdv-view .cashier-pdv-mobile-switch__button { transition: none; }
+}
