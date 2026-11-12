@@ -311,39 +311,57 @@ test('PDV optional customer/payment panels preserve checkout context without add
 });
 
 
-test('PDV mobile reclaims catalog space while all sales destinations remain reachable', async ({ page }) => {
-  test.skip((page.viewportSize()?.width ?? 1366) >= 768, 'Phone-only contextual navigation');
-  await openNewOrder(page);
+test('PDV phone sales tabs are always visible, left-aligned and scrollbar-free', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1366) >= 768, 'Phone-only horizontal navigation');
 
-  // Role queries intentionally omit display:none elements. Use the DOM
-  // locator to assert the same navigation exists while being collapsed.
-  const navigation = page.locator('nav[aria-label="Telas desta área"]');
-  const toggle = page.getByRole('button', { name: 'Mostrar telas de Vendas' });
-  await expect(toggle).toBeVisible();
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(navigation).toHaveCount(1);
-  await expect(navigation).toBeHidden();
+  for (const width of [320, 360, 390, 430]) {
+    await page.setViewportSize({ width, height: 780 });
+    await openNewOrder(page);
 
-  const product = page.getByTestId('cashier-pdv-product-card').first();
-  await expect(product).toBeVisible();
-  const compactTop = (await product.boundingBox())?.y ?? 0;
+    const nav = page.getByRole('navigation', { name: 'Telas desta área' });
+    const strip = nav.locator('.cashier-subnav__scroll');
+    await expect(nav).toBeVisible();
+    await expect(nav.locator('.cashier-subnav__button')).toHaveCount(6);
+    await expect(page.getByRole('button', { name: /(?:Mostrar|Ocultar) telas de Vendas/ })).toHaveCount(0);
+    await expect(nav.getByRole('button', { name: 'Novo pedido', exact: true })).toHaveAttribute('aria-current', 'page');
 
-  await toggle.click();
-  const collapse = page.getByRole('button', { name: 'Ocultar telas de Vendas' });
-  await expect(collapse).toHaveAttribute('aria-expanded', 'true');
-  await expect(navigation).toBeVisible();
-  await expect(navigation.getByRole('button', { name: 'Retiradas' })).toBeVisible();
-  const expandedTop = (await product.boundingBox())?.y ?? 0;
-  expect(expandedTop - compactTop).toBeGreaterThanOrEqual(40);
+    // Native touch scrolling remains available, but not the grey track
+    // or the empty arrow gutter before the first destination.
+    await expect.poll(() => strip.evaluate(el => el.scrollLeft)).toBe(0);
+    const geometry = await strip.evaluate(el => {
+      const viewport = el.getBoundingClientRect();
+      const first = el.querySelector('button')!.getBoundingClientRect();
+      return {
+        leadingGap: Math.round(first.left - viewport.left),
+        track: getComputedStyle(el).scrollbarWidth,
+        overflow: el.scrollWidth - el.clientWidth,
+      };
+    });
+    expect(geometry.leadingGap).toBeGreaterThanOrEqual(-1);
+    expect(geometry.leadingGap).toBeLessThanOrEqual(2);
+    expect(geometry.track).toBe('none');
+    expect(geometry.overflow).toBeGreaterThan(0);
+    await expect(nav.locator('.cashier-subnav__arrow').first()).toBeHidden();
+    await expect(nav.locator('.cashier-subnav__arrow').last()).toBeHidden();
 
-  await collapse.click();
-  await expect(navigation).toBeHidden();
-  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.getByRole('group', { name: 'Navegação e atendimento do novo pedido' })).toBeVisible();
-  await expect(page.locator('.cashier-mobile-bottom-bar')).toBeVisible();
+    const maxScroll = await strip.evaluate(el => {
+      const max = el.scrollWidth - el.clientWidth;
+      el.scrollLeft = max;
+      return max;
+    });
+    await expect.poll(() => strip.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
+    expect(Math.abs(await strip.evaluate(el => el.scrollLeft) - maxScroll)).toBeLessThanOrEqual(1);
+    await nav.getByRole('button', { name: 'Retiradas', exact: true }).click();
+    await nav.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+    await expect(nav).toBeVisible();
+    await expect.poll(() => strip.evaluate(el => el.scrollLeft)).toBe(0);
+    await expect(page.getByTestId('cashier-pdv-product-card').first()).toBeVisible();
 
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-  expect(overflow).toBeLessThanOrEqual(1);
+    const horizontalOverflow = await page.evaluate(() =>
+      document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(horizontalOverflow).toBeLessThanOrEqual(1);
+  }
 });
 
 test('PDV keeps desktop sales navigation in the existing position', async ({ page }) => {
