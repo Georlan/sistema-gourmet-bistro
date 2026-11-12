@@ -483,3 +483,175 @@
     transition: none !important;
   }
 }
+
+/* Compact service cards share the cart rather than introducing more modals.
+   Only their relevant fields expand; the server still validates fulfillment. */
+.cashier-pdv-view .cashier-pdv-service-detail {
+  overflow: hidden;
+  border: 1px solid var(--koma-border-default);
+  border-radius: .875rem;
+  background: var(--koma-surface-card);
+}
+.cashier-pdv-view .cashier-pdv-service-detail__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  min-height: 3.125rem;
+  padding: .625rem .75rem;
+  cursor: pointer;
+  list-style: none;
+}
+.cashier-pdv-view .cashier-pdv-service-detail__summary::-webkit-details-marker { display: none; }
+.cashier-pdv-view .cashier-pdv-service-detail__summary--static { cursor: default; }
+.cashier-pdv-view .cashier-pdv-service-detail__label {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: .625rem;
+  min-width: 0;
+}
+.cashier-pdv-view .cashier-pdv-service-detail__label > svg {
+  flex: 0 0 auto;
+  color: var(--koma-accent-text);
+}
+.cashier-pdv-view .cashier-pdv-service-detail__label > span { min-width: 0; }
+.cashier-pdv-view .cashier-pdv-service-detail__label strong {
+  display: block;
+  color: var(--koma-text-primary);
+  font-size: .8125rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.cashier-pdv-view .cashier-pdv-service-detail__label strong small { display: inline; font-weight: 400; }
+.cashier-pdv-view .cashier-pdv-service-detail__label small {
+  display: block;
+  overflow: hidden;
+  color: var(--koma-text-secondary);
+  font-size: .6875rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+}
+.cashier-pdv-view .cashier-pdv-service-detail__status {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: .25rem;
+  color: var(--koma-accent-text);
+  font-size: .75rem;
+  font-weight: 600;
+}
+.cashier-pdv-view .cashier-pdv-service-detail__summary > svg,
+.cashier-pdv-view .cashier-pdv-service-detail__status > svg {
+  flex: 0 0 auto;
+  color: var(--koma-text-secondary);
+  transition: transform 130ms ease;
+}
+.cashier-pdv-view .cashier-pdv-service-detail[open] > summary > svg,
+.cashier-pdv-view .cashier-pdv-service-detail[open] > summary .cashier-pdv-service-detail__status > svg,
+.cashier-pdv-view .cashier-pdv-service-detail__delivery[open] > summary > svg {
+  transform: rotate(180deg);
+}
+.cashier-pdv-view .cashier-pdv-service-detail__content {
+  padding: .75rem;
+  border-top: 1px solid var(--koma-border-default);
+}
+.cashier-pdv-view .cashier-pdv-service-detail__delivery {
+  border-top: 1px solid var(--koma-border-default);
+}
+.cashier-pdv-view .cashier-pdv-service-detail__delivery > .cashier-pdv-service-detail__content {
+  padding: .625rem;
+}
+.cashier-pdv-view .cashier-pdv-customer-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .625rem;
+}
+.cashier-pdv-view .cashier-pdv-customer-fields > div { min-width: 0; }
+.cashier-pdv-view .cashier-pdv-customer-fields label {
+  display: block;
+  margin-bottom: .3rem;
+  color: var(--koma-text-secondary);
+  font-size: .75rem;
+  font-weight: 600;
+}
+.cashier-pdv-view .cashier-pdv-customer-fields input {
+  display: block;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: .625rem .5rem;
+  border: 1px solid var(--koma-border-default);
+  border-radius: .625rem;
+  background: var(--koma-surface-input);
+  color: var(--koma-text-primary);
+  font-size: 1rem;
+}
+.cashier-pdv-view .cashier-pdv-customer-fields__lookup {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--koma-text-secondary);
+  font-size: .75rem;
+  line-height: 1.4;
+}
+.cashier-pdv-view .cashier-pdv-payment-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .375rem;
+}
+.cashier-pdv-view .cashier-pdv-payment-option {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: .5rem;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: .5rem .625rem;
+  border: 1px solid var(--koma-border-default);
+  border-radius: .625rem;
+  background: var(--koma-surface-panel);
+  color: var(--koma-text-primary);
+  cursor: pointer;
+  font-size: .75rem;
+  font-weight: 600;
+  text-align: left;
+  line-height: 1.3;
+}
+.cashier-pdv-view .cashier-pdv-payment-option.is-selected {
+  border-color: var(--koma-accent-border);
+  background: var(--koma-accent-soft);
+  color: var(--koma-accent-text);
+}
+.cashier-pdv-view .cashier-pdv-payment-option__dot {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 1px solid var(--koma-border-strong);
+  border-radius: 50%;
+}
+.cashier-pdv-view .cashier-pdv-payment-option.is-selected .cashier-pdv-payment-option__dot {
+  border-color: var(--koma-action-bg);
+  background: var(--koma-action-bg);
+  color: var(--koma-action-text);
+}
+.cashier-pdv-view .cashier-pdv-service-detail summary:focus-visible,
+.cashier-pdv-view .cashier-pdv-payment-option:focus-visible,
+.cashier-pdv-view .cashier-pdv-customer-fields input:focus-visible {
+  outline: 2px solid var(--koma-focus-ring);
+  outline-offset: 2px;
+}
+.cashier-pdv-view .cashier-pdv-cart__modality-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .25rem;
+}
+.cashier-pdv-view .cashier-pdv-cart__modality-option svg { flex: 0 0 auto; }
+@media (max-width: 359px) {
+  .cashier-pdv-view .cashier-pdv-customer-fields { grid-template-columns: 1fr; }
+  .cashier-pdv-view .cashier-pdv-service-detail__summary { padding-inline: .5rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cashier-pdv-view .cashier-pdv-service-detail__summary svg { transition: none; }
+}
