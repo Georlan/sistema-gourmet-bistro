@@ -47,7 +47,7 @@ export function CashierPdvCustomerFields({
         <p className="cashier-pdv-customer-fields__lookup" role="status" aria-live="polite">
           {lookupStatus === 'loading' && 'Buscando cliente...'}
           {lookupStatus === 'found' && 'Cliente encontrado.'}
-          {lookupStatus === 'new' && 'Número novo — o cliente será criado ao lançar o pedido.'}
+          {lookupStatus === 'new' && 'Novo número — o cliente será criado ao lançar o pedido.'}
           {lookupStatus === 'error' && 'Não foi possível consultar o cliente. Confira os dados.'}
         </p>
       )}
