@@ -633,8 +633,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <strong className="block text-[9px] text-koma-foreground">Identificação do cliente</strong>
-                            <span className="text-[8px] text-koma-muted">Opcional para retirada rápida</span>
-                          </div>
+                              </div>
                           <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
                             <span className="group-open:hidden">
                               {pdvCustomerName || pdvCustomerPhone ? 'Preenchido' : 'Adicionar'}
@@ -724,7 +723,10 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           {pdvCustomerLookup === 'new' && 'Novo número — o cliente será criado ao lançar o pedido.'}
                         </p>
                       )}
-                      <details className="group rounded-xl border border-koma-border bg-koma-card/40">
+                      <details
+                        className="group rounded-xl border border-koma-border bg-koma-card/40"
+                        defaultOpen={!pdvDeliveryAddressDraft.logradouro || !pdvDeliveryAddressDraft.numero}
+                      >
                         <summary className="cursor-pointer list-none px-3 py-2.5">
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
@@ -758,7 +760,6 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <strong className="block text-[9px] text-koma-foreground">Pagamento <span className="font-normal text-koma-muted">(opcional agora)</span></strong>
-                            <span className="text-[8px] text-koma-muted">Pode ser informado no fechamento.</span>
                           </div>
                           <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
                             <span className="group-open:hidden">
