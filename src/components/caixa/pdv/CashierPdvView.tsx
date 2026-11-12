@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PAYMENT_LABELS, type PaymentMethod } from '../../../cardapio/paymentMethods';
-import { Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Package, Search, ShoppingCart, X } from 'lucide-react';
+import { Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CreditCard, MapPin, Package, Search, ShoppingCart, Truck, UserRound, UtensilsCrossed, X } from 'lucide-react';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import {
@@ -18,6 +18,7 @@ import { usePdvCategoryNavigation } from './usePdvCategoryNavigation';
 import { CashierPdvProductCard } from './CashierPdvProductCard';
 import { CashierPdvCartLine } from './CashierPdvCartLine';
 import { CashierPdvConfigurator } from './CashierPdvConfigurator';
+import { CashierPdvCustomerFields } from './CashierPdvCustomerFields';
 
 type ProductWithModifiers = Product & { grupos_modificadores?: CatalogModifierGroup[] };
 
@@ -260,6 +261,10 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   const changeServiceType = (next: PdvOrderType) => {
     setPdvOrderType(next);
     if (next === 'delivery') setPdvTargetMesaId(0);
+  };
+  const changeCustomerPhone = (phone: string) => {
+    setPdvCustomerPhone(aplicarMascaraTelefoneInput(phone));
+    setPdvCustomerId(null);
   };
   const shortcutLabels = [
     allowedPdvOrderTypes.includes('pickup') ? 'F2 Retirada' : null,
@@ -625,7 +630,10 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           }}
                           className={clsx('cashier-pdv-cart__modality-option', pdvOrderType === type.id && 'is-active')}
                         >
-                          {type.label}
+                          {type.id === 'pickup' && <Package size={15} aria-hidden="true" />}
+                          {type.id === 'delivery' && <Truck size={15} aria-hidden="true" />}
+                          {type.id === 'dine_in' && <UtensilsCrossed size={15} aria-hidden="true" />}
+                          <span>{type.label}</span>
                         </button>
                       ))}
                     </div>
@@ -674,120 +682,63 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   )}
 
                   {pdvOrderType === 'pickup' && (
-                    <details className="group rounded-xl border border-koma-border bg-koma-card/40">
-                      <summary className="cursor-pointer list-none px-3 py-2.5">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <strong className="block text-[9px] text-koma-foreground">Identificação do cliente</strong>
-                              </div>
-                          <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
-                            <span className="group-open:hidden">
-                              {pdvCustomerName || pdvCustomerPhone ? 'Preenchido' : 'Adicionar'}
-                            </span>
-                            <span className="hidden group-open:inline">Fechar</span>
+                    <details className="cashier-pdv-service-detail">
+                      <summary className="cashier-pdv-service-detail__summary">
+                        <span className="cashier-pdv-service-detail__label">
+                          <UserRound size={18} aria-hidden="true" />
+                          <span>
+                            <strong>Identificação do cliente</strong>
+                            <small>Opcional na retirada</small>
                           </span>
-                        </div>
+                        </span>
+                        <span className="cashier-pdv-service-detail__status">
+                          {pdvCustomerName || pdvCustomerPhone ? 'Preenchido' : 'Adicionar'}
+                          <ChevronDown size={16} aria-hidden="true" />
+                        </span>
                       </summary>
-                      <div className="grid grid-cols-2 gap-2 border-t border-koma-border p-3">
-                        <div className="space-y-1">
-                          <label htmlFor="pdv-customer-phone-input" className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Telefone</label>
-                          <input
-                            id="pdv-customer-phone-input"
-                            type="tel"
-                            inputMode="numeric"
-                            autoComplete="tel"
-                            placeholder="(00) 00000-0000"
-                            value={pdvCustomerPhone}
-                            onChange={(e) => {
-                              setPdvCustomerPhone(aplicarMascaraTelefoneInput(e.target.value));
-                              setPdvCustomerId(null);
-                            }}
-                            className="w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-[10px] text-koma-foreground focus:outline-none"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label htmlFor="pdv-customer-name-input" className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Nome</label>
-                          <input
-                            id="pdv-customer-name-input"
-                            type="text"
-                            autoComplete="name"
-                            placeholder="Ex: Maria"
-                            value={pdvCustomerName}
-                            onChange={(e) => setPdvCustomerName(e.target.value)}
-                            className="w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-[10px] text-koma-foreground focus:outline-none"
-                          />
-                        </div>
-                        {pdvCustomerLookup !== 'idle' && (
-                          <p className={clsx('col-span-2 text-[8px] font-bold', pdvCustomerLookup === 'found' ? 'text-emerald-400' : 'text-koma-muted')}>
-                            {pdvCustomerLookup === 'loading' && 'Buscando cliente...'}
-                            {pdvCustomerLookup === 'found' && 'Cliente encontrado.'}
-                            {pdvCustomerLookup === 'new' && 'Novo número — o cliente será criado ao lançar o pedido.'}
-                          </p>
-                        )}
+                      <div className="cashier-pdv-service-detail__content">
+                        <CashierPdvCustomerFields
+                          name={pdvCustomerName}
+                          phone={pdvCustomerPhone}
+                          required={false}
+                          lookupStatus={pdvCustomerLookup}
+                          onNameChange={setPdvCustomerName}
+                          onPhoneChange={changeCustomerPhone}
+                        />
                       </div>
                     </details>
                   )}
 
                   {pdvOrderType === 'delivery' && (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <label htmlFor="pdv-customer-phone-input" className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Telefone</label>
-                          <input
-                            id="pdv-customer-phone-input"
-                            type="tel"
-                            inputMode="numeric"
-                            autoComplete="tel"
-                            placeholder="(00) 00000-0000"
-                            required={pdvCart.length > 0}
-                            value={pdvCustomerPhone}
-                            onChange={(e) => {
-                              setPdvCustomerPhone(aplicarMascaraTelefoneInput(e.target.value));
-                              setPdvCustomerId(null);
-                            }}
-                            className="w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-[10px] text-koma-foreground focus:outline-none"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label htmlFor="pdv-customer-name-input" className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Nome</label>
-                          <input
-                            id="pdv-customer-name-input"
-                            type="text"
-                            autoComplete="name"
-                            placeholder="Ex: Maria"
-                            required={pdvCart.length > 0}
-                            value={pdvCustomerName}
-                            onChange={(e) => setPdvCustomerName(e.target.value)}
-                            className="w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-[10px] text-koma-foreground focus:outline-none"
-                          />
-                        </div>
+                    <div className="cashier-pdv-service-detail cashier-pdv-service-detail--required">
+                      <div className="cashier-pdv-service-detail__summary cashier-pdv-service-detail__summary--static">
+                        <span className="cashier-pdv-service-detail__label">
+                          <UserRound size={18} aria-hidden="true" />
+                          <span><strong>Cliente da entrega</strong><small>Nome e telefone obrigatórios</small></span>
+                        </span>
                       </div>
-                      {pdvCustomerLookup !== 'idle' && (
-                        <p className={clsx('text-[8px] font-bold', pdvCustomerLookup === 'found' ? 'text-emerald-400' : 'text-koma-muted')}>
-                          {pdvCustomerLookup === 'loading' && 'Buscando cliente...'}
-                          {pdvCustomerLookup === 'found' && 'Cliente encontrado — confira a entrega.'}
-                          {pdvCustomerLookup === 'new' && 'Novo número — o cliente será criado ao lançar o pedido.'}
-                        </p>
-                      )}
-                      <details
-                        className="group rounded-xl border border-koma-border bg-koma-card/40"
-                        ref={deliveryAddressDisclosureRef}
-                      >
-                        <summary className="cursor-pointer list-none px-3 py-2.5">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="min-w-0">
-                              <strong className="block text-[9px] text-koma-foreground">Entrega</strong>
-                              <span className="block truncate text-[8px] text-koma-muted">
-                                {deliveryAddressSummary || pdvDeliveryAddressLegacyHint || 'Endereço ainda não informado'}
-                              </span>
-                            </div>
-                            <span className="shrink-0 text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
-                              <span className="group-open:hidden">Editar entrega</span>
-                              <span className="hidden group-open:inline">Fechar</span>
+                      <div className="cashier-pdv-service-detail__content">
+                        <CashierPdvCustomerFields
+                          name={pdvCustomerName}
+                          phone={pdvCustomerPhone}
+                          required={pdvCart.length > 0}
+                          lookupStatus={pdvCustomerLookup}
+                          onNameChange={setPdvCustomerName}
+                          onPhoneChange={changeCustomerPhone}
+                        />
+                      </div>
+                      <details className="cashier-pdv-service-detail__delivery" ref={deliveryAddressDisclosureRef}>
+                        <summary className="cashier-pdv-service-detail__summary">
+                          <span className="cashier-pdv-service-detail__label">
+                            <MapPin size={18} aria-hidden="true" />
+                            <span>
+                              <strong>Endereço de entrega</strong>
+                              <small>{deliveryAddressSummary || pdvDeliveryAddressLegacyHint || 'Informe o endereço completo'}</small>
                             </span>
-                          </div>
+                          </span>
+                          <ChevronDown size={16} aria-hidden="true" />
                         </summary>
-                        <div className="border-t border-koma-border p-2">
+                        <div className="cashier-pdv-service-detail__content">
                           <DeliveryAddressFields
                             value={pdvDeliveryAddressDraft}
                             onChange={handlePdvDeliveryAddressChange}
@@ -801,37 +752,37 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   )}
 
                   {(pdvOrderType === 'pickup' || pdvOrderType === 'delivery') && (
-                    <details className="group rounded-xl border border-koma-border bg-koma-card/40">
-                      <summary className="cursor-pointer list-none px-3 py-2.5">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <strong className="block text-[9px] text-koma-foreground">Pagamento <span className="font-normal text-koma-muted">(opcional agora)</span></strong>
-                          </div>
-                          <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
-                            <span className="group-open:hidden">
-                              {pdvPaymentMethod ? PAYMENT_LABELS[pdvPaymentMethod] : 'Adicionar'}
-                            </span>
-                            <span className="hidden group-open:inline">Fechar</span>
+                    <details className="cashier-pdv-service-detail">
+                      <summary className="cashier-pdv-service-detail__summary">
+                        <span className="cashier-pdv-service-detail__label">
+                          <CreditCard size={18} aria-hidden="true" />
+                          <span>
+                            <strong>Pagamento <small>(opcional agora)</small></strong>
+                            <small>Pode ser informado no fechamento</small>
                           </span>
-                        </div>
+                        </span>
+                        <span className="cashier-pdv-service-detail__status">
+                          {pdvPaymentMethod ? PAYMENT_LABELS[pdvPaymentMethod] : 'Definir'}
+                          <ChevronDown size={16} aria-hidden="true" />
+                        </span>
                       </summary>
-                      <div className="grid grid-cols-2 gap-1.5 border-t border-koma-border p-3">
-                        {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((method) => (
-                          <button
-                            key={method}
-                            type="button"
-                            onClick={() => setPdvPaymentMethod(pdvPaymentMethod === method ? null : method)}
-                            aria-pressed={pdvPaymentMethod === method}
-                            className={clsx(
-                              'min-h-9 rounded-lg border px-2 py-1.5 text-[9px] font-bold transition-colors',
-                              pdvPaymentMethod === method
-                                ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                                : 'border-koma-border bg-koma-input text-koma-muted hover:border-emerald-500/30 hover:text-koma-foreground',
-                            )}
-                          >
-                            {PAYMENT_LABELS[method]}
-                          </button>
-                        ))}
+                      <div className="cashier-pdv-service-detail__content">
+                        <div className="cashier-pdv-payment-options" role="group" aria-label="Forma de pagamento">
+                          {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((method) => (
+                            <button
+                              key={method}
+                              type="button"
+                              aria-pressed={pdvPaymentMethod === method}
+                              onClick={() => setPdvPaymentMethod(pdvPaymentMethod === method ? null : method)}
+                              className={clsx('cashier-pdv-payment-option', pdvPaymentMethod === method && 'is-selected')}
+                            >
+                              <span className="cashier-pdv-payment-option__dot" aria-hidden="true">
+                                {pdvPaymentMethod === method && <Check size={12} strokeWidth={3} />}
+                              </span>
+                              {PAYMENT_LABELS[method]}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </details>
                   )}
