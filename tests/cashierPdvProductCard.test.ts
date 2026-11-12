@@ -17,9 +17,10 @@ const product: Product = {
   grupos_modificadores: [{ id: 'm1', nome: 'Extras', opcoes: [] }],
 } as unknown as Product;
 
-const renderProduct = (detailsOpen: boolean, item: Product = product) =>
+const renderProduct = (detailsOpen: boolean, item: Product = product, cartQuantity = 0) =>
   renderToStaticMarkup(createElement(CashierPdvProductCard, {
     product: item,
+    cartQuantity,
     detailsOpen,
     onConfigure: () => {},
     onQuickAdd: () => {},
@@ -53,4 +54,16 @@ test('PDV product without description or code does not render an irrelevant deta
   const html = renderProduct(false, plain);
   assert.equal((html.match(/<button\b/g) || []).length, 2);
   assert.doesNotMatch(html, /Ver ingredientes e detalhes/);
+});
+
+
+test('PDV highlights products already in the cart with an accessible quantity marker', () => {
+  const fresh = renderProduct(false);
+  assert.doesNotMatch(fresh, /cashier-pdv-product-card__quantity/);
+  const selected = renderProduct(false, product, 3);
+  assert.match(selected, /cashier-pdv-product-card group is-in-cart/);
+  assert.match(selected, /aria-label="3 unidades no pedido"/);
+  const capped = renderProduct(false, product, 105);
+  assert.match(capped, /99\+/);
+  assert.match(capped, /aria-label="105 unidades no pedido"/);
 });
