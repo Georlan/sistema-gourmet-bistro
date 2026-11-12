@@ -1,10 +1,7 @@
 import clsx from 'clsx';
 import { Info, Plus } from 'lucide-react';
-import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import type { Product } from '../../../types';
 import { formatCurrency } from '../cashierPresentation';
-
-type ProductWithModifiers = Product & { grupos_modificadores?: CatalogModifierGroup[] };
 
 interface CashierPdvProductCardProps {
   product: Product;
@@ -35,7 +32,6 @@ export function CashierPdvProductCard({
 }: CashierPdvProductCardProps) {
   const { code, name } = splitProductLabel(product.nome);
   const hasDetails = Boolean(product.descricao || code);
-  const hasChoices = Boolean((product as ProductWithModifiers).grupos_modificadores?.length);
   const productId = String(product.id);
   const detailsId = `pdv-product-details-${productId}`;
 
@@ -45,7 +41,7 @@ export function CashierPdvProductCard({
         type="button"
         className="cashier-pdv-product-card__open"
         aria-label={`Personalizar ${name}`}
-        title={`Personalizar ${name}`}
+        title={`Personalizar ${name} e escolher complementos`}
         onClick={() => onConfigure(product)}
       />
       <div className="cashier-pdv-product-card__content">
@@ -69,9 +65,6 @@ export function CashierPdvProductCard({
               </span>
             )}
           </div>
-          {hasChoices && (
-            <span className="cashier-pdv-product-card__choices">Personalizável</span>
-          )}
         </div>
         <div className="cashier-pdv-product-actions">
           <span className="cashier-pdv-product-card__price">{formatCurrency(Number(product.preco) || 0)}</span>
