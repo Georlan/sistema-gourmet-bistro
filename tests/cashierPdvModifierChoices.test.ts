@@ -51,3 +51,19 @@ test('PDV modifier picker uses enabled steppers for selected quantities', () => 
   assert.match(html, /Remover uma unidade de Bacon/);
   assert.match(html, /\+ R\$\s*2,00/);
 });
+
+test('PDV shows optional groups immediately when no group is recommended or required', () => {
+  const optional: CatalogModifierGroup = {
+    ...group,
+    min_selecoes: 0,
+    tipo: 'opcional',
+    recomendado: false,
+  };
+  const html = renderToStaticMarkup(createElement(CashierPdvModifierChoices, {
+    groups: [optional],
+    selectedIds: [],
+    onQuantityChange: () => {},
+  }));
+  assert.match(html, /Bacon/);
+  assert.doesNotMatch(html, /Ver outros complementos/);
+});
