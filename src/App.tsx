@@ -1484,7 +1484,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
   // 11. Delivery (Waiter serves a ready dish)
   const handleDeliverItem = async (orderId: string, itemId: string) => {
-    if (inflightItemIdsRef.current.has(itemId)) return; // Ignore rapid duplicate clicks
+    if (inflightItemIdsRef.current.has(itemId)) return false; // Ignore rapid duplicate clicks
     const requestScopeKey = operationalScopeKey;
     inflightItemIdsRef.current.add(itemId);
     handleOptimisticUpdateItemStatus(itemId, 'entregue');
@@ -1537,20 +1537,24 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   const handleFinishPreparation = async (orderId: string, itemId: string) => {
     if (inflightItemIdsRef.current.has(itemId)) return; // Ignore rapid duplicate clicks
     inflightItemIdsRef.current.add(itemId);
-    handleOptimisticUpdateItemStatus(itemId, 'pronto');
+    // Wait for the canonical response before exposing an item as ready.
     try {
-      const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/status?status=pronto`, {
+      const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/status?status=pronto&avancar_pedido=true`, {
         method: "PUT",
         headers: getAuthHeaders()
       });
       if (!res.ok) {
         showToast("Erro ao finalizar preparação no backend.", 'error');
-        fetchOrdersFromAPI();
+        await fetchOrdersFromAPI();
+        return false;
       }
+      await fetchOrdersFromAPI();
+      return true;
     } catch (err) {
       console.error(err);
       showToast("Erro de conexão ao finalizar preparação.", 'error');
-      fetchOrdersFromAPI();
+      try { await fetchOrdersFromAPI(); } catch (refreshError) { console.error('KDS reconciliation failed', refreshError); }
+      return false;
     } finally {
       inflightItemIdsRef.current.delete(itemId);
     }
@@ -1902,7 +1906,6 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           <KitchenPanel
             orders={orders}
             onFinishPreparation={handleFinishPreparation}
-            currentTime={currentTime}
           />
         ) : isManagementRole(activeRole) ? (
           <React.Suspense fallback={<CashierLoading />}>

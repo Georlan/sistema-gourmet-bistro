@@ -5,6 +5,7 @@
 @import "./components/caixa/pdv/cashierPdvCart.css";
 @import "./components/caixa/pdv/cashierPdvConfig.css";
 @import "./components/caixa/pdv/cashierPdvTone.css";
+@import "./components/caixa/kitchen/kdsWorkspace.css";
 @import "./components/mesas/waiterOperational.css";
 
 @custom-variant dark (&:where([data-koma-theme="dark"], [data-koma-theme="dark"] *));

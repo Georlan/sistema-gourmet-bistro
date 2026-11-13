@@ -37,7 +37,7 @@ export interface KdsProjection {
   readyItemCount: number;
 }
 
-const timestampValue = (value: unknown): number => {
+export const timestampValue = (value: unknown): number => {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (value instanceof Date) return value.getTime();
   if (typeof value === 'string' && value.trim()) {
@@ -49,6 +49,10 @@ const timestampValue = (value: unknown): number => {
 
 const ticketKeyFor = (item: KdsKitchenItem) =>
   item.lancamentoId ? `launch:${item.lancamentoId}` : `order:${item.orderId}`;
+
+/** A KDS ticket may start only after acceptance; local orders have no gate. */
+export const isKdsKitchenOrderEligible = (status?: Order['deliveryStatus'] | string | null) =>
+  !['pendente', 'analise', 'recusado'].includes(String(status || '').toLowerCase());
 
 const normalizeSearchText = (value: unknown): string =>
   String(value ?? '')
@@ -105,14 +109,14 @@ export function projectKdsTickets(items: readonly KdsKitchenItem[]): KdsProjecti
         ...ticket,
         items: [...ticket.items].sort((a, b) => {
           if (a.status !== b.status) return a.status === 'preparando' ? -1 : 1;
-          return a.nome.localeCompare(b.nome, 'pt-BR');
+          return 0; // Stable Array.sort preserves the persisted item order within each phase.
         }),
         preparingCount,
         readyCount,
         totalCount: preparingCount + readyCount,
       };
     })
-    .sort((a, b) => timestampValue(a.timestamp) - timestampValue(b.timestamp));
+    .sort((a, b) => timestampValue(a.timestamp) - timestampValue(b.timestamp) || a.key.localeCompare(b.key));
 
   const preparingTickets = tickets.filter((ticket) => ticket.preparingCount > 0);
   const readyTickets = tickets.filter((ticket) => ticket.preparingCount === 0 && ticket.readyCount > 0);
@@ -128,16 +132,15 @@ export function projectKdsTickets(items: readonly KdsKitchenItem[]): KdsProjecti
 
 export function getKdsTicketLabel(ticket: Pick<KdsTicket, 'displayNumber' | 'numeroPedido' | 'orderId'>) {
   if (ticket.displayNumber) return `#${ticket.displayNumber.replace(/^#/, '')}`;
-  if (ticket.numeroPedido !== undefined) return `#${ticket.numeroPedido}`;
-  return `#${String(ticket.orderId).slice(-6)}`;
+  if (Number.isFinite(ticket.numeroPedido) && Number(ticket.numeroPedido) > 0) return `#${ticket.numeroPedido}`;
+  return 'sem número';
 }
 
 export function getKdsDestinationLabel(ticket: Pick<KdsTicket, 'mesaId' | 'tipo'>) {
-  if (ticket.mesaId > 0) return `Mesa ${ticket.mesaId}`;
-
   const normalizedType = normalizeSearchText(ticket.tipo);
   if (normalizedType === 'entrega' || normalizedType === 'delivery') return 'Delivery';
   if (normalizedType === 'retirada') return 'Retirada';
+  if (ticket.mesaId > 0) return `Mesa ${String(ticket.mesaId).padStart(2, '0')}`;
   return 'Balcão';
 }
 
@@ -148,6 +151,7 @@ export function matchesKdsTicketQuery(ticket: KdsTicket, query: string): boolean
 
   const searchable = [
     getKdsDestinationLabel(ticket),
+    ticket.mesaId > 0 ? `Mesa ${ticket.mesaId}` : null, // Search accepts both 04 and 4.
     getKdsTicketLabel(ticket),
     ticket.identificador,
     ticket.garcomNome,
@@ -159,4 +163,36 @@ export function matchesKdsTicketQuery(ticket: KdsTicket, query: string): boolean
     .join(' ');
 
   return searchable.includes(normalizedQuery);
+}
+
+/** Age measures time since the persisted launch, NOT active cooking time. */
+export function getKdsWaitInfo(timestamp: unknown, now: number): {
+  minutes: number | null;
+  label: string;
+  level: 'normal' | 'attention' | 'late' | 'unknown';
+} {
+  const started = timestampValue(timestamp);
+  if (started === Number.MAX_SAFE_INTEGER || !Number.isFinite(now)) {
+    return { minutes: null, label: 'Horário indisponível', level: 'unknown' };
+  }
+  const minutes = Math.max(0, Math.floor((now - started) / 60000));
+  const label = minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}`;
+  return { minutes, label, level: minutes >= 15 ? 'late' : minutes >= 10 ? 'attention' : 'normal' };
+}
+
+export interface KdsDemandLine { key: string; name: string; count: number; details: string[] }
+
+/** All-day counts only IDENTICAL recipes/observations; substitutions never merge. */
+export function projectKdsDemand(items: readonly KdsKitchenItem[]): KdsDemandLine[] {
+  const counts = new Map<string, KdsDemandLine>();
+  for (const item of items) {
+    if (item.status !== 'preparando') continue;
+    const composition = itemCompositionPresentation(item);
+    const details = [...composition.lines, composition.observation].filter(Boolean);
+    const key = JSON.stringify([item.produtoId, item.nome, details]);
+    const existing = counts.get(key);
+    if (existing) existing.count += 1;
+    else counts.set(key, { key, name: item.nome, count: 1, details });
+  }
+  return [...counts.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, 'pt-BR') || a.key.localeCompare(b.key));
 }

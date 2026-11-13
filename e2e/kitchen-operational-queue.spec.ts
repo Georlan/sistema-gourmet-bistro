@@ -19,22 +19,32 @@ test('cozinha mostra identidade de cada lançamento e mantém FIFO e conclusão 
     ] }];
   await page.route('**/comandas/detalhes/todos*', route => route.fulfill({ json: orders }));
   await page.goto('/?view=caixa');
-  const first = page.locator('#kitchen-card-old-rice');
-  const second = page.locator('#kitchen-card-new-rice');
+  const first = page.locator('[data-kds-ticket="launch:old-launch"]');
+  const second = page.locator('[data-kds-ticket="launch:new-launch"]');
   await expect(first).toContainText('Pedido #80');
   await expect(first).toContainText('Sarah');
-  await expect(first).toContainText('Atrasado · 1º na fila');
+  await expect(first.locator('[data-wait-level="late"]')).toBeVisible();
   await expect(second).toContainText('Pedido #81');
   await expect(second).toContainText('Retirada');
   await expect(second).toContainText('Caixa Demo');
-  await expect(second).toContainText('Normal · 2º na fila');
+  await expect(second.locator('[data-wait-level="normal"]')).toBeVisible();
   await expect(second).toContainText('Queijo extra');
   await expect(second).toContainText('Sem cebola');
   expect(await first.evaluate(el => el.getBoundingClientRect().top)).toBeLessThanOrEqual(await second.evaluate(el => el.getBoundingClientRect().top));
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: '../kitchen-preview-' + test.info().project.name + '.png', fullPage: true });
   let finished = false;
-  await page.route('**/comandas/itens/new-rice/status?status=pronto', async route => { finished = true; await route.fulfill({ json: { status: 'pronto' } }); });
-  await second.getByRole('button', { name: 'Concluir Preparo' }).click();
+  let kanbanOptIn = false;
+  await page.route('**/comandas/itens/new-rice/status?*', async route => {
+    const url = new URL(route.request().url());
+    finished = url.searchParams.get('status') === 'pronto';
+    kanbanOptIn = url.searchParams.get('avancar_pedido') === 'true';
+    await route.fulfill({ json: { status: 'pronto' } });
+  });
+  await second.getByRole('button', { name: 'Marcar como pronto: Arroz da Brasa' }).click();
   await expect.poll(() => finished).toBe(true);
+  expect(kanbanOptIn).toBe(true);
+  // A cozinha cannot claim delivery; the attendant/expedition must handle it.
+  await expect(page.getByRole('button', { name: /marcar como entregue/i })).toHaveCount(0);
+
 });

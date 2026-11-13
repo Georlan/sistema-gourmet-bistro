@@ -32,6 +32,7 @@ import { CheckoutDialog } from './caixa/checkout/CheckoutDialog';
 import { useCheckoutController } from './caixa/checkout/useCheckoutController';
 import { useCashierCustomers } from './caixa/customers/useCashierCustomers';
 import { CashierKitchen } from './caixa/kitchen/CashierKitchen';
+import { isKdsKitchenOrderEligible } from './caixa/kitchen/kdsProjection';
 import { DeferredCashierSection } from './caixa/loading/DeferredCashierSection';
 import { CashierConversationsDrawer } from './caixa/chat/CashierConversationsDrawer';
 import { useCashierChat } from './caixa/chat/useCashierChat';
@@ -548,7 +549,7 @@ export function CaixaPanel({
   const activeKitchenItems = useMemo(() => orders.flatMap((order) =>
     order.itens
       .filter((item) => item.status === 'preparando' || item.status === 'pronto')
-      .filter(() => order.deliveryStatus !== 'pendente' && order.deliveryStatus !== 'recusado')
+      .filter(() => isKdsKitchenOrderEligible(order.deliveryStatus))
       .map((item) => ({
         ...item,
         orderId: order.id,

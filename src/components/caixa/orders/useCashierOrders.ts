@@ -1151,19 +1151,25 @@ export function useCashierOrders({
   };
 
   const handleUpdateItemStatus = async (itemId: string, newStatus: 'preparando' | 'pronto' | 'entregue') => {
-    if (onOptimisticUpdateItemStatus) onOptimisticUpdateItemStatus(itemId, newStatus);
+    // KDS readiness is acknowledged only after the canonical order confirms it.
+    // Optimistic status could leave a failed item looking ready until the next refresh.
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/itens/${itemId}/status?status=${newStatus}${newStatus === 'pronto' ? '&avancar_pedido=true' : ''}`, {
         method: 'PUT',
         headers: authHeaders,
       });
       if (!res.ok) {
-        alert('Erro ao atualizar status na cozinha.');
-        onRefreshOrders();
+        showToast('Não foi possível atualizar o item na cozinha. Confira o pedido.', 'error');
+        await onRefreshOrders();
+        return false;
       }
+      await onRefreshOrders();
+      return true;
     } catch (err) {
       console.error(err);
-      onRefreshOrders();
+      showToast('Sem conexão para confirmar o preparo. Tente novamente.', 'error');
+      try { await onRefreshOrders(); } catch (refreshError) { console.error('KDS reconciliation failed', refreshError); }
+      return false;
     }
   };
 
