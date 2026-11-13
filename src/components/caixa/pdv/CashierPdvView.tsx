@@ -379,7 +379,8 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               </div>
             </div>
 
-            {addedNotice && (
+            {/* Adding already animates the card and cart counter; only edits need text feedback. */}
+            {addedNotice?.edited && (
               <div
                 key={addedNotice.token}
                 className="cashier-pdv-feedback"
