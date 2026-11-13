@@ -20,6 +20,7 @@ import { pdvProductNeedsRequiredChoices } from './pdvProductChoices';
 import { CashierPdvCartLine } from './CashierPdvCartLine';
 import { CashierPdvConfigurator } from './CashierPdvConfigurator';
 import { CashierPdvCustomerFields } from './CashierPdvCustomerFields';
+import { CashierPdvTablePicker, formatPdvTableLabel } from './CashierPdvTablePicker';
 
 type ProductWithModifiers = Product & { grupos_modificadores?: CatalogModifierGroup[] };
 
@@ -109,6 +110,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     finishPdvCategoryDrag,
   } = usePdvCategoryNavigation({ activeSubTab, balcaoMobileView, pdvCategories });
 
+  const [tablePickerOpen, setTablePickerOpen] = useState(false);
   const [configProduct, setConfigProduct] = useState<Product | null>(null);
   const [configCartIndex, setConfigCartIndex] = useState<number | null>(null);
   const [configQty, setConfigQty] = useState(1);
@@ -277,6 +279,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     { id: 'dine_in', label: 'Consumo local' },
   ] as const).filter((type) => allowedPdvOrderTypes.includes(type.id));
   const changeServiceType = (next: PdvOrderType) => {
+    setTablePickerOpen(false);
     setPdvOrderType(next);
     if (next === 'delivery') setPdvTargetMesaId(0);
   };
@@ -320,6 +323,16 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   ]
             }
           />
+
+          {pdvOrderType === 'dine_in' && selectedPdvTableOption && (
+            <div className="cashier-pdv-table-context" role="status" data-testid="pdv-selected-table-context">
+              <div className="cashier-pdv-table-context__text">
+                <MapPin size={21} aria-hidden="true" />
+                <span>Pedido para <strong>{formatPdvTableLabel(selectedPdvTableOption.table)}</strong></span>
+              </div>
+              <button type="button" onClick={() => setTablePickerOpen(true)}>Trocar mesa</button>
+            </div>
+          )}
 
           <div
             className={"cashier-pdv-layout min-h-0 flex-1 flex flex-col xl:flex-row gap-3 sm:gap-4 overflow-hidden relative"}
@@ -658,43 +671,34 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   </div>
 
                   {pdvOrderType === 'dine_in' && (
-                    <div className="space-y-2">
-                      <div className={"flex items-center justify-between gap-3"}>
-                        <label htmlFor="pdv-target-table" className={"block text-[8px] font-bold uppercase tracking-wider text-koma-subtle"}>
-                          Mesa
-                        </label>
-                        <span className={"text-[8px] text-koma-muted"}>{pdvOccupiedTableCount} em atendimento</span>
+                    <div className="cashier-pdv-cart__table-section">
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <span className="text-xs font-semibold text-koma-secondary">Mesa do pedido</span>
+                        <span className="text-xs text-koma-muted">{pdvOccupiedTableCount} em atendimento</span>
                       </div>
-                      <select
+                      <button
                         id="pdv-target-table"
-                        value={pdvTargetMesaId || ''}
-                        onChange={(e) => setPdvTargetMesaId(Number(e.target.value) || 0)}
-                        data-table-status={
-                          selectedPdvTableOption?.isOccupied ? 'occupied' : selectedPdvTableOption ? 'free' : 'unselected'
-                        }
-                        className="cashier-pdv-cart__table-select w-full rounded-xl border px-3 text-koma-foreground"
+                        type="button"
+                        className="cashier-pdv-table-trigger"
+                        data-table-id={pdvTargetMesaId || 0}
+                        data-table-status={selectedPdvTableOption?.isOccupied ? 'occupied' : selectedPdvTableOption ? 'free' : 'unselected'}
+                        aria-haspopup="dialog"
+                        aria-expanded={tablePickerOpen}
+                        aria-controls="pdv-table-picker"
+                        onClick={() => setTablePickerOpen(true)}
                       >
-                        <option value="">Sem mesa</option>
-                        {pdvTableOptions.map((option) => (
-                          <option
-                            key={option.table.id}
-                            value={option.table.id}
-                            data-table-status={option.isOccupied ? 'occupied' : 'free'}
-                          >
-                            {option.isOccupied ? '●' : '○'} {option.label}
-                            {option.table.nome ? ` · Mesa ${option.table.id}` : ''}
-                            {option.isOccupied
-                              ? ` · em atendimento${option.total > 0 ? ` · R$ ${option.total.toFixed(2).replace('.', ',')}` : ''}`
-                              : ' · livre'}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-[8px] leading-relaxed text-koma-muted">
+                        <span className="cashier-pdv-table-trigger__details">
+                          <strong>{selectedPdvTableOption ? formatPdvTableLabel(selectedPdvTableOption.table) : 'Escolher mesa'}</strong>
+                          <small>{selectedPdvTableOption ? selectedPdvTableOption.isOccupied ? 'Em atendimento' : 'Livre' : 'Ainda sem mesa'}</small>
+                        </span>
+                        <span className="cashier-pdv-table-trigger__change">Alterar <ChevronDown size={17} aria-hidden="true" /></span>
+                      </button>
+                      <p className="cashier-pdv-table-note">
                         {selectedPdvTableOption
                           ? selectedPdvTableOption.isOccupied
-                            ? 'Os itens serão adicionados ao atendimento existente.'
-                            : 'O primeiro lançamento abrirá o atendimento da mesa.'
-                          : 'Sem mesa também é permitido; você pode associar depois.'}
+                            ? 'Este pedido será adicionado ao atendimento da mesa.'
+                            : 'O lançamento abrirá o atendimento desta mesa.'
+                          : 'Também é possível lançar sem mesa e vincular depois.'}
                       </p>
                     </div>
                   )}
@@ -860,6 +864,14 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
           </div>
         </div>
       )}
+
+      <CashierPdvTablePicker
+        options={pdvTableOptions}
+        selectedId={pdvTargetMesaId}
+        open={activeSubTab === 'balcao' && pdvOrderType === 'dine_in' && tablePickerOpen}
+        onOpenChange={setTablePickerOpen}
+        onSelect={setPdvTargetMesaId}
+      />
 
       {configProduct && (
         <CashierPdvConfigurator

@@ -54,13 +54,13 @@ test('adicionar consumo abre o PDV na mesa correta e mantém o carrinho ao volta
   await preparedDishButton.click();
   const cart = page.getByRole('button', { name: /^Carrinho \(/ });
   if (await cart.isVisible()) await cart.click();
-  await expect(page.locator('#pdv-target-table')).toHaveValue('7');
+  await expect(page.locator('#pdv-target-table')).toHaveAttribute('data-table-id', '7');
   const main = page.getByRole('main');
   await main.getByRole('button', { name: 'Salão', exact: true }).click();
   if ((page.viewportSize()?.width ?? 1366) < 1024) await page.locator('.cashier-mobile-bottom-bar').getByRole('button', { name: '+ Pedido', exact: true }).click();
   else await main.getByRole('button', { name: 'Novo pedido', exact: true }).click();
   if (await cart.isVisible()) await cart.click();
-  await expect(page.locator('#pdv-target-table')).toHaveValue('7');
+  await expect(page.locator('#pdv-target-table')).toHaveAttribute('data-table-id', '7');
   await expect(page.locator('#pdv-submit-btn').locator('..')).toContainText('112,00');
   expect(state.actions.filter(action => /lancamentos|pagar|transferir/.test(action.path))).toEqual([]);
 });
@@ -72,7 +72,7 @@ test('receber fica disponível para a mesa sem transformar itens servidos em con
   await expect(card).not.toContainText('Aguardando pagamento');
   await card.getByRole('button', { name: 'Ver comanda', exact: true }).click();
   await page.getByRole('dialog', { name: 'Mesa 07', exact: true }).getByRole('button', { name: 'Receber', exact: true }).click();
-  await expect(page.getByText('Receber Pagamento', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Receber pagamento', exact: true })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Digite qualquer valor para abater do saldo.' })).toHaveValue('160,00');
   expect(state.actions.filter(action => /pagar|status|transferir/.test(action.path))).toEqual([]);
 });
@@ -132,14 +132,14 @@ test('Novo pedido preserva o carrinho e adapta os dados operacionais por modalid
   const customerDetails = panel.locator('details').filter({ hasText: 'Identificação do cliente' });
   await expect(customerDetails.getByText('Adicionar', { exact: true })).toBeVisible();
   await customerDetails.locator('summary').click();
-  await expect(customerDetails.getByText('Fechar', { exact: true })).toBeVisible();
+  await expect(panel.locator('#pdv-customer-phone-input')).toBeVisible();
   await customerDetails.locator('summary').click();
 
   await expect(panel.getByText(/Pagamento \(opcional agora\)/)).toBeVisible();
   const paymentDetails = panel.locator('details').filter({ hasText: 'Pagamento' });
-  await expect(paymentDetails.getByText('Adicionar', { exact: true })).toBeVisible();
+  await expect(paymentDetails.getByText('Definir', { exact: true })).toBeVisible();
   await paymentDetails.locator('summary').click();
-  await expect(paymentDetails.getByText('Fechar', { exact: true })).toBeVisible();
+  await expect(paymentDetails.getByRole('group', { name: 'Forma de pagamento' })).toBeVisible();
   await paymentDetails.locator('summary').click();
   await expect(panel.getByRole('button', { name: 'Lançar Pedido', exact: false })).toBeEnabled();
 
