@@ -14,7 +14,7 @@ test('conflito de transferência atualiza as mesas e exige nova seleção sem re
   page.on('request', request => {
     if (rejectedTransfers && new URL(request.url()).pathname === '/comandas/detalhes/todos') refreshesAfterConflict += 1;
   });
-  await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda', exact: true }).click();
+  await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda' }).click();
   const details = page.getByRole('dialog', { name: /Mesa 0?7$/ });
   await details.getByRole('button', { name: 'Transferir', exact: true }).click();
   const target = details.getByRole('radio', { name: /^Mesa 8/ });
