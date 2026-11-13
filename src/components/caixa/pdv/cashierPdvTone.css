@@ -1,0 +1,230 @@
+/* KÔMA PDV – role-based tonal palette, scoped to Novo Pedido.
+ * Do not override global brand/operation tokens: Garçom, Salão and Entregador
+ * retain their own visual semantics. No gradient, glow, asset or extra component.
+ * The existing DOM and domain state own the interaction; aria-pressed owns style.
+ */
+.cashier-pdv-view {
+  --pdv-canvas: #16251e;
+  --pdv-surface: #1c2d25;
+  --pdv-card: #23362c;
+  --pdv-raised: #293f34;
+  --pdv-inset: #172820;
+  --pdv-border: #435e50;
+  --pdv-border-strong: #5b7a69;
+  --pdv-text: #f2f7f3;
+  --pdv-secondary: #cad8cf;
+  --pdv-muted: #b9cbbf;
+  --pdv-accent: #9ad7c3;
+  --pdv-selection: #284a3c;
+  --pdv-selection-line: #79b8a0;
+  --pdv-quiet-action: #2a5949;
+  --pdv-quiet-hover: #346c59;
+  --pdv-quiet-ink: #f4f9f5;
+  --pdv-primary: #2dc9a6;
+  --pdv-primary-hover: #23b797;
+  --pdv-primary-ink: #0a231b;
+  --pdv-focus: #b0e9d5;
+
+  /* Reuse the existing component contracts without redefining the platform. */
+  --koma-surface-panel: var(--pdv-surface);
+  --koma-surface-card: var(--pdv-card);
+  --koma-surface-raised: var(--pdv-raised);
+  --koma-surface-input: var(--pdv-inset);
+  --koma-text-primary: var(--pdv-text);
+  --koma-text-secondary: var(--pdv-secondary);
+  --koma-text-muted: var(--pdv-muted);
+  --koma-border-default: var(--pdv-border);
+  --koma-border-strong: var(--pdv-border-strong);
+  --koma-accent-soft: var(--pdv-selection);
+  --koma-accent-border: var(--pdv-selection-line);
+  --koma-accent-text: var(--pdv-accent);
+  --koma-action-bg: var(--pdv-primary);
+  --koma-action-hover: var(--pdv-primary-hover);
+  --koma-action-text: var(--pdv-primary-ink);
+  --koma-focus-ring: var(--pdv-focus);
+  --pdv-mint: var(--pdv-quiet-action);
+  --pdv-on-mint: var(--pdv-quiet-ink);
+
+  color: var(--pdv-text);
+  background: var(--pdv-canvas);
+}
+
+[data-koma-theme="light"] .cashier-pdv-view {
+  --pdv-canvas: #edf3ee;
+  --pdv-surface: #f8faf7;
+  --pdv-card: #fff;
+  --pdv-raised: #e7eee8;
+  --pdv-inset: #edf3ee;
+  --pdv-border: #b9c9bf;
+  --pdv-border-strong: #82a797;
+  --pdv-text: #1c3027;
+  --pdv-secondary: #455e50;
+  --pdv-muted: #4b6557;
+  --pdv-accent: #0b6c54;
+  --pdv-selection: #dceee3;
+  --pdv-selection-line: #6f9f89;
+  --pdv-quiet-action: #dce9e0;
+  --pdv-quiet-hover: #cedfd3;
+  --pdv-quiet-ink: #1b4536;
+  --pdv-primary: #00745f;
+  --pdv-primary-hover: #00604f;
+  --pdv-primary-ink: #fff;
+  --pdv-focus: #146e58;
+}
+
+/* Hierarchy: selected filter is a quiet choice, not a checkout action. */
+.cashier-pdv-view .cashier-pdv-category {
+  border-color: var(--pdv-border);
+  background: transparent;
+  color: var(--pdv-secondary);
+  box-shadow: none;
+}
+.cashier-pdv-view .cashier-pdv-category[aria-pressed="true"] {
+  border-color: var(--pdv-selection-line);
+  background: var(--pdv-selection);
+  color: var(--pdv-text);
+  box-shadow: none;
+}
+@media (hover: hover) {
+  .cashier-pdv-view .cashier-pdv-category:hover:not([aria-pressed="true"]) {
+    background: var(--pdv-raised);
+    color: var(--pdv-text);
+  }
+}
+.cashier-pdv-view .cashier-pdv-category:focus-visible {
+  outline: 2px solid var(--pdv-focus);
+  outline-offset: 2px;
+}
+
+/* One consistent family of selection states (mode, category, menu choices). */
+.cashier-pdv-view .cashier-pdv-cart__modality-options {
+  border-color: var(--pdv-border);
+  background: var(--pdv-inset);
+  box-shadow: none;
+}
+.cashier-pdv-view .cashier-pdv-cart__modality-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  min-width: 0;
+  color: var(--pdv-secondary);
+  border-color: transparent;
+  background: transparent;
+  font-weight: 600;
+  box-shadow: none;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+.cashier-pdv-view .cashier-pdv-cart__modality-option[aria-pressed="true"] {
+  border-color: var(--pdv-selection-line);
+  background: var(--pdv-selection);
+  color: var(--pdv-text);
+  font-weight: 700;
+  box-shadow: none;
+}
+.cashier-pdv-view .cashier-pdv-cart__modality-option[aria-pressed="true"] svg {
+  color: var(--pdv-accent);
+}
+@media (hover: hover) {
+  .cashier-pdv-view .cashier-pdv-cart__modality-option:hover:not([aria-pressed="true"]) {
+    background: var(--pdv-raised);
+    color: var(--pdv-text);
+  }
+}
+
+/* Payment and modifier selections share this restrained treatment. */
+.cashier-pdv-view .cashier-pdv-payment-option.is-selected {
+  border-color: var(--pdv-selection-line);
+  background: var(--pdv-selection);
+  color: var(--pdv-text);
+}
+.cashier-pdv-view .cashier-pdv-payment-option.is-selected .cashier-pdv-payment-option__dot {
+  border-color: var(--pdv-accent);
+  background: var(--pdv-accent);
+  color: var(--pdv-primary-ink);
+}
+
+/* Calm elevations: reserve saturated mint for the actual submit action. */
+.cashier-pdv-view .cashier-pdv-cart,
+.cashier-pdv-view .cashier-pdv-cart__form,
+.cashier-pdv-view .cashier-pdv-cart__footer {
+  background: var(--pdv-surface);
+  box-shadow: none;
+}
+.cashier-pdv-view .cashier-pdv-cart__header {
+  background: var(--pdv-raised);
+}
+.cashier-pdv-view .cashier-pdv-cart__line,
+.cashier-pdv-view .cashier-pdv-payment-option {
+  background: var(--pdv-card);
+  box-shadow: none;
+}
+.cashier-pdv-view .cashier-pdv-cart__line-total,
+.cashier-pdv-view .cashier-pdv-cart__total-value strong {
+  color: var(--pdv-text);
+  font-variant-numeric: tabular-nums;
+}
+.cashier-pdv-view .cashier-pdv-cart__total-value strong {
+  font-weight: 700;
+}
+.cashier-pdv-view .cashier-pdv-cart__count,
+.cashier-pdv-view .cashier-pdv-product-card__quantity {
+  border-color: var(--pdv-border-strong);
+  background: var(--pdv-raised);
+  color: var(--pdv-text);
+}
+.cashier-pdv-view .cashier-pdv-product-card__price {
+  color: var(--pdv-text);
+}
+.cashier-pdv-view .cashier-pdv-product-card {
+  box-shadow: none;
+}
+.cashier-pdv-view .cashier-pdv-product-card__add,
+.cashier-pdv-view .cashier-pdv-mobile-cart-cta {
+  border-color: var(--pdv-border-strong);
+  background: var(--pdv-quiet-action);
+  color: var(--pdv-quiet-ink);
+}
+@media (hover: hover) {
+  .cashier-pdv-view .cashier-pdv-product-card__add:hover,
+  .cashier-pdv-view .cashier-pdv-mobile-cart-cta:hover {
+    background: var(--pdv-quiet-hover);
+  }
+}
+.cashier-pdv-view .cashier-pdv-table-context {
+  border-color: var(--pdv-border-strong);
+  background: var(--pdv-raised);
+}
+.cashier-pdv-view .cashier-pdv-table-context__text strong {
+  color: var(--pdv-text);
+}
+.cashier-pdv-view .cashier-pdv-table-context > button {
+  border: 1px solid var(--pdv-border-strong);
+  background: var(--pdv-surface);
+  color: var(--pdv-text);
+}
+.cashier-pdv-view .cashier-pdv-table-trigger[data-table-status="free"] {
+  border-color: var(--pdv-border);
+}
+.cashier-pdv-view .cashier-pdv-cart__footer {
+  border-top-color: var(--pdv-border);
+}
+.cashier-pdv-view #pdv-submit-btn:not(:disabled) {
+  border: 1px solid transparent;
+  background: var(--pdv-primary);
+  color: var(--pdv-primary-ink);
+  box-shadow: none;
+}
+@media (hover: hover) {
+  .cashier-pdv-view #pdv-submit-btn:not(:disabled):hover {
+    background: var(--pdv-primary-hover);
+  }
+}
+.cashier-pdv-view #pdv-submit-btn:focus-visible {
+  outline: 2px solid var(--pdv-focus);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cashier-pdv-view .cashier-pdv-cart__modality-option,
+  .cashier-pdv-view .cashier-pdv-category { transition: none; }
+}
