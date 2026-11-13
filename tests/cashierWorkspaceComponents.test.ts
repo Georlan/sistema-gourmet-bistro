@@ -8,6 +8,7 @@ import { projectCashierSalonTables } from '../src/domain/cashierSalonProjection'
 import { CaixaOrdersWorkspaceView as CaixaOrdersWorkspace, type CaixaOrdersWorkspaceProps } from '../src/components/caixa/orders/CaixaOrdersWorkspace';
 import { CaixaSalonTab, type CaixaSalonTabProps } from '../src/components/caixa/salao/CaixaSalonTab';
 import { CashierSalonCard } from '../src/components/caixa/salao/CashierSalonCard';
+import { useCashierSalonProjection } from '../src/components/caixa/salao/useCashierSalonProjection';
 import { CashierTableDestinations } from '../src/components/caixa/orders/CashierTableDestinations';
 import { KanbanOrderDetails, type KanbanOrderDetailsProps } from '../src/components/caixa/orders/KanbanOrderDetails';
 import type { CashierTableCard, DeliveryOrderView } from '../src/components/caixa/orders/cashierWorkspaceTypes';
@@ -306,13 +307,53 @@ test('Salão renders its current visual priorities and delegates table-scoped ac
   const cardElements = elements(view).filter(element => element.type === CashierSalonCard);
   assert.equal(cardElements.length, 3);
   const cardViews = cardElements.map(element => CashierSalonCard(element.props as unknown as Parameters<typeof CashierSalonCard>[0]));
-  invoke(button(cardViews[0], 'Ver comanda'), 'onClick');
-  invoke(button(cardViews[1], 'Ver comanda'), 'onClick');
-  invoke(button(cardViews[2], 'Abrir pedido'), 'onClick');
+  const cardButton = (cardView: ReactNode, action: string) => find(cardView, element =>
+    element.type === 'button' && String(element.props['aria-label'] || '').startsWith(action));
+  invoke(cardButton(cardViews[0], 'Ver comanda'), 'onClick');
+  invoke(cardButton(cardViews[1], 'Ver comanda'), 'onClick');
+  invoke(cardButton(cardViews[2], 'Abrir pedido'), 'onClick');
   invoke(button(view, 'Receber1'), 'onClick');
   assert.deepEqual(calls, [cards[0].tableOrders, cards[1].tableOrders, 9, 'payment']);
   assert.doesNotMatch(markup, /Contexto da mesa|Atendentes registrados|0 servidos|Transferir…|Consumo registrado|ATENDIMENTO NO LOCAL|koma-salon__summary/);
   for (const cardView of cardViews) assert.equal(elements(cardView).filter(element => element.type === 'button').length, 1);
+  assert.match(markup, /aria-label="Ver comanda · Mesa 07, Varanda · Tem item pronto"/);
+  assert.match(markup, /aria-label="Abrir pedido · Mesa 09 · Livre"/);
+});
+
+test('Salão directs a merged table to its real destination, without creating a second action', () => {
+  const mergedOrder = check({ id: 'joined-check', mesaId: 7, mesaOrigemId: 8 });
+  const projected = projectCashierSalonTables([TABLE, { id: 8, capacidade: 4 }], [mergedOrder], [], NOW);
+  const source = projected.find(card => card.table.id === 8);
+  assert.ok(source);
+  assert.equal(source.isMerged, true);
+  assert.equal(source.displayMesaId, 7);
+  const inspected: unknown[] = [];
+  const view = CashierSalonCard({ card: source, actions: {
+    inspectTable: rows => inspected.push(rows),
+    openTableOrder: id => inspected.push(id),
+  } });
+  const markup = renderToStaticMarkup(view);
+  assert.match(markup, /Ver mesa 07/);
+  assert.match(markup, /Atendimento na mesa 07/);
+  assert.match(markup, /data-table-status="merged"/);
+  assert.equal(elements(view).filter(element => element.type === 'button').length, 1);
+  invoke(find(view, element => element.type === 'button'), 'onClick');
+  assert.deepEqual(inspected, [source.tableOrders]);
+});
+
+test('Salão counts merged origins only in total, never duplicates their financial destination', () => {
+  let counts: ReturnType<typeof useCashierSalonProjection>['tableStatusCounts'] | undefined;
+  function Probe() {
+    const state = useCashierSalonProjection({
+      salonTables: [TABLE, { id: 8, capacidade: 2 }],
+      orders: [check({ mesaId: 7, mesaOrigemId: 8, statusComanda: 'aguardando_pagamento' })],
+      pagamentosPendentes: [], nowTimestamp: NOW,
+    });
+    counts = state.tableStatusCounts;
+    return null;
+  }
+  renderToStaticMarkup(createElement(Probe));
+  assert.deepEqual(counts, { all: 2, free: 0, occupied: 0, payment: 1 });
 });
 
 test('Salão keeps empty, error and filtered-empty states separate', () => {

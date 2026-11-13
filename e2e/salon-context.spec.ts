@@ -4,15 +4,15 @@ import { API_ORIGIN, openOperationalScenario } from './fixtures/operational';
 test('Salão compacto preserva todas as comandas nos detalhes e no recebimento', async ({ page }, testInfo) => {
   const state = await openOperationalScenario(page, { subtab: 'mesas', canonicalIdentity: true, secondCheck: true, transferredSecondCheck: true });
   const card = page.locator('article[data-table-status="occupied"]');
-  await expect(card).toHaveAttribute('aria-label', /Mesa 7:/);
-  await expect(card).not.toHaveAttribute('aria-label', /24-A|24-B|25-Z/);
+  await expect(card.getByRole('button')).toHaveAttribute('aria-label', /Mesa 7/);
+  await expect(card.getByRole('button')).not.toHaveAttribute('aria-label', /24-A|24-B|25-Z/);
   await expect(card.getByLabel('Contexto da mesa')).toHaveCount(0);
   await expect(card.getByRole('button')).toHaveCount(1);
   await expect(card).toContainText(/R\$\s*172,00/);
   await expect(card).not.toContainText('Aguardando pagamento');
   await expect(page.locator('body')).toHaveJSProperty('scrollWidth', await page.locator('body').evaluate(element => element.clientWidth));
   if (process.env.KOMA_CAPTURE_UI) await page.screenshot({ path: testInfo.outputPath('cashier-salon-context.png'), fullPage: true });
-  await card.getByRole('button', { name: 'Ver comanda', exact: true }).click();
+  await card.getByRole('button', { name: 'Ver comanda' }).click();
   const details = page.getByRole('dialog', { name: 'Mesa 07', exact: true });
   const context = details.getByLabel('Contexto da mesa');
   await expect(context).toContainText('Comandas: 2');
@@ -29,7 +29,7 @@ test('Salão compacto preserva todas as comandas nos detalhes e no recebimento',
 
 test('transferência nos detalhes só envia a Comanda técnica após confirmar', async ({ page }) => {
   const state = await openOperationalScenario(page, { subtab: 'mesas', canonicalIdentity: true });
-  await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda', exact: true }).click();
+  await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda' }).click();
   const details = page.getByRole('dialog', { name: 'Mesa 07', exact: true });
   expect(state.actions.filter(action => action.path.includes('/transferir/'))).toEqual([]);
   await details.getByRole('button', { name: 'Transferir', exact: true }).click();
@@ -45,7 +45,7 @@ test('transferência nos detalhes só envia a Comanda técnica após confirmar',
 
 test('adicionar consumo abre o PDV na mesa correta e mantém o carrinho ao voltar ao Salão', async ({ page }) => {
   const state = await openOperationalScenario(page, { subtab: 'mesas' });
-  await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda', exact: true }).click();
+  await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda' }).click();
   const details = page.getByRole('dialog', { name: 'Mesa 07', exact: true });
   await details.getByRole('button', { name: 'Adicionar itens', exact: true }).click();
   await expect(details).toBeHidden();
@@ -70,7 +70,7 @@ test('receber fica disponível para a mesa sem transformar itens servidos em con
   const card = page.locator('article[data-table-status="occupied"]');
   await expect(card).toContainText('Itens servidos');
   await expect(card).not.toContainText('Aguardando pagamento');
-  await card.getByRole('button', { name: 'Ver comanda', exact: true }).click();
+  await card.getByRole('button', { name: 'Ver comanda' }).click();
   await page.getByRole('dialog', { name: 'Mesa 07', exact: true }).getByRole('button', { name: 'Receber', exact: true }).click();
   await expect(page.getByRole('dialog', { name: 'Receber pagamento', exact: true })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Digite qualquer valor para abater do saldo.' })).toHaveValue('160,00');
@@ -177,7 +177,7 @@ test('transferência do Caixa identifica destinos ocupados sem itens e livres', 
     { id: 9, nome: 'Mesa 9', capacidade: 4, status: 'livre' },
   ] }));
   await page.reload();
-  await page.getByRole('button', { name: 'Ver comanda', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Ver comanda' }).first().click();
   await page.locator('.orders-detail-modal').getByRole('button', { name: 'Transferir', exact: true }).click();
   const picker = page.getByRole('radiogroup', { name: 'Mesa de destino' });
   await expect(picker.getByRole('radio', { name: 'Mesa 8 · Varanda · ocupada', exact: true })).toHaveAttribute('data-occupied', 'true');
