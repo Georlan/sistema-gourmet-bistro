@@ -1,0 +1,230 @@
+/* Salão do Caixa — dedicated surface, shared KÔMA typography/tokens and waiter state glyphs. */
+.koma-salon {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  color: var(--koma-text-primary);
+  font-family: var(--koma-font-body);
+}
+.koma-salon__heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .1rem .15rem 0;
+}
+.koma-salon__eyebrow {
+  display: block;
+  margin-bottom: .25rem;
+  color: var(--koma-accent-text);
+  font-size: .6875rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+}
+.koma-salon__heading h2 {
+  margin: 0;
+  font-family: var(--koma-font-display);
+  font-size: clamp(1.5rem, 2vw, 1.85rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -.025em;
+}
+.koma-salon__heading p { margin: .4rem 0 0; font-size: .875rem; color: var(--koma-text-muted); line-height: 1.35; }
+.koma-salon__occupancy {
+  flex-shrink: 0;
+  color: var(--koma-accent-text);
+  font-family: var(--koma-font-display);
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1;
+  text-align: right;
+}
+.koma-salon__occupancy span { display: block; margin-top: .3rem; font: 600 .7rem var(--koma-font-body); color: var(--koma-text-muted); }
+.koma-salon__summary {
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: .55rem;
+}
+.koma-salon__summary > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: .25rem;
+  padding: .72rem .85rem;
+  border: 1px solid var(--koma-border-subtle);
+  border-radius: 1rem;
+  background: var(--koma-surface-card);
+}
+.koma-salon__summary span { font-size: .73rem; font-weight: 500; color: var(--koma-text-muted); line-height: 1.3; }
+.koma-salon__summary strong { font-family: var(--koma-font-display); font-size: 1.04rem; font-weight: 700; line-height: 1.25; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.koma-salon__workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--koma-border-default);
+  border-radius: 1.3rem;
+  background: var(--koma-surface-panel);
+}
+.koma-salon__toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: .75rem;
+  padding: .85rem;
+  border-bottom: 1px solid var(--koma-border-subtle);
+}
+.koma-salon__filters {
+  display: flex;
+  width: 100%;
+  gap: .2rem;
+  padding: .25rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-radius: .9rem;
+  background: var(--koma-surface-raised);
+}
+.koma-salon__filters::-webkit-scrollbar { display:none; }
+.koma-salon__filter {
+  display: inline-flex;
+  flex: 1 0 auto;
+  min-width: 0;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  padding: .55rem .75rem;
+  border: 1px solid transparent;
+  border-radius: .7rem;
+  background: transparent;
+  color: var(--koma-text-muted);
+  font: 600 .8125rem var(--koma-font-body);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .15s ease,color .15s ease;
+  touch-action: manipulation;
+}
+.koma-salon__filter strong { font-size: .72rem; font-variant-numeric: tabular-nums; opacity: .83; }
+.koma-salon__filter[aria-pressed="true"] { background: var(--koma-action-bg); border-color: transparent; color: var(--koma-action-text); font-weight: 700; }
+.koma-salon__filter:not([aria-pressed="true"]):hover { background: var(--koma-surface-card); color: var(--koma-text-primary); }
+.koma-salon__search {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  min-height: 2.9rem;
+  padding: 0 .85rem;
+  border: 1px solid var(--koma-border-default);
+  border-radius: .9rem;
+  color: var(--koma-text-muted);
+  background: var(--koma-surface-input);
+}
+.koma-salon__search:focus-within { outline: 2px solid var(--koma-focus-ring); outline-offset: 1px; }
+.koma-salon__search input { width: 100%; min-width: 0; font: 400 1rem var(--koma-font-body); color: var(--koma-text-primary); border: 0; background: transparent; outline: none; }
+.koma-salon__search input::placeholder { color: var(--koma-text-muted); }
+.koma-salon__search input::-webkit-search-cancel-button { display: none; }
+.koma-salon__search button { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; flex-shrink: 0; border-radius: .55rem; color: var(--koma-text-primary); }
+.koma-salon__results { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: .85rem; }
+.koma-salon__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill,minmax(min(100%, 168px),1fr));
+  align-items: start;
+  gap: .7rem;
+}
+.koma-salon-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--koma-border-default);
+  border-radius: 1.1rem;
+  background: var(--koma-surface-card);
+  color: var(--koma-text-primary);
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.koma-salon-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .5rem;
+  min-height: 4.5rem;
+  padding: .68rem .82rem;
+  background: var(--koma-surface-raised);
+  border-bottom-right-radius: 1.3rem;
+}
+.koma-salon-card__identity { display: flex; flex-direction: column; min-width: 0; gap: .07rem; }
+.koma-salon-card__caption { font-size: .67rem; line-height: 1; font-weight: 600; color: var(--koma-text-muted); }
+.koma-salon-card__number { display: block; font: 700 2.05rem/1.04 var(--koma-font-display); font-variant-numeric: tabular-nums; letter-spacing: -.055em; }
+.koma-salon-card__glyph { flex-shrink: 0; margin-top: .2rem; color: var(--koma-accent-text); }
+.koma-salon-card__body { display: flex; flex-direction: column; gap: .35rem; min-height: 3.5rem; padding: .65rem .8rem .45rem; }
+.koma-salon-card__custom-name { font-size: .8rem; line-height: 1.25; overflow-wrap: anywhere; }
+.koma-salon-card__status { display: inline-flex; align-items: center; gap: .4rem; font-size: .75rem; font-weight: 650; line-height: 1.35; color: var(--koma-text-secondary); }
+.koma-salon-card__status-dot { flex-shrink: 0; width: .42rem; height: .42rem; border-radius: 50%; background: var(--koma-accent-text); }
+.koma-salon-card__meta { display: inline-flex; align-items: center; gap: .32rem; font-size: .71rem; font-weight: 500; line-height: 1.35; color: var(--koma-text-muted); }
+.koma-salon-card__service { display:flex; flex-direction:column; gap:.25rem; }
+.koma-salon-card__total { font: 700 1rem/1.25 var(--koma-font-display); font-variant-numeric:tabular-nums; }
+.koma-salon-card__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .3rem;
+  min-height: 2.75rem;
+  margin: .2rem .65rem .65rem;
+  padding: .45rem .4rem;
+  border: 1px solid var(--koma-accent-border);
+  border-radius: .75rem;
+  background: var(--koma-accent-soft);
+  color: var(--koma-accent-text);
+  font: 700 .78rem/1.2 var(--koma-font-body);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background .15s ease,transform .15s ease;
+}
+.koma-salon-card__action:hover { background: var(--koma-surface-raised); }
+.koma-salon-card__action:active { transform: translateY(1px); }
+.koma-salon-card[data-operational-state="occupied"] .koma-salon-card__status-dot { background: #e2a05a; }
+.koma-salon-card[data-operational-state="ready"] .koma-salon-card__status-dot { background: var(--koma-operation-ready); }
+.koma-salon-card[data-operational-state="payment"] .koma-salon-card__status-dot { background: var(--koma-operation-payment); }
+.koma-salon-card[data-operational-state="merged"] { border-style: dashed; }
+.koma-salon-card[data-operational-state="merged"] .koma-salon-card__status-dot { background: var(--koma-text-muted); }
+.koma-salon-card[data-operational-state="payment"] .koma-salon-card__glyph { color: var(--koma-operation-payment); }
+.koma-salon-card[data-operational-state="merged"] .koma-salon-card__body { padding-bottom: .9rem; }
+.koma-salon__empty { display:flex; min-height: 14rem; flex-direction:column; align-items:center; justify-content:center; gap:.55rem; text-align:center; padding: 1rem; color:var(--koma-text-muted); }
+.koma-salon__empty strong { color:var(--koma-text-primary); font-size:.95rem; }
+.koma-salon__empty p { max-width:30rem; overflow-wrap:anywhere; margin:0; font-size:.81rem; }
+.koma-salon__clear { margin-top:.45rem; padding:.65rem 1rem; border-radius:.7rem; background:var(--koma-accent-soft); color:var(--koma-accent-text); font-weight:700; }
+.koma-salon button:focus-visible, .koma-salon__search button:focus-visible { outline: 2px solid var(--koma-focus-ring); outline-offset: 2px; }
+@media (min-width: 1000px) {
+  .koma-salon__toolbar { flex-direction: row; align-items:center; }
+  .koma-salon__filters { flex:1; min-width:0; }
+  .koma-salon__search { flex:0 0 min(36%,330px); }
+}
+@media (max-width: 767px) {
+  .koma-salon { height:auto; overflow:visible; gap:.8rem; }
+  .koma-salon__heading { align-items:center; }
+  .koma-salon__heading p { font-size:.8rem; }
+  .koma-salon__summary { gap:.4rem; }
+  .koma-salon__summary > div { padding:.65rem .6rem; }
+  .koma-salon__summary span { font-size:.66rem; }
+  .koma-salon__summary strong { font-size:.9rem; }
+  .koma-salon__workspace { flex:initial; overflow:visible; }
+  .koma-salon__toolbar { padding:.7rem; }
+  .koma-salon__filter { padding-inline:.65rem; }
+  .koma-salon__results { overflow:visible; padding:.7rem; }
+  .koma-salon__grid, .cashier-shell[data-koma-plan="pocket"] .cashier-salon-grid {
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap:.55rem;
+  }
+}
+@media (max-width: 360px) {
+  .koma-salon__filter { font-size:.75rem; }
+  .koma-salon-card__number { font-size:1.8rem; }
+  .koma-salon-card__body { padding-inline:.65rem; }
+  .koma-salon-card__action { margin-inline:.5rem; font-size:.72rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .koma-salon__filter,.koma-salon-card__action { transition:none; }
+  .koma-salon-card__action:active { transform:none; }
+}

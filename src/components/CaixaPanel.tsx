@@ -70,6 +70,8 @@ import { SuprimentoModal } from './caixa/SuprimentoModal';
 import { OperationalBanner } from './shared/OperationalBanner';
 import { SidebarProvider } from './ui/sidebar';
 import './caixa/navigation/cashierChrome.css';
+import './caixa/salao/cashierSalon.css';
+import './caixa/pdv/cashierPdvTablePicker.css';
 import './caixa/orders/cashierOrderDetails.css';
 import './caixa/orders/cashierDetailActions.css';
 import './caixa/orders/cashierOrderControls.css';
@@ -390,6 +392,8 @@ export function CaixaPanel({
   const {
     tableStatusFilter,
     setTableStatusFilter,
+    tableSearch,
+    setTableSearch,
     salonTableCards,
     tableStatusCounts,
     salonInsights,
@@ -980,6 +984,8 @@ export function CaixaPanel({
                 insights={salonInsights}
                 filter={tableStatusFilter}
                 onFilterChange={setTableStatusFilter}
+                search={tableSearch}
+                onSearchChange={setTableSearch}
                 fetchError={fetchError}
                 actions={{ inspectTable: handleInspectSalonTable, openTableOrder: handleOpenSalonTableOrder }}
               />
