@@ -1,7 +1,9 @@
 import clsx from 'clsx';
-import { Info, Plus } from 'lucide-react';
+import { memo } from 'react';
+import { Info, ListChecks, Plus } from 'lucide-react';
 import type { Product } from '../../../types';
 import { formatCurrency } from '../cashierPresentation';
+import { pdvProductNeedsRequiredChoices } from './pdvProductChoices';
 
 interface CashierPdvProductCardProps {
   product: Product;
@@ -23,7 +25,7 @@ const splitProductLabel = (label: string) => {
  * cart mutations or availability: the canonical PDV hook remains authoritative.
  * Three independent buttons avoid nesting interactive controls in a fake button.
  */
-export function CashierPdvProductCard({
+function CashierPdvProductCardView({
   product,
   cartQuantity = 0,
   detailsOpen,
@@ -34,6 +36,7 @@ export function CashierPdvProductCard({
 }: CashierPdvProductCardProps) {
   const { code, name } = splitProductLabel(product.nome);
   const hasDetails = Boolean(product.descricao || code);
+  const needsChoices = pdvProductNeedsRequiredChoices(product);
   const productId = String(product.id);
   const detailsId = `pdv-product-details-${productId}`;
 
@@ -74,10 +77,11 @@ export function CashierPdvProductCard({
             type="button"
             className="cashier-pdv-product-card__add"
             onClick={() => onQuickAdd(product)}
-            aria-label={`Adicionar ${name} rapidamente`}
+            aria-label={needsChoices ? `Escolher opções de ${name}` : `Adicionar ${name} rapidamente`}
+            title={needsChoices ? 'Escolha os complementos obrigatórios antes de adicionar' : 'Adicionar uma unidade sem alterações'}
           >
-            <Plus size={16} strokeWidth={2.3} aria-hidden="true" />
-            <span>Adicionar</span>
+            {needsChoices ? <ListChecks size={16} strokeWidth={2.3} aria-hidden="true" /> : <Plus size={16} strokeWidth={2.3} aria-hidden="true" />}
+            <span>{needsChoices ? 'Escolher opções' : 'Adicionar'}</span>
           </button>
         </div>
       </div>
@@ -109,3 +113,7 @@ export function CashierPdvProductCard({
     </article>
   );
 }
+
+// Keep a large catalogue stable when the cart changes: with stable handlers,
+// only the updated card, its quantity and the current detail panel rerender.
+export const CashierPdvProductCard = memo(CashierPdvProductCardView);

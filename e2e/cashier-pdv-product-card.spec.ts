@@ -370,3 +370,125 @@ test('PDV keeps desktop sales navigation in the existing position', async ({ pag
   await expect(page.getByRole('navigation', { name: 'Telas desta área' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Mostrar telas de Vendas' })).toHaveCount(0);
 });
+
+
+test('novice cashier cannot skip a required product choice via quick add', async ({ page }) => {
+  await mockCashierBackend(page);
+  await page.route('http://127.0.0.1:8000/produtos/catalogo', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        categorias: [{ id: 'meals', nome: 'Refeições' }],
+        produtos: [{
+          id: 'required-meal',
+          nome: 'Marmita P',
+          preco: 20,
+          ativo: true,
+          categoria_id: 'meals',
+          grupos_modificadores: [{
+            id: 'protein',
+            nome: 'Escolha a proteína',
+            min_selecoes: 1,
+            max_selecoes: 1,
+            tipo: 'obrigatorio',
+            recomendado: true,
+            opcoes: [
+              { id: 'chicken', grupo_id: 'protein', nome: 'Frango', preco_adicional: 0, ativo: true },
+              { id: 'beef', grupo_id: 'protein', nome: 'Carne', preco_adicional: 3, ativo: true },
+            ],
+          }],
+        }],
+      }),
+    });
+  });
+  await seedCashierSession(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_active_tab', 'operacao');
+    sessionStorage.setItem('koma_active_subtab', 'balcao');
+  });
+  await page.goto('/?view=caixa');
+  const card = page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Marmita P' });
+  await expect(card).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Adicionar Marmita P rapidamente' })).toHaveCount(0);
+  await card.getByRole('button', { name: 'Escolher opções de Marmita P' }).click();
+  const dialog = page.getByTestId('cashier-pdv-config-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Adicionar ao pedido' })).toBeDisabled();
+  if ((page.viewportSize()?.width ?? 1366) < 1280) {
+    await expect(page.getByRole('button', { name: /Carrinho \(0\)/ })).toBeVisible();
+  } else {
+    await expect(page.getByTestId('cashier-pdv-cart-line')).toHaveCount(0);
+  }
+  await dialog.getByRole('button', { name: 'Selecionar Frango' }).click();
+  await expect(dialog.getByRole('button', { name: 'Adicionar ao pedido' })).toBeEnabled();
+  await dialog.getByRole('button', { name: 'Adicionar ao pedido' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(card.locator('.cashier-pdv-product-card__quantity')).toHaveText('1');
+  if ((page.viewportSize()?.width ?? 1366) < 1280) {
+    await page.getByRole('button', { name: /Carrinho \(1\)/ }).click();
+  }
+  await expect(page.getByTestId('cashier-pdv-cart-line')).toContainText('Frango');
+});
+
+test('four fixture-only cashiers stay responsive with 240 products and repeated additions', async ({ browser }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-390', 'Exercise synthetic burst once on a phone viewport');
+  const numOperators = 4;
+  const products = Array.from({ length: 240 }, (_, index) => ({
+    id: 'burst-' + index,
+    nome: 'Produto ' + index,
+    preco: 10 + (index % 12),
+    categoria_id: 'cat-' + (index % 24),
+    ativo: true,
+    grupos_modificadores: [],
+  }));
+  const categories = Array.from({ length: 24 }, (_, index) => ({
+    id: 'cat-' + index, nome: 'Categoria ' + index,
+  }));
+  const sessions = await Promise.all(Array.from({ length: numOperators }, async () => {
+    const context = await browser.newContext({ viewport: { width: 390, height: 780 }, isMobile: true, hasTouch: true });
+    const page = await context.newPage();
+    await mockCashierBackend(page);
+    await page.route('http://127.0.0.1:8000/produtos/catalogo', async route => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ categorias: categories, produtos: products }) });
+    });
+    await seedCashierSession(page);
+    // The shared fixture initializes Pedidos. Navigate explicitly instead
+    // of relying on browser-dependent ordering of multiple init scripts.
+    let salePosts = 0;
+    page.on('request', request => {
+      if (request.method() === 'POST' && request.url().includes('/cardapio/modificadores/venda-direta')) salePosts++;
+    });
+    return { context, page, getSalePosts: () => salePosts };
+  }));
+  try {
+    const durations = await Promise.all(sessions.map(async ({ page }) => {
+      await page.goto('/?view=caixa');
+      const salesNav = page.getByRole('navigation', { name: 'Telas desta área' });
+      await salesNav.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+      const search = page.getByRole('searchbox', { name: 'Buscar produtos do cardápio' });
+      await expect(search).toBeVisible();
+      const card = page.getByTestId('cashier-pdv-product-card').filter({ hasText: /^Produto 0/ }).first();
+      const add = card.getByRole('button', { name: 'Adicionar Produto 0 rapidamente' });
+      await expect(add).toBeVisible();
+      const start = Date.now();
+      for (let n = 0; n < 12; n++) await add.click();
+      await expect(card.locator('.cashier-pdv-product-card__quantity')).toHaveText('12');
+      await search.fill('Produto 199');
+      await expect(page.getByTestId('cashier-pdv-product-card')).toHaveCount(1);
+      await expect(page.getByTestId('cashier-pdv-product-card').first()).toContainText('Produto 199');
+      return Date.now() - start;
+    }));
+    for (const { getSalePosts } of sessions) expect(getSalePosts()).toBe(0);
+    const independent = sessions[1].page.getByRole('button', { name: /Carrinho \(12\)/ });
+    await expect(independent).toBeVisible();
+    const sorted = durations.slice().sort((a, b) => a - b);
+    console.log('PDV fixture-only burst (4 independent sessions, 240 items each, 12 additions/session; not production TPS):', JSON.stringify({
+      elapsedPerOperatorMs: durations,
+      medianOperatorMs: sorted[2],
+      maxOperatorMs: sorted[sorted.length - 1],
+    }));
+  } finally {
+    await Promise.all(sessions.map(({ context }) => context.close()));
+  }
+});

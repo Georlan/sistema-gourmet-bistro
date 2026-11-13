@@ -302,7 +302,7 @@ export function useCashierPdv({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeSubTab, allowedPdvOrderTypes, pdvCart]);
 
-  const handlePdvAddToCart = (product: Product) => {
+  const handlePdvAddToCart = useCallback((product: Product) => {
     setPdvCart((prev) => {
       const idx = prev.findIndex((item) =>
         item.product.id === product.id
@@ -317,7 +317,7 @@ export function useCashierPdv({
       }
       return [...prev, { product, quantity: 1, obs: '', client: 'Balcão', modifierIds: [], modifiers: [] }];
     });
-  };
+  }, []);
 
   const handlePdvUpdateCartQty = (idx: number, delta: number) => {
     setPdvCart((prev) => {
