@@ -126,6 +126,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   }, [addedNotice]);
 
   const deliveryAddressDisclosureRef = useRef<HTMLDetailsElement | null>(null);
+  const mobileTaskRef = useRef<HTMLDivElement | null>(null);
 
   // Reveal a missing delivery address when that modality is selected, but
   // allow operators to collapse the native disclosure afterward.
@@ -252,9 +253,20 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     closeConfig();
   };
 
-  const cartTotal = pdvCart.reduce((sum, item) => sum + pdvCartItemUnitPrice(item) * item.quantity, 0);
+  const cartTotal = useMemo(() => pdvCart.reduce(
+    (sum, item) => sum + pdvCartItemUnitPrice(item) * item.quantity, 0,
+  ), [pdvCart]);
   const currentModalityLabel = pdvOrderType === 'pickup' ? 'Retirada'
     : pdvOrderType === 'delivery' ? 'Delivery' : 'Consumo local';
+  const switchMobileTask = useCallback((next: 'produtos' | 'carrinho') => {
+    if (next === balcaoMobileView) return;
+    setBalcaoMobileView(next);
+    // A task change must never leave the operator looking at the bottom of the old pane.
+    // Keep catalog/category selection untouched; this only reveals the active task header.
+    window.requestAnimationFrame(() => {
+      mobileTaskRef.current?.scrollIntoView({ block: 'start', behavior: 'instant' });
+    });
+  }, [balcaoMobileView, setBalcaoMobileView]);
   const changeCartObservation = (index: number, observation: string) => {
     setPdvCart((current) => current.map((item, itemIndex) =>
       itemIndex === index ? { ...item, obs: observation } : item));
@@ -297,7 +309,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   return (
     <>
       {activeSubTab === 'balcao' && (
-        <div className={clsx("orders-workspace cashier-pdv-view h-full min-h-0 flex flex-col gap-3 sm:gap-4", balcaoMobileView === "produtos" && pdvCartItemCount > 0 && "has-mobile-cart-cta")}>
+        <div className={clsx("orders-workspace cashier-pdv-view h-full min-h-0 flex flex-col gap-3 sm:gap-4", balcaoMobileView === "produtos" && "has-mobile-cart-cta")}>
           <OperationalBanner
             id="counter-heading"
             eyebrow="VENDA"
@@ -337,11 +349,11 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
           <div
             className={"cashier-pdv-layout min-h-0 flex-1 flex flex-col xl:flex-row gap-3 sm:gap-4 overflow-hidden relative"}
           >
-            <div className="cashier-pdv-mobile-switch xl:hidden" role="group" aria-label="Navegação e atendimento do novo pedido">
+            <div ref={mobileTaskRef} className="cashier-pdv-mobile-switch xl:hidden" role="group" aria-label="Navegação e atendimento do novo pedido">
               <button
                 type="button"
                 aria-label="Escolher itens"
-                onClick={() => setBalcaoMobileView('produtos')}
+                onClick={() => switchMobileTask('produtos')}
                 aria-current={balcaoMobileView === 'produtos' ? 'page' : undefined}
                 aria-controls="pdv-products-panel"
                 className={clsx('cashier-pdv-mobile-switch__button', balcaoMobileView === 'produtos' && 'is-active')}
@@ -352,7 +364,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               <button
                 type="button"
                 aria-label={`Carrinho (${pdvCartItemCount})`}
-                onClick={() => setBalcaoMobileView('carrinho')}
+                onClick={() => switchMobileTask('carrinho')}
                 aria-current={balcaoMobileView === 'carrinho' ? 'page' : undefined}
                 aria-controls="pdv-order-panel"
                 className={clsx('cashier-pdv-mobile-switch__button', balcaoMobileView === 'carrinho' && 'is-active')}
@@ -594,7 +606,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
 
             <div
               id="pdv-order-panel"
-              className={`cashier-pdv-cart w-full xl:w-[350px] 2xl:w-[380px] bg-koma-panel border border-koma-border rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden xl:flex'} ${pdvCart.length === 0 ? 'xl:self-start' : ''} flex-col overflow-hidden shrink-0 shadow-sm`}
+              className={`cashier-pdv-cart w-full xl:w-[350px] 2xl:w-[380px] bg-koma-panel border border-koma-border rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden xl:flex'} ${pdvCart.length === 0 ? 'xl:self-start' : ''} ${pdvCart.length === 0 && pdvOrderType === 'pickup' ? 'is-empty-pickup' : ''} flex-col overflow-hidden shrink-0 shadow-sm`}
             >
               <div className="cashier-pdv-cart__header">
                 <div className="cashier-pdv-cart__cart-heading">
@@ -615,10 +627,11 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                 <div className="cashier-pdv-cart__body">
               <div className="cashier-pdv-cart-scroll">
                 {pdvCart.length === 0 ? (
-                  <div className="cashier-pdv-cart__empty h-full flex flex-col items-center justify-center text-center px-5">
-                    <img src="/brand/cashier/pdv-empty-cart-v1.svg" alt="" width="100" height="80" loading="lazy" />
-                    <strong>Comece escolhendo um item</strong>
-                    <p>+ Adicionar é rápido. Toque no produto para personalizar.</p>
+                  <div className="cashier-pdv-cart__empty flex flex-col items-center justify-center text-center px-5">
+                    <ShoppingCart size={28} aria-hidden="true" />
+                    <strong>Carrinho vazio</strong>
+                    <p>Escolha os itens para começar seu pedido.</p>
+                    <button type="button" className="cashier-pdv-cart__empty-action xl:hidden" onClick={() => switchMobileTask('produtos')}>Escolher itens</button>
                   </div>
                 ) : (
                   pdvCart.map((item, idx) => (
@@ -814,8 +827,13 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
 
                 <div className="cashier-pdv-cart__footer shrink-0 border-t border-koma-border bg-koma-panel p-3 shadow-[0_-10px_24px_rgba(0,0,0,0.12)]">
                   <div className="cashier-pdv-cart__total mb-2 flex items-center justify-between font-bold text-koma-foreground">
-                    <span>Total do pedido</span>
-                    <span className="text-sm text-emerald-700 dark:text-emerald-400">{formatCurrency(cartTotal)}</span>
+                    <span className="cashier-pdv-cart__footer-left">
+                      <button type="button" className="cashier-pdv-cart__back xl:hidden" onClick={() => switchMobileTask('produtos')} aria-label="Voltar aos itens">
+                        <ChevronLeft size={17} aria-hidden="true" /> Itens
+                      </button>
+                      <span>Total do pedido</span>
+                    </span>
+                    <span className="cashier-pdv-cart__total-value text-emerald-700 dark:text-emerald-400"><small className="xl:hidden">Total</small><strong>{formatCurrency(cartTotal)}</strong></span>
                   </div>
                   {cartHasUnavailableItems && (
                     <div
@@ -843,10 +861,10 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               </form>
             </div>
 
-            {pdvCart.length > 0 && balcaoMobileView === 'produtos' && (
+            {balcaoMobileView === 'produtos' && (
               <button
                 type="button"
-                onClick={() => setBalcaoMobileView('carrinho')}
+                onClick={() => switchMobileTask('carrinho')}
                 aria-label={`Ver pedido com ${pdvCartItemCount} ${pdvCartItemCount === 1 ? 'item' : 'itens'}, total ${formatCurrency(cartTotal)}`}
                 id="pdv-review-btn"
                 className="cashier-pdv-mobile-cart-cta xl:hidden"

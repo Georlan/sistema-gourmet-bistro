@@ -4,7 +4,7 @@ import { API_ORIGIN, openOperationalScenario } from './fixtures/operational';
 test('Salão compacto preserva todas as comandas nos detalhes e no recebimento', async ({ page }, testInfo) => {
   const state = await openOperationalScenario(page, { subtab: 'mesas', canonicalIdentity: true, secondCheck: true, transferredSecondCheck: true });
   const card = page.locator('article[data-table-status="occupied"]');
-  await expect(card.getByRole('button')).toHaveAttribute('aria-label', /Mesa 7/);
+  await expect(card.getByRole('button')).toHaveAttribute('aria-label', /Mesa 07/);
   await expect(card.getByRole('button')).not.toHaveAttribute('aria-label', /24-A|24-B|25-Z/);
   await expect(card.getByLabel('Contexto da mesa')).toHaveCount(0);
   await expect(card.getByRole('button')).toHaveCount(1);
