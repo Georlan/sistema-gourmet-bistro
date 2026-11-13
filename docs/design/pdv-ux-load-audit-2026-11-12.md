@@ -38,6 +38,8 @@ Referências de contexto: [BeeFood PDV](https://ajuda.beefood.com.br/pdv), [Kyte
 
 **F2 — concorrência de API.** `test_capacity_stage_1_ten_tenants`: dez restaurantes sintéticos / quarenta pedidos, até quatro requisições em paralelo, testes de replay, isolamento e percentis. Rodar apenas em SQLite local descartável do GitHub Actions; não usar dados reais, Railway nem produção. Esta medida não equivale a tráfego externo em PostgreSQL/infra real.
 
+**F3 — pico concentrado.** Um único restaurante sintético / 24 pedidos e até quatro requisições concorrentes sobre SQLite descartável; comparar erros, duplicações e percentis com F2. A concentração em um tenant não modela conexões de celulares reais, PostgreSQL nem tráfego do Railway.
+
 ## Guardrails
 
 - Core de preço, status, estoque, pagamentos, limites de modificadores e tenant continuam no backend; UI só apresenta e bloqueia escolhas inválidas.
