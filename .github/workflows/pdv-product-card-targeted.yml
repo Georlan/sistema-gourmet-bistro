@@ -85,3 +85,23 @@ jobs:
           print("CI-only synthetic tenants; no production requests")
           PY
           python -m pytest -q -s backend/tests/test_capacity_scale_stages.py::test_capacity_stage_1_ten_tenants
+      - name: Same-restaurant peak - 24 synthetic orders, 4 concurrent
+        run: |
+          python - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          url = urlparse(os.environ["DATABASE_URL"])
+          assert url.scheme == "sqlite" and "pdv-synthetic-capacity.db" in url.path
+          from app.database import Base, engine, SessionLocal
+          from tests.test_capacity_scale_stages import provision_synthetic_tenants, run_stage_simulation
+          Base.metadata.create_all(bind=engine)
+          session = SessionLocal()
+          try:
+              tenants = provision_synthetic_tenants(session, count=1, base_id=9200)
+          finally:
+              session.close()
+          stats = run_stage_simulation(tenants, requests_per_tenant=24, concurrency=4)
+          print("Single-restaurant synthetic peak:", stats)
+          assert stats["completed"] == 24 and stats["errors"] == 0, stats["error_details"]
+          assert stats["p95_ms"] < 3000.0, "P95 over synthetic CI budget"
+          PY
