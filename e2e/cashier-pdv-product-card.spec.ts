@@ -160,7 +160,8 @@ test('PDV F4 first exposes or focuses the submit button without launching a sale
   } else {
     await expect(page.getByRole('button', { name: 'Consumo local' })).toHaveAttribute('aria-pressed', 'true');
   }
-  await expect(page.getByLabel('Mesa', { exact: true })).toBeVisible();
+  await expect(page.locator('#pdv-target-table')).toBeVisible();
+  await expect(page.locator('#pdv-target-table')).toBeFocused();
 
   await page.keyboard.press('F2');
   if (mobile) {
