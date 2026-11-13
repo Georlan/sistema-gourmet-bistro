@@ -22,7 +22,6 @@ export function ProductScreen({ view = 'mesas', scaleLogicalWidth = 1280 }: Prod
           <KitchenPanel
             orders={orders}
             onFinishPreparation={() => {}}
-            currentTime={Date.now()}
           />
         );
       case 'cardapio':
