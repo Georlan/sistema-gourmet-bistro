@@ -26,7 +26,7 @@ test('30 mesas mantêm cards compactos e livres não esticam; detalhes cabem na 
     console.info('salon-layout', JSON.stringify({ viewport: page.viewportSize(), occupiedHeight: occupiedBox.height, freeHeight: freeBox.height, visibleTables }));
     await page.screenshot({ path: testInfo.outputPath('compact-salon.png') });
   }
-  await occupied.getByRole('button', { name: 'Ver comanda', exact: true }).click();
+  await occupied.getByRole('button', { name: 'Ver comanda' }).click();
   const details = page.getByRole('dialog', { name: 'Mesa 07', exact: true });
   const box = (await details.boundingBox())!;
   expect(box.y).toBeGreaterThanOrEqual(0);
@@ -42,7 +42,7 @@ test('30 mesas mantêm cards compactos e livres não esticam; detalhes cabem na 
 
 test('cédulas só aparecem em Dinheiro e trocar método não altera valor nem registra pagamento', async ({ page }) => {
   const state = await openOperationalScenario(page, { subtab: 'mesas' });
-  await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda', exact: true }).click();
+  await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda' }).click();
   await page.getByRole('dialog', { name: 'Mesa 07', exact: true }).getByRole('button', { name: 'Receber', exact: true }).click();
   const form = page.locator('form').filter({ has: page.getByRole('textbox', { name: 'Digite qualquer valor para abater do saldo.' }) });
   const shortcuts = form.getByRole('group', { name: 'Atalhos de cédulas' });

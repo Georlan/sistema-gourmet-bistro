@@ -28,8 +28,8 @@ export function useCashierSalonProjection({
     () => ({
       all: salonTableCards.length,
       free: salonTableCards.filter((card) => !card.isOccupied && !card.isMerged).length,
-      occupied: salonTableCards.filter((card) => card.isOccupied && !card.hasPendingPayment).length,
-      payment: salonTableCards.filter((card) => card.hasPendingPayment).length,
+      occupied: salonTableCards.filter((card) => !card.isMerged && card.isOccupied && !card.hasPendingPayment).length,
+      payment: salonTableCards.filter((card) => !card.isMerged && card.hasPendingPayment).length,
     }),
     [salonTableCards],
   );
@@ -54,12 +54,14 @@ export function useCashierSalonProjection({
     const query = tableSearch.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
     return salonTableCards.filter((card) => {
       if (tableStatusFilter === 'free' && (card.isOccupied || card.isMerged)) return false;
-      if (tableStatusFilter === 'occupied' && (!card.isOccupied || card.hasPendingPayment)) return false;
-      if (tableStatusFilter === 'payment' && !card.hasPendingPayment) return false;
+      if (tableStatusFilter === 'occupied' && (card.isMerged || !card.isOccupied || card.hasPendingPayment)) return false;
+      if (tableStatusFilter === 'payment' && (card.isMerged || !card.hasPendingPayment)) return false;
       if (!query) return true;
-      const haystack = String(card.table.id) + ' ' + String(card.table.id).padStart(2, '0') + ' mesa ' + (card.table.nome || '');
+      const mesa = String(card.table.id);
+      const padded = mesa.padStart(2, '0');
+      const haystack = [mesa, padded, `mesa ${mesa}`, `mesa ${padded}`, card.table.nome || ''].join(' ');
       return haystack.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').includes(query);
-    });
+    }).sort((a, b) => a.table.id - b.table.id);
   }, [salonTableCards, tableStatusFilter, tableSearch]);
   return {
     tableStatusFilter,

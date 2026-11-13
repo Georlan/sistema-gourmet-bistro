@@ -6,6 +6,8 @@ test('Salão do Caixa mantém busca, filtros e grade legíveis no celular', asyn
   const cards = page.locator('.koma-salon-card');
   await expect(cards).toHaveCount(18);
   await expect(page.locator('.koma-salon__summary, .koma-salon__heading, .koma-salon__workspace')).toHaveCount(0);
+  await expect(page.locator('.koma-salon-card__tap')).toHaveCount(18);
+  await expect(page.locator('.koma-salon-card__tap').first()).toHaveAttribute('aria-label', /Mesa 07/);
   await expect(page.getByRole('group', { name: 'Filtrar mesas por situação' })).toBeVisible();
   if ((page.viewportSize()?.width ?? 1366) >= 360 && (page.viewportSize()?.width ?? 1366) < 640) {
     const columns = await page.locator('.koma-salon__grid').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length);
@@ -95,4 +97,11 @@ test('Salão claro mantém identidade KÔMA e texto gigante reorganiza cards em 
   await expect(page.locator('.koma-salon-card')).toHaveCount(8);
   const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
   expect(documentWidth).toBeLessThanOrEqual(391);
+});
+
+test('tocar no número da mesa usa todo o card e mantém destino no PDV', async ({ page }) => {
+  await openOperationalScenario(page, { subtab: 'mesas' });
+  const mesa = page.locator('.koma-salon-card[data-table-status="free"]').first();
+  await mesa.locator('.koma-salon-card__number').click();
+  await expect(page.getByTestId('pdv-selected-table-context')).toContainText('Mesa 08');
 });
