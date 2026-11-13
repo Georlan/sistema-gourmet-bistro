@@ -1,7 +1,4 @@
 import { useMemo, useState } from 'react';
-import {
-  formatCashierOldestAge as formatOldestAge,
-} from '../../../domain/cashierOrderProjection';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import type { Order, Table } from '../../../types';
 
@@ -37,28 +34,6 @@ export function useCashierSalonProjection({
     [salonTableCards],
   );
 
-  const salonInsights = useMemo(() => {
-    const activeCards = salonTableCards.filter((card) => card.isOccupied && !card.isMerged);
-    const openValue = activeCards.reduce((total, card) => total + card.total, 0);
-    const timestamps = activeCards.flatMap((card) =>
-      card.tableOrders.map(
-        (order) =>
-          (order as any).aberta_em ||
-          (order as any).data_abertura ||
-          (order as any).aberto_em ||
-          order.created_at ||
-          order.timestamp ||
-          (order as any).criadoEm,
-      ),
-    );
-    return {
-      occupancy:
-        salonTableCards.length > 0 ? Math.round((activeCards.length / salonTableCards.length) * 100) : 0,
-      openValue,
-      oldestService: formatOldestAge(timestamps, nowTimestamp),
-    };
-  }, [salonTableCards, nowTimestamp]);
-
   const pdvTableOptions = useMemo(
     () =>
       salonTableCards
@@ -93,7 +68,6 @@ export function useCashierSalonProjection({
     setTableSearch,
     salonTableCards,
     tableStatusCounts,
-    salonInsights,
     pdvTableOptions,
     visibleSalonTableCards,
   };

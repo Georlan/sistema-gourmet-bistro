@@ -5,6 +5,12 @@ test('Salão do Caixa mantém busca, filtros e grade legíveis no celular', asyn
   await openOperationalScenario(page, { subtab: 'mesas', tableCount: 18 });
   const cards = page.locator('.koma-salon-card');
   await expect(cards).toHaveCount(18);
+  await expect(page.locator('.koma-salon__summary, .koma-salon__heading, .koma-salon__workspace')).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Filtrar mesas por situação' })).toBeVisible();
+  if ((page.viewportSize()?.width ?? 1366) >= 360 && (page.viewportSize()?.width ?? 1366) < 640) {
+    const columns = await page.locator('.koma-salon__grid').evaluate(element => getComputedStyle(element).gridTemplateColumns.split(' ').length);
+    expect(columns).toBe(3);
+  }
   const search = page.getByRole('searchbox', { name: 'Buscar mesa no salão' });
   await search.fill('07');
   await expect(cards).toHaveCount(1);
@@ -70,4 +76,23 @@ test('Salão permanece navegável em 320px sem rolagem horizontal de página', a
   expect(sizes.bodyWidth).toBeLessThanOrEqual(sizes.viewport + 1);
   await expect(page.locator('.koma-salon-card')).toHaveCount(18);
   await expect(page.locator('.koma-salon-card[data-table-status="free"]').first().getByRole('button', { name: 'Abrir pedido' })).toBeVisible();
+});
+
+test('Salão claro mantém identidade KÔMA e texto gigante reorganiza cards em 390px', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 760 });
+  await openOperationalScenario(page, { subtab: 'mesas', tableCount: 8 });
+  await page.evaluate(() => {
+    document.documentElement.dataset.komaTheme = 'light';
+    document.documentElement.dataset.komaTextSize = 'normal';
+  });
+  const grid = page.locator('.koma-salon__grid');
+  const columnCount = () => grid.evaluate(node => getComputedStyle(node).gridTemplateColumns.split(' ').length);
+  expect(await columnCount()).toBe(3);
+  await expect(page.locator('.koma-salon__summary, .koma-salon__heading')).toHaveCount(0);
+  if (process.env.KOMA_CAPTURE_UI) await page.screenshot({ path: testInfo.outputPath('salon-light-390.png') });
+  await page.evaluate(() => { document.documentElement.dataset.komaTextSize = 'gigante'; });
+  expect(await columnCount()).toBe(2);
+  await expect(page.locator('.koma-salon-card')).toHaveCount(8);
+  const documentWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(documentWidth).toBeLessThanOrEqual(391);
 });

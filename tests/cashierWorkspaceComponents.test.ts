@@ -294,7 +294,7 @@ test('Salão renders its current visual priorities and delegates table-scoped ac
   const cards = projectCashierSalonTables(tables, orders, [], NOW);
   const calls: unknown[] = [];
   const props: CaixaSalonTabProps = freeze({ cards, visibleCards: cards,
-    counts: { all: 3, free: 1, occupied: 1, payment: 1 }, insights: { occupancy: 67, openValue: 320, oldestService: '2 min' },
+    counts: { all: 3, free: 1, occupied: 1, payment: 1 },
     filter: 'all', onFilterChange: filter => calls.push(filter),
     actions: { inspectTable: rows => calls.push(rows), openTableOrder: id => calls.push(id) },
   });
@@ -309,20 +309,20 @@ test('Salão renders its current visual priorities and delegates table-scoped ac
   invoke(button(cardViews[0], 'Ver comanda'), 'onClick');
   invoke(button(cardViews[1], 'Ver comanda'), 'onClick');
   invoke(button(cardViews[2], 'Abrir pedido'), 'onClick');
-  invoke(button(view, 'Para receber 1'), 'onClick');
+  invoke(button(view, 'Receber1'), 'onClick');
   assert.deepEqual(calls, [cards[0].tableOrders, cards[1].tableOrders, 9, 'payment']);
-  assert.doesNotMatch(markup, /Contexto da mesa|Atendentes registrados|0 servidos|Transferir…/);
+  assert.doesNotMatch(markup, /Contexto da mesa|Atendentes registrados|0 servidos|Transferir…|Consumo registrado|ATENDIMENTO NO LOCAL|koma-salon__summary/);
   for (const cardView of cardViews) assert.equal(elements(cardView).filter(element => element.type === 'button').length, 1);
 });
 
 test('Salão keeps empty, error and filtered-empty states separate', () => {
   const base: CaixaSalonTabProps = { cards: [], visibleCards: [], counts: { all: 0, free: 0, occupied: 0, payment: 0 },
-    insights: { occupancy: 0, openValue: 0, oldestService: '—' }, filter: 'all', onFilterChange: noop,
+    filter: 'all', onFilterChange: noop,
     actions: { inspectTable: noop, openTableOrder: noop } };
   assert.match(renderToStaticMarkup(createElement(CaixaSalonTab, base)), /Nenhuma mesa cadastrada/);
-  assert.match(renderToStaticMarkup(createElement(CaixaSalonTab, { ...base, fetchError: 'Sem conexão' })), /Não foi possível carregar o salão/);
+  assert.match(renderToStaticMarkup(createElement(CaixaSalonTab, { ...base, fetchError: 'Sem conexão' })), /Não foi possível carregar as mesas/);
   const cards = projectCashierSalonTables([TABLE], [check()], [], NOW);
-  assert.match(renderToStaticMarkup(createElement(CaixaSalonTab, { ...base, cards })), /Nenhuma mesa neste filtro/);
+  assert.match(renderToStaticMarkup(createElement(CaixaSalonTab, { ...base, cards })), /Nenhuma mesa nesta situação/);
 });
 
 test('details groups visible units and delegates print/transfer/cancellation without closing itself', () => {
