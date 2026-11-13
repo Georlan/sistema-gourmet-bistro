@@ -70,6 +70,7 @@ import { SuprimentoModal } from './caixa/SuprimentoModal';
 import { OperationalBanner } from './shared/OperationalBanner';
 import { SidebarProvider } from './ui/sidebar';
 import './caixa/navigation/cashierChrome.css';
+import './caixa/pdv/cashierPdvMobileWorkspace.css';
 import './caixa/salao/cashierSalon.css';
 import './caixa/pdv/cashierPdvTablePicker.css';
 import './caixa/orders/cashierOrderDetails.css';
@@ -735,7 +736,7 @@ export function CaixaPanel({
   return (
     <div
       data-koma-plan={currentPlanId}
-      className={`cashier-shell ${activeTab === 'operacao' && activeSubTab === 'pedidos' ? 'cashier-shell--mobile-orders' : ''} flex w-full bg-koma-page text-koma-foreground font-sans selection:bg-[#10b981]/30 text-xs ${
+      className={`cashier-shell ${activeTab === 'operacao' && activeSubTab === 'pedidos' ? 'cashier-shell--mobile-orders' : ''} ${activeTab === 'operacao' && activeSubTab === 'balcao' ? 'cashier-shell--mobile-pdv' : ''} flex w-full bg-koma-page text-koma-foreground font-sans selection:bg-[#10b981]/30 text-xs ${
         fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}
     >

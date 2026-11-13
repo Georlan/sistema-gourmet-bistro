@@ -144,7 +144,7 @@ test('Novo pedido preserva o carrinho e adapta os dados operacionais por modalid
   await expect(panel.getByRole('button', { name: 'Lançar Pedido', exact: false })).toBeEnabled();
 
   if ((page.viewportSize()?.width ?? 1366) < 1280) {
-    await page.getByRole('combobox', { name: 'Tipo de atendimento' }).selectOption('delivery');
+    await page.locator('.cashier-pdv-cart__modality-option').filter({ hasText: 'Delivery' }).click();
   } else {
     await panel.getByRole('button', { name: 'Delivery', exact: true }).click();
   }
@@ -155,7 +155,7 @@ test('Novo pedido preserva o carrinho e adapta os dados operacionais por modalid
   await expect(panel.getByRole('button', { name: 'Lançar Pedido', exact: false })).toBeVisible();
 
   if ((page.viewportSize()?.width ?? 1366) < 1280) {
-    await page.getByRole('combobox', { name: 'Tipo de atendimento' }).selectOption('dine_in');
+    await page.locator('.cashier-pdv-cart__modality-option').filter({ hasText: 'Consumo local' }).click();
   } else {
     await panel.getByRole('button', { name: 'Consumo local', exact: true }).click();
   }

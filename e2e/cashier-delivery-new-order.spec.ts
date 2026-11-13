@@ -24,7 +24,7 @@ test('delivery envia endereço simplificado e mostra erro legível preservando c
     await page.getByRole('button', { name: 'Carrinho (1)', exact: true }).click();
   }
   if ((page.viewportSize()?.width ?? 1366) < 1280) {
-    await page.getByRole('combobox', { name: 'Tipo de atendimento' }).selectOption('delivery');
+    await page.locator('.cashier-pdv-cart__modality-option').filter({ hasText: 'Delivery' }).click();
   } else {
     await page.getByRole('button', { name: 'Delivery', exact: true }).click();
   }

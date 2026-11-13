@@ -237,44 +237,7 @@
   .cashier-pdv-product-card__details { transition: none; }
 }
 
-/* PDV mobile work area: the catalog remains the primary task, with
- * one clear cart action above the shared five-item bottom navigation. */
-.cashier-pdv-view .cashier-pdv-mobile-switch {
-  display: flex;
-  flex: 0 0 auto;
-  gap: .25rem;
-  padding: .25rem;
-  border: 1px solid var(--pdv-line);
-  border-radius: .875rem;
-  background: var(--koma-surface-raised);
-}
-.cashier-pdv-view .cashier-pdv-mobile-switch__button {
-  display: inline-flex;
-  flex: 1 1 0;
-  justify-content: center;
-  align-items: center;
-  gap: .4rem;
-  min-height: 2.75rem;
-  padding: .5rem .625rem;
-  border: 1px solid transparent;
-  border-radius: .625rem;
-  color: var(--pdv-secondary);
-  font-size: .8125rem;
-  font-weight: 600;
-  line-height: 1.25;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-.cashier-pdv-view .cashier-pdv-mobile-switch__button.is-active {
-  background: var(--koma-accent-soft);
-  border-color: var(--koma-accent-border);
-  color: var(--koma-accent-text);
-}
-.cashier-pdv-view .cashier-pdv-mobile-switch__button:focus-visible,
-.cashier-pdv-view .cashier-pdv-mobile-cart-cta:focus-visible {
-  outline: 2px solid var(--koma-focus-ring);
-  outline-offset: 2px;
-}
+/* Catalog search and one-touch order review action on compact layouts. */
 .cashier-pdv-view .cashier-pdv-search-input {
   min-height: 2.75rem;
   font-size: .875rem;
@@ -294,11 +257,7 @@
   touch-action: pan-x;
 }
 .cashier-pdv-view .cashier-pdv-mobile-cart-cta {
-  position: fixed;
-  z-index: 35;
-  right: .75rem;
-  bottom: calc(5.25rem + env(safe-area-inset-bottom));
-  left: .75rem;
+  position: static;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -309,7 +268,6 @@
   border-radius: .875rem;
   background: var(--pdv-mint);
   color: var(--pdv-on-mint);
-  box-shadow: 0 6px 18px #061e1750;
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -331,24 +289,10 @@
   line-height: 1.25;
   font-variant-numeric: tabular-nums;
 }
-@media (max-width: 1279px) {
-  .cashier-pdv-view.has-mobile-cart-cta .cashier-pdv-product-grid {
-    padding-bottom: 7.5rem;
-  }
-}
-@media (min-width: 1024px) and (max-width: 1279px) {
-  .cashier-pdv-view .cashier-pdv-mobile-cart-cta {
-    right: 1rem;
-    bottom: 1rem;
-    left: 1rem;
-  }
-}
 @media (min-width: 1280px) {
-  .cashier-pdv-view .cashier-pdv-mobile-switch,
   .cashier-pdv-view .cashier-pdv-mobile-cart-cta { display: none; }
 }
 @media (max-width: 767px) {
-  .cashier-pdv-view .cashier-pdv-mobile-switch__button { font-size: .875rem; }
   .cashier-pdv-view .cashier-pdv-category { min-height: 2.75rem; }
 }
 @media (max-width: 359px) {
@@ -357,81 +301,9 @@
   .cashier-pdv-view .cashier-pdv-mobile-cart-cta__total { font-size: .8125rem; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cashier-pdv-view .cashier-pdv-mobile-switch__button { transition: none; }
 }
 
-/* Compact operational context: mode selection shares the existing mobile
- * navigation row instead of consuming another full-width form block. */
-.cashier-pdv-view .cashier-pdv-mobile-switch__count {
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 auto;
-  min-width: 1.2rem;
-  height: 1.2rem;
-  padding: 0 .2rem;
-  border: 1px solid var(--koma-accent-border);
-  border-radius: 999px;
-  background: var(--koma-accent-soft);
-  color: var(--koma-accent-text);
-  font-size: .625rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-.cashier-pdv-view .cashier-pdv-mobile-service {
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex: 0 1 7.5rem;
-  min-width: 6rem;
-  margin-left: auto;
-}
-.cashier-pdv-view .cashier-pdv-mobile-service select {
-  width: 100%;
-  min-width: 0;
-  min-height: 2.75rem;
-  padding: .5rem 1.55rem .5rem .625rem;
-  appearance: none;
-  border: 1px solid var(--koma-border-default);
-  border-radius: .625rem;
-  background: var(--koma-surface-panel);
-  color: var(--koma-text-primary);
-  font-family: var(--koma-font-body);
-  font-size: .75rem;
-  font-weight: 600;
-  line-height: 1.25;
-  cursor: pointer;
-  touch-action: manipulation;
-}
-.cashier-pdv-view .cashier-pdv-mobile-service > svg {
-  position: absolute;
-  right: .45rem;
-  color: var(--koma-text-secondary);
-  pointer-events: none;
-}
-.cashier-pdv-view .cashier-pdv-mobile-service select:focus-visible {
-  outline: 2px solid var(--koma-focus-ring);
-  outline-offset: 2px;
-}
-@media (max-width: 1279px) {
-  .cashier-pdv-view .cashier-pdv-mobile-switch {
-    gap: .3rem;
-    padding: 0;
-    border: 0;
-    background: transparent;
-  }
-  .cashier-pdv-view .cashier-pdv-mobile-switch__button {
-    flex: 0 1 auto;
-    min-width: 0;
-    padding: .5rem .55rem;
-    border: 1px solid var(--koma-border-default);
-    background: var(--koma-surface-panel);
-    font-size: .75rem;
-  }
-  .cashier-pdv-view .cashier-pdv-mobile-switch__button.is-active {
-    border-color: var(--koma-accent-border);
-    background: var(--koma-accent-soft);
-  }
-}
+/* Product filters are compact; only the product list itself scrolls. */
 @media (max-width: 767px) {
   .cashier-pdv-view .cashier-pdv-catalog-controls {
     padding: .375rem;
@@ -440,34 +312,13 @@
     background: transparent;
     box-shadow: none;
   }
-  .cashier-pdv-view .cashier-pdv-mobile-switch__button {
-    gap: .25rem;
-    min-height: 2.75rem;
-    font-size: .75rem;
-  }
-  .cashier-pdv-view .cashier-pdv-mobile-service {
-    flex-basis: 6.6rem;
-    min-width: 5.8rem;
-  }
-  .cashier-pdv-view .cashier-pdv-mobile-cart-cta {
-    bottom: calc(4.5rem + env(safe-area-inset-bottom));
-    min-height: 3rem;
-    padding: .65rem .875rem;
-    box-shadow: 0 4px 12px #061e1738;
-  }
   .cashier-pdv-view .cashier-pdv-mobile-cart-cta__label,
-  .cashier-pdv-view .cashier-pdv-mobile-cart-cta__total {
-    font-size: .8125rem;
-  }
+  .cashier-pdv-view .cashier-pdv-mobile-cart-cta__total { font-size: .8125rem; }
 }
 @media (max-width: 359px) {
-  .cashier-pdv-view .cashier-pdv-mobile-switch__button {
-    padding-inline: .35rem;
-  }
-  .cashier-pdv-view .cashier-pdv-mobile-service select {
-    font-size: .6875rem;
-    padding-left: .4rem;
-  }
+  .cashier-pdv-view .cashier-pdv-mobile-cart-cta { gap: .375rem; padding-inline: .625rem; }
+  .cashier-pdv-view .cashier-pdv-mobile-cart-cta__label,
+  .cashier-pdv-view .cashier-pdv-mobile-cart-cta__total { font-size: .8125rem; }
 }
 
 /* Dense menu cards: image/name/price/action remain readable while repetitive

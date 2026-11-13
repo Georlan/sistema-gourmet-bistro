@@ -1,0 +1,224 @@
+/* Mobile PDV viewport contract — the shell never scrolls with the order.
+ * One vertical scroll owner per task (catalog list OR order details), with
+ * navigation and the active task action in the surrounding flex layout.
+ * Scoped to Novo pedido: other Caixa, Garçom and Entregador views are unaffected.
+ */
+@media (max-width: 1279px) {
+  .cashier-shell--mobile-pdv {
+    height: 100dvh !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+  .cashier-shell--mobile-pdv .group\/sidebar-wrapper {
+    height: 100%;
+    min-height: 0;
+  }
+  .cashier-shell--mobile-pdv .cashier-main {
+    height: 100%;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+  .cashier-shell--mobile-pdv .cashier-content {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden !important;
+    scrollbar-gutter: auto;
+    padding: .45rem .6rem .5rem !important;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-view {
+    flex: 1 1 auto;
+    height: 100% !important;
+    min-height: 0 !important;
+    gap: .35rem !important;
+    overflow: hidden;
+  }
+  /* Vendas > Novo pedido already identifies this task; a second dashboard
+     banner above the catalog adds no actionable information. */
+  .cashier-shell--mobile-pdv .cashier-pdv-view > .orders-hero { display: none; }
+  .cashier-shell--mobile-pdv .cashier-pdv-table-context {
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: .4rem .55rem;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-layout {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden !important;
+    gap: .4rem;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-catalog {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden !important;
+    gap: .4rem;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-product-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    overscroll-behavior-y: contain !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-product-grid,
+  .cashier-shell--mobile-pdv .cashier-pdv-view.has-mobile-cart-cta .cashier-pdv-product-grid {
+    padding-bottom: .5rem !important;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-mobile-cart-cta {
+    position: static !important;
+    display: flex;
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: none;
+    min-height: 48px;
+    margin: 0 !important;
+    padding: .65rem .85rem;
+    border-radius: .8rem;
+    box-shadow: none;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart {
+    flex: 1 1 auto !important;
+    align-self: stretch;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden !important;
+    border-radius: .85rem;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__header {
+    flex: 0 0 auto;
+    min-height: 49px;
+    padding: .4rem .55rem;
+    background: var(--koma-surface-panel);
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__cart-heading { gap: .5rem; }
+  /* The back control already communicates the cart transition. */
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__heading-icon { display: none !important; }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__header-back {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: .1rem;
+    min-width: 65px;
+    min-height: 44px;
+    padding: .4rem .5rem;
+    border: 1px solid var(--koma-border-default);
+    border-radius: .65rem;
+    background: var(--koma-surface-raised);
+    color: var(--koma-text-primary);
+    font: 700 .8125rem/1.2 var(--koma-font-body);
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__header-back:focus-visible {
+    outline: 2px solid var(--koma-focus-ring);
+    outline-offset: 2px;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__count {
+    padding: .25rem .4rem;
+    font-size: .7rem;
+    white-space: nowrap;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__eyebrow { display: block !important; }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__form {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden !important;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding-bottom: .4rem !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart-scroll {
+    flex: 0 0 auto;
+    min-height: 0;
+    padding: .45rem .5rem;
+    overflow: visible !important;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__review-fields {
+    flex: 0 0 auto;
+    padding: .5rem;
+    overflow: visible;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__modality-section {
+    display: block !important;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__modality-option {
+    min-height: 44px;
+    padding: .35rem .15rem;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__footer {
+    position: static !important;
+    z-index: auto;
+    display: grid;
+    grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr);
+    align-items: center;
+    gap: .5rem;
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: none;
+    margin: 0 !important;
+    padding: .5rem .6rem !important;
+    border: 0;
+    border-top: 1px solid var(--koma-border-default);
+    border-radius: 0;
+    box-shadow: none !important;
+    background: var(--koma-surface-panel);
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__total {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: .12rem;
+    min-width: 0;
+    margin: 0 !important;
+    font-size: .65rem;
+    color: var(--koma-text-secondary);
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__total-value strong {
+    display: block;
+    font: 750 clamp(1rem, 3.8vw, 1.25rem)/1.2 var(--koma-font-display);
+    color: var(--koma-accent-text);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .cashier-shell--mobile-pdv #pdv-submit-btn {
+    min-width: 0;
+    min-height: 48px;
+    padding: .5rem .4rem;
+    font-size: .8125rem;
+  }
+  .cashier-shell--mobile-pdv #pdv-cart-unavailable-warning {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart.is-empty-pickup .cashier-pdv-cart__review-fields {
+    display: none;
+  }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__empty {
+    padding: 2rem .75rem;
+    min-height: 10rem;
+  }
+}
+@media (max-width: 1023px) {
+  .cashier-shell--mobile-pdv .cashier-content {
+    padding-bottom: calc(4.4rem + env(safe-area-inset-bottom)) !important;
+  }
+}
+@media (max-width: 359px) {
+  .cashier-shell--mobile-pdv .cashier-content { padding-inline: .35rem !important; }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__header h3 { font-size: .875rem; }
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__cart-heading { gap: .3rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cashier-shell--mobile-pdv .cashier-pdv-mobile-cart-cta,
+  .cashier-shell--mobile-pdv .cashier-pdv-cart__header-back { transition: none; }
+}
