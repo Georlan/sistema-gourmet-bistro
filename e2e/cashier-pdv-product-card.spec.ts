@@ -272,13 +272,14 @@ test('PDV customizer is scrollable but retains its total and confirm action at p
     expect(overflow).toBeLessThanOrEqual(1);
     await save.click();
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByTestId('pdv-added-feedback')).toContainText('Item adicionado');
+    await expect(page.getByTestId('pdv-added-feedback')).toHaveCount(0);
+    await expect(page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Risoto da casa' }).first()).toHaveClass(/is-just-added/);
     await expect(page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Risoto da casa' }).first()
       .locator('.cashier-pdv-product-card__quantity')).toHaveText('2');
   }
 });
 
-test('PDV cart feedback respects reduced motion and customization Escape restores focus', async ({ page }) => {
+test('PDV cart animation respects reduced motion, omits add toast and customization Escape restores focus', async ({ page }) => {
   await openNewOrder(page);
   const customize = page.getByRole('button', { name: 'Personalizar Risoto da casa' }).first();
   await customize.focus();
@@ -289,10 +290,14 @@ test('PDV cart feedback respects reduced motion and customization Escape restore
   await expect(customize).toBeFocused();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
-  const feedback = page.getByTestId('pdv-added-feedback');
-  await expect(feedback).toBeVisible();
-  await expect(feedback).toContainText('Item adicionado');
-  await expect(feedback).toHaveCSS('animation-name', 'none');
+  await expect(page.getByTestId('pdv-added-feedback')).toHaveCount(0);
+  const productCard = page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Risoto da casa' }).first();
+  await expect(productCard).toHaveClass(/is-just-added/);
+  await expect(productCard).toHaveCSS('animation-name', 'none');
+  const count = page.locator('.cashier-pdv-mobile-switch__count');
+  await expect(count).toContainText('1');
+  await expect(count).toHaveClass(/is-bumped/);
+  await expect(count).toHaveCSS('animation-name', 'none');
 });
 
 test('PDV optional customer/payment panels preserve checkout context without additional modals', async ({ page }) => {
@@ -492,4 +497,18 @@ test('four fixture-only cashiers stay responsive with 240 products and repeated 
   } finally {
     await Promise.all(sessions.map(({ context }) => context.close()));
   }
+});
+
+test('PDV hides quick-add notification but keeps item-edit confirmation', async ({ page }) => {
+  await openNewOrder(page);
+  await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
+  await expect(page.getByTestId('pdv-added-feedback')).toHaveCount(0);
+  if ((page.viewportSize()?.width ?? 1366) < 1280) {
+    await page.getByRole('button', { name: 'Carrinho (1)' }).click();
+  }
+  await page.getByRole('button', { name: 'Editar Risoto da casa' }).click();
+  const edit = page.getByRole('dialog', { name: 'Risoto da casa' });
+  await expect(edit).toBeVisible();
+  await edit.getByRole('button', { name: 'Salvar alterações' }).click();
+  await expect(page.getByTestId('pdv-added-feedback')).toContainText('Item atualizado');
 });
