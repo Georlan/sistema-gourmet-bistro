@@ -3258,21 +3258,6 @@ body {
     white-space: nowrap;
   }
 
-  .cashier-shell[data-koma-plan="pocket"] .cashier-salon-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.55rem;
-  }
-
-  .cashier-shell[data-koma-plan="pocket"] .cashier-salon-grid > * {
-    min-width: 0;
-  }
-
-  .cashier-shell[data-koma-plan="pocket"] .cashier-salon-grid .koma-table-free-action,
-  .cashier-shell[data-koma-plan="pocket"] .cashier-salon-grid .koma-table-occupied-action {
-    min-height: 2.75rem;
-    font-size: 0.68rem;
-  }
-
   .cashier-shell[data-koma-plan="pocket"] .orders-mobile-stages {
     position: sticky;
     top: 6.25rem;
@@ -3282,12 +3267,6 @@ body {
 
 .cashier-shell[data-koma-plan="pocket"] .cashier-mobile-bottom-bar {
   padding-bottom: env(safe-area-inset-bottom);
-}
-
-@media (max-width: 380px) {
-  .cashier-shell[data-koma-plan="pocket"] .cashier-salon-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Pocket: preparation on a phone must remain readable without printed tickets. */

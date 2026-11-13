@@ -396,7 +396,6 @@ export function CaixaPanel({
     setTableSearch,
     salonTableCards,
     tableStatusCounts,
-    salonInsights,
     pdvTableOptions,
     visibleSalonTableCards,
   } = useCashierSalonProjection({ salonTables, orders, pagamentosPendentes, nowTimestamp });
@@ -981,7 +980,6 @@ export function CaixaPanel({
                 cards={salonTableCards}
                 visibleCards={visibleSalonTableCards}
                 counts={tableStatusCounts}
-                insights={salonInsights}
                 filter={tableStatusFilter}
                 onFilterChange={setTableStatusFilter}
                 search={tableSearch}

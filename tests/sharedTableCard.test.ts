@@ -42,7 +42,7 @@ for (const scenario of scenarios) {
     }));
     const cashier = renderToStaticMarkup(React.createElement(CaixaSalonTab, {
       cards, visibleCards: cards, counts: { all: 1, free: 0, occupied: 1, payment: 0 },
-      insights: { occupancy: 100, openValue: 112, oldestService: '12m' }, filter: 'all',
+      filter: 'all',
       onFilterChange() {}, actions: { inspectTable() {}, openTableOrder() {} },
     }));
     const presentation = tableCardPresentation(cards[0].operational);
