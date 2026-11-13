@@ -122,7 +122,7 @@ test('PDV preserva tentativa e carrinho após falha mesmo fora da tela', async (
   await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente', exact: true }).click();
   await showCart(page);
   if ((page.viewportSize()?.width ?? 1366) < 1280) {
-    await page.getByRole('combobox', { name: 'Tipo de atendimento' }).selectOption('dine_in');
+    await page.locator('.cashier-pdv-cart__modality-option').filter({ hasText: 'Consumo local' }).click();
   } else {
     await page.getByRole('button', { name: 'Consumo local', exact: true }).click();
   }

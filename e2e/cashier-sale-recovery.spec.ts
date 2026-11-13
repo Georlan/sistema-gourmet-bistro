@@ -36,7 +36,7 @@ for (const status of [503, 422, 502]) {
       await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente', exact: true }).click();
       await showCart();
       if ((page.viewportSize()?.width ?? 1366) < 1280) {
-        await page.getByRole('combobox', { name: 'Tipo de atendimento' }).selectOption('dine_in');
+        await page.locator('.cashier-pdv-cart__modality-option').filter({ hasText: 'Consumo local' }).click();
       } else {
         await page.getByRole('button', { name: 'Consumo local', exact: true }).click();
       }

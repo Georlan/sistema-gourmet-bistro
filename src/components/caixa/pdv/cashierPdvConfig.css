@@ -459,7 +459,7 @@
 .cashier-pdv-product-card.is-just-added {
   animation: pdv-card-confirm 460ms ease-out both;
 }
-.cashier-pdv-view .cashier-pdv-mobile-switch__count.is-bumped {
+.cashier-pdv-view .cashier-pdv-mobile-cart-cta__count.is-bumped {
   animation: pdv-count-bump 360ms ease-out both;
 }
 @keyframes pdv-feedback-in {
@@ -478,7 +478,7 @@
   .cashier-pdv-config,
   .cashier-pdv-view .cashier-pdv-feedback,
   .cashier-pdv-product-card.is-just-added,
-  .cashier-pdv-view .cashier-pdv-mobile-switch__count.is-bumped {
+  .cashier-pdv-view .cashier-pdv-mobile-cart-cta__count.is-bumped {
     animation: none !important;
     transition: none !important;
   }
