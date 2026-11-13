@@ -82,6 +82,7 @@ test('PDV mobile cart dock stays above bottom navigation and supports a quick re
   await dock.click();
   await expect(page.locator('#pdv-order-panel')).toBeVisible();
   await expect(dock).toHaveCount(0);
+  await expect(page.locator('.cashier-pdv-cart__back')).toBeVisible();
   await expect(switcher.getByRole('button', { name: /Carrinho \(1\)/ })).toHaveAttribute('aria-current', 'page');
 
   const cartRow = page.locator('.cashier-pdv-cart__line').first();
@@ -246,7 +247,11 @@ test('mobile unified checkout retains a sticky launch footer', async ({ page }) 
   await expect(footer).toBeVisible();
   await expect(page.locator('#pdv-submit-btn')).toBeEnabled();
   const position = await footer.evaluate((element) => getComputedStyle(element).position);
-  expect(position).toBe('sticky');
+  expect(position).toBe('fixed');
+  const nav = page.locator('.cashier-mobile-bottom-bar');
+  const footerBox = await footer.boundingBox();
+  const navBox = await nav.boundingBox();
+  expect((footerBox?.y ?? 0) + (footerBox?.height ?? 0)).toBeLessThanOrEqual((navBox?.y ?? 0) + 1);
   await expect(page.locator('.cashier-mobile-bottom-bar')).toBeVisible();
 });
 
@@ -511,4 +516,94 @@ test('PDV hides quick-add notification but keeps item-edit confirmation', async 
   await expect(edit).toBeVisible();
   await edit.getByRole('button', { name: 'Salvar alterações' }).click();
   await expect(page.getByTestId('pdv-added-feedback')).toContainText('Item atualizado');
+});
+
+
+test('PDV: cart and products remain reachable by a fixed two-way control after scrolling and quantity edits', async ({ page }, testInfo) => {
+  test.skip((page.viewportSize()?.width ?? 1366) >= 1024, 'Phone bottom navigation contract');
+  await page.setViewportSize({ width: 390, height: 720 });
+  await openNewOrder(page);
+  const dock = page.locator('#pdv-review-btn');
+  const navigation = page.locator('.cashier-mobile-bottom-bar');
+  await expect(dock).toBeVisible();
+  await expect(dock).toContainText('0 itens');
+  await expect(dock).toContainText('R$ 0,00');
+  await dock.click();
+  const panel = page.locator('#pdv-order-panel');
+  const footer = panel.locator('.cashier-pdv-cart__footer');
+  await expect(panel.getByText('Carrinho vazio')).toBeVisible();
+  await expect(panel.getByText('Identificação do cliente', { exact: true })).toBeHidden();
+  await expect(footer).toBeVisible();
+  await panel.getByRole('button', { name: 'Voltar aos itens' }).click();
+  const card = page.getByTestId('cashier-pdv-product-card').filter({ hasText: 'Risoto da casa' }).first();
+  await card.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
+  await expect(dock).toBeVisible();
+  await expect(dock).toContainText('42,00');
+  await dock.click();
+  await panel.getByTestId('cashier-pdv-cart-line').first().getByRole('button', { name: 'Aumentar quantidade de Risoto da casa' }).click();
+  await expect(footer).toContainText('R$ 84,00');
+  await panel.locator('details').filter({ hasText: 'Identificação do cliente' }).locator('summary').click();
+  await panel.getByLabel('Nome', { exact: true }).fill('Maria');
+  await panel.locator('details').filter({ hasText: 'Pagamento' }).locator('summary').click();
+  await panel.getByRole('group', { name: 'Forma de pagamento' }).getByRole('button', { name: 'Pix' }).click();
+  // A long checkout scroll must not detach the amount or hide submission.
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect(footer).toBeInViewport();
+  const footerBox = await footer.boundingBox();
+  const navBox = await navigation.boundingBox();
+  expect((footerBox?.y ?? 0) + (footerBox?.height ?? 0)).toBeLessThanOrEqual((navBox?.y ?? 0) + 1);
+  await expect(panel.locator('#pdv-submit-btn')).toBeEnabled();
+  if (process.env.KOMA_CAPTURE_UI) await page.screenshot({ path: testInfo.outputPath('cart-fixed-footer-390.png') });
+  await panel.getByRole('button', { name: 'Voltar aos itens' }).click();
+  await expect(dock).toBeVisible();
+  await expect(dock).toContainText('84,00');
+  await dock.click();
+  await expect(panel.getByLabel('Nome', { exact: true })).toHaveValue('Maria');
+  await expect(panel.getByRole('button', { name: 'Pix' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('PDV checkout maintains a fixed total and no horizontal overflow at 320/430 phone widths', async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1366) >= 1024, 'Phone layouts');
+  for (const width of [320, 430]) {
+    await page.setViewportSize({ width, height: 700 });
+    await openNewOrder(page);
+    await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
+    await page.locator('#pdv-review-btn').click();
+    const footer = page.locator('.cashier-pdv-cart__footer');
+    const amount = footer.locator('.cashier-pdv-cart__total');
+    await expect(footer).toHaveCSS('position', 'fixed');
+    await expect(amount).toContainText('R$ 42,00');
+    const left = await footer.evaluate(el => el.getBoundingClientRect().left);
+    expect(left).toBeGreaterThanOrEqual(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    await page.getByRole('combobox', { name: 'Tipo de atendimento' }).selectOption('delivery');
+    await expect(page.locator('#pdv-delivery-address-logradouro')).toBeVisible();
+    await expect(footer).toBeInViewport();
+  }
+});
+
+test('PDV checkout dock respects 360/768/1024 layouts and a short mobile viewport', async ({ page }, testInfo) => {
+  for (const width of [360, 768, 1024]) {
+    await page.setViewportSize({ width, height: 620 });
+    await openNewOrder(page);
+    await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente' }).click();
+    await page.getByRole('button', { name: 'Carrinho (1)' }).click();
+    const footer = page.locator('.cashier-pdv-cart__footer');
+    await expect(footer).toHaveCSS('position', 'fixed');
+    const nav = page.locator('.cashier-mobile-bottom-bar');
+    if (width < 1024) {
+      await expect(nav).toBeVisible();
+      const bottom = await footer.evaluate(el => el.getBoundingClientRect().bottom);
+      const navTop = await nav.evaluate(el => el.getBoundingClientRect().top);
+      expect(bottom).toBeLessThanOrEqual(navTop + 1);
+    } else {
+      await expect(nav).toBeHidden();
+    }
+    await expect(footer.locator('#pdv-submit-btn')).toBeInViewport();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    if (width === 360 && process.env.KOMA_CAPTURE_UI) {
+      await page.evaluate(() => { document.documentElement.dataset.komaTheme = 'light'; });
+      await page.screenshot({ path: testInfo.outputPath('light-mobile-cart-360.png') });
+    }
+  }
 });

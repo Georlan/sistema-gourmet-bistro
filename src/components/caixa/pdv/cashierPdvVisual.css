@@ -480,3 +480,14 @@
   .cashier-pdv-view .cashier-pdv-product-actions { gap: .25rem; padding-top: .375rem; }
   .cashier-pdv-product-card__add { min-height: 2.75rem; }
 }
+
+/* Persistent task switch on phones: visible for an empty or populated cart.
+   Footer and dock occupy the same safe area, never at the same time. */
+@media (max-width: 1279px) {
+  .cashier-pdv-view .cashier-pdv-mobile-cart-cta {
+    max-width: 32rem;
+    margin-inline: auto;
+    z-index: 35;
+    box-shadow: 0 5px 16px #061e172b;
+  }
+}
