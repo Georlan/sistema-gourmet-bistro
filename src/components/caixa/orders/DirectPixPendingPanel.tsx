@@ -44,6 +44,9 @@ function formatShortTime(iso?: string | null): string {
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
+const PENDING_PIX_TTL_MS = 5000;
+let recentPendingPixSnapshot: { key: string; rows: Pending[]; expiresAt: number } | null = null;
+
 export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:Props) {
   const [open,setOpen] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -52,7 +55,13 @@ export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:P
     if(open && dialog && !dialog.open) dialog.showModal();
     if(!open && dialog?.open) dialog.close();
   },[open]);
-  const [rows,setRows] = useState<Pending[]>([]);
+  const [rows,setRows] = useState<Pending[]>(() => {
+    const key = `${apiBaseUrl}\u0000${authHeaders.Authorization || authHeaders.authorization || ''}`;
+    if (recentPendingPixSnapshot && recentPendingPixSnapshot.key === key && recentPendingPixSnapshot.expiresAt > Date.now()) {
+      return recentPendingPixSnapshot.rows;
+    }
+    return [];
+  });
   const [selected,setSelected] = useState<Pending|null>(null);
   const [reference,setReference] = useState('');
   const [checked,setChecked] = useState(false);
@@ -60,12 +69,18 @@ export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:P
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState('');
   const refreshPendingRef = useRef<(()=>void)|null>(null);
-  const load = useCallback(async(signal:AbortSignal)=>{
+  const load = useCallback(async(signal:AbortSignal, force = false)=>{
+    const key = `${apiBaseUrl}\u0000${authHeaders.Authorization || authHeaders.authorization || ''}`;
+    if (!force && recentPendingPixSnapshot && recentPendingPixSnapshot.key === key && recentPendingPixSnapshot.expiresAt > Date.now()) {
+      setRows(recentPendingPixSnapshot.rows);
+      return recentPendingPixSnapshot.rows.length;
+    }
     try {
       const response = await authFetch(`${apiBaseUrl}/payments/direct-pix/pending`,{headers:authHeaders,signal});
       if (!response.ok) return;
       const pending:Pending[] = await response.json();
       if (signal.aborted) return;
+      recentPendingPixSnapshot = { key, rows: pending, expiresAt: Date.now() + PENDING_PIX_TTL_MS };
       setRows(pending);
       return pending.length;
     } catch { /* Existing operational screens retain their own connectivity feedback. */ }

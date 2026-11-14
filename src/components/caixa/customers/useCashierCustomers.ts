@@ -6,6 +6,7 @@ import type { LoyaltyCustomer } from '../cashierContracts';
 type Props = {
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
+  enabled?: boolean;
 };
 
 type CustomerSnapshot = {
@@ -63,11 +64,13 @@ export function mapCustomers(clientes: any[], productsIncluded: boolean): Loyalt
     }));
 }
 
-export function useCashierCustomers({ apiBaseUrl, authHeaders }: Props) {
+export function useCashierCustomers({ apiBaseUrl, authHeaders, enabled = true }: Props) {
   const authorization = authHeaders.Authorization || authHeaders.authorization || '';
   const scope = `${apiBaseUrl}\u0000${authorization}`;
   const [snapshot, setSnapshot] = useState<CustomerSnapshot>({ scope, data: [], status: 'loading', hasSnapshot: false, totalCount: 0, hasMore: false });
   const scopeRef = useRef(scope);
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
   const mountedRef = useRef(false);
   const flightRef = useRef<Promise<void> | null>(null);
   const dirtyRef = useRef(false);
@@ -77,6 +80,8 @@ export function useCashierCustomers({ apiBaseUrl, authHeaders }: Props) {
   const moreFlightRef = useRef<Promise<void> | null>(null);
   const [loadingMoreCustomers, setLoadingMoreCustomers] = useState(false);
   const current = snapshot.scope === scope ? snapshot : { scope, data: [], status: 'loading' as const, hasSnapshot: false, totalCount: 0, hasMore: false };
+  const hasSnapshotRef = useRef(current.hasSnapshot);
+  hasSnapshotRef.current = current.hasSnapshot;
 
   const loadCustomers = useCallback((): Promise<void> => {
     if (scopeRef.current !== scope) {
@@ -186,9 +191,20 @@ export function useCashierCustomers({ apiBaseUrl, authHeaders }: Props) {
 
   useEffect(() => {
     mountedRef.current = true;
-    void loadCustomers();
+    if (enabled && (!hasSnapshotRef.current || dirtyRef.current || scopeRef.current !== scope)) {
+      dirtyRef.current = false;
+      void loadCustomers();
+    }
+  }, [enabled, loadCustomers, scope]);
+
+  useEffect(() => {
+    mountedRef.current = true;
 
     const handleCustomerEvent = () => {
+      if (!enabledRef.current) {
+        dirtyRef.current = true;
+        return;
+      }
       if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
       hintTimerRef.current = setTimeout(() => {
         hintTimerRef.current = null;

@@ -388,7 +388,12 @@ export function CaixaPanel({
   });
   const { apiProdutos, apiCategorias, dynamicMenu, suggestedProductCode, fetchProdutos, fetchCategorias } =
     catalog;
-  const customers = useCashierCustomers({ apiBaseUrl, authHeaders });
+  const [hasOpenedCheckout, setHasOpenedCheckout] = useState(false);
+  const customers = useCashierCustomers({
+    apiBaseUrl,
+    authHeaders,
+    enabled: activeTab === 'clientes' || hasOpenedCheckout,
+  });
   const { loyaltyUsers, customersStatus, hasCustomerSnapshot, refreshLoyaltyUsers, totalCustomers, hasMoreCustomers, loadingMoreCustomers, loadMoreCustomers } = customers;
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -441,6 +446,10 @@ export function CaixaPanel({
     handleFinalizeDigitalOrder,
     handleReceiveSalonTable,
   } = checkout;
+
+  if (selectedOrder && !hasOpenedCheckout) {
+    setHasOpenedCheckout(true);
+  }
 
   const handleFinalizeCourierOrder = async (orderId: string): Promise<boolean> => {
     const deliveryOrder = deliveryOrders.find((order) => order.id === orderId);
@@ -725,6 +734,7 @@ export function CaixaPanel({
     isWsConnected,
     activeTab,
     needsCouriers: activeTab === 'operacao' && (['motoboys', 'entregadores'].includes(activeSubTab) || deliveryOrders.some(order => order.modalidade === 'delivery')),
+    motoboysLoadState,
     fetchTurno,
     fetchDeliveryOrders,
     fetchMotoboys,

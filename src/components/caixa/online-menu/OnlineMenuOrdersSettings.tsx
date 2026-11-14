@@ -1,5 +1,6 @@
 import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import { ONBOARDING_SETUP_MODE_KEY, useUnsavedSetupChanges } from '../../onboarding/setupNavigation';
+import { fetchCardapioDigitalConfig, invalidateCardapioDigitalConfigCache } from './cardapioDigitalConfigClient';
 import clsx from 'clsx';
 import {
   AlertCircle,
@@ -142,15 +143,14 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
   const loadConfig = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [response, scheduledOrdersResponse] = await Promise.all([
-        fetch(`${apiBaseUrl}/api/cardapio-digital/config`, { headers: authHeaders, cache: 'no-store' }),
+      const authorization = authHeaders.Authorization || authHeaders.authorization || '';
+      const [data, scheduledOrdersResponse] = await Promise.all([
+        fetchCardapioDigitalConfig<Record<string, unknown>>(apiBaseUrl, authorization),
         guidedMode ? Promise.resolve(null) : fetch(`${apiBaseUrl}/api/restaurant-features/scheduled-orders`, { headers: authHeaders, cache: 'no-store' }),
       ]);
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || 'Não foi possível carregar o funcionamento.');
       const scheduledOrdersData = await scheduledOrdersResponse?.json().catch(() => ({})) || {};
       if (scheduledOrdersResponse && !scheduledOrdersResponse.ok) throw new Error(scheduledOrdersData.detail || 'Não foi possível carregar a configuração de agendamento.');
-      const next = normalizeConfig(data as Record<string, unknown>);
+      const next = normalizeConfig(data);
       setConfig(next);
       setHasLoadedConfig(true);
       setScheduledOrdersEnabled(Boolean(scheduledOrdersData.enabled));
@@ -199,6 +199,7 @@ export function OnlineMenuOrdersSettings({ apiBaseUrl, authHeaders, publicMenuUr
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || 'Não foi possível salvar o funcionamento.');
+      invalidateCardapioDigitalConfigCache();
       const next = normalizeConfig(data as Record<string, unknown>);
       setConfig(next);
       setSavedSnapshot(JSON.stringify(persistedPayload(next)));

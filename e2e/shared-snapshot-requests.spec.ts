@@ -27,9 +27,7 @@ test('Caixa compartilha clientes entre checkout e tela Clientes', async ({ page 
   });
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
-  await expect.poll(() => requests.length).toBeGreaterThanOrEqual(1);
-  const before = requests.length;
-  expect(before).toBe(1);
+  expect(requests).toHaveLength(0);
   await openCashierSidebar(page);
   const sidebar = page.locator('.cashier-sidebar:visible');
   await sidebar.getByRole('button', { name: /^Relacionamento(?: \d+)?$/ }).click();
@@ -77,10 +75,11 @@ test('hints próximos de clientes geram uma reconciliação e preservam o snapsh
   });
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
-  await expect.poll(() => reads).toBe(1);
+  expect(reads).toBe(0);
   await openCashierSidebar(page);
   await page.locator('.cashier-sidebar:visible').getByRole('button', { name: /^Relacionamento(?: \d+)?$/ }).click();
   await navigateRelationship(page, 'clientes');
+  await expect.poll(() => reads).toBe(1);
   await expect(page.getByText('Cliente E2E', { exact: true }).filter({ visible: true }).last()).toBeVisible();
   await page.evaluate(() => {
     for (let index = 0; index < 4; index++) window.dispatchEvent(new Event('koma_customers_updated'));
