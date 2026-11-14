@@ -169,7 +169,7 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
           {waiting && ticket.deliveryStatus === 'aceito' && <span className="kds-ticket__accepted">Aceito</span>}
           {waiting && batchTargets.length > 1 && <button type="button" className="kds-ticket__batch-action"
             onClick={() => void markReady(batchTargets)} aria-label={`Concluir ${batchTargets.length} itens do pedido ${getKdsTicketLabel(ticket)}`}>
-            <Check size={16} aria-hidden="true"/><span>Concluir <strong>{batchTargets.length}</strong></span>
+            <span>Concluir</span><strong className="kds-ticket__batch-count" aria-hidden="true">{batchTargets.length}</strong>
           </button>}
           {waiting && pendingCount > 0 && available.length <= 1 && <span className="kds-ticket__saving">{pendingCount} salvando</span>}
         </div>
@@ -191,7 +191,7 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
           { key: 'prontos', label: 'Prontos', count: projection.readyTickets.length },
           { key: 'todos', label: 'Todos', count: projection.tickets.length },
         ] as const).map(option => <button key={option.key} type="button" aria-pressed={filter === option.key}
-          className="kds-workspace__filter" onClick={() => setFilter(option.key)}>{option.label}<span>{option.count}</span></button>)}
+          className="kds-workspace__filter" onClick={() => setFilter(option.key)}><span>{option.label}</span><strong className="kds-workspace__filter-count">{option.count}</strong></button>)}
       </div>
       <div className="kds-workspace__tools">
         <button type="button" className="kds-workspace__tool" aria-label="Buscar pedido, mesa ou item" aria-pressed={searchOpen}

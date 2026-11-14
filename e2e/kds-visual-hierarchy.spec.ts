@@ -51,12 +51,20 @@ test('KDS uses distinct batch/individual actions, readable typography and contra
     const secondary = ticket.locator('.kds-ticket__item-action').first();
     const getPaint = (locator: typeof primary) => locator.evaluate(node => {
       const css = getComputedStyle(node);
-      return { color: css.color, background: css.backgroundColor, height: node.getBoundingClientRect().height };
+      return { color: css.color, background: css.backgroundColor, shadow: css.boxShadow, height: node.getBoundingClientRect().height };
     });
     const [p, s] = await Promise.all([getPaint(primary), getPaint(secondary)]);
     expect(contrast(p.color, p.background)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(s.color, s.background)).toBeGreaterThanOrEqual(4.5);
     expect(p.background).not.toBe(s.background);
+    expect(p.shadow).not.toBe('none');
+    expect(s.shadow).not.toBe('none');
+    const selectedFilter = workspace.locator('.kds-workspace__filter[aria-pressed="true"]');
+    const filterPaint = await getPaint(selectedFilter);
+    expect(contrast(filterPaint.color, filterPaint.background)).toBeGreaterThanOrEqual(4.5);
+    expect(filterPaint.shadow).not.toBe('none');
+    await expect(ticket.locator('.kds-ticket__batch-count')).toHaveText('2');
+    await expect(selectedFilter.locator('.kds-workspace__filter-count')).toHaveText('1');
     expect(p.height).toBeGreaterThanOrEqual(44);
     expect(s.height).toBeGreaterThanOrEqual(44);
 
