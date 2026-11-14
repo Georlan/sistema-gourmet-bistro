@@ -8,7 +8,7 @@ import uuid
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -335,6 +335,9 @@ def _create_pix_payment(*, restaurante_id: int, amount: Decimal, payer_email: st
         raise SaasMercadoPagoError("Erro de comunicação ao gerar o Pix.") from exc
 
 
+_DEFAULT_CREATE_PIX_PAYMENT = _create_pix_payment
+
+
 def _advance_paid_period(subscription: SaaSSubscription, paid_at: dt.datetime) -> None:
     months = 12 if str(subscription.billing_cycle or "").lower() in {"annual", "anual"} else 1
     month_index = paid_at.year * 12 + paid_at.month - 1 + months
@@ -404,7 +407,15 @@ def _get_existing_pix_payment_or_fail(payment_id: str) -> dict[str, Any] | None:
 
 
 @subscription_router.post("/pix")
-def generate_or_get_subscription_pix(user=Depends(_administrator), db: Session = Depends(get_db)):
+def generate_or_get_subscription_pix(
+    user=Depends(_administrator),
+    db: Session = Depends(get_db),
+    manual: bool = False,
+):
+    """Gera ou obtém cobrança Pix para a assinatura SaaS. Suporta manual=True para faturamento direto sem gateway."""
+    if manual is True:
+        return generate_subscription_manual_pix(user=user, db=db)
+
     restaurante_id = int(user.restaurante_id)
     subscription = (
         db.query(SaaSSubscription)
@@ -438,6 +449,31 @@ def generate_or_get_subscription_pix(user=Depends(_administrator), db: Session =
             "message": "Ainda não há cobrança Pix vencida.",
         }
 
+    amount = _subscription_amount(db, subscription, restaurante_id)
+
+    # 1. Fluxo manual Pix independente de provedores externos
+    if str(subscription.provider or "").strip().lower() == "manual_pix" or str(subscription.payment_method_type or "").strip().lower() == "manual_pix":
+        from ..services.direct_pix_billing import create_invoice_pix, ensure_subscription_invoice
+        invoice = ensure_subscription_invoice(db, restaurant_id=restaurante_id, due_at=due_at, amount=amount)
+        if invoice.status == "paid":
+            return {
+                "status": "approved",
+                "invoiceId": invoice.id,
+                "amount": str(amount.quantize(_MONEY_QUANTUM)),
+                "paidUntil": _as_utc(subscription.current_period_end).isoformat() if subscription.current_period_end else None,
+                "paymentMethodType": "pix",
+                "message": "Mensalidade liquidada previamente.",
+            }
+        payer_email = str(getattr(user, "email", "") or "").strip().lower() or "admin@koma.test"
+        return create_invoice_pix(
+            db,
+            restaurant_id=restaurante_id,
+            invoice_id=invoice.id,
+            payer_email=payer_email,
+            manual=True,
+        )
+
+    # 2. Fatura consolidada mensal (fees de vendas diretas + assinatura)
     from ..models import DirectPixFeeInvoice, RestaurantDirectPixConfig
     from ..services.direct_pix_billing import close_month
     direct_config = db.query(RestaurantDirectPixConfig).filter(
@@ -467,7 +503,7 @@ def generate_or_get_subscription_pix(user=Depends(_administrator), db: Session =
         except (ValueError,SaasMercadoPagoError) as exc:
             raise HTTPException(409,str(exc)) from exc
 
-    amount = _subscription_amount(db, subscription, restaurante_id)
+    # 3. Fluxo de assinatura padrão via gateway Mercado Pago
     existing_payment_id = str(subscription.provider_subscription_id or "").strip()
     if existing_payment_id:
         existing_payment = _get_existing_pix_payment_or_fail(existing_payment_id)
@@ -497,21 +533,116 @@ def generate_or_get_subscription_pix(user=Depends(_administrator), db: Session =
     payer_email = str(getattr(user, "email", "") or "").strip().lower()
     if not payer_email or "@" not in payer_email:
         raise HTTPException(422, "O administrador precisa ter um e-mail válido para gerar o Pix.")
-    try:
-        payment = _create_pix_payment(
-            restaurante_id=restaurante_id,
-            amount=amount,
-            payer_email=payer_email,
-            due_at=due_at or now,
-            previous_payment_id=existing_payment_id,
-        )
-    except SaasMercadoPagoError as exc:
-        raise HTTPException(502, str(exc)) from exc
 
-    subscription.provider_subscription_id = str(payment["id"])
-    subscription.updated_at = now
-    db.commit()
-    return _payment_qr_payload(payment, due_at=due_at, amount=amount)
+    # Tenta via gateway Mercado Pago se estiver configurado e operacional
+    mp_ready = False
+    try:
+        default_saas_mp_service._ensure_provider_ready()
+        mp_ready = True
+    except Exception:
+        if _create_pix_payment is not _DEFAULT_CREATE_PIX_PAYMENT:
+            mp_ready = True
+        else:
+            mp_ready = False
+
+    if mp_ready:
+        try:
+            payment = _create_pix_payment(
+                restaurante_id=restaurante_id,
+                amount=amount,
+                payer_email=payer_email,
+                due_at=due_at or now,
+                previous_payment_id=existing_payment_id,
+            )
+            subscription.provider_subscription_id = str(payment["id"])
+            subscription.updated_at = now
+            db.commit()
+            return _payment_qr_payload(payment, due_at=due_at, amount=amount)
+        except SaasMercadoPagoError as exc:
+            raise HTTPException(502, str(exc)) from exc
+
+    # Fluxo sem dependência externa: fatura única e Pix manual com BR Code EMV
+    from ..services.direct_pix_billing import create_invoice_pix, ensure_subscription_invoice
+    invoice = ensure_subscription_invoice(db, restaurant_id=restaurante_id, due_at=due_at, amount=amount)
+    if invoice.status == "paid":
+        return {
+            "status": "approved",
+            "invoiceId": invoice.id,
+            "amount": str(amount.quantize(_MONEY_QUANTUM)),
+            "paidUntil": _as_utc(subscription.current_period_end).isoformat() if subscription.current_period_end else None,
+            "paymentMethodType": "pix",
+            "message": "Mensalidade liquidada previamente.",
+        }
+    return create_invoice_pix(
+        db,
+        restaurant_id=restaurante_id,
+        invoice_id=invoice.id,
+        payer_email=payer_email,
+        manual=True,
+    )
+
+
+@subscription_router.post("/manual-pix")
+def generate_subscription_manual_pix(
+    user=Depends(_administrator),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Gera fatura única e payload Pix BR Code para pagamento manual da mensalidade sem dependência de gateway externo."""
+    restaurante_id = int(user.restaurante_id)
+    subscription = (
+        db.query(SaaSSubscription)
+        .filter(SaaSSubscription.restaurante_id == restaurante_id)
+        .with_for_update()
+        .one_or_none()
+    )
+    if subscription is None:
+        raise HTTPException(404, "Assinatura não encontrada.")
+
+    now = dt.datetime.now(dt.timezone.utc)
+    due_at = _as_utc(subscription.current_period_end) or _as_utc(subscription.trial_ends_at)
+
+    if subscription.trial_started_at is None:
+        return {
+            "status": "not_due",
+            "paymentMethodType": "pix",
+            "trialStartsAfterSetup": True,
+            "dueAt": None,
+            "automaticRenewal": False,
+            "message": "O Pix só será gerado depois da implantação essencial e dos 7 dias grátis.",
+        }
+
+    if due_at is not None and now < due_at:
+        return {
+            "status": "not_due",
+            "paymentMethodType": "pix",
+            "trialStartsAfterSetup": False,
+            "dueAt": due_at.isoformat(),
+            "automaticRenewal": False,
+            "message": "Ainda não há cobrança Pix vencida.",
+        }
+
+    amount = _subscription_amount(db, subscription, restaurante_id)
+    from ..services.direct_pix_billing import create_invoice_pix, ensure_subscription_invoice
+
+    invoice = ensure_subscription_invoice(db, restaurant_id=restaurante_id, due_at=due_at, amount=amount)
+    if invoice.status == "paid":
+        return {
+            "status": "approved",
+            "invoiceId": invoice.id,
+            "amount": str(amount.quantize(_MONEY_QUANTUM)),
+            "paidUntil": _as_utc(subscription.current_period_end).isoformat() if subscription.current_period_end else None,
+            "paymentMethodType": "pix",
+            "message": "Mensalidade liquidada previamente.",
+        }
+
+    payer_email = str(getattr(user, "email", "") or "").strip().lower() or "admin@koma.test"
+    return create_invoice_pix(
+        db,
+        restaurant_id=restaurante_id,
+        invoice_id=invoice.id,
+        payer_email=payer_email,
+        manual=True,
+    )
 
 
 @webhook_router.post("/webhook")
