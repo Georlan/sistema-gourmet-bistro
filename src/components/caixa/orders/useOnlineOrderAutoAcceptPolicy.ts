@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { CashierNotice } from '../cashierContracts';
+import {
+  fetchOnlineOrdersControl,
+  invalidateOnlineOrdersControlCache,
+} from '../online-menu/onlineOrdersControlClient';
 
 interface UseOnlineOrderAutoAcceptPolicyArgs {
   apiBaseUrl: string;
@@ -19,13 +23,12 @@ export function useOnlineOrderAutoAcceptPolicy({
 
     const load = async () => {
       try {
-        const response = await fetch(`${apiBaseUrl}/api/online-orders/control`, {
-          headers: authHeaders,
-          cache: 'no-store',
-        });
-        if (!response.ok) return;
-        const payload = await response.json();
-        if (!cancelled) setAutoAccept(Boolean(payload?.auto_accept));
+        const result = await fetchOnlineOrdersControl(
+          apiBaseUrl,
+          authHeaders.Authorization || '',
+        );
+        if (!result.ok || !result.payload) return;
+        if (!cancelled) setAutoAccept(Boolean(result.payload.auto_accept));
       } catch {
         // Leitura best-effort: não altera estado operacional do servidor.
       }
@@ -40,6 +43,7 @@ export function useOnlineOrderAutoAcceptPolicy({
   const updateAutoAccept = async (enabled: boolean) => {
     const previous = autoAccept;
     setAutoAccept(enabled);
+    invalidateOnlineOrdersControlCache();
     try {
       const response = await fetch(`${apiBaseUrl}/api/online-orders/auto-accept`, {
         method: 'PUT',

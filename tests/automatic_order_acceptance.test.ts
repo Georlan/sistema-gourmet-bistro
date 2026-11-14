@@ -8,10 +8,15 @@ const policyHook = readFileSync(
   'src/components/caixa/orders/useOnlineOrderAutoAcceptPolicy.ts',
   'utf8',
 );
+const controlClient = readFileSync(
+  'src/components/caixa/online-menu/onlineOrdersControlClient.ts',
+  'utf8',
+);
 
 test('autoaceite é uma política persistida no backend, não um executor do navegador', () => {
   assert.match(panel, /useOnlineOrderAutoAcceptPolicy/);
-  assert.match(policyHook, /\/api\/online-orders\/control/);
+  assert.match(policyHook, /fetchOnlineOrdersControl/);
+  assert.match(controlClient, /\/api\/online-orders\/control/);
   assert.match(policyHook, /\/api\/online-orders\/auto-accept/);
   assert.match(policyHook, /payload\?\.auto_accept/);
   assert.equal(workspace.includes('useAutomaticOrderAcceptance'), false);

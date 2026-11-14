@@ -1,4 +1,8 @@
 import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
+import {
+  fetchCaixaConfiguracoes,
+  invalidateCaixaConfiguracoesCache,
+} from '../../../utils/caixaConfigClient';
 import React, { useRef, useState } from 'react';
 import { DEFAULT_WAITER_PERMISSIONS, patchWaiterPermissions, readWaiterPermissions, type WaiterPermissions } from './waiterPermissions';
 import type { CashierNotice } from '../cashierContracts';
@@ -54,6 +58,7 @@ export function useCashierSettings({ apiBaseUrl, authHeaders, showToast, setChec
     if (updates.impressao_nome_posicao !== undefined) setPrintNamePosition(updates.impressao_nome_posicao);
     if (updates.impressao_mensagem_rodape !== undefined) setPrintFooter(updates.impressao_mensagem_rodape);
 
+    invalidateCaixaConfiguracoesCache();
     try {
       const res = await fetch(`${apiBaseUrl}/caixa/configuracoes`, {
         method: 'PUT',
@@ -65,7 +70,7 @@ export function useCashierSettings({ apiBaseUrl, authHeaders, showToast, setChec
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => null);
-        await fetchConfiguracoes();
+        await fetchConfiguracoes(true);
         showToast(payload?.detail || 'Não foi possível salvar esta configuração.', 'error');
         if (isPrintPersonalizationUpdate) setPrintSettingsSaveState('error');
         return false;
@@ -74,7 +79,7 @@ export function useCashierSettings({ apiBaseUrl, authHeaders, showToast, setChec
       return true;
     } catch (e) {
       console.error('Error saving configurations:', e);
-      await fetchConfiguracoes();
+      await fetchConfiguracoes(true);
       showToast('Falha de conexão ao salvar a configuração.', 'error');
       if (isPrintPersonalizationUpdate) setPrintSettingsSaveState('error');
       return false;
@@ -92,15 +97,15 @@ export function useCashierSettings({ apiBaseUrl, authHeaders, showToast, setChec
   const [isTestingPrinter, setIsTestingPrinter] = useState(false);
   const isTestingPrinterRef = useRef(false);
 
-  const fetchConfiguracoes = async () => {
+  const fetchConfiguracoes = async (force = false) => {
     setSettingsLoadState((current) => current === 'loaded' ? current : 'loading');
     try {
-      const res = await fetch(`${apiBaseUrl}/caixa/configuracoes`, { headers: authHeaders });
-      if (!res.ok) {
+      const res = await fetchCaixaConfiguracoes(apiBaseUrl, authHeaders, { force });
+      if (!res.ok || !res.data) {
         setSettingsLoadState((current) => current === 'loaded' ? current : 'error');
         return;
       }
-      const data = await res.json();
+      const data = res.data;
       setWaiterPermissions(readWaiterPermissions(data));
       setCheckoutServiceTax(Boolean(data.taxa_servico_ativa));
       setTaxaServicoAtiva(Boolean(data.taxa_servico_ativa));
