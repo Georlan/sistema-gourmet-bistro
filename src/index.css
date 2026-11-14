@@ -3393,3 +3393,56 @@ html[data-koma-text-size]:not([data-koma-text-size="padrao"]) .cashier-subnav__b
 .orders-card__identity-side--digital { gap: .3rem; }
 .orders-card__money-actions { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: .4rem; }
 .orders-card__money-actions .orders-card__price { margin-left: 0; }
+
+/* Caixa Salão: the same operational color semantics as Garçom. */
+.koma-table-state-card {
+  --table-state-band: #28463a;
+  --table-state-label: var(--koma-text-secondary);
+  background: var(--koma-surface-card);
+  color: var(--koma-text-primary);
+  border-color: var(--koma-border-default);
+  box-shadow: none;
+}
+.koma-table-state-card.koma-table-occupied-card,
+.koma-table-state-card.koma-table-served-card {
+  --table-state-band: #b8798c;
+  --table-state-label: #f3a3b8;
+  background: #2c2026;
+  border-color: #9b6375;
+}
+.koma-table-state-card.koma-table-ready-card {
+  --table-state-band: #72ebc3;
+  --table-state-label: #72ebc3;
+  background: #163a30;
+  border-color: #56caa4;
+}
+.koma-table-state-card.koma-table-payment-card {
+  --table-state-band: #9ad5ff;
+  --table-state-label: #9ad5ff;
+  background: #1b2e3f;
+  border-color: #6898b9;
+}
+.koma-table-state-card.koma-table-merged-card { border-style:dashed; }
+.koma-table-state-band {
+  position:absolute; inset:0 0 auto; height:5px;
+  background:var(--table-state-band);
+}
+.koma-table-state-card .koma-table-state-label { color:var(--table-state-label); }
+.koma-table-state-card.koma-table-occupied-card .text-koma-foreground,
+.koma-table-state-card.koma-table-ready-card .text-koma-foreground,
+.koma-table-state-card.koma-table-payment-card .text-koma-foreground,
+.koma-table-state-card.koma-table-served-card .text-koma-foreground { color:#f5f8f7; }
+[data-koma-theme="light"] .koma-table-state-card.koma-table-occupied-card,
+[data-koma-theme="light"] .koma-table-state-card.koma-table-served-card {
+  --table-state-band:#9d3050; --table-state-label:#822540;
+  background:#fff1f4; border-color:#c58b9d;
+}
+[data-koma-theme="light"] .koma-table-state-card.koma-table-ready-card {
+  --table-state-band:#006c53; --table-state-label:#006c53;
+  background:#daf8ee; border-color:#69bba0;
+}
+[data-koma-theme="light"] .koma-table-state-card.koma-table-payment-card {
+  --table-state-band:#155e90; --table-state-label:#155e90;
+  background:#e5f2ff; border-color:#8ab5d2;
+}
+[data-koma-theme="light"] .koma-table-state-card .text-koma-foreground { color:var(--koma-text-primary); }

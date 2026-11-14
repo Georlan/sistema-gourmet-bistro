@@ -84,7 +84,6 @@ export function CashierPdvTablePicker({ options, selectedId, open, onOpenChange,
       <div className="koma-table-picker__surface">
         <header className="koma-table-picker__heading">
           <div>
-            <span className="koma-table-picker__eyebrow">CONSUMO NO LOCAL</span>
             <h2 id="pdv-table-picker-title">Escolher mesa</h2>
           </div>
           <button className="koma-table-picker__close" type="button" onClick={() => onOpenChange(false)} aria-label="Fechar escolha de mesa"><X size={21} aria-hidden="true" /></button>
@@ -130,7 +129,7 @@ export function CashierPdvTablePicker({ options, selectedId, open, onOpenChange,
                 const selected = selectedId === option.table.id;
                 const presentation = tableCardPresentation(option.operational);
                 const status = presentation.label;
-                const baseStatus = option.isMerged ? 'Unida' : option.isOccupied ? 'Em atendimento' : 'Livre';
+                const tone = presentation.key;
                 const displayName = formatPdvTableLabel(option.table);
                 const customName = option.table.nome?.trim()
                   && !/^mesa\s*0*\d+$/i.test(option.table.nome.trim()) ? option.table.nome.trim() : null;
@@ -138,11 +137,11 @@ export function CashierPdvTablePicker({ options, selectedId, open, onOpenChange,
                   <button
                     key={option.table.id}
                     type="button"
-                    aria-label={`${displayName} · ${baseStatus}${status !== baseStatus ? ` · ${status}` : ''}`}
+                    aria-label={`${displayName} · ${status}`}
                     aria-pressed={selected}
                     className="koma-table-picker__tile"
-                    data-table-status={option.isMerged ? 'merged' : option.isOccupied ? 'occupied' : 'free'}
-                    data-operational-state={presentation.key}
+                    data-table-status={tone}
+                    data-operational-state={tone}
                     onClick={() => select(option.table.id)}
                   >
                     <span className="koma-table-picker__tile-top">

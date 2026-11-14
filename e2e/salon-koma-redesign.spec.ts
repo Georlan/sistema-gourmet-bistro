@@ -44,7 +44,7 @@ test('abrir pedido na mesa evidencia destino; seletor KÔMA permite buscar, troc
   await expect(dialog).toBeVisible();
   await dialog.getByRole('searchbox', { name: 'Buscar número ou nome da mesa' }).fill('07');
   await expect(dialog.locator('.koma-table-picker__tile')).toHaveCount(1);
-  await dialog.getByRole('button', { name: /^Mesa 07 · Em atendimento/ }).click();
+  await dialog.getByRole('button', { name: /^Mesa 07 · Tem item pronto/ }).click();
   await expect(dialog).toBeHidden();
   await expect(destination).toContainText('Mesa 07');
 

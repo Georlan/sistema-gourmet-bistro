@@ -336,7 +336,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
           />
 
           {pdvOrderType === 'dine_in' && selectedPdvTableOption && (
-            <div className="cashier-pdv-table-context" role="status" data-testid="pdv-selected-table-context"
+            <div className="cashier-pdv-table-context" data-table-status={selectedPdvTableOption.isMerged ? 'merged' : selectedPdvTableOption.isOccupied ? 'occupied' : 'free'} role="status" data-testid="pdv-selected-table-context"
               data-operational-state={selectedTablePresentation?.key}>
               <div className="cashier-pdv-table-context__text">
                 <KomaWaiterGlyph name={TABLE_STATE_GLYPH[selectedTablePresentation?.key] || 'table-service'} size={22} aria-hidden="true" />
@@ -661,7 +661,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                         type="button"
                         className="cashier-pdv-table-trigger"
                         data-table-id={pdvTargetMesaId || 0}
-                        data-table-status={selectedPdvTableOption?.isOccupied ? 'occupied' : selectedPdvTableOption ? 'free' : 'unselected'}
+                        data-table-status={selectedPdvTableOption ? (selectedPdvTableOption.isMerged ? 'merged' : selectedPdvTableOption.isOccupied ? 'occupied' : 'free') : 'unselected'}
                         data-operational-state={selectedTablePresentation?.key}
                         aria-haspopup="dialog"
                         aria-expanded={tablePickerOpen}
