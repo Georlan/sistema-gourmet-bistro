@@ -13,18 +13,20 @@ test('suspensão substitui o app operacional por uma tela exclusiva', () => {
     /if \(accessState === 'suspended'\) \{\s*return <SuspensionScreen checking=\{checking\} onRetry=\{retry\} onLogout=\{logout\} \/>;\s*\}/,
   );
   const suspendedReturn = boundary.indexOf("if (accessState === 'suspended')");
-  const normalReturn = boundary.lastIndexOf('return <>{children}</>;');
+  const normalReturn = boundary.lastIndexOf('{children}');
   assert.ok(suspendedReturn >= 0 && normalReturn > suspendedReturn, 'o app normal só volta depois do gate de suspensão');
 });
 
-test('checagem de suspensão preserva o shell montado para não reiniciar o login unificado', () => {
-  assert.match(boundary, /if \(accessState === 'checking'\) \{/);
+test('checagem de suspensão preserva o shell montado para não reiniciar o login unificado nem remontar arrays', () => {
   assert.match(
     boundary,
-    /if \(accessState === 'checking'\) \{[\s\S]*?return \([\s\S]*?\{children\}[\s\S]*?<AccessCheckingScreen \/>[\s\S]*?\);[\s\S]*?\}/,
+    /return \(\s*<>\s*\{children\}\s*\{accessState === 'checking' \? <AccessCheckingScreen \/> : null\}\s*<\/>\s*\);/,
   );
   assert.doesNotMatch(boundary, /if \(accessState === 'checking'\) return <AccessCheckingScreen \/>/);
-  assert.match(boundary, /desmontá-lo aqui[\s\S]*apaga `activePortal`/);
+  assert.doesNotMatch(
+    boundary.slice(boundary.indexOf("if (accessState === 'suspended')")),
+    /return <>\{children\}<\/?>;/,
+  );
 });
 
 test('boundary detecta suspensão nas operações e revalida apenas sessões suspensas', () => {
