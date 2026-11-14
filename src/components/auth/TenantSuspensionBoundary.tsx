@@ -259,18 +259,16 @@ export function TenantSuspensionBoundary({ children, disabled = false }: TenantS
   if (accessState === 'suspended') {
     return <SuspensionScreen checking={checking} onRetry={retry} onLogout={logout} />;
   }
-  if (accessState === 'checking') {
-    // Não substitua `children` durante a checagem. No app canônico, o login
-    // recém-autenticado vive dentro de UnifiedOperationalEntry; desmontá-lo aqui
-    // apaga `activePortal` e faz a tela voltar imediatamente para o login.
-    return (
-      <>
-        {children}
-        <AccessCheckingScreen />
-      </>
-    );
-  }
-  return <>{children}</>;
+  // Mantenha exatamente a mesma estrutura de Fragment quando `children` é um
+  // array (como em `main.tsx`). Alternar `<>{children}</>` e
+  // `<>{children}<AccessCheckingScreen /></>` muda o shape de 1 slot para
+  // 2 slots e faz o React desmontar e remontar toda a árvore operacional.
+  return (
+    <>
+      {children}
+      {accessState === 'checking' ? <AccessCheckingScreen /> : null}
+    </>
+  );
 }
 
 export default TenantSuspensionBoundary;
