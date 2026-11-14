@@ -1,0 +1,282 @@
+/* Shared table semantics, not a third business-state engine.
+   Inspired by the existing Garçom surfaces; typography and glyphs stay KÔMA.
+   These local tokens affect only the Salão, the PDV chooser and its context. */
+:is(.koma-salon-card, .koma-table-picker__tile, .cashier-pdv-table-context, .cashier-pdv-table-trigger, .kd-destination-grid > [role="radio"]) {
+  --table-face: #192e26;
+  --table-cap: #305848;
+  --table-cap-ink: #f4fcf7;
+  --table-text: #effbf5;
+  --table-muted: #c6d8ce;
+  --table-border: #527c68;
+  --table-state: #9de0c2;
+  --table-action: #9de0c2;
+}
+:is(.koma-salon-card, .koma-table-picker__tile, .cashier-pdv-table-context, .cashier-pdv-table-trigger, .kd-destination-grid > [role="radio"])[data-operational-state="occupied"],
+:is(.koma-salon-card, .koma-table-picker__tile, .cashier-pdv-table-context, .cashier-pdv-table-trigger, .kd-destination-grid > [role="radio"])[data-operational-state="served"] {
+  --table-face: #34232a;
+  --table-cap: #d995a8;
+  --table-cap-ink: #3b1b26;
+  --table-text: #fff0f4;
+  --table-muted: #dfbbc5;
+  --table-border: #aa687b;
+  --table-state: #ffc1d0;
+  --table-action: #f3b1c3;
+}
+:is(.koma-salon-card, .koma-table-picker__tile, .cashier-pdv-table-context, .cashier-pdv-table-trigger, .kd-destination-grid > [role="radio"])[data-operational-state="ready"] {
+  --table-face: #163c30;
+  --table-cap: #6cdbb5;
+  --table-cap-ink: #093b2d;
+  --table-text: #ecfff8;
+  --table-muted: #b6decf;
+  --table-border: #40b98e;
+  --table-state: #80edc3;
+  --table-action: #80edc3;
+}
+:is(.koma-salon-card, .koma-table-picker__tile, .cashier-pdv-table-context, .cashier-pdv-table-trigger, .kd-destination-grid > [role="radio"])[data-operational-state="payment"] {
+  --table-face: #192f3d;
+  --table-cap: #a6d6eb;
+  --table-cap-ink: #18394d;
+  --table-text: #edf8ff;
+  --table-muted: #c2d5e2;
+  --table-border: #5f9ec0;
+  --table-state: #b3e4ff;
+  --table-action: #b3e4ff;
+}
+:is(.koma-salon-card, .koma-table-picker__tile, .cashier-pdv-table-context, .cashier-pdv-table-trigger, .kd-destination-grid > [role="radio"])[data-operational-state="merged"] {
+  --table-face: #222e2a;
+  --table-cap: #3b4d46;
+  --table-cap-ink: #eff7f2;
+  --table-text: #ecf5ef;
+  --table-muted: #c4d1ca;
+  --table-border: #677c71;
+  --table-state: #d5e3dc;
+  --table-action: #d5e3dc;
+}
+[data-koma-theme="light"] :is(.koma-salon-card, .koma-table-picker__tile, .cashier-pdv-table-context, .cashier-pdv-table-trigger, .kd-destination-grid > [role="radio"]) {
+  --table-face: #f4faf6;
+  --table-cap: #d4ecdf;
+  --table-cap-ink: #163c2b;
+  --table-text: #163b2b;
+  --table-muted: #446c59;
+  --table-border: #8ac5a8;
+  --table-state: #136947;
+  --table-action: #08734f;
+}
+[data-koma-theme="light"] :is(.koma-salon-card, .koma-table-picker__tile, .cashier-pdv-table-context, .cashier-pdv-table-trigger, .kd-destination-grid > [role="radio"])[data-operational-state="occupied"],
+[data-koma-theme="light"] :is(.koma-salon-card, .koma-table-picker__tile, .cashier-pdv-table-context, .cashier-pdv-table-trigger, .kd-destination-grid > [role="radio"])[data-operational-state="served"] {
+  --table-face: #fff0f3;
+  --table-cap: #ecc0cc;
+  --table-cap-ink: #4e1e2d;
+  --table-text: #4b1d2b;
+  --table-muted: #7a4554;
+  --table-border: #c67b91;
+  --table-state: #903451;
+  --table-action: #9a3452;
+}
+[data-koma-theme="light"] :is(.koma-salon-card, .koma-table-picker__tile, .cashier-pdv-table-context, .cashier-pdv-table-trigger, .kd-destination-grid > [role="radio"])[data-operational-state="ready"] {
+  --table-face: #e0f9ef;
+  --table-cap: #8de7c7;
+  --table-cap-ink: #083c2c;
+  --table-text: #103d2e;
+  --table-muted: #356b58;
+  --table-border: #35a985;
+  --table-state: #086c4c;
+  --table-action: #076b4c;
+}
+[data-koma-theme="light"] :is(.koma-salon-card, .koma-table-picker__tile, .cashier-pdv-table-context, .cashier-pdv-table-trigger, .kd-destination-grid > [role="radio"])[data-operational-state="payment"] {
+  --table-face: #e9f5fc;
+  --table-cap: #b3def2;
+  --table-cap-ink: #183e54;
+  --table-text: #183e54;
+  --table-muted: #416980;
+  --table-border: #75b1d1;
+  --table-state: #145d85;
+  --table-action: #146285;
+}
+[data-koma-theme="light"] :is(.koma-salon-card, .koma-table-picker__tile, .cashier-pdv-table-context, .cashier-pdv-table-trigger, .kd-destination-grid > [role="radio"])[data-operational-state="merged"] {
+  --table-face: #f1f5f2;
+  --table-cap: #dce8df;
+  --table-cap-ink: #324c3c;
+  --table-text: #324c3c;
+  --table-muted: #526859;
+  --table-border: #a7b7ac;
+  --table-state: #41594a;
+  --table-action: #41594a;
+}
+.koma-table-state-mark { display: inline-flex; min-width: 0; align-items: baseline; gap: .35rem; color: var(--table-state); font-size: inherit; line-height: 1.28; font-weight: 750; }
+.koma-table-state-mark__dot { display: inline-block; flex: 0 0 auto; width: .47rem; height: .47rem; border-radius: 50%; background: currentColor; }
+
+/* Salão: strong status cap, an independent readable body, and an action that
+   changes with the table's operational state. No decorative shadows or glow. */
+.koma-salon-card { background: var(--table-face); color: var(--table-text); border-color: var(--table-border); }
+.koma-salon-card:hover { border-color: var(--table-action); }
+.koma-salon-card__identity { background: var(--table-cap); color: var(--table-cap-ink); }
+.koma-salon-card__number { color: inherit; }
+.koma-salon-card__glyph { color: inherit; }
+.koma-salon-card__context { color: var(--table-text); gap: .22rem; }
+.koma-salon-card__state { color: var(--table-state); font-size: .73rem; line-height: 1.3; font-weight: 750; }
+.koma-salon-card__name, .koma-salon-card__total { color: var(--table-text); }
+.koma-salon-card__meta { color: var(--table-muted); }
+.koma-salon-card__action { color: var(--table-action); border-color: var(--table-border); font-size: .73rem; }
+.koma-salon-card__tap:not(:disabled):hover .koma-salon-card__action,
+.koma-salon-card__tap:not(:disabled):active { background: color-mix(in srgb, var(--table-cap) 14%, var(--table-face)); }
+.koma-salon-card[data-operational-state="occupied"],
+.koma-salon-card[data-operational-state="served"],
+.koma-salon-card[data-operational-state="ready"],
+.koma-salon-card[data-operational-state="payment"] { border-color: var(--table-border); }
+.koma-salon-card[data-operational-state="occupied"] .koma-salon-card__identity,
+.koma-salon-card[data-operational-state="served"] .koma-salon-card__identity,
+.koma-salon-card[data-operational-state="ready"] .koma-salon-card__identity,
+.koma-salon-card[data-operational-state="payment"] .koma-salon-card__identity { background: var(--table-cap); }
+.koma-salon-card[data-operational-state="merged"] { border-style: dashed; }
+
+/* PDV picker: same visual state as Salão, but a selected tile keeps its state
+   instead of turning every occupied table into the same mint selection. */
+.koma-table-picker__tile { background: var(--table-face); border-color: var(--table-border); color: var(--table-text); }
+.koma-table-picker__tile:hover { border-color: var(--table-action); background: var(--table-face); }
+.koma-table-picker__tile[aria-pressed="true"] { border: 2px solid var(--table-action); background: var(--table-face); box-shadow: inset 0 0 0 1px var(--table-action); }
+.koma-table-picker__tile-top { color: var(--table-cap-ink); background: var(--table-cap); }
+.koma-table-picker__tile-status { color: var(--table-state); font-weight: 750; }
+.koma-table-picker__tile .koma-table-picker__tile-name { color: var(--table-text); }
+.koma-table-picker__tile .koma-table-picker__tile-detail { color: var(--table-muted); }
+.koma-table-picker__tile[data-operational-state="merged"] { border-style: dashed; }
+
+/* PDV context and cart trigger use the identical surface: status is explicit,
+   not a vague "em andamento" or a colorless line under Mesa 04. */
+.cashier-pdv-table-context, .cashier-pdv-table-trigger {
+  border-color: var(--table-border);
+  background: var(--table-face);
+  color: var(--table-text);
+}
+.cashier-pdv-table-context__text > svg { color: var(--table-state); }
+.cashier-pdv-table-context__text strong, .cashier-pdv-table-trigger__details strong { color: var(--table-text); }
+.cashier-pdv-table-context__status, .cashier-pdv-table-trigger__details small { color: var(--table-state); }
+.cashier-pdv-table-context__amount { color: var(--table-text); font-size: .8rem; font-variant-numeric: tabular-nums; font-weight: 750; }
+.cashier-pdv-table-context > button, .cashier-pdv-table-trigger__change { color: var(--table-action); }
+.cashier-pdv-table-trigger__details small::before { display: none; }
+.cashier-pdv-table-trigger[data-operational-state] { border-color: var(--table-border); }
+
+@media (prefers-reduced-motion: reduce) {
+  .koma-salon-card, .koma-table-picker__tile { transition: none; }
+}
+
+/* Compact selector tiles use the same cap/body hierarchy as the Salão and
+   Garçom, not a generic mint form-control grid. */
+.koma-table-picker__tile,
+.koma-table-picker__tile[aria-pressed="true"] {
+  min-height: 8rem;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: .85rem;
+}
+.koma-table-picker__tile-top {
+  min-height: 3.35rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .3rem;
+  width: 100%;
+  padding: .65rem .7rem .55rem;
+  border-radius: .75rem .75rem .95rem .2rem;
+}
+.koma-table-picker__tile-top strong { font: 750 2rem/.95 var(--koma-font-display); letter-spacing: -.055em; }
+.koma-table-picker__tile-symbols { display: inline-flex; align-items: center; gap: .22rem; min-width: 0; }
+.koma-table-picker__tile-status { width: 100%; padding: .55rem .65rem 0; font-size: .78rem; line-height: 1.2; }
+.koma-table-picker__tile-name { padding: .45rem .65rem 0; font-size: .74rem; }
+.koma-table-picker__tile .koma-table-picker__tile-detail {
+  margin-top: auto;
+  min-height: 1.95rem;
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: .2rem;
+  padding: .35rem .65rem .55rem;
+  font-size: .72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.koma-table-picker__tile:hover .koma-table-picker__tile-top,
+.koma-table-picker__tile[aria-pressed="true"] .koma-table-picker__tile-top { color: var(--table-cap-ink); }
+.koma-table-picker__tile[aria-pressed="true"] .koma-table-picker__tile-top { padding: calc(.65rem - 1px) calc(.7rem - 1px) .55rem; }
+.koma-table-picker__tile[aria-pressed="true"] .koma-table-picker__tile-status { padding-left: calc(.65rem - 1px); }
+.koma-table-picker__heading { align-items: center; padding: .85rem 1rem .65rem; }
+.koma-table-picker__heading h2 { margin: .12rem 0 0; font-size: 1.25rem; }
+.koma-table-picker__eyebrow { font-size: .62rem; }
+.koma-table-picker__tools { gap: .45rem; padding: 0 1rem .65rem; }
+.koma-table-picker__search { min-height: 2.75rem; }
+.koma-table-picker__filters button { padding-inline: .5rem; font-size: .75rem; }
+.koma-table-picker__scroll { padding: .65rem 1rem max(.75rem, env(safe-area-inset-bottom)); }
+.koma-table-picker__grid { gap: .5rem; }
+.koma-table-picker__no-table { min-height: 3rem; margin-bottom: .6rem; padding: .45rem .75rem; }
+.koma-table-picker__no-table strong { font-size: .83rem; }
+.koma-table-picker__no-table small { font-size: .7rem; }
+.koma-table-picker__no-table[aria-pressed="true"] { border-color: var(--koma-accent-text); box-shadow: inset 0 0 0 1px var(--koma-accent-text); }
+.koma-table-picker__tile:focus-visible { outline: 2px solid var(--koma-focus-ring); outline-offset: 1px; }
+
+/* Status in the PDV destination: a compact two-line read model with table,
+   status and consumption available at a glance. */
+.cashier-pdv-table-context { padding: .55rem .65rem; }
+.cashier-pdv-table-context__summary { min-width: 0; display: flex; flex-direction: column; gap: .12rem; }
+.cashier-pdv-table-context__summary > span:first-child { line-height: 1.3; }
+.cashier-pdv-table-context__status { display: flex; align-items: center; flex-wrap: wrap; gap: .25rem .65rem; font-size: .77rem; line-height: 1.3; }
+.cashier-pdv-table-context > button { min-height: 44px; border: 1px solid var(--table-border); background: color-mix(in srgb, var(--table-cap) 28%, var(--table-face)); }
+.cashier-pdv-table-trigger { padding: .7rem .8rem; }
+.cashier-pdv-table-trigger__details { flex: 1; }
+.cashier-pdv-table-trigger__details small { display: inline-flex; align-items: center; flex-wrap: wrap; gap: .3rem .6rem; font-size: .76rem; }
+.cashier-pdv-table-trigger__amount { color: var(--table-text); font-size: .76rem; font-weight: 750; font-variant-numeric: tabular-nums; }
+.cashier-pdv-table-trigger__change { white-space: nowrap; }
+
+@media (max-width: 620px) {
+  .koma-table-picker__heading { padding: .75rem .85rem .55rem; }
+  .koma-table-picker__tools { padding: 0 .85rem .55rem; }
+  .koma-table-picker__scroll { padding: .55rem .85rem max(.85rem, env(safe-area-inset-bottom)); }
+  .koma-table-picker__tile { min-height: 8.25rem; }
+}
+@media (max-width: 350px) {
+  .koma-table-picker__tile-top strong { font-size: 1.75rem; }
+  .koma-table-picker__tile-symbols svg { width: 15px; height: 15px; }
+  .koma-table-picker__filters button { padding-inline: .3rem; font-size: .72rem; }
+  .cashier-pdv-table-context__text { gap: .4rem; }
+}
+
+/* Status ink changes immediately with theme. Animating only the background
+   creates a transient low-contrast frame on theme toggle (verified by E2E). */
+.koma-salon-card, .koma-table-picker__tile, .cashier-pdv-table-context, .cashier-pdv-table-trigger {
+  transition: none;
+}
+
+/* No destination is a neutral state, not a green "free table". */
+.cashier-pdv-table-trigger:not([data-operational-state]) {
+  background: var(--koma-surface-raised);
+  border-color: var(--koma-border-default);
+  color: var(--koma-text-primary);
+}
+
+
+/* Transfer/merge/associate destinations remain a real radio group with their
+   existing keyboard and confirmation rules. Only the visual state is shared. */
+.kd-destination-grid > [role="radio"] {
+  min-height: 88px;
+  padding: .55rem .25rem;
+  background: var(--table-face);
+  color: var(--table-text);
+  border: 1px solid var(--table-border);
+  border-radius: .75rem;
+  box-shadow: none;
+  transition: none;
+  overflow-wrap: anywhere;
+}
+.kd-destination-grid > [role="radio"][data-occupied="true"] {
+  background: var(--table-face);
+  color: var(--table-text);
+  border-color: var(--table-border);
+}
+.kd-destination-grid > [role="radio"] strong { color: var(--table-text); font-size: 1.45rem; font-weight: 750; }
+.kd-destination-grid > [role="radio"] .koma-table-state-mark { color: var(--table-state); font-size: .7rem; line-height: 1.2; }
+.kd-destination-grid > [role="radio"] .koma-table-state-mark__dot { position: static; display: inline-block; width: .47rem; height: .47rem; background: currentColor; border-radius: 50%; }
+.kd-destination-grid > [role="radio"][aria-checked="true"] { outline: 2px solid var(--table-action); outline-offset: -3px; background: var(--table-face); }
+.kd-destination-grid > [role="radio"]:focus-visible { outline: 2px solid var(--koma-focus-ring); outline-offset: 2px; }
+.kd-destination-legend i[data-occupied="true"] { background: #d995a8; border-radius: 50%; }
+[data-koma-theme="light"] .kd-destination-legend i[data-occupied="true"] { background: #9a3452; }

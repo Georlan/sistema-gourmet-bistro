@@ -21,6 +21,9 @@ import { CashierPdvCartLine } from './CashierPdvCartLine';
 import { CashierPdvConfigurator } from './CashierPdvConfigurator';
 import { CashierPdvCustomerFields } from './CashierPdvCustomerFields';
 import { CashierPdvTablePicker, formatPdvTableLabel } from './CashierPdvTablePicker';
+import { tableCardPresentation } from '../../shared/SharedTableCard';
+import { TABLE_STATE_GLYPH, TableStatusMark } from '../../shared/TableStatusMark';
+import { KomaWaiterGlyph } from '../../shared/KomaWaiterGlyphs';
 
 type ProductWithModifiers = Product & { grupos_modificadores?: CatalogModifierGroup[] };
 
@@ -274,6 +277,8 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     }
     return quantities;
   }, [pdvCart]);
+  const selectedTablePresentation = selectedPdvTableOption
+    ? tableCardPresentation(selectedPdvTableOption.operational) : null;
   const deliveryAddressSummary = [
     pdvDeliveryAddressDraft.logradouro,
     pdvDeliveryAddressDraft.numero,
@@ -331,10 +336,18 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
           />
 
           {pdvOrderType === 'dine_in' && selectedPdvTableOption && (
-            <div className="cashier-pdv-table-context" role="status" data-testid="pdv-selected-table-context">
+            <div className="cashier-pdv-table-context" role="status" data-testid="pdv-selected-table-context"
+              data-operational-state={selectedTablePresentation?.key}>
               <div className="cashier-pdv-table-context__text">
-                <MapPin size={21} aria-hidden="true" />
-                <span>Pedido para <strong>{formatPdvTableLabel(selectedPdvTableOption.table)}</strong></span>
+                <KomaWaiterGlyph name={TABLE_STATE_GLYPH[selectedTablePresentation?.key] || 'table-service'} size={22} aria-hidden="true" />
+                <span className="cashier-pdv-table-context__summary">
+                  <span>Pedido para <strong>{formatPdvTableLabel(selectedPdvTableOption.table)}</strong></span>
+                  <span className="cashier-pdv-table-context__status">
+                    <TableStatusMark>{selectedTablePresentation?.label}</TableStatusMark>
+                    {selectedPdvTableOption.isOccupied && selectedPdvTableOption.total > 0 &&
+                      <strong className="cashier-pdv-table-context__amount">{formatCurrency(selectedPdvTableOption.total)}</strong>}
+                  </span>
+                </span>
               </div>
               <button type="button" onClick={() => setTablePickerOpen(true)}>Trocar mesa</button>
             </div>
@@ -649,6 +662,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                         className="cashier-pdv-table-trigger"
                         data-table-id={pdvTargetMesaId || 0}
                         data-table-status={selectedPdvTableOption?.isOccupied ? 'occupied' : selectedPdvTableOption ? 'free' : 'unselected'}
+                        data-operational-state={selectedTablePresentation?.key}
                         aria-haspopup="dialog"
                         aria-expanded={tablePickerOpen}
                         aria-controls="pdv-table-picker"
@@ -656,7 +670,12 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       >
                         <span className="cashier-pdv-table-trigger__details">
                           <strong>{selectedPdvTableOption ? formatPdvTableLabel(selectedPdvTableOption.table) : 'Escolher mesa'}</strong>
-                          <small>{selectedPdvTableOption ? selectedPdvTableOption.isOccupied ? 'Em atendimento' : 'Livre' : 'Ainda sem mesa'}</small>
+                          <small>{selectedPdvTableOption
+                            ? <TableStatusMark>{selectedTablePresentation?.label}</TableStatusMark>
+                            : 'Ainda sem mesa'}
+                            {selectedPdvTableOption?.isOccupied && selectedPdvTableOption.total > 0 &&
+                              <strong className="cashier-pdv-table-trigger__amount">{formatCurrency(selectedPdvTableOption.total)}</strong>}
+                          </small>
                         </span>
                         <span className="cashier-pdv-table-trigger__change">Alterar <ChevronDown size={17} aria-hidden="true" /></span>
                       </button>
