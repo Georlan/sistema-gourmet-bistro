@@ -887,25 +887,35 @@ def update_item_status(
 ):
     """
     Atualiza o status de um item.
-    Operadores com 'pedidos:alterar_status' (admin, gerente, caixa, cozinha) podem alterar
-    o status de preparo. O garçom pode marcar um item pronto como 'entregue' (Servir).
+    A cozinha confirma apenas preparo -> pronto. Servir, cancelar, reabrir e
+    logística pertencem a outros papéis. O garçom pode servir um item pronto.
     """
     kds_started_at = perf_counter() if avancar_pedido and status == "pronto" else None
     user_role = (current_garcom.role or current_garcom.cargo or "garcom").lower().strip()
     if not (user_role == "garcom" and status == "entregue"):
         ensure_permission(current_garcom, "pedidos:alterar_status")
+    if user_role == "cozinha" and status != "pronto":
+        raise HTTPException(
+            status_code=403,
+            detail="A equipe da cozinha pode apenas confirmar itens prontos.",
+        )
 
     rest_id = require_tenant_id()
     # Serialize KDS updates by order first, so concurrent last-item updates
     # observe one committed order state before deciding to advance it.
-    if avancar_pedido and status == "pronto":
+    if status == "pronto" and (avancar_pedido or user_role == "cozinha"):
         item_owner = db.query(Item.comanda_id).filter(
             Item.restaurante_id == rest_id, Item.id == item_id,
         ).first()
         if item_owner:
-            db.query(Comanda).filter(
+            locked_check = db.query(Comanda).filter(
                 Comanda.restaurante_id == rest_id, Comanda.id == item_owner.comanda_id,
             ).with_for_update().first()
+            if user_role == "cozinha" and (
+                not locked_check or locked_check.fechada
+                or locked_check.delivery_status in {"pendente", "analise", "recusado", "transito", "finalizado"}
+            ):
+                raise HTTPException(status_code=409, detail="Pedido indisponível para preparo.")
     item = db.query(Item).filter(
         Item.restaurante_id == rest_id,
         Item.id == item_id,
@@ -925,6 +935,10 @@ def update_item_status(
             status_code=409,
             detail="Somente itens prontos podem ser marcados como servidos pelo garçom."
         )
+    if user_role == "cozinha" and item.status not in (None, "preparando", "pronto"):
+        raise HTTPException(status_code=409, detail="O item não está mais em preparo.")
+    # Replays of 'pronto' must retain the canonical lifecycle reconciliation:
+    # a legacy all-ready check can still need the order-level transition.
     item.status = status
     db.flush()
     if avancar_pedido and status == "pronto":
@@ -1237,7 +1251,7 @@ def listar_entregas_concluidas_recentes(
 @router.get("/motoboys/lista", response_model=List[MotoboyResponse])
 def listar_motoboys(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("pedidos:alterar_status")),
+    current_user: Usuario = Depends(require_permission("pedidos:operar_logistica")),
 ):
     """
     Lista todos os motoboys cadastrados do restaurante atual.

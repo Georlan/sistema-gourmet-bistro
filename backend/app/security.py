@@ -69,6 +69,8 @@ PERMISSION_ROLES = MappingProxyType({
     "comandas:forcar_fechamento": frozenset({"admin", "gerente", "caixa"}),
     "comandas:reabrir": frozenset({"admin", "gerente", "caixa"}),
     "pedidos:alterar_status": frozenset({"admin", "gerente", "caixa", "cozinha"}),
+    # Dispatch, courier assignment and fulfillment are not kitchen operations.
+    "pedidos:operar_logistica": frozenset({"admin", "gerente", "caixa"}),
     "pedidos:alterar_modalidade": frozenset({"admin", "gerente", "caixa"}),
 })
 

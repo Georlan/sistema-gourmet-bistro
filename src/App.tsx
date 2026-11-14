@@ -1928,6 +1928,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
             orders={orders}
             onFinishPreparation={handleFinishPreparation}
             onFinishPreparationBatch={handleFinishPreparationBatch}
+            onRefreshOrders={fetchOrdersFromAPI}
           />
         ) : isManagementRole(activeRole) ? (
           <React.Suspense fallback={<CashierLoading />}>

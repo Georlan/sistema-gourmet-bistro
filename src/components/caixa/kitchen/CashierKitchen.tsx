@@ -1,4 +1,4 @@
-import { Check, ClipboardList, Maximize2, Minimize2, MoreHorizontal, Search, X } from 'lucide-react';
+import { Check, ClipboardList, Maximize2, Minimize2, MoreHorizontal, RefreshCw, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { itemCompositionPresentation } from '../../../domain/orderItemComposition';
 import { KitchenTimer } from './KitchenTimer';
@@ -19,6 +19,8 @@ type KitchenProps = Pick<ReturnType<typeof useCashierOrders>, 'handleUpdateItemS
   activeKitchenItems: KdsKitchenItem[];
   /** One backend transaction for a ticket, when the operator supports it. */
   handleConfirmTicketReady?: (itemIds: string[]) => Promise<boolean>;
+  /** Request a fresh canonical snapshot without inventing a local order state. */
+  onRefreshOrders?: () => void | Promise<unknown>;
   mode?: 'kds' | 'queue' | 'standalone';
 };
 
@@ -31,7 +33,7 @@ const isMeaningfulCustomer = (name: string | undefined, destination: string) => 
 /** One operational surface for cashier and kitchen-role staff.
  * Cooking changes item status only; serving, payment and fulfillment belong to other areas.
  */
-export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateItemStatus, handleConfirmTicketReady, mode = 'kds' }: KitchenProps) {
+export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateItemStatus, handleConfirmTicketReady, onRefreshOrders, mode = 'kds' }: KitchenProps) {
   const active = mode === 'standalone' || activeSubTab === (mode === 'kds' ? 'kds' : 'preparo');
   const [filter, setFilter] = useState<KdsFilter>('preparo');
   const [query, setQuery] = useState('');
@@ -41,10 +43,26 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
   const [focusMode, setFocusMode] = useState(false);
   const [clock, setClock] = useState(() => Date.now());
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshRef = useRef(false);
+  const [deviceOffline, setDeviceOffline] = useState(() => typeof navigator !== 'undefined' && !navigator.onLine);
   const [confirmedIds, setConfirmedIds] = useState<Set<string>>(() => new Set());
   const pendingRef = useRef(new Set<string>());
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!active) return;
+    const offline = () => setDeviceOffline(true);
+    const online = () => setDeviceOffline(false);
+    setDeviceOffline(!navigator.onLine);
+    window.addEventListener('offline', offline);
+    window.addEventListener('online', online);
+    return () => {
+      window.removeEventListener('offline', offline);
+      window.removeEventListener('online', online);
+    };
+  }, [active]);
 
   useEffect(() => {
     if (!active) return;
@@ -89,6 +107,26 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
         : [...projection.preparingTickets, ...projection.readyTickets];
     return ordered.filter(ticket => matchesKdsTicketQuery(ticket, query));
   }, [projection, filter, query]);
+
+  const refreshQueue = async () => {
+    if (!onRefreshOrders || refreshRef.current) return;
+    refreshRef.current = true;
+    setRefreshing(true);
+    setToolsOpen(false);
+    try {
+      // We only request reconciliation; no "sincronizado" claim without a
+      // verified authoritative snapshot and no mutation of item status.
+      await onRefreshOrders();
+      // The refresh callback can swallow transport failures; do not dismiss a
+      // failed preparation confirmation based on an unverified refresh.
+    } catch (error) {
+      console.error('KDS refresh request failed', error);
+      setErrorNotice('Não foi possível atualizar a fila. Confira a conexão e tente novamente.');
+    } finally {
+      refreshRef.current = false;
+      setRefreshing(false);
+    }
+  };
 
   const markReady = async (items: readonly KdsKitchenItem[]) => {
     const targets = items.filter(item => item.status === 'preparando'
@@ -203,10 +241,14 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
         </button>
         {toolsOpen && <div className="kds-workspace__menu" role="group" aria-label="Ferramentas da cozinha">
           <button type="button" onClick={() => { setDemandOpen(v => !v); setToolsOpen(false); }}><ClipboardList size={17}/> Produção total ({projection.preparingItemCount})</button>
+          {onRefreshOrders && <button type="button" disabled={refreshing} onClick={() => void refreshQueue()}><RefreshCw size={17}/> {refreshing ? 'Atualizando…' : 'Atualizar fila'}</button>}
           <button type="button" onClick={() => { setFocusMode(true); setToolsOpen(false); }}><Maximize2 size={17}/> Modo foco</button>
         </div>}
       </div>
     </div>
+    {deviceOffline && <p className="kds-workspace__offline" role="status">
+      Dispositivo sem internet. A fila pode estar desatualizada; reconecte e use Atualizar fila.
+    </p>}
     {searchOpen && <div className="kds-workspace__search">
       <label className="sr-only" htmlFor="kds-ticket-search">Buscar tickets da cozinha</label>
       <input ref={searchRef} id="kds-ticket-search" type="search" value={query}

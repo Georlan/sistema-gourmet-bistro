@@ -35,7 +35,18 @@ def test_kitchen_can_update_order_status_but_not_administer_team():
 
     assert ensure_permission(user, "pedidos:alterar_status") is user
 
+    for permission in ("pedidos:operar_logistica", "pedidos:alterar_modalidade"):
+        with pytest.raises(HTTPException) as forbidden:
+            ensure_permission(user, permission)
+        assert forbidden.value.status_code == 403
+
     with pytest.raises(HTTPException) as exc_info:
         ensure_permission(user, "equipe:administrar")
 
     assert exc_info.value.status_code == 403
+
+
+@pytest.mark.parametrize("role", ["admin", "gerente", "caixa"])
+def test_cashier_and_management_keep_logistics_permission(role):
+    operator = SimpleNamespace(status="ativo", role=role, cargo=role)
+    assert ensure_permission(operator, "pedidos:operar_logistica") is operator

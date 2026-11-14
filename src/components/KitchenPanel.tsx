@@ -5,10 +5,11 @@ import { isKdsKitchenOrderEligible, type KdsKitchenItem } from './caixa/kitchen/
 
 /** Adapter for staff with the cozinha role. The view, ticket identity and
  * preparation rules are shared with the cashier KDS; serving stays elsewhere. */
-export function KitchenPanel({ orders, onFinishPreparation, onFinishPreparationBatch }: {
+export function KitchenPanel({ orders, onFinishPreparation, onFinishPreparationBatch, onRefreshOrders }: {
   orders: Order[];
   onFinishPreparation: (orderId: string, itemId: string) => Promise<boolean> | void;
   onFinishPreparationBatch?: (orderId: string, itemIds: string[]) => Promise<boolean>;
+  onRefreshOrders?: () => void | Promise<unknown>;
 }) {
   const items = useMemo<KdsKitchenItem[]>(() => orders
     .filter(order => isKdsKitchenOrderEligible(order.deliveryStatus))
@@ -33,6 +34,7 @@ export function KitchenPanel({ orders, onFinishPreparation, onFinishPreparationB
     mode="standalone"
     activeSubTab="standalone"
     activeKitchenItems={items}
+    onRefreshOrders={onRefreshOrders}
     handleConfirmTicketReady={onFinishPreparationBatch ? async (itemIds) => {
       const first = items.find(entry => entry.id === itemIds[0]);
       if (!first || itemIds.some(id => !items.some(item => item.id === id && item.orderId === first.orderId))) return false;

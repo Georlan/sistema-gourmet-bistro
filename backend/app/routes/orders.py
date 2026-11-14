@@ -206,7 +206,7 @@ def atualizar_status_delivery(
     status_novo: str,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("pedidos:alterar_status")),
+    current_user: Usuario = Depends(require_permission("pedidos:operar_logistica")),
     payload: OrderStatusReasonPayload | None = None,
 ):
     """Adapta o status legado para os comandos canônicos do ciclo de vida."""
@@ -318,7 +318,7 @@ def atribuir_entregador_delivery(
     payload: dict,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("pedidos:alterar_status")),
+    current_user: Usuario = Depends(require_permission("pedidos:operar_logistica")),
 ):
     """Persiste a atribuição logística sem alterar a etapa do pedido.
 
@@ -398,7 +398,7 @@ def reatribuir_entregador_em_rota(
     payload: dict,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("pedidos:alterar_status")),
+    current_user: Usuario = Depends(require_permission("pedidos:operar_logistica")),
 ):
     """Troca excepcional do entregador sem alterar o estado da corrida.
 
@@ -514,7 +514,7 @@ def despachar_delivery(
     payload: dict,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("pedidos:alterar_status")),
+    current_user: Usuario = Depends(require_permission("pedidos:operar_logistica")),
 ):
     """Vincula motoboy e delega a transição pronto -> trânsito ao Core."""
     rid = require_tenant_id()

@@ -180,8 +180,8 @@ test('kanban projects order ready independently of kitchen item completion, with
 });
 
 
-test('KDS excludes pending/analysis/rejected online orders but retains accepted and ordinary table launches', () => {
-  for (const status of ['pendente', 'analise', 'recusado']) assert.equal(isKdsKitchenOrderEligible(status), false);
+test('KDS excludes pending/declined/dispatched/finished orders but retains accepted and table launches', () => {
+  for (const status of ['pendente', 'analise', 'recusado', 'transito', 'finalizado']) assert.equal(isKdsKitchenOrderEligible(status), false);
   for (const status of ['aceito', 'producao', 'pronto', null, undefined]) assert.equal(isKdsKitchenOrderEligible(status), true);
 });
 
