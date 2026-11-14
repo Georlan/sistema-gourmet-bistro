@@ -235,6 +235,25 @@ if (
   );
 }
 
+const isPublicMenuEntry = isPublicMenuRoute() && !isOperationalUtilityRoute() && !pathname.startsWith("/super-admin");
+if (isPublicMenuEntry) {
+  void Promise.all([
+    import("./config/api"),
+    import("./cardapio/publicMenuClient"),
+    import("./cardapio/popularProductsClient"),
+  ]).then(([{ API_BASE_URL: apiBaseUrl }, { fetchPublicMenu, getPublicMenuIdentifier }, { fetchPopularProducts }]) => {
+    const identifier = getPublicMenuIdentifier();
+    if (!identifier) return;
+    const isNumericIdentifier = /^\d+$/.test(identifier);
+    void fetchPublicMenu({ apiBaseUrl, identifier }).catch(() => null);
+    void fetchPopularProducts({
+      apiBaseUrl,
+      slug: isNumericIdentifier ? null : identifier,
+      restaurantId: isNumericIdentifier ? identifier : null,
+    }).catch(() => []);
+  }).catch(() => null);
+}
+
 const RootApp = React.lazy(
   pathname === "/w/c"
     ? () => import("./cardapio/WhatsAppConsentPage")
@@ -260,7 +279,7 @@ const RootApp = React.lazy(
             ? () => import("./components/auth/UnifiedOperationalEntry")
             : isOnboardingAwareManagementRoute
               ? () => import("./components/onboarding/OnboardingAwareOperationalEntry")
-              : (isPublicMenuRoute() && !isOperationalUtilityRoute() && !pathname.startsWith("/super-admin"))
+              : isPublicMenuEntry
                 ? () => import("./cardapio/CardapioPage")
                 : () => import("./App"),
 );
