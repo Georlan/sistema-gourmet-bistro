@@ -320,6 +320,22 @@ class KomaPrintAndroidCoreTest {
     }
 
     @Test
+    fun `previously selected printer cannot fall back to another paired device`() {
+        val journal = FilePrintJournal(Files.createTempDirectory("koma-missing-printer").resolve("journal.properties"))
+        val bluetooth = FakeBluetoothSppTransport()
+        val client = KomaPrintAgentClient(FakePrintAgentHttpTransport(), agentTokenProvider = { "token" })
+        val worker = AndroidPrintWorker(client, bluetooth, journal)
+        val oldPrinter = "11:22:33:44:55:66"
+        val printers = worker.resolvePrinters(oldPrinter)
+        assertTrue(printers.none { it.isDefault }, "Não escolher outra impressora silenciosamente")
+        assertNull(worker.selectTargetPrinter(printers, oldPrinter))
+        val outcome = worker.runCycle(preferredPrinterAddress = oldPrinter, includeHeartbeat = false)
+        assertFalse(outcome.printerDispatchable)
+        assertEquals(0, outcome.claimedCount)
+        assertEquals(0, bluetooth.sentPayloads.size)
+    }
+
+    @Test
     fun `BluetoothReconnectPolicy chunks payload and OemCompatibilityPolicy covers Android 8 to 14+`() {
         val policy = BluetoothReconnectPolicy(chunkSizeBytes = 128, interChunkPauseMs = 5L)
         val out = ByteArrayOutputStream()
@@ -333,17 +349,23 @@ class KomaPrintAndroidCoreTest {
 
         // Android 8.0 (API 26) a Android 11 (API 30)
         val permsApi26 = OemCompatibilityPolicy.requiredRuntimePermissions(26)
-        assertTrue(OemCompatibilityPolicy.PERMISSION_BLUETOOTH in permsApi26)
-        assertFalse(OemCompatibilityPolicy.PERMISSION_BLUETOOTH_CONNECT in permsApi26)
+        assertTrue(permsApi26.isEmpty(), "Permissões Bluetooth anteriores a API 31 são concedidas na instalação")
 
         // Android 12 (API 31)
         val permsApi31 = OemCompatibilityPolicy.requiredRuntimePermissions(31)
-        assertTrue(OemCompatibilityPolicy.PERMISSION_BLUETOOTH_CONNECT in permsApi31)
-        assertTrue(OemCompatibilityPolicy.PERMISSION_BLUETOOTH_SCAN in permsApi31)
+        assertEquals(
+            listOf(OemCompatibilityPolicy.PERMISSION_BLUETOOTH_CONNECT),
+            permsApi31,
+            "App usa apenas dispositivos já pareados; não precisa solicitar busca Bluetooth",
+        )
 
         // Android 13+ (API 33)
         val permsApi34 = OemCompatibilityPolicy.requiredRuntimePermissions(34)
-        assertTrue(OemCompatibilityPolicy.PERMISSION_POST_NOTIFICATIONS in permsApi34)
+        assertEquals(
+            listOf(OemCompatibilityPolicy.PERMISSION_BLUETOOTH_CONNECT),
+            permsApi34,
+            "Notificação é opcional e não deve bloquear instalação/ativação do serviço",
+        )
 
         assertTrue(OemCompatibilityPolicy.lockScreenGuidanceForManufacturer("Xiaomi").contains("HyperOS"))
         assertTrue(OemCompatibilityPolicy.lockScreenGuidanceForManufacturer("samsung").contains("One UI"))
