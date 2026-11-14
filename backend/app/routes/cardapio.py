@@ -1,3 +1,4 @@
+import hmac
 import uuid
 import datetime
 import logging
@@ -297,6 +298,8 @@ def consultar_status_pedido_publico(
             payment_failed=payment_failed,
         )
 
+        from ..services.online_payments import OnlinePaymentService
+
         return {
             "id": comanda.id,
             "numero_pedido": comanda.numero_pedido,
@@ -310,17 +313,77 @@ def consultar_status_pedido_publico(
             "scheduled_released_at": schedule.released_at.isoformat() if schedule is not None and schedule.released_at else None,
             "itens": itens_payload,
             "pagamento": (
-                {
-                    "status": payment_intent.status,
-                    "cobranca_online": True,
-                    "metodo": payment_intent.method,
-                    "confirmacao_manual": payment_intent.provider == "direct_pix",
-                    "qr_code": payment_intent.qr_code,
-                    "qr_code_base64": payment_intent.qr_code_base64,
-                    "ticket_url": payment_intent.ticket_url,
-                    "expira_em": payment_intent.expires_at.isoformat() if payment_intent.expires_at else None,
-                }
+                OnlinePaymentService.public_payload(payment_intent)
                 if payment_intent is not None
                 else {"status": "pendente_no_atendimento", "cobranca_online": False}
             ),
+        }
+
+
+@router.post("/pedidos/{comanda_id}/pix-informado")
+def informar_pix_pedido_publico(
+    comanda_id: str,
+    request: Request,
+    key: str = "",
+    db: Session = Depends(get_db),
+):
+    """Registra que o cliente informou ter pago o Pix próprio do pedido.
+
+    Requer a idempotency_key (?key=...) para comprovar posse do pedido e nunca
+    aprova financeiramente o recebimento nem envia o pedido para produção.
+    """
+    clean_id = (comanda_id or "").strip()
+    clean_key = (key or "").strip()
+    rest_id = _resolve_public_order_tenant(db, clean_id, clean_key)
+    if rest_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Pedido não encontrado.",
+        )
+
+    with tenant_session_scope(db, int(rest_id)):
+        _consume_rate_limit(
+            db,
+            restaurante_id=int(rest_id),
+            scope="direct_pix_report_order",
+            raw_key=clean_id,
+            max_requests=15,
+            window_seconds=60,
+            detail="Muitas tentativas em pouco tempo. Aguarde um instante.",
+        )
+        db.commit()
+
+        comanda = db.query(Comanda).filter(
+            Comanda.restaurante_id == int(rest_id),
+            Comanda.id == clean_id,
+            Comanda.idempotency_key == clean_key,
+        ).first()
+        if not comanda or not hmac.compare_digest(str(comanda.idempotency_key or ""), clean_key):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pedido não encontrado.",
+            )
+
+        payment_intent = db.query(OnlinePaymentIntent).filter(
+            OnlinePaymentIntent.restaurante_id == int(rest_id),
+            OnlinePaymentIntent.comanda_id == comanda.id,
+        ).first()
+
+        from ..services.online_payments import OnlinePaymentService
+        from ..services.online_payments.direct_pix import report_direct_pix_payment
+
+        intent = report_direct_pix_payment(
+            db,
+            restaurant_id=int(rest_id),
+            comanda=comanda,
+            intent=payment_intent,
+        )
+        return {
+            "id": comanda.id,
+            "status": (
+                "aguardando_pagamento"
+                if intent.status in {"created", "pending"}
+                else (comanda.delivery_status or "pendente")
+            ),
+            "pagamento": OnlinePaymentService.public_payload(intent),
         }

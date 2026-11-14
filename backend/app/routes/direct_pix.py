@@ -4,7 +4,7 @@ import re
 from decimal import Decimal
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from ..config import settings
@@ -14,7 +14,11 @@ from ..security import require_permission
 from ..security import get_current_user
 from ..services.online_payments.direct_pix import normalize_key, merchant_text
 from ..services.online_payments.base import ProviderPayment
-from ..services.online_payments.account_connection import guard_receiver_change, MercadoPagoAccountConnectionError
+from ..services.online_payments.account_connection import (
+    enable_menu_pix,
+    guard_receiver_change,
+    MercadoPagoAccountConnectionError,
+)
 from ..services.online_payments.service import OnlinePaymentService, OnlinePaymentConfigurationError, OnlinePaymentValidationError
 from ..services.direct_pix_billing import close_month
 from ..services.direct_pix_test_release import TEST_TERMS_VERSION, test_registration_allowed
@@ -41,6 +45,21 @@ class ReceiptConfirmation(BaseModel):
     received_amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
     bank_reference: str = Field(pattern=r'^E[A-Za-z0-9]{31}$')
     checked_bank_statement: bool
+
+    @field_validator('bank_reference', mode='before')
+    @classmethod
+    def extract_bank_reference(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+        cleaned = value.strip()
+        if re.fullmatch(r'E[A-Za-z0-9]{31}', cleaned):
+            return cleaned
+        if any(ch.isspace() for ch in cleaned) or len(cleaned) > 32:
+            matches = re.findall(r'(?<![A-Za-z0-9])E[A-Za-z0-9]{31}(?![A-Za-z0-9])', cleaned)
+            unique = list(dict.fromkeys(matches))
+            if len(unique) == 1:
+                return unique[0]
+        return cleaned
 
 
 def available():
@@ -112,6 +131,8 @@ def save_settings(payload: PixConfiguration, db: Session = Depends(get_db), user
         if payload.enabled or changing:
             guard_receiver_change(db, restaurant_id=rest_id, provider='direct_pix',
                                   force_change=changing)
+        if payload.enabled:
+            enable_menu_pix(db, restaurant_id=rest_id)
     except MercadoPagoAccountConnectionError as exc:
         raise HTTPException(409, str(exc)) from exc
     if payload.enabled:
@@ -135,6 +156,7 @@ def save_settings(payload: PixConfiguration, db: Session = Depends(get_db), user
             action='DIRECT_PIX_TEST_ACTIVATED',
             reason='Loja autorizada explicitamente na allowlist de teste; sem contrato ou assinatura.',
             after_data={'enabled': True, 'mode': 'test', 'terms_version': TEST_TERMS_VERSION}))
+    manager.queue_committed_broadcast(db, {'event': 'config_updated'}, rest_id)
     db.commit()
     return config_payload(config)
 
@@ -144,9 +166,21 @@ def pending_receipts(db: Session = Depends(get_db), user: Usuario = Depends(requ
     rows = db.query(OnlinePaymentIntent,Comanda).join(Comanda,Comanda.id == OnlinePaymentIntent.comanda_id).filter(
         OnlinePaymentIntent.restaurante_id == require_tenant_id(), Comanda.restaurante_id == require_tenant_id(),
         OnlinePaymentIntent.provider == 'direct_pix', OnlinePaymentIntent.status.in_(['created','pending']),
-    ).order_by(OnlinePaymentIntent.created_at).limit(100).all()
-    return [{'id':intent.id, 'order_number':order.numero_pedido, 'customer':order.identificador,
-        'amount':str(intent.amount), 'status':'aguardando_aprovacao_pix'} for intent,order in rows]
+    ).order_by(
+        OnlinePaymentIntent.reconciliation_attempted_at.asc().nullslast(),
+        OnlinePaymentIntent.created_at.asc(),
+    ).limit(100).all()
+    return [{
+        'id': intent.id,
+        'order_number': order.numero_pedido,
+        'customer': order.identificador,
+        'amount': str(intent.amount),
+        'status': 'aguardando_aprovacao_pix',
+        'txid': intent.id.replace('-', '')[:25],
+        'created_at': intent.created_at.isoformat() if intent.created_at else None,
+        'customer_reported': intent.reconciliation_attempted_at is not None,
+        'customer_reported_at': intent.reconciliation_attempted_at.isoformat() if intent.reconciliation_attempted_at else None,
+    } for intent, order in rows]
 
 
 @router.post('/{intent_id}/confirm')

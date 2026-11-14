@@ -58,6 +58,7 @@ import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
 import { CardapioConditionsSummary } from "./components/CardapioOrderConditions";
 import CardapioOrdersDrawer from "./components/CardapioOrdersDrawer";
 import { ManualPixReceiptContact } from "./components/ManualPixReceiptContact";
+import { DirectPixCustomerConfirm } from "./components/DirectPixCustomerConfirm";
 import CardapioArtisticExperience from "./components/CardapioArtisticExperience";
 import { KomaLoading } from "../components/app/KomaLoading";
 import { API_BASE_URL, WS_BASE_URL } from "../config/api";
@@ -73,6 +74,7 @@ import {
 } from "./customerSession";
 import {
   isOrderStateContract,
+  OrderPaymentStatus,
   OrderStateContract,
   StoredOrder,
   loadStoredOrders,
@@ -250,6 +252,16 @@ export default function CardapioPage() {
     } finally {
       setIsRefreshingOrders(false);
     }
+  }, []);
+
+  const handleOrderPaymentUpdated = useCallback((orderId: string, nextPayment: OrderPaymentStatus) => {
+    setStoredOrders((current) =>
+      current.map((order) => (
+        order.id === orderId
+          ? { ...order, pagamento: { ...(order.pagamento || {}), ...nextPayment } }
+          : order
+      )),
+    );
   }, []);
 
   const loadRestaurantData = useCallback(async (background = false) => {
@@ -1282,10 +1294,16 @@ export default function CardapioPage() {
                   <QrCode className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
                   <div className="min-w-0">
                     <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">
-                      Primeiro: confirme o Pix
+                      {activeOrder.pagamento?.confirmacao_manual && activeOrder.pagamento?.cliente_informou_pagamento
+                        ? "Pagamento informado"
+                        : "Primeiro: confirme o Pix"}
                     </p>
                     <p className="mt-1 text-[10px] leading-relaxed text-amber-200/80">
-                      O andamento do preparo começa depois da confirmação automática do pagamento.
+                      {activeOrder.pagamento?.confirmacao_manual && activeOrder.pagamento?.cliente_informou_pagamento
+                        ? "Pagamento informado. Aguardando confirmação do restaurante."
+                        : activeOrder.pagamento?.confirmacao_manual
+                          ? "Faça o Pix e toque em Pagar Pix para avisar o restaurante."
+                          : "O andamento do preparo começa depois da confirmação automática do pagamento."}
                     </p>
                   </div>
                 </div>
@@ -1674,6 +1692,7 @@ export default function CardapioPage() {
             setStoredOrders(current => mergeLocalOrderSnapshots(loadStoredOrders(Number(activeBrand.id)), current));
           }
         }}
+        onOrderPaymentUpdated={handleOrderPaymentUpdated}
         onRealtimeStatus={handleRealtimeOrderStatus}
         onRealtimeRefresh={handleRealtimeOrderRefresh}
         isRefreshing={isRefreshingOrders}
@@ -1739,6 +1758,16 @@ export default function CardapioPage() {
             )}
 
             {pixModalOrder.pagamento.qr_code && <PixCopyCode code={pixModalOrder.pagamento.qr_code} />}
+
+            <DirectPixCustomerConfirm
+              order={pixModalOrder}
+              apiBaseUrl={API_BASE_URL}
+              onReported={(nextPayment) => {
+                const updatedPayment = { ...pixModalOrder.pagamento, ...nextPayment };
+                setPixModalOrder((current) => (current ? { ...current, pagamento: updatedPayment } : current));
+                handleOrderPaymentUpdated(pixModalOrder.id, updatedPayment);
+              }}
+            />
 
             <ManualPixReceiptContact order={pixModalOrder} phone={activeBrand?.phone} restaurantId={activeBrand?.id} />
 
