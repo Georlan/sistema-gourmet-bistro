@@ -6,7 +6,9 @@ const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'u
 
 test('home consome ranking público cacheado e mantém catálogo como fonte de verdade', () => {
   const conditions = source('../src/cardapio/components/CardapioOrderConditions.tsx');
-  assert.match(conditions, /\/api\/cardapio-digital\/populares\?restaurante_id=/);
+  const client = source('../src/cardapio/popularProductsClient.ts');
+  assert.match(conditions, /fetchPopularProducts\(/);
+  assert.match(client, /\/api\/cardapio-digital\/populares\?/);
   assert.match(conditions, /brand\.products\.map/);
   assert.match(conditions, /ids\.map\(\(id\) => byId\.get\(id\)\)/);
   assert.match(conditions, /rankedIds\.filter/);
@@ -24,7 +26,8 @@ test('Mais escolhidos só renderiza quando o ranking resolve para produtos atuai
 
 test('ranking é uma melhoria progressiva e falha sem bloquear a home', () => {
   const conditions = source('../src/cardapio/components/CardapioOrderConditions.tsx');
-  assert.match(conditions, /if \(!response\.ok\) return null/);
-  assert.match(conditions, /AbortController/);
+  const client = source('../src/cardapio/popularProductsClient.ts');
+  assert.match(client, /if \(!response\.ok\) return \[\]/);
+  assert.match(conditions, /cancelled = true/);
   assert.match(conditions, /setRankedIds\(\[\]\)/);
 });

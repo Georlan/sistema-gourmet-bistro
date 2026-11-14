@@ -19,8 +19,18 @@ class BootCompletedReceiver : BroadcastReceiver() {
         }
         val config = AgentPreferencesStore(context).load()
         if (config.isConfigured && config.autoStartEnabled) {
+            if (!AndroidBluetoothSppAdapter(context).hasBluetoothPermission()) {
+                AgentPreferencesStore(context).updateLastStatus(
+                    "Abra o KÔMA Print e permita Dispositivos próximos para retomar impressão.",
+                )
+                return
+            }
             runCatching {
                 KomaPrintForegroundService.startService(context)
+            }.onFailure {
+                AgentPreferencesStore(context).updateLastStatus(
+                    "Não foi possível reiniciar automaticamente. Abra o KÔMA Print.",
+                )
             }
         }
     }

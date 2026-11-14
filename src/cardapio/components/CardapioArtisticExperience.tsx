@@ -5,6 +5,7 @@
 
 import { DeliveryReceiptCode } from './DeliveryReceiptCode';
 import { useActivePromotions } from '../useActivePromotions';
+import { fetchPopularProducts } from '../popularProductsClient';
 import { getFulfillmentAvailability } from '../fulfillment';
 import { smartSearchMatch } from '../../domain';
 import { API_BASE_URL } from '../../config/api';
@@ -191,20 +192,20 @@ export function CardapioArtisticExperience({
   const [popularIds, setPopularIds] = useState<string[]>(() => activeBrand.popularProductIds || []);
 
   useEffect(() => {
+    let cancelled = false;
     setPopularIds([]);
     if (!activeBrand.id) return;
-    const controller = new AbortController();
-    void fetch(`${API_BASE_URL}/api/cardapio-digital/populares?restaurante_id=${encodeURIComponent(activeBrand.id)}`, {
-      signal: controller.signal,
-    }).then(async response => response.ok ? response.json() : null)
-      .then(payload => {
-        if (controller.signal.aborted || !payload) return;
-        setPopularIds(Array.isArray(payload.produtos)
-          ? payload.produtos.map((item: { produto_id: string | number }) => String(item.produto_id))
-          : []);
-      }).catch(() => { /* O hero continua disponível pelo catálogo. */ });
-    return () => controller.abort();
-  }, [activeBrand.id]);
+    void fetchPopularProducts({
+      apiBaseUrl: API_BASE_URL,
+      slug: activeBrand.slug,
+      restaurantId: activeBrand.id,
+    })
+      .then((ids) => {
+        if (!cancelled) setPopularIds(ids);
+      })
+      .catch(() => { /* O hero continua disponível pelo catálogo. */ });
+    return () => { cancelled = true; };
+  }, [activeBrand.id, activeBrand.slug]);
 
   // Promoções vigentes da marca (combos por composição)
   const offers = useActivePromotions(activeBrand.promotions);
@@ -789,13 +790,13 @@ export function CardapioArtisticExperience({
                 <strong>
                   {activeOrder.pagamento?.confirmacao_manual && activeOrder.pagamento?.cliente_informou_pagamento
                     ? 'Pagamento informado'
-                    : 'Primeiro: confirme o Pix'}
+                    : activeOrder.pagamento?.confirmacao_manual ? 'Pix aguardando conferência' : 'Primeiro: confirme o Pix'}
                 </strong>
                 <p>
                   {activeOrder.pagamento?.confirmacao_manual && activeOrder.pagamento?.cliente_informou_pagamento
                     ? 'Pagamento informado. Aguardando confirmação do restaurante.'
                     : activeOrder.pagamento?.confirmacao_manual
-                      ? 'Faça o Pix e toque em Pagar Pix para avisar o restaurante.'
+                      ? 'Pague o Pix. O restaurante já vê o pedido; avisar que pagou é opcional.'
                       : 'O andamento do preparo começa depois da confirmação automática do pagamento.'}
                 </p>
               </div>

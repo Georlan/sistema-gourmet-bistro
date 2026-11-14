@@ -8,11 +8,18 @@ import ReactDOM from "react-dom/client";
 import "./index.css";
 import "./landing/siara-event.css";
 import "./components/shared/operationalHeader.css";
-import { CustomerSupportWidget } from "./components/app/CustomerSupportWidget";
 import { KomaLoading } from "./components/app/KomaLoading";
-import { TenantSuspensionBoundary } from "./components/auth/TenantSuspensionBoundary";
 import { initializeKomaTheme } from "./config/theme";
 import { AppRecoveryBoundary } from "./components/auth/AppRecoveryBoundary";
+
+const CustomerSupportWidget = React.lazy(() =>
+  import("./components/app/CustomerSupportWidget").then((module) => ({
+    default: module.CustomerSupportWidget,
+  })),
+);
+const TenantSuspensionBoundary = React.lazy(
+  () => import("./components/auth/TenantSuspensionBoundary"),
+);
 import { SupportCodeNotice } from "./components/app/SupportCodeNotice";
 import { installSupportCodeObserver } from "./utils/supportCode";
 import { AnalyticsProvider, initAnalytics } from "./analytics";
@@ -270,7 +277,9 @@ const RootApp = React.lazy(
             ? () => import("./components/auth/UnifiedOperationalEntry")
             : isOnboardingAwareManagementRoute
               ? () => import("./components/onboarding/OnboardingAwareOperationalEntry")
-              : () => import("./App"),
+              : (isPublicMenuRoute() && !isOperationalUtilityRoute() && !pathname.startsWith("/super-admin"))
+                ? () => import("./cardapio/CardapioPage")
+                : () => import("./App"),
 );
 
 const RouteLoading = () => (pathname === "/recuperar-senha" || pathname === "/confirmar-cadastro")
@@ -285,17 +294,30 @@ async function mountApplication() {
   if (isUnifiedOperationalRoute || isOnboardingAwareManagementRoute || isEmbeddedOperationalPreview || pathname.startsWith("/entregador")) {
     await initializeTabSessionOwnership();
   }
+  const appTree = (
+    <>
+      <React.Suspense fallback={<RouteLoading />}>
+        <RootApp />
+      </React.Suspense>
+      {hasCustomerSupportSurface ? (
+        <React.Suspense fallback={null}>
+          <CustomerSupportWidget />
+        </React.Suspense>
+      ) : null}
+      <SupportCodeNotice />
+    </>
+  );
   ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <AnalyticsProvider disabled={isWhatsAppPrivateRoute}>
       <AppRecoveryBoundary>
-      <TenantSuspensionBoundary disabled={bypassTenantSuspensionBoundary()}>
-        <React.Suspense fallback={<RouteLoading />}>
-          <RootApp />
-        </React.Suspense>
-        {hasCustomerSupportSurface ? <CustomerSupportWidget /> : null}
-        <SupportCodeNotice />
-      </TenantSuspensionBoundary>
+        {bypassTenantSuspensionBoundary() ? (
+          appTree
+        ) : (
+          <React.Suspense fallback={<RouteLoading />}>
+            <TenantSuspensionBoundary>{appTree}</TenantSuspensionBoundary>
+          </React.Suspense>
+        )}
       </AppRecoveryBoundary>
     </AnalyticsProvider>
   </React.StrictMode>,

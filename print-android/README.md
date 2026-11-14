@@ -24,3 +24,36 @@ Reutiliza integralmente o **Core Universal de Impressão** e os endpoints oficia
 ```bash
 gradle -p print-android test :app:assembleDebug --no-daemon
 ```
+
+
+## Instalação rápida no restaurante (v1.1.0)
+
+1. Ligue a impressora e pareie com o Android em Configurações → Bluetooth.
+   O app trabalha com dispositivos pareados e não exige busca/localização.
+2. Instale o APK e abra KÔMA Print. No Android 12+, permita Dispositivos próximos.
+3. No Caixa KÔMA da loja, abra Configurações → Impressão → Conectar celular.
+   Confirme o nome da loja no app; não digite tokens manualmente.
+4. Em Impressora Bluetooth, escolha a impressora de 58 mm. Se houver mais
+   de uma, toque em Salvar impressora escolhida.
+5. Toque em Imprimir Teste 58 mm e confira fisicamente o papel.
+6. Confirme KÔMA online • monitorando pedidos. O serviço usa notificação de
+   primeiro plano para continuar trabalhando com a tela bloqueada.
+
+Bateria: a isenção de otimização não é pré-requisito de instalação.
+Se o fabricante suspender a impressão com a tela bloqueada, abra a seção
+Configuração Manual (Avançada) e use Liberar Bateria, somente quando necessário.
+
+Falha ou troca de impressora: se a preferida desaparecer, o KÔMA não desvia
+comandas para outro dispositivo. Pareie novamente ou escolha e salve outra.
+Confira a fila no Caixa antes de reconfigurar o agente. O diário local protege
+contra reimpressões acidentais após oscilações de rede.
+
+Atualizações: o APK precisa ser atualizado para instalar mudanças do aplicativo.
+Alterações do texto da comanda no backend passam a valer para novos pedidos
+sem nova instalação.
+
+Sobre o APK de CI: app-debug.apk é um build de teste. A assinatura debug
+pode mudar entre runners do GitHub e impedir atualização sobre outra build.
+Não desinstale um agente com trabalhos pendentes: reconcilie a fila antes de
+reinstalar e reconfigurar. A distribuição final precisa de assinatura de
+release persistente controlada pelo projeto.

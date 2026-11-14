@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {QrCode, X} from 'lucide-react';
+import {QrCode, X, MessageCircle, Copy} from 'lucide-react';
+import {buildWhatsAppContactUrl} from '../../../config/whatsappUtils';
 import {authFetch,authRequestErrorMessage} from '../../../utils/authRequest';
 import {formatCurrency} from '../cashierPresentation';
 import {startPendingPixPolling} from './pendingPixPolling';
@@ -8,6 +9,7 @@ type Pending = {
   id: string;
   order_number: string;
   customer: string;
+  customer_phone?: string | null;
   amount: string;
   txid?: string | null;
   created_at?: string | null;
@@ -20,6 +22,20 @@ export function normalizeDirectPixReference(raw: string): string {
   const match = raw.match(/(?:^|[^A-Za-z0-9])(E[A-Za-z0-9]{31})(?:[^A-Za-z0-9]|$)/);
   if (match?.[1]) return match[1];
   return raw.trim().slice(0, 32);
+}
+
+export function isValidDirectPixBankReference(reference: string, txid?: string | null): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._/-]{5,31}$/.test(reference)
+    && reference.toLowerCase() !== (txid || '').toLowerCase();
+}
+
+function pendingPixWhatsAppUrl(row: Pending): string {
+  const base = buildWhatsAppContactUrl(row.customer_phone);
+  if (!base) return '';
+  const message = 'Olá! Sobre o Pix do pedido #' + row.order_number +
+    ' (' + formatCurrency(Number(row.amount)) + '): pode nos enviar o comprovante para conferência? ' +
+    'A liberação depende da verificação do recebimento no banco.';
+  return base + '?text=' + encodeURIComponent(message);
 }
 
 function formatShortTime(iso?: string | null): string {
@@ -108,32 +124,32 @@ export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:P
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <p className="text-xs text-koma-muted">Confira o recebimento no extrato bancário. Comprovante ou aviso do cliente não confirma o pagamento.</p>
           {!rows.length && <p className="mt-4 text-sm text-koma-muted">Nenhum Pix aguardando conferência.</p>}
-    <div className="mt-3 flex flex-wrap gap-2">{rows.map(row => {
+
+    <div className="mt-3 space-y-2">{rows.map(row => {
       const reportedTime = formatShortTime(row.customer_reported_at);
+      const whatsappUrl = pendingPixWhatsAppUrl(row);
       return (
-        <button
-          type="button"
-          key={row.id}
-          className={`min-h-11 rounded-lg border px-3 py-1.5 text-left text-xs text-koma-foreground ${
-            row.customer_reported
-              ? 'border-emerald-500/60 bg-emerald-500/10'
-              : 'border-koma-border'
-          }`}
-          onClick={() => {
-            setSelected(row);
-            setNotReceived(false);
-            setChecked(false);
-            setReference('');
-            setError('');
-          }}
-        >
-          <span className="block font-semibold">Pedido #{row.order_number} · {formatCurrency(Number(row.amount))}</span>
-          {row.customer_reported && (
-            <span data-testid={`direct-pix-reported-${row.id}`} className="mt-0.5 block text-[11px] font-bold text-emerald-400">
-              Cliente informou o Pix{reportedTime ? ` · ${reportedTime}` : ''}
+        <div key={row.id} className={'rounded-lg border p-2 ' + (row.customer_reported ? 'border-emerald-500/60 bg-emerald-500/10' : 'border-koma-border')}>
+          <button
+            type="button"
+            className="min-h-11 w-full rounded-md px-1 py-1 text-left text-xs text-koma-foreground"
+            onClick={() => {
+              setSelected(row);
+              setNotReceived(false);
+              setChecked(false);
+              setReference('');
+              setError('');
+            }}
+          >
+            <span className="block font-semibold">Pedido #{row.order_number} · {formatCurrency(Number(row.amount))}</span>
+            <span className="mt-1 block">{row.customer || 'Cliente não informado'}</span>
+            {row.customer_phone && <span className="mt-0.5 block text-koma-muted">Tel.: {row.customer_phone}</span>}
+            <span data-testid={'direct-pix-reported-' + row.id} className={'mt-1 block text-[11px] ' + (row.customer_reported ? 'font-bold text-emerald-400' : 'text-koma-muted')}>
+              {row.customer_reported ? 'Cliente informou o Pix' + (reportedTime ? ' · ' + reportedTime : '') : 'Aguardando pagamento / conferência'}
             </span>
-          )}
-        </button>
+          </button>
+          {whatsappUrl && <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center gap-2 rounded-md border border-emerald-600/50 px-2 text-xs text-emerald-300"><MessageCircle size={14}/> Solicitar comprovante pelo WhatsApp</a>}
+        </div>
       );
     })}</div>
     {selected && <div className="mt-4 space-y-3">
@@ -144,15 +160,25 @@ export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:P
             data-testid={`direct-pix-selected-status-${selected.id}`}
             className={selected.customer_reported ? 'font-bold text-emerald-400' : 'text-koma-muted'}
           >
-            {selected.customer_reported ? 'Cliente informou o Pix' : 'Aguardando aviso do cliente'}
+            {selected.customer_reported ? 'Cliente informou o Pix' : 'Aguardando pagamento / conferência'}
           </span>
-          {selected.txid && <span className="font-mono text-koma-muted">Ref: {selected.txid}</span>}
+
+
         </div>
       </div>
-      <label className="block text-xs text-koma-foreground">Identificador do Pix no extrato (EndToEndId)<input className="mt-1 w-full rounded-lg border border-koma-border bg-koma-page p-3" value={reference} onChange={e=>setReference(normalizeDirectPixReference(e.target.value))} /></label>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
+        <div><p className="text-[11px] text-koma-muted">Código para localizar e compartilhar</p><strong className="text-lg text-emerald-300">Pedido #{selected.order_number}</strong></div>
+        <button type="button" className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-koma-border px-2 text-xs" onClick={() => { void navigator.clipboard.writeText('Pedido #' + selected.order_number).catch(() => setError('Não foi possível copiar o número do pedido.')); }}><Copy size={14}/> Copiar</button>
+      </div>
+      {pendingPixWhatsAppUrl(selected) && <a href={pendingPixWhatsAppUrl(selected)} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-emerald-500/40 px-3 text-xs text-emerald-300"><MessageCircle size={15}/> Solicitar comprovante no WhatsApp · {selected.customer_phone}</a>}
+      <p className="text-xs text-koma-muted">O pedido já está nesta fila mesmo se o cliente fechar a página sem avisar. O comprovante não substitui a conferência no banco.</p>
+      <label className="block text-xs text-koma-foreground">ID da transferência no extrato bancário
+        <input className="mt-1 w-full rounded-lg border border-koma-border bg-koma-page p-3" aria-label="Identificador do Pix no extrato (EndToEndId)" placeholder="EndToEndId ou número da operação do banco" value={reference} onChange={e=>setReference(normalizeDirectPixReference(e.target.value))} />
+        <span className="mt-1 block text-[11px] text-koma-muted">Informe o ID do recebimento no banco (6–32 caracteres). Não use o código do pedido nem o TXID do QR.</span>
+      </label>
       <label className="flex min-h-11 items-center gap-2 text-xs text-koma-muted"><input type="checkbox" checked={checked} onChange={e=>setChecked(e.target.checked)}/>Conferi o valor integral recebido na conta correta.</label>
       <label className="flex min-h-11 items-center gap-2 text-xs text-koma-muted"><input type="checkbox" checked={notReceived} onChange={e=>setNotReceived(e.target.checked)}/>Para cancelar: conferi que o pagamento não foi recebido.</label>
-      <div className="flex flex-wrap gap-2"><button type="button" disabled={busy || !checked || !/^E[A-Za-z0-9]{31}$/.test(reference)} onClick={()=>void resolve(false)} className="min-h-11 rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white disabled:opacity-50">Confirmar Pagamento Pix</button><button type="button" disabled={busy || !notReceived} onClick={()=>void resolve(true)} className="min-h-11 rounded-lg border border-koma-border px-3 text-xs text-koma-foreground">Cancelar pedido</button></div>
+      <div className="flex flex-wrap gap-2"><button type="button" disabled={busy || !checked || !isValidDirectPixBankReference(reference,selected.txid)} onClick={()=>void resolve(false)} className="min-h-11 rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white disabled:opacity-50">Confirmar Pagamento Pix</button><button type="button" disabled={busy || !notReceived} onClick={()=>void resolve(true)} className="min-h-11 rounded-lg border border-koma-border px-3 text-xs text-koma-foreground">Cancelar pedido</button></div>
       <p className="text-xs text-koma-muted">Cancelar o pedido não invalida o QR no banco. Confira recebimentos tardios e devolva pelo aplicativo bancário se necessário.</p>
       {error && <p role="alert" className="text-xs text-koma-foreground">{error}</p>}
     </div>}

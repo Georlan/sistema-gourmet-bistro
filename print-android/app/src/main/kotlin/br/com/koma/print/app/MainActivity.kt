@@ -99,20 +99,22 @@ class MainActivity : Activity() {
         val scheme = data.scheme.orEmpty().lowercase()
         val host = data.host.orEmpty().lowercase()
 
-        Log.i(TAG, "handleIncomingIntent: scheme=$scheme host=$host uri=$data")
+        Log.i(TAG, "handleIncomingIntent: scheme=$scheme host=$host")
 
         if (scheme == "koma-print" && host == "connect") {
             val backendUrl = data.getQueryParameter("backend")
                 ?.takeIf { it.isNotBlank() } ?: "https://sistema-gourmet-bistro-production.up.railway.app"
-            val tenantId = data.getQueryParameter("tenant")?.toIntOrNull() ?: 1
+            val tenantId = data.getQueryParameter("tenant")?.toIntOrNull()
             val restaurantName = data.getQueryParameter("name")
-                ?.takeIf { it.isNotBlank() } ?: "Restaurante #$tenantId"
+                ?.takeIf { it.isNotBlank() } ?: "Restaurante KÔMA"
             val agentId = data.getQueryParameter("agent_id")
-                ?.takeIf { it.isNotBlank() } ?: "android-bt-$tenantId"
+                ?.takeIf { it.isNotBlank() } ?: store.stableDeviceId()
             val token = data.getQueryParameter("token").orEmpty()
 
-            if (token.isBlank()) {
-                toast("Link de conexão inválido (token ausente).")
+            if (tenantId == null || tenantId <= 0 || token.isBlank() ||
+                !isSecureBackendUrl(backendUrl)
+            ) {
+                toast("Link inválido. Gere outro link nas configurações de impressão do KÔMA.")
                 return
             }
 
@@ -131,8 +133,14 @@ class MainActivity : Activity() {
                 .setNegativeButton("Cancelar", null)
                 .show()
         } else if (scheme == "koma-print" && host == "start") {
-            KomaPrintForegroundService.startService(this)
-            toast("Serviço KÔMA Print iniciado.")
+            if (store.load().isConfigured && btAdapter.hasBluetoothPermission()) {
+                runCatching { KomaPrintForegroundService.startService(this) }
+                    .onSuccess { toast("Impressão automática ativada.") }
+                    .onFailure { toast("Não foi possível iniciar. Abra o app para verificar.") }
+            } else {
+                requestMissingRuntimePermissions()
+                toast("Vincule o restaurante e autorize Dispositivos próximos.")
+            }
             refreshUiFromStore()
         }
     }
@@ -144,7 +152,6 @@ class MainActivity : Activity() {
         agentId: String,
         token: String,
     ) {
-        saveSelectedPrinterPreference()
         store.saveCredentials(
             backendUrl = backendUrl,
             agentId = agentId,
@@ -155,10 +162,18 @@ class MainActivity : Activity() {
         store.updateLastStatus("Conectado ao restaurante $restaurantName (#$tenantId).")
         Log.i(TAG, "Conexão confirmada com sucesso: $restaurantName (#$tenantId), agent=$agentId")
 
-        KomaPrintForegroundService.startService(this)
-        requestBatteryOptimizationExemption()
+        if (btAdapter.hasBluetoothPermission()) {
+            runCatching { KomaPrintForegroundService.startService(this) }
+                .onFailure {
+                    store.setAutoStartEnabled(false)
+                    store.updateLastStatus("Vinculado; toque em Ativar impressão automática.")
+                }
+        } else {
+            store.setAutoStartEnabled(false)
+            requestMissingRuntimePermissions()
+        }
         refreshUiFromStore()
-        toast("Conectado ao $restaurantName com sucesso!")
+        toast("Loja $restaurantName vinculada. Confira a impressora e faça um teste.")
     }
 
     private fun buildContentView(): ScrollView {
@@ -179,7 +194,7 @@ class MainActivity : Activity() {
             setTextColor(Color.parseColor("#F8FAFC"))
         }
         val subtitle = TextView(this).apply {
-            text = "Agente de Impressão Direta Bluetooth SPP (Kapbom KA-1445)"
+            text = "Pedidos automáticos • Impressora térmica Bluetooth 58 mm"
             textSize = 13f
             setTextColor(Color.parseColor("#94A3B8"))
             setPadding(0, dp(4), 0, dp(14))
@@ -259,6 +274,19 @@ class MainActivity : Activity() {
         )
         root.addView(btButtonsRow)
 
+        root.addView(actionButton("Abrir Bluetooth para parear", "#475569") {
+            startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
+        })
+        root.addView(actionButton("Salvar impressora escolhida", "#0F766E") {
+            val selected = saveSelectedPrinterPreference()
+            if (selected == null) {
+                toast("Pareie uma impressora nas configurações Bluetooth primeiro.")
+            } else {
+                toast("Impressora selecionada: " + selected.name)
+                refreshPairedPrinters()
+            }
+        })
+
         // 3. Operação em Segundo Plano (Tela Bloqueada)
         root.addView(sectionHeader("Operação em Segundo Plano (Tela Bloqueada)"))
         serviceStatusView = TextView(this).apply {
@@ -279,17 +307,27 @@ class MainActivity : Activity() {
         batteryExemptionBtn = actionButton("Liberar Bateria do Fabricante (Sem Restrições)", "#D97706") {
             requestBatteryOptimizationExemption()
         }
-        root.addView(batteryExemptionBtn)
-
+        // Ajuste de bateria é opcional: fica em Avançado, não bloqueia o onboarding.
         val serviceRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, dp(8), 0, dp(16))
         }
-        startServiceBtn = actionButton("Iniciar Serviço 2º Plano", "#059669") {
-            saveSelectedPrinterPreference()
-            KomaPrintForegroundService.startService(this)
-            toast("Serviço KÔMA Print iniciado.")
-            refreshUiFromStore()
+        startServiceBtn = actionButton("Ativar impressão automática", "#059669") {
+            if (!btAdapter.hasBluetoothPermission()) {
+                requestMissingRuntimePermissions()
+                toast("Autorize Dispositivos próximos para imprimir por Bluetooth.")
+            } else if (!store.load().isConfigured) {
+                toast("Vincule primeiro o restaurante pelo Caixa KÔMA.")
+            } else {
+                saveSelectedPrinterPreference()
+                runCatching { KomaPrintForegroundService.startService(this) }
+                    .onSuccess { toast("Impressão automática ativada.") }
+                    .onFailure {
+                        store.setAutoStartEnabled(false)
+                        toast("Não foi possível iniciar o serviço. Verifique as permissões.")
+                    }
+                refreshUiFromStore()
+            }
         }
         stopServiceBtn = actionButton("Pausar Serviço", "#64748B") {
             KomaPrintForegroundService.stopService(this)
@@ -323,11 +361,13 @@ class MainActivity : Activity() {
             setPadding(pad, pad, pad, pad)
             setBackgroundColor(Color.parseColor("#1E293B"))
         }
+        advancedSection.addView(sectionHeader("Bateria (opcional)"))
+        advancedSection.addView(batteryExemptionBtn)
 
         backendUrlInput = labeledInput(advancedSection, "URL da API KÔMA", "https://sistema-gourmet-bistro-production.up.railway.app")
-        restauranteIdInput = labeledInput(advancedSection, "ID do Restaurante", "1", InputType.TYPE_CLASS_NUMBER)
-        restaurantNameInput = labeledInput(advancedSection, "Nome no Cupom", "JE LANCHES")
-        agentIdInput = labeledInput(advancedSection, "Identificador deste Celular (Agent ID)", "android-je-lanches-01")
+        restauranteIdInput = labeledInput(advancedSection, "ID do Restaurante", "", InputType.TYPE_CLASS_NUMBER)
+        restaurantNameInput = labeledInput(advancedSection, "Nome da loja", "Restaurante KÔMA")
+        agentIdInput = labeledInput(advancedSection, "Identificador deste Celular (Agent ID)", store.stableDeviceId())
         usernameInput = labeledInput(advancedSection, "E-mail / Usuário Operador KÔMA", "")
         passwordInput = labeledInput(
             advancedSection,
@@ -351,7 +391,7 @@ class MainActivity : Activity() {
         val batteryOk = isIgnoringBatteryOptimizations()
 
         if (cfg.isConfigured) {
-            connectionTitleView.text = "● Conectado: ${cfg.restaurantName} (#${cfg.restauranteId})"
+            connectionTitleView.text = "● Vinculado: ${cfg.restaurantName} (#${cfg.restauranteId})"
             connectionTitleView.setTextColor(Color.parseColor("#10B981"))
             connectionDetailView.text = "Agente: ${cfg.agentId}\nServidor: ${cfg.backendUrl}\nStatus: ${cfg.lastStatusSummary}"
             disconnectButton.visibility = View.VISIBLE
@@ -368,24 +408,31 @@ class MainActivity : Activity() {
         agentIdInput.setText(cfg.agentId)
 
         if (cfg.autoStartEnabled && cfg.isConfigured) {
-            serviceStatusView.text = "● Serviço em segundo plano ativo"
-            serviceStatusView.setTextColor(Color.parseColor("#10B981"))
+            val lastContact = cfg.lastBackendContactEpochMs
+            val recentlyOnline = lastContact > 0L &&
+                (System.currentTimeMillis() - lastContact) in 0L..120_000L
+            serviceStatusView.text = if (recentlyOnline) {
+                "● KÔMA online • monitorando pedidos"
+            } else {
+                "○ Iniciado • aguardando resposta do KÔMA"
+            }
+            serviceStatusView.setTextColor(Color.parseColor(if (recentlyOnline) "#10B981" else "#F59E0B"))
             startServiceBtn.visibility = View.GONE
             stopServiceBtn.visibility = View.VISIBLE
         } else {
-            serviceStatusView.text = "○ Serviço em segundo plano pausado"
+            serviceStatusView.text = "○ Impressão automática pausada"
             serviceStatusView.setTextColor(Color.parseColor("#94A3B8"))
             startServiceBtn.visibility = View.VISIBLE
             stopServiceBtn.visibility = View.GONE
         }
 
         if (batteryOk) {
-            batteryStatusView.text = "✓ Bateria livre de restrições (Pronto para imprimir com celular bloqueado)"
-            batteryStatusView.setTextColor(Color.parseColor("#10B981"))
+            batteryStatusView.text = "✓ Bateria sem restrições extras."
+            batteryStatusView.setTextColor(Color.parseColor("#CBD5E1"))
             batteryExemptionBtn.visibility = View.GONE
         } else {
-            batteryStatusView.text = OemCompatibilityPolicy.lockScreenGuidanceForManufacturer(Build.MANUFACTURER)
-            batteryStatusView.setTextColor(Color.parseColor("#FDE68A"))
+            batteryStatusView.text = "Se os pedidos pararem com a tela bloqueada, veja Bateria em Avançado."
+            batteryStatusView.setTextColor(Color.parseColor("#94A3B8"))
             batteryExemptionBtn.visibility = View.VISIBLE
         }
     }
@@ -404,16 +451,32 @@ class MainActivity : Activity() {
         printerSpinner.adapter = adapter
 
         if (pairedPrinters.isNotEmpty()) {
-            val idx = pairedPrinters.indexOfFirst {
+            val savedIndex = pairedPrinters.indexOfFirst {
                 it.normalizedAddress.equals(cfg.preferredPrinterAddress, ignoreCase = true)
-            }.takeIf { it >= 0 } ?: 0
-            printerSpinner.setSelection(idx)
-            val chosen = pairedPrinters[idx]
-            store.savePreferredPrinter(chosen.name, chosen.normalizedAddress)
-            printerStatusView.text = "Impressora ativa: ${chosen.name} (${chosen.normalizedAddress})"
-            Log.i(TAG, "Impressora Bluetooth ativa selecionada: ${chosen.name} (${chosen.normalizedAddress})")
+            }
+            if (savedIndex >= 0) {
+                printerSpinner.setSelection(savedIndex)
+                val chosen = pairedPrinters[savedIndex]
+                printerStatusView.text = "Escolhida: " + chosen.name + " • pronta para tentativa Bluetooth."
+            } else if (cfg.preferredPrinterAddress.isNotBlank()) {
+                printerSpinner.setSelection(0)
+                printerStatusView.text = "Impressora anterior não encontrada (" +
+                    cfg.preferredPrinterName + "). Pareie ou salve outra."
+            } else if (pairedPrinters.size == 1) {
+                val chosen = pairedPrinters.first()
+                printerSpinner.setSelection(0)
+                store.savePreferredPrinter(chosen.name, chosen.normalizedAddress)
+                printerStatusView.text = "Detectada: " + chosen.name + " • pronta para teste."
+            } else {
+                printerSpinner.setSelection(0)
+                printerStatusView.text = "Escolha a impressora e toque em Salvar impressora escolhida."
+            }
         } else {
-            printerStatusView.text = "Pareie a impressora térmica nas configurações Bluetooth do Android."
+            printerStatusView.text = if (!btAdapter.hasBluetoothPermission()) {
+                "Autorize Dispositivos próximos para ver as impressoras pareadas."
+            } else {
+                "Nenhuma impressora pareada. Use Abrir Bluetooth para parear."
+            }
         }
     }
 
@@ -445,7 +508,7 @@ class MainActivity : Activity() {
             val result = btAdapter.sendRawPayload(target, payload)
             runOnUiThread {
                 if (result.success) {
-                    val msg = "Teste 58mm impresso com sucesso em ${target.name} (${result.bytesWritten} bytes)."
+                    val msg = "Teste enviado à impressora. Confira se o papel saiu corretamente."
                     store.updateLastStatus(msg)
                     toast(msg)
                     Log.i(TAG, msg)
@@ -462,14 +525,16 @@ class MainActivity : Activity() {
 
     private fun performManualLoginAndRegister() {
         val backendUrl = backendUrlInput.text?.toString()?.trim()?.trimEnd('/').orEmpty()
-        val restauranteId = restauranteIdInput.text?.toString()?.trim()?.toIntOrNull() ?: 1
-        val restaurantName = restaurantNameInput.text?.toString()?.trim().orEmpty().ifBlank { "JE LANCHES" }
-        val agentId = agentIdInput.text?.toString()?.trim().orEmpty().ifBlank { "android-je-lanches-01" }
+        val restauranteId = restauranteIdInput.text?.toString()?.trim()?.toIntOrNull()
+        val restaurantName = restaurantNameInput.text?.toString()?.trim().orEmpty().ifBlank { "Restaurante KÔMA" }
+        val agentId = agentIdInput.text?.toString()?.trim().orEmpty().ifBlank { store.stableDeviceId() }
         val username = usernameInput.text?.toString()?.trim().orEmpty()
         val password = passwordInput.text?.toString().orEmpty()
 
-        if (backendUrl.isBlank() || username.isBlank() || password.isBlank()) {
-            toast("Preencha URL da API, usuário/e-mail e senha do operador KÔMA.")
+        if (!isSecureBackendUrl(backendUrl) || restauranteId == null ||
+            restauranteId <= 0 || username.isBlank() || password.isBlank()
+        ) {
+            toast("Informe URL HTTPS, ID da loja, usuário e senha do KÔMA.")
             return
         }
 
@@ -496,9 +561,15 @@ class MainActivity : Activity() {
                 store.updateLastStatus("Agente ${credentials.agentId} vinculado ao Restaurante #${credentials.restauranteId}.")
                 runOnUiThread {
                     passwordInput.setText("")
-                    KomaPrintForegroundService.startService(this)
+                    if (btAdapter.hasBluetoothPermission()) {
+                        runCatching { KomaPrintForegroundService.startService(this) }
+                            .onFailure { store.setAutoStartEnabled(false) }
+                    } else {
+                        store.setAutoStartEnabled(false)
+                        requestMissingRuntimePermissions()
+                    }
                     refreshUiFromStore()
-                    toast("Celular vinculado com sucesso! Impressão automática ativada.")
+                    toast("Celular vinculado. Confira a impressora e faça um teste.")
                 }
             } catch (err: Throwable) {
                 runOnUiThread {
@@ -509,6 +580,31 @@ class MainActivity : Activity() {
                 }
             }
         }.start()
+    }
+
+    private fun isSecureBackendUrl(raw: String): Boolean {
+        val parsed = runCatching { Uri.parse(raw.trim()) }.getOrNull() ?: return false
+        return parsed.scheme.equals("https", ignoreCase = true) &&
+            !parsed.host.isNullOrBlank() &&
+            !parsed.authority.orEmpty().contains("@")
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_PERMISSIONS_CODE) {
+            refreshPairedPrinters()
+            if (btAdapter.hasBluetoothPermission() && store.load().isConfigured &&
+                !store.load().autoStartEnabled
+            ) {
+                runCatching { KomaPrintForegroundService.startService(this) }
+                    .onFailure { store.setAutoStartEnabled(false) }
+            }
+            refreshUiFromStore()
+        }
     }
 
     private fun requestMissingRuntimePermissions() {
