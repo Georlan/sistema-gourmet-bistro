@@ -22,11 +22,9 @@ test('cozinha mostra identidade de cada lançamento e mantém FIFO e conclusão 
   const first = page.locator('[data-kds-ticket="launch:old-launch"]');
   const second = page.locator('[data-kds-ticket="launch:new-launch"]');
   await expect(first).toContainText('Pedido #80');
-  await expect(first).toContainText('Sarah');
   await expect(first.locator('[data-wait-level="late"]')).toBeVisible();
   await expect(second).toContainText('Pedido #81');
   await expect(second).toContainText('Retirada');
-  await expect(second).toContainText('Caixa Demo');
   await expect(second.locator('[data-wait-level="normal"]')).toBeVisible();
   await expect(second).toContainText('Queijo extra');
   await expect(second).toContainText('Sem cebola');

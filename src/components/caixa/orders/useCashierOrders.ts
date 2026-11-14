@@ -1,4 +1,5 @@
 import { createCoalescedRefresh } from '../../../utils/coalescedRefresh';
+import { confirmKdsBatch } from '../kitchen/confirmKdsBatch';
 import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import { orderUpdateAffects } from '../../../utils/orderUpdate';
 import React, { useEffect, useRef, useState } from 'react';
@@ -50,6 +51,9 @@ export function useCashierOrders({
   setIsLoading,
 }: Props) {
   const [selectedKanbanOrder, setSelectedKanbanOrder] = useState<any>(null);
+  // An ACK from a previous operator/tenant must not mutate the new snapshot.
+  const kitchenAuthScopeRef = useRef(authHeaders.Authorization);
+  kitchenAuthScopeRef.current = authHeaders.Authorization;
 
   const [cancelConsumptionTarget, setCancelConsumptionTarget] = useState<{
     scope: 'order' | 'table' | 'digital';
@@ -1150,25 +1154,44 @@ export function useCashierOrders({
     }
   };
 
+  /** ACK first, local confirmed state immediately, background snapshot later.
+   * A stalled full-comandas GET must never hold the next item button hostage. */
   const handleUpdateItemStatus = async (itemId: string, newStatus: 'preparando' | 'pronto' | 'entregue') => {
-    // KDS readiness is acknowledged only after the canonical order confirms it.
-    // Optimistic status could leave a failed item looking ready until the next refresh.
+    const scope = authHeaders.Authorization;
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/itens/${itemId}/status?status=${newStatus}${newStatus === 'pronto' ? '&avancar_pedido=true' : ''}`, {
-        method: 'PUT',
-        headers: authHeaders,
+        method: 'PUT', headers: authHeaders,
       });
       if (!res.ok) {
-        showToast('Não foi possível atualizar o item na cozinha. Confira o pedido.', 'error');
-        await onRefreshOrders();
+        showToast('Não foi possível confirmar este item. Confira o pedido.', 'error');
+        void onRefreshOrders();
         return false;
       }
-      await onRefreshOrders();
+      if (scope !== kitchenAuthScopeRef.current) return false;
+      onOptimisticUpdateItemStatus?.(itemId, newStatus); // server-confirmed, not speculative
+      void onRefreshOrders();
       return true;
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error('KDS status confirmation failed', error);
       showToast('Sem conexão para confirmar o preparo. Tente novamente.', 'error');
-      try { await onRefreshOrders(); } catch (refreshError) { console.error('KDS reconciliation failed', refreshError); }
+      void onRefreshOrders();
+      return false;
+    }
+  };
+
+  /** A whole-ticket operation makes one transaction and one snapshot request. */
+  const handleConfirmTicketReady = async (itemIds: string[]): Promise<boolean> => {
+    const scope = authHeaders.Authorization;
+    try {
+      const confirmed = await confirmKdsBatch({ apiBaseUrl, authHeaders, itemIds });
+      if (scope !== kitchenAuthScopeRef.current) return false;
+      onOptimisticUpdateItemStatus?.(confirmed, 'pronto');
+      void onRefreshOrders();
+      return true;
+    } catch (error) {
+      console.error('KDS ticket confirmation failed', error);
+      showToast('Pedido não confirmado. Os itens permanecem em preparo.', 'error');
+      void onRefreshOrders();
       return false;
     }
   };
@@ -1394,6 +1417,7 @@ export function useCashierOrders({
     handleFinalizarPedido,
     handleAddMotoboy,
     handleUpdateItemStatus,
+    handleConfirmTicketReady,
     handleAcceptPendingDeliveryOrder,
     pendingAcceptanceOrders,
     pendingDeliveryOrderIds,
