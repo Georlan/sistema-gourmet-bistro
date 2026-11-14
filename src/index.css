@@ -3241,11 +3241,6 @@ body {
     white-space: nowrap;
   }
 
-  .cashier-shell[data-koma-plan="pocket"] .orders-mobile-stages {
-    position: sticky;
-    top: 6.25rem;
-    z-index: 40;
-  }
 }
 
 .cashier-shell[data-koma-plan="pocket"] .cashier-mobile-bottom-bar {
