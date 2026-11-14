@@ -1,4 +1,5 @@
 import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
+import { fetchCardapioDigitalConfig, invalidateCardapioDigitalConfigCache } from './cardapioDigitalConfigClient';
 import clsx from 'clsx';
 import { AlertCircle, CheckCircle2, CreditCard, ExternalLink, Loader2, Save, ShieldCheck } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -44,9 +45,8 @@ export function OnlineMenuPaymentSettings({ apiBaseUrl, authHeaders, publicMenuU
   const loadConfig = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${apiBaseUrl}/api/cardapio-digital/config`, { headers: authHeaders, cache: 'no-store' });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || 'Não foi possível carregar os pagamentos.');
+      const authorization = authHeaders.Authorization || authHeaders.authorization || '';
+      const data = await fetchCardapioDigitalConfig<Record<string, unknown>>(apiBaseUrl, authorization);
       const nextMethods = normalizePayments(data.formas_pagamento_aceitas);
       setMethods(nextMethods);
       setOnlinePaymentEnabled(data.pagamento_online_ativo === true);
@@ -80,6 +80,7 @@ export function OnlineMenuPaymentSettings({ apiBaseUrl, authHeaders, publicMenuU
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || 'Não foi possível salvar as formas de pagamento.');
+      invalidateCardapioDigitalConfigCache();
       const nextMethods = normalizePayments(data.formas_pagamento_aceitas);
       setMethods(nextMethods);
       setSavedSnapshot(JSON.stringify(nextMethods));

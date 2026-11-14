@@ -3,16 +3,19 @@ import { orderUpdateAffects } from '../../../utils/orderUpdate';
 
 /** Events reconcile immediately; an empty list needs only a slow safety read. */
 export function startPendingPixPolling(
-  read: (signal: AbortSignal) => Promise<number | undefined>,
+  read: (signal: AbortSignal, force?: boolean) => Promise<number | undefined>,
   page: Pick<Document, 'hidden' | 'addEventListener' | 'removeEventListener'> = document,
   browser: Pick<Window, 'addEventListener' | 'removeEventListener'> = window,
   isOnline: () => boolean = () => navigator.onLine,
 ) {
   let stopped = false;
+  let forceNextRead = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let controller: AbortController | undefined;
   const refresh = createVisibleRefresh(async () => {
     clearTimeout(timer);
+    const force = forceNextRead;
+    forceNextRead = false;
     const request = new AbortController();
     controller = request;
     let timeout: ReturnType<typeof setTimeout>;
@@ -22,7 +25,7 @@ export function startPendingPixPolling(
     });
     let count: number | undefined;
     try {
-      count = await Promise.race([read(request.signal), aborted]);
+      count = await Promise.race([read(request.signal, force), aborted]);
     } finally {
       clearTimeout(timeout!);
       if (controller === request) controller = undefined;
@@ -32,7 +35,10 @@ export function startPendingPixPolling(
 
   const resume = () => refresh.resume();
   const ordersUpdated = (event: Event) => {
-    if (orderUpdateAffects(event, 'payments')) refresh.invalidate();
+    if (orderUpdateAffects(event, 'payments')) {
+      forceNextRead = true;
+      refresh.invalidate();
+    }
   };
   page.addEventListener('visibilitychange', resume);
   browser.addEventListener('focus', resume);
@@ -40,7 +46,10 @@ export function startPendingPixPolling(
   browser.addEventListener('koma_orders_updated', ordersUpdated);
   refresh.tick();
   return {
-    invalidate: refresh.invalidate,
+    invalidate: () => {
+      forceNextRead = true;
+      refresh.invalidate();
+    },
     stop: () => {
       stopped = true;
       refresh.stop();
