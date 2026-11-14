@@ -512,7 +512,7 @@ class Comanda(Base):
         ),
         CheckConstraint(
             "online_payment_status IS NULL OR online_payment_status IN "
-            "('pending', 'approved', 'rejected', 'cancelled', 'expired', 'error')",
+            "('pending', 'pending_released', 'approved', 'rejected', 'cancelled', 'expired', 'error')",
             name="ck_comandas_online_payment_status",
         ),
         Index(
@@ -2369,7 +2369,7 @@ class DirectPixReceipt(Base):
     __tablename__ = "direct_pix_receipts"
     intent_id = Column(String(36), ForeignKey("online_payment_intents.id"), primary_key=True)
     restaurante_id = Column(Integer, ForeignKey("restaurantes.id"), nullable=False, default=lambda: current_restaurante_id.get())
-    bank_reference = Column(String(32), nullable=False)
+    bank_reference = Column(String(32), nullable=True)  # NULL: confirmed via manual bank review without a visible bank operation ID
     confirmed_by = Column(String, nullable=False)
     confirmed_at = Column(DateTime(timezone=True), nullable=False)
     fee = Column(Numeric(14,2), nullable=False)
