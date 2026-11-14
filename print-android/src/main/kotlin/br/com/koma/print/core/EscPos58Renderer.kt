@@ -171,7 +171,16 @@ object EscPos58Renderer {
                 }
                 val wrappedLeft = wrapWords(left, columns).toMutableList()
                 if (right.length <= columns) {
-                    wrappedLeft.add(right.padStart(columns, ' '))
+                    // Reaproveita a última linha de nomes longos para o valor,
+                    // sem deslocar preços ou cortar texto na bobina de 58 mm.
+                    val itemPrice = ITEM_LINE_REGEX.containsMatchIn(left) &&
+                        Regex("""^R\$\s*\d""", RegexOption.IGNORE_CASE).containsMatchIn(right)
+                    val lastLine = wrappedLeft.lastOrNull()
+                    if (itemPrice && lastLine != null && lastLine.length + right.length + 1 <= columns) {
+                        wrappedLeft[wrappedLeft.lastIndex] = lastLine.padEnd(columns - right.length, ' ') + right
+                    } else {
+                        wrappedLeft.add(right.padStart(columns, ' '))
+                    }
                 } else {
                     wrappedLeft.addAll(wrapWords(right, columns))
                 }
@@ -303,6 +312,71 @@ object EscPos58Renderer {
         }
 
         return withoutBrandFooter.joinToString("\n")
+    }
+
+    private val optionObservationRegex =
+        Regex("""^(\s*)OBS:\s*OP[ÇC][ÕO]ES:\s*(.+)$""", RegexOption.IGNORE_CASE)
+    private val amountRegex = Regex("""R\$\s*[\d.,]+""", RegexOption.IGNORE_CASE)
+
+    private fun compact58ReceiptSemantics(payloadText: String): String {
+        val lines = payloadText.split("\n")
+        val visible = lines.map { visibleText(it).trim() }
+        val subtotals = visible.filter { it.uppercase().startsWith("SUBTOTAL ITENS:") }
+            .mapNotNull { amountRegex.find(it)?.value?.replace(" ", "") }
+        val totals = visible.filter { it.uppercase().startsWith("TOTAL DO PEDIDO:") }
+            .mapNotNull { amountRegex.find(it)?.value?.replace(" ", "") }
+        val adjustments = visible.any {
+            val upper = it.uppercase()
+            upper.startsWith("TAXA DE ENTREGA:") || upper.startsWith("DESCONTO ") ||
+                upper.startsWith("ACRÉSCIMO:") || upper.startsWith("ACRESCIMO:")
+        }
+        val skipSubtotal = !adjustments && subtotals.size == 1 &&
+            totals.size == 1 && subtotals[0] == totals[0]
+
+        var inCustomer = false
+        val compacted = mutableListOf<String>()
+        for ((index, raw) in lines.withIndex()) {
+            val text = visible[index]
+            if (text.uppercase() == "CLIENTE") {
+                inCustomer = true
+            } else if (
+                text.uppercase() in setOf("ITENS", "ENTREGA", "PAGAMENTO") ||
+                text.uppercase().startsWith("ITENS ")
+            ) {
+                inCustomer = false
+            }
+
+            if (skipSubtotal && text.uppercase().startsWith("SUBTOTAL ITENS:")) continue
+            val controls = extractEdgeControls(raw)
+            val choices = optionObservationRegex.find(controls.visible)
+            val replacement = when {
+                choices != null -> choices.groupValues[1] + "OPCOES: " + choices.groupValues[2]
+                inCustomer && text.uppercase().startsWith("NOME:") ->
+                    controls.visible.trim().substringAfter(":").trim()
+                inCustomer && text.uppercase().startsWith("TELEFONE:") ->
+                    controls.visible.replaceFirst("TELEFONE:", "TEL:", ignoreCase = true)
+                else -> controls.visible
+            }
+            compacted.add(
+                if (choices != null || (inCustomer && text.uppercase().startsWith("NOME:")) ||
+                    (inCustomer && text.uppercase().startsWith("TELEFONE:"))
+                ) controls.leading + replacement + controls.trailing else raw,
+            )
+        }
+        return compacted.joinToString("\n")
+    }
+
+    private fun collapseCompact58Separators(payloadText: String): String {
+        val result = mutableListOf<String>()
+        var previousSeparator = false
+        for (line in payloadText.split("\n")) {
+            val text = visibleText(line).trim()
+            val separator = text.isNotEmpty() && text.all { it == text[0] } &&
+                (text[0] == '-' || text[0] == '=')
+            if (!separator || !previousSeparator) result.add(line)
+            previousSeparator = separator
+        }
+        return result.joinToString("\n")
     }
 
     private fun normalizeLabel(value: String): String {
@@ -451,9 +525,12 @@ object EscPos58Renderer {
         charsetName: String = "IBM860",
     ): ByteArray {
         val restored = payloadText.replace("\\x00", "\u0000")
-        val projected = if (profile.semanticLayout.lowercase() == "compact_58") {
-            restoreCompact58CompositionLayout(
-                projectCompactSemantics(restored, profile.columns),
+        val isCompact58 = profile.semanticLayout.lowercase() == "compact_58"
+        val projected = if (isCompact58) {
+            compact58ReceiptSemantics(
+                restoreCompact58CompositionLayout(
+                    projectCompactSemantics(restored, profile.columns),
+                ),
             )
         } else {
             restored
@@ -462,6 +539,7 @@ object EscPos58Renderer {
         if (profile.compactLayout) {
             fitted = compactTextLayout(fitted, allowDoubleHeight = profile.allowDoubleHeight)
         }
+        if (isCompact58) fitted = collapseCompact58Separators(fitted)
         fitted = applyCharsetPolicy(fitted, profile.charsetPolicy)
 
         val normalized = fitted.replace(SIMULATED_CUT_MARKER, "")
