@@ -356,7 +356,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     }
   };
 
-  const fetchConfig = async () => {
+  const fetchConfig = async (force = false) => {
     const requestScopeKey = operationalScopeKey;
     if (!requestScopeKey) return;
     if (configRequestRef.current) {
@@ -371,7 +371,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     const timeout = setTimeout(() => controller.abort(), 6000);
     try {
       const requestRestaurantId = activeRestaurantId;
-      const res = await fetchCaixaConfiguracoes(API_BASE_URL, getAuthHeaders());
+      const res = await fetchCaixaConfiguracoes(API_BASE_URL, getAuthHeaders(), { force });
       if (requestScopeKey !== operationalScopeKeyRef.current || sessionStorage.getItem(tokenKey) !== token) return;
       if (res.status === 401) { handleLogout(); return; }
       if (!res.ok || !res.data) throw new Error(`HTTP ${res.status}`);
@@ -396,7 +396,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         const dirty = configDirtyRef.current;
         configDirtyRef.current = false;
         if (dirty && requestScopeKey === operationalScopeKeyRef.current && sessionStorage.getItem(tokenKey) === token) {
-          queueMicrotask(() => { void fetchConfig(); });
+          queueMicrotask(() => { void fetchConfig(true); });
         }
       }
     }
@@ -450,7 +450,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
   useEffect(() => {
     if (!isAuthenticated) return;
     const refresh = createVisibleRefresh(
-      () => Promise.allSettled([fetchConfig(), fetchTurnoResumo()]),
+      () => Promise.allSettled([fetchConfig(true), fetchTurnoResumo()]),
       () => !document.hidden,
     );
     const interval = isWsConnected && isConfigLoaded ? undefined : setInterval(refresh.tick, 15000);
@@ -802,7 +802,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         if (refresh.orders) fetchOrdersFromAPI();
         if (refresh.tables) fetchTables();
         if (refresh.catalog) fetchLiveCatalog();
-        if (refresh.config) fetchConfig();
+        if (refresh.config) fetchConfig(true);
         if (refresh.summary) fetchTurnoResumo();
         if (refresh.payments && isManagementRole(activeRole)) {
           fetchPagamentosPendentes();
@@ -854,7 +854,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           // Catalog updates can be missed while this socket is disconnected.
           // Reuse the existing shared catalog owner; never create a second cache.
           scheduleRealtimeRefresh({ catalog: true });
-          fetchConfig();
+          fetchConfig(true);
           fetchTables();
           fetchOrdersFromAPI();
           if (isManagementRole(activeRole)) fetchPagamentosPendentes();

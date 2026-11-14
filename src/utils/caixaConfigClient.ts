@@ -23,7 +23,9 @@ export function fetchCaixaConfiguracoes(
   const key = `${apiBaseUrl}|${auth}`;
   const force = options?.force === true;
 
-  if (!force) {
+  if (force) {
+    recentCache.delete(key);
+  } else {
     const cached = recentCache.get(key);
     if (cached && cached.expiresAt > Date.now()) {
       return Promise.resolve(cached.result);
