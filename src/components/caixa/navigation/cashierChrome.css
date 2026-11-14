@@ -11,6 +11,16 @@
   .cashier-shell--mobile-orders .group\/sidebar-wrapper { height: 100%; min-height: 0; }
   .cashier-shell--mobile-orders .cashier-main { height: 100%; min-height: 0 !important; overflow: hidden !important; }
   .cashier-shell--mobile-orders .cashier-content { overflow-y: auto !important; overscroll-behavior-y: contain; }
+
+  /* The orders list scrolls inside .cashier-content, not the window.
+     The topbar and sales subnav are outside that scroller, so adding their
+     heights again (the former 6.25rem offset) stranded this selector in the
+     middle of the screen and covered cards while the operator scrolled. */
+  .cashier-shell--mobile-orders .orders-mobile-stages {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+  }
 }
 
 .cashier-shell {
