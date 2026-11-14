@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { LockKeyhole, LogOut, RefreshCw } from 'lucide-react';
 import { API_BASE_URL } from '../../config/api';
+import { fetchOperationalCatalog } from '../../catalog/operationalCatalogClient';
 import { KomaLogo } from '../KomaLogo';
 import { clearOperatorSession, getOperatorAccessToken } from '../../utils/authSession';
 import { clearSmartPosSession, getSmartPosSession } from '../../smartpos/smartPosSession';
@@ -23,11 +24,8 @@ function readOperationalToken(): string {
   return getOperatorAccessToken() || readSmartPosToken();
 }
 
-async function responseSignalsSuspension(response: Response): Promise<boolean> {
-  if (response.status !== 403) return false;
-
-  const payload = await response.clone().json().catch(() => null) as any;
-  const detail = payload?.detail;
+function payloadSignalsSuspension(payload: unknown): boolean {
+  const detail = (payload as any)?.detail;
   const message = typeof detail === 'string'
     ? detail
     : typeof detail?.message === 'string'
@@ -36,6 +34,22 @@ async function responseSignalsSuspension(response: Response): Promise<boolean> {
 
   const normalized = message.toLocaleLowerCase('pt-BR');
   return normalized.includes('restaurante') && normalized.includes('suspens');
+}
+
+function bodySignalsSuspension(status: number, bodyText?: string): boolean {
+  if (status !== 403 || !bodyText) return false;
+  try {
+    return payloadSignalsSuspension(JSON.parse(bodyText));
+  } catch {
+    return false;
+  }
+}
+
+async function responseSignalsSuspension(response: Response): Promise<boolean> {
+  if (response.status !== 403) return false;
+
+  const payload = await response.clone().json().catch(() => null) as any;
+  return payloadSignalsSuspension(payload);
 }
 
 function clearOperationalAuthentication() {
@@ -137,24 +151,26 @@ export function TenantSuspensionBoundary({ children, disabled = false }: TenantS
   const lastTokenRef = useRef('');
   const probeInFlightRef = useRef(false);
 
-  const probeToken = useCallback(async (token: string) => {
+  const probeToken = useCallback(async (token: string, force = false) => {
     if (!token || probeInFlightRef.current) return;
     const fetcher = nativeFetchRef.current || window.fetch.bind(window);
     probeInFlightRef.current = true;
     setChecking(true);
 
     try {
-      const response = await fetcher(`${API_BASE_URL}/produtos/categorias`, {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: 'no-store',
+      const result = await fetchOperationalCatalog({
+        apiBaseUrl: API_BASE_URL,
+        token,
+        force,
+        fetcher,
       });
 
-      if (await responseSignalsSuspension(response)) {
+      if (bodySignalsSuspension(result.status, result.errorBodyText)) {
         setAccessState('suspended');
         return;
       }
 
-      if (response.ok) {
+      if (result.ok) {
         setAccessState('active');
         return;
       }
@@ -209,7 +225,7 @@ export function TenantSuspensionBoundary({ children, disabled = false }: TenantS
       if (token !== lastTokenRef.current) {
         lastTokenRef.current = token;
         setAccessState('checking');
-        void probeToken(token);
+        void probeToken(token, false);
       }
     };
 
@@ -225,7 +241,7 @@ export function TenantSuspensionBoundary({ children, disabled = false }: TenantS
 
     const probeCurrentToken = () => {
       const token = readOperationalToken();
-      if (token && !document.hidden) void probeToken(token);
+      if (token && !document.hidden) void probeToken(token, true);
     };
 
     const onVisibilityChange = () => {
@@ -245,7 +261,7 @@ export function TenantSuspensionBoundary({ children, disabled = false }: TenantS
 
   const retry = () => {
     const token = readOperationalToken();
-    if (token) void probeToken(token);
+    if (token) void probeToken(token, true);
   };
 
   const logout = () => {

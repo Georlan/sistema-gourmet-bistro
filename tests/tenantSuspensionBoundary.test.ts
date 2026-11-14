@@ -33,7 +33,10 @@ test('boundary detecta suspensão nas operações e revalida apenas sessões sus
   assert.match(boundary, /response\.status !== 403/);
   assert.match(boundary, /normalized\.includes\('restaurante'\)/);
   assert.match(boundary, /normalized\.includes\('suspens'\)/);
-  assert.match(boundary, /\/produtos\/categorias/);
+  assert.match(boundary, /fetchOperationalCatalog/);
+  const catalogClient = readFileSync('src/catalog/operationalCatalogClient.ts', 'utf8');
+  assert.match(catalogClient, /\/produtos\/catalogo/);
+  assert.match(catalogClient, /\/produtos\/categorias/);
   assert.match(boundary, /STATUS_PROBE_INTERVAL_MS = 5_000/);
   assert.match(boundary, /if \(disabled \|\| accessState !== 'suspended'\) return/);
   assert.match(boundary, /token && !document.hidden/);

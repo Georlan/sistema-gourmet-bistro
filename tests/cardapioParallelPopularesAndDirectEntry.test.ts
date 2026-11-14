@@ -47,6 +47,6 @@ test('main.tsx routes public menu directly to CardapioPage and lazy-loads operat
 test('CardapioPage starts popular products fetch before awaiting public menu response', () => {
   const cardapioPage = fs.readFileSync(path.resolve('src/cardapio/CardapioPage.tsx'), 'utf8');
   const popularIndex = cardapioPage.indexOf('fetchPopularProducts({');
-  const publicIndex = cardapioPage.indexOf('/api/cardapio-digital/public?');
+  const publicIndex = cardapioPage.indexOf('fetchPublicMenu({');
   assert.ok(popularIndex > 0 && publicIndex > popularIndex);
 });

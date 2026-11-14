@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { normalizeCatalogSnapshot, type CatalogSnapshot } from '../../../catalog/catalog';
+import { fetchOperationalCatalog } from '../../../catalog/operationalCatalogClient';
 import { API_BASE_URL } from '../../../config/api';
 import { getOperationalAccessToken } from '../../../utils/authSession';
 
@@ -25,7 +26,7 @@ export function useOperationalCatalog({
 
   const catalogRequestRef = useRef(0);
 
-  const fetchLiveCatalog = useCallback(async () => {
+  const fetchLiveCatalog = useCallback(async (force = false) => {
     if (!scope || !token) return;
     const requestId = ++catalogRequestRef.current;
     catalogAbortRef.current?.abort();
@@ -35,47 +36,22 @@ export function useOperationalCatalog({
       && requestId === catalogRequestRef.current
       && getOperationalAccessToken(portal) === token;
     try {
-      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-      let payload: unknown;
-      const catalogResponse = await fetch(`${API_BASE_URL}/produtos/catalogo`, {
-        headers,
-        cache: 'no-store',
-        signal: controller.signal,
+      const result = await fetchOperationalCatalog({
+        apiBaseUrl: API_BASE_URL,
+        token,
+        force,
       });
 
       if (!isCurrent()) return;
-      if (catalogResponse.status === 401) {
+      if (result.status === 401) {
         handleLogout();
         return;
       }
-
-      if (catalogResponse.ok) {
-        payload = await catalogResponse.json();
-      } else if (catalogResponse.status === 404 || catalogResponse.status === 405) {
-        // Compatibilidade durante deploy gradual: o endpoint atômico pode
-        // chegar alguns segundos depois do frontend novo.
-        const [productsResponse, categoriesResponse] = await Promise.all([
-          fetch(`${API_BASE_URL}/produtos/`, { headers, cache: 'no-store', signal: controller.signal }),
-          fetch(`${API_BASE_URL}/produtos/categorias`, { headers, cache: 'no-store', signal: controller.signal }),
-        ]);
-        if (!isCurrent()) return;
-        if (productsResponse.status === 401 || categoriesResponse.status === 401) {
-          handleLogout();
-          return;
-        }
-        if (!productsResponse.ok || !categoriesResponse.ok) {
-          throw new Error(`CATALOG_HTTP_${productsResponse.status}_${categoriesResponse.status}`);
-        }
-        payload = {
-          produtos: await productsResponse.json(),
-          categorias: await categoriesResponse.json(),
-        };
-      } else {
-        throw new Error(`CATALOG_HTTP_${catalogResponse.status}`);
+      if (!result.ok) {
+        throw new Error(`CATALOG_HTTP_${result.status}`);
       }
 
-      if (!isCurrent()) return;
-      setSnapshot({ scope, data: normalizeCatalogSnapshot(payload) });
+      setSnapshot({ scope, data: normalizeCatalogSnapshot(result.payload) });
     } catch (err) {
       if (isCurrent()) {
         console.error('Error fetching live catalog', err);
@@ -101,10 +77,10 @@ export function useOperationalCatalog({
 
     const refreshIfVisible = () => {
       if (document.hidden) return;
-      fetchLiveCatalog();
+      fetchLiveCatalog(true);
     };
     const handleVisibilityChange = () => {
-      if (!document.hidden) fetchLiveCatalog();
+      if (!document.hidden) fetchLiveCatalog(true);
     };
 
     const interval = setInterval(refreshIfVisible, 40000); // fallback only while the app is visible
@@ -119,7 +95,7 @@ export function useOperationalCatalog({
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      fetchLiveCatalog();
+      fetchLiveCatalog(true);
       window.dispatchEvent(new Event('koma_orders_updated'));
       window.dispatchEvent(new Event('koma_customers_updated'));
     };
