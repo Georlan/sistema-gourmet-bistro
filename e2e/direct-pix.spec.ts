@@ -10,17 +10,16 @@ async function open(page:Page,pending=false) {
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
 }
-test('conferência mantém referência após falha e confirmação exige extrato',async({page})=>{
+test('Pix recebido exige conferência bancária e nunca código de pedido',async({page})=>{
   await open(page,true);
   await page.getByRole('button',{name:/Conferir Pix/}).click();
   const panel=page.getByRole('dialog',{name:/Pix manual/});
   await panel.getByRole('button',{name:/#47 · Cliente teste/}).click();
   const confirm=panel.getByRole('button',{name:'Confirmar Pix recebido'});
-  await panel.getByText('ID bancário (opcional)').click();
   await expect(confirm).toBeDisabled();
-  await panel.getByLabel('Identificador do Pix no extrato (EndToEndId)').fill('E'+'1'.repeat(31));
-  await expect(confirm).toBeDisabled();
-  await panel.getByLabel('Conferi o recebimento no banco').check();
+  await expect(panel.getByRole('button',{name:'Copiar',exact:true})).toHaveCount(0);
+  await expect(panel.getByLabel('Identificador do Pix no extrato (EndToEndId)')).toHaveCount(0);
+  await panel.getByRole('checkbox',{name:'Conferi o Pix na conta bancária'}).check();
   const bodies:unknown[]=[];
   await page.route('**/payments/direct-pix/intent-test/confirm',async route=>{
     bodies.push(route.request().postDataJSON());
@@ -28,23 +27,23 @@ test('conferência mantém referência após falha e confirmação exige extrato
   });
   await confirm.click();
   await expect(panel.getByRole('alert')).toContainText('Falha temporária');
-  await expect(panel.getByLabel('Identificador do Pix no extrato (EndToEndId)')).toHaveValue('E'+'1'.repeat(31));
-  await test.info().attach('direct-pix-manual-confirmation',{body:await page.screenshot({fullPage:true}),contentType:'image/png'});
+  await expect(panel.getByRole('checkbox',{name:'Conferi o Pix na conta bancária'})).toBeChecked();
   await page.route('**/payments/direct-pix/pending',route=>route.fulfill({json:[]}));
   await confirm.click();
   await expect(panel).toContainText('Nenhum Pix pendente.');
   await panel.getByRole('button',{name:'Fechar conferência Pix'}).click();
   await expect(panel).toBeHidden();
-  expect(bodies).toHaveLength(2);
-  expect(bodies[1]).toEqual(bodies[0]);
+  expect(bodies).toEqual([
+    {received_amount:'100.00',bank_reference:null,checked_bank_statement:true},
+    {received_amount:'100.00',bank_reference:null,checked_bank_statement:true}
+  ]);
 });
 
-test('Pix pendente mostra contato e código curto antes do aviso do cliente, sem aceitar TXID do QR',async({page})=>{
+test('Pix pendente permite contato e ações sem enviar código',async({page})=>{
   await open(page,true);
-  const txid='abcdef1234567890abcdef123';
   await page.route('**/payments/direct-pix/pending',route=>route.fulfill({json:[{
     id:'intent-contact',order_number:'47',customer:'Cliente teste',customer_phone:'(88) 99961-6937',
-    amount:'10.50',txid,customer_reported:false
+    amount:'10.50',customer_reported:false
   }]}));
   await page.reload();
   await page.getByRole('button',{name:/Conferir Pix/}).click();
@@ -53,15 +52,11 @@ test('Pix pendente mostra contato e código curto antes do aviso do cliente, sem
   const contact=panel.getByRole('link',{name:'Pedir comprovante no WhatsApp'});
   await expect(contact).toHaveAttribute('href',/wa\.me\/5588999616937\?text=/);
   await panel.getByRole('button',{name:/#47 · Cliente teste/}).click();
-  await expect(panel.getByText('Pedido #47')).toBeVisible();
   await expect(panel).toContainText('Aguardando Pix');
-  await panel.getByText('ID bancário (opcional)').click();
-  const input=panel.getByLabel('Identificador do Pix no extrato (EndToEndId)');
+  await expect(panel.getByRole('button',{name:'Copiar',exact:true})).toHaveCount(0);
   const confirm=panel.getByRole('button',{name:'Confirmar Pix recebido'});
-  await panel.getByLabel('Conferi o recebimento no banco').check();
-  await input.fill(txid);
   await expect(confirm).toBeDisabled();
-  await input.fill('BANK-20261114-0001');
+  await panel.getByRole('checkbox',{name:'Conferi o Pix na conta bancária'}).check();
   await expect(confirm).toBeEnabled();
 });
 
@@ -89,14 +84,13 @@ test('operador libera no Kanban sem simular recebimento e confirma o Pix posteri
   await page.getByRole('button',{name:/Conferir Pix/}).click();
   const panel=page.getByRole('dialog',{name:/Pix manual/});
   await panel.getByRole('button',{name:/#47 · Cliente teste/}).click();
-  await panel.getByRole('button',{name:'Liberar preparo sem receber'}).click();
-  await expect(panel).toContainText('O Pix continuará pendente no caixa');
-  await panel.getByRole('button',{name:'Sim, liberar sem pagamento'}).click();
+  await expect(panel).toContainText('Entra no Kanban. O Pix continua pendente.');
+  await panel.getByRole('button',{name:'Liberar preparo · conferir depois'}).click();
   expect(releasePayload).toEqual({acknowledge_payment_pending:true});
   expect(confirmations).toBe(0);
   await expect(panel.getByText('Na operação · Pix pendente')).toBeVisible();
-  await expect(panel.getByRole('button',{name:'Liberar preparo sem receber'})).toHaveCount(0);
-  await panel.getByLabel('Conferi o recebimento no banco').check();
+  await expect(panel.getByRole('button',{name:'Liberar preparo · conferir depois'})).toHaveCount(0);
+  await panel.getByLabel('Conferi o Pix na conta bancária').check();
   await panel.getByRole('button',{name:'Confirmar Pix recebido'}).click();
   expect(confirmations).toBe(1);
 });
@@ -187,7 +181,7 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   }]:[]}));
   await page.route('**/payments/direct-pix/journey-intent/confirm',route=>{
     const body=route.request().postDataJSON();
-    expect(body).toMatchObject({received_amount:'10.50',checked_bank_statement:true,bank_reference:'E1234567890123456789012345678901'});
+    expect(body).toMatchObject({received_amount:'10.50',checked_bank_statement:true,bank_reference:null});
     confirmations++;paid=true;
     return route.fulfill({json:{status:'approved',already_confirmed:false}});
   });
@@ -230,10 +224,10 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   await consumer.getByRole('button',{name:'Fazer pedido',exact:true}).click();
   await expect(consumer.getByText('Aguardando pagamento',{exact:true}).first()).toBeVisible();
   await expect(consumer.getByText('O restaurante conferirá o recebimento',{exact:false})).toBeVisible();
-  const shortCode=consumer.getByTestId('direct-pix-customer-confirm');
-  await expect(shortCode).toContainText('Seu código');
-  await expect(shortCode).toContainText('#47');
-  await expect(shortCode).toContainText('Pode fechar esta tela');
+  const manualNotice=consumer.getByTestId('direct-pix-customer-confirm');
+  await expect(manualNotice).toContainText('Você pode fechar esta tela.');
+  await expect(manualNotice).not.toContainText('Seu código');
+  await expect(manualNotice.getByRole('button',{name:'Copiar',exact:true})).toHaveCount(0);
 
   await expect(consumer.getByText('No banco, confira destinatário e valor.')).toBeVisible();
   await consumer.evaluate(() => {
@@ -266,7 +260,7 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   await expect(reopened.getByRole('link',{name:'Enviar comprovante no WhatsApp'})).toHaveAttribute('href', /wa\.me\/5588999616937\?text=/);
   await expect(reopened).not.toContainText('A confirmação do pagamento é automática');
   await reopened.getByRole('button',{name:/Já paguei/}).click();
-  await expect(reopened.getByText('Aviso enviado ao restaurante')).toBeVisible();
+  await expect(reopened.getByText('Restaurante avisado')).toBeVisible();
   expect(customerReported).toBe(true);
   await test.info().attach('pix-reaberto-manual',{body:await consumer.screenshot(),contentType:'image/png'});
   await consumer.reload();
@@ -279,12 +273,8 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   const pending=page.getByRole('dialog',{name:/Pix manual/});
   await expect(pending.getByTestId('direct-pix-reported-journey-intent')).toContainText('Cliente avisou que pagou');
   await pending.getByRole('button',{name:/#47 · Cliente teste/}).click();
-  await expect(pending.getByText('Pedido #47')).toBeVisible();
-  await pending.getByText('ID bancário (opcional)').click();
-  const referenceInput=pending.getByLabel('Identificador do Pix no extrato (EndToEndId)');
-  await referenceInput.fill('Comprovante Pix\nID da transacao: E1234567890123456789012345678901\nValor: R$ 10,50');
-  await expect(referenceInput).toHaveValue('E1234567890123456789012345678901');
-  await pending.getByRole('checkbox',{name:'Conferi o recebimento no banco'}).check();
+  await expect(pending.getByLabel('Identificador do Pix no extrato (EndToEndId)')).toHaveCount(0);
+  await pending.getByRole('checkbox',{name:'Conferi o Pix na conta bancária'}).check();
   await pending.getByRole('button',{name:'Confirmar Pix recebido'}).click();
   await expect(pending).toContainText('Nenhum Pix pendente.');
   await pending.getByRole('button',{name:'Fechar conferência Pix'}).click();
@@ -306,22 +296,20 @@ test('Pix usa botão compacto, lateral com rolagem própria e mantém rascunho a
   const dialog=page.getByRole('dialog',{name:/Pix manual/});
   await expect(trigger).toBeVisible();
   await expect(dialog).toBeHidden();
-  await expect(page.getByText('Conferi o recebimento no banco')).toBeHidden();
+  await expect(page.getByText('Conferi o Pix na conta bancária')).toBeHidden();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
   const before=await page.locator('.orders-board').boundingBox();
   await trigger.click();
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('button',{name:'Fechar conferência Pix'})).toBeFocused();
   await dialog.getByRole('button',{name:/#47 · Cliente teste/}).click();
-  await dialog.getByText('ID bancário (opcional)').click();
-  const input=dialog.getByLabel('Identificador do Pix no extrato (EndToEndId)');
-  await input.fill('E'+'2'.repeat(31));
-  await input.press('Escape');
+  await dialog.getByRole('checkbox',{name:'Conferi o Pix na conta bancária'}).check();
+  await dialog.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(trigger).toBeFocused();
   await trigger.click();
-  await expect(input).toHaveValue('E'+'2'.repeat(31));
-  await expect(dialog.getByRole('button',{name:'Confirmar Pix recebido'})).toBeDisabled();
+  await expect(dialog.getByRole('checkbox',{name:'Conferi o Pix na conta bancária'})).toBeChecked();
+  await expect(dialog.getByRole('button',{name:'Confirmar Pix recebido'})).toBeEnabled();
   const box=await dialog.boundingBox();
   const viewport=page.viewportSize()!;
   expect(box!.width).toBeLessThanOrEqual(viewport.width);
