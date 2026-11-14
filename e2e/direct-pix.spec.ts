@@ -65,6 +65,42 @@ test('Pix pendente mostra contato e código curto antes do aviso do cliente, sem
   await expect(confirm).toBeEnabled();
 });
 
+test('operador libera no Kanban sem simular recebimento e confirma o Pix posteriormente',async({page})=>{
+  await open(page,true);
+  let released=false;
+  let releasePayload:Record<string,unknown>|undefined;
+  let confirmations=0;
+  await page.route('**/payments/direct-pix/pending',route=>route.fulfill({json:[{
+    id:'unpaid-intent',order_number:'47',customer:'Cliente teste',amount:'10.50',
+    released_unpaid:released,customer_reported:false
+  }]}));
+  await page.route('**/payments/direct-pix/unpaid-intent/release-unpaid',route=>{
+    releasePayload=route.request().postDataJSON();
+    released=true;
+    return route.fulfill({json:{status:'pending',released_unpaid:true,already_released:false}});
+  });
+  await page.route('**/payments/direct-pix/unpaid-intent/confirm',route=>{
+    const body=route.request().postDataJSON();
+    expect(body).toMatchObject({bank_reference:null,received_amount:'10.50',checked_bank_statement:true});
+    confirmations++;
+    return route.fulfill({json:{status:'approved',already_confirmed:false}});
+  });
+  await page.reload();
+  await page.getByRole('button',{name:/Conferir Pix/}).click();
+  const panel=page.getByRole('dialog',{name:/Pix manual/});
+  await panel.getByRole('button',{name:/#47 · Cliente teste/}).click();
+  await panel.getByRole('button',{name:'Liberar preparo sem receber'}).click();
+  await expect(panel).toContainText('O Pix continuará pendente no caixa');
+  await panel.getByRole('button',{name:'Sim, liberar sem pagamento'}).click();
+  expect(releasePayload).toEqual({acknowledge_payment_pending:true});
+  expect(confirmations).toBe(0);
+  await expect(panel.getByText('Na operação · Pix pendente')).toBeVisible();
+  await expect(panel.getByRole('button',{name:'Liberar preparo sem receber'})).toHaveCount(0);
+  await panel.getByLabel('Conferi o recebimento no banco').check();
+  await panel.getByRole('button',{name:'Confirmar Pix recebido'}).click();
+  expect(confirmations).toBe(1);
+});
+
 test('Caixa vazio reduz consultas Pix e evento financeiro recupera nova pendência imediatamente',async({page})=>{
   await page.clock.install();
   await mockCashierBackend(page);
