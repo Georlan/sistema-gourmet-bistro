@@ -1,6 +1,6 @@
 import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import { orderUpdateAffects } from '../../../utils/orderUpdate';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Order } from '../../../types';
 import { operationalFetch } from '../../../utils/operationalRequest';
 import { createVisibleRefresh, smartPosFallbackInterval } from '../../../utils/visibleRefresh';
@@ -52,6 +52,16 @@ export function useCashierSmartPos({
   const [smartPosRecoveryError, setSmartPosRecoveryError] = useState('');
 
   const smartPosAuthorization = authHeaders.Authorization || authHeaders.authorization || '';
+  const scopeKey = `${apiBaseUrl}|${smartPosAuthorization}`;
+  const scopeRef = useRef(scopeKey);
+  const dirtyRef = useRef(true);
+  const lastFetchedAtRef = useRef(0);
+
+  if (scopeRef.current !== scopeKey) {
+    scopeRef.current = scopeKey;
+    dirtyRef.current = true;
+    lastFetchedAtRef.current = 0;
+  }
 
   const smartPosCashByTable = useMemo(
     () => new Map(smartPosCashRows.map((row) => [Number(row.mesa_id), row])),
@@ -59,8 +69,10 @@ export function useCashierSmartPos({
   );
 
   const refreshSmartPosCashProjection = useCallback(async () => {
-    if (activeSubTab !== 'pedidos' || !smartPosAuthorization) {
+    if (!smartPosAuthorization) {
       setSmartPosCashRows([]);
+      dirtyRef.current = true;
+      lastFetchedAtRef.current = 0;
       return;
     }
     try {
@@ -70,24 +82,57 @@ export function useCashierSmartPos({
       });
       if (response.status === 401 || response.status === 403) {
         setSmartPosCashRows([]);
+        dirtyRef.current = true;
         return;
       }
       if (!response.ok) return;
       const data = await response.json().catch(() => []);
       setSmartPosCashRows(Array.isArray(data) ? data : []);
+      dirtyRef.current = false;
+      lastFetchedAtRef.current = Date.now();
     } catch {
       // A fila principal continua utilizável; o próximo refresh reconcilia o indicador.
     }
-  }, [activeSubTab, apiBaseUrl, smartPosAuthorization]);
+  }, [apiBaseUrl, smartPosAuthorization]);
+
+  useEffect(() => {
+    if (!smartPosAuthorization) {
+      setSmartPosCashRows([]);
+      dirtyRef.current = true;
+      lastFetchedAtRef.current = 0;
+      return;
+    }
+    if (activeSubTab === 'pedidos') return;
+
+    // Enquanto o operador está em outra aba, apenas sinalizamos que houve evento
+    // de pagamento/maquininha para reconciliar ao retornar para Pedidos.
+    const markDirtyOnOrders = (event: Event) => {
+      if (orderUpdateAffects(event, 'payments')) dirtyRef.current = true;
+    };
+    const markDirty = () => {
+      dirtyRef.current = true;
+    };
+    window.addEventListener('koma_orders_updated', markDirtyOnOrders);
+    window.addEventListener('koma_smartpos_updated', markDirty);
+    return () => {
+      window.removeEventListener('koma_orders_updated', markDirtyOnOrders);
+      window.removeEventListener('koma_smartpos_updated', markDirty);
+    };
+  }, [activeSubTab, smartPosAuthorization]);
 
   useEffect(() => {
     if (activeSubTab !== 'pedidos' || !smartPosAuthorization) {
-      setSmartPosCashRows([]);
       return;
     }
 
     const refresh = createVisibleRefresh(refreshSmartPosCashProjection, () => !document.hidden);
-    refresh.invalidate();
+    const offlineIntervalElapsed =
+      !isWsConnected &&
+      lastFetchedAtRef.current > 0 &&
+      Date.now() - lastFetchedAtRef.current >= smartPosFallbackInterval(false);
+    if (dirtyRef.current || lastFetchedAtRef.current === 0 || offlineIntervalElapsed) {
+      refresh.invalidate();
+    }
     const timer = window.setInterval(refresh.tick, smartPosFallbackInterval(isWsConnected));
     window.addEventListener('focus', refresh.resume);
     const onOrdersUpdated = (event: Event) => {
