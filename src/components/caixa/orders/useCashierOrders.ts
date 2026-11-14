@@ -10,6 +10,7 @@ import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';
 import type { CashierTableCard, DeliveryOrderView } from '../orders/cashierWorkspaceTypes';
 import {
   projectApiComandaToDeliveryView,
+  isPendingDeliveryComanda,
   readActiveDeliveryStatus,
   reconcileDeliveryOrderAfterStatus,
 } from './deliveryOrderProjection';
@@ -459,12 +460,12 @@ export function useCashierOrders({
     const requestId = ++deliveryOrdersRequestRef.current;
     setDeliveryOrdersLoadState((current) => current === 'loaded' ? current : 'loading');
     try {
-      const [res, pendingRes] = await Promise.all([
-        fetch(`${apiBaseUrl}/comandas/delivery/ativos`, { headers: authHeaders }),
-        fetch(`${apiBaseUrl}/comandas/delivery/pendentes`, { headers: authHeaders }),
-      ]);
-      if (res.ok && pendingRes.ok) {
-        const [data, pendingData] = await Promise.all([res.json(), pendingRes.json()]);
+      // The pending queue is a strict subset of /delivery/ativos. Read one
+      // authoritative snapshot instead of issuing two expensive projections.
+      const res = await fetch(`${apiBaseUrl}/comandas/delivery/ativos`, { headers: authHeaders });
+      if (res.ok) {
+        const data = await res.json();
+        const pendingData = data.filter(isPendingDeliveryComanda);
         if (requestId !== deliveryOrdersRequestRef.current) return;
         const mapped = data
           .map(mapComandaToDeliveryView)
