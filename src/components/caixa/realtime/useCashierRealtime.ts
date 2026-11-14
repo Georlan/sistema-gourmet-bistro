@@ -5,6 +5,7 @@ type Props = Pick<CaixaPanelProps, 'isWsConnected' | 'onInitialDigitalSnapshotCo
   hasInitialDigitalSnapshot: boolean;
   activeTab: string;
   needsCouriers: boolean;
+  motoboysLoadState?: 'idle' | 'loading' | 'loaded' | 'error';
   fetchTurno: () => Promise<void>;
   fetchDeliveryOrders: () => Promise<void>;
   fetchMotoboys: () => Promise<void>;
@@ -18,6 +19,7 @@ export function useCashierRealtime({
   hasInitialDigitalSnapshot,
   activeTab,
   needsCouriers,
+  motoboysLoadState = 'idle',
   fetchTurno,
   fetchDeliveryOrders,
   fetchMotoboys,
@@ -31,8 +33,10 @@ export function useCashierRealtime({
   }, []);
 
   useEffect(() => {
-    if (needsCouriers) void fetchMotoboys();
-  }, [needsCouriers]);
+    if (needsCouriers && (motoboysLoadState === 'idle' || motoboysLoadState === 'error')) {
+      void fetchMotoboys();
+    }
+  }, [needsCouriers, motoboysLoadState]);
 
   // Browsers can suspend timers and socket delivery while the cashier tab is in
   // the background without immediately marking the WebSocket as disconnected.
