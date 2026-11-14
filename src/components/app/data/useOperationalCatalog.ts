@@ -25,9 +25,12 @@ export function useOperationalCatalog({
   const catalogAbortRef = useRef<AbortController | null>(null);
 
   const catalogRequestRef = useRef(0);
+  const hasCoalescedInitialRef = useRef(false);
 
-  const fetchLiveCatalog = useCallback(async (force = false) => {
+  const fetchLiveCatalog = useCallback(async () => {
     if (!scope || !token) return;
+    const isInitialCoalesce = !hasCoalescedInitialRef.current;
+    hasCoalescedInitialRef.current = true;
     const requestId = ++catalogRequestRef.current;
     catalogAbortRef.current?.abort();
     const controller = new AbortController();
@@ -39,7 +42,7 @@ export function useOperationalCatalog({
       const result = await fetchOperationalCatalog({
         apiBaseUrl: API_BASE_URL,
         token,
-        force,
+        force: !isInitialCoalesce,
       });
 
       if (!isCurrent()) return;
@@ -77,10 +80,10 @@ export function useOperationalCatalog({
 
     const refreshIfVisible = () => {
       if (document.hidden) return;
-      fetchLiveCatalog(true);
+      fetchLiveCatalog();
     };
     const handleVisibilityChange = () => {
-      if (!document.hidden) fetchLiveCatalog(true);
+      if (!document.hidden) fetchLiveCatalog();
     };
 
     const interval = setInterval(refreshIfVisible, 40000); // fallback only while the app is visible
@@ -95,7 +98,7 @@ export function useOperationalCatalog({
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      fetchLiveCatalog(true);
+      fetchLiveCatalog();
       window.dispatchEvent(new Event('koma_orders_updated'));
       window.dispatchEvent(new Event('koma_customers_updated'));
     };

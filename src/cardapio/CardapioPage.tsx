@@ -7,7 +7,11 @@ import PixCopyCode from "./components/PixCopyCode";
 
 import type { CardapioFulfillment } from "./fulfillment";
 import { fetchPopularProducts, registerPopularProductsAlias } from "./popularProductsClient";
-import { fetchPublicMenu, getPublicMenuIdentifier } from "./publicMenuClient";
+import {
+  fetchPublicMenu,
+  getPublicMenuIdentifier,
+  getPublicMenuLoadDurationMs,
+} from "./publicMenuClient";
 import { buildWhatsAppContactUrl } from "../config/whatsappUtils";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -37,6 +41,7 @@ import {
 import CardapioHeader from "./components/CardapioHeader";
 import CardapioCategoryNav from "./components/CardapioCategoryNav";
 import CardapioProductCard from "./components/CardapioProductCard";
+import CardapioProductModal from "./components/CardapioProductModal";
 import {
   groupCategoryProductsForDisplay,
   isGroupedProduct,
@@ -44,9 +49,9 @@ import {
   type GroupedDisplayProduct,
 } from "./catalogGrouping";
 import type { PromotionPartSelection } from "./promotionComposition";
-import type {
-  CardapioCheckoutRequest,
-  CartItem,
+import CardapioCartDrawer, {
+  type CardapioCheckoutRequest,
+  type CartItem,
 } from "./components/CardapioCartDrawer";
 import type { CustomerHistoryOrder } from "./components/CardapioCustomerOrderHistory";
 import { CardapioConditionsSummary } from "./components/CardapioOrderConditions";
@@ -59,9 +64,7 @@ const QRCodeSVG = React.lazy(() =>
   import("qrcode.react").then((module) => ({ default: module.QRCodeSVG })),
 );
 const CardapioBenefitsDrawer = React.lazy(() => import("./components/CardapioBenefitsDrawer"));
-const CardapioProductModal = React.lazy(() => import("./components/CardapioProductModal"));
 const CardapioPromotionWizard = React.lazy(() => import("./components/CardapioPromotionWizard"));
-const CardapioCartDrawer = React.lazy(() => import("./components/CardapioCartDrawer"));
 const CardapioAuthModal = React.lazy(() => import("./components/CardapioAuthModal"));
 const CardapioUserProfileModal = React.lazy(() => import("./components/CardapioUserProfileModal"));
 const CardapioDigital = React.lazy(() => import("./components/CardapioDigital"));
@@ -471,7 +474,7 @@ export default function CardapioPage() {
           categories_count: brand.categories.length,
           products_count: brand.products.length,
           store_status: brand.storeStatus,
-          catalog_load_ms: Math.round(performance.now() - loadStartedAt),
+          catalog_load_ms: getPublicMenuLoadDurationMs(API_BASE_URL, identifier) ?? Math.round(performance.now() - loadStartedAt),
         });
       }
       setActiveCategory((current) => current && brand.categories.includes(current) ? current : "");
@@ -1487,86 +1490,82 @@ export default function CardapioPage() {
       )}
 
       {selectedProduct && (
-        <React.Suspense fallback={null}>
-          <CardapioProductModal
-            product={selectedProduct}
-            restaurantId={activeBrand.id}
-            initialItem={editingCartItem || undefined}
-            onClose={() => { setSelectedProduct(null); setEditingCartItem(null); }}
-            onAddToCart={handleAddToCart}
-          />
-        </React.Suspense>
+        <CardapioProductModal
+          product={selectedProduct}
+          restaurantId={activeBrand.id}
+          initialItem={editingCartItem || undefined}
+          onClose={() => { setSelectedProduct(null); setEditingCartItem(null); }}
+          onAddToCart={handleAddToCart}
+        />
       )}
 
       {(isCartOpen || cart.length > 0) && (
         <div hidden={!isCartOpen}>
-          <React.Suspense fallback={null}>
-            <CardapioCartDrawer
-              key={activeBrand.id}
-              cart={cart}
-              restaurantId={activeBrand.id}
-              restaurantAddress={activeBrand.address}
-              brandConfig={activeBrand}
-              initialFulfillment={fulfillmentChoice?.restaurantId === activeBrand.id ? fulfillmentChoice.method : null}
-              onFulfillmentChange={(method) => setFulfillmentChoice({ restaurantId: activeBrand.id, method })}
-              allProducts={activeBrand.products}
-              onAddToCart={handleAddToCart}
-              onSelectProduct={(product) => {
-                setSelectedProduct(product);
-                setIsCartOpen(false);
-              }}
-              initialCouponCode={couponToApply}
-              onClose={() => { setIsCartOpen(false); setCouponToApply(""); }}
-              onAdjustQty={(itemId, delta) => setCart(current => current.flatMap(item => {
-                if (item.id !== itemId) return [item];
-                const quantity = item.quantity + delta;
-                return quantity > 0 ? [{ ...item, quantity }] : [];
-              }))}
-              onUpdateQty={(itemId, quantity) => setCart((current) => quantity <= 0 ? current.filter((item) => item.id !== itemId) : current.map((item) => item.id === itemId ? { ...item, quantity } : item))}
-              onEditItem={item => {
-                if (item.promotionId) {
-                  const promotion = activeBrand.promotions?.find(offer => offer.id === item.promotionId);
-                  if (promotion) { setEditingPromotionItem(item); setSelectedPromotion(promotion); setIsCartOpen(false); }
-                  else showNotification("A promoção não está mais disponível. Remova-a da sacola.");
-                  return;
-                }
-                const product = activeBrand.products.find(candidate => candidate.id === item.product.id);
-                if (!product || product.isAvailable === false) { showNotification("Este produto não está mais disponível para edição."); return; }
-                setEditingCartItem(item);
-                setSelectedProduct(product);
-              }}
-              onComposeAnother={item => {
-                const product = activeBrand.products.find(candidate => candidate.id === item.product.id);
-                if (!product || product.isAvailable === false) { showNotification("Este produto não está mais disponível para montagem."); return; }
-                setEditingCartItem(null);
-                setSelectedProduct(product);
-              }}
-              onRemoveItem={(itemId) => setCart((current) => current.filter((item) => item.id !== itemId))}
-              onPlaceOrder={(request) => {
-                trackAnalyticsEvent('public_checkout_initiated', {
-                  restaurant_id: activeBrand.id,
-                  delivery_method: request.deliveryMethod,
-                  items_count: cart.reduce((tot, item) => tot + item.quantity, 0),
-                  cart_total: cartTotal,
-                  delivery_fee: request.deliveryFee,
-                  has_coupon: Boolean(request.cupomCodigo),
-                  coupon_discount: request.descontoCupom || 0,
-                  has_cashback: Boolean(request.usarCashback),
-                  cashback_discount: request.descontoCashback || 0,
-                  payment_method: request.paymentMethodDetail || 'nao_definido',
-                });
-                setCheckoutRequest(request);
-                setIsCartOpen(false);
-                setIsCheckoutOpen(true);
-              }}
-              user={user}
-              customerToken={customerToken}
-              accountRequired={activeBrand.customerAccountRequired === true}
-              onAuthClick={() => setIsAuthOpen(true)}
-              orderingEnabled={orderingEnabled}
-              orderingMessage={orderingMessage}
-            />
-          </React.Suspense>
+          <CardapioCartDrawer
+            key={activeBrand.id}
+            cart={cart}
+            restaurantId={activeBrand.id}
+            restaurantAddress={activeBrand.address}
+            brandConfig={activeBrand}
+            initialFulfillment={fulfillmentChoice?.restaurantId === activeBrand.id ? fulfillmentChoice.method : null}
+            onFulfillmentChange={(method) => setFulfillmentChoice({ restaurantId: activeBrand.id, method })}
+            allProducts={activeBrand.products}
+            onAddToCart={handleAddToCart}
+            onSelectProduct={(product) => {
+              setSelectedProduct(product);
+              setIsCartOpen(false);
+            }}
+            initialCouponCode={couponToApply}
+            onClose={() => { setIsCartOpen(false); setCouponToApply(""); }}
+            onAdjustQty={(itemId, delta) => setCart(current => current.flatMap(item => {
+              if (item.id !== itemId) return [item];
+              const quantity = item.quantity + delta;
+              return quantity > 0 ? [{ ...item, quantity }] : [];
+            }))}
+            onUpdateQty={(itemId, quantity) => setCart((current) => quantity <= 0 ? current.filter((item) => item.id !== itemId) : current.map((item) => item.id === itemId ? { ...item, quantity } : item))}
+            onEditItem={item => {
+              if (item.promotionId) {
+                const promotion = activeBrand.promotions?.find(offer => offer.id === item.promotionId);
+                if (promotion) { setEditingPromotionItem(item); setSelectedPromotion(promotion); setIsCartOpen(false); }
+                else showNotification("A promoção não está mais disponível. Remova-a da sacola.");
+                return;
+              }
+              const product = activeBrand.products.find(candidate => candidate.id === item.product.id);
+              if (!product || product.isAvailable === false) { showNotification("Este produto não está mais disponível para edição."); return; }
+              setEditingCartItem(item);
+              setSelectedProduct(product);
+            }}
+            onComposeAnother={item => {
+              const product = activeBrand.products.find(candidate => candidate.id === item.product.id);
+              if (!product || product.isAvailable === false) { showNotification("Este produto não está mais disponível para montagem."); return; }
+              setEditingCartItem(null);
+              setSelectedProduct(product);
+            }}
+            onRemoveItem={(itemId) => setCart((current) => current.filter((item) => item.id !== itemId))}
+            onPlaceOrder={(request) => {
+              trackAnalyticsEvent('public_checkout_initiated', {
+                restaurant_id: activeBrand.id,
+                delivery_method: request.deliveryMethod,
+                items_count: cart.reduce((tot, item) => tot + item.quantity, 0),
+                cart_total: cartTotal,
+                delivery_fee: request.deliveryFee,
+                has_coupon: Boolean(request.cupomCodigo),
+                coupon_discount: request.descontoCupom || 0,
+                has_cashback: Boolean(request.usarCashback),
+                cashback_discount: request.descontoCashback || 0,
+                payment_method: request.paymentMethodDetail || 'nao_definido',
+              });
+              setCheckoutRequest(request);
+              setIsCartOpen(false);
+              setIsCheckoutOpen(true);
+            }}
+            user={user}
+            customerToken={customerToken}
+            accountRequired={activeBrand.customerAccountRequired === true}
+            onAuthClick={() => setIsAuthOpen(true)}
+            orderingEnabled={orderingEnabled}
+            orderingMessage={orderingMessage}
+          />
         </div>
       )}
 

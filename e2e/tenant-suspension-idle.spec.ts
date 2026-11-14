@@ -14,7 +14,7 @@ async function mountBoundary(page: Page) {
 
 test('active idle session makes zero recurring probes in one minute', async ({ page }) => {
   let probes = 0;
-  await page.route('**/produtos/categorias', route => {
+  await page.route('**/produtos/catalogo', route => {
     probes += 1;
     return route.fulfill({ json: [] });
   });
@@ -36,7 +36,7 @@ test('active idle session makes zero recurring probes in one minute', async ({ p
 test('operational suspension blocks the shell and recovery probes stop after reactivation', async ({ page }) => {
   let probes = 0;
   let suspended = false;
-  await page.route('**/produtos/categorias', route => {
+  await page.route('**/produtos/catalogo', route => {
     probes += 1;
     return route.fulfill(suspended
       ? { status: 403, json: { detail: 'Restaurante suspenso' } }
@@ -65,7 +65,7 @@ test('operational suspension blocks the shell and recovery probes stop after rea
 });
 
 test('unrelated permission 403 does not suspend the tenant', async ({ page }) => {
-  await page.route('**/produtos/categorias', route => route.fulfill({ json: [] }));
+  await page.route('**/produtos/catalogo', route => route.fulfill({ json: [] }));
   await page.route('**/permission-denied', route => route.fulfill({
     status: 403, json: { detail: 'Permissão insuficiente' },
   }));

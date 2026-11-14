@@ -17,9 +17,16 @@ type CacheEntry = {
 const PUBLIC_MENU_TTL_MS = 10_000;
 const inFlightRequests = new Map<string, Promise<PublicMenuPayload>>();
 const recentResults = new Map<string, CacheEntry>();
+const lastLoadDurationMs = new Map<string, number>();
 
 function buildKey(apiBaseUrl: string, identifier: string): string {
   return `${apiBaseUrl}\u0000${identifier.trim().toLowerCase()}`;
+}
+
+export function getPublicMenuLoadDurationMs(apiBaseUrl: string, identifier: string): number | null {
+  const cleanIdentifier = String(identifier || '').trim();
+  if (!cleanIdentifier) return null;
+  return lastLoadDurationMs.get(buildKey(apiBaseUrl, cleanIdentifier)) ?? null;
 }
 
 export function getPublicMenuIdentifier(): string | null {
@@ -40,6 +47,7 @@ export function getPublicMenuIdentifier(): string | null {
 export function clearPublicMenuCache(): void {
   inFlightRequests.clear();
   recentResults.clear();
+  lastLoadDurationMs.clear();
 }
 
 export function fetchPublicMenu({
@@ -74,6 +82,7 @@ export function fetchPublicMenu({
     const query = new URLSearchParams(
       isNumericIdentifier ? { restaurante_id: cleanIdentifier } : { slug: cleanIdentifier },
     );
+    const startedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
     flight = (async () => {
       const response = await fetch(
         `${apiBaseUrl}/api/cardapio-digital/public?${query.toString()}`,
@@ -91,6 +100,11 @@ export function fetchPublicMenu({
         throw new Error('CARDAPIO_INVALID_RESPONSE');
       }
 
+      const elapsed = Math.max(
+        0,
+        Math.round((typeof performance !== 'undefined' ? performance.now() : Date.now()) - startedAt),
+      );
+      lastLoadDurationMs.set(key, elapsed);
       recentResults.set(key, {
         expiresAt: Date.now() + PUBLIC_MENU_TTL_MS,
         payload,
