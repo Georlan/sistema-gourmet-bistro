@@ -404,7 +404,12 @@ def get_catalogo(
     """Snapshot único do catálogo usado pelo caixa e pelo app do garçom."""
     del current_user
     rest_id = require_tenant_id()
-    niche = resolve_restaurant_niche(db, rest_id)
+    config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == rest_id).first()
+    niche = resolve_restaurant_niche(
+        db,
+        rest_id,
+        fallback_niche=(config.nicho if config and config.nicho else "geral"),
+    )
     categorias = ordered_categories(
         db.query(Categoria)
         .filter(Categoria.restaurante_id == rest_id)
@@ -420,7 +425,6 @@ def get_catalogo(
     products = ordered_products(products)
     modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, products)
     family_metadata = family_metadata_for_products(db, rest_id, products)
-    config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == rest_id).first()
     cardapios = (
         db.query(Cardapio)
         .filter(Cardapio.restaurante_id == rest_id)
