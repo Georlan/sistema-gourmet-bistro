@@ -512,14 +512,16 @@ def test_explicit_test_release_without_subscription_is_scoped_and_revocable(db, 
     payload = PixConfiguration(enabled=True, key_type='email', pix_key='pix@example.test',
         holder_name='Restaurante', city='Fortaleza', accept_manual_confirmation_and_monthly_fees=True)
     assert read_settings(db, user)['test_mode'] is False
-    with pytest.raises(HTTPException) as failure:
-        save_settings(payload, db, user)
-    assert failure.value.status_code == 409
+    save_settings(payload, db, user)
+    row = db.query(RestaurantDirectPixConfig).one()
+    assert row.enabled and row.terms_version == 'direct-pix-v2-zero-commission'
+    assert OnlinePaymentService.has_active_account(db, 99420)
+    assert OnlinePaymentService.active_account(db, 99420).provider == 'direct_pix'
     monkeypatch.setenv('DIRECT_PIX_TEST_TENANT_IDS', '99420')
     assert read_settings(db, user)['test_mode'] is True
     assert read_settings(db, user)['commercial'] is None
     save_settings(payload, db, user)
-    row = db.query(RestaurantDirectPixConfig).one()
+    db.refresh(row)
     assert row.enabled and row.terms_version == 'direct-pix-test-v1'
     assert db.query(SaaSSubscription).count() == 0
     assert db.query(SuperAdminAuditLog).filter_by(action='DIRECT_PIX_TEST_ACTIVATED').count() == 1
@@ -542,14 +544,23 @@ def test_test_release_never_bypasses_existing_subscription_or_invalid_contract(d
     assert read_settings(db, user)['test_mode'] is False
     payload = PixConfiguration(enabled=True, key_type='email', pix_key='pix@example.test',
         holder_name='Restaurante', city='Fortaleza', accept_manual_confirmation_and_monthly_fees=True)
-    with pytest.raises(HTTPException):
-        save_settings(payload, db, user)
+    save_settings(payload, db, user)
+    row = db.query(RestaurantDirectPixConfig).one()
+    assert row.terms_version == 'direct-pix-v2-zero-commission'
     def invalid(*_):
         raise RuntimeError('Invalid stored terms')
     monkeypatch.setattr('app.services.billing_service.tenant_commercial_terms', invalid)
     assert read_settings(db, user)['test_mode'] is False
-    with pytest.raises(HTTPException):
+    with pytest.raises(HTTPException) as exc:
         save_settings(payload, db, user)
+    assert exc.value.status_code == 409
+    monkeypatch.setattr('app.services.billing_service.tenant_commercial_terms', lambda *_: None)
+    restaurant = db.query(Restaurante).filter(Restaurante.id == 99420).one()
+    restaurant.saas_status = 'suspended'
+    db.commit()
+    with pytest.raises(HTTPException) as inactive_exc:
+        save_settings(payload, db, user)
+    assert inactive_exc.value.status_code == 409
 
 
 def test_test_payment_fees_are_never_invoiced_after_later_subscription(db, monkeypatch):

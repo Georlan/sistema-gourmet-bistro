@@ -105,25 +105,18 @@ def save_settings(payload: PixConfiguration, db: Session = Depends(get_db), user
     except ValueError as exc:
         raise HTTPException(422,str(exc)) from exc
     rest_id = require_tenant_id()
+    from ..models import Restaurante
+    restaurant = db.query(Restaurante).filter(Restaurante.id == rest_id).with_for_update().one()
     test_mode = False
     if payload.enabled:
-        from ..saas_billing_models import SaaSSubscription
+        if str(getattr(restaurant, 'saas_status', 'active') or 'active').strip().lower() != 'active':
+            raise HTTPException(409, 'Restaurante inativo não pode ativar Pix próprio.')
         from ..services.billing_service import tenant_commercial_terms
         try:
             terms = tenant_commercial_terms(db, rest_id)
         except RuntimeError as exc:
             raise HTTPException(409,"Termos comerciais da assinatura indisponíveis.") from exc
         test_mode = terms is None and test_registration_allowed(db, rest_id)
-        if not test_mode:
-            sub = db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == rest_id).one_or_none()
-            if sub is None:
-                raise HTTPException(409,"Configure a assinatura antes de ativar Pix direto.")
-            if sub.billing_cycle in {'monthly','mensal'} and sub.payment_method_type != 'pix':
-                raise HTTPException(409,"A mensalidade atual tem cobrança recorrente. Migre o billing para Pix antes de ativar a fatura consolidada.")
-            if terms is None:
-                raise HTTPException(409,"Termos comerciais da assinatura indisponíveis.")
-    from ..models import Restaurante
-    db.query(Restaurante).filter(Restaurante.id == rest_id).with_for_update().one()
     config = db.query(RestaurantDirectPixConfig).filter(RestaurantDirectPixConfig.restaurante_id == rest_id).one_or_none()
     changing = bool(config and (config.enabled and not payload.enabled or
         (config.key_type, config.pix_key, config.holder_name, config.city) != (payload.key_type, key, name, city)))
