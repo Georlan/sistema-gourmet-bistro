@@ -70,7 +70,7 @@
   border: 0;
   background: transparent;
   color: var(--kds-muted);
-  font-size: clamp(.7rem, 2.9vw, .84rem);
+  font-size: clamp(.75rem, 2.9vw, .86rem);
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -200,7 +200,7 @@
 .kds-ticket__title-row h3 {
   margin: 0;
   color: var(--kds-text);
-  font: 700 1.08rem/1.2 var(--koma-font-display);
+  font: 700 1.16rem/1.22 var(--koma-font-display);
   letter-spacing: -.025em;
   overflow-wrap: anywhere;
 }
@@ -229,7 +229,7 @@
   border: 1px solid transparent;
   border-radius: .4rem;
   color: var(--kds-muted);
-  font-size: .79rem;
+  font-size: .82rem;
   line-height: 1.25;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -252,7 +252,7 @@
   min-height: 44px;
   padding-top: .45rem;
 }
-.kds-ticket__progress { color: var(--kds-muted); font-size: .78rem; line-height: 1.4; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kds-ticket__progress { color: var(--kds-muted); font-size: .84rem; line-height: 1.4; font-weight: 600; font-variant-numeric: tabular-nums; }
 .kds-ticket__identifier { color: var(--kds-muted); font-size: .75rem; overflow-wrap: anywhere; }
 .kds-ticket__accepted { font-size: .75rem; font-weight: 600; color: var(--kds-warn); }
 .kds-ticket__saving { margin-left: auto; font-size: .77rem; color: var(--kds-muted); }
@@ -295,14 +295,14 @@
 .kds-ticket__item-description strong {
   display: block;
   color: var(--kds-text);
-  font-size: .93rem;
+  font-size: 1rem;
   font-weight: 600;
   line-height: 1.35;
 }
 .kds-ticket__item-description small {
   display: block;
   color: var(--kds-muted);
-  font-size: .77rem;
+  font-size: .85rem;
   line-height: 1.4;
   font-weight: 400;
 }
@@ -328,7 +328,7 @@
   border-radius: .6rem;
   background: var(--kds-secondary-bg);
   color: var(--kds-secondary-text);
-  font-size: .81rem;
+  font-size: .85rem;
   font-weight: 600;
   line-height: 1.2;
   cursor: pointer;

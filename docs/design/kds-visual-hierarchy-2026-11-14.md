@@ -12,6 +12,7 @@ A captura é evidência de aparência e densidade, não de defeito operacional. 
 4. **Duas ações, duas hierarquias:** **Concluir N** é a única ação preenchida do ticket, para conclusão em lote. **Pronto** é secundária, com aro e marca de confirmação. As duas mantêm 44px de altura, nomes acessíveis e callbacks existentes; ações individuais seguem independentes.
 5. **Composição legível:** nome do item recebe ênfase, complementos ficam em corpo compacto com espaçamento respirável, e observações reais ganham uma pequena linha contextual; não adicionar informações artificiais ou cartões aninhados.
 6. **Contraste e temas:** preferir tokens --koma-operation-* do design system, usar variáveis locais apenas para botão secundário e espera crítica. Garantir texto sobre ação primária e secundária com razão calculada ≥4,5:1 em dark/light, sem usar menta para tudo.
+   **Peso tipográfico:** títulos de pedido 1,16rem / 700, produtos 1rem / 600, composição 0,85rem / 400 e ação individual 0,85rem / 600; preservar nomes e quebra de linha em 320px.
 7. **Escopo:** CashierKitchen.tsx, kdsWorkspace.css e regressão Playwright. Nenhuma alteração no domínio, API, autenticação, backend, banco, KDS projection, impressão, entregas ou pagamentos.
 
 ## Verificação focal
@@ -22,5 +23,13 @@ A captura é evidência de aparência e densidade, não de defeito operacional. 
 - Capturas de fixture isolada inspecionadas em 320/360/430 px; não foram feitos pedidos reais.
 - Execução ampla de cashier-responsive.spec.ts apresentou falhas fora do KDS (Cardápio, Relatórios, Estoque e navegação). Não são consideradas resolvidas por este PR e não autorizam alterar outros módulos incidentalmente.
 
+## Peso técnico medido e decisão
+Comparação de builds isolados (origin/main 850bb13d versus branch visual, gzip -9 dos bundles Vite):
+- CSS principal: 58.470 B → 58.793 B; acréscimo real de 323 B comprimidos.
+- JavaScript CaixaPanel: 136.697 B → 136.691 B; variação de -6 B comprimidos (sem novos imports ou dependências).
+- CSS do módulo antes da compilação: 2.551 B → 3.284 B gzip; essa medida não representa a transferência real do bundle, que é minificado e unificado.
+- Não vale introduzir lazy loading adicional, dependência ou arquitetura paralela para uma diferença inferior a 0,4 KB no CSS principal.
+- O ajuste de escala tipográfica alterou os valores sem aumentar os bytes não comprimidos do bundle CSS principal (420.199 B no PR), validado em 320px sem rolagem horizontal.
+
 ## Publicação
-Manter PR sem merge até revisão visual e gates finais. Comparar o preview do Cloudflare com o KÔMA em mobile/light e mobile/dark; em eventual regressão, reverter o PR (sem migração).
+Autorização de merge fornecida pelo responsável após o draft. Integrar somente após checks obrigatórios verdes no SHA final, confirmar Cloudflare Pages e /meta.json do domínio público. Em eventual regressão, reverter o PR sem migração.
