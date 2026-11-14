@@ -19,6 +19,9 @@ test('Pix próprio exige aceite, preserva o escopo e envia chave para o contrato
   await page.locator('.cashier-subnav').getByRole('button', { name: 'Integrações', exact: true }).click();
   const section = page.getByRole('region', { name: 'Pix com chave própria' });
   await expect(section).toBeVisible();
+  await expect(section).toContainText('valor de cada pedido do Cardápio Online');
+  await expect(section).toContainText('Modo teste: Pix pagos transferem dinheiro real.');
+  await expect(section).not.toContainText('Um comprovante, sozinho');
   await section.getByLabel('Chave Pix', { exact: true }).fill('conta@example.test');
   await section.getByLabel('Nome do recebedor').fill('Restaurante Teste');
   await section.getByLabel('Cidade do recebedor').fill('Fortaleza');
