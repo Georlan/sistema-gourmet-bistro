@@ -7,7 +7,8 @@ from app.config import settings
 from app.database import Base, SessionLocal, current_restaurante_id
 from app.models import (Restaurante, Usuario, CaixaTurno, Comanda, Categoria, Produto,
     OnlinePaymentIntent, Pagamento, RestaurantDirectPixConfig, DirectPixReceipt, DirectPixFeeInvoice, IntegrationOutbox)
-from app.routes.direct_pix import confirm_receipt, ReceiptConfirmation, PendingCancellation, cancel_pending
+from app.routes.direct_pix import (confirm_receipt, ReceiptConfirmation, PendingCancellation, cancel_pending,
+    release_unpaid, UnpaidRelease)
 from app.services.online_payments.service import OnlinePaymentService, OnlinePaymentConfigurationError
 from app.services.online_payments.direct_pix import brcode, crc16, normalize_key
 from app.services.direct_pix_billing import close_month
@@ -102,6 +103,85 @@ def test_confirmation_is_manual_transactional_and_idempotent(db,monkeypatch):
     assert confirm_receipt(intent.id,payload,db,SimpleNamespace(id='direct-pix-user'))['already_confirmed']
     assert db.query(Pagamento).count()==1 and db.query(IntegrationOutbox).count()==count
     assert OnlinePaymentService.active_account(db,99420).provider=='direct_pix'
+
+
+def test_manual_confirm_without_bank_id_is_audited_not_fabricated(db, monkeypatch):
+    intent, _ = order(db, monkeypatch)
+    payload = ReceiptConfirmation(received_amount='100.00', checked_bank_statement=True)
+    assert payload.bank_reference is None
+    assert confirm_receipt(intent.id, payload, db, SimpleNamespace(id='direct-pix-user'))['status'] == 'approved'
+    receipt = db.query(DirectPixReceipt).one()
+    assert receipt.bank_reference is None
+    assert receipt.confirmed_by == 'direct-pix-user'
+    assert receipt.intent_id == intent.id
+
+
+def test_manual_unpaid_release_publishes_once_and_later_confirm_does_not_republish(db, monkeypatch):
+    from app.online_order_control_models import OnlineOrderOperationalAudit
+    from app.routes.orders_core import _operational_online_payment_filter
+
+    intent, shift = order(db, monkeypatch)
+    order_row = db.query(Comanda).filter(Comanda.id == intent.comanda_id).one()
+    assert db.query(IntegrationOutbox).count() == 0
+    request = UnpaidRelease(acknowledge_payment_pending=True)
+    with pytest.raises(HTTPException) as forbidden:
+        release_unpaid(intent.id, UnpaidRelease(acknowledge_payment_pending=False), db,
+                       SimpleNamespace(id='direct-pix-user'))
+    assert forbidden.value.status_code == 422
+    released = release_unpaid(intent.id, request, db, SimpleNamespace(id='direct-pix-user'))
+    assert released == {'status': 'pending', 'released_unpaid': True, 'already_released': False}
+    db.refresh(order_row)
+    db.refresh(intent)
+    assert order_row.online_payment_status == 'pending_released'
+    assert intent.status == 'pending' and intent.pagamento_id is None
+    assert order_row.valor_pago == 0
+    assert all(not item.pago for item in order_row.itens)
+    assert db.query(Pagamento).count() == 0
+    assert db.query(DirectPixReceipt).count() == 0
+    assert db.query(Comanda).filter(_operational_online_payment_filter(), Comanda.id == order_row.id).count() == 1
+    audit = db.query(OnlineOrderOperationalAudit).filter_by(action='direct_pix_unpaid_released').one()
+    assert audit.actor_user_id == 'direct-pix-user'
+    published = db.query(IntegrationOutbox).count()
+    assert published > 0
+    assert release_unpaid(intent.id, request, db, SimpleNamespace(id='direct-pix-user'))['already_released']
+    assert db.query(IntegrationOutbox).count() == published
+    assert db.query(OnlineOrderOperationalAudit).filter_by(action='direct_pix_unpaid_released').count() == 1
+    with pytest.raises(OnlinePaymentConfigurationError, match='Pix diretos pendentes'):
+        OnlinePaymentService.prepare_shift_for_close(db, restaurant_id=99420, shift_id=shift.id)
+
+    paid = confirm_receipt(intent.id, ReceiptConfirmation(received_amount='100.00',
+        checked_bank_statement=True), db, SimpleNamespace(id='direct-pix-user'))
+    assert paid == {'status':'approved', 'already_confirmed':False}
+    db.refresh(order_row)
+    assert order_row.online_payment_status == 'approved'
+    assert db.query(Pagamento).count() == 1
+    assert all(item.pago for item in order_row.itens)
+    assert db.query(IntegrationOutbox).count() == published
+    assert confirm_receipt(intent.id, ReceiptConfirmation(received_amount='100.00',
+        checked_bank_statement=True), db, SimpleNamespace(id='direct-pix-user'))['already_confirmed']
+    with pytest.raises(HTTPException) as blocked:
+        release_unpaid(intent.id, request, db, SimpleNamespace(id='direct-pix-user'))
+    assert blocked.value.status_code == 409
+
+
+def test_manual_release_is_tenant_scoped_and_cannot_cancel_active_preparation(db,monkeypatch):
+    intent,_=order(db,monkeypatch)
+    request=UnpaidRelease(acknowledge_payment_pending=True)
+    token=current_restaurante_id.set(99421)
+    try:
+        with pytest.raises(HTTPException) as denied:
+            release_unpaid(intent.id,request,db,SimpleNamespace(id='other-user'))
+        assert denied.value.status_code == 404
+    finally:
+        current_restaurante_id.reset(token)
+    release_unpaid(intent.id,request,db,SimpleNamespace(id='direct-pix-user'))
+    comanda=db.query(Comanda).filter(Comanda.id==intent.comanda_id).one()
+    comanda.delivery_status='aceito'
+    db.commit()
+    with pytest.raises(HTTPException) as denied_cancel:
+        cancel_pending(intent.id,PendingCancellation(checked_no_receipt=True),db,
+                       SimpleNamespace(id='direct-pix-user'))
+    assert denied_cancel.value.status_code == 409
 
 
 def test_wrong_amount_and_other_tenant_cannot_confirm(db,monkeypatch):
