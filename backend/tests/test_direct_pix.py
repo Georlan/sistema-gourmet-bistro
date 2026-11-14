@@ -834,6 +834,7 @@ def test_customer_report_direct_pix_endpoints_idempotency_and_pending_order(monk
                 amount=Decimal("32.50"),
                 intent_id="11111111-1111-1111-1111-111111111111",
             )
+            comanda1.delivery_telefone = "(88) 99961-6937"
             comanda2, intent2 = _seed_pix_order(
                 setup_session,
                 rest_id=99420,
@@ -953,6 +954,8 @@ def test_customer_report_direct_pix_endpoints_idempotency_and_pending_order(monk
         assert pending_a.status_code == 200, pending_a.text
         rows_a = pending_a.json()
         assert [row["order_number"] for row in rows_a] == [102, 101, 100]
+        assert next(row for row in rows_a if row["order_number"] == 101)["customer_phone"] == "(88) 99961-6937"
+        assert next(row for row in rows_a if row["order_number"] == 100)["customer_reported"] is False
         assert rows_a[0]["customer_reported"] is True
         assert rows_a[0]["customer_reported_at"] is not None
         assert rows_a[0]["txid"]
