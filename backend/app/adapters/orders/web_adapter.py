@@ -776,8 +776,11 @@ class CardapioWebAdapter:
         finally:
             current_restaurante_id.reset(token_context)
 
-        if not online_payment:
+        if not online_payment or (
+            payment_intent is not None and payment_intent.provider == "direct_pix"
+        ):
             background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
+        if not online_payment:
             background_tasks.add_task(
                 manager.broadcast,
                 {"event": "new_delivery_order", "message": f"Novo pedido online de {cliente_nome} recebido!"},

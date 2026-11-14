@@ -98,13 +98,33 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   const enabled=true;
   let paid=false;
   let created=false;
+  let customerReported=false;
+  let customerReportedAt: string|null=null;
   let confirmations=0;
   const submitted: Record<string,unknown>[]=[];
-  const payment=()=>({status:paid?'approved':'pending',cobranca_online:true,confirmacao_manual:true,metodo:'pix',qr_code:'test-only-journey-do-not-pay',qr_code_base64:null});
-  await page.route('**/payments/direct-pix/pending',route=>route.fulfill({json:created&&!paid?[{id:'journey-intent',order_number:'47',customer:'Cliente teste',amount:'10.50'}]:[]}));
+  const payment=()=>({
+    status:paid?'approved':'pending',
+    cobranca_online:true,
+    confirmacao_manual:true,
+    metodo:'pix',
+    txid:'journeyintent1234567890123',
+    cliente_informou_pagamento:customerReported,
+    pagamento_informado_em:customerReportedAt,
+    qr_code:'test-only-journey-do-not-pay',
+    qr_code_base64:null,
+  });
+  await page.route('**/payments/direct-pix/pending',route=>route.fulfill({json:created&&!paid?[{
+    id:'journey-intent',
+    order_number:'47',
+    customer:'Cliente teste',
+    amount:'10.50',
+    txid:'journeyintent1234567890123',
+    customer_reported:customerReported,
+    customer_reported_at:customerReportedAt,
+  }]:[]}));
   await page.route('**/payments/direct-pix/journey-intent/confirm',route=>{
     const body=route.request().postDataJSON();
-    expect(body).toMatchObject({received_amount:'10.50',checked_bank_statement:true,bank_reference:'E'+'8'.repeat(31)});
+    expect(body).toMatchObject({received_amount:'10.50',checked_bank_statement:true,bank_reference:'E1234567890123456789012345678901'});
     confirmations++;paid=true;
     return route.fulfill({json:{status:'approved',already_confirmed:false}});
   });
@@ -117,9 +137,14 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
       categorias:[{id:10,nome:'Bebidas'}],produtos:[{id:101,nome:'Água',preco:4.5,categoria_id:10,grupos_modificadores:[]}]}});
     if(pathname==='/cardapio/pedidos'&&request.method()==='POST') {
       submitted.push(request.postDataJSON());created=true;
-      return route.fulfill({status:201,json:{comanda_id:'journey-order',numero_pedido:47,total:10.5,pagamento:payment()}});
+      return route.fulfill({status:201,json:{comanda_id:'journey-order',numero_pedido:47,total:10.5,tracking_token:'journey-tracking-token',pagamento:payment()}});
     }
-    if(pathname.includes('/cardapio/pedidos/')&&pathname.endsWith('/status')) return route.fulfill({json:{
+    if(pathname.endsWith('/pix-informado')&&request.method()==='POST') {
+      customerReported=true;
+      customerReportedAt='2026-11-14T15:00:00Z';
+      return route.fulfill({json:{id:'journey-order',status:paid?'pendente':'aguardando_pagamento',pagamento:payment()}});
+    }
+    if((pathname.includes('/cardapio/pedidos/')&&pathname.endsWith('/status'))||pathname.endsWith('/acompanhar/journey-tracking-token/summary')) return route.fulfill({json:{
       id:'journey-order',numero_pedido:47,status:paid?'pendente':'aguardando_pagamento',tipo:'Delivery',fechado:false,total:10.5,pagamento:payment()}});
     return route.fulfill({json:{}});
   });
@@ -174,13 +199,24 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   await expect(reopened).toContainText('O restaurante conferirá o recebimento');
   await expect(reopened.getByRole('link',{name:'Enviar comprovante no WhatsApp'})).toHaveAttribute('href', /wa\.me\/5588999616937\?text=/);
   await expect(reopened).not.toContainText('A confirmação do pagamento é automática');
+  await reopened.getByRole('button',{name:'Já fiz o Pix'}).click();
+  await expect(reopened.getByText('Pagamento informado. Aguardando confirmação do restaurante.')).toBeVisible();
+  expect(customerReported).toBe(true);
   await test.info().attach('pix-reaberto-manual',{body:await consumer.screenshot(),contentType:'image/png'});
+  await consumer.reload();
+  const ordersButtonAfterReport=(consumer.viewportSize()?.width||0)<=640 ? '#mobile-nav-orders' : '#floating-order-chat-trigger';
+  await consumer.locator(ordersButtonAfterReport).click();
+  await expect(consumer.locator('#orders-drawer-panel').getByText('Pagamento informado. Aguardando confirmação do restaurante.')).toBeVisible();
   await page.reload();
   await expect(page.locator('.orders-board')).toBeVisible();
   await page.getByRole('button',{name:/Conferir Pix/}).click();
   const pending=page.getByRole('dialog',{name:/Pix aguardando conferência/});
+  await expect(pending.getByTestId('direct-pix-reported-journey-intent')).toContainText('Cliente informou o Pix');
   await pending.getByRole('button',{name:/Pedido #47/}).click();
-  await pending.getByRole('textbox').fill('E'+'8'.repeat(31));
+  await expect(pending.getByTestId('direct-pix-selected-status-journey-intent')).toContainText('Cliente informou o Pix');
+  const referenceInput=pending.getByLabel('Identificador do Pix no extrato (EndToEndId)');
+  await referenceInput.fill('Comprovante Pix\nID da transacao: E1234567890123456789012345678901\nValor: R$ 10,50');
+  await expect(referenceInput).toHaveValue('E1234567890123456789012345678901');
   await pending.getByRole('checkbox',{name:'Conferi o valor integral recebido na conta correta.'}).check();
   await pending.getByRole('button',{name:'Confirmar Pagamento Pix'}).click();
   await expect(pending).toContainText('Nenhum Pix aguardando conferência.');

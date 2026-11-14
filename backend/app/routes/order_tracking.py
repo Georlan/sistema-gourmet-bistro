@@ -272,16 +272,9 @@ def _resolve_tracking_payment_state(
             effective_status = "cancelado"
             payment_failed = True
 
-        pagamento_payload = {
-            "status": intent.status,
-            "cobranca_online": True,
-            "metodo": intent.method,
-            "confirmacao_manual": intent.provider == "direct_pix",
-            "qr_code": intent.qr_code,
-            "qr_code_base64": intent.qr_code_base64,
-            "ticket_url": intent.ticket_url,
-            "expira_em": intent.expires_at.isoformat() if intent.expires_at else None,
-        }
+        from ..services.online_payments import OnlinePaymentService
+
+        pagamento_payload = OnlinePaymentService.public_payload(intent)
 
     return effective_status, payment_pending, payment_failed, pagamento_payload
 
@@ -572,6 +565,76 @@ def enviar_mensagem_do_cliente(
         db.commit()
         db.refresh(msg)
         return serialize_message(msg)
+
+
+@router.post("/{token}/pix-informado", summary="Informa ao restaurante que o cliente realizou o Pix")
+def informar_pix_realizado(
+    token: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    resolved = resolve_public_tracking(db, token)
+    if not resolved:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
+
+    restaurante_id, conversation_id, pedido_id, _closed_at = resolved
+    with tenant_session_scope(db, restaurante_id):
+        consume_rate_limit(
+            db,
+            restaurante_id=restaurante_id,
+            scope="direct_pix_report_conv",
+            raw_key=conversation_id,
+            max_requests=15,
+            window_seconds=60,
+            detail="Muitas tentativas em pouco tempo. Aguarde um instante.",
+        )
+        db.commit()
+        consume_rate_limit(
+            db,
+            restaurante_id=restaurante_id,
+            scope="direct_pix_report_ip",
+            raw_key=client_ip(request),
+            max_requests=30,
+            window_seconds=5 * 60,
+            detail="Muitas tentativas em pouco tempo. Aguarde um instante.",
+        )
+        db.commit()
+
+        comanda = (
+            db.query(Comanda)
+            .filter(Comanda.restaurante_id == restaurante_id, Comanda.id == pedido_id)
+            .first()
+        )
+        if not comanda:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pedido não encontrado.")
+
+        payment_intent = (
+            db.query(OnlinePaymentIntent)
+            .filter(
+                OnlinePaymentIntent.restaurante_id == restaurante_id,
+                OnlinePaymentIntent.comanda_id == comanda.id,
+            )
+            .first()
+        )
+
+        from ..services.online_payments import OnlinePaymentService
+        from ..services.online_payments.direct_pix import report_direct_pix_payment
+
+        intent = report_direct_pix_payment(
+            db,
+            restaurant_id=restaurante_id,
+            comanda=comanda,
+            intent=payment_intent,
+        )
+        return {
+            "id": comanda.id,
+            "status": (
+                "aguardando_pagamento"
+                if intent.status in {"created", "pending"}
+                else _effective_tracking_status(comanda)
+            ),
+            "pagamento": OnlinePaymentService.public_payload(intent),
+        }
 
 
 @router.post("/{token}/read", summary="Marca mensagens como lidas pelo cliente")

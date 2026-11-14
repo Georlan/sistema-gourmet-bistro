@@ -1,4 +1,5 @@
 import PixCopyCode from "./PixCopyCode";
+import { DirectPixCustomerConfirm } from "./DirectPixCustomerConfirm";
 import { OrderItemComposition } from "../../components/shared/OrderItemComposition";
 import { cardapioCompositionSource } from "../orderItems";
 import { QRCodeSVG } from 'qrcode.react';
@@ -64,7 +65,11 @@ interface CreatedOrder {
 interface OnlinePaymentResponse {
   status: string;
   cobranca_online: boolean;
+  provedor?: string;
   metodo?: string;
+  txid?: string | null;
+  cliente_informou_pagamento?: boolean;
+  pagamento_informado_em?: string | null;
   qr_code?: string | null;
   qr_code_base64?: string | null;
   confirmacao_manual?: boolean;
@@ -607,7 +612,9 @@ export default function CardapioDigital({
         const nextStatus = String(payload?.pagamento?.status || "pending");
         setCreatedOrder((current) => current ? {
           ...current,
-          pagamento: current.pagamento ? { ...current.pagamento, status: nextStatus } : current.pagamento,
+          pagamento: current.pagamento
+            ? { ...current.pagamento, ...(payload?.pagamento || {}), status: nextStatus }
+            : current.pagamento,
         } : current);
       } catch {
         // O webhook é a autoridade; uma falha pontual de rede ou DNS só adia a checagem sem travar a UI.
@@ -678,6 +685,22 @@ export default function CardapioDigital({
                   {!createdOrder.pagamento.qr_code_base64 && createdOrder.pagamento.qr_code && <QRCodeSVG value={createdOrder.pagamento.qr_code} size={208} level="M" marginSize={4} className="mx-auto" />}
                   {createdOrder.pagamento.qr_code_base64 && <img className="mx-auto h-52 w-52 rounded-xl bg-white p-2" src={`data:image/png;base64,${createdOrder.pagamento.qr_code_base64}`} alt="QR Code Pix do pedido" />}
                   {createdOrder.pagamento.qr_code && <PixCopyCode code={createdOrder.pagamento.qr_code} />}
+                  <DirectPixCustomerConfirm
+                    order={{
+                      id: createdOrder.comanda_id,
+                      idempotency_key: idempotencyKeyRef.current,
+                      tracking_token: createdOrder.tracking_token,
+                      tracking_url: createdOrder.tracking_url,
+                      pagamento: createdOrder.pagamento,
+                    }}
+                    apiBaseUrl={API_BASE_URL}
+                    onReported={(nextPayment) => {
+                      setCreatedOrder((current) => current ? {
+                        ...current,
+                        pagamento: current.pagamento ? { ...current.pagamento, ...nextPayment } : { ...nextPayment, status: nextPayment.status || "pending", cobranca_online: true },
+                      } : current);
+                    }}
+                  />
                   {createdOrder.pagamento.ticket_url && <a href={createdOrder.pagamento.ticket_url} target="_blank" rel="noreferrer" className="mt-2 flex h-11 w-full items-center justify-center rounded-xl border border-koma-border text-xs font-bold text-koma-foreground">Abrir pagamento</a>}
                   <p className="mt-2 text-[10px] leading-relaxed text-koma-muted">{createdOrder.pagamento.confirmacao_manual ? "O restaurante confirmará o recebimento. Você pode acompanhar o pedido neste cardápio." : "A confirmação é automática. Você pode acompanhar o pedido neste cardápio."}</p>
                 </div>
