@@ -9,6 +9,5 @@ export function ManualPixReceiptContact({ order, phone, restaurantId }: { order:
     <a href={url} target="_blank" rel="noopener noreferrer" className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-emerald-600 bg-emerald-800 px-3 text-sm font-semibold text-white hover:bg-emerald-900">
       <MessageCircle size={17} aria-hidden="true" /> Enviar comprovante no WhatsApp
     </a>
-    <p className="mt-2 text-xs text-koma-muted">Anexe o comprovante na conversa. O restaurante confirma o recebimento pelo banco.</p>
   </div>;
 }
