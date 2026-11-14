@@ -458,7 +458,9 @@ export default function CardapioOrderChatPanel({
             <p className="min-w-0 text-[10px] leading-relaxed text-amber-200/80">
               {order.pagamento?.confirmacao_manual && order.pagamento?.cliente_informou_pagamento
                 ? "Pagamento informado. Aguardando confirmação do restaurante."
-                : "Confirme o Pix para liberar o pedido para o restaurante."}
+                : order.pagamento?.confirmacao_manual
+                  ? "O restaurante vê o pedido e conferirá o Pix no extrato, mesmo sem aviso."
+                  : "Confirme o Pix para liberar o pedido para o restaurante."}
             </p>
             {order.pagamento?.qr_code && onPayPix && (
               <button
