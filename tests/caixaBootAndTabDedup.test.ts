@@ -96,5 +96,5 @@ test('CaixaPanel gates loyalty customers load and motoboys reload on active stat
 
   assert.match(caixaPanel, /enabled:\s*activeTab === 'clientes' \|\| hasOpenedCheckout/);
   assert.match(caixaPanel, /motoboysLoadState,/);
-  assert.match(realtimeHook, /needsCouriers && \(motoboysLoadState === 'idle' \|\| motoboysLoadState === 'error'\)/);
+  assert.match(realtimeHook, /needsCouriers && motoboysLoadState !== 'loaded'/);
 });

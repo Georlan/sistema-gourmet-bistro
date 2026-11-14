@@ -33,7 +33,7 @@ export function useCashierRealtime({
   }, []);
 
   useEffect(() => {
-    if (needsCouriers && (motoboysLoadState === 'idle' || motoboysLoadState === 'error')) {
+    if (needsCouriers && motoboysLoadState !== 'loaded') {
       void fetchMotoboys();
     }
   }, [needsCouriers, motoboysLoadState]);
