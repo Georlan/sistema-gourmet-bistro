@@ -1,4 +1,5 @@
 import datetime
+import re
 import textwrap
 from typing import Optional
 
@@ -95,6 +96,23 @@ def _append_wrapped_in_font(
     lines.extend(wrapped_lines)
 
 
+def _append_item_observation(lines: list[str], value: str, width: int) -> None:
+    """Uma categoria por nota: OPÇÕES ou OBS, nunca OBS: OPÇÕES:.
+
+    O texto original é preservado para observações livres. O cardápio pode
+    registrar escolhas num campo legado de observação iniciado por 'Opções:'.
+    Isso é apresentação, não mudança na composição, no preço ou no pedido.
+    """
+    note = _single_line(value)
+    if not note:
+        return
+    if re.match(r"^OBS:\s*", note, flags=re.IGNORECASE):
+        note = re.sub(r"^OBS:\s*", "", note, count=1, flags=re.IGNORECASE)
+    is_options = bool(re.match(r"^OP[ÇC][ÕO]ES:\s*\S", note, flags=re.IGNORECASE))
+    prefix = "   " if is_options else "   OBS: "
+    _append_wrapped_in_font(lines, note.upper(), width, prefix, ESC_FONT_A)
+
+
 def _printable_product_name(code: str, name: str) -> str:
     clean_name = _single_line(name)
     clean_code = _single_line(code)
@@ -113,16 +131,33 @@ def _printable_product_name(code: str, name: str) -> str:
 
 
 def _append_amount_line(lines: list[str], left: str, right: str, width: int) -> None:
-    max_left = max(width - len(right) - 1, 1)
+    """Mantenha todo o nome e o valor, inclusive em bobinas estreitas.
+
+    Quando ambos cabem, preserve a linha tradicional. Para nomes longos, a
+    quantia acompanha a última linha se couber; senão fica em linha própria
+    à direita. Não corte o nome para reservar a coluna de preço.
+    """
+    label = _single_line(left)
+    amount = _single_line(right)
+    if len(label) + len(amount) + 1 <= width:
+        lines.append(split_justified(label, amount, width))
+        return
+
     wrapped = textwrap.wrap(
-        _single_line(left),
-        width=max_left,
+        label,
+        width=width,
+        subsequent_indent="  ",
         break_long_words=True,
         break_on_hyphens=False,
     ) or [""]
-    lines.append(split_justified(wrapped[0], right, width))
-    for continuation in wrapped[1:]:
-        lines.append(f"   {continuation}"[:width])
+    if len(amount) <= width and len(wrapped[-1]) + len(amount) + 1 <= width:
+        wrapped[-1] = split_justified(wrapped[-1], amount, width)
+    elif len(amount) <= width:
+        wrapped.append(amount.rjust(width))
+    else:
+        # Defensivo para campos não monetários excepcionalmente grandes.
+        wrapped.extend(textwrap.wrap(amount, width=width, break_long_words=True))
+    lines.extend(wrapped)
 
 
 def _append_bold_amount_line(lines: list[str], left: str, right: str, width: int) -> None:
@@ -633,9 +668,7 @@ class PrinterService:
                 for composition_line in composition:
                     _append_wrapped(lines, composition_line.upper(), width, "   ")
                 if observacao:
-                    _append_wrapped_in_font(
-                        lines, observacao.upper(), width, "   OBS: ", ESC_FONT_A
-                    )
+                    _append_item_observation(lines, observacao, width)
                 lines.append("")
 
         lines.append(draw_separator("-", width))
@@ -805,9 +838,7 @@ class PrinterService:
                 if not apenas_valores and observation:
                     if production_hierarchy and composition:
                         lines.append("")
-                    _append_wrapped_in_font(
-                        lines, observation.upper(), width, "   OBS: ", ESC_FONT_A
-                    )
+                    _append_item_observation(lines, observation, width)
                 lines.append("")
 
             grand_total += client_subtotal

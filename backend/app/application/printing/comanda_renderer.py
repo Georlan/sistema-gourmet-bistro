@@ -376,14 +376,14 @@ def _insert_context_block(
         block.append(ESC_BOLD_ON + "CLIENTE" + ESC_BOLD_OFF)
         if variant.customer_name:
             customer_lines = textwrap.wrap(
-                f"NOME: {variant.customer_name}",
+                str(variant.customer_name).strip(),
                 width=width,
                 break_long_words=True,
                 break_on_hyphens=False,
-            ) or ["NOME: NÃO INFORMADO"]
+            ) or ["NÃO INFORMADO"]
             block.extend(customer_lines)
         if customer_phone:
-            block.append(f"TELEFONE: {format_phone_for_print(customer_phone)}")
+            block.append(f"TEL: {format_phone_for_print(customer_phone)}")
         if (
             float(variant.cashback_discount or 0.0) > 0
             and variant.loyalty_previous_orders is not None
@@ -594,9 +594,18 @@ def _replace_total(
     )
 
     if variant.show_financial_breakdown:
-        charge_lines = [
-            split_justified("SUBTOTAL ITENS:", _format_brl(items_total), width),
-        ]
+        # Sem taxa/desconto, o subtotal repetiria o total e gastaria papel.
+        # Delivery mantém subtotal e taxa explícitos para conferência.
+        detailed_breakdown = bool(
+            _order_type_label(order_type) == "DELIVERY"
+            or delivery_fee > 0
+            or coupon_discount > 0
+            or cashback_discount > 0
+        )
+        charge_lines = (
+            [split_justified("SUBTOTAL ITENS:", _format_brl(items_total), width)]
+            if detailed_breakdown else []
+        )
         if _order_type_label(order_type) == "DELIVERY":
             charge_lines.append(
                 split_justified("TAXA DE ENTREGA:", _format_brl(delivery_fee), width)
@@ -617,9 +626,10 @@ def _replace_total(
                     width,
                 )
             )
-        charge_lines.append("-" * width)
-        lines[total_index:total_index] = charge_lines
-        total_index += len(charge_lines)
+        if charge_lines:
+            charge_lines.append("-" * width)
+            lines[total_index:total_index] = charge_lines
+            total_index += len(charge_lines)
     elif delivery_fee > 0:
         charge_lines = [
             split_justified("SUBTOTAL ITENS:", _format_brl(items_total), width),
