@@ -1,6 +1,8 @@
 package br.com.koma.print.core
 
 import java.io.OutputStream
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
 import kotlin.math.min
 
 enum class SppSocketStrategy {
@@ -21,6 +23,36 @@ data class SppTransmissionResult(
 interface BluetoothSppTransport {
     fun listPairedSppPrinters(): List<BluetoothPrinterDevice>
     fun sendRawPayload(device: BluetoothPrinterDevice, payload: ByteArray): SppTransmissionResult
+}
+
+
+/**
+ * Um único transporte Bluetooth por processo, protegendo a bobina contra
+ * mistura de bytes do serviço automático com o teste manual.
+ */
+class BluetoothTransmissionGate {
+    private val exclusive = ReentrantLock()
+
+    fun send(waitMs: Long = 8_000L, operation: () -> SppTransmissionResult): SppTransmissionResult {
+        val acquired = try {
+            exclusive.tryLock(waitMs.coerceAtLeast(0L), TimeUnit.MILLISECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            return SppTransmissionResult(
+                success = false, attempts = 0, errorCode = "send_interrupted",
+                errorMessage = "Envio interrompido. Tente novamente.",
+            )
+        }
+        if (!acquired) return SppTransmissionResult(
+            success = false, attempts = 0, errorCode = "printer_busy",
+            errorMessage = "Impressora ocupada com outra comanda. Aguarde e tente novamente.",
+        )
+        return try {
+            operation()
+        } finally {
+            exclusive.unlock()
+        }
+    }
 }
 
 /**
@@ -89,18 +121,9 @@ object OemCompatibilityPolicy {
 
     fun requiredRuntimePermissions(sdkInt: Int): List<String> {
         require(sdkInt >= 26) { "KÔMA Print Android exige Android 8.0+ (API 26+)." }
-        val permissions = mutableListOf<String>()
-        if (sdkInt >= 31) {
-            permissions.add(PERMISSION_BLUETOOTH_CONNECT)
-            permissions.add(PERMISSION_BLUETOOTH_SCAN)
-        } else {
-            permissions.add(PERMISSION_BLUETOOTH)
-            permissions.add(PERMISSION_BLUETOOTH_ADMIN)
-        }
-        if (sdkInt >= 33) {
-            permissions.add(PERMISSION_POST_NOTIFICATIONS)
-        }
-        return permissions
+        // Só conectamos a aparelhos já pareados: sem varredura e sem
+        // notificação obrigatória para iniciar o serviço em primeiro plano.
+        return if (sdkInt >= 31) listOf(PERMISSION_BLUETOOTH_CONNECT) else emptyList()
     }
 
     fun lockScreenGuidanceForManufacturer(manufacturerRaw: String): String {

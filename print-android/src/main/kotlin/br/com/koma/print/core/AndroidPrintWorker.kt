@@ -27,7 +27,7 @@ class AndroidPrintWorker(
     private val apiClient: KomaPrintAgentClient,
     private val bluetoothTransport: BluetoothSppTransport,
     private val journal: PrintJournal,
-    private val restaurantDisplayName: String = "JE LANCHES",
+    private val restaurantDisplayName: String = "RESTAURANTE KÔMA",
 ) {
     fun resolvePrinters(preferredAddress: String? = null): List<BluetoothPrinterDevice> {
         val rawPrinters = bluetoothTransport.listPairedSppPrinters()
@@ -37,15 +37,17 @@ class AndroidPrintWorker(
             ?.takeIf { it.isNotBlank() }
             ?.let { BluetoothPrinterDevice.normalizeMacAddress(it) }
 
-        val defaultCandidate = rawPrinters.firstOrNull {
-            normalizedPreferred != null && it.normalizedAddress == normalizedPreferred
-        } ?: rawPrinters.firstOrNull {
-            it.profile.paperWidthMm <= 58
-        } ?: rawPrinters.first()
+        val defaultCandidate = if (normalizedPreferred != null) {
+            // Se a escolhida sumiu, nunca desvie pedidos para outra.
+            rawPrinters.firstOrNull { it.normalizedAddress == normalizedPreferred }
+        } else {
+            // Sem escolha prévia, seleção automática só quando for inequívoca.
+            rawPrinters.singleOrNull()
+        }
 
         return rawPrinters.map { printer ->
             printer.copy(
-                isDefault = printer.normalizedAddress == defaultCandidate.normalizedAddress,
+                isDefault = defaultCandidate != null && printer.normalizedAddress == defaultCandidate.normalizedAddress,
                 configured = true,
             )
         }
@@ -61,9 +63,9 @@ class AndroidPrintWorker(
             ?.let { BluetoothPrinterDevice.normalizeMacAddress(it) }
 
         if (normalizedPreferred != null) {
-            printers.firstOrNull { it.normalizedAddress == normalizedPreferred }?.let { return it }
+            return printers.firstOrNull { it.normalizedAddress == normalizedPreferred }
         }
-        return printers.firstOrNull { it.isDefault } ?: printers.firstOrNull()
+        return printers.firstOrNull { it.isDefault }
     }
 
     fun reconcilePendingBackendAcks(): Int {

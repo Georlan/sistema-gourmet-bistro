@@ -68,7 +68,7 @@ class AgentRevokedException(message: String) : RuntimeException(message)
 class KomaPrintAgentClient(
     private val transport: PrintAgentHttpTransport,
     private val agentTokenProvider: () -> String,
-    private val agentVersion: String = "1.0.0-android",
+    private val agentVersion: String = "1.1.0-android",
 ) {
     fun loginAndRegisterAgent(
         username: String,
@@ -208,7 +208,9 @@ class KomaPrintAgentClient(
     }
 
     fun buildDiagnosticsJson(printers: List<BluetoothPrinterDevice>): String {
-        val defaultPrinter = printers.firstOrNull { it.isDefault } ?: printers.firstOrNull()
+        // Não anuncie uma impressora genérica como destino se o usuário ainda
+        // não escolheu ou se a impressora preferida desapareceu.
+        val defaultPrinter = printers.firstOrNull { it.isDefault }
         val printersJson = printers.joinToString(",") { p ->
             buildString {
                 append('{')
