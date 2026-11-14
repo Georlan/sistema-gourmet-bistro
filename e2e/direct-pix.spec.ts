@@ -181,7 +181,7 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   }]:[]}));
   await page.route('**/payments/direct-pix/journey-intent/confirm',route=>{
     const body=route.request().postDataJSON();
-    expect(body).toMatchObject({received_amount:'10.50',checked_bank_statement:true,bank_reference:'E1234567890123456789012345678901'});
+    expect(body).toMatchObject({received_amount:'10.50',checked_bank_statement:true,bank_reference:null});
     confirmations++;paid=true;
     return route.fulfill({json:{status:'approved',already_confirmed:false}});
   });
