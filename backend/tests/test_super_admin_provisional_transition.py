@@ -80,12 +80,11 @@ TEST_TENANT_ID = 9876
 
 def _cleanup_tenant(db, tenant_id: int = TEST_TENANT_ID):
     from app.session_models import UserSessionVersion
-    from app.saas_billing_models import SaaSBillingSetup, SaaSInvoice
+    from app.saas_billing_models import SaaSBillingSetup
     db.query(SignupNotification).delete()
     db.query(SuperAdminAuditLog).filter(SuperAdminAuditLog.restaurante_id == tenant_id).delete()
     db.query(RestaurantContractAcceptance).filter(RestaurantContractAcceptance.restaurante_id == tenant_id).delete()
     db.query(ContractAcceptance).filter(ContractAcceptance.email == "contato@jelanches.com.br").delete()
-    db.query(SaaSInvoice).filter(SaaSInvoice.restaurante_id == tenant_id).delete()
     db.query(SaaSBillingSetup).filter(SaaSBillingSetup.restaurante_id == tenant_id).delete()
     db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == tenant_id).delete()
     db.execute(restaurant_trials.delete().where(restaurant_trials.c.restaurante_id == tenant_id))
