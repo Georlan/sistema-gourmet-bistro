@@ -10,6 +10,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { API_BASE_URL } from '../../../config/api';
 import { getOperatorAccessToken } from '../../../utils/authSession';
+import {
+  fetchOnlineOrdersControl,
+  invalidateOnlineOrdersControlCache,
+} from './onlineOrdersControlClient';
 
 type OperationalStatus = {
   paused: boolean;
@@ -65,22 +69,23 @@ export function OnlineOrderEmergencyControl({ mobile = false, isWsConnected = fa
   const dirtyRef = useRef(false);
   const mountedRef = useRef(false);
 
-  const loadStatus = useCallback((): Promise<void> => {
-    if (loadFlightRef.current) return loadFlightRef.current;
+  const loadStatus = useCallback((force = false): Promise<void> => {
+    if (!force && loadFlightRef.current) return loadFlightRef.current;
     const requestToken = getOperatorAccessToken();
     const flight = (async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/online-orders/control`, {
-          headers: requestToken ? { Authorization: `Bearer ${requestToken}` } : {},
-          cache: 'no-store',
-        });
+        const result = await fetchOnlineOrdersControl(
+          API_BASE_URL,
+          requestToken ? `Bearer ${requestToken}` : '',
+          { force },
+        );
         if (!mountedRef.current || getOperatorAccessToken() !== requestToken) return;
-        if (response.status === 401 || response.status === 403) {
+        if (result.status === 401 || result.status === 403) {
           setAuthorized(false);
           return;
         }
-        if (!response.ok) return;
-        const payload = (await response.json()) as OperationalStatus;
+        if (!result.ok || !result.payload) return;
+        const payload = result.payload as OperationalStatus;
         if (!mountedRef.current || getOperatorAccessToken() !== requestToken) return;
         if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !payload.counts) return;
         setAuthorized(true);
@@ -94,7 +99,7 @@ export function OnlineOrderEmergencyControl({ mobile = false, isWsConnected = fa
         loadFlightRef.current = null;
         if (dirtyRef.current && mountedRef.current) {
           dirtyRef.current = false;
-          queueMicrotask(() => { void loadStatus(); });
+          queueMicrotask(() => { void loadStatus(true); });
         }
       }
     })();
@@ -113,7 +118,7 @@ export function OnlineOrderEmergencyControl({ mobile = false, isWsConnected = fa
       hintTimer = window.setTimeout(() => {
         hintTimer = null;
         if (loadFlightRef.current) dirtyRef.current = true;
-        else void loadStatus();
+        else void loadStatus(true);
       }, 100);
     };
     const onOrdersUpdated = (event: Event) => {
@@ -136,7 +141,7 @@ export function OnlineOrderEmergencyControl({ mobile = false, isWsConnected = fa
     // Keep recovery polling if bootstrap failed or a timed pause needs reconciliation.
     if (!visibleOwner || !authorized || (isWsConnected && statusReady && !pauseDeadlineReached)) return;
     const interval = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void loadStatus();
+      if (document.visibilityState === 'visible') void loadStatus(true);
     }, 30000);
     return () => window.clearInterval(interval);
   }, [isWsConnected, statusReady, pauseDeadlineReached, visibleOwner, authorized, loadStatus]);
@@ -148,7 +153,7 @@ export function OnlineOrderEmergencyControl({ mobile = false, isWsConnected = fa
     if (!Number.isFinite(deadline)) return;
     const timer = window.setTimeout(() => {
       setPauseDeadlineReached(true);
-      if (document.visibilityState === 'visible') void loadStatus();
+      if (document.visibilityState === 'visible') void loadStatus(true);
     }, Math.max(0, Math.min(2_147_483_647, deadline - Date.now())));
     return () => window.clearTimeout(timer);
   }, [visibleOwner, statusData?.paused, statusData?.pause_until, loadStatus]);
@@ -172,6 +177,7 @@ export function OnlineOrderEmergencyControl({ mobile = false, isWsConnected = fa
     if (!statusData) return;
     setLoading(true);
     setError('');
+    invalidateOnlineOrdersControlCache();
     try {
       const response = await fetch(`${API_BASE_URL}/api/online-orders/${action}`, {
         method: 'POST',
@@ -206,7 +212,7 @@ export function OnlineOrderEmergencyControl({ mobile = false, isWsConnected = fa
         onClick={() => {
           if (!statusLoading) {
             setStatusLoading(true);
-            void loadStatus();
+            void loadStatus(true);
           }
         }}
         className={clsx(

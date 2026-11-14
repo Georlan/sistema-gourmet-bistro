@@ -5,6 +5,7 @@
 
 
 import { snapshotFetch } from './utils/snapshotFetch';
+import { fetchCaixaConfiguracoes } from './utils/caixaConfigClient';
 import { SlidersHorizontal } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOperationalCatalog } from './components/app/data/useOperationalCatalog';
@@ -370,13 +371,11 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     const timeout = setTimeout(() => controller.abort(), 6000);
     try {
       const requestRestaurantId = activeRestaurantId;
-      const res = await fetch(`${API_BASE_URL}/caixa/configuracoes`, {
-        headers: getAuthHeaders(), signal: controller.signal,
-      });
+      const res = await fetchCaixaConfiguracoes(API_BASE_URL, getAuthHeaders());
       if (requestScopeKey !== operationalScopeKeyRef.current || sessionStorage.getItem(tokenKey) !== token) return;
       if (res.status === 401) { handleLogout(); return; }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      if (!res.ok || !res.data) throw new Error(`HTTP ${res.status}`);
+      const data = res.data;
       const responseRestaurantId = Number(data?.restaurante_id || 0);
       if (requestScopeKey !== operationalScopeKeyRef.current || sessionStorage.getItem(tokenKey) !== token) return;
       if (requestRestaurantId > 0 && responseRestaurantId > 0 && responseRestaurantId !== requestRestaurantId) {
