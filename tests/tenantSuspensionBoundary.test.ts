@@ -51,7 +51,7 @@ test('boundary cobre autenticação operacional sem voltar a ler aliases legados
   assert.match(main, /TenantSuspensionBoundary/);
   assert.match(main, /pathname\.startsWith\("\/super-admin"\)/);
   assert.match(main, /pathname\.startsWith\("\/c\/"\)/);
-  assert.match(main, /disabled=\{bypassTenantSuspensionBoundary\(\)\}/);
+  assert.match(main, /bypassTenantSuspensionBoundary\(\) \?/);
 });
 
 test('usuário suspenso só pode revalidar acesso ou sair', () => {
