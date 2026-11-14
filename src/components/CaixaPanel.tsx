@@ -447,9 +447,9 @@ export function CaixaPanel({
     handleReceiveSalonTable,
   } = checkout;
 
-  useEffect(() => {
-    if (selectedOrder) setHasOpenedCheckout(true);
-  }, [selectedOrder]);
+  if (selectedOrder && !hasOpenedCheckout) {
+    setHasOpenedCheckout(true);
+  }
 
   const handleFinalizeCourierOrder = async (orderId: string): Promise<boolean> => {
     const deliveryOrder = deliveryOrders.find((order) => order.id === orderId);
