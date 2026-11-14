@@ -38,6 +38,31 @@ test('conferência mantém referência após falha e confirmação exige extrato
   expect(bodies[1]).toEqual(bodies[0]);
 });
 
+test('Pix pendente mostra contato e código curto antes do aviso do cliente, sem aceitar TXID do QR',async({page})=>{
+  await open(page,true);
+  const txid='abcdef1234567890abcdef123';
+  await page.route('**/payments/direct-pix/pending',route=>route.fulfill({json:[{
+    id:'intent-contact',order_number:'47',customer:'Cliente teste',customer_phone:'(88) 99961-6937',
+    amount:'10.50',txid,customer_reported:false
+  }]}));
+  await page.reload();
+  await page.getByRole('button',{name:/Conferir Pix/}).click();
+  const panel=page.getByRole('dialog',{name:/Pix aguardando conferência/});
+  await expect(panel.getByText('Tel.: (88) 99961-6937')).toBeVisible();
+  const contact=panel.getByRole('link',{name:'Solicitar comprovante pelo WhatsApp'});
+  await expect(contact).toHaveAttribute('href',/wa\.me\/5588999616937\?text=/);
+  await panel.getByRole('button',{name:/Pedido #47/}).click();
+  await expect(panel.getByText('Código para localizar e compartilhar')).toBeVisible();
+  await expect(panel).toContainText('O pedido já está nesta fila mesmo se o cliente fechar a página');
+  const input=panel.getByLabel('Identificador do Pix no extrato (EndToEndId)');
+  const confirm=panel.getByRole('button',{name:'Confirmar Pagamento Pix'});
+  await panel.getByLabel('Conferi o valor integral recebido na conta correta.').check();
+  await input.fill(txid);
+  await expect(confirm).toBeDisabled();
+  await input.fill('BANK-20261114-0001');
+  await expect(confirm).toBeEnabled();
+});
+
 test('Caixa vazio reduz consultas Pix e evento financeiro recupera nova pendência imediatamente',async({page})=>{
   await page.clock.install();
   await mockCashierBackend(page);
@@ -167,6 +192,11 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   await consumer.getByRole('button',{name:'Fazer pedido',exact:true}).click();
   await expect(consumer.getByText('Aguardando pagamento',{exact:true}).first()).toBeVisible();
   await expect(consumer.getByText('O restaurante conferirá o recebimento',{exact:false})).toBeVisible();
+  const shortCode=consumer.getByTestId('direct-pix-customer-confirm');
+  await expect(shortCode).toContainText('Código curto para localizar seu pedido');
+  await expect(shortCode).toContainText('Pedido #47');
+  await expect(shortCode).toContainText('Você pode pagar e fechar esta página');
+
   await expect(consumer.getByText('Abra o aplicativo do seu banco, escolha Pix Copia e Cola e confirme o pagamento.')).toBeVisible();
   await consumer.evaluate(() => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => { (window as any).__copiedPix = value; } } });

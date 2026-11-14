@@ -43,7 +43,7 @@ class PendingCancellation(BaseModel):
 
 class ReceiptConfirmation(BaseModel):
     received_amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
-    bank_reference: str = Field(pattern=r'^E[A-Za-z0-9]{31}$')
+    bank_reference: str = Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9._/-]{5,31}$')
     checked_bank_statement: bool
 
     @field_validator('bank_reference', mode='before')
@@ -167,6 +167,7 @@ def pending_receipts(db: Session = Depends(get_db), user: Usuario = Depends(requ
         'id': intent.id,
         'order_number': order.numero_pedido,
         'customer': order.identificador,
+        'customer_phone': order.delivery_telefone,
         'amount': str(intent.amount),
         'status': 'aguardando_aprovacao_pix',
         'txid': intent.id.replace('-', '')[:25],
@@ -186,6 +187,8 @@ def confirm_receipt(intent_id: str, payload: ReceiptConfirmation, db: Session = 
         raise HTTPException(404,'Cobrança não encontrada.')
     if not payload.checked_bank_statement or payload.received_amount != Decimal(str(intent.amount)):
         raise HTTPException(422,'Confira o recebimento do valor integral no extrato bancário.')
+    if payload.bank_reference.lower() == intent.id.replace('-', '')[:25].lower():
+        raise HTTPException(422,'Informe o identificador da transferência no extrato bancário, não o TXID do QR Pix.')
     receipt = db.query(DirectPixReceipt).filter(DirectPixReceipt.restaurante_id == rest_id, DirectPixReceipt.intent_id == intent.id).one_or_none()
     if receipt and receipt.bank_reference != payload.bank_reference:
         raise HTTPException(409,'Confirmação anterior tem outra referência bancária.')
