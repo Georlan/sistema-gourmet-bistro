@@ -1312,13 +1312,13 @@ export default function CardapioPage() {
                     <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">
                       {activeOrder.pagamento?.confirmacao_manual && activeOrder.pagamento?.cliente_informou_pagamento
                         ? "Pagamento informado"
-                        : "Primeiro: confirme o Pix"}
+                        : activeOrder.pagamento?.confirmacao_manual ? "Pix aguardando conferência" : "Primeiro: confirme o Pix"}
                     </p>
                     <p className="mt-1 text-[10px] leading-relaxed text-amber-200/80">
                       {activeOrder.pagamento?.confirmacao_manual && activeOrder.pagamento?.cliente_informou_pagamento
                         ? "Pagamento informado. Aguardando confirmação do restaurante."
                         : activeOrder.pagamento?.confirmacao_manual
-                          ? "Faça o Pix e toque em Pagar Pix para avisar o restaurante."
+                          ? "Pague o Pix. O restaurante já vê o pedido; avisar que pagou é opcional."
                           : "O andamento do preparo começa depois da confirmação automática do pagamento."}
                     </p>
                   </div>

@@ -692,6 +692,28 @@ def test_receipt_confirmation_extracts_end_to_end_id_from_pasted_receipt():
         )
 
 
+def test_manual_pix_accepts_bank_statement_reference_without_mandatory_e2e():
+    from app.routes.direct_pix import ReceiptConfirmation
+    from pydantic import ValidationError
+
+    payload = ReceiptConfirmation(
+        received_amount='5.00', bank_reference='BANK-20261114-0001', checked_bank_statement=True)
+    assert payload.bank_reference == 'BANK-20261114-0001'
+    with pytest.raises(ValidationError):
+        ReceiptConfirmation(received_amount='5.00', bank_reference='#6', checked_bank_statement=True)
+
+
+def test_manual_pix_rejects_the_qr_txid_as_bank_transaction_id(db, monkeypatch):
+    intent, _ = order(db, monkeypatch)
+    txid = intent.id.replace('-', '')[:25]
+    payload = ReceiptConfirmation(
+        received_amount='100.00', bank_reference=txid, checked_bank_statement=True)
+    with pytest.raises(HTTPException, match='TXID do QR Pix') as error:
+        confirm_receipt(intent.id, payload, db, SimpleNamespace(id='direct-pix-user'))
+    assert error.value.status_code == 422
+    assert db.query(DirectPixReceipt).count() == 0
+
+
 def test_customer_report_direct_pix_endpoints_idempotency_and_pending_order(monkeypatch):
     from fastapi.testclient import TestClient
     from sqlalchemy.pool import StaticPool
@@ -812,6 +834,7 @@ def test_customer_report_direct_pix_endpoints_idempotency_and_pending_order(monk
                 amount=Decimal("32.50"),
                 intent_id="11111111-1111-1111-1111-111111111111",
             )
+            comanda1.delivery_telefone = "(88) 99961-6937"
             comanda2, intent2 = _seed_pix_order(
                 setup_session,
                 rest_id=99420,
@@ -931,6 +954,8 @@ def test_customer_report_direct_pix_endpoints_idempotency_and_pending_order(monk
         assert pending_a.status_code == 200, pending_a.text
         rows_a = pending_a.json()
         assert [row["order_number"] for row in rows_a] == [102, 101, 100]
+        assert next(row for row in rows_a if row["order_number"] == 101)["customer_phone"] == "(88) 99961-6937"
+        assert next(row for row in rows_a if row["order_number"] == 100)["customer_reported"] is False
         assert rows_a[0]["customer_reported"] is True
         assert rows_a[0]["customer_reported_at"] is not None
         assert rows_a[0]["txid"]

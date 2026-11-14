@@ -10,7 +10,7 @@ import {
 interface DirectPixCustomerConfirmProps {
   order: Pick<
     StoredOrder,
-    "id" | "idempotency_key" | "tracking_token" | "tracking_url" | "pagamento"
+    "id" | "numero_pedido" | "idempotency_key" | "tracking_token" | "tracking_url" | "pagamento"
   >;
   apiBaseUrl?: string;
   onReported?: (pagamento: OrderPaymentStatus) => void;
@@ -36,6 +36,7 @@ export function DirectPixCustomerConfirm({
   const [localReported, setLocalReported] = useState(serverReported);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [copyFeedback, setCopyFeedback] = useState("");
 
   useEffect(() => {
     setLocalReported(Boolean(pagamento?.cliente_informou_pagamento));
@@ -76,11 +77,17 @@ export function DirectPixCustomerConfirm({
 
   return (
     <div className="mt-3 space-y-2 text-left" data-testid="direct-pix-customer-confirm">
-      {pagamento.txid && (
-        <p className="text-center text-[10px] font-semibold text-koma-muted">
-          Identificador do pedido: <span className="font-mono text-koma-foreground">{pagamento.txid}</span>
-        </p>
-      )}
+      <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-center">
+        <p className="text-[11px] text-koma-muted">Código curto para localizar seu pedido</p>
+        <p className="my-1 text-xl font-black tracking-wide text-emerald-300">Pedido #{order.numero_pedido}</p>
+        <button type="button" className="min-h-10 rounded-lg border border-emerald-500/50 px-3 text-xs font-semibold text-koma-foreground" onClick={() => {
+          void navigator.clipboard.writeText('Pedido #' + order.numero_pedido)
+            .then(() => setCopyFeedback('Número do pedido copiado.'))
+            .catch(() => setCopyFeedback('Copie o número exibido acima.'));
+        }}>Copiar número do pedido</button>
+        {copyFeedback && <p role="status" className="mt-1 text-[11px] text-koma-muted">{copyFeedback}</p>}
+        <p className="mt-2 text-xs leading-relaxed text-koma-muted">Você pode pagar e fechar esta página. O restaurante já consegue localizar o pedido e conferir o Pix, mesmo sem tocar em “Já fiz o Pix”.</p>
+      </div>
 
       {reported ? (
         <div

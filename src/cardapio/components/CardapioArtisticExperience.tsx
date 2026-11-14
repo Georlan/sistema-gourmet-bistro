@@ -790,13 +790,13 @@ export function CardapioArtisticExperience({
                 <strong>
                   {activeOrder.pagamento?.confirmacao_manual && activeOrder.pagamento?.cliente_informou_pagamento
                     ? 'Pagamento informado'
-                    : 'Primeiro: confirme o Pix'}
+                    : activeOrder.pagamento?.confirmacao_manual ? 'Pix aguardando conferência' : 'Primeiro: confirme o Pix'}
                 </strong>
                 <p>
                   {activeOrder.pagamento?.confirmacao_manual && activeOrder.pagamento?.cliente_informou_pagamento
                     ? 'Pagamento informado. Aguardando confirmação do restaurante.'
                     : activeOrder.pagamento?.confirmacao_manual
-                      ? 'Faça o Pix e toque em Pagar Pix para avisar o restaurante.'
+                      ? 'Pague o Pix. O restaurante já vê o pedido; avisar que pagou é opcional.'
                       : 'O andamento do preparo começa depois da confirmação automática do pagamento.'}
                 </p>
               </div>
