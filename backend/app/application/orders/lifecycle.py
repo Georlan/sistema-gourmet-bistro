@@ -76,16 +76,24 @@ class OrderLifecycleCoordinator:
         courier_id: str | int | None = None,
         reason: str | None = None,
         commit: bool = True,
+        locked_comanda: Comanda | None = None,
     ) -> OrderLifecycleResult:
-        comanda = (
-            db.query(Comanda)
-            .filter(
-                Comanda.restaurante_id == restaurant_id,
-                Comanda.id == str(comanda_id),
+        if (
+            locked_comanda is not None
+            and locked_comanda.restaurante_id == restaurant_id
+            and str(locked_comanda.id) == str(comanda_id)
+        ):
+            comanda = locked_comanda
+        else:
+            comanda = (
+                db.query(Comanda)
+                .filter(
+                    Comanda.restaurante_id == restaurant_id,
+                    Comanda.id == str(comanda_id),
+                )
+                .with_for_update()
+                .first()
             )
-            .with_for_update()
-            .first()
-        )
         if comanda is None:
             raise OrderValidationError(f"Pedido/Comanda {comanda_id} não encontrado.")
 

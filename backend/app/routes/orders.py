@@ -114,6 +114,7 @@ def _transition_via_application_or_http(
     operator_user_id: str | int | None,
     courier_id: str | int | None = None,
     reason: str | None = None,
+    locked_comanda: Comanda | None = None,
 ):
     try:
         return OrderLifecycleCoordinator.transition_check_status(
@@ -125,6 +126,7 @@ def _transition_via_application_or_http(
             courier_id=courier_id,
             reason=reason,
             commit=False,
+            locked_comanda=locked_comanda,
         )
     except InvalidOrderTransitionError as exc:
         db.rollback()
@@ -518,6 +520,29 @@ def despachar_delivery(
 ):
     """Vincula motoboy e delega a transição pronto -> trânsito ao Core."""
     rid = require_tenant_id()
+    motoboy_id = payload.get("motoboy_id")
+    if not motoboy_id:
+        raise HTTPException(status_code=400, detail="motoboy_id obrigatório")
+
+    motoboy_row = (
+        db.query(Motoboy, Usuario.status)
+        .outerjoin(
+            Usuario,
+            (Motoboy.usuario_id == Usuario.id) & (Usuario.restaurante_id == rid),
+        )
+        .filter(
+            Motoboy.restaurante_id == rid,
+            Motoboy.id == motoboy_id,
+            Motoboy.ativo.is_(True),
+        )
+        .first()
+    )
+    if not motoboy_row:
+        raise HTTPException(status_code=404, detail="Motoboy ativo não encontrado")
+    motoboy, linked_user_status = motoboy_row
+    if motoboy.usuario_id and linked_user_status is not None and str(linked_user_status or "").lower().strip() == "inativo":
+        raise HTTPException(status_code=404, detail="Motoboy ativo não encontrado")
+
     comanda = (
         db.query(Comanda)
         .filter(
@@ -534,22 +559,6 @@ def despachar_delivery(
             status_code=status.HTTP_409_CONFLICT,
             detail="Somente pedidos de delivery podem ser despachados para motoboy.",
         )
-
-    motoboy_id = payload.get("motoboy_id")
-    if not motoboy_id:
-        raise HTTPException(status_code=400, detail="motoboy_id obrigatório")
-
-    motoboy = db.query(Motoboy).filter(
-        Motoboy.restaurante_id == rid,
-        Motoboy.id == motoboy_id,
-        Motoboy.ativo.is_(True),
-    ).first()
-    if not motoboy:
-        raise HTTPException(status_code=404, detail="Motoboy ativo não encontrado")
-    if motoboy.usuario_id:
-        u_check = db.query(Usuario).filter(Usuario.id == motoboy.usuario_id, Usuario.restaurante_id == rid).first()
-        if u_check and str(u_check.status or "").lower().strip() == "inativo":
-            raise HTTPException(status_code=404, detail="Motoboy ativo não encontrado")
 
     current_status = normalize_to_order_status(comanda.delivery_status)
     if current_status == OrderStatus.DISPATCHED:
@@ -578,6 +587,7 @@ def despachar_delivery(
         target_status="transito",
         operator_user_id=getattr(current_user, "id", None),
         courier_id=motoboy_id,
+        locked_comanda=comanda,
     )
 
     try:
