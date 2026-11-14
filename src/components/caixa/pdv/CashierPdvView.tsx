@@ -1,10 +1,9 @@
 import clsx from 'clsx';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PAYMENT_LABELS, type PaymentMethod } from '../../../cardapio/paymentMethods';
-import { Check, ChevronLeft, ChevronRight, Edit3, Info, Minus, Package, Plus, Search, ShoppingCart, Trash2, X } from 'lucide-react';
+import { Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CreditCard, MapPin, Package, Search, ShoppingCart, Truck, UserRound, UtensilsCrossed, X } from 'lucide-react';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
-import { getProductPresets } from '../../../domain/catalogPresentation';
 import {
   changeModifierQuantitySelection,
   modifierGroupSelectionValid,
@@ -12,16 +11,19 @@ import {
 import type { Product } from '../../../types';
 import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
 import DeliveryAddressFields from '../../shared/DeliveryAddressFields';
-import ModifierPicker from '../../shared/ModifierPicker';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import { formatCurrency } from '../cashierPresentation';
-import { pdvCartItemUnitPrice, type PdvModifierSelection, type useCashierPdv } from './useCashierPdv';
+import { pdvCartItemUnitPrice, type PdvModifierSelection, type PdvOrderType, type useCashierPdv } from './useCashierPdv';
 import { usePdvCategoryNavigation } from './usePdvCategoryNavigation';
-
-const splitProductLabel = (label: string) => {
-  const match = String(label || '').match(/^(\d{2,4})\s*[-–]\s*(.+)$/);
-  return match ? { code: match[1], name: match[2] } : { code: '', name: label };
-};
+import { CashierPdvProductCard } from './CashierPdvProductCard';
+import { pdvProductNeedsRequiredChoices } from './pdvProductChoices';
+import { CashierPdvCartLine } from './CashierPdvCartLine';
+import { CashierPdvConfigurator } from './CashierPdvConfigurator';
+import { CashierPdvCustomerFields } from './CashierPdvCustomerFields';
+import { CashierPdvTablePicker, formatPdvTableLabel } from './CashierPdvTablePicker';
+import { tableCardPresentation } from '../../shared/SharedTableCard';
+import { TABLE_STATE_GLYPH, TableStatusMark } from '../../shared/TableStatusMark';
+import { KomaWaiterGlyph } from '../../shared/KomaWaiterGlyphs';
 
 type ProductWithModifiers = Product & { grupos_modificadores?: CatalogModifierGroup[] };
 
@@ -45,19 +47,6 @@ const modifierSelectionsFor = (groups: CatalogModifierGroup[], selectedIds: stri
       preco: Number(option.preco_adicional || 0),
     }];
   });
-};
-
-const summarizeModifierSelections = (modifiers: PdvModifierSelection[]) => {
-  const summary = new Map<string, { modifier: PdvModifierSelection; quantity: number }>();
-  modifiers.forEach((modifier) => {
-    const current = summary.get(modifier.id);
-    if (current) {
-      current.quantity += 1;
-      return;
-    }
-    summary.set(modifier.id, { modifier, quantity: 1 });
-  });
-  return Array.from(summary.values());
 };
 
 interface Props {
@@ -124,11 +113,43 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     finishPdvCategoryDrag,
   } = usePdvCategoryNavigation({ activeSubTab, balcaoMobileView, pdvCategories });
 
+  const [tablePickerOpen, setTablePickerOpen] = useState(false);
   const [configProduct, setConfigProduct] = useState<Product | null>(null);
   const [configCartIndex, setConfigCartIndex] = useState<number | null>(null);
   const [configQty, setConfigQty] = useState(1);
   const [configObs, setConfigObs] = useState('');
   const [configModifierIds, setConfigModifierIds] = useState<string[]>([]);
+  const [addedNotice, setAddedNotice] = useState<{ productId: string; name: string; token: number; edited: boolean } | null>(null);
+  const addNoticeSequence = useRef(0);
+
+  useEffect(() => {
+    if (!addedNotice) return;
+    const timeout = window.setTimeout(() => setAddedNotice(null), 1500);
+    return () => window.clearTimeout(timeout);
+  }, [addedNotice]);
+
+  const deliveryAddressDisclosureRef = useRef<HTMLDetailsElement | null>(null);
+
+  // Reveal a missing delivery address when that modality is selected, but
+  // allow operators to collapse the native disclosure afterward.
+  useEffect(() => {
+    if (pdvOrderType !== 'delivery') return;
+    if (!pdvDeliveryAddressDraft.logradouro || !pdvDeliveryAddressDraft.numero) {
+      if (deliveryAddressDisclosureRef.current) deliveryAddressDisclosureRef.current.open = true;
+    }
+  }, [pdvOrderType, pdvDeliveryAddressDraft.logradouro, pdvDeliveryAddressDraft.numero]);
+
+  // Destination shortcuts open the same order surface; no duplicated
+  // cart, checkout or fulfillment state is needed.
+  useEffect(() => {
+    if (activeSubTab !== 'balcao') return;
+    const revealDestination = (event: KeyboardEvent) => {
+      if (configProduct || event.repeat || !['F2', 'F3', 'F8'].includes(event.key)) return;
+      setBalcaoMobileView('carrinho');
+    };
+    window.addEventListener('keydown', revealDestination, true);
+    return () => window.removeEventListener('keydown', revealDestination, true);
+  }, [activeSubTab, configProduct, setBalcaoMobileView]);
 
   const configGroups = modifierGroupsFor(configProduct);
   const configModifiers = useMemo(
@@ -154,6 +175,43 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     setConfigModifierIds([...(item?.modifierIds || [])]);
     setPdvProductDetailId(null);
   };
+
+  // New-product configuration does not depend on cart edits. Keep this stable
+  // so an existing cart change does not rerender all catalogue cards.
+  const openNewProductConfig = useCallback((product: Product) => {
+    setConfigProduct(product);
+    setConfigCartIndex(null);
+    setConfigQty(1);
+    setConfigObs('');
+    setConfigModifierIds([]);
+    setPdvProductDetailId(null);
+  }, [setPdvProductDetailId]);
+
+  const reportCartChange = useCallback((product: Product, edited = false) => {
+    addNoticeSequence.current += 1;
+    setAddedNotice({
+      productId: String(product.id),
+      name: product.nome,
+      token: addNoticeSequence.current,
+      edited,
+    });
+  }, []);
+
+  const handleQuickAddProduct = useCallback((product: Product) => {
+    // Products with mandatory groups must never enter an incomplete cart.
+    // Optional modifiers retain one-tap quick add.
+    if (pdvProductNeedsRequiredChoices(product)) {
+      openNewProductConfig(product);
+      return;
+    }
+    setPdvProductDetailId(null);
+    handlePdvAddToCart(product);
+    reportCartChange(product);
+  }, [handlePdvAddToCart, openNewProductConfig, reportCartChange, setPdvProductDetailId]);
+
+  const toggleProductDetails = useCallback((productId: string) => {
+    setPdvProductDetailId((current) => current === productId ? null : productId);
+  }, [setPdvProductDetailId]);
 
   const changeConfigModifierQuantity = (
     group: CatalogModifierGroup,
@@ -193,10 +251,34 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
       }
       return [...current, nextItem];
     });
+    reportCartChange(configProduct, configCartIndex !== null);
     closeConfig();
   };
 
-  const cartTotal = pdvCart.reduce((sum, item) => sum + pdvCartItemUnitPrice(item) * item.quantity, 0);
+  const cartTotal = useMemo(() => pdvCart.reduce(
+    (sum, item) => sum + pdvCartItemUnitPrice(item) * item.quantity, 0,
+  ), [pdvCart]);
+  const currentModalityLabel = pdvOrderType === 'pickup' ? 'Retirada'
+    : pdvOrderType === 'delivery' ? 'Delivery' : 'Consumo local';
+  // Each task owns its own scroll, so toggling never moves the entire application.
+  const switchMobileTask = useCallback((next: 'produtos' | 'carrinho') => {
+    setBalcaoMobileView(next);
+  }, [setBalcaoMobileView]);
+  const changeCartObservation = (index: number, observation: string) => {
+    setPdvCart((current) => current.map((item, itemIndex) =>
+      itemIndex === index ? { ...item, obs: observation } : item));
+  };
+  // Aggregate once per cart update, rather than scanning every cart line for each visible product.
+  const cartQuantitiesByProduct = useMemo(() => {
+    const quantities = new Map<string, number>();
+    for (const item of pdvCart) {
+      const id = String(item.product.id);
+      quantities.set(id, (quantities.get(id) ?? 0) + item.quantity);
+    }
+    return quantities;
+  }, [pdvCart]);
+  const selectedTablePresentation = selectedPdvTableOption
+    ? tableCardPresentation(selectedPdvTableOption.operational) : null;
   const deliveryAddressSummary = [
     pdvDeliveryAddressDraft.logradouro,
     pdvDeliveryAddressDraft.numero,
@@ -207,6 +289,15 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     { id: 'delivery', label: 'Delivery' },
     { id: 'dine_in', label: 'Consumo local' },
   ] as const).filter((type) => allowedPdvOrderTypes.includes(type.id));
+  const changeServiceType = (next: PdvOrderType) => {
+    setTablePickerOpen(false);
+    setPdvOrderType(next);
+    if (next === 'delivery') setPdvTargetMesaId(0);
+  };
+  const changeCustomerPhone = (phone: string) => {
+    setPdvCustomerPhone(aplicarMascaraTelefoneInput(phone));
+    setPdvCustomerId(null);
+  };
   const shortcutLabels = [
     allowedPdvOrderTypes.includes('pickup') ? 'F2 Retirada' : null,
     allowedPdvOrderTypes.includes('dine_in') ? 'F3 Consumo local' : null,
@@ -217,7 +308,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   return (
     <>
       {activeSubTab === 'balcao' && (
-        <div className={"orders-workspace h-full min-h-0 flex flex-col gap-3 sm:gap-4"}>
+        <div className="orders-workspace cashier-pdv-view h-full min-h-0 flex flex-col gap-3 sm:gap-4">
           <OperationalBanner
             id="counter-heading"
             eyebrow="VENDA"
@@ -244,43 +335,47 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
             }
           />
 
+          {pdvOrderType === 'dine_in' && selectedPdvTableOption && (
+            <div className="cashier-pdv-table-context" data-table-status={selectedPdvTableOption.isMerged ? 'merged' : selectedPdvTableOption.isOccupied ? 'occupied' : 'free'} role="status" data-testid="pdv-selected-table-context"
+              data-operational-state={selectedTablePresentation?.key}>
+              <div className="cashier-pdv-table-context__text">
+                <KomaWaiterGlyph name={TABLE_STATE_GLYPH[selectedTablePresentation?.key] || 'table-service'} size={22} aria-hidden="true" />
+                <span className="cashier-pdv-table-context__summary">
+                  <span>Pedido para <strong>{formatPdvTableLabel(selectedPdvTableOption.table)}</strong></span>
+                  <span className="cashier-pdv-table-context__status">
+                    <TableStatusMark>{selectedTablePresentation?.label}</TableStatusMark>
+                    {selectedPdvTableOption.isOccupied && selectedPdvTableOption.total > 0 &&
+                      <strong className="cashier-pdv-table-context__amount">{formatCurrency(selectedPdvTableOption.total)}</strong>}
+                  </span>
+                </span>
+              </div>
+              <button type="button" onClick={() => setTablePickerOpen(true)}>Trocar mesa</button>
+            </div>
+          )}
+
           <div
             className={"cashier-pdv-layout min-h-0 flex-1 flex flex-col xl:flex-row gap-3 sm:gap-4 overflow-hidden relative"}
           >
-            <div
-              className={"flex xl:hidden gap-1 p-1 bg-white/[0.025] border border-koma-border rounded-xl shrink-0"}
-            >
-              <button
-                type="button"
-                onClick={() => setBalcaoMobileView('produtos')}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  balcaoMobileView === 'produtos'
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-koma-muted hover:text-koma-foreground'
-                }`}
+            {/* Adding already animates the card and cart counter; only edits need text feedback. */}
+            {addedNotice?.edited && (
+              <div
+                key={addedNotice.token}
+                className="cashier-pdv-feedback"
+                role="status"
+                aria-live="polite"
+                data-testid="pdv-added-feedback"
               >
-                <Package size={14} />
-                <span>Escolher itens</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setBalcaoMobileView('carrinho')}
-                className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  balcaoMobileView === 'carrinho'
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-koma-muted hover:text-koma-foreground'
-                }`}
-              >
-                <ShoppingCart size={14} />
-                <span>Carrinho ({pdvCartItemCount})</span>
-              </button>
-            </div>
+                <CheckCircle2 size={17} aria-hidden="true" />
+                <span>{addedNotice.edited ? 'Item atualizado' : 'Item adicionado'} · {addedNotice.name}</span>
+              </div>
+            )}
 
             <div
+              id="pdv-products-panel"
               className={`cashier-pdv-catalog min-w-0 flex-1 ${balcaoMobileView === 'produtos' ? 'flex' : 'hidden xl:flex'} flex-col gap-3 overflow-hidden w-full`}
             >
               <div
-                className={"shrink-0 rounded-2xl border border-koma-border bg-koma-panel p-2.5 sm:p-3 space-y-2.5"}
+                className="cashier-pdv-catalog-controls shrink-0 rounded-2xl border border-koma-border bg-koma-panel p-2.5 sm:p-3 space-y-2.5"
               >
                 <div className="relative">
                   <Search
@@ -289,11 +384,13 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   />
                   <input
                     id="pdv-product-search-input"
-                    type="text"
+                    type="search"
+                    autoComplete="off"
+                    aria-label="Buscar produtos do cardápio"
                     placeholder="Buscar item, descrição ou código"
                     value={pdvSearch}
                     onChange={(e) => setPdvSearch(e.target.value)}
-                    className={"w-full bg-koma-input border border-koma-border focus:border-emerald-500/60 text-koma-foreground placeholder:text-koma-muted rounded-xl py-2.5 pl-10 pr-8 text-xs outline-none transition-all"}
+                    className="cashier-pdv-search-input w-full bg-koma-input border border-koma-border text-koma-foreground placeholder:text-koma-muted rounded-xl py-2.5 pl-10 pr-8 text-xs outline-none transition-colors"
                   />
                   {pdvSearch && (
                     <button
@@ -338,15 +435,12 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   >
                     <button
                       type="button"
+                      aria-pressed={pdvSelectedCategory === 'todos'}
                       onClick={() => {
                         setPdvSelectedCategory('todos');
                         setPdvProductDetailId(null);
                       }}
-                      className={`h-8 px-3 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-colors border ${
-                        pdvSelectedCategory === 'todos'
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                          : 'bg-transparent border-koma-border text-koma-muted hover:text-koma-foreground hover:bg-koma-raised'
-                      }`}
+                      className="cashier-pdv-category h-8 px-3 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-colors border"
                     >
                       Todos <span className={"ml-1 opacity-75"}>{sellableProducts.length}</span>
                     </button>
@@ -354,15 +448,12 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       <button
                         key={catObj.id || catObj.nome}
                         type="button"
+                        aria-pressed={pdvSelectedCategory === catObj.nome}
                         onClick={() => {
                           setPdvSelectedCategory(catObj.nome);
                           setPdvProductDetailId(null);
                         }}
-                        className={`h-8 px-3 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-colors border ${
-                          pdvSelectedCategory === catObj.nome
-                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
-                            : 'bg-transparent border-koma-border text-koma-muted hover:text-koma-foreground hover:bg-koma-raised'
-                        }`}
+                        className="cashier-pdv-category h-8 px-3 text-[10px] font-bold rounded-lg cursor-pointer whitespace-nowrap transition-colors border"
                       >
                         {catObj.nome}
                       </button>
@@ -385,135 +476,20 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               <div className={"cashier-pdv-product-scroll flex-1 min-h-0 overflow-y-auto pr-1 overscroll-contain"}>
                 {filteredProducts.length > 0 ? (
                   <div
-                    className={"grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 2xl:grid-cols-4 gap-2 sm:gap-2.5 pb-2"}
+                    className="cashier-pdv-product-grid"
                   >
-                    {filteredProducts.map((p) => {
-                      const productLabel = splitProductLabel(p.nome);
-                      const productDetailKey = String(p.id);
-                      const hasProductDetails = Boolean(p.descricao || productLabel.code);
-                      const groups = modifierGroupsFor(p);
-                      const recommendedCount = groups.filter((group) => group.recomendado !== false).length;
-                      return (
-                        <div
-                          key={p.id}
-                          role="button"
-                          tabIndex={0}
-                          onClick={() => openConfig(p)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault();
-                              openConfig(p);
-                            }
-                          }}
-                          className={"group relative min-h-[96px] sm:min-h-[112px] bg-koma-panel border border-koma-border hover:border-emerald-500/60 rounded-xl sm:rounded-2xl transition-colors shadow-sm cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"}
-                          title="Clique no card para personalizar"
-                        >
-                          <div className={"flex h-full w-full flex-col justify-between gap-2 sm:gap-3 p-2.5 sm:p-3.5 text-left rounded-xl sm:rounded-2xl"}>
-                            {p.imagem && (
-                              <img
-                                src={p.imagem}
-                                alt=""
-                                loading="lazy"
-                                className={"w-full h-16 sm:h-20 object-cover rounded-lg sm:rounded-xl"}
-                              />
-                            )}
-                            <div className="min-h-[28px] sm:min-h-[34px] pr-6">
-                              <h4
-                                className={"font-semibold text-koma-foreground text-xs sm:text-[13px] leading-snug line-clamp-2"}
-                              >
-                                {productLabel.name}
-                              </h4>
-                              {groups.length > 0 && (
-                                <span className="mt-1 inline-flex rounded bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
-                                  Personalizável{recommendedCount > 0 ? ` · ${recommendedCount} recomendados` : ''}
-                                </span>
-                              )}
-                            </div>
-                            <div
-                              className={"cashier-pdv-product-actions flex justify-between items-center border-t border-koma-border pt-2 sm:pt-2.5 gap-2"}
-                            >
-                              <span
-                                className={"font-bold text-emerald-700 dark:text-emerald-400 font-mono text-xs"}
-                              >
-                                R$ {p.preco.toFixed(2).replace('.', ',')}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setPdvProductDetailId(null);
-                                  handlePdvAddToCart(p);
-                                }}
-                                className={"inline-flex min-h-8 items-center gap-1 rounded-lg bg-emerald-500 px-2 text-[9px] font-extrabold text-zinc-950 hover:bg-emerald-400"}
-                                aria-label={`Adicionar ${productLabel.name} rapidamente`}
-                              >
-                                <Plus size={13} /> <span className="hidden min-[380px]:inline">Adicionar</span>
-                              </button>
-                            </div>
-                          </div>
-
-                          {hasProductDetails && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  setPdvProductDetailId((current) =>
-                                    current === productDetailKey ? null : productDetailKey,
-                                  );
-                                }}
-                                aria-expanded={pdvProductDetailId === productDetailKey}
-                                aria-controls={`pdv-product-details-${productDetailKey}`}
-                                aria-label={`Ver ingredientes e detalhes de ${productLabel.name}`}
-                                title="Ver ingredientes e detalhes"
-                                className={"absolute right-2 top-2 z-20 flex size-7 items-center justify-center rounded-lg border border-koma-border bg-koma-card/95 text-koma-muted hover:border-emerald-500/40 hover:text-emerald-700 dark:hover:text-emerald-300"}
-                              >
-                                <Info size={13} />
-                              </button>
-                              <div
-                                id={`pdv-product-details-${productDetailKey}`}
-                                role="note"
-                                className={clsx(
-                                  'pointer-events-none',
-                                  'absolute',
-                                  'inset-x-2',
-                                  'top-10',
-                                  'z-10',
-                                  'rounded-xl',
-                                  'border',
-                                  'border-koma-border',
-                                  'bg-koma-dialog/95',
-                                  'backdrop-blur-md',
-                                  'p-2.5',
-                                  'text-left',
-                                  'shadow-xl',
-                                  'translate-y-1',
-                                  'opacity-0',
-                                  'transition-all',
-                                  'group-hover:translate-y-0',
-                                  'group-hover:opacity-100',
-                                  pdvProductDetailId === productDetailKey && 'translate-y-0 opacity-100',
-                                )}
-                              >
-                                <span
-                                  className={"block text-[8px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300"}
-                                >
-                                  Ingredientes e detalhes
-                                </span>
-                                {productLabel.code && (
-                                  <span className={"mt-1 block font-mono text-[8px] text-koma-muted"}>
-                                    Cód. {productLabel.code}
-                                  </span>
-                                )}
-                                <p className={"mt-1 text-[10px] leading-relaxed text-koma-secondary"}>
-                                  {p.descricao || 'Sem descrição cadastrada.'}
-                                </p>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {filteredProducts.map((product) => (
+                      <CashierPdvProductCard
+                        key={product.id}
+                        product={product}
+                        cartQuantity={cartQuantitiesByProduct.get(String(product.id)) ?? 0}
+                        recentlyAdded={addedNotice?.productId === String(product.id)}
+                        detailsOpen={pdvProductDetailId === String(product.id)}
+                        onConfigure={openNewProductConfig}
+                        onQuickAdd={handleQuickAddProduct}
+                        onToggleDetails={toggleProductDetails}
+                      />
+                    ))}
                   </div>
                 ) : (
                   <div
@@ -586,182 +562,65 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
             </div>
 
             <div
-              className={`cashier-pdv-cart w-full xl:w-[350px] 2xl:w-[380px] bg-koma-panel border border-koma-border rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden xl:flex'} ${pdvCart.length === 0 ? 'xl:self-start' : ''} flex-col overflow-hidden shrink-0 shadow-sm`}
+              id="pdv-order-panel"
+              className={`cashier-pdv-cart w-full xl:w-[350px] 2xl:w-[380px] bg-koma-panel border border-koma-border rounded-2xl ${balcaoMobileView === 'carrinho' ? 'flex' : 'hidden xl:flex'} ${pdvCart.length === 0 ? 'xl:self-start' : ''} ${pdvCart.length === 0 && pdvOrderType === 'pickup' ? 'is-empty-pickup' : ''} flex-col overflow-hidden shrink-0 shadow-sm`}
             >
-              <div
-                className={"bg-koma-raised px-4 py-3.5 border-b border-koma-border flex justify-between items-center shrink-0"}
-              >
-                <span className={"font-semibold text-koma-foreground flex items-center gap-2"}>
-                  <span
-                    className={"w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 inline-flex items-center justify-center"}
+              <div className="cashier-pdv-cart__header">
+                <div className="cashier-pdv-cart__cart-heading">
+                  <button
+                    type="button"
+                    className="cashier-pdv-cart__header-back xl:hidden"
+                    aria-label="Escolher itens"
+                    aria-controls="pdv-products-panel"
+                    onClick={() => switchMobileTask('produtos')}
                   >
-                    <ShoppingCart size={15} className="text-emerald-700 dark:text-emerald-400" />
-                  </span>
-                  <span>Pedido atual</span>
-                </span>
-                <span
-                  className={"bg-emerald-500/15 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 font-bold px-2.5 py-1 rounded-full font-mono text-[9px]"}
-                >
-                  {pdvCartItemCount} itens
-                </span>
-              </div>
-
-              <div className={"cashier-pdv-cart-scroll min-h-[180px] flex-1 overflow-y-auto p-3 space-y-2"}>
-                {pdvCart.length === 0 ? (
-                  <div
-                    className={"h-full min-h-44 flex flex-col items-center justify-center text-center px-6 text-koma-muted"}
-                  >
-                    <ShoppingCart size={22} className={"mb-3 opacity-60"} />
-                    <p className={"text-xs font-semibold text-koma-subtle"}>Comece escolhendo um item</p>
-                    <p className={"text-[9px] mt-1"}>+ Adicionar é rápido. O card abre a personalização.</p>
+                    <ChevronLeft size={18} aria-hidden="true" />
+                    <span>Itens</span>
+                  </button>
+                  <div className="cashier-pdv-cart__heading-icon hidden xl:grid" aria-hidden="true"><ShoppingCart size={20} /></div>
+                  <div className="cashier-pdv-cart__heading-text">
+                    <h3>Pedido atual</h3>
+                    <span className="cashier-pdv-cart__eyebrow">{currentModalityLabel}</span>
                   </div>
-                ) : (
-                  pdvCart.map((item, idx) => (
-                    <div
-                      key={`${item.product.id}-${idx}`}
-                      className={"bg-white/[0.025] p-3 rounded-xl border border-koma-border-subtle space-y-2.5"}
-                    >
-                      <div className={"flex justify-between items-start gap-2"}>
-                        <div className="min-w-0 space-y-0.5">
-                          <strong className={"text-koma-foreground text-xs block truncate max-w-48"}>
-                            {item.product.nome}
-                          </strong>
-                          <span className={"text-[9px] text-[#4fe0bc] font-mono block"}>
-                            {formatCurrency(pdvCartItemUnitPrice(item))} / un.
-                          </span>
-                          {(() => {
-                            const unav = checkCartItemAvailability(item);
-                            if (!unav.unavailable) return null;
-                            return (
-                              <div
-                                id={`pdv-cart-item-unavailable-${idx}`}
-                                data-testid={`pdv-cart-item-unavailable-${idx}`}
-                                className="mt-0.5 inline-flex items-center gap-1 text-[9px] font-bold text-rose-400 bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 rounded-md"
-                              >
-                                <span>{unav.reason === 'paused' ? 'Produto pausado' : 'Indisponível no cardápio ativo'}</span>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => openConfig(item.product, idx)}
-                            className={"text-koma-muted hover:text-emerald-400 p-1 cursor-pointer rounded-lg hover:bg-koma-raised"}
-                            aria-label={`Editar ${item.product.nome}`}
-                            title="Editar item e adicionais"
-                          >
-                            <Edit3 size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handlePdvRemoveCartItem(idx)}
-                            className={"text-koma-muted hover:text-rose-500 p-1 cursor-pointer rounded-lg"}
-                            aria-label={`Remover ${item.product.nome}`}
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      </div>
-
-                      {(item.modifiers || []).length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {summarizeModifierSelections(item.modifiers || []).map(({ modifier, quantity }) => (
-                            <span key={modifier.id} className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-400">
-                              + {quantity > 1 ? `${quantity}x ` : ''}{modifier.nome}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className={"flex justify-between items-center gap-2"}>
-                        <div
-                          className={"flex items-center bg-koma-input border border-koma-border rounded-lg overflow-hidden"}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => handlePdvUpdateCartQty(idx, -1)}
-                            className={"px-2 py-1 text-koma-subtle hover:text-koma-foreground cursor-pointer hover:bg-koma-raised"}
-                          >
-                            -
-                          </button>
-                          <span
-                            className={"px-2 text-[10px] font-bold font-mono text-koma-foreground"}
-                          >
-                            {item.quantity}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handlePdvUpdateCartQty(idx, 1)}
-                            className={"px-2 py-1 text-koma-subtle hover:text-koma-foreground cursor-pointer hover:bg-koma-raised"}
-                          >
-                            +
-                          </button>
-                        </div>
-                        <input
-                          type="text"
-                          placeholder="Obs..."
-                          value={item.obs}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setPdvCart((prev) => prev.map((entry, index) => index === idx ? { ...entry, obs: val } : entry));
-                          }}
-                          className={"min-w-0 flex-1 px-1.5 py-1 text-[9px] bg-koma-input border border-koma-border rounded focus:outline-none focus:border-[#10b981] text-koma-foreground"}
-                        />
-                      </div>
-
-                      {(() => {
-                        const presets = getProductPresets(item.product);
-                        if (presets.length === 0) return null;
-                        const parts = item.obs ? item.obs.split(',').map((p) => p.trim()) : [];
-                        return (
-                          <div className={"flex flex-wrap gap-1 mt-2 justify-end"}>
-                            {presets.map((preset) => {
-                              const isActive = parts.some((p) => p.toLowerCase() === preset.toLowerCase());
-                              return (
-                                <button
-                                  key={preset}
-                                  type="button"
-                                  onClick={() => {
-                                    const currentParts = item.obs ? item.obs.split(',').map((p) => p.trim()) : [];
-                                    const exists = currentParts.some((p) => p.toLowerCase() === preset.toLowerCase());
-                                    const updatedParts = exists
-                                      ? currentParts.filter((p) => p.toLowerCase() !== preset.toLowerCase() && p !== '')
-                                      : [...currentParts.filter((p) => p !== ''), preset];
-
-                                    const updatedObs = updatedParts.join(', ');
-                                    setPdvCart((prev) => prev.map((entry, index) => index === idx ? { ...entry, obs: updatedObs } : entry));
-                                  }}
-                                  className={`px-1.5 py-0.5 text-[8px] rounded border transition-colors cursor-pointer font-medium ${
-                                    isActive
-                                      ? 'bg-emerald-600/20 border-emerald-500/40 text-emerald-400'
-                                      : 'bg-koma-raised hover:bg-emerald-600/25 text-koma-subtle hover:text-white border-koma-border'
-                                  }`}
-                                >
-                                  {isActive ? preset : `+${preset}`}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  ))
-                )}
+                  <span className="cashier-pdv-cart__count">{pdvCartItemCount} {pdvCartItemCount === 1 ? 'item' : 'itens'}</span>
+                </div>
               </div>
-
               <form
                 onSubmit={handlePdvSubmitOrder}
                 noValidate
-                className={"min-h-0 max-h-[48%] shrink-0 border-t border-koma-border bg-koma-panel/40 flex flex-col"}
+                aria-label="Finalização do pedido"
+                className="cashier-pdv-cart__form cashier-pdv-cart__form--unified"
               >
-                <div className="min-h-0 overflow-y-auto p-3 space-y-3 overscroll-contain">
-                  <div className="space-y-1.5">
+                <div className="cashier-pdv-cart__body">
+              <div className="cashier-pdv-cart-scroll">
+                {pdvCart.length === 0 ? (
+                  <div className="cashier-pdv-cart__empty flex flex-col items-center justify-center text-center px-5">
+                    <ShoppingCart size={28} aria-hidden="true" />
+                    <strong>Carrinho vazio</strong>
+                    <p>Escolha os itens para começar seu pedido.</p>
+                  </div>
+                ) : (
+                  pdvCart.map((item, idx) => (
+                    <CashierPdvCartLine
+                      key={`${item.product.id}-${idx}`}
+                      item={item}
+                      index={idx}
+                      availability={checkCartItemAvailability(item)}
+                      onEdit={(index) => openConfig(pdvCart[index].product, index)}
+                      onRemove={handlePdvRemoveCartItem}
+                      onChangeQuantity={handlePdvUpdateCartQty}
+                      onChangeObservation={changeCartObservation}
+                    />
+                  ))
+                )}
+              </div>
+                <div className="cashier-pdv-cart__review-fields">
+                  <div className="cashier-pdv-cart__modality-section space-y-1.5">
                     <div className="flex items-center justify-between gap-3">
                       <label className={"text-[8px] text-koma-subtle font-bold uppercase tracking-wider block"}>
                         Modalidade
                       </label>
-                      <details className="text-left text-[9px] text-koma-muted">
+                      <details className="cashier-pdv-cart__shortcut-hints text-left text-[9px] text-koma-muted">
                         <summary className="cursor-pointer list-none font-semibold hover:text-koma-secondary">
                           Atalhos
                         </summary>
@@ -769,210 +628,125 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       </details>
                     </div>
                     <div className={clsx(
-                      'grid gap-1 bg-koma-input p-1 rounded-xl border border-koma-border',
+                      'cashier-pdv-cart__modality-options grid gap-1 bg-koma-input p-1 rounded-xl border border-koma-border',
                       modalityOptions.length === 2 ? 'grid-cols-2' : 'grid-cols-3',
                     )}>
                       {modalityOptions.map((type) => (
                         <button
                           key={type.id}
                           type="button"
+                          aria-pressed={pdvOrderType === type.id}
                           onClick={() => {
-                            setPdvOrderType(type.id);
-                            if (type.id === 'delivery') setPdvTargetMesaId(0);
+                            changeServiceType(type.id);
                           }}
-                          className={`py-1.5 rounded-lg text-[9px] font-bold uppercase transition-all cursor-pointer ${
-                            pdvOrderType === type.id
-                              ? 'bg-[#10b981] text-zinc-950 font-extrabold'
-                              : 'text-koma-subtle hover:text-koma-foreground'
-                          }`}
+                          className={clsx('cashier-pdv-cart__modality-option', pdvOrderType === type.id && 'is-active')}
                         >
-                          {type.label}
+                          {type.id === 'pickup' && <Package size={15} aria-hidden="true" />}
+                          {type.id === 'delivery' && <Truck size={15} aria-hidden="true" />}
+                          {type.id === 'dine_in' && <UtensilsCrossed size={15} aria-hidden="true" />}
+                          <span>{type.label}</span>
                         </button>
                       ))}
                     </div>
                   </div>
 
-                  <div aria-label="Resumo do pedido" className="grid grid-cols-3 gap-1.5 rounded-xl border border-koma-border bg-koma-input p-2">
-                    <div>
-                      <span className="block text-[7px] font-bold uppercase tracking-wider text-koma-muted">Modalidade</span>
-                      <strong className="text-[9px] text-koma-foreground">
-                        {pdvOrderType === 'pickup' ? 'Retirada' : pdvOrderType === 'delivery' ? 'Delivery' : 'Consumo local'}
-                      </strong>
-                    </div>
-                    <div>
-                      <span className="block text-[7px] font-bold uppercase tracking-wider text-koma-muted">Itens</span>
-                      <strong className="font-mono text-[9px] text-koma-foreground">{pdvCartItemCount}</strong>
-                    </div>
-                    <div className="text-right">
-                      <span className="block text-[7px] font-bold uppercase tracking-wider text-koma-muted">Total</span>
-                      <strong className="font-mono text-[9px] text-emerald-600 dark:text-emerald-300">{formatCurrency(cartTotal)}</strong>
-                    </div>
-                  </div>
-
                   {pdvOrderType === 'dine_in' && (
-                    <div className="space-y-2">
-                      <div className={"flex items-center justify-between gap-3"}>
-                        <label htmlFor="pdv-target-table" className={"block text-[8px] font-bold uppercase tracking-wider text-koma-subtle"}>
-                          Mesa
-                        </label>
-                        <span className={"text-[8px] text-koma-muted"}>{pdvOccupiedTableCount} em atendimento</span>
+                    <div className="cashier-pdv-cart__table-section">
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <span className="text-xs font-semibold text-koma-secondary">Mesa do pedido</span>
+                        <span className="text-xs text-koma-muted">{pdvOccupiedTableCount} em atendimento</span>
                       </div>
-                      <select
+                      <button
                         id="pdv-target-table"
-                        value={pdvTargetMesaId || ''}
-                        onChange={(e) => setPdvTargetMesaId(Number(e.target.value) || 0)}
-                        data-table-status={
-                          selectedPdvTableOption?.isOccupied ? 'occupied' : selectedPdvTableOption ? 'free' : 'unselected'
-                        }
-                        className={clsx(
-                          'min-h-10 w-full rounded-xl border px-3 text-[10px] font-semibold text-koma-foreground outline-none transition-colors focus:ring-2',
-                          selectedPdvTableOption?.isOccupied
-                            ? 'border-[#6b2d37] bg-[#1b1013] focus:border-[#8a3d49] focus:ring-[#6b2d37]/20'
-                            : 'border-koma-border bg-koma-input focus:border-[#00b894]/70 focus:ring-[#00b894]/10',
-                        )}
+                        type="button"
+                        className="cashier-pdv-table-trigger"
+                        data-table-id={pdvTargetMesaId || 0}
+                        data-table-status={selectedPdvTableOption ? (selectedPdvTableOption.isMerged ? 'merged' : selectedPdvTableOption.isOccupied ? 'occupied' : 'free') : 'unselected'}
+                        data-operational-state={selectedTablePresentation?.key}
+                        aria-haspopup="dialog"
+                        aria-expanded={tablePickerOpen}
+                        aria-controls="pdv-table-picker"
+                        onClick={() => setTablePickerOpen(true)}
                       >
-                        <option value="">Sem mesa</option>
-                        {pdvTableOptions.map((option) => (
-                          <option
-                            key={option.table.id}
-                            value={option.table.id}
-                            data-table-status={option.isOccupied ? 'occupied' : 'free'}
-                            style={{
-                              backgroundColor: option.isOccupied ? '#1b1013' : '#090d0b',
-                              color: option.isOccupied ? '#e4a3ac' : '#d4d4d8',
-                            }}
-                          >
-                            {option.isOccupied ? '●' : '○'} {option.label}
-                            {option.table.nome ? ` · Mesa ${option.table.id}` : ''}
-                            {option.isOccupied
-                              ? ` · em atendimento${option.total > 0 ? ` · R$ ${option.total.toFixed(2).replace('.', ',')}` : ''}`
-                              : ' · livre'}
-                          </option>
-                        ))}
-                      </select>
-                      <p className="text-[8px] leading-relaxed text-koma-muted">
+                        <span className="cashier-pdv-table-trigger__details">
+                          <strong>{selectedPdvTableOption ? formatPdvTableLabel(selectedPdvTableOption.table) : 'Escolher mesa'}</strong>
+                          <small>{selectedPdvTableOption
+                            ? <TableStatusMark>{selectedTablePresentation?.label}</TableStatusMark>
+                            : 'Ainda sem mesa'}
+                            {selectedPdvTableOption?.isOccupied && selectedPdvTableOption.total > 0 &&
+                              <strong className="cashier-pdv-table-trigger__amount">{formatCurrency(selectedPdvTableOption.total)}</strong>}
+                          </small>
+                        </span>
+                        <span className="cashier-pdv-table-trigger__change">Alterar <ChevronDown size={17} aria-hidden="true" /></span>
+                      </button>
+                      <p className="cashier-pdv-table-note">
                         {selectedPdvTableOption
                           ? selectedPdvTableOption.isOccupied
-                            ? 'Os itens serão adicionados ao atendimento existente.'
-                            : 'O primeiro lançamento abrirá o atendimento da mesa.'
-                          : 'Sem mesa também é permitido; você pode associar depois.'}
+                            ? 'Este pedido será adicionado ao atendimento da mesa.'
+                            : 'O lançamento abrirá o atendimento desta mesa.'
+                          : 'Também é possível lançar sem mesa e vincular depois.'}
                       </p>
                     </div>
                   )}
 
                   {pdvOrderType === 'pickup' && (
-                    <details className="group rounded-xl border border-koma-border bg-koma-card/40">
-                      <summary className="cursor-pointer list-none px-3 py-2.5">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <strong className="block text-[9px] text-koma-foreground">Identificação do cliente</strong>
-                            <span className="text-[8px] text-koma-muted">Opcional para retirada rápida</span>
-                          </div>
-                          <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
-                            <span className="group-open:hidden">
-                              {pdvCustomerName || pdvCustomerPhone ? 'Preenchido' : 'Adicionar'}
-                            </span>
-                            <span className="hidden group-open:inline">Fechar</span>
+                    <details className="cashier-pdv-service-detail">
+                      <summary className="cashier-pdv-service-detail__summary">
+                        <span className="cashier-pdv-service-detail__label">
+                          <UserRound size={18} aria-hidden="true" />
+                          <span>
+                            <strong>Identificação do cliente</strong>
+                            <small>Opcional na retirada</small>
                           </span>
-                        </div>
+                        </span>
+                        <span className="cashier-pdv-service-detail__status">
+                          {pdvCustomerName || pdvCustomerPhone ? 'Preenchido' : 'Adicionar'}
+                          <ChevronDown size={16} aria-hidden="true" />
+                        </span>
                       </summary>
-                      <div className="grid grid-cols-2 gap-2 border-t border-koma-border p-3">
-                        <div className="space-y-1">
-                          <label className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Telefone</label>
-                          <input
-                            id="pdv-customer-phone-input"
-                            type="tel"
-                            inputMode="numeric"
-                            autoComplete="tel"
-                            placeholder="(00) 00000-0000"
-                            value={pdvCustomerPhone}
-                            onChange={(e) => {
-                              setPdvCustomerPhone(aplicarMascaraTelefoneInput(e.target.value));
-                              setPdvCustomerId(null);
-                            }}
-                            className="w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-[10px] text-koma-foreground focus:outline-none"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Nome</label>
-                          <input
-                            id="pdv-customer-name-input"
-                            type="text"
-                            autoComplete="name"
-                            placeholder="Ex: Maria"
-                            value={pdvCustomerName}
-                            onChange={(e) => setPdvCustomerName(e.target.value)}
-                            className="w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-[10px] text-koma-foreground focus:outline-none"
-                          />
-                        </div>
-                        {pdvCustomerLookup !== 'idle' && (
-                          <p className={clsx('col-span-2 text-[8px] font-bold', pdvCustomerLookup === 'found' ? 'text-emerald-400' : 'text-koma-muted')}>
-                            {pdvCustomerLookup === 'loading' && 'Buscando cliente...'}
-                            {pdvCustomerLookup === 'found' && 'Cliente encontrado.'}
-                            {pdvCustomerLookup === 'new' && 'Novo número — o cliente será criado ao lançar o pedido.'}
-                          </p>
-                        )}
+                      <div className="cashier-pdv-service-detail__content">
+                        <CashierPdvCustomerFields
+                          name={pdvCustomerName}
+                          phone={pdvCustomerPhone}
+                          required={false}
+                          lookupStatus={pdvCustomerLookup}
+                          onNameChange={setPdvCustomerName}
+                          onPhoneChange={changeCustomerPhone}
+                        />
                       </div>
                     </details>
                   )}
 
                   {pdvOrderType === 'delivery' && (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="space-y-1">
-                          <label className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Telefone</label>
-                          <input
-                            id="pdv-customer-phone-input"
-                            type="tel"
-                            inputMode="numeric"
-                            autoComplete="tel"
-                            placeholder="(00) 00000-0000"
-                            required={pdvCart.length > 0}
-                            value={pdvCustomerPhone}
-                            onChange={(e) => {
-                              setPdvCustomerPhone(aplicarMascaraTelefoneInput(e.target.value));
-                              setPdvCustomerId(null);
-                            }}
-                            className="w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-[10px] text-koma-foreground focus:outline-none"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[8px] font-bold uppercase tracking-wider text-koma-subtle">Nome</label>
-                          <input
-                            id="pdv-customer-name-input"
-                            type="text"
-                            autoComplete="name"
-                            placeholder="Ex: Maria"
-                            required={pdvCart.length > 0}
-                            value={pdvCustomerName}
-                            onChange={(e) => setPdvCustomerName(e.target.value)}
-                            className="w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-[10px] text-koma-foreground focus:outline-none"
-                          />
-                        </div>
+                    <div className="cashier-pdv-service-detail cashier-pdv-service-detail--required">
+                      <div className="cashier-pdv-service-detail__summary cashier-pdv-service-detail__summary--static">
+                        <span className="cashier-pdv-service-detail__label">
+                          <UserRound size={18} aria-hidden="true" />
+                          <span><strong>Cliente da entrega</strong><small>Nome e telefone obrigatórios</small></span>
+                        </span>
                       </div>
-                      {pdvCustomerLookup !== 'idle' && (
-                        <p className={clsx('text-[8px] font-bold', pdvCustomerLookup === 'found' ? 'text-emerald-400' : 'text-koma-muted')}>
-                          {pdvCustomerLookup === 'loading' && 'Buscando cliente...'}
-                          {pdvCustomerLookup === 'found' && 'Cliente encontrado — confira a entrega.'}
-                          {pdvCustomerLookup === 'new' && 'Novo número — o cliente será criado ao lançar o pedido.'}
-                        </p>
-                      )}
-                      <details className="group rounded-xl border border-koma-border bg-koma-card/40">
-                        <summary className="cursor-pointer list-none px-3 py-2.5">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="min-w-0">
-                              <strong className="block text-[9px] text-koma-foreground">Entrega</strong>
-                              <span className="block truncate text-[8px] text-koma-muted">
-                                {deliveryAddressSummary || pdvDeliveryAddressLegacyHint || 'Endereço ainda não informado'}
-                              </span>
-                            </div>
-                            <span className="shrink-0 text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
-                              <span className="group-open:hidden">Editar entrega</span>
-                              <span className="hidden group-open:inline">Fechar</span>
+                      <div className="cashier-pdv-service-detail__content">
+                        <CashierPdvCustomerFields
+                          name={pdvCustomerName}
+                          phone={pdvCustomerPhone}
+                          required={pdvCart.length > 0}
+                          lookupStatus={pdvCustomerLookup}
+                          onNameChange={setPdvCustomerName}
+                          onPhoneChange={changeCustomerPhone}
+                        />
+                      </div>
+                      <details className="cashier-pdv-service-detail__delivery" ref={deliveryAddressDisclosureRef}>
+                        <summary className="cashier-pdv-service-detail__summary">
+                          <span className="cashier-pdv-service-detail__label">
+                            <MapPin size={18} aria-hidden="true" />
+                            <span>
+                              <strong>Endereço de entrega</strong>
+                              <small>{deliveryAddressSummary || pdvDeliveryAddressLegacyHint || 'Informe o endereço completo'}</small>
                             </span>
-                          </div>
+                          </span>
+                          <ChevronDown size={16} aria-hidden="true" />
                         </summary>
-                        <div className="border-t border-koma-border p-2">
+                        <div className="cashier-pdv-service-detail__content">
                           <DeliveryAddressFields
                             value={pdvDeliveryAddressDraft}
                             onChange={handlePdvDeliveryAddressChange}
@@ -986,47 +760,47 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                   )}
 
                   {(pdvOrderType === 'pickup' || pdvOrderType === 'delivery') && (
-                    <details className="group rounded-xl border border-koma-border bg-koma-card/40">
-                      <summary className="cursor-pointer list-none px-3 py-2.5">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <strong className="block text-[9px] text-koma-foreground">Pagamento <span className="font-normal text-koma-muted">(opcional agora)</span></strong>
-                            <span className="text-[8px] text-koma-muted">Pode ser informado no fechamento.</span>
-                          </div>
-                          <span className="text-[8px] font-bold text-emerald-600 dark:text-emerald-300">
-                            <span className="group-open:hidden">
-                              {pdvPaymentMethod ? PAYMENT_LABELS[pdvPaymentMethod] : 'Adicionar'}
-                            </span>
-                            <span className="hidden group-open:inline">Fechar</span>
+                    <details className="cashier-pdv-service-detail">
+                      <summary className="cashier-pdv-service-detail__summary">
+                        <span className="cashier-pdv-service-detail__label">
+                          <CreditCard size={18} aria-hidden="true" />
+                          <span>
+                            <strong>Pagamento <small>(opcional agora)</small></strong>
+                            <small>Pode ser informado no fechamento</small>
                           </span>
-                        </div>
+                        </span>
+                        <span className="cashier-pdv-service-detail__status">
+                          {pdvPaymentMethod ? PAYMENT_LABELS[pdvPaymentMethod] : 'Definir'}
+                          <ChevronDown size={16} aria-hidden="true" />
+                        </span>
                       </summary>
-                      <div className="grid grid-cols-2 gap-1.5 border-t border-koma-border p-3">
-                        {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((method) => (
-                          <button
-                            key={method}
-                            type="button"
-                            onClick={() => setPdvPaymentMethod(pdvPaymentMethod === method ? null : method)}
-                            aria-pressed={pdvPaymentMethod === method}
-                            className={clsx(
-                              'min-h-9 rounded-lg border px-2 py-1.5 text-[9px] font-bold transition-colors',
-                              pdvPaymentMethod === method
-                                ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                                : 'border-koma-border bg-koma-input text-koma-muted hover:border-emerald-500/30 hover:text-koma-foreground',
-                            )}
-                          >
-                            {PAYMENT_LABELS[method]}
-                          </button>
-                        ))}
+                      <div className="cashier-pdv-service-detail__content">
+                        <div className="cashier-pdv-payment-options" role="group" aria-label="Forma de pagamento">
+                          {(Object.keys(PAYMENT_LABELS) as PaymentMethod[]).map((method) => (
+                            <button
+                              key={method}
+                              type="button"
+                              aria-pressed={pdvPaymentMethod === method}
+                              onClick={() => setPdvPaymentMethod(pdvPaymentMethod === method ? null : method)}
+                              className={clsx('cashier-pdv-payment-option', pdvPaymentMethod === method && 'is-selected')}
+                            >
+                              <span className="cashier-pdv-payment-option__dot" aria-hidden="true">
+                                {pdvPaymentMethod === method && <Check size={12} strokeWidth={3} />}
+                              </span>
+                              {PAYMENT_LABELS[method]}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     </details>
                   )}
                 </div>
+                </div>
 
-                <div className="shrink-0 border-t border-koma-border bg-koma-panel p-3 shadow-[0_-10px_24px_rgba(0,0,0,0.12)]">
-                  <div className="mb-2 flex items-center justify-between font-mono text-[11px] font-bold text-koma-foreground">
-                    <span>Total pedido</span>
-                    <span className="text-sm text-emerald-700 dark:text-emerald-400">{formatCurrency(cartTotal)}</span>
+                <div className="cashier-pdv-cart__footer shrink-0 border-t border-koma-border bg-koma-panel p-3 shadow-[0_-10px_24px_rgba(0,0,0,0.12)]">
+                  <div className="cashier-pdv-cart__total mb-2 flex items-center justify-between font-bold text-koma-foreground">
+                    <span className="cashier-pdv-cart__footer-left">Total do pedido</span>
+                    <span className="cashier-pdv-cart__total-value"><strong>{formatCurrency(cartTotal)}</strong></span>
                   </div>
                   {cartHasUnavailableItems && (
                     <div
@@ -1043,34 +817,34 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                     disabled={pdvCart.length === 0 || isLoading || cartHasUnavailableItems}
                     title={cartHasUnavailableItems ? 'Remova os itens indisponíveis antes de lançar o pedido' : undefined}
                     aria-label={cartHasUnavailableItems ? 'Remova os itens indisponíveis para lançar' : undefined}
-                    className="w-full min-h-11 py-2 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] rounded-xl border border-transparent font-bold text-[10px] uppercase tracking-wider transition-colors cursor-pointer flex flex-col items-center justify-center gap-0.5 disabled:cursor-not-allowed disabled:border-[#272c29] disabled:bg-koma-card disabled:text-zinc-600"
+                    className="cashier-pdv-cart__submit w-full min-h-11 rounded-xl border font-bold cursor-pointer flex flex-col items-center justify-center gap-0.5"
                   >
-                    <div className="flex items-center gap-1">
-                      <Check size={12} />
+                    <div className="flex items-center gap-2">
+                      <Check size={16} aria-hidden="true" />
                       <span>Lançar Pedido</span>
                     </div>
-                    <span className="text-[7.5px] text-emerald-600 dark:text-emerald-300/80 font-mono font-normal">
-                      Pressione [F4] para finalizar
-                    </span>
                   </button>
                 </div>
               </form>
             </div>
 
-            {pdvCart.length > 0 && balcaoMobileView === 'produtos' && (
+            {balcaoMobileView === 'produtos' && (
               <button
                 type="button"
-                onClick={() => setBalcaoMobileView('carrinho')}
-                className={"xl:hidden fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] lg:bottom-4 left-4 right-4 z-40 min-h-12 py-3 px-5 bg-[#00b894] hover:bg-[#13c9a0] text-[#06110d] font-bold rounded-2xl shadow-2xl flex items-center justify-between border border-[#4fe0bc]/30 animate-fade-in cursor-pointer"}
+                onClick={() => switchMobileTask('carrinho')}
+                aria-label={`Carrinho (${pdvCartItemCount})`}
+                aria-controls="pdv-order-panel"
+                id="pdv-review-btn"
+                className="cashier-pdv-mobile-cart-cta xl:hidden"
               >
-                <span className={"text-xs flex items-center gap-2"}>
+                <span className="cashier-pdv-mobile-cart-cta__label">
                   <ShoppingCart size={16} />
-                  <span>{pdvCartItemCount} itens no carrinho</span>
+                  <span>Ver pedido · <span key={addedNotice?.token ?? 0} className={clsx('cashier-pdv-mobile-cart-cta__count', addedNotice && 'is-bumped')}>{pdvCartItemCount} {pdvCartItemCount === 1 ? 'item' : 'itens'}</span></span>
                 </span>
                 <span
-                  className={"text-xs font-mono font-extrabold bg-black/30 px-3 py-1 rounded-xl"}
+                  className="cashier-pdv-mobile-cart-cta__total"
                 >
-                  {formatCurrency(cartTotal)} →
+                  {formatCurrency(cartTotal)}
                 </span>
               </button>
             )}
@@ -1078,91 +852,31 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
         </div>
       )}
 
+      <CashierPdvTablePicker
+        options={pdvTableOptions}
+        selectedId={pdvTargetMesaId}
+        open={activeSubTab === 'balcao' && pdvOrderType === 'dine_in' && tablePickerOpen}
+        onOpenChange={setTablePickerOpen}
+        onSelect={setPdvTargetMesaId}
+      />
+
       {configProduct && (
-        <div
-          className="fixed inset-0 z-[100] flex items-end justify-center bg-koma-overlay p-0 sm:items-center sm:p-4"
-          onClick={(event) => event.target === event.currentTarget && closeConfig()}
-        >
-          <div className="max-h-[92dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl border border-koma-border bg-koma-card p-4 shadow-2xl sm:rounded-3xl sm:p-6">
-            <div className="flex items-start justify-between gap-3 border-b border-koma-border pb-3">
-              <div className="min-w-0">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400">
-                  {configCartIndex === null ? 'Personalizar item' : 'Editar item do pedido'}
-                </span>
-                <h3 className="truncate text-lg font-bold text-koma-foreground">{configProduct.nome}</h3>
-              </div>
-              <button type="button" onClick={closeConfig} className="rounded-full p-1.5 text-koma-muted hover:text-koma-foreground" aria-label="Fechar personalização">
-                <X size={18} />
-              </button>
-            </div>
-
-            {configProduct.descricao && (
-              <p className="mt-3 rounded-xl border border-koma-border bg-koma-raised p-3 text-[11px] leading-relaxed text-koma-subtle">
-                {configProduct.descricao}
-              </p>
-            )}
-
-            <div className="mt-4 flex items-center justify-between gap-3">
-              <div>
-                <span className="mb-1 block text-[9px] font-bold uppercase text-koma-muted">Quantidade</span>
-                <div className="flex items-center rounded-xl border border-koma-border bg-koma-input p-1">
-                  <button type="button" onClick={() => setConfigQty((value) => Math.max(1, value - 1))} className="p-2 text-koma-muted hover:text-rose-400">
-                    <Minus size={14} />
-                  </button>
-                  <span className="px-4 font-mono text-sm font-bold text-koma-foreground">{configQty}</span>
-                  <button type="button" onClick={() => setConfigQty((value) => value + 1)} className="p-2 text-koma-muted hover:text-emerald-400">
-                    <Plus size={14} />
-                  </button>
-                </div>
-              </div>
-              <div className="text-right">
-                <span className="block text-[9px] font-bold uppercase text-koma-muted">Total configurado</span>
-                <span className="font-mono text-lg font-bold text-emerald-400">{formatCurrency(configUnitTotal * configQty)}</span>
-              </div>
-            </div>
-
-            {configGroups.length > 0 && (
-              <div className="mt-4 space-y-3 border-t border-koma-border pt-4">
-                <div>
-                  <h4 className="text-xs font-bold text-koma-foreground">Complementos</h4>
-                  <p className="text-[10px] text-koma-muted">Recomendados primeiro. Use a busca para qualquer adicional do restaurante.</p>
-                </div>
-                <ModifierPicker
-                  key={`${configProduct.id}-${configCartIndex ?? 'new'}`}
-                  groups={configGroups}
-                  selectedIds={configModifierIds}
-                  onQuantityChange={changeConfigModifierQuantity}
-                  compact
-                />
-              </div>
-            )}
-
-            <div className="mt-4 space-y-2 border-t border-koma-border pt-4">
-              <label htmlFor="pdv-config-obs" className="text-[9px] font-bold uppercase text-koma-muted">Observação de preparo</label>
-              <input
-                id="pdv-config-obs"
-                value={configObs}
-                onChange={(event) => setConfigObs(event.target.value)}
-                placeholder="Ex: sem cebola, bem passado, molho à parte..."
-                className="w-full rounded-xl border border-koma-border bg-koma-input px-3 py-2 text-xs text-koma-foreground outline-none focus:border-emerald-500"
-              />
-            </div>
-
-            <div className="mt-4 flex items-center gap-3 border-t border-koma-border pt-4">
-              <button type="button" onClick={closeConfig} className="flex-1 rounded-xl border border-koma-border py-2.5 text-xs font-bold text-koma-muted hover:text-koma-foreground">
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={saveConfiguredItem}
-                disabled={!configValid}
-                className="flex-1 rounded-xl bg-emerald-500 py-2.5 text-xs font-extrabold text-zinc-950 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {!configValid ? 'Complete as escolhas' : configCartIndex === null ? 'Adicionar ao pedido' : 'Salvar alterações'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <CashierPdvConfigurator
+          key={String(configProduct.id) + ':' + String(configCartIndex ?? 'new')}
+          product={configProduct}
+          isEditing={configCartIndex !== null}
+          quantity={configQty}
+          onQuantityChange={setConfigQty}
+          observation={configObs}
+          onObservationChange={setConfigObs}
+          groups={configGroups}
+          selectedIds={configModifierIds}
+          onModifierChange={changeConfigModifierQuantity}
+          total={configUnitTotal * configQty}
+          valid={configValid}
+          onSave={saveConfiguredItem}
+          onClose={closeConfig}
+        />
       )}
     </>
   );

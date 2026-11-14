@@ -25,6 +25,8 @@ import { clsx } from 'clsx';
 import type { Product } from '../../types';
 import type { CatalogCategory } from '../../catalog/catalog';
 import PromotionsSettings from './PromotionsSettings';
+import CartRecommendationsSettings from './CartRecommendationsSettings';
+import MenuHighlightSettings from './MenuHighlightSettings';
 import { smartSearchMatch } from '../../domain';
 
 interface CardapioProdutosTabProps {
@@ -45,9 +47,13 @@ interface CardapioProdutosTabProps {
   focusCategoryId?: string | null;
   onFocusCategoryHandled?: () => void;
   promotionsConfig?: { apiBaseUrl: string; authHeaders: Record<string, string> };
+  /** Names returned by the existing /produto-familias API. No SKU name parsing. */
+  familyLabels?: Record<string, string>;
+  recommendationProducts?: Product[];
 }
 
 const PROMOTIONS_VIRTUAL_CATEGORY = '__KOMA_PROMOTIONS__';
+const RECOMMENDATIONS_VIRTUAL_CATEGORY = '__KOMA_CART_RECOMMENDATIONS__';
 
 type AvailabilityFilter = 'TODOS' | 'DISPONIVEIS' | 'PAUSADOS';
 type MediaFilter = 'TODAS' | 'SEM_FOTO' | 'UMA_FOTO' | 'GALERIA';
@@ -93,11 +99,14 @@ export function CardapioProdutosTab({
   focusCategoryId,
   onFocusCategoryHandled,
   promotionsConfig,
+  familyLabels = {},
+  recommendationProducts,
 }: CardapioProdutosTabProps) {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('TODAS');
   const [promotionCount, setPromotionCount] = useState<number | null>(null);
   const isPromotionsView = Boolean(promotionsConfig && categoryFilter === PROMOTIONS_VIRTUAL_CATEGORY);
+  const isRecommendationsView = Boolean(promotionsConfig && categoryFilter === RECOMMENDATIONS_VIRTUAL_CATEGORY);
   const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>('TODOS');
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('TODAS');
   const [showPhotoFilters, setShowPhotoFilters] = useState(false);
@@ -158,7 +167,9 @@ export function CardapioProdutosTab({
           || smartSearchMatch(product.nome, normalizedSearch)
           || smartSearchMatch(product.descricao || '', normalizedSearch)
           || smartSearchMatch(product.id, normalizedSearch)
-          || smartSearchMatch(categoryName, normalizedSearch);
+          || smartSearchMatch(categoryName, normalizedSearch)
+          || (product.familia_id != null
+            && smartSearchMatch(familyLabels[product.familia_id] || '', normalizedSearch));
         const matchesCategory = categoryFilter === 'TODAS'
           || String(product.categoria_id) === categoryFilter;
         const isAvailable = product.ativo !== false;
@@ -184,7 +195,30 @@ export function CardapioProdutosTab({
         }
         return a.nome.localeCompare(b.nome, 'pt-BR');
       });
-  }, [availabilityFilter, categorias, categoryFilter, mediaFilter, produtos, search]);
+  }, [availabilityFilter, categorias, categoryFilter, familyLabels, mediaFilter, produtos, search]);
+
+  // In normal editing mode, one family is one commercial card.
+  // Selection/batch mode deliberately exposes real SKUs for individual operations.
+  const familyMembers = useMemo(() => {
+    const result = new Map<string, Product[]>();
+    for (const product of produtos) {
+      if (!product.familia_id) continue;
+      const members = result.get(product.familia_id) || [];
+      members.push(product);
+      result.set(product.familia_id, members);
+    }
+    return result;
+  }, [produtos]);
+  const displayProducts = useMemo(() => {
+    if (selectionMode) return filteredProducts;
+    const familiesShown = new Set<string>();
+    return filteredProducts.filter((product) => {
+      if (!product.familia_id) return true;
+      if (familiesShown.has(product.familia_id)) return false;
+      familiesShown.add(product.familia_id);
+      return true;
+    });
+  }, [filteredProducts, selectionMode]);
 
   const selectedCategory = categoryFilter === 'TODAS'
     ? null
@@ -339,6 +373,25 @@ export function CardapioProdutosTab({
               {promotionCount !== null && <span className="text-xs font-bold opacity-60">{promotionCount}</span>}
             </button>
           )}
+          {promotionsConfig && (
+            <button type="button"
+              onClick={() => {
+                if (selectionMode) leaveSelectionMode();
+                setSearch('');
+                setCategoryFilter(RECOMMENDATIONS_VIRTUAL_CATEGORY);
+              }}
+              aria-pressed={isRecommendationsView}
+              className={clsx(
+                'flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-left transition-colors',
+                isRecommendationsView
+                  ? 'border-emerald-500 bg-emerald-50 text-emerald-900 dark:border-emerald-500/60 dark:bg-emerald-500/15 dark:text-emerald-100'
+                  : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-300 dark:border-white/10 dark:bg-transparent dark:text-slate-300',
+              )}
+            >
+              <Gift size={16} aria-hidden="true" />
+              <span className="font-black">Recomendações</span>
+            </button>
+          )}
           {categorias.map((category) => {
             const stats = categoryStats.get(category.id) ?? { total: 0, available: 0, paused: 0 };
             const active = categoryFilter === String(category.id);
@@ -368,7 +421,20 @@ export function CardapioProdutosTab({
         </div>
       </section>
 
-      {isPromotionsView && promotionsConfig ? (
+      {isRecommendationsView && promotionsConfig ? (
+        <>
+        <MenuHighlightSettings
+          apiBaseUrl={promotionsConfig.apiBaseUrl}
+          authHeaders={promotionsConfig.authHeaders}
+          products={recommendationProducts || produtos}
+        />
+        <CartRecommendationsSettings
+          apiBaseUrl={promotionsConfig.apiBaseUrl}
+          authHeaders={promotionsConfig.authHeaders}
+          products={recommendationProducts || produtos}
+        />
+        </>
+      ) : isPromotionsView && promotionsConfig ? (
         <PromotionsSettings
           apiBaseUrl={promotionsConfig.apiBaseUrl}
           authHeaders={promotionsConfig.authHeaders}
@@ -654,7 +720,59 @@ export function CardapioProdutosTab({
       ) : (
         <section>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-            {filteredProducts.map((product) => {
+            {displayProducts.map((product) => {
+              const members = !selectionMode && product.familia_id
+                ? familyMembers.get(product.familia_id) || [] : [];
+              if (members.length > 0 && product.familia_id) {
+                const availableMembers = members.filter((item) => item.ativo !== false);
+                const basePrices = (availableMembers.length ? availableMembers : members)
+                  .map((item) => Number(item.preco));
+                const lowestPrice = Math.min(...basePrices);
+                const highestPrice = Math.max(...basePrices);
+                const familyName = familyLabels[product.familia_id] || 'Produto com variações';
+                return (
+                  <article key={`family-${product.familia_id}`}
+                    data-family-id={product.familia_id}
+                    className="flex min-h-40 flex-col gap-3 rounded-2xl border border-emerald-500/30 bg-white p-3 shadow-sm dark:bg-[#141b16]">
+                    <div className="flex items-start gap-3">
+                      <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/5">
+                        {product.imagem ? <img src={product.imagem} alt="" width={44} height={44} className="h-full w-full object-cover" /> : <Images size={18} />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm font-black text-slate-950 dark:text-white">{familyName}</h3>
+                        <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
+                          {members.length} {members.length === 1 ? 'opção' : 'opções'} · {availableMembers.length} à venda
+                        </p>
+                      </div>
+                      <span className="shrink-0 rounded-lg bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">Variações</span>
+                    </div>
+                    <div className="space-y-1 rounded-xl bg-slate-50 p-2 dark:bg-black/20">
+                      {members.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between gap-2 text-xs">
+                          <span className={`min-w-0 truncate ${item.ativo === false ? 'text-slate-400 line-through' : 'text-slate-700 dark:text-slate-200'}`}>
+                            {item.variacao_rotulo || item.nome}
+                            {item.ativo === false ? ' · Pausado' : ''}
+                          </span>
+                          <span className="shrink-0 font-mono font-bold text-slate-900 dark:text-white">
+                            {Number(item.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3 dark:border-white/10">
+                      <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                        {highestPrice > lowestPrice ? 'A partir de ' : ''}
+                        {lowestPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </span>
+                      <button type="button" onClick={() => onEditProduct(product)}
+                        aria-label={`Editar variações de ${familyName}`}
+                        className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-emerald-500/50 px-3 text-xs font-bold text-emerald-800 hover:bg-emerald-500/10 dark:text-emerald-300">
+                        <Edit3 size={14} /> Editar variações
+                      </button>
+                    </div>
+                  </article>
+                );
+              }
               const isAvailable = product.ativo !== false;
               const isSelected = selectedProductIds.has(product.id);
               const mediaCount = productMediaCount(product);
@@ -683,7 +801,7 @@ export function CardapioProdutosTab({
                     )}
                     <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
                       {product.imagem ? (
-                        <img src={product.imagem} alt="" className="h-full w-full object-cover" />
+                        <img src={product.imagem} alt="" loading="lazy" decoding="async" width={44} height={44} className="h-full w-full object-cover" />
                       ) : (
                         <ImageIcon size={19} />
                       )}

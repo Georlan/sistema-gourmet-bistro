@@ -1,0 +1,503 @@
+/* KÔMA Kitchen — cashier controls, not a generic KDS theme.
+ * References: cashierOrderColumns.css (Salão segmented control) and
+ * cashierOrderControls.css (Novos pedidos raised action).
+ * Functional order state, time and completion remain owned by TSX/projections.
+ */
+.kds-workspace {
+  --kds-canvas: var(--koma-operation-canvas);
+  --kds-card: var(--koma-operation-surface);
+  --kds-raised: var(--koma-operation-raised);
+  --kds-border: var(--koma-operation-line);
+  --kds-text: var(--koma-operation-text);
+  --kds-muted: var(--koma-operation-muted);
+  --kds-ready: var(--koma-operation-ready);
+  --kds-face: var(--koma-operation-raised);
+  --kds-face-border: #5b7a69;
+  --kds-face-ink: var(--koma-operation-text);
+  --kds-mint: #83e3c6;
+  --kds-mint-hover: #9cebd2;
+  --kds-mint-border: #a8efdb;
+  --kds-mint-ink: #07382c;
+  --kds-mint-counter: #0b5340;
+  --kds-mint-counter-ink: #eafff5;
+  --kds-glint: #ffffff30;
+  --kds-button-depth: #071b1466;
+  --kds-surface-depth: #061c1529;
+  --kds-error: #ffb9b4;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: .9rem;
+  min-width: 0;
+  width: 100%;
+  color: var(--kds-text);
+  font-family: var(--koma-font-body);
+}
+[data-koma-theme="light"] .kds-workspace {
+  --kds-face-border: #5d7d6f;
+  --kds-mint: #00745f;
+  --kds-mint-hover: #00604f;
+  --kds-mint-border: #378b76;
+  --kds-mint-ink: #fff;
+  --kds-mint-counter: #e9f6ef;
+  --kds-mint-counter-ink: #0a5743;
+  --kds-glint: #ffffffa6;
+  --kds-button-depth: #1c604525;
+  --kds-surface-depth: #20583e1f;
+  --kds-error: #943831;
+}
+.kds-workspace button { touch-action: manipulation; }
+.kds-workspace :is(button, input, summary):focus-visible {
+  outline: 2px solid var(--koma-focus-ring);
+  outline-offset: 3px;
+}
+/* Raised segmented rail matching Vendas > Pedidos > Salão. */
+.kds-workspace__toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  width: 100%;
+  padding: .27rem;
+  gap: .3rem;
+  border: 1px solid var(--kds-border);
+  border-radius: .95rem;
+  background: var(--kds-card);
+  box-shadow: inset 0 1px 0 var(--kds-glint), 0 2px 0 var(--kds-surface-depth);
+}
+.kds-workspace__filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) minmax(0, .9fr);
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: stretch;
+  gap: .15rem;
+}
+.kds-workspace__filter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  min-width: 0;
+  min-height: 46px;
+  padding: .38rem .24rem;
+  border: 1px solid transparent;
+  border-radius: .68rem;
+  background: transparent;
+  color: var(--kds-muted);
+  font: 600 .76rem/1.25 var(--koma-font-body);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.kds-workspace__filter-count {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  min-width: 1.3rem;
+  min-height: 1.3rem;
+  padding-inline: .2rem;
+  border-radius: .43rem;
+  color: var(--kds-text);
+  background: var(--kds-raised);
+  font: 700 .72rem/1 var(--koma-font-display);
+  font-variant-numeric: tabular-nums;
+}
+.kds-workspace__filter[aria-pressed="true"] {
+  border-color: var(--kds-mint-border);
+  background: var(--kds-mint);
+  color: var(--kds-mint-ink);
+  box-shadow: inset 0 1px 0 #ffffff65, 0 2px 0 var(--kds-button-depth);
+}
+.kds-workspace__filter[aria-pressed="true"] .kds-workspace__filter-count {
+  background: var(--kds-mint-counter);
+  color: var(--kds-mint-counter-ink);
+}
+.kds-workspace__tools {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+  gap: .08rem;
+}
+.kds-workspace__tool {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 41px;
+  min-height: 46px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: .65rem;
+  background: transparent;
+  color: var(--kds-text);
+  cursor: pointer;
+}
+.kds-workspace__tool[aria-pressed="true"] {
+  border-color: var(--kds-border);
+  background: var(--kds-raised);
+}
+@media (hover: hover) {
+  .kds-workspace__filter:not([aria-pressed="true"]):hover,
+  .kds-workspace__tool:hover { background: var(--kds-raised); color: var(--kds-text); }
+}
+.kds-workspace__menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + .38rem);
+  z-index: 25;
+  min-width: 220px;
+  overflow: hidden;
+  border: 1px solid var(--koma-border-strong);
+  border-radius: .75rem;
+  background: var(--kds-card);
+  box-shadow: inset 0 1px 0 var(--kds-glint), 0 8px 22px #0005;
+}
+.kds-workspace__menu button {
+  display: flex;
+  align-items: center;
+  gap: .65rem;
+  width: 100%;
+  min-height: 46px;
+  padding: .7rem .8rem;
+  border: 0;
+  color: var(--kds-text);
+  text-align: left;
+  font: 600 .85rem/1.35 var(--koma-font-body);
+  cursor: pointer;
+}
+.kds-workspace__menu button + button { border-top: 1px solid var(--kds-border); }
+.kds-workspace__offline {
+  margin: 0;
+  padding: .65rem .8rem;
+  border: 1px solid var(--kds-border);
+  border-radius: .6rem;
+  background: var(--kds-raised);
+  color: var(--kds-text);
+  font: 600 .82rem/1.45 var(--koma-font-body);
+}
+.kds-workspace__search {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  gap: .2rem;
+  padding-inline: .75rem .15rem;
+  border: 1px solid var(--kds-border);
+  border-radius: .7rem;
+  background: var(--kds-card);
+  box-shadow: inset 0 1px 0 var(--kds-glint);
+}
+.kds-workspace__search:focus-within { border-color: var(--koma-focus-ring); }
+.kds-workspace__search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--kds-text);
+  font: 400 .9rem/1.4 var(--koma-font-body);
+}
+.kds-workspace__search input::placeholder { color: var(--kds-muted); }
+.kds-workspace__search button,
+.kds-workspace__error button,
+.kds-workspace__demand-head button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  color: inherit;
+  cursor: pointer;
+}
+.kds-workspace__demand {
+  overflow: hidden;
+  border: 1px solid var(--kds-border);
+  border-radius: .85rem;
+  background: var(--kds-card);
+}
+.kds-workspace__demand-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .2rem .4rem .2rem .85rem;
+  color: var(--kds-text);
+  font-size: .85rem;
+}
+.kds-workspace__demand-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 225px), 1fr));
+  max-height: 34vh;
+  overflow-y: auto;
+  gap: .3rem;
+  padding: .5rem;
+  border-top: 1px solid var(--kds-border);
+}
+.kds-workspace__demand-row {
+  padding: .55rem .65rem;
+  border-radius: .45rem;
+  background: var(--kds-raised);
+  overflow-wrap: anywhere;
+}
+.kds-workspace__demand-row strong { display: block; font-size: .85rem; }
+.kds-workspace__demand-row small {
+  display: block;
+  margin-top: .2rem;
+  color: var(--kds-muted);
+  font-size: .76rem;
+}
+.kds-workspace__demand-empty { padding: .7rem; color: var(--kds-muted); font-size: .83rem; }
+
+/* Each ticket is a single reading surface with an elevated identity region. */
+.kds-workspace__tickets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr));
+  align-items: start;
+  min-width: 0;
+  gap: 1rem;
+}
+.kds-ticket {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--kds-border);
+  border-radius: 1rem;
+  background: var(--kds-card);
+  box-shadow: inset 0 1px 0 var(--kds-glint), 0 2px 0 var(--kds-surface-depth);
+}
+.kds-ticket__header {
+  padding: .95rem .9rem .9rem;
+  background: color-mix(in srgb, var(--kds-raised) 54%, var(--kds-card));
+}
+.kds-ticket__title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: .55rem;
+  align-items: start;
+  min-width: 0;
+}
+.kds-ticket__identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  min-width: 0;
+  gap: .35rem .6rem;
+}
+.kds-ticket__title-row h3 {
+  margin: 0;
+  color: var(--kds-text);
+  font: 700 1.18rem/1.22 var(--koma-font-display);
+  letter-spacing: -.025em;
+  overflow-wrap: anywhere;
+}
+.kds-ticket__destination {
+  color: var(--kds-muted);
+  font: 500 .83rem/1.4 var(--koma-font-body);
+  white-space: nowrap;
+}
+.kds-ticket__timer,
+.kds-ticket__ready-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  justify-self: end;
+  gap: .3rem;
+  margin: 0;
+  color: var(--kds-muted);
+  font: 600 .81rem/1.4 var(--koma-font-body);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.kds-ticket__timer svg { flex: 0 0 auto; }
+.kds-ticket__timer[data-wait-level="late"] {
+  color: var(--kds-text);
+  font-weight: 700;
+}
+.kds-ticket__ready-label { color: var(--kds-ready); }
+.kds-ticket__wait-caption { display: none; }
+.kds-ticket__underhead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .45rem .6rem;
+  min-height: 50px;
+  padding-top: .6rem;
+}
+.kds-ticket__progress {
+  color: var(--kds-muted);
+  font: 600 .84rem/1.4 var(--koma-font-body);
+  font-variant-numeric: tabular-nums;
+}
+.kds-ticket__identifier {
+  color: var(--kds-muted);
+  font: 400 .8rem/1.4 var(--koma-font-body);
+  overflow-wrap: anywhere;
+}
+.kds-ticket__accepted { color: var(--kds-muted); font-size: .76rem; font-weight: 600; }
+.kds-ticket__saving { margin-left: auto; color: var(--kds-muted); font-size: .8rem; }
+
+/* The batch action uses the same inset highlight / short bottom lip as
+ * the active Salão tab. The number is an integrated inset counter, not a badge. */
+.kds-ticket__batch-action {
+  display: inline-flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: .65rem;
+  flex: 0 0 auto;
+  min-height: 48px;
+  margin-left: auto;
+  padding: .45rem .5rem .45rem .8rem;
+  border: 1px solid var(--kds-mint-border);
+  border-radius: .7rem;
+  background: var(--kds-mint);
+  color: var(--kds-mint-ink);
+  box-shadow: inset 0 1px 0 #ffffff65, 0 3px 0 var(--kds-button-depth);
+  font: 700 .86rem/1.25 var(--koma-font-body);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: box-shadow .12s ease, transform .12s ease;
+}
+.kds-ticket__batch-count {
+  display: grid;
+  place-items: center;
+  min-width: 1.55rem;
+  height: 1.55rem;
+  padding-inline: .2rem;
+  border-radius: .43rem;
+  background: var(--kds-mint-counter);
+  color: var(--kds-mint-counter-ink);
+  font: 700 .83rem/1 var(--koma-font-display);
+  font-variant-numeric: tabular-nums;
+}
+@media (hover: hover) {
+  .kds-ticket__batch-action:hover:not(:active) {
+    transform: translateY(-1px);
+    background: var(--kds-mint-hover);
+    box-shadow: inset 0 1px 0 #ffffff75, 0 4px 0 var(--kds-button-depth);
+  }
+}
+.kds-ticket__batch-action:active { transform: translateY(2px); box-shadow: inset 0 2px 3px #0002; }
+.kds-ticket__items { display: grid; border-top: 1px solid var(--kds-border); }
+.kds-ticket__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: .75rem;
+  min-width: 0;
+  min-height: 70px;
+  padding: .78rem .9rem;
+}
+.kds-ticket__item + .kds-ticket__item { border-top: 1px solid var(--kds-border); }
+.kds-ticket__item-description { min-width: 0; overflow-wrap: anywhere; }
+.kds-ticket__item-description strong {
+  display: block;
+  color: var(--kds-text);
+  font: 600 1rem/1.38 var(--koma-font-body);
+}
+.kds-ticket__item-description small {
+  display: block;
+  color: var(--kds-muted);
+  font: 400 .87rem/1.4 var(--koma-font-body);
+}
+.kds-ticket__item-description .kds-ticket__composition { margin-top: .2rem; }
+.kds-ticket__item-description .kds-ticket__observation {
+  margin-top: .25rem;
+  color: var(--kds-muted);
+  font-weight: 500;
+}
+.kds-ticket__observation b { font-weight: 700; }
+
+/* Each item: a compact raised physical control like Novos pedidos,
+ * never another full-bleed CTA; no fake neon/gradient/status decorations. */
+.kds-ticket__item-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  flex: 0 0 auto;
+  min-width: 105px;
+  min-height: 48px;
+  padding: .58rem .7rem;
+  border: 1px solid var(--kds-face-border);
+  border-radius: .68rem;
+  background: var(--kds-face);
+  color: var(--kds-face-ink);
+  box-shadow: inset 0 1px 0 var(--kds-glint), 0 3px 0 var(--kds-button-depth);
+  font: 600 .85rem/1.25 var(--koma-font-body);
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+.kds-ticket__item-action svg { flex: 0 0 auto; }
+@media (hover: hover) {
+  .kds-ticket__item-action:hover:not(:active) {
+    transform: translateY(-1px);
+    border-color: var(--kds-text);
+    box-shadow: inset 0 1px 0 var(--kds-glint), 0 4px 0 var(--kds-button-depth);
+  }
+}
+.kds-ticket__item-action:active { transform: translateY(2px); box-shadow: inset 0 2px 3px #0002; }
+.kds-ticket__item-action:disabled { opacity: .66; cursor: wait; transform: none; }
+.kds-ticket__item-complete {
+  display: grid;
+  place-items: center;
+  min-width: 105px;
+  min-height: 48px;
+  color: var(--kds-ready);
+}
+.kds-ticket__ready-items { border-top: 1px solid var(--kds-border); }
+.kds-ticket__ready-items summary {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  min-height: 44px;
+  padding: .5rem .9rem;
+  color: var(--kds-ready);
+  font: 600 .81rem/1.35 var(--koma-font-body);
+  cursor: pointer;
+  list-style: none;
+}
+.kds-ticket__ready-items summary::-webkit-details-marker { display: none; }
+.kds-ticket__ready-items > div { border-top: 1px solid var(--kds-border); }
+.kds-workspace__empty { padding: 2rem .7rem; text-align: center; }
+.kds-workspace__empty strong { font: 700 1rem/1.3 var(--koma-font-body); }
+.kds-workspace__empty p { margin: .3rem 0 0; font-size: .82rem; color: var(--kds-muted); }
+.kds-workspace__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .7rem;
+  padding: .3rem .3rem .3rem .75rem;
+  border: 1px solid var(--kds-error);
+  border-radius: .6rem;
+  color: var(--kds-error);
+  font-size: .82rem;
+}
+/* KDS focus: optional operational mode, never hides the exit control. */
+.cashier-shell:has(.kds-workspace[data-focus="true"]) { height: 100svh !important; overflow: hidden !important; }
+.cashier-shell:has(.kds-workspace[data-focus="true"]) .cashier-main { height: 100svh !important; min-height: 0 !important; overflow: hidden !important; }
+.cashier-shell:has(.kds-workspace[data-focus="true"]) :is(.cashier-topbar, .cashier-subnav, .cashier-mobile-bottom-bar, .cashier-sidebar) { display: none !important; }
+.cashier-shell:has(.kds-workspace[data-focus="true"]) .cashier-content {
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  padding: .35rem .45rem !important;
+  overscroll-behavior-y: contain;
+}
+@media (min-width: 768px) {
+  .cashier-shell:has(.kds-workspace[data-focus="true"]) .group\/sidebar-wrapper { width: 100%; }
+}
+@media (max-width: 359px) {
+  .kds-workspace__toolbar { padding: .2rem; gap: .12rem; }
+  .kds-workspace__filters { gap: .05rem; }
+  .kds-workspace__filter { gap: .15rem; padding-inline: .08rem; font-size: .64rem; }
+  .kds-workspace__filter-count { min-width: 1rem; min-height: 1rem; padding-inline: .08rem; font-size: .64rem; }
+  .kds-workspace__tool { width: 34px; }
+  .kds-ticket__header { padding: .8rem .65rem .7rem; }
+  .kds-ticket__underhead { gap: .35rem; }
+  .kds-ticket__item { gap: .55rem; padding: .72rem .65rem; }
+  .kds-ticket__item-action { min-width: 89px; padding-inline: .4rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kds-workspace *, .kds-workspace *::before, .kds-workspace *::after {
+    transition-duration: 0s !important;
+    animation-duration: 0s !important;
+  }
+}

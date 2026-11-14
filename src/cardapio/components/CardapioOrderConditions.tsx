@@ -2,6 +2,7 @@ import CatalogProductImage from './CatalogProductImage';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Truck } from 'lucide-react';
 import type { BrandConfig, Product } from '../CardapioTypes';
+import { resolveCatalogDisplayProduct } from '../resolvePairingDisplay';
 import { CardapioRecommendations } from './CardapioRecommendations';
 import { CardapioHighlights } from './CardapioHighlights';
 import CardapioPromotions from './CardapioPromotions';
@@ -87,13 +88,18 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
 
   const products = useMemo(() => {
     const byId = new Map(brand.products.map((product) => [String(product.id), product]));
-    return rankedIds.map((id) => byId.get(id)).filter((product): product is Product => Boolean(product) && product?.isAvailable !== false);
-  }, [brand.products, rankedIds]);
+    const manual = brand.manualHighlightProductId ? byId.get(brand.manualHighlightProductId) : undefined;
+    const ids = manual && manual.isAvailable !== false
+      ? [String(manual.id), ...rankedIds.filter(id => id !== String(manual.id))]
+      : rankedIds;
+    return ids.map((id) => byId.get(id)).filter((product): product is Product => Boolean(product) && product?.isAvailable !== false);
+  }, [brand.products, brand.manualHighlightProductId, rankedIds]);
 
   if (products.length === 0) return null;
 
   const openProduct = (product: Product) => {
-    const target = document.getElementById(`product-card-${product.id}`);
+    const displayProduct = resolveCatalogDisplayProduct(brand.products, product, brand.id);
+    const target = document.getElementById(`product-card-${displayProduct.id}`);
     const detailsTrigger = target?.querySelector<HTMLButtonElement>('.cardapio-product-card__details-hitbox');
     if (detailsTrigger) {
       detailsTrigger.click();
@@ -106,7 +112,7 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
     <section aria-labelledby="popular-products-title" className="cardapio-popular-section w-full basis-full" id="popular-products-home">
       <div className="cardapio-showcase-header">
         <h2 id="popular-products-title" className="cardapio-showcase-heading">Mais escolhidos</h2>
-        <span className="cardapio-showcase-badge">Favoritos dos clientes</span>
+        <span className="cardapio-showcase-badge">{brand.manualHighlightProductId && String(products[0]?.id) === brand.manualHighlightProductId ? 'Destaque da casa' : 'Favoritos dos clientes'}</span>
       </div>
 
       <div className={`cardapio-popular-layout cardapio-popular-layout--${variant}`} role="list">
@@ -117,7 +123,8 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
               ? 'Escolher'
               : 'Pedir';
           const isFirst = index === 0;
-          const rank = `#${index + 1}`;
+          const manual = isFirst && String(product.id) === brand.manualHighlightProductId;
+          const rank = `#${rankedIds.indexOf(String(product.id)) + 1}`;
 
           if (variant === 'catalog-first' || !isFirst) {
             return (
@@ -134,11 +141,11 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
                     image={product.image}
                     className="cardapio-popular-card__image"
                   />
-                  <span className="cardapio-popular-card__rank-pill">{rank}</span>
+                  {!manual && <span className="cardapio-popular-card__rank-pill">{rank}</span>}
                 </div>
                 <span className="cardapio-popular-card__content">
                   <span className="cardapio-popular-card__ribbon-eyebrow">
-                    {isFirst ? '★ Mais pedido da casa' : `★ Favorito ${rank}`}
+                    {manual ? '★ Destaque da casa' : rank === '#1' ? '★ Mais pedido da casa' : `★ Favorito ${rank}`}
                   </span>
                   <strong className="cardapio-popular-card__name">{product.name}</strong>
                   <span className="cardapio-popular-card__bottom">
@@ -170,9 +177,9 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
                   className="cardapio-popular-card__image"
                 />
                 <KomaSeloBadge
-                  label="Nº 1 mais pedido"
-                  icon="crown"
-                  rank="#1"
+                  label={manual ? 'Destaque da casa' : 'Nº 1 mais pedido'}
+                  icon={manual ? 'sparkles' : 'crown'}
+                  rank={manual ? '' : '#1'}
                   className="cardapio-popular-card__selo-badge"
                 />
               </div>

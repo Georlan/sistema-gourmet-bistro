@@ -899,6 +899,9 @@ def _can_agent_claim_generic_jobs(
     if getattr(agent, "is_primary", False):
         return True, "primary"
 
+    cutoff_online = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+        seconds=AGENT_ONLINE_THRESHOLD_SECONDS * 2
+    )
     stats = (
         db.query(
             func.count(PrintAgentToken.id),
@@ -908,6 +911,7 @@ def _can_agent_claim_generic_jobs(
                         and_(
                             PrintAgentToken.is_primary == True,
                             PrintAgentToken.id != agent.id,
+                            PrintAgentToken.last_seen_at >= cutoff_online,
                         ),
                         1,
                     )
@@ -1340,6 +1344,7 @@ def get_current_agent(
 # --- SCHEMAS ---
 class RegisterAgentRequest(BaseModel):
     agent_id: str
+    is_primary: Optional[bool] = None
 
 class SetPrimaryAgentRequest(BaseModel):
     agent_id: str = Field(min_length=1, max_length=200)
@@ -2386,16 +2391,26 @@ def register_agent(
             )
         log.warning("print_agent_registration_collision_preserved")
 
+    cutoff_online = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+        seconds=AGENT_ONLINE_THRESHOLD_SECONDS * 3
+    )
     has_active_primary = (
         db.query(PrintAgentToken.id)
         .filter(
             PrintAgentToken.restaurante_id == rest_id,
             PrintAgentToken.ativo == True,
             PrintAgentToken.is_primary == True,
+            PrintAgentToken.last_seen_at >= cutoff_online,
         )
         .first()
         is not None
     )
+
+    make_primary = bool(req.is_primary) or (not has_active_primary)
+    if make_primary:
+        db.query(PrintAgentToken).filter(
+            PrintAgentToken.restaurante_id == rest_id,
+        ).update({"is_primary": False}, synchronize_session=False)
 
     raw_token = f"koma_ag_{secrets.token_urlsafe(32)}"
     token_h = hash_token(raw_token)
@@ -2404,7 +2419,7 @@ def register_agent(
         agent_id=agent_id_clean,
         token_hash=token_h,
         ativo=True,
-        is_primary=not has_active_primary,
+        is_primary=make_primary,
     )
     db.add(new_token)
     db.flush()

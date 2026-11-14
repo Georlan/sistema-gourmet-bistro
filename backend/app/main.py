@@ -342,6 +342,10 @@ async def add_request_tenant_context(request: Request, call_next):
     restaurante_id: int | None = None
     auth_header = request.headers.get("Authorization")
 
+    # Tokens de agente de impressão (koma_ag_*) são opacos e autenticados nas rotas /api/print-agents
+    if request.headers.get("X-Agent-Token") or (auth_header and auth_header.startswith("Bearer koma_ag_")):
+        return await call_next(request)
+
     if auth_header:
         if not auth_header.startswith("Bearer "):
             _log_auth_rejection(request, "malformed_bearer")
@@ -480,6 +484,8 @@ app.include_router(auth.router)
 from .routes import password_recovery
 app.include_router(password_recovery.router)
 app.include_router(products.router)
+from .routes import product_families
+app.include_router(product_families.router)
 app.include_router(atendimentos.router)
 app.include_router(atendimento_printing.router)
 app.include_router(tables.router)

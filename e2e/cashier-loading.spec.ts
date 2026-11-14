@@ -121,15 +121,20 @@ test('PDV preserva tentativa e carrinho após falha mesmo fora da tela', async (
   await cashierSubnavButton(page, 'Novo pedido').click();
   await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente', exact: true }).click();
   await showCart(page);
-  await page.getByRole('button', { name: 'Consumo local', exact: true }).click();
-  await page.locator('#pdv-target-table').selectOption('10');
+  if ((page.viewportSize()?.width ?? 1366) < 1280) {
+    await page.locator('.cashier-pdv-cart__modality-option').filter({ hasText: 'Consumo local' }).click();
+  } else {
+    await page.getByRole('button', { name: 'Consumo local', exact: true }).click();
+  }
+  await page.locator('#pdv-target-table').click();
+      await page.locator('#pdv-table-picker').getByRole('button', { name: /^Mesa 10 / }).click();
   await page.locator('#pdv-submit-btn').click();
   await expect(page.locator('.orders-board')).toBeVisible();
   await expect(page.getByText('Erro ao registrar venda: Falha controlada')).toBeVisible();
   expect(sales).toHaveLength(1);
   await cashierSubnavButton(page, 'Novo pedido').click();
   await showCart(page);
-  await expect(page.locator('#pdv-target-table')).toHaveValue('10');
+  await expect(page.locator('#pdv-target-table')).toHaveAttribute('data-table-id', '10');
   await expect(page.locator('#pdv-submit-btn').locator('..').getByText('R$ 42,00', { exact: true })).toBeVisible();
   await page.locator('#pdv-submit-btn').click();
   await expect(page.getByText('Pedido confirmado e enviado à cozinha.', { exact: true })).toBeVisible();

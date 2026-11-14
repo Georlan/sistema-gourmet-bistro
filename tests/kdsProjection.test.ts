@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { projectCashierDeliveryState } from '../src/domain/cashierOrderProjection';
 
 import {
   getKdsDestinationLabel,
   getKdsTicketLabel,
   matchesKdsTicketQuery,
   projectKdsTickets,
+  projectKdsDemand,
+  getKdsWaitInfo,
+  isKdsKitchenOrderEligible,
   type KdsKitchenItem,
 } from '../src/components/caixa/kitchen/kdsProjection';
 
@@ -130,4 +134,60 @@ test('KDS identifica pedido aceito aguardando início sem o confundir com prepar
     kitchenItem('accepted', 'preparando', { deliveryStatus: 'aceito' }),
   ]);
   assert.equal(projection.tickets[0].deliveryStatus, 'aceito');
+});
+
+
+test('All day never aggregates substitutions, observations or ready items', () => {
+  const result = projectKdsDemand([
+    kitchenItem('one', 'preparando', { produtoId: 'burger', nome: 'Burger' }),
+    kitchenItem('two', 'preparando', { produtoId: 'burger', nome: 'Burger' }),
+    kitchenItem('custom', 'preparando', { produtoId: 'burger', nome: 'Burger', observacao: 'Sem cebola' }),
+    kitchenItem('ready', 'pronto', { produtoId: 'burger', nome: 'Burger' }),
+  ]);
+  assert.deepEqual(result.map(row => [row.count, row.name, row.details]), [
+    [2, 'Burger', []], [1, 'Burger', ['Sem cebola']],
+  ]);
+});
+
+test('elapsed time is launch wait only and handles missing clocks or time in the future', () => {
+  const at = Date.parse('2026-11-13T20:00:00Z');
+  assert.deepEqual(getKdsWaitInfo(undefined, at), { minutes: null, label: 'Horário indisponível', level: 'unknown' });
+  assert.equal(getKdsWaitInfo(at - 9*60000, at).level, 'normal');
+  assert.equal(getKdsWaitInfo(at - 10*60000, at).level, 'attention');
+  assert.equal(getKdsWaitInfo(at - 15*60000, at).level, 'late');
+  assert.equal(getKdsWaitInfo(at + 60000, at).minutes, 0);
+});
+
+test('items preserve their incoming cook order while ready items follow unfinished ones', () => {
+  const ticket = projectKdsTickets([
+    kitchenItem('z', 'preparando'),
+    kitchenItem('a', 'preparando'),
+    kitchenItem('r', 'pronto'),
+  ]).tickets[0];
+  assert.deepEqual(ticket.items.map(i => i.id), ['z', 'a', 'r']);
+});
+
+
+test('kanban projects order ready independently of kitchen item completion, with no implicit service', () => {
+  const preparing = projectKdsTickets([kitchenItem('one', 'preparando', { deliveryStatus: 'aceito' })]);
+  const ready = projectKdsTickets([kitchenItem('one', 'pronto', { deliveryStatus: 'pronto' })]);
+  assert.equal(preparing.preparingTickets.length, 1);
+  assert.equal(ready.readyTickets.length, 1);
+  assert.equal(ready.readyTickets[0].items[0].status, 'pronto');
+  assert.equal(projectCashierDeliveryState('aceito', 'pickup').inProduction, true);
+  assert.equal(projectCashierDeliveryState('pronto', 'pickup').inFinalization, true);
+  assert.equal(projectCashierDeliveryState('pronto', 'pickup').label, 'Pronto para retirada');
+});
+
+
+test('KDS excludes pending/declined/dispatched/finished orders but retains accepted and table launches', () => {
+  for (const status of ['pendente', 'analise', 'recusado', 'transito', 'finalizado']) assert.equal(isKdsKitchenOrderEligible(status), false);
+  for (const status of ['aceito', 'producao', 'pronto', null, undefined]) assert.equal(isKdsKitchenOrderEligible(status), true);
+});
+
+test('KDS never substitutes the technical id for an absent persisted order display number', () => {
+  assert.equal(getKdsTicketLabel({ orderId: 'technical-id-123' }), 'sem número');
+  assert.equal(getKdsTicketLabel({ orderId: 'technical-id-123', numeroPedido: 0 }), 'sem número');
+  assert.equal(getKdsDestinationLabel({ mesaId: 7, tipo: 'Consumo no Local' }), 'Mesa 07');
+  assert.equal(getKdsDestinationLabel({ mesaId: 7, tipo: 'Entrega' }), 'Delivery');
 });

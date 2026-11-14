@@ -1,375 +1,271 @@
-import { OrderItemComposition } from '../../shared/OrderItemComposition';
-import { ChefHat, Check, CircleDot, PackageCheck, Search, UtensilsCrossed } from 'lucide-react';
-import { useMemo, useState } from 'react';
-
+import { Check, ClipboardList, Maximize2, Minimize2, MoreHorizontal, RefreshCw, Search, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { itemCompositionPresentation } from '../../../domain/orderItemComposition';
+import { KitchenTimer } from './KitchenTimer';
 import type { useCashierOrders } from '../orders/useCashierOrders';
-import { KitchenTimer as KDSTimer } from './KitchenTimer';
 import {
   getKdsDestinationLabel,
   getKdsTicketLabel,
   matchesKdsTicketQuery,
+  projectKdsDemand,
   projectKdsTickets,
   type KdsKitchenItem,
   type KdsTicket,
 } from './kdsProjection';
 
-type BoundaryProps = Pick<ReturnType<typeof useCashierOrders>, 'handleUpdateItemStatus'> & {
+type KdsFilter = 'todos' | 'preparo' | 'prontos';
+type KitchenProps = Pick<ReturnType<typeof useCashierOrders>, 'handleUpdateItemStatus'> & {
   activeSubTab: string;
   activeKitchenItems: KdsKitchenItem[];
-  mode?: 'kds' | 'queue';
+  /** One backend transaction for a ticket, when the operator supports it. */
+  handleConfirmTicketReady?: (itemIds: string[]) => Promise<boolean>;
+  /** Request a fresh canonical snapshot without inventing a local order state. */
+  onRefreshOrders?: () => void | Promise<unknown>;
+  mode?: 'kds' | 'queue' | 'standalone';
 };
 
-const toTimerTimestamp = (value: unknown): string | undefined => {
-  if (typeof value === 'string' && value.trim()) return value;
-  if (typeof value === 'number' && Number.isFinite(value)) return new Date(value).toISOString();
-  if (value instanceof Date) return value.toISOString();
-  return undefined;
+const isMeaningfulCustomer = (name: string | undefined, destination: string) => {
+  const normalized = (name || '').trim().toLocaleLowerCase();
+  return !!normalized && normalized !== 'consumo geral' && normalized !== 'balcão'
+    && normalized !== destination.toLocaleLowerCase();
 };
 
-const originLabel = (origin: KdsTicket['origemOperacional']) => {
-  if (origin === 'cardapio') return 'Cardápio online';
-  if (origin === 'smartpos') return 'SmartPOS';
-  if (origin === 'caixa') return 'Caixa';
-  if (origin === 'garcom') return 'Garçom';
-  return null;
-};
-
-/**
- * Kitchen view over the canonical item statuses owned by the order flow.
- * Caixa and KDS therefore converge on the same preparing/ready/delivered state.
+/** One operational surface for cashier and kitchen-role staff.
+ * Cooking changes item status only; serving, payment and fulfillment belong to other areas.
  */
-export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateItemStatus, mode = 'kds' }: BoundaryProps) {
-  const [pendingItemIds, setPendingItemIds] = useState<Set<string>>(() => new Set());
-  const [searchQuery, setSearchQuery] = useState('');
-  const projection = useMemo(() => projectKdsTickets(activeKitchenItems), [activeKitchenItems]);
-  const visiblePreparingTickets = useMemo(
-    () => projection.preparingTickets.filter((ticket) => matchesKdsTicketQuery(ticket, searchQuery)),
-    [projection.preparingTickets, searchQuery],
-  );
-  const visibleReadyTickets = useMemo(
-    () => projection.readyTickets.filter((ticket) => matchesKdsTicketQuery(ticket, searchQuery)),
-    [projection.readyTickets, searchQuery],
-  );
+export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateItemStatus, handleConfirmTicketReady, onRefreshOrders, mode = 'kds' }: KitchenProps) {
+  const active = mode === 'standalone' || activeSubTab === (mode === 'kds' ? 'kds' : 'preparo');
+  const [filter, setFilter] = useState<KdsFilter>('preparo');
+  const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [demandOpen, setDemandOpen] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
+  const [clock, setClock] = useState(() => Date.now());
+  const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshRef = useRef(false);
+  const [deviceOffline, setDeviceOffline] = useState(() => typeof navigator !== 'undefined' && !navigator.onLine);
+  const [confirmedIds, setConfirmedIds] = useState<Set<string>>(() => new Set());
+  const pendingRef = useRef(new Set<string>());
+  const [errorNotice, setErrorNotice] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  const expectedSubTab = mode === 'kds' ? 'kds' : 'preparo';
-  if (activeSubTab !== expectedSubTab) return null;
+  useEffect(() => {
+    if (!active) return;
+    const offline = () => setDeviceOffline(true);
+    const online = () => setDeviceOffline(false);
+    setDeviceOffline(!navigator.onLine);
+    window.addEventListener('offline', offline);
+    window.addEventListener('online', online);
+    return () => {
+      window.removeEventListener('offline', offline);
+      window.removeEventListener('online', online);
+    };
+  }, [active]);
 
-  const runTransition = async (
-    items: readonly KdsKitchenItem[],
-    newStatus: 'pronto' | 'entregue',
-  ) => {
-    const ids = items.map((item) => item.id).filter((id) => !pendingItemIds.has(id));
-    if (ids.length === 0) return;
+  useEffect(() => {
+    if (!active) return;
+    const tick = () => { if (!document.hidden) setClock(Date.now()); };
+    tick();
+    const interval = window.setInterval(tick, 30_000);
+    document.addEventListener('visibilitychange', tick);
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', tick); };
+  }, [active]);
+  useEffect(() => {
+    if (searchOpen && active) searchRef.current?.focus();
+  }, [searchOpen, active]);
+  useEffect(() => {
+    if (!focusMode) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setFocusMode(false); setToolsOpen(false); }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [focusMode]);
 
-    setPendingItemIds((current) => {
-      const next = new Set(current);
-      ids.forEach((id) => next.add(id));
-      return next;
+  // The API has ACKed these items, but a background snapshot can still be in flight.
+  // Keep local confirmed status until canonical props reflect it; never mark failed requests.
+  useEffect(() => {
+    const remaining = new Set(activeKitchenItems.filter(item => item.status === 'preparando').map(item => item.id));
+    setConfirmedIds(previous => {
+      if (![...previous].some(id => !remaining.has(id))) return previous;
+      return new Set([...previous].filter(id => remaining.has(id)));
     });
+  }, [activeKitchenItems]);
+  const effectiveItems = useMemo(() => activeKitchenItems.map(item =>
+    confirmedIds.has(item.id) && item.status === 'preparando'
+      ? { ...item, status: 'pronto' as const }
+      : item,
+  ), [activeKitchenItems, confirmedIds]);
+  const projection = useMemo(() => projectKdsTickets(effectiveItems), [effectiveItems]);
+  const demand = useMemo(() => projectKdsDemand(effectiveItems), [effectiveItems]);
+  const visible = useMemo(() => {
+    // Queue by urgency of work, not by completion age. FIFO within each stage.
+    const ordered = filter === 'preparo' ? projection.preparingTickets
+      : filter === 'prontos' ? projection.readyTickets
+        : [...projection.preparingTickets, ...projection.readyTickets];
+    return ordered.filter(ticket => matchesKdsTicketQuery(ticket, query));
+  }, [projection, filter, query]);
 
+  const refreshQueue = async () => {
+    if (!onRefreshOrders || refreshRef.current) return;
+    refreshRef.current = true;
+    setRefreshing(true);
+    setToolsOpen(false);
     try {
-      await Promise.all(ids.map((id) => handleUpdateItemStatus(id, newStatus)));
+      // We only request reconciliation; no "sincronizado" claim without a
+      // verified authoritative snapshot and no mutation of item status.
+      await onRefreshOrders();
+      // The refresh callback can swallow transport failures; do not dismiss a
+      // failed preparation confirmation based on an unverified refresh.
+    } catch (error) {
+      console.error('KDS refresh request failed', error);
+      setErrorNotice('Não foi possível atualizar a fila. Confira a conexão e tente novamente.');
     } finally {
-      setPendingItemIds((current) => {
-        const next = new Set(current);
-        ids.forEach((id) => next.delete(id));
-        return next;
-      });
+      refreshRef.current = false;
+      setRefreshing(false);
     }
   };
 
-  const advanceItem = async (item: KdsKitchenItem) => {
-    await runTransition([item], item.status === 'preparando' ? 'pronto' : 'entregue');
+  const markReady = async (items: readonly KdsKitchenItem[]) => {
+    const targets = items.filter(item => item.status === 'preparando'
+      && !pendingRef.current.has(item.id) && !confirmedIds.has(item.id));
+    if (!targets.length) return;
+    targets.forEach(item => pendingRef.current.add(item.id));
+    setPendingIds(new Set(pendingRef.current));
+    setErrorNotice(null);
+    try {
+      let saved = false;
+      if (targets.length > 1 && handleConfirmTicketReady) {
+        saved = await handleConfirmTicketReady(targets.map(item => item.id));
+      } else {
+        // Only a one-item request in normal use; legacy marketing demo has no batch.
+        saved = true;
+        for (const item of targets) {
+          let confirmed = false;
+          try { confirmed = await handleUpdateItemStatus(item.id, 'pronto'); }
+          catch (error) { console.error('KDS item confirmation failed', error); }
+          if (!confirmed) { saved = false; break; }
+          setConfirmedIds(current => new Set(current).add(item.id));
+        }
+      }
+      if (saved) {
+        setConfirmedIds(current => new Set([...current, ...targets.map(item => item.id)]));
+      } else {
+        setErrorNotice('Não foi possível confirmar o preparo. Os itens não confirmados continuam pendentes.');
+      }
+    } catch (error) {
+      console.error('KDS ticket confirmation failed', error);
+      setErrorNotice('Falha ao confirmar o preparo. Confira a conexão e tente novamente.');
+    } finally {
+      targets.forEach(item => pendingRef.current.delete(item.id));
+      setPendingIds(new Set(pendingRef.current));
+    }
   };
 
-  const advanceTicket = async (ticket: KdsTicket) => {
-    const preparingItems = ticket.items.filter((item) => item.status === 'preparando');
-    if (preparingItems.length > 0) {
-      await runTransition(preparingItems, 'pronto');
-      return;
-    }
-
-    await runTransition(
-      ticket.items.filter((item) => item.status === 'pronto'),
-      'entregue',
-    );
+  const renderItem = (item: KdsKitchenItem, destination: string) => {
+    const ready = item.status === 'pronto';
+    const pending = pendingIds.has(item.id);
+    const details = itemCompositionPresentation(item);
+    const customerName = item.clienteNome || item.cliente_nome;
+    return <div className="kds-ticket__item" key={item.id} id={`kitchen-card-${item.id}`} data-kds-item-status={item.status}>
+      <div className="kds-ticket__item-description">
+        <strong>{item.nome}</strong>
+        {isMeaningfulCustomer(customerName, destination) && <small>{customerName}</small>}
+        {details.lines.map((line, index) => <small key={index} className="kds-ticket__composition">{line}</small>)}
+        {details.observation && <small className="kds-ticket__observation"><b>OBS:</b> {details.observation}</small>}
+      </div>
+      {ready
+        ? <span className="kds-ticket__item-complete" title="Preparo confirmado"><Check size={17} aria-hidden="true"/><span className="sr-only">Pronto</span></span>
+        : <button type="button" id={`kitchen-finish-btn-${item.id}`} className="kds-ticket__item-action"
+            disabled={pending} aria-label={`Marcar como pronto: ${item.nome}`}
+            onClick={() => void markReady([item])}>{pending ? 'Salvando…' : <><Check size={16} aria-hidden="true"/><span>Pronto</span></>}</button>}
+    </div>;
   };
 
   const renderTicket = (ticket: KdsTicket) => {
-    const ready = ticket.preparingCount === 0;
-    const source = originLabel(ticket.origemOperacional);
-    const actionableItems = ready
-      ? ticket.items.filter((item) => item.status === 'pronto')
-      : ticket.items.filter((item) => item.status === 'preparando');
-    const ticketPending = actionableItems.some((item) => pendingItemIds.has(item.id));
-
-    return (
-      <article
-        key={ticket.key}
-        className={`overflow-hidden rounded-2xl border bg-koma-card shadow-sm ${
-          ready ? 'border-emerald-500/30' : 'border-koma-border'
-        }`}
-      >
-        <header className="space-y-3 border-b border-koma-border px-4 py-3.5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-extrabold text-koma-foreground">
-                  {getKdsTicketLabel(ticket)}
-                </span>
-                <span className="rounded-md border border-koma-border bg-koma-panel px-2 py-0.5 font-mono text-[10px] font-bold text-koma-muted">
-                  {getKdsDestinationLabel(ticket)}
-                </span>
-              </div>
-              {ticket.deliveryStatus === 'aceito' && <span className="text-[10px] text-koma-muted">Aguardando preparo</span>}
-              <div className="mt-1 flex flex-wrap gap-x-2 text-[10px] text-koma-muted">
-                {ticket.identificador && <span>{ticket.identificador}</span>}
-                {source && <span>{source}</span>}
-                <span>Lançado por {ticket.garcomNome}</span>
-              </div>
-            </div>
-            <KDSTimer
-              itemTimestamp={toTimerTimestamp(ticket.timestamp)}
-              status={ready ? 'pronto' : 'preparando'}
-            />
+    const waiting = ticket.preparingCount > 0;
+    const available = ticket.items.filter(item => item.status === 'preparando' && !pendingIds.has(item.id));
+    const pendingCount = ticket.items.filter(item => pendingIds.has(item.id)).length;
+    const batchTargets = available.slice(0, 40);
+    const destination = getKdsDestinationLabel(ticket);
+    const readyItems = ticket.items.filter(item => item.status === 'pronto');
+    const preparingItems = ticket.items.filter(item => item.status === 'preparando');
+    return <article key={ticket.key} className="kds-ticket" data-kds-ticket={ticket.key} data-stage={waiting ? 'preparo' : 'pronto'}>
+      <header className="kds-ticket__header">
+        <div className="kds-ticket__title-row">
+          <div className="kds-ticket__identity">
+            <h3>Pedido {getKdsTicketLabel(ticket)}</h3>
+            <span className="kds-ticket__destination">{destination}</span>
           </div>
-
-          <div className="flex items-center justify-between gap-3 text-[10px]">
-            <span className="font-semibold text-koma-muted">
-              {ready
-                ? `${ticket.readyCount} ${ticket.readyCount === 1 ? 'item pronto' : 'itens prontos'}`
-                : `${ticket.readyCount}/${ticket.totalCount} prontos`}
-            </span>
-            {!ready && ticket.readyCount > 0 && (
-              <span className="font-bold text-emerald-500">Parcialmente pronto</span>
-            )}
-          </div>
-
-          {!ready && ticket.totalCount > 1 && (
-            <div className="h-1 overflow-hidden rounded-full bg-koma-panel" aria-hidden="true">
-              <div
-                className="h-full rounded-full bg-emerald-500 transition-all"
-                style={{ width: `${Math.round((ticket.readyCount / ticket.totalCount) * 100)}%` }}
-              />
-            </div>
-          )}
-        </header>
-
-        <div className="divide-y divide-koma-border/70">
-          {ticket.items.map((item) => {
-            const itemReady = item.status === 'pronto';
-            const pending = pendingItemIds.has(item.id);
-            return (
-              <div key={item.id} className="flex items-start gap-3 px-4 py-3">
-                <div
-                  className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
-                    itemReady ? 'bg-emerald-500' : 'bg-amber-400'
-                  }`}
-                  aria-hidden="true"
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <strong className="text-xs text-koma-foreground">{item.nome}</strong>
-                    {item.clienteNome && item.clienteNome !== 'Consumo Geral' && (
-                      <span className="rounded bg-koma-panel px-1.5 py-0.5 text-[9px] font-semibold text-koma-muted">
-                        {item.clienteNome}
-                      </span>
-                    )}
-                  </div>
-                  <OrderItemComposition item={item} className="mt-2 text-koma-foreground" />
-                </div>
-                <button
-                  type="button"
-                  disabled={pending}
-                  onClick={() => void advanceItem(item)}
-                  className={`shrink-0 rounded-lg border px-3 py-2 text-[9px] font-extrabold uppercase tracking-wide transition disabled:cursor-wait disabled:opacity-50 ${
-                    itemReady
-                      ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                      : 'border-emerald-500 bg-emerald-500 text-[#101411] hover:bg-emerald-400'
-                  }`}
-                  aria-label={`${itemReady ? 'Marcar como entregue' : 'Marcar como pronto'}: ${item.nome}`}
-                >
-                  {pending ? 'Salvando…' : itemReady ? 'Entregue' : 'Pronto'}
-                </button>
-              </div>
-            );
-          })}
+          <KitchenTimer itemTimestamp={ticket.timestamp} status={waiting ? 'preparando' : 'pronto'} now={clock} />
         </div>
-
-        {actionableItems.length > 1 && (
-          <div className="border-t border-koma-border bg-koma-panel/35 p-3">
-            <button
-              type="button"
-              disabled={ticketPending}
-              onClick={() => void advanceTicket(ticket)}
-              className={`flex w-full items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-[9px] font-extrabold uppercase tracking-wide transition disabled:cursor-wait disabled:opacity-50 ${
-                ready
-                  ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
-                  : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
-              }`}
-            >
-              <Check size={12} />
-              {ticketPending
-                ? 'Atualizando ticket…'
-                : ready
-                  ? `Marcar ${actionableItems.length} itens como entregues`
-                  : `Marcar ${actionableItems.length} restantes como prontos`}
-            </button>
-          </div>
-        )}
-      </article>
-    );
+        <div className="kds-ticket__underhead">
+          <span className="kds-ticket__progress">{waiting ? `${ticket.preparingCount} pendentes${ticket.readyCount ? ` · ${ticket.readyCount} prontos` : ''}` : `${ticket.readyCount} prontos · Para expedição`}</span>
+          {ticket.identificador && <span className="kds-ticket__identifier">{ticket.identificador}</span>}
+          {waiting && ticket.deliveryStatus === 'aceito' && <span className="kds-ticket__accepted">Aceito</span>}
+          {waiting && batchTargets.length > 1 && <button type="button" className="kds-ticket__batch-action"
+            onClick={() => void markReady(batchTargets)} aria-label={`Concluir ${batchTargets.length} itens do pedido ${getKdsTicketLabel(ticket)}`}>
+            <span>Concluir</span><strong className="kds-ticket__batch-count" aria-hidden="true">{batchTargets.length}</strong>
+          </button>}
+          {waiting && pendingCount > 0 && available.length <= 1 && <span className="kds-ticket__saving">{pendingCount} salvando</span>}
+        </div>
+      </header>
+      <div className="kds-ticket__items">{preparingItems.map(item => renderItem(item, destination))}</div>
+      {waiting && readyItems.length > 0 ? <details className="kds-ticket__ready-items">
+        <summary><Check size={14} aria-hidden="true" /> {readyItems.length} {readyItems.length === 1 ? 'item já pronto' : 'itens já prontos'}</summary>
+        <div>{readyItems.map(item => renderItem(item, destination))}</div>
+      </details> : !waiting && <div className="kds-ticket__items">{readyItems.map(item => renderItem(item, destination))}</div>}
+    </article>;
   };
 
-  const renderLane = (
-    title: string,
-    subtitle: string,
-    tickets: KdsTicket[],
-    totalTickets: number,
-    readyLane = false,
-  ) => (
-    <section className="min-w-0 rounded-2xl border border-koma-border bg-koma-page/40 p-3.5">
-      <div className="mb-3 flex items-center justify-between gap-3 px-1">
-        <div>
-          <h3 className="flex items-center gap-2 text-xs font-extrabold text-koma-foreground">
-            {readyLane ? <PackageCheck size={15} /> : <UtensilsCrossed size={15} />}
-            {title}
-          </h3>
-          <p className="mt-0.5 text-[10px] text-koma-muted">{subtitle}</p>
-        </div>
-        <span
-          className={`rounded-full px-2 py-1 font-mono text-[10px] font-bold ${
-            readyLane
-              ? 'bg-emerald-500/15 text-emerald-400'
-              : 'bg-amber-500/10 text-amber-400'
-          }`}
-        >
-          {searchQuery.trim() ? `${tickets.length}/${totalTickets}` : tickets.length}
-        </span>
+  if (!active) return null;
+  return <section className="kds-workspace" aria-label="Fila da cozinha" data-kitchen-mode={mode} data-focus={focusMode ? 'true' : 'false'}>
+    <div className="kds-workspace__toolbar">
+      <div className="kds-workspace__filters" role="group" aria-label="Filtrar tickets da cozinha">
+        {([
+          { key: 'preparo', label: 'Em preparo', count: projection.preparingTickets.length },
+          { key: 'prontos', label: 'Prontos', count: projection.readyTickets.length },
+          { key: 'todos', label: 'Todos', count: projection.tickets.length },
+        ] as const).map(option => <button key={option.key} type="button" aria-pressed={filter === option.key}
+          className="kds-workspace__filter" onClick={() => setFilter(option.key)}><span>{option.label}</span><strong className="kds-workspace__filter-count">{option.count}</strong></button>)}
       </div>
-
-      {tickets.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-koma-border px-4 py-10 text-center text-[10px] text-koma-muted">
-          {searchQuery.trim()
-            ? 'Nenhum ticket desta etapa corresponde à busca.'
-            : readyLane
-              ? 'Nada aguardando saída.'
-              : 'Nenhum ticket para preparar.'}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">{tickets.map(renderTicket)}</div>
-      )}
-    </section>
-  );
-
-  if (mode === 'queue') {
-    return (
-      <div className="space-y-4 rounded-3xl border border-koma-border bg-koma-card/60 p-4 sm:p-5" data-kitchen-mode="queue">
-        <div className="flex flex-col gap-3 border-b border-koma-border pb-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-start gap-3">
-            <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-2.5 text-emerald-400">
-              <ChefHat size={20} />
-            </div>
-            <div>
-              <h2 className="font-serif text-base font-bold text-koma-secondary">Fila de preparo</h2>
-              <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
-                Acompanhe os pedidos e marque os itens como prontos ou entregues.
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold">
-            <span className="rounded-full bg-amber-500/10 px-2.5 py-1.5 text-amber-400">{projection.preparingItemCount} a preparar</span>
-            <span className="rounded-full bg-emerald-500/15 px-2.5 py-1.5 text-emerald-400">{projection.readyItemCount} prontos</span>
-          </div>
-        </div>
-
-        {projection.tickets.length === 0 ? (
-          <div className="py-20 text-center">
-            <ChefHat size={30} className="mx-auto mb-3 text-koma-muted/40" />
-            <p className="font-serif text-base font-bold text-koma-foreground">Nada para preparar agora</p>
-            <p className="mt-1 text-[10px] text-koma-muted">Novos pedidos aparecem aqui automaticamente.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">{projection.tickets.map(renderTicket)}</div>
-        )}
+      <div className="kds-workspace__tools">
+        <button type="button" className="kds-workspace__tool" aria-label="Buscar pedido, mesa ou item" aria-pressed={searchOpen}
+          onClick={() => { setSearchOpen(value => !value); setToolsOpen(false); }}><Search size={19}/></button>
+        <button type="button" className="kds-workspace__tool" aria-label={focusMode ? 'Sair do modo foco' : 'Mais ferramentas da cozinha'}
+          aria-expanded={focusMode ? undefined : toolsOpen}
+          onClick={() => { if (focusMode) setFocusMode(false); else setToolsOpen(v => !v); }}>
+          {focusMode ? <Minimize2 size={19}/> : <MoreHorizontal size={19}/>}
+        </button>
+        {toolsOpen && <div className="kds-workspace__menu" role="group" aria-label="Ferramentas da cozinha">
+          <button type="button" onClick={() => { setDemandOpen(v => !v); setToolsOpen(false); }}><ClipboardList size={17}/> Produção total ({projection.preparingItemCount})</button>
+          {onRefreshOrders && <button type="button" disabled={refreshing} onClick={() => void refreshQueue()}><RefreshCw size={17}/> {refreshing ? 'Atualizando…' : 'Atualizar fila'}</button>}
+          <button type="button" onClick={() => { setFocusMode(true); setToolsOpen(false); }}><Maximize2 size={17}/> Modo foco</button>
+        </div>}
       </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4 rounded-3xl border border-koma-border bg-koma-card/60 p-4 sm:p-5">
-      <div className="flex flex-col gap-4 border-b border-koma-border pb-4 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-2.5 text-emerald-400">
-            <ChefHat size={20} />
-          </div>
-          <div>
-            <h2 className="font-serif text-base font-bold text-koma-secondary">Produção da cozinha</h2>
-            <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
-              Mesma fila operacional do Caixa, organizada por tickets para a cozinha. Alterações feitas no Caixa aparecem aqui e vice-versa.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="flex items-center gap-1.5 rounded-full border border-koma-border bg-koma-panel px-2.5 py-1.5 text-[10px] font-bold text-koma-foreground">
-            <CircleDot size={11} className="text-emerald-400" />
-            {projection.tickets.length} {projection.tickets.length === 1 ? 'ticket' : 'tickets'}
-          </span>
-          <span className="rounded-full bg-amber-500/10 px-2.5 py-1.5 text-[10px] font-bold text-amber-400">
-            {projection.preparingItemCount} a preparar
-          </span>
-          <span className="flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1.5 text-[10px] font-bold text-emerald-400">
-            <Check size={11} /> {projection.readyItemCount} prontos
-          </span>
-        </div>
-      </div>
-
-      {projection.tickets.length > 0 && (
-        <label className="flex max-w-xl items-center gap-2 rounded-xl border border-koma-border bg-koma-page px-3 py-2.5 focus-within:border-emerald-500/50">
-          <Search size={14} className="shrink-0 text-koma-muted" aria-hidden="true" />
-          <span className="sr-only">Buscar tickets da cozinha</span>
-          <input
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Buscar mesa, pedido, cliente, item ou observação"
-            className="min-w-0 flex-1 bg-transparent text-xs text-koma-foreground outline-none placeholder:text-koma-muted"
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="shrink-0 rounded-md px-2 py-1 text-[9px] font-bold text-koma-muted hover:bg-koma-panel hover:text-koma-foreground"
-            >
-              Limpar
-            </button>
-          )}
-        </label>
-      )}
-
-      {projection.tickets.length === 0 ? (
-        <div className="py-24 text-center">
-          <ChefHat size={34} className="mx-auto mb-3 text-koma-muted/40" />
-          <p className="font-serif text-base font-bold text-koma-foreground">Cozinha limpa</p>
-          <p className="mt-1 text-[10px] text-koma-muted">Novos lançamentos aparecerão aqui automaticamente.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 items-start gap-4 2xl:grid-cols-2">
-          {renderLane(
-            'A preparar',
-            'Pedidos com itens ainda não prontos.',
-            visiblePreparingTickets,
-            projection.preparingTickets.length,
-          )}
-          {renderLane(
-            'Prontos para sair',
-            'Tickets cujos itens ativos já estão prontos.',
-            visibleReadyTickets,
-            projection.readyTickets.length,
-            true,
-          )}
-        </div>
-      )}
     </div>
-  );
+    {deviceOffline && <p className="kds-workspace__offline" role="status">
+      Dispositivo sem internet. A fila pode estar desatualizada; reconecte e use Atualizar fila.
+    </p>}
+    {searchOpen && <div className="kds-workspace__search">
+      <label className="sr-only" htmlFor="kds-ticket-search">Buscar tickets da cozinha</label>
+      <input ref={searchRef} id="kds-ticket-search" type="search" value={query}
+        onChange={event => setQuery(event.target.value)} placeholder="Número, mesa, item ou observação"/>
+      <button type="button" onClick={() => { setQuery(''); setSearchOpen(false); }} aria-label="Fechar busca"><X size={18}/></button>
+    </div>}
+    {demandOpen && <section className="kds-workspace__demand" aria-label="Produção total">
+      <div className="kds-workspace__demand-head"><strong>Produção total · {projection.preparingItemCount} pendentes</strong>
+        <button type="button" aria-label="Fechar produção total" onClick={() => setDemandOpen(false)}><X size={18}/></button></div>
+      {demand.length ? <div className="kds-workspace__demand-items">{demand.map(line => <div key={line.key} className="kds-workspace__demand-row"><strong>{line.count}× {line.name}</strong>{line.details.length > 0 && <small>{line.details.join(' · ')}</small>}</div>)}</div>
+        : <p className="kds-workspace__demand-empty">Nenhum item pendente.</p>}
+    </section>}
+    {errorNotice && <div className="kds-workspace__error" role="alert">{errorNotice}<button type="button" onClick={() => setErrorNotice(null)} aria-label="Dispensar aviso"><X size={17}/></button></div>}
+    {projection.tickets.length === 0
+      ? <div className="kds-workspace__empty"><strong>Fila vazia</strong><p>Sem pedidos aguardando preparo.</p></div>
+      : visible.length === 0
+        ? <div className="kds-workspace__empty"><strong>Sem pedidos nesta etapa</strong><p>{query ? 'Experimente limpar a busca.' : 'Veja outra etapa.'}</p></div>
+        : <div className="kds-workspace__tickets">{visible.map(renderTicket)}</div>}
+  </section>;
 }

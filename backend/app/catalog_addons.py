@@ -17,7 +17,7 @@ from sqlalchemy import Boolean, Column, ForeignKey, ForeignKeyConstraint, Index,
 from sqlalchemy.orm import Session
 
 from .database import Base, current_restaurante_id
-from .models import Categoria, GrupoModificador, OpcaoModificador, Produto, ProdutoGrupoModificador
+from .models import Categoria, GrupoModificador, OpcaoModificador, Produto, ProdutoGrupoModificador, ProdutoFamiliaGrupoModificador
 
 
 class CategoriaRelacao(Base):
@@ -136,6 +136,7 @@ def category_lineage(category_id: str, parents: dict[str, str]) -> tuple[str, ..
 @dataclass(frozen=True)
 class _ModifierLinks:
     direct: tuple[ProdutoGrupoModificador, ...]
+    families: tuple[ProdutoFamiliaGrupoModificador, ...]
     categories: tuple[CategoriaGrupoModificador, ...]
     parents: dict[str, str]
 
@@ -146,6 +147,11 @@ def _modifier_links(db: Session, restaurante_id: int, products: Sequence[Produto
         ProdutoGrupoModificador.restaurante_id == restaurante_id,
         ProdutoGrupoModificador.produto_id.in_(product_ids),
     )
+    family_ids = {str(p.familia_id) for p in products if p.familia_id and not p.marmitaria_tamanho}
+    family_query = db.query(ProdutoFamiliaGrupoModificador).filter(
+        ProdutoFamiliaGrupoModificador.restaurante_id == restaurante_id,
+        ProdutoFamiliaGrupoModificador.familia_id.in_(family_ids),
+    ) if family_ids else None
     category_query = db.query(CategoriaGrupoModificador).filter(
         CategoriaGrupoModificador.restaurante_id == restaurante_id,
     )
@@ -154,6 +160,7 @@ def _modifier_links(db: Session, restaurante_id: int, products: Sequence[Produto
         category_query = category_query.filter(CategoriaGrupoModificador.min_selecoes.isnot(None), CategoriaGrupoModificador.max_selecoes.isnot(None))
     return _ModifierLinks(
         tuple(direct_query.all()) if product_ids else (),
+        tuple(family_query.all()) if family_query is not None and not limits_only else (),
         tuple(category_query.all()),
         category_parent_map(db, restaurante_id),
     )
@@ -171,6 +178,10 @@ def _recommended_modifier_group_ids_by_product(
     direct_by_product: dict[str, list[str]] = {}
     for row in links.direct:
         direct_by_product.setdefault(str(row.produto_id), []).append(str(row.grupo_id))
+
+    groups_by_family: dict[str, list[str]] = {}
+    for row in links.families:
+        groups_by_family.setdefault(str(row.familia_id), []).append(str(row.grupo_id))
 
     category_links = links.categories
     links_by_category: dict[str, list[CategoriaGrupoModificador]] = {}
@@ -191,6 +202,13 @@ def _recommended_modifier_group_ids_by_product(
         if product.marmitaria_tamanho:
             resolved[str(product.id)] = tuple(ordered)
             continue
+
+        # Family groups are inherited at read/checkout time. No direct-link
+        # rows are duplicated into each SKU when a group is assigned.
+        for group_id in groups_by_family.get(str(product.familia_id), []):
+            if group_id not in seen:
+                seen.add(group_id)
+                ordered.append(group_id)
 
         lineage = category_lineage(str(product.categoria_id), parents)
         for index, category_id in enumerate(lineage):
@@ -213,8 +231,8 @@ def effective_modifier_group_ids_by_product(
 ) -> dict[str, tuple[str, ...]]:
     """Resolve apenas grupos explicitamente aplicáveis a cada produto.
 
-    Um grupo entra no produto por vínculo direto ou por categoria/ancestral com
-    herança habilitada. Grupos opcionais sem vínculo não vazam para o restante
+    Um grupo entra no produto por vínculo direto, pela família comercial
+    ou por categoria/ancestral com herança habilitada. Grupos opcionais sem vínculo não vazam para o restante
     do cardápio; isso evita combinações sem sentido, como adicionais de
     hambúrguer em bebidas.
     """

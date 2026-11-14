@@ -7,6 +7,7 @@ import { QRCodeSVG } from 'qrcode.react';
  */
 
 import type { CardapioFulfillment } from "./fulfillment";
+import { buildWhatsAppContactUrl } from "../config/whatsappUtils";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
@@ -56,6 +57,7 @@ import CardapioDigital from "./components/CardapioDigital";
 import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
 import { CardapioConditionsSummary } from "./components/CardapioOrderConditions";
 import CardapioOrdersDrawer from "./components/CardapioOrdersDrawer";
+import { ManualPixReceiptContact } from "./components/ManualPixReceiptContact";
 import CardapioArtisticExperience from "./components/CardapioArtisticExperience";
 import { KomaLoading } from "../components/app/KomaLoading";
 import { API_BASE_URL, WS_BASE_URL } from "../config/api";
@@ -289,6 +291,12 @@ export default function CardapioPage() {
 
       const mapPublicProduct = (product: Record<string, any>): Product => ({
         marmitaria: product.marmitaria === true,
+        familia_id: product.familia_id ? String(product.familia_id) : null,
+        familia_nome: product.familia_nome ? String(product.familia_nome) : null,
+        familia_descricao: product.familia_descricao ? String(product.familia_descricao) : null,
+        familia_eixo: product.familia_eixo || null,
+        familia_imagem: product.familia_imagem ? getProductImageUrl(String(product.familia_imagem)) : null,
+        variacao_rotulo: product.variacao_rotulo ? String(product.variacao_rotulo) : null,
         id: String(product.id),
         name: String(product.nome || ""),
         description: String(product.descricao || ""),
@@ -333,13 +341,13 @@ export default function CardapioPage() {
             let url = String(value || "");
             if (platform === "instagram" && !url.startsWith("http")) url = `https://instagram.com/${url.replace("@", "")}`;
             if (platform === "whatsapp") {
-              whatsappNumber = url.replace(/\D/g, "");
-              url = `https://wa.me/${whatsappNumber}`;
+              url = buildWhatsAppContactUrl(url);
+              whatsappNumber = url ? url.slice('https://wa.me/'.length) : '';
             }
             return {
               platform: platform === "instagram" ? "Instagram" : platform === "whatsapp" ? "WhatsApp" : platform,
               url,
-              active: true,
+              active: Boolean(url),
             };
           });
       }
@@ -387,6 +395,11 @@ export default function CardapioPage() {
         },
         categories: payload.categorias.map((category) => String(category.nome || "")).filter(Boolean),
         products,
+        manualHighlightProductId: typeof restaurant.destaque_cardapio_produto_id === 'string'
+          ? restaurant.destaque_cardapio_produto_id : null,
+        cartRecommendationSkuIds: Array.isArray(restaurant.recomendacoes_sacola_ids)
+          ? restaurant.recomendacoes_sacola_ids.filter((value: unknown): value is string => typeof value === 'string')
+          : null,
         promotionProducts,
         explicitPromotionComposition: payload.promocao_composicao_explicita === true,
         promotions: Array.isArray(payload.promocoes) ? payload.promocoes
@@ -1366,7 +1379,7 @@ export default function CardapioPage() {
             const products = activeBrand.products
               .filter((product) => (
                 product.category === category
-                && smartSearchMatch(`${product.name} ${product.description || ""}`, searchQuery)
+                && smartSearchMatch(`${product.name} ${product.familia_nome || ""} ${product.description || ""}`, searchQuery)
               ))
               .sort((a, b) => {
                 const orderA = a.ordem_exibicao ?? Number.MAX_SAFE_INTEGER;
@@ -1644,6 +1657,8 @@ export default function CardapioPage() {
       <CardapioStoreInfoDrawer brand={activeBrand} isOpen={isStoreInfoOpen} onClose={() => setIsStoreInfoOpen(false)} />
 
       <CardapioOrdersDrawer
+        restaurantId={activeBrand?.id}
+        restaurantPhone={activeBrand?.phone}
         isOpen={isOrdersDrawerOpen}
         onClose={() => setIsOrdersDrawerOpen(false)}
         orders={storedOrders}
@@ -1726,6 +1741,8 @@ export default function CardapioPage() {
             )}
 
             {pixModalOrder.pagamento.qr_code && <PixCopyCode code={pixModalOrder.pagamento.qr_code} />}
+
+            <ManualPixReceiptContact order={pixModalOrder} phone={activeBrand?.phone} restaurantId={activeBrand?.id} />
 
             {pixModalOrder.pagamento.ticket_url && (
               <a

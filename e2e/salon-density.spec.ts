@@ -26,15 +26,14 @@ test('30 mesas mantêm cards compactos e livres não esticam; detalhes cabem na 
     console.info('salon-layout', JSON.stringify({ viewport: page.viewportSize(), occupiedHeight: occupiedBox.height, freeHeight: freeBox.height, visibleTables }));
     await page.screenshot({ path: testInfo.outputPath('compact-salon.png') });
   }
-  await occupied.getByRole('button', { name: 'Ver comanda', exact: true }).click();
-  const details = page.getByRole('dialog', { name: 'Consumo local · Mesa 07', exact: true });
+  await occupied.getByRole('button', { name: 'Ver comanda' }).click();
+  const details = page.getByRole('dialog', { name: 'Mesa 07', exact: true });
   const box = (await details.boundingBox())!;
   expect(box.y).toBeGreaterThanOrEqual(0);
   expect(box.y + box.height).toBeLessThanOrEqual(page.viewportSize()!.height);
-  await expect(details.getByRole('button', { name: 'Adicionar consumo', exact: true })).toBeVisible();
+  await expect(details.getByRole('button', { name: 'Adicionar itens', exact: true })).toBeVisible();
   await expect(details.getByRole('button', { name: 'Receber', exact: true })).toBeVisible();
-  await details.getByRole('combobox', { name: 'Mesa de destino' }).scrollIntoViewIfNeeded();
-  await expect(details.getByRole('combobox', { name: 'Mesa de destino' })).toBeInViewport();
+  await expect(details.getByRole('button', { name: 'Transferir', exact: true })).toBeVisible();
   await details.getByRole('button', { name: 'Fechar detalhes' }).scrollIntoViewIfNeeded();
   if (process.env.KOMA_CAPTURE_UI) await page.screenshot({ path: testInfo.outputPath('compact-salon-details.png') });
   await details.getByRole('button', { name: 'Fechar detalhes' }).click();
@@ -43,13 +42,13 @@ test('30 mesas mantêm cards compactos e livres não esticam; detalhes cabem na 
 
 test('cédulas só aparecem em Dinheiro e trocar método não altera valor nem registra pagamento', async ({ page }) => {
   const state = await openOperationalScenario(page, { subtab: 'mesas' });
-  await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Consumo local · Mesa 07', exact: true }).getByRole('button', { name: 'Receber', exact: true }).click();
+  await page.locator('article[data-table-status="occupied"]').getByRole('button', { name: 'Ver comanda' }).click();
+  await page.getByRole('dialog', { name: 'Mesa 07', exact: true }).getByRole('button', { name: 'Receber', exact: true }).click();
   const form = page.locator('form').filter({ has: page.getByRole('textbox', { name: 'Digite qualquer valor para abater do saldo.' }) });
   const shortcuts = form.getByRole('group', { name: 'Atalhos de cédulas' });
   const value = form.getByRole('textbox', { name: 'Digite qualquer valor para abater do saldo.' });
   await expect(value).toHaveValue('160,00');
-  for (const method of ['Pix', 'C. Débito', 'C. Crédito']) {
+  for (const method of ['Pix', 'Débito', 'Crédito']) {
     await form.getByRole('button', { name: method, exact: true }).click();
     await expect(shortcuts).toHaveCount(0);
     await expect(value).toHaveValue('160,00');

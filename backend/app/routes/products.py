@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional, Union, Literal
 from ..catalog_addons import effective_modifier_payloads_by_product
+from ..services.catalog_family_metadata import family_metadata_for_products
 from ..catalog_ordering import (
     LEGACY_CATEGORY_DISPLAY_ORDER as CATEGORY_DISPLAY_ORDER,
     ordered_categories,
@@ -12,7 +13,7 @@ from ..catalog_ordering import (
 from ..marmitaria_catalog import enabled as marmitaria_enabled, size_category, size_key
 import uuid
 from ..database import get_db, require_tenant_id
-from ..models import Produto, Categoria, ObservacaoPredefinida, Usuario, Cardapio, ConfiguracaoRestaurante
+from ..models import Produto, Categoria, ObservacaoPredefinida, Usuario, Cardapio, ConfiguracaoRestaurante, GrupoModificador, ProdutoGrupoModificador
 from ..security import get_current_user, require_permission
 from ..schemas import (
     ProdutoResponse,
@@ -24,6 +25,10 @@ from ..schemas import (
     CardapioUpdate,
     CardapiosListResponse,
 )
+from ..services.storage_paths import (
+    normalize_gallery_references,
+    validate_tenant_storage_reference,
+)
 from ..websocket_manager import manager
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 import re
@@ -33,6 +38,31 @@ router = APIRouter(
     prefix="/produtos",
     tags=["Produtos e Categorias"]
 )
+
+
+def _validate_product_media_fields(
+    rest_id: int,
+    imagem: str | None = None,
+    imagens_galeria: list[str] | None = None,
+) -> tuple[str | None, list[str] | None]:
+    try:
+        clean_image = (
+            validate_tenant_storage_reference(imagem, rest_id, "products")
+            if imagem is not None
+            else None
+        )
+        clean_gallery = (
+            normalize_gallery_references(imagens_galeria, rest_id, clean_image)
+            if imagens_galeria is not None
+            else None
+        )
+        return clean_image, clean_gallery
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
 
 def notify_catalog_update(
     background_tasks: BackgroundTasks,
@@ -138,9 +168,14 @@ class EdicaoLoteResponse(BaseModel):
     categoria_id: Optional[str] = None
 
 
-def _serialize_product_with_modifiers(product: Produto, modifier_payloads: dict[str, list[dict]]) -> dict:
+def _serialize_product_with_modifiers(
+    product: Produto, modifier_payloads: dict[str, list[dict]],
+    family_metadata: dict[str, dict] | None = None,
+) -> dict:
     payload = ProdutoResponse.model_validate(product).model_dump()
     payload["grupos_modificadores"] = modifier_payloads.get(str(product.id), [])
+    if family_metadata:
+        payload.update(family_metadata.get(str(product.id), {}))
     return payload
 
 
@@ -358,7 +393,8 @@ def get_produtos(db: Session = Depends(get_db), current_user: Usuario = Depends(
     )
     products = ordered_products(products)
     modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, products)
-    return [_serialize_product_with_modifiers(product, modifier_payloads) for product in products]
+    family_metadata = family_metadata_for_products(db, rest_id, products)
+    return [_serialize_product_with_modifiers(product, modifier_payloads, family_metadata) for product in products]
 
 @router.get("/catalogo", response_model=CatalogoResponse)
 def get_catalogo(
@@ -383,6 +419,7 @@ def get_catalogo(
     )
     products = ordered_products(products)
     modifier_payloads = effective_modifier_payloads_by_product(db, rest_id, products)
+    family_metadata = family_metadata_for_products(db, rest_id, products)
     config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == rest_id).first()
     cardapios = (
         db.query(Cardapio)
@@ -396,7 +433,7 @@ def get_catalogo(
     return {
         "categorias": categorias,
         "produtos": [
-            _serialize_product_with_modifiers(product, modifier_payloads)
+            _serialize_product_with_modifiers(product, modifier_payloads, family_metadata)
             for product in products
         ],
         "cardapio_ativo_id": cardapio_ativo_id,
@@ -571,6 +608,8 @@ def move_produto_cardapio(
     ).first()
     if not produto:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Produto não encontrado.")
+    if produto.familia_id:
+        raise HTTPException(status_code=409, detail="Mova a família inteira, não uma variante isolada.")
 
     if data.cardapio_id:
         cardapio = db.query(Cardapio).filter(
@@ -587,6 +626,112 @@ def move_produto_cardapio(
     db.refresh(produto)
     notify_catalog_update(background_tasks, "Produto movido de cardápio", rest_id)
     return produto
+
+
+class ProdutoPersonalizacoesUpdate(BaseModel):
+    """Vínculos diretos apenas; vínculos herdados por categoria não são apagados."""
+    model_config = ConfigDict(extra="forbid")
+    grupo_ids: List[str] = Field(default_factory=list, max_length=100)
+    grupos_diretos_anteriores: List[str] = Field(default_factory=list, max_length=100)
+
+
+def _produto_personalizacoes(db: Session, rest_id: int, produto: Produto) -> dict:
+    diretos = sorted({
+        str(row.grupo_id)
+        for row in db.query(ProdutoGrupoModificador).filter(
+            ProdutoGrupoModificador.restaurante_id == rest_id,
+            ProdutoGrupoModificador.produto_id == produto.id,
+        ).all()
+    })
+    efetivos = {
+        str(group["id"])
+        for group in effective_modifier_payloads_by_product(db, rest_id, [produto]).get(str(produto.id), [])
+    }
+    return {
+        "produto_id": str(produto.id),
+        "grupos_diretos": diretos,
+        "grupos_herdados": sorted(efetivos - set(diretos)),
+    }
+
+
+@router.get("/{produto_id}/personalizacoes")
+def get_produto_personalizacoes(
+    produto_id: str,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Permite editar opções por produto sem acessar a tela técnica de grupos."""
+    del current_user
+    rest_id = require_tenant_id()
+    produto = db.query(Produto).filter(
+        Produto.id == produto_id, Produto.restaurante_id == rest_id,
+    ).first()
+    if produto is None:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    return _produto_personalizacoes(db, rest_id, produto)
+
+
+@router.put("/{produto_id}/personalizacoes")
+def atualizar_produto_personalizacoes(
+    produto_id: str,
+    payload: ProdutoPersonalizacoesUpdate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Salva só vínculos diretos em transação, preservando regras legadas.
+
+    A resolução pública continua centralizada em catalog_addons.
+    Marmitas P/M/G usam o editor de composição próprio.
+    """
+    del current_user
+    rest_id = require_tenant_id()
+    produto = db.query(Produto).filter(
+        Produto.id == produto_id, Produto.restaurante_id == rest_id,
+    ).with_for_update().first()
+    if produto is None:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    if produto.marmitaria_tamanho:
+        raise HTTPException(status_code=409, detail="Configure a composição desta marmita em Marmitas.")
+
+    requested = [group_id.strip() for group_id in payload.grupo_ids]
+    before = [group_id.strip() for group_id in payload.grupos_diretos_anteriores]
+    if any(not group_id for group_id in requested + before):
+        raise HTTPException(status_code=422, detail="Identificador de personalização inválido.")
+    if len(requested) != len(set(requested)) or len(before) != len(set(before)):
+        raise HTTPException(status_code=422, detail="Não repita a mesma personalização.")
+
+    existing = db.query(ProdutoGrupoModificador).filter(
+        ProdutoGrupoModificador.restaurante_id == rest_id,
+        ProdutoGrupoModificador.produto_id == produto_id,
+    ).all()
+    existing_ids = {str(link.grupo_id) for link in existing}
+    if existing_ids != set(before):
+        raise HTTPException(status_code=409, detail="As personalizações foram alteradas em outro acesso. Reabra o produto.")
+
+    if requested:
+        valid = {
+            str(group.id)
+            for group in db.query(GrupoModificador).filter(
+                GrupoModificador.restaurante_id == rest_id,
+                GrupoModificador.id.in_(requested),
+                GrupoModificador.tipo.in_(("opcional", "obrigatorio", "meio_a_meio")),
+            ).all()
+        }
+        if valid != set(requested):
+            raise HTTPException(status_code=422, detail="Uma personalização não pertence ao restaurante ativo.")
+
+    for link in existing:
+        if str(link.grupo_id) not in requested:
+            db.delete(link)
+    for group_id in requested:
+        if group_id not in existing_ids:
+            db.add(ProdutoGrupoModificador(
+                restaurante_id=rest_id, produto_id=produto_id, grupo_id=group_id,
+            ))
+    db.commit()
+    notify_catalog_update(background_tasks, "Personalizações do produto atualizadas", rest_id)
+    return _produto_personalizacoes(db, rest_id, produto)
 
 
 @router.get("/{produto_id}", response_model=ProdutoResponse)
@@ -744,6 +889,15 @@ def create_produto(
         )
 
     payload = produto_data.model_dump()
+    clean_img, clean_gal = _validate_product_media_fields(
+        rest_id,
+        payload.get("imagem"),
+        payload.get("imagens_galeria"),
+    )
+    if clean_img is not None:
+        payload["imagem"] = clean_img
+    if clean_gal is not None:
+        payload["imagens_galeria"] = clean_gal
     if payload.get("cardapio_id"):
         cardapio = db.query(Cardapio).filter(
             Cardapio.restaurante_id == rest_id,
@@ -798,6 +952,18 @@ def update_produto(
         )
 
     data = update_data.model_dump(exclude_unset=True)
+    if db_produto.familia_id and any(key in data for key in ("categoria_id", "cardapio_id", "somente_promocao")):
+        raise HTTPException(409, "As variantes usam categoria e cardápio comuns. Edite a família.")
+    if "imagem" in data or "imagens_galeria" in data:
+        clean_img, clean_gal = _validate_product_media_fields(
+            rest_id,
+            data.get("imagem") if "imagem" in data else None,
+            data.get("imagens_galeria") if "imagens_galeria" in data else None,
+        )
+        if "imagem" in data and clean_img is not None:
+            data["imagem"] = clean_img
+        if "imagens_galeria" in data and clean_gal is not None:
+            data["imagens_galeria"] = clean_gal
 
     if "cardapio_id" in data and data["cardapio_id"]:
         cardapio = db.query(Cardapio).filter(
@@ -953,10 +1119,20 @@ def importar_cardapio(
                     db.add(cat)
                 else:
                     cat.nome = cat_nome
+                    destino = category_data.destino_impressao if not isinstance(category_data, str) else destino
                     cat.destino_impressao = destino
             db.flush()
     else:
         produtos_data = payload
+
+    # Validate all product media references before mutating DB state.
+    validated_media_by_id: dict[str, tuple[str | None, list[str] | None]] = {}
+    for item in produtos_data:
+        validated_media_by_id[item.id] = _validate_product_media_fields(
+            rest_id,
+            item.imagem,
+            item.imagens_galeria,
+        )
 
     if not isinstance(payload, CardapioImportPayload) or payload.mode == "replace":
         db.query(Produto).filter(Produto.restaurante_id == rest_id).update({Produto.ativo: False})
@@ -964,6 +1140,7 @@ def importar_cardapio(
     imported_products = []
 
     for item in produtos_data:
+        clean_img, clean_gal = validated_media_by_id[item.id]
         cat_id = item.categoria_id
         cat = db.query(Categoria).filter(
             Categoria.restaurante_id == rest_id,
@@ -997,10 +1174,10 @@ def importar_cardapio(
             existente.categoria_id = item.categoria_id
             if item.descricao is not None:
                 existente.descricao = item.descricao
-            if item.imagem is not None:
-                existente.imagem = item.imagem
-            if item.imagens_galeria is not None:
-                existente.imagens_galeria = item.imagens_galeria
+            if clean_img is not None:
+                existente.imagem = clean_img
+            if clean_gal is not None:
+                existente.imagens_galeria = clean_gal
             existente.ativo = item.ativo if item.ativo is not None else True
             imported_products.append(existente)
         else:
@@ -1011,8 +1188,8 @@ def importar_cardapio(
                 preco=item.preco,
                 categoria_id=item.categoria_id,
                 descricao=item.descricao or "",
-                imagem=item.imagem or "",
-                imagens_galeria=item.imagens_galeria or [],
+                imagem=clean_img or "",
+                imagens_galeria=clean_gal or [],
                 ativo=item.ativo if item.ativo is not None else True
             )
             db.add(novo)

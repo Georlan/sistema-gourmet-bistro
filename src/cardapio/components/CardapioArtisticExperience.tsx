@@ -8,7 +8,8 @@ import { useActivePromotions } from '../useActivePromotions';
 import { getFulfillmentAvailability } from '../fulfillment';
 import { smartSearchMatch } from '../../domain';
 import { API_BASE_URL } from '../../config/api';
-import React, { useEffect, useMemo, useState } from 'react';
+import { buildWhatsAppContactUrl } from '../../config/whatsappUtils';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
   CheckCircle2,
@@ -37,6 +38,7 @@ import { CustomerProfile } from '../customerSession';
 import { OrderStateContract, StoredOrder, customerOrderLabel, orderFulfillmentLabel } from '../orderTracking';
 import { buildKomaAttributionUrl } from '../komaAttribution';
 import { getPairingRecommendations, classifyProduct } from '../pairingRecommendations';
+import { resolveCatalogDisplayProduct, resolvePairingDisplay } from '../resolvePairingDisplay';
 import type { CartItem } from './CardapioCartDrawer';
 import CatalogProductImage from './CatalogProductImage';
 import {
@@ -157,6 +159,7 @@ export function CardapioArtisticExperience({
   orderingMessage = '',
 }: CardapioArtisticExperienceProps) {
   const [shareToastVisible, setShareToastVisible] = useState(false);
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
 
   // Compartilhar cardápio com feedback ao usuário
   const handleShare = async () => {
@@ -209,7 +212,7 @@ export function CardapioArtisticExperience({
   // Canais de contato verificados
   const whatsappUrl = useMemo(() => {
     if (!activeBrand.phone) return null;
-    return `https://wa.me/${String(activeBrand.phone).replace(/\D/g, '')}`;
+    return buildWhatsAppContactUrl(activeBrand.phone);
   }, [activeBrand.phone]);
 
   const instagramSocial = useMemo(() => {
@@ -219,31 +222,59 @@ export function CardapioArtisticExperience({
   }, [activeBrand.socials]);
 
   // Identificação do produto Hero (seleciona o #1 em escolhas registradas ou o primeiro disponível)
-  const heroProduct = useMemo<Product | null>(() => {
-    if (!activeBrand.products || activeBrand.products.length === 0) return null;
+  const heroProduct = useMemo<CatalogDisplayItem | null>(() => {
+    const catalog = activeBrand.products || [];
+    if (catalog.length === 0) return null;
     const effectivePopularIds = popularIds.length > 0 ? popularIds : (activeBrand.popularProductIds || []);
-    if (effectivePopularIds.length > 0) {
-      const topId = String(effectivePopularIds[0]);
-      const found = activeBrand.products.find((p) => String(p.id) === topId && p.isAvailable !== false);
-      if (found) return found;
+    const manual = activeBrand.manualHighlightProductId
+      ? catalog.find((p) => String(p.id) === activeBrand.manualHighlightProductId && p.isAvailable !== false)
+      : null;
+    const top = effectivePopularIds.length > 0
+      ? catalog.find((p) => String(p.id) === String(effectivePopularIds[0]) && p.isAvailable !== false)
+      : null;
+    const source = manual || top || catalog.find((p) => p.isAvailable !== false);
+    return source ? resolveCatalogDisplayProduct(catalog, source, activeBrand.id) : null;
+  }, [activeBrand.products, activeBrand.id, popularIds, activeBrand.popularProductIds, activeBrand.manualHighlightProductId]);
+
+  // Mantém a categoria ativa visível sem deslocar a página verticalmente.
+  useEffect(() => {
+    const strip = categoryScrollRef.current;
+    const active = strip?.querySelector<HTMLButtonElement>('[aria-current="true"]');
+    if (!strip || !active) return;
+    const container = strip.getBoundingClientRect();
+    const button = active.getBoundingClientRect();
+    const inset = 12;
+    const delta = button.left < container.left + inset
+      ? button.left - container.left - inset
+      : button.right > container.right - inset
+        ? button.right - container.right + inset
+        : 0;
+    if (delta !== 0) {
+      strip.scrollBy({
+        left: delta,
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+      });
     }
-    return activeBrand.products.find((p) => p.isAvailable !== false) || null;
-  }, [activeBrand.products, popularIds, activeBrand.popularProductIds]);
+  }, [selectedCategory, searchQuery]);
 
   // Produtos de harmonização / recomendação complementar contextual
-  const pairingProducts = useMemo<Product[]>(() => {
+  const pairingProducts = useMemo<CatalogDisplayItem[]>(() => {
+    const catalog = activeBrand.products || [];
     const cartProductIds = (cart || []).map((item) => item.product.id);
-    return getPairingRecommendations({
-      catalog: activeBrand.products || [],
+    const suggestions = getPairingRecommendations({
+      catalog,
       cartProductIds,
-      limit: 4,
+      limit: 12,
       excludeCartItems: false,
     });
-  }, [activeBrand.products, cart]);
+    return resolvePairingDisplay(catalog, suggestions, activeBrand.id, 4);
+  }, [activeBrand.products, activeBrand.id, cart]);
 
   const pairingHint = useMemo(() => {
     const types = new Set(pairingProducts.map(classifyProduct));
+    if (types.size > 2) return 'Opções para acompanhar';
     if (types.has('beverage') && types.has('dessert')) return 'Bebidas e sobremesas';
+    if (types.has('beverage') && types.has('side')) return 'Bebidas e acompanhamentos';
     if (types.has('beverage')) return 'Bebidas geladas para harmonizar';
     if (types.has('dessert')) return 'Sobremesas artesanais';
     if (types.has('side')) return 'Acompanhamentos e porções';
@@ -268,11 +299,23 @@ export function CardapioArtisticExperience({
   const fulfillment = getFulfillmentAvailability(activeBrand);
   const fulfillmentLabel = [fulfillment.delivery && 'Entrega', fulfillment.pickup && 'Retirada', fulfillment.dine_in && 'Consumo local'].filter(Boolean).join(' · ');
 
-  const heroCartQty = heroProduct ? getProductCartQuantity(heroProduct.id) : 0;
+  const heroCartQty = heroProduct
+    ? (isGroupedProduct(heroProduct)
+      ? heroProduct.variants.reduce((sum, variant) => sum + getProductCartQuantity(variant.id), 0)
+      : getProductCartQuantity(heroProduct.id))
+    : 0;
+  const isManualHighlight = Boolean(heroProduct && activeBrand.manualHighlightProductId &&
+    activeBrand.products.some(p => String(p.id) === activeBrand.manualHighlightProductId && p.isAvailable !== false) &&
+    (isGroupedProduct(heroProduct)
+      ? heroProduct.variants.some(v => String(v.id) === activeBrand.manualHighlightProductId)
+      : String(heroProduct.id) === activeBrand.manualHighlightProductId));
   const isVerifiedTopRanked = Boolean(
+    !isManualHighlight &&
     popularIds.length > 0 &&
     heroProduct &&
-    String(popularIds[0]) === String(heroProduct.id)
+    (isGroupedProduct(heroProduct)
+      ? heroProduct.variants.some((v) => String(v.id) === String(popularIds[0]))
+      : String(popularIds[0]) === String(heroProduct.id))
   );
 
   return (
@@ -297,6 +340,9 @@ export function CardapioArtisticExperience({
                   src={activeBrand.logo}
                   alt={activeBrand.name}
                   className="koma-art-brand-logo"
+                  width={48}
+                  height={48}
+                  decoding="async"
                   crossOrigin="anonymous"
                   referrerPolicy="no-referrer"
                   onError={(event) => {
@@ -486,6 +532,47 @@ export function CardapioArtisticExperience({
             </label>
           </div>
 
+          {/* The default public vitrine owns this header (not CardapioHeader).
+              Keep real configured contact actions reachable below the search on phones. */}
+          <nav className="koma-art-mobile-contacts" aria-label="Contato e compartilhamento">
+            {whatsappUrl && (
+              <a
+                href={whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="koma-art-mobile-contact-action"
+                aria-label="Falar no WhatsApp"
+                id="btn-whatsapp-mobile"
+              >
+                <Phone size={15} aria-hidden="true" />
+                <span>WhatsApp</span>
+              </a>
+            )}
+            {instagramSocial && (
+              <a
+                href={instagramSocial.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="koma-art-mobile-contact-action"
+                aria-label="Instagram do restaurante"
+                id="btn-instagram-mobile"
+              >
+                <KomaSocialCameraIcon size={15} />
+                <span>Instagram</span>
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={handleShare}
+              className="koma-art-mobile-contact-action"
+              aria-label="Compartilhar cardápio"
+              id="btn-share-mobile"
+            >
+              <KomaShareIcon size={15} />
+              <span>Compartilhar</span>
+            </button>
+          </nav>
+
           {/* Barra de Hospitalidade Integrada */}
           <div className="koma-art-hospitality-strip">
             <div className="koma-art-hospitality-status">
@@ -540,6 +627,8 @@ export function CardapioArtisticExperience({
             src={activeBrand.bannerImage}
             alt={`${activeBrand.name} — banner`}
             className="koma-art-banner-img"
+            decoding="async"
+            fetchPriority="high"
           />
         </section>
       )}
@@ -729,7 +818,7 @@ export function CardapioArtisticExperience({
           ZONA 2: FITA ORGÂNICA DE CATEGORIAS (STICKY E FLUIDA)
           ======================================================== */}
       <nav className="koma-art-category-bar" aria-label="Categorias do cardápio" id="koma-art-category-nav">
-        <div className="koma-art-category-scroll">
+        <div ref={categoryScrollRef} className="koma-art-category-scroll">
           {(() => {
             const hasDestaquesCategory = visibleCategories.some((c) => c.trim().toLowerCase() === 'destaques');
             const highlightsLabel = hasDestaquesCategory ? 'Início' : '★ Destaques';
@@ -878,6 +967,7 @@ export function CardapioArtisticExperience({
                   image={heroProduct.image}
                   alt={heroProduct.name}
                   className="koma-art-arch-img"
+                  priority
                 />
               ) : (
                 <ArtisticClocheIllustration />
@@ -921,10 +1011,10 @@ export function CardapioArtisticExperience({
               <div className="koma-art-stage-action-row">
                 <div className="koma-art-stage-price-box">
                   <span className="koma-art-stage-price-label">Valor</span>
-                  <strong className="koma-art-stage-price-val">{formatPrice(heroProduct.price)}</strong>
+                  <strong className="koma-art-stage-price-val">{isGroupedProduct(heroProduct) && heroProduct.hasVariablePrice ? 'A partir de ' : ''}{formatPrice(heroProduct.price)}</strong>
                 </div>
 
-                {heroCartQty > 0 ? (
+                {heroCartQty > 0 && !isGroupedProduct(heroProduct) ? (
                   <div className="koma-art-stepper-capsule">
                     <button
                       type="button"
@@ -953,6 +1043,7 @@ export function CardapioArtisticExperience({
                     type="button"
                     onClick={(e) => {
                       if (
+                        isGroupedProduct(heroProduct) ||
                         (heroProduct.modifierGroups && heroProduct.modifierGroups.length > 0) ||
                         (heroProduct.modifiers && heroProduct.modifiers.length > 0)
                       ) {
@@ -965,7 +1056,7 @@ export function CardapioArtisticExperience({
                     id={`btn-hero-fast-add-${heroProduct.id}`}
                     aria-label={`Pedir ${heroProduct.name}`}
                   >
-                    <span>Pedir agora</span>
+                    <span>{isGroupedProduct(heroProduct) ? 'Escolher opção' : 'Pedir agora'}</span>
                     <ArrowRight className="w-4 h-4 ml-1" />
                   </button>
                 )}
@@ -994,8 +1085,10 @@ export function CardapioArtisticExperience({
 
           <div className="koma-art-pairing-grid">
             {pairingProducts.map((item) => {
-              const qty = getProductCartQuantity(item.id);
-              const hasMods = Boolean(
+              const qty = isGroupedProduct(item)
+                ? item.variants.reduce((sum, variant) => sum + getProductCartQuantity(variant.id), 0)
+                : getProductCartQuantity(item.id);
+              const hasMods = isGroupedProduct(item) || Boolean(
                 (item.modifierGroups && item.modifierGroups.length > 0) ||
                 (item.modifiers && item.modifiers.length > 0)
               );
@@ -1023,7 +1116,7 @@ export function CardapioArtisticExperience({
                   <div className="koma-art-pebble-content">
                     <h4 className="koma-art-pebble-title"><button type="button" className="koma-art-details-trigger" aria-label={`${item.name}, ver detalhes`} onClick={event => { event.stopPropagation(); onSelectProduct(item); }}>{item.name}</button></h4>
                     <div className="koma-art-pebble-footer">
-                      <span className="koma-art-pebble-price">{formatPrice(item.price)}</span>
+                      <span className="koma-art-pebble-price">{isGroupedProduct(item) && item.hasVariablePrice ? 'A partir de ' : ''}{formatPrice(item.price)}</span>
                       {!isAvailable ? (
                         <span className="koma-art-pebble-unavailable">Esgotado</span>
                       ) : qty > 0 && !hasMods ? (

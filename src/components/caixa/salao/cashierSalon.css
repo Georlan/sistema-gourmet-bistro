@@ -1,0 +1,226 @@
+/* Salão do Caixa — leitura rápida, toque no card inteiro e tokens KÔMA.
+   Sem banner, cartões decorativos nem estados visuais paralelos ao domínio. */
+.koma-salon {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  gap: .55rem;
+  color: var(--koma-text-primary);
+  font-family: var(--koma-font-body);
+}
+.koma-salon__toolbar { display: flex; flex-shrink: 0; flex-direction: column; gap: .55rem; }
+
+.koma-salon__filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  border-radius: 1rem;
+  background: var(--koma-surface-raised);
+}
+.koma-salon__filter {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .12rem;
+  padding: .3rem .1rem;
+  border-radius: .8rem;
+  color: var(--koma-text-secondary);
+  font: 650 .6875rem/1.2 var(--koma-font-body);
+  text-align: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.koma-salon__filter strong { font: 750 .6875rem/1.2 var(--koma-font-body); font-variant-numeric: tabular-nums; }
+.koma-salon__filter[aria-pressed="true"] { background: var(--koma-action-bg); color: var(--koma-action-text); }
+.koma-salon__filter:not([aria-pressed="true"]):hover { color: var(--koma-text-primary); background: var(--koma-surface-card); }
+
+.koma-salon__search {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  gap: .6rem;
+  padding: 0 .35rem;
+  border-bottom: 1px solid var(--koma-border-default);
+  color: var(--koma-text-secondary);
+}
+.koma-salon__search input {
+  min-height: 42px;
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  color: var(--koma-text-primary);
+  font: 400 .875rem var(--koma-font-body);
+}
+.koma-salon__search input::placeholder { color: var(--koma-text-secondary); opacity: 1; }
+.koma-salon__search input::-webkit-search-cancel-button { display: none; }
+.koma-salon__search button { display: grid; width: 40px; min-width: 40px; min-height: 40px; place-items: center; color: var(--koma-text-primary); }
+.koma-salon__search:focus-within { outline: 2px solid var(--koma-focus-ring); outline-offset: 2px; border-radius: .35rem; }
+
+.koma-salon__results {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  padding: .25rem .1rem .7rem;
+}
+.koma-salon__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: .5rem;
+}
+.koma-salon-card {
+  min-width: 0;
+  border: 1px solid var(--koma-operation-line);
+  border-radius: 1.05rem;
+  background: var(--koma-operation-surface);
+  color: var(--koma-operation-text);
+  transition: border-color .13s ease, background .13s ease;
+}
+.koma-salon-card__tap {
+  display: flex;
+  width: 100%;
+  min-height: 134px;
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.koma-salon-card:focus-within { outline: 2px solid var(--koma-focus-ring); outline-offset: 2px; }
+.koma-salon-card:hover { border-color: var(--koma-accent-border); }
+.koma-salon-card__identity {
+  display: flex;
+  min-width: 0;
+  min-height: 3.15rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: .2rem;
+  padding: .54rem .6rem .4rem;
+  border-radius: .96rem .96rem 0 0;
+  background: var(--koma-operation-raised);
+  color: var(--koma-operation-text);
+}
+.koma-salon-card__number {
+  min-width: 0;
+  font: 700 1.95rem/1 var(--koma-font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.055em;
+}
+.koma-salon-card__glyph { flex-shrink: 0; margin-top: 2px; color: var(--koma-accent-text); }
+.koma-salon-card__context {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: .15rem;
+  padding: .5rem .6rem .35rem;
+  overflow-wrap: anywhere;
+}
+.koma-salon-card__name { font: 650 .75rem/1.25 var(--koma-font-body); }
+.koma-salon-card__state { color: var(--koma-operation-text); font: 650 .7rem/1.25 var(--koma-font-body); }
+.koma-salon-card__meta { color: var(--koma-operation-muted); font: 500 .675rem/1.25 var(--koma-font-body); }
+.koma-salon-card__total { color: var(--koma-operation-text); font: 700 .86rem/1.25 var(--koma-font-display); font-variant-numeric: tabular-nums; }
+
+.koma-salon-card__action {
+  display: flex;
+  min-width: 0;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: .15rem;
+  margin-top: auto;
+  padding: .52rem .57rem;
+  border-top: 1px solid var(--koma-operation-line);
+  border-radius: 0 0 1rem 1rem;
+  color: var(--koma-accent-text);
+  font: 700 .7rem/1.2 var(--koma-font-body);
+}
+.koma-salon-card__action span { min-width: 0; overflow-wrap: anywhere; }
+.koma-salon-card__action svg { flex-shrink: 0; }
+.koma-salon-card__tap:not(:disabled):hover .koma-salon-card__action { background: var(--koma-accent-soft); }
+.koma-salon-card__tap:not(:disabled):active { background: var(--koma-accent-soft); }
+.koma-salon-card__tap:disabled { cursor: default; }
+.koma-salon-card__tap:disabled .koma-salon-card__action { color: var(--koma-operation-muted); }
+
+.koma-salon-card[data-operational-state="occupied"],
+.koma-salon-card[data-operational-state="served"] {
+  border-color: color-mix(in srgb, var(--koma-operation-service) 45%, var(--koma-operation-line));
+}
+.koma-salon-card[data-operational-state="occupied"] .koma-salon-card__identity,
+.koma-salon-card[data-operational-state="served"] .koma-salon-card__identity {
+  background: color-mix(in srgb, var(--koma-operation-service) 18%, var(--koma-operation-raised));
+}
+.koma-salon-card[data-operational-state="ready"] { border-color: var(--koma-operation-ready); }
+.koma-salon-card[data-operational-state="ready"] .koma-salon-card__identity {
+  background: color-mix(in srgb, var(--koma-operation-ready) 22%, var(--koma-operation-raised));
+}
+.koma-salon-card[data-operational-state="payment"] { border-color: var(--koma-operation-payment); }
+.koma-salon-card[data-operational-state="payment"] .koma-salon-card__identity {
+  background: color-mix(in srgb, var(--koma-operation-payment) 20%, var(--koma-operation-raised));
+}
+.koma-salon-card[data-operational-state="merged"] { border-style: dashed; }
+.koma-salon-card[data-operational-state="merged"] .koma-salon-card__glyph { color: var(--koma-operation-muted); }
+
+.koma-salon__empty {
+  display: flex;
+  min-height: 12rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  padding: 1rem;
+  color: var(--koma-text-secondary);
+  text-align: center;
+}
+.koma-salon__empty strong { color: var(--koma-text-primary); font-size: .9375rem; }
+.koma-salon__empty p { max-width: 30rem; margin: 0; font-size: .8125rem; overflow-wrap: anywhere; }
+.koma-salon__clear { min-height: 44px; padding: .55rem 1rem; border-radius: .7rem; background: var(--koma-action-bg); color: var(--koma-action-text); font-weight: 700; }
+.koma-salon :is(button,input):focus-visible { outline: 2px solid var(--koma-focus-ring); outline-offset: 2px; }
+
+@media (min-width: 360px) {
+  .koma-salon__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 430px) {
+  .koma-salon__filter { flex-direction: row; gap: .35rem; }
+}
+@media (min-width: 640px) {
+  .koma-salon__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; }
+  .koma-salon__grid .koma-salon-card__tap { min-height: 144px; }
+}
+@media (min-width: 900px) {
+  .koma-salon__toolbar { flex-direction: row; align-items: center; }
+  .koma-salon__filters { flex: 1; }
+  .koma-salon__filter { flex-direction: row; font-size: .8125rem; }
+  .koma-salon__search { flex: 0 1 19rem; }
+  .koma-salon__grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (min-width: 1260px) {
+  .koma-salon__grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  .koma-salon { height: auto; }
+  .koma-salon__results { overflow: visible; }
+}
+@media (max-width: 560px) {
+  html[data-koma-text-size="grande"] .koma-salon__grid,
+  html[data-koma-text-size="gigante"] .koma-salon__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .koma-salon-card { transition: none; }
+}

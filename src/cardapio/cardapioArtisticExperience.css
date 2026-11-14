@@ -35,7 +35,8 @@
   background-color: var(--art-bg);
   color: var(--art-text-main);
   font-family: inherit;
-  overflow-x: hidden;
+  /* clip avoids creating a scroll container that traps the sticky categories. */
+  overflow-x: clip;
   padding-bottom: 96px;
   position: relative;
 }
@@ -116,9 +117,9 @@ html[data-koma-theme="light"] .koma-art-canvas,
 .koma-art-brand-logo {
   width: 44px;
   height: 44px;
-  border-radius: 14px;
-  object-fit: cover;
-  background: #ffffff;
+  border-radius: 50%;
+  object-fit: contain;
+  background: transparent;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   flex-shrink: 0;
 }
@@ -310,6 +311,51 @@ html[data-koma-theme="light"] .koma-art-canvas,
   justify-content: center;
   color: #ffffff;
   cursor: pointer;
+}
+
+/* Compact contact shortcuts belong to the artistic (default) header.
+   Desktop keeps the existing top-right actions; mobile uses this row. */
+.koma-art-mobile-contacts {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .koma-art-mobile-contacts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(85px, 1fr));
+    gap: 7px;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .koma-art-mobile-contact-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 5px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .koma-art-mobile-contact-action svg {
+    flex-shrink: 0;
+  }
+
+  .koma-art-mobile-contact-action:focus-visible {
+    outline: 2px solid #34d399;
+    outline-offset: 2px;
+  }
 }
 
 /* Faixa de Hospitalidade Integrada */

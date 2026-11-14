@@ -595,6 +595,42 @@ def provision_restaurant_for_contract(
         )
 
 
+QA_OPERATION_START = "SUPERADMIN_QA_OPERATION_START"
+QA_OPERATION_END = "SUPERADMIN_QA_OPERATION_END"
+
+
+def is_superadmin_operational_qa_active(db: Session, restaurante_id: int) -> bool:
+    """Janela temporária autorizada pelo Super Admin para testes operacionais.
+
+    Esta janela é independente de contrato, assinatura, cobrança e trial SaaS.
+    É revogável, possui validade curta e nunca concede acesso entre tenants.
+    """
+    record = (
+        db.query(SuperAdminAuditLog)
+        .filter(
+            SuperAdminAuditLog.restaurante_id == restaurante_id,
+            SuperAdminAuditLog.action.in_((QA_OPERATION_START, QA_OPERATION_END)),
+        )
+        .order_by(SuperAdminAuditLog.id.desc())
+        .first()
+    )
+    if record is None or record.action != QA_OPERATION_START:
+        return False
+    data = record.after_data
+    if not isinstance(data, dict) or data.get("mode") != "operational_qa":
+        return False
+    raw_expiry = data.get("expires_at")
+    if not isinstance(raw_expiry, str):
+        return False
+    try:
+        expires_at = datetime.datetime.fromisoformat(raw_expiry.replace("Z", "+00:00"))
+        if expires_at.tzinfo is None:
+            return False
+    except ValueError:
+        return False
+    return datetime.datetime.now(datetime.timezone.utc) < expires_at.astimezone(datetime.timezone.utc)
+
+
 def is_provisional_preparation(db: Session, restaurante_id: int) -> bool:
     """Retorna True se o restaurante está em preparação provisória (onboarding deferido),
     sem assinatura comercial vinculada e sem trial iniciado.
@@ -634,5 +670,7 @@ def is_provisional_preparation(db: Session, restaurante_id: int) -> bool:
     if contract_exists is not None:
         return False
 
-    return True
+    # Somente a ação privilegiada específica de QA suspende temporariamente
+    # o bloqueio provisório. Iniciar trial administrativo genérico não basta.
+    return not is_superadmin_operational_qa_active(db, restaurante_id)
 

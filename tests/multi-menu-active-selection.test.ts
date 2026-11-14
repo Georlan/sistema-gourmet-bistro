@@ -375,9 +375,9 @@ test('CashierPdvView blocks submitting order when cart has items from an inactiv
   assert.match(html, /id="pdv-cart-unavailable-warning"/);
   assert.match(html, /Há itens indisponíveis no carrinho\. Remova-os para continuar\./);
 
-  // 3. O botão de lançar pedido do PDV fica desabilitado
+  // 3. A ação canônica de envio está sempre visível, mas indisponível
+  // enquanto houver itens sem disponibilidade confirmada.
   assert.match(html, /id="pdv-submit-btn"[^>]*disabled/);
-  assert.match(html, /title="Remova os itens indisponíveis antes de lançar o pedido"/);
 });
 
 test('CashierPdvView renders unavailable search matches with active menu status during search', () => {

@@ -22,6 +22,7 @@ import { openWaiterHistory } from './components/app/waiterHistoryEvents';
 import { useOperationalDrafts } from './components/app/drafts/useOperationalDrafts';
 import { OperationalSnapshotLoading } from './components/app/OperationalSnapshotLoading';
 import { KitchenPanel } from './components/KitchenPanel';
+import { confirmKdsBatch } from './components/caixa/kitchen/confirmKdsBatch';
 import { KomaLogo } from './components/KomaLogo';
 import { MesaDetailsModal } from './components/MesaDetailsModal';
 import { AppRouteBoundary } from './components/app/AppRouteBoundary';
@@ -851,6 +852,9 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         setIsWsConnected(true);
         currentDelay = 2000;
         if (isReconnect) {
+          // Catalog updates can be missed while this socket is disconnected.
+          // Reuse the existing shared catalog owner; never create a second cache.
+          scheduleRealtimeRefresh({ catalog: true });
           fetchConfig();
           fetchTables();
           fetchOrdersFromAPI();
@@ -1040,7 +1044,11 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     const handleVisibilityChange = () => {
       if (document.hidden || stopped) return;
       const socket = wsRef.current;
-      if (!socket || socket.readyState === WebSocket.CLOSED) {
+      if (socket?.readyState === WebSocket.OPEN) {
+        // A backgrounded tab may miss messages despite a seemingly healthy socket.
+        scheduleRealtimeRefresh({ catalog: true });
+      } else if (!socket || socket.readyState === WebSocket.CLOSED) {
+        // Reconnect performs the catalog reconciliation on the next onopen.
         currentDelay = 2000;
         connectWS();
       }
@@ -1477,7 +1485,7 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
   // 11. Delivery (Waiter serves a ready dish)
   const handleDeliverItem = async (orderId: string, itemId: string) => {
-    if (inflightItemIdsRef.current.has(itemId)) return; // Ignore rapid duplicate clicks
+    if (inflightItemIdsRef.current.has(itemId)) return false; // Ignore rapid duplicate clicks
     const requestScopeKey = operationalScopeKey;
     inflightItemIdsRef.current.add(itemId);
     handleOptimisticUpdateItemStatus(itemId, 'entregue');
@@ -1526,26 +1534,50 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
     }
   };
 
-  // 12. Kitchen - Chef completes cooking a plate
-  const handleFinishPreparation = async (orderId: string, itemId: string) => {
-    if (inflightItemIdsRef.current.has(itemId)) return; // Ignore rapid duplicate clicks
+  // 12. Kitchen: ACK is authoritative; the full order snapshot is background-only.
+  const handleFinishPreparation = async (_orderId: string, itemId: string): Promise<boolean> => {
+    if (inflightItemIdsRef.current.has(itemId)) return false;
+    const requestScope = operationalScopeKey;
     inflightItemIdsRef.current.add(itemId);
-    handleOptimisticUpdateItemStatus(itemId, 'pronto');
     try {
-      const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/status?status=pronto`, {
-        method: "PUT",
-        headers: getAuthHeaders()
+      const res = await fetch(`${API_BASE_URL}/comandas/itens/${itemId}/status?status=pronto&avancar_pedido=true`, {
+        method: 'PUT', headers: getAuthHeaders(),
       });
-      if (!res.ok) {
-        showToast("Erro ao finalizar preparação no backend.", 'error');
-        fetchOrdersFromAPI();
+      if (!res.ok || requestScope !== operationalScopeKeyRef.current) {
+        showToast('Não foi possível confirmar o item.', 'error');
+        void fetchOrdersFromAPI();
+        return false;
       }
-    } catch (err) {
-      console.error(err);
-      showToast("Erro de conexão ao finalizar preparação.", 'error');
-      fetchOrdersFromAPI();
+      handleOptimisticUpdateItemStatus(itemId, 'pronto');
+      void fetchOrdersFromAPI();
+      return true;
+    } catch (error) {
+      console.error('Kitchen item confirmation failed', error);
+      showToast('Sem conexão para confirmar o preparo.', 'error');
+      void fetchOrdersFromAPI();
+      return false;
     } finally {
       inflightItemIdsRef.current.delete(itemId);
+    }
+  };
+
+  const handleFinishPreparationBatch = async (_orderId: string, itemIds: string[]): Promise<boolean> => {
+    const requestScope = operationalScopeKey;
+    if (itemIds.some(id => inflightItemIdsRef.current.has(id))) return false;
+    itemIds.forEach(id => inflightItemIdsRef.current.add(id));
+    try {
+      const confirmed = await confirmKdsBatch({ apiBaseUrl: API_BASE_URL, authHeaders: getAuthHeaders(), itemIds });
+      if (requestScope !== operationalScopeKeyRef.current) return false;
+      handleOptimisticUpdateItemStatus(confirmed, 'pronto');
+      void fetchOrdersFromAPI();
+      return true;
+    } catch (error) {
+      console.error('Kitchen ticket confirmation failed', error);
+      showToast('Pedido não confirmado. Atualize a cozinha.', 'error');
+      void fetchOrdersFromAPI();
+      return false;
+    } finally {
+      itemIds.forEach(id => inflightItemIdsRef.current.delete(id));
     }
   };
 
@@ -1895,7 +1927,8 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           <KitchenPanel
             orders={orders}
             onFinishPreparation={handleFinishPreparation}
-            currentTime={currentTime}
+            onFinishPreparationBatch={handleFinishPreparationBatch}
+            onRefreshOrders={fetchOrdersFromAPI}
           />
         ) : isManagementRole(activeRole) ? (
           <React.Suspense fallback={<CashierLoading />}>

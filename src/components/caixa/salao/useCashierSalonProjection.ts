@@ -1,7 +1,4 @@
 import { useMemo, useState } from 'react';
-import {
-  formatCashierOldestAge as formatOldestAge,
-} from '../../../domain/cashierOrderProjection';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import type { Order, Table } from '../../../types';
 
@@ -20,6 +17,7 @@ export function useCashierSalonProjection({
   nowTimestamp,
 }: BoundaryProps) {
   const [tableStatusFilter, setTableStatusFilter] = useState<'all' | 'free' | 'occupied' | 'payment'>('all');
+  const [tableSearch, setTableSearch] = useState('');
 
   const salonTableCards = useMemo(
     () => projectCashierSalonTables(salonTables, orders, pagamentosPendentes, nowTimestamp),
@@ -30,33 +28,11 @@ export function useCashierSalonProjection({
     () => ({
       all: salonTableCards.length,
       free: salonTableCards.filter((card) => !card.isOccupied && !card.isMerged).length,
-      occupied: salonTableCards.filter((card) => card.isOccupied && !card.hasPendingPayment).length,
-      payment: salonTableCards.filter((card) => card.hasPendingPayment).length,
+      occupied: salonTableCards.filter((card) => !card.isMerged && card.isOccupied && !card.hasPendingPayment).length,
+      payment: salonTableCards.filter((card) => !card.isMerged && card.hasPendingPayment).length,
     }),
     [salonTableCards],
   );
-
-  const salonInsights = useMemo(() => {
-    const activeCards = salonTableCards.filter((card) => card.isOccupied && !card.isMerged);
-    const openValue = activeCards.reduce((total, card) => total + card.total, 0);
-    const timestamps = activeCards.flatMap((card) =>
-      card.tableOrders.map(
-        (order) =>
-          (order as any).aberta_em ||
-          (order as any).data_abertura ||
-          (order as any).aberto_em ||
-          order.created_at ||
-          order.timestamp ||
-          (order as any).criadoEm,
-      ),
-    );
-    return {
-      occupancy:
-        salonTableCards.length > 0 ? Math.round((activeCards.length / salonTableCards.length) * 100) : 0,
-      openValue,
-      oldestService: formatOldestAge(timestamps, nowTimestamp),
-    };
-  }, [salonTableCards, nowTimestamp]);
 
   const pdvTableOptions = useMemo(
     () =>
@@ -74,22 +50,26 @@ export function useCashierSalonProjection({
     [salonTableCards],
   );
 
-  const visibleSalonTableCards = useMemo(
-    () =>
-      salonTableCards.filter((card) => {
-        if (tableStatusFilter === 'free') return !card.isOccupied && !card.isMerged;
-        if (tableStatusFilter === 'occupied') return card.isOccupied && !card.hasPendingPayment;
-        if (tableStatusFilter === 'payment') return card.hasPendingPayment;
-        return true;
-      }),
-    [salonTableCards, tableStatusFilter],
-  );
+  const visibleSalonTableCards = useMemo(() => {
+    const query = tableSearch.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+    return salonTableCards.filter((card) => {
+      if (tableStatusFilter === 'free' && (card.isOccupied || card.isMerged)) return false;
+      if (tableStatusFilter === 'occupied' && (card.isMerged || !card.isOccupied || card.hasPendingPayment)) return false;
+      if (tableStatusFilter === 'payment' && (card.isMerged || !card.hasPendingPayment)) return false;
+      if (!query) return true;
+      const mesa = String(card.table.id);
+      const padded = mesa.padStart(2, '0');
+      const haystack = [mesa, padded, `mesa ${mesa}`, `mesa ${padded}`, card.table.nome || ''].join(' ');
+      return haystack.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').includes(query);
+    }).sort((a, b) => a.table.id - b.table.id);
+  }, [salonTableCards, tableStatusFilter, tableSearch]);
   return {
     tableStatusFilter,
     setTableStatusFilter,
+    tableSearch,
+    setTableSearch,
     salonTableCards,
     tableStatusCounts,
-    salonInsights,
     pdvTableOptions,
     visibleSalonTableCards,
   };

@@ -39,6 +39,12 @@ export interface ProductModifier {
 
 export interface Product {
   marmitaria?: boolean;
+  familia_id?: string | null;
+  familia_nome?: string | null;
+  familia_descricao?: string | null;
+  familia_eixo?: 'tamanho' | 'sabor' | 'outra' | null;
+  familia_imagem?: string | null;
+  variacao_rotulo?: string | null;
   id: string;
   name: string;
   description: string;
@@ -115,6 +121,9 @@ export interface BrandConfig {
   categories: string[];
   products: Product[];
   popularProductIds?: string[];
+  manualHighlightProductId?: string | null;
+  /** Optional ordered real SKU IDs; absent means automatic cart recommendations. */
+  cartRecommendationSkuIds?: string[] | null;
   promotions?: CatalogPromotion[];
   explicitPromotionComposition?: boolean;
   promotionProducts?: Product[];

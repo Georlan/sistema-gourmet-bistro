@@ -16,7 +16,8 @@ export interface DisplayVariant {
 
 export interface GroupedDisplayProduct extends Product {
   isGrouped: true;
-  groupKind: 'batatas' | 'pasteis' | 'sucos' | 'vitaminas' | 'refrigerantes' | 'generic';
+  /** Exige escolha consciente antes de adicionar o SKU real à sacola. */
+  requiresExplicitVariantSelection?: boolean;
   groupTitle: string;
   groupDescription: string;
   minPrice: number;
@@ -29,13 +30,6 @@ export type CatalogDisplayItem = Product | GroupedDisplayProduct;
 export function isGroupedProduct(item: CatalogDisplayItem): item is GroupedDisplayProduct {
   return Boolean(item && typeof item === 'object' && (item as GroupedDisplayProduct).isGrouped === true);
 }
-
-const normalize = (val: string) =>
-  (val || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
 
 /**
  * Calcula o custo mínimo de entrada de um produto, somando o preço base ao
@@ -77,264 +71,70 @@ export function calculateProductMinStartingPrice(product: Product): number {
   return minCost;
 }
 
-function formatVariantLabel(name: string, kind: string): string {
-  const norm = normalize(name);
-  if (kind === 'batatas') {
-    if (norm === 'batata frita') return 'Tradicional (com Molho Rosê)';
-    if (norm.includes('especial')) return 'Especial (Bacon ou Calabresa)';
-    if (norm.includes('file')) return 'Com Filé de Frango (200 g)';
-    if (norm.includes('carne de sol')) return 'Com Carne de Sol e Queijo Coalho';
-    return name;
-  }
-  if (kind === 'pasteis') {
-    return name
-      .replace(/^pastel\s*(medio|médio|ao|ão)?\s*(de\s*)?/i, '')
-      .replace(/^pastel\s*/i, '')
-      .replace(/^\w/, (c) => c.toUpperCase());
-  }
-  if (kind === 'sucos') {
-    return name.replace(/^suco\s*(de\s*)?/i, '').replace(/^\w/, (c) => c.toUpperCase());
-  }
-  if (kind === 'vitaminas') {
-    return name.replace(/^vitamina\s*(de\s*)?/i, '').replace(/^\w/, (c) => c.toUpperCase());
-  }
-  if (kind === 'refrigerantes') {
-    return name.replace(/^refrigerante\s*/i, '').replace(/^\w/, (c) => c.toUpperCase());
-  }
-  return name;
-}
-
+/**
+ * One card per persisted family, preserving real SKU identities and product order.
+ * Unassociated products always remain independent, regardless of tenant/name.
+ */
 export function groupCategoryProductsForDisplay(
-  categoryName: string,
+  _categoryName: string,
   products: Product[],
-  restaurantId?: string | number,
+  _restaurantId?: string | number,
 ): CatalogDisplayItem[] {
-  if (!products || products.length === 0) return [];
+  if (!products?.length) return [];
 
-  // O agrupamento visual por famílias foi validado inicialmente para o JE Lanches (ID 1).
-  // Para outros restaurantes da plataforma, mantemos 100% o comportamento padrão e retrocompatibilidade,
-  // preservando a flexibilidade de configurar famílias de produtos por tenant futuramente.
-  const isEligibleRestaurant = restaurantId !== undefined && restaurantId !== null && String(restaurantId) === '1';
-  if (!isEligibleRestaurant) {
-    return products;
+  const byFamily = new Map<string, Product[]>();
+  for (const product of products) {
+    if (!product.familia_id || !product.familia_nome) continue;
+    const group = byFamily.get(product.familia_id) || [];
+    group.push(product);
+    byFamily.set(product.familia_id, group);
   }
+  if (!byFamily.size) return products;
 
-  const catNorm = normalize(categoryName);
-
-  // 1. Grupo Batatas Fritas
-  if (catNorm.includes('batata') || catNorm.includes('frita')) {
-    const batatas = products.filter((p) => {
-      const n = normalize(p.name);
-      return n.includes('batata') || n.includes('frita') || n.includes('carne de sol com frita');
+  const native = new Map<string, GroupedDisplayProduct>();
+  for (const [familyId, members] of byFamily) {
+    const lead = members[0];
+    const variants: DisplayVariant[] = members.map((product) => ({
+      id: String(product.id),
+      label: product.variacao_rotulo || product.name,
+      description: product.description,
+      price: calculateProductMinStartingPrice(product),
+      product,
+      isAvailable: product.isAvailable !== false,
+    }));
+    const available = variants.filter(variant => variant.isAvailable);
+    const prices = (available.length ? available : variants).map(variant => variant.price);
+    const minPrice = Math.min(...prices);
+    native.set(familyId, {
+      ...lead,
+      id: `family-${familyId}`,
+      name: lead.familia_nome!,
+      description: lead.familia_descricao || lead.description,
+      image: lead.familia_imagem || lead.image,
+      price: minPrice,
+      isGrouped: true,
+      requiresExplicitVariantSelection: variants.length > 1,
+      groupTitle: lead.familia_nome!,
+      groupDescription: lead.familia_eixo === 'tamanho' ? 'Escolha o tamanho:' :
+        lead.familia_eixo === 'sabor' ? 'Escolha o sabor:' : 'Escolha a opção:',
+      minPrice,
+      hasVariablePrice: Math.max(...prices) > minPrice,
+      variants,
+      isAvailable: variants.some(variant => variant.isAvailable),
     });
-
-    if (batatas.length >= 2) {
-      const remaining = products.filter((p) => !batatas.includes(p));
-      const variants: DisplayVariant[] = batatas.map((p) => ({
-        id: p.id,
-        label: formatVariantLabel(p.name, 'batatas'),
-        description: p.description,
-        price: calculateProductMinStartingPrice(p),
-        product: p,
-        isAvailable: p.isAvailable !== false,
-      }));
-
-      const availableVariants = variants.filter((v) => v.isAvailable);
-      const pricingPool = availableVariants.length > 0 ? availableVariants : variants;
-      const prices = pricingPool.map((v) => v.price);
-      const minPrice = Math.min(...prices);
-      const maxPrice = Math.max(...prices);
-      const leadProduct = batatas.find((p) => normalize(p.name) === 'batata frita') || batatas[0];
-
-      const grouped: GroupedDisplayProduct = {
-        ...leadProduct,
-        id: 'family-batatas-fritas',
-        name: 'Batata Frita',
-        description: 'Batatas crocantes nas versões Tradicional, Especial (Bacon ou Calabresa), com Filé de Frango ou Carne de Sol.',
-        price: minPrice,
-        isGrouped: true,
-        groupKind: 'batatas',
-        groupTitle: 'Batata Frita',
-        groupDescription: 'Escolha a preparação e os tamanhos ou acompanhamentos disponíveis:',
-        minPrice,
-        hasVariablePrice: maxPrice > minPrice,
-        variants,
-        isAvailable: variants.some((v) => v.isAvailable),
-      };
-
-      return [grouped, ...remaining];
-    }
   }
 
-  // 2. Grupo Pastéis
-  if (catNorm.includes('pastel') || catNorm.includes('pasteis')) {
-    const pasteis = products.filter((p) => normalize(p.name).includes('pastel'));
-    if (pasteis.length >= 2) {
-      const remaining = products.filter((p) => !pasteis.includes(p));
-      const variants: DisplayVariant[] = pasteis.map((p) => ({
-        id: p.id,
-        label: formatVariantLabel(p.name, 'pasteis'),
-        description: p.description,
-        price: calculateProductMinStartingPrice(p),
-        product: p,
-        isAvailable: p.isAvailable !== false,
-      }));
-
-      const availableVariants = variants.filter((v) => v.isAvailable);
-      const pricingPool = availableVariants.length > 0 ? availableVariants : variants;
-      const prices = pricingPool.map((v) => v.price);
-      const minPrice = Math.min(...prices);
-      const maxPrice = Math.max(...prices);
-      const leadProduct = pasteis.find((p) => normalize(p.name).includes('carne de sol')) || pasteis[0];
-
-      const grouped: GroupedDisplayProduct = {
-        ...leadProduct,
-        id: 'family-pasteis',
-        name: 'Pastéis (Médio e Pastelão)',
-        description: 'Pastel crocante e sequinho frito na hora. Escolha o tamanho (Médio ou Pastelão) e seu sabor favorito.',
-        price: minPrice,
-        isGrouped: true,
-        groupKind: 'pasteis',
-        groupTitle: 'Pastéis (Médio e Pastelão)',
-        groupDescription: 'Escolha seu sabor favorito e o tamanho do pastel:',
-        minPrice,
-        hasVariablePrice: true, // Pastéis têm opção Pastelão com acréscimo
-        variants,
-        isAvailable: variants.some((v) => v.isAvailable),
-      };
-
-      return [grouped, ...remaining];
-    }
+  // Each SKU is mapped to its persisted family card at most once.
+  const emitted = new Set<string>();
+  const result: CatalogDisplayItem[] = [];
+  for (const product of products) {
+    const display = product.familia_id && native.has(product.familia_id)
+      ? native.get(product.familia_id)!
+      : product;
+    const identity = isGroupedProduct(display) ? `family:${display.id}` : `sku:${display.id}`;
+    if (emitted.has(identity)) continue;
+    emitted.add(identity);
+    result.push(display);
   }
-
-  // 3. Grupo Vitaminas e Sucos
-  if (catNorm.includes('vitamina') || catNorm.includes('suco')) {
-    const sucos = products.filter((p) => normalize(p.name).startsWith('suco'));
-    const vitaminas = products.filter((p) => normalize(p.name).startsWith('vitamina'));
-    const others = products.filter((p) => !sucos.includes(p) && !vitaminas.includes(p));
-
-    const result: CatalogDisplayItem[] = [];
-
-    if (sucos.length >= 2) {
-      const variants: DisplayVariant[] = sucos.map((p) => ({
-        id: p.id,
-        label: formatVariantLabel(p.name, 'sucos'),
-        description: p.description,
-        price: calculateProductMinStartingPrice(p),
-        product: p,
-        isAvailable: p.isAvailable !== false,
-      }));
-      const availableVariants = variants.filter((v) => v.isAvailable);
-      const pricingPool = availableVariants.length > 0 ? availableVariants : variants;
-      const prices = pricingPool.map((v) => v.price);
-      const minPrice = Math.min(...prices);
-      const maxPrice = Math.max(...prices);
-      const lead = sucos[0];
-
-      result.push({
-        ...lead,
-        id: 'family-sucos-300ml',
-        name: 'Sucos Naturais (300 ml)',
-        description: 'Suco natural da fruta, refrescante e geladinho. Garrafinha de 300 ml.',
-        price: minPrice,
-        isGrouped: true,
-        groupKind: 'sucos',
-        groupTitle: 'Sucos Naturais (300 ml)',
-        groupDescription: 'Escolha sua fruta favorita:',
-        minPrice,
-        hasVariablePrice: maxPrice > minPrice,
-        variants,
-        isAvailable: variants.some((v) => v.isAvailable),
-      });
-    } else {
-      result.push(...sucos);
-    }
-
-    if (vitaminas.length >= 2) {
-      const variants: DisplayVariant[] = vitaminas.map((p) => ({
-        id: p.id,
-        label: formatVariantLabel(p.name, 'vitaminas'),
-        description: p.description,
-        price: calculateProductMinStartingPrice(p),
-        product: p,
-        isAvailable: p.isAvailable !== false,
-      }));
-      const availableVariants = variants.filter((v) => v.isAvailable);
-      const pricingPool = availableVariants.length > 0 ? availableVariants : variants;
-      const prices = pricingPool.map((v) => v.price);
-      const minPrice = Math.min(...prices);
-      const maxPrice = Math.max(...prices);
-      const lead = vitaminas[0];
-
-      result.push({
-        ...lead,
-        id: 'family-vitaminas-300ml',
-        name: 'Vitaminas Especiais (300 ml)',
-        description: 'Vitamina cremosa de 300 ml batida com fruta, leite integral e leite em pó.',
-        price: minPrice,
-        isGrouped: true,
-        groupKind: 'vitaminas',
-        groupTitle: 'Vitaminas Especiais (300 ml)',
-        groupDescription: 'Escolha a fruta para a sua vitamina:',
-        minPrice,
-        hasVariablePrice: maxPrice > minPrice,
-        variants,
-        isAvailable: variants.some((v) => v.isAvailable),
-      });
-    } else {
-      result.push(...vitaminas);
-    }
-
-    result.push(...others);
-    return result;
-  }
-
-  // 4. Grupo Refrigerantes
-  if (catNorm.includes('refrigerante') || catNorm.includes('bebida')) {
-    const refri1L = products.filter((p) => {
-      const n = normalize(p.name);
-      const d = normalize(p.description || '');
-      return n.includes('refrigerante') && (n.includes('1l') || d.includes('1l') || d.includes('1 l'));
-    });
-
-    if (refri1L.length >= 2) {
-      const remaining = products.filter((p) => !refri1L.includes(p));
-      const variants: DisplayVariant[] = refri1L.map((p) => ({
-        id: p.id,
-        label: formatVariantLabel(p.name, 'refrigerantes'),
-        description: p.description,
-        price: calculateProductMinStartingPrice(p),
-        product: p,
-        isAvailable: p.isAvailable !== false,
-      }));
-
-      const availableVariants = variants.filter((v) => v.isAvailable);
-      const pricingPool = availableVariants.length > 0 ? availableVariants : variants;
-      const prices = pricingPool.map((v) => v.price);
-      const minPrice = Math.min(...prices);
-      const maxPrice = Math.max(...prices);
-      const lead = refri1L[0];
-
-      const grouped: GroupedDisplayProduct = {
-        ...lead,
-        id: 'family-refrigerantes-1l',
-        name: 'Refrigerante 1L',
-        description: 'Refrigerante bem gelado garrafa de 1 litro. Escolha seu sabor favorito.',
-        price: minPrice,
-        isGrouped: true,
-        groupKind: 'refrigerantes',
-        groupTitle: 'Refrigerante 1L',
-        groupDescription: 'Escolha o sabor da bebida:',
-        minPrice,
-        hasVariablePrice: maxPrice > minPrice,
-        variants,
-        isAvailable: variants.some((v) => v.isAvailable),
-      };
-
-      return [grouped, ...remaining];
-    }
-  }
-
-  // Para qualquer outra categoria (ex: Hambúrgueres), cada produto é individual
-  return products;
+  return result;
 }

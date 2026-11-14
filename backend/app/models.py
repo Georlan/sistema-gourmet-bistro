@@ -228,6 +228,64 @@ class Categoria(Base):
     observacoes_predefinidas = relationship("ObservacaoPredefinida", back_populates="categoria")
 
 
+class ProdutoFamilia(Base):
+    """One visual offer containing purchasable SKUs, scoped to one tenant."""
+
+    __tablename__ = "produto_familias"
+    __table_args__ = (
+        UniqueConstraint("restaurante_id", "id", name="uq_produto_familias_tenant_id"),
+        ForeignKeyConstraint(
+            ["restaurante_id", "categoria_id"],
+            ["categorias.restaurante_id", "categorias.id"],
+            name="fk_produto_familias_categoria_tenant",
+            ondelete="RESTRICT",
+        ),
+        ForeignKeyConstraint(
+            ["restaurante_id", "cardapio_id"],
+            ["cardapios.restaurante_id", "cardapios.id"],
+            name="fk_produto_familias_cardapio_tenant",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("eixo IN ('tamanho', 'sabor', 'outra')", name="ck_produto_familias_eixo"),
+    )
+    id = Column(String(36), primary_key=True)
+    restaurante_id = Column(Integer, ForeignKey("restaurantes.id", ondelete="RESTRICT"), default=lambda: current_restaurante_id.get(), nullable=False)
+    nome = Column(String(160), nullable=False)
+    descricao = Column(Text, nullable=False, default="")
+    eixo = Column(String(20), nullable=False)
+    categoria_id = Column(String, nullable=False)
+    cardapio_id = Column(String(36), nullable=True)
+    imagem = Column(Text, nullable=False, default="")
+
+
+class ProdutoFamiliaGrupoModificador(Base):
+    """A reusable customization group selected once for an entire product family.
+
+    Variant-specific quantity limits remain in ProdutoGrupoModificador. The
+    SKU itself, never this family link, is the item sold and priced.
+    """
+
+    __tablename__ = "produto_familia_grupo_modificadores"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["restaurante_id", "familia_id"],
+            ["produto_familias.restaurante_id", "produto_familias.id"],
+            name="fk_produto_familia_grupo_familia_tenant",
+            ondelete="CASCADE",
+        ),
+    )
+
+    restaurante_id = Column(
+        Integer, ForeignKey("restaurantes.id"), primary_key=True,
+        default=lambda: current_restaurante_id.get(), nullable=False,
+    )
+    familia_id = Column(String(36), primary_key=True)
+    grupo_id = Column(
+        String, ForeignKey("grupo_modificadores.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+
+
 class Produto(Base):
     __tablename__ = "produtos"
     __table_args__ = (
@@ -244,6 +302,21 @@ class Produto(Base):
             ['cardapios.restaurante_id', 'cardapios.id'],
             name='fk_produtos_cardapio_tenant',
             ondelete='SET NULL',
+        ),
+        ForeignKeyConstraint(
+            ['restaurante_id', 'familia_id'],
+            ['produto_familias.restaurante_id', 'produto_familias.id'],
+            name='fk_produtos_familia_tenant',
+            ondelete='RESTRICT',
+        ),
+        CheckConstraint(
+            "(familia_id IS NULL AND variacao_rotulo IS NULL) OR "
+            "(familia_id IS NOT NULL AND variacao_rotulo IS NOT NULL AND length(trim(variacao_rotulo)) > 0)",
+            name="ck_produtos_familia_rotulo",
+        ),
+        Index(
+            "uq_produtos_tenant_familia_rotulo",
+            "restaurante_id", "familia_id", "variacao_rotulo", unique=True,
         ),
         CheckConstraint(
             "preco >= 0",
@@ -274,6 +347,8 @@ class Produto(Base):
     ativo = Column(Boolean, default=True)  # Toggle product availability
     somente_promocao = Column(Boolean, nullable=False, default=False, server_default='false')
     ordem_exibicao = Column(Integer, nullable=True, default=None)
+    familia_id = Column(String(36), nullable=True)
+    variacao_rotulo = Column(String(100), nullable=True)
     
     # Relationships
     categoria = relationship("Categoria", back_populates="produtos")
@@ -1100,6 +1175,11 @@ class ConfiguracaoRestaurante(Base):
     tabela_taxas_km = Column(JSON, default=list)
     # Campanhas por restaurante; componentes referenciam os produtos reais.
     promocoes = Column(JSON, nullable=False, default=list, server_default="[]")
+    # NULL = automatic recommendation engine. Ordered SKU IDs = manual cart picks.
+    # Public catalog filtering prevents unavailable/foreign/hidden products.
+    recomendacoes_sacola_ids = Column(JSON, nullable=True)
+    # NULL keeps the automatic popularity ranking.
+    destaque_cardapio_produto_id = Column(String, nullable=True)
     taxa_servico_ativa = Column(Boolean, default=True)
     taxa_servico_padrao = Column(Float, default=10.0)
     meta_mensal = Column(Numeric(14, 2, asdecimal=False), default=0.0)

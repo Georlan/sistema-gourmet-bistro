@@ -152,6 +152,13 @@ class SuperAdminReleaseRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class SuperAdminOperationalQaRequest(BaseModel):
+    action: Literal["start", "end"]
+    hours: int = Field(default=24, ge=1, le=72)
+    reason: str = Field(min_length=10, max_length=1000)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
 
 def _normalize_payload(payload: TenantOnboardingRequest) -> dict[str, str]:
     name = payload.name.strip()
@@ -536,6 +543,106 @@ def super_admin_bootstrap_tables(
             )
             db.commit()
             return _commercial_release_preview(db, tenant_id_int, require_subscription=False)
+    finally:
+        db.close()
+
+
+@router.post("/onboarding/restaurantes/{tenant_id}/operational-qa")
+def update_operational_qa(
+    tenant_id: str,
+    payload: SuperAdminOperationalQaRequest,
+    admin: dict[str, Any] = Depends(get_current_admin),
+):
+    """Liberação temporária para homologação sem fingir contrato ou faturamento.
+
+    Não abre caixa, não recebe pagamento e não ativa a loja automaticamente.
+    Pedidos permanecem sujeitos a turno aberto, pausa e modalidades do restaurante.
+    """
+    from ..contract_models import RestaurantContractAcceptance
+    from ..services.restaurant_provisioning import (
+        QA_OPERATION_END,
+        QA_OPERATION_START,
+        is_provisional_preparation,
+        is_superadmin_operational_qa_active,
+    )
+
+    tenant_id_int = _parse_tenant_id(tenant_id)
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, tenant_id_int):
+            restaurante = (
+                db.query(Restaurante)
+                .filter(Restaurante.id == tenant_id_int)
+                .with_for_update()
+                .one_or_none()
+            )
+            if restaurante is None:
+                raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+            if str(restaurante.saas_status or "").strip().lower() != "active":
+                raise HTTPException(status_code=409, detail="Restaurante suspenso não pode entrar em QA operacional.")
+
+            # Nunca converter um tenant comercial (ou em onboarding comercial)
+            # em uma liberação administrativa que contorne o contrato.
+            if (
+                db.query(SaaSSubscription.id).filter(
+                    SaaSSubscription.restaurante_id == tenant_id_int
+                ).first() is not None
+                or db.query(RestaurantContractAcceptance.id).filter(
+                    RestaurantContractAcceptance.restaurante_id == tenant_id_int
+                ).first() is not None
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail="QA administrativo disponível somente antes da contratação comercial.",
+                )
+
+            active = is_superadmin_operational_qa_active(db, tenant_id_int)
+            now = datetime.datetime.now(datetime.timezone.utc)
+            if payload.action == "start":
+                if active:
+                    raise HTTPException(status_code=409, detail="Janela de QA já ativa. Encerre antes de reiniciar.")
+                if not is_provisional_preparation(db, tenant_id_int):
+                    raise HTTPException(status_code=409, detail="Restaurante não está em implantação provisória.")
+                expires_at = now + datetime.timedelta(hours=payload.hours)
+                action = QA_OPERATION_START
+                after = {
+                    "mode": "operational_qa",
+                    "started_at": now.isoformat(),
+                    "expires_at": expires_at.isoformat(),
+                    "hours": payload.hours,
+                    "commercial_contract_created": False,
+                    "subscription_created": False,
+                }
+            else:
+                if not active:
+                    raise HTTPException(status_code=409, detail="Nenhuma janela de QA ativa para encerrar.")
+                expires_at = now
+                action = QA_OPERATION_END
+                after = {"mode": "operational_qa", "ended_at": now.isoformat()}
+
+            db.add(SuperAdminAuditLog(
+                restaurante_id=tenant_id_int,
+                actor=f"superadmin:{admin.get('user') or 'unknown'}",
+                action=action,
+                reason=payload.reason,
+                before_data={"qa_active": active},
+                after_data=after,
+            ))
+            db.commit()
+
+            return {
+                "restaurantId": str(tenant_id_int),
+                "qaActive": payload.action == "start",
+                "expiresAt": expires_at.isoformat(),
+                "commercialContractCreated": False,
+                "saasTrialStarted": False,
+                "message": "Homologação operacional temporária liberada." if payload.action == "start"
+                    else "Homologação operacional encerrada.",
+            }
+    except HTTPException:
+        if db.in_transaction():
+            db.rollback()
+        raise
     finally:
         db.close()
 

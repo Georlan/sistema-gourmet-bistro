@@ -17,6 +17,8 @@ export interface Product {
   ativo?: boolean;
   ordem_exibicao?: number | null;
   cardapio_id?: string | null;
+  familia_id?: string | null;
+  variacao_rotulo?: string | null;
 }
 
 export interface CardapioMenu {

@@ -20,4 +20,8 @@ test('KDS avança pedido aceito quando o último item fica pronto', async ({ pag
   await page.getByRole('button',{name:'Marcar como pronto: Suco KDS'}).click();
   await expect.poll(() => status).toBe('pronto');
   expect(readyWasOptIn).toBe(true);
+  await expect(page.getByRole('button', { name: 'Prontos 1' })).toBeVisible();
+  await page.getByRole('button', { name: 'Prontos 1' }).click();
+  await expect(page.locator('[data-stage="pronto"]')).toContainText('Para expedição');
+  await expect(page.getByRole('button', { name: /marcar como entregue/i })).toHaveCount(0);
 });

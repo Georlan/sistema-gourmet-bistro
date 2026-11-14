@@ -154,7 +154,8 @@ export function initAnalytics(): Promise<boolean> {
     }
 
     const projectToken = (import.meta.env?.VITE_POSTHOG_PROJECT_TOKEN || '').trim();
-    const host = (import.meta.env?.VITE_POSTHOG_HOST || 'https://us.i.posthog.com').trim();
+    // Temporary compatibility with the misspelled Cloudflare Pages env var.
+    const host = (import.meta.env?.VITE_POSTHOG_HOST || import.meta.env?.VITE_POSTHOG_HOS || 'https://us.i.posthog.com').trim();
 
     if (!projectToken) {
       analyticsActive = false;

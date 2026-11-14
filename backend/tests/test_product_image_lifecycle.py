@@ -13,7 +13,7 @@ from starlette.datastructures import Headers
 
 from app.config import settings
 from app.database import current_restaurante_id
-from app.models import Restaurante, Categoria, Cardapio, Produto, ProductImageRetirement
+from app.models import Restaurante, Categoria, Cardapio, Produto, ProdutoFamilia, ProductImageRetirement
 from app.services.product_image_lifecycle import collect, enqueue, reconcile, list_product_objects
 from app.services.storage_paths import storage_object_path
 
@@ -25,7 +25,7 @@ def db(monkeypatch):
     monkeypatch.setattr(settings, 'SUPABASE_URL', 'https://test.supabase.co')
     engine = create_engine('sqlite://')
     metadata = MetaData()
-    for model in (Restaurante, Categoria, Cardapio, Produto, ProductImageRetirement):
+    for model in (Restaurante, Categoria, Cardapio, ProdutoFamilia, Produto, ProductImageRetirement):
         model.__table__.to_metadata(metadata)
     metadata.create_all(engine)
     with Session(engine, expire_on_commit=False) as session:
@@ -244,3 +244,108 @@ def test_migration_lineage_has_one_resolvable_head():
     script = ScriptDirectory.from_config(config)
     assert len(script.get_heads()) == 1
     assert script.get_revision('82c7a941d5ef') is not None
+
+
+def test_multi_category_inventory_and_observability(db):
+    from app.services.product_image_lifecycle import inventory, summarize_storage_observability
+    product(db, ident='p1', image='1/products/shared.jpg', gallery=[url('1/products/gal.png')])
+    product(db, ident='p2', image='1/products/shared.jpg')
+    rest = db.query(Restaurante).filter_by(id=1).one()
+    rest.logo_url = url('1/logo/brand.webp')
+    db.commit()
+
+    def obj(name, days, size):
+        return {
+            'id': name,
+            'name': name,
+            'created_at': (NOW - timedelta(days=days)).isoformat() + 'Z',
+            'metadata': {'size': size, 'mimetype': 'image/jpeg'},
+        }
+
+    objects_by_category = {
+        'products': [
+            obj('shared.jpg', 10, 300_000),
+            obj('gal.png', 15, 900_000),
+            obj('orphan_old.png', 20, 1_500_000),
+            obj('recent_new.webp', 1, 25_000),
+        ],
+        'logo': [obj('brand.webp', 30, 18_000)],
+        'banner': [],
+    }
+    inv = inventory(db, 1, objects_by_category, now=NOW)
+    assert inv['summary']['total_objects'] == 5
+    assert inv['summary']['in_use_count'] == 3
+    assert inv['summary']['orphan_count'] == 1
+    assert inv['summary']['indeterminate_count'] == 1
+    assert inv['by_category']['products']['max_bytes'] == 1_500_000
+    shared_entry = next(o for o in inv['objects'] if o['object_path'] == '1/products/shared.jpg')
+    assert shared_entry['shared'] is True and shared_entry['reference_count'] == 2
+    assert inv['top_heaviest'][0]['object_path'] == '1/products/orphan_old.png'
+
+    obs = summarize_storage_observability(db, tenant=1)
+    assert obs['metric_type'] == 'storage_and_reference_state'
+    t1 = obs['tenants'][0]
+    assert t1['restaurante_id'] == 1
+    assert t1['unique_bucket_objects_referenced'] == 3
+    assert t1['non_webp_bucket_objects_referenced'] == 2
+
+
+def test_migrate_legacy_images_deduplicates_verifies_and_recovers(db):
+    from io import BytesIO
+    from PIL import Image
+    from app.services.product_image_lifecycle import migrate_legacy_images, restore_migrated_references
+
+    buf = BytesIO()
+    Image.new('RGB', (800, 600), (180, 90, 40)).save(buf, format='PNG')
+    png_bytes = buf.getvalue()
+
+    p1 = product(db, ident='juice-1', image='1/products/shared.png')
+    p2 = product(db, ident='juice-2', image='1/products/shared.png')
+    p3 = product(db, ident='juice-copy', image='1/products/duplicate_content.png')
+
+    stored: dict[str, bytes] = {
+        '/storage/v1/object/public/cardapio-assets/1/products/shared.png': png_bytes,
+        '/storage/v1/object/public/cardapio-assets/1/products/duplicate_content.png': png_bytes,
+    }
+    uploads: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == 'GET':
+            body = stored.get(request.url.path)
+            if body is None:
+                return httpx.Response(404)
+            return httpx.Response(200, content=body, headers={'cache-control': 'no-cache'})
+        if request.method == 'POST':
+            uploads.append(request.url.path)
+            public_path = request.url.path.replace(
+                '/storage/v1/object/cardapio-assets/',
+                '/storage/v1/object/public/cardapio-assets/',
+            )
+            stored[public_path] = request.content
+            return httpx.Response(200, json={'Key': request.url.path})
+        return httpx.Response(405)
+
+    with httpx.Client(base_url='https://test.supabase.co', transport=httpx.MockTransport(handler)) as client:
+        dry = migrate_legacy_images(db, 1, execute=False, client=client)
+        assert dry['executed'] is False
+        assert dry['summary']['migrated_objects_count'] == 2
+        assert dry['summary']['updated_references_count'] == 3
+        assert not uploads
+        assert p1.imagem.endswith('shared.png')
+
+        applied = migrate_legacy_images(db, 1, execute=True, client=client)
+        assert applied['executed'] is True
+        # Content deduplication: shared.png and duplicate_content.png have identical SHA-256,
+        # so only ONE .webp object is uploaded to Storage and shared across all 3 products!
+        assert len(uploads) == 1
+        assert p1.imagem.endswith('.webp')
+        assert p1.imagem == p2.imagem == p3.imagem
+        assert applied['summary']['saved_bytes'] > 0
+        retired_paths = {r.object_path for r in db.query(ProductImageRetirement).filter_by(restaurante_id=1)}
+        assert retired_paths == {'1/products/shared.png', '1/products/duplicate_content.png'}
+
+        restored = restore_migrated_references(db, 1, applied['recovery_map'], execute=True)
+        assert restored['restored_references'] == 3
+        assert p1.imagem == url('1/products/shared.png')
+        assert p3.imagem == url('1/products/duplicate_content.png')
+

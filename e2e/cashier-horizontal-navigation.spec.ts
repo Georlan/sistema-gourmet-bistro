@@ -35,13 +35,18 @@ test('mobile scroll exposes delivery and retains order creation in the same stri
   await page.goto('/?view=caixa');
   const nav = page.getByRole('navigation', { name: 'Telas desta área' });
   await expect(nav.locator('.cashier-subnav__button')).toHaveCount(6);
-  await expect(nav.getByRole('button', { name: 'Ver próximas abas' })).toBeVisible();
-  await nav.getByRole('button', { name: 'Ver próximas abas' }).click();
+  const strip = nav.locator('.cashier-subnav__scroll');
+  await expect(nav.locator('.cashier-subnav__arrow').first()).toBeHidden();
+  await expect(nav.locator('.cashier-subnav__arrow').last()).toBeHidden();
+  await strip.evaluate(el => { el.scrollLeft = el.scrollWidth; });
+  await expect.poll(() => strip.evaluate(el => el.scrollLeft)).toBeGreaterThan(80);
   await nav.getByRole('button', { name: 'Entregas', exact: true }).click();
   await expect(nav.getByRole('button', { name: 'Entregas', exact: true })).toHaveAttribute('aria-current', 'page');
   await nav.getByRole('button', { name: 'Novo pedido', exact: true }).click();
-  await expect(nav.getByRole('button', { name: 'Novo pedido', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.getByPlaceholder('Buscar item, descrição ou código')).toBeVisible();
+  await expect(nav).toBeVisible();
+  await expect.poll(() => strip.evaluate(el => el.scrollLeft)).toBe(0);
+  await expect(nav.getByRole('button', { name: 'Novo pedido', exact: true })).toHaveAttribute('aria-current', 'page');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
 
@@ -77,7 +82,10 @@ for (const [tab, subTab] of [
       }, edge);
       // Cross the scroll event, React state update and ResizeObserver cycle.
       await page.waitForTimeout(250);
-      expect(await strip.evaluate(el => el.scrollLeft)).toBeCloseTo(target, 0);
+      // Chromium rounds fractional scroll pixels differently after hiding
+      // the scrollbar; one CSS pixel is within the same geometric position.
+      const actual = await strip.evaluate(el => el.scrollLeft);
+      expect(Math.abs(actual - target)).toBeLessThanOrEqual(1);
       const bounds = await strip.boundingBox();
       expect(bounds!.x).toBeCloseTo(geometry!.x, 0);
       expect(bounds!.width).toBeCloseTo(geometry!.width, 0);

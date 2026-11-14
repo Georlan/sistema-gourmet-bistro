@@ -21,6 +21,248 @@ async function menu(page:Page, mutate?:(payload:any)=>void, rankingGate?:Promise
   return {payload,orders,rankingRequests:()=>rankingRequests};
 }
 
+test('destaque escolhido pelo restaurante substitui ranking sem alegar ser o mais vendido', async ({ page }) => {
+  await menu(page, payload => { payload.restaurante.destaque_cardapio_produto_id = '101'; });
+  const hero = page.locator('#koma-art-hero-showcase');
+  await expect(hero).toContainText('Pizza Margherita Especial');
+  await expect(hero).toContainText('DESTAQUE DA CASA');
+  await expect(hero).not.toContainText('Nº 1 MAIS PEDIDO');
+});
+
+test('destaque indisponível retorna ao ranking automático', async ({ page }) => {
+  await menu(page, payload => { payload.restaurante.destaque_cardapio_produto_id = 'inexistente'; });
+  await expect(page.locator('#koma-art-hero-showcase')).toContainText('Vinho Tinto');
+  await expect(page.locator('#koma-art-hero-showcase')).toContainText('Nº 1 MAIS PEDIDO');
+});
+
+test('contato WhatsApp inclui DDI brasileiro no cabeçalho e nas informações da loja', async ({ page }) => {
+  await menu(page, payload => { payload.restaurante.socials = { whatsapp: '(88) 99961-6937' }; });
+  await expect(page.locator('#btn-whatsapp-mobile')).toHaveAttribute('href', 'https://wa.me/5588999616937');
+  await page.locator('#header-brand-info-trigger').click();
+  await expect(page.locator('#store-info-whatsapp-link')).toHaveAttribute('href', 'https://wa.me/5588999616937');
+});
+
+
+test('sacola usa o mesmo card de família nativa, exige tamanho e conserva preço por SKU', async ({ page }) => {
+  await menu(page, payload => {
+    payload.categorias.push({ id: 30, nome: 'Batatas Fritas' });
+    payload.produtos.push(
+      { id: 'b200', nome: 'Batata Tradicional 200g', descricao: 'Porção de 200 g', preco: 12,
+        categoria_id: 30, imagem_url: '', familia_id: 'f-batatas',
+        familia_nome: 'Batata Tradicional', familia_eixo: 'tamanho', variacao_rotulo: '200 g',
+        grupos_modificadores: [] },
+      { id: 'b400', nome: 'Batata Tradicional 400g', descricao: 'Porção de 400 g', preco: 18,
+        categoria_id: 30, imagem_url: '', familia_id: 'f-batatas',
+        familia_nome: 'Batata Tradicional', familia_eixo: 'tamanho', variacao_rotulo: '400 g',
+        grupos_modificadores: [] },
+    );
+  });
+  await page.locator('#btn-fast-add-301').click();
+  await page.locator('#btn-cart-header').click();
+  const cart = page.locator('#cart-drawer-container');
+  await expect(cart).toBeVisible();
+  const family = cart.locator('#upsell-card-family-f-batatas');
+  await expect(family).toBeVisible();
+  await expect(family).toContainText('Batata Tradicional');
+  await expect(family).toContainText('A partir de R$ 12,00');
+  await expect(cart.locator('#upsell-card-b200')).toHaveCount(0);
+  await expect(cart.locator('#upsell-card-b400')).toHaveCount(0);
+  await family.locator('#btn-upsell-add-family-f-batatas').click();
+  const modal = page.locator('#product-details-modal');
+  await expect(modal).toBeVisible();
+  await modal.locator('#btn-add-to-cart-action').click();
+  await expect(modal).toContainText('Escolha o tamanho antes de adicionar');
+  await modal.locator('#variant-btn-b400').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 18,00');
+});
+
+test('logo da loja mantém avatar circular sem moldura branca no cabeçalho e no painel', async ({ page }) => {
+  const logoSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect width="64" height="64" fill="#101010"/><circle cx="32" cy="32" r="24" fill="#ffd12b"/></svg>';
+  await menu(page, payload => {
+    payload.restaurante.logo_url = `data:image/svg+xml,${encodeURIComponent(logoSvg)}`;
+  });
+
+  const headerLogo = page.locator('.koma-art-brand-logo');
+  await expect(headerLogo).toBeVisible();
+  const headerStyle = await headerLogo.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, radius: style.borderRadius, fit: style.objectFit };
+  });
+  expect(headerStyle).toEqual({ background: 'rgba(0, 0, 0, 0)', radius: '50%', fit: 'contain' });
+
+  await page.locator('#header-brand-info-trigger').click();
+  const avatar = page.locator('#store-info-brand-avatar');
+  await expect(avatar).toBeVisible();
+  const avatarStyle = await avatar.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, overflow: style.overflow, padding: style.padding, radius: style.borderRadius };
+  });
+  expect(avatarStyle.background).not.toBe('rgb(255, 255, 255)');
+  expect(avatarStyle.overflow).toBe('hidden');
+  expect(avatarStyle.padding).toBe('0px');
+  expect(parseFloat(avatarStyle.radius)).toBeGreaterThan(20);
+  const logo = avatar.locator('img');
+  await expect(logo).toHaveAttribute('alt', 'Pizzeria Bella Italia');
+  expect(await logo.evaluate((element) => getComputedStyle(element).objectFit)).toBe('contain');
+});
+
+test('link de rota usa Google Maps quando cadastrado somente o Plus Code', async ({ page }) => {
+  await menu(page, payload => {
+    payload.restaurante.google_maps_url = 'Q4H9+CQ, Limoeiro do Norte - CE, 62930-000';
+  });
+  await page.locator('#header-brand-info-trigger').click();
+  const mapsLink = page.locator('#btn-google-maps-link');
+  await expect(mapsLink).toBeVisible();
+  await expect(mapsLink).toHaveAttribute(
+    'href',
+    'https://www.google.com/maps/dir/?api=1&destination=Q4H9%2BCQ%2C%20Limoeiro%20do%20Norte%20-%20CE%2C%2062930-000',
+  );
+  await expect(mapsLink).toHaveAttribute('target', '_blank');
+});
+
+test('batata tradicional usa um único card com tamanho obrigatório na categoria e na sugestão', async ({ page }) => {
+  await menu(page, payload => {
+    payload.restaurante.id = 1;
+    payload.categorias.push({ id: 30, nome: 'Batatas Fritas' });
+    payload.produtos.push(
+      { id: 'batata-p', nome: 'Batata Frita Pequena (200 g)', descricao: 'Com molho rosé', preco: 12, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Pequena · 200 g', grupos_modificadores: [] },
+      { id: 'batata-m', nome: 'Batata Frita Média (300 g)', descricao: 'Com molho rosé', preco: 15, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Média · 300 g', grupos_modificadores: [] },
+      { id: 'batata-g', nome: 'Batata Frita Grande (400 g)', descricao: 'Com molho rosé', preco: 18, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Grande · 400 g', grupos_modificadores: [] },
+      { id: 'especial', nome: 'Batata Frita Especial (300 g)', descricao: 'Escolha bacon ou calabresa', preco: 24, categoria_id: 30, imagem_url: '', grupos_modificadores: [] },
+    );
+  });
+  const catalog = page.locator('[data-menu-category="Batatas Fritas"]');
+  await expect(catalog.locator('[id^="product-card-"]')).toHaveCount(2);
+  await expect(catalog.locator('#product-card-family-batata-tradicional')).toContainText('A partir de R$');
+  await expect(page.locator('#pairing-card-family-batata-tradicional')).toBeVisible();
+
+  await page.locator('#pairing-card-family-batata-tradicional').click();
+  const modal = page.locator('#product-details-modal');
+  await expect(modal).toContainText('Batata Frita Tradicional');
+  await expect(modal.locator('#variant-btn-batata-p')).toContainText('Pequena · 200 g');
+  await expect(modal.locator('#variant-btn-batata-m')).toContainText('Média · 300 g');
+  await expect(modal.locator('#variant-btn-batata-g')).toContainText('Grande · 400 g');
+  await modal.locator('#btn-add-to-cart-action').click();
+  await expect(modal).toContainText('Escolha o tamanho antes de adicionar');
+  await modal.locator('#variant-btn-batata-m').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 15,00');
+  await modal.locator('#btn-close-modal').click();
+
+  await catalog.locator('#product-card-family-batata-tradicional').click();
+  await expect(modal).toContainText('Escolha o tamanho:');
+  await modal.locator('#variant-btn-batata-g').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 18,00');
+});
+
+test('família nativa conserva um único card e envia o SKU real para a sacola artística', async ({ page }) => {
+  await menu(page, payload => {
+    payload.restaurante.id = 6; // No JE-specific grouping or name regex allowed.
+    payload.categorias.push({ id: 40, nome: 'Pastéis' });
+    payload.produtos.push(
+      { id: 'p-carne', nome: 'Pastel Médio de Carne Moída', descricao: '', preco: 7, categoria_id: 40,
+        familia_id: 'f-pastel', familia_nome: 'Pastel Médio', familia_eixo: 'sabor',
+        variacao_rotulo: 'Carne Moída', imagem_url: '', grupos_modificadores: [] },
+      { id: 'p-queijo', nome: 'Pastel Médio de Queijo', descricao: '', preco: 8, categoria_id: 40,
+        familia_id: 'f-pastel', familia_nome: 'Pastel Médio', familia_eixo: 'sabor',
+        variacao_rotulo: 'Queijo', imagem_url: '', grupos_modificadores: [] },
+    );
+  });
+  const category = page.locator('[data-menu-category="Pastéis"]');
+  await expect(category.locator('[id^="product-card-"]')).toHaveCount(1);
+  await expect(category.locator('#product-card-family-f-pastel')).toBeVisible();
+  await category.locator('#product-card-family-f-pastel').click();
+  const modal = page.locator('#product-details-modal');
+  await expect(modal).toContainText('Escolha o sabor:');
+  await modal.locator('#btn-add-to-cart-action').click();
+  await expect(modal).toContainText('Escolha o sabor antes de adicionar');
+  await modal.locator('#variant-btn-p-queijo').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 8,00');
+  await modal.locator('#btn-add-to-cart-action').click();
+  if (!await page.locator('#cart-drawer-container').isVisible()) {
+    await page.locator('#btn-cart-header').click();
+  }
+  const cart = page.locator('#cart-drawer-container');
+  await expect(cart).toContainText('Pastel Médio de Queijo');
+  await expect(cart).toContainText('R$ 8,00');
+  await expect(cart).not.toContainText('Pastel Médio de Carne Moída');
+});
+
+test('destaque da batata abre o mesmo seletor sem fast-add de produto sintético', async ({ page }) => {
+  await menu(page, payload => {
+    payload.restaurante.id = 1;
+    payload.produtos = payload.produtos.filter((product: any) => product.id !== 201);
+    payload.categorias.push({ id: 30, nome: 'Batatas Fritas' });
+    payload.produtos.push(
+      { id: 201, nome: 'Batata Frita Pequena (200 g)', descricao: 'Com molho rosé', preco: 12, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Pequena · 200 g', grupos_modificadores: [] },
+      { id: 'batata-m', nome: 'Batata Frita Média (300 g)', descricao: 'Com molho rosé', preco: 15, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Média · 300 g', grupos_modificadores: [] },
+      { id: 'batata-g', nome: 'Batata Frita Grande (400 g)', descricao: 'Com molho rosé', preco: 18, categoria_id: 30, imagem_url: '', familia_id: 'batata-tradicional', familia_nome: 'Batata Frita Tradicional', familia_eixo: 'tamanho', variacao_rotulo: 'Grande · 400 g', grupos_modificadores: [] },
+    );
+  });
+  const hero = page.locator('#koma-art-hero-showcase');
+  await expect(hero).toContainText('Batata Frita Tradicional');
+  await hero.locator('#btn-hero-fast-add-family-batata-tradicional').click();
+  const modal = page.locator('#product-details-modal');
+  await expect(modal).toContainText('Escolha o tamanho:');
+  await modal.locator('#variant-btn-batata-g').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 18,00');
+});
+
+test('pastel médio e pastelão oferecem somente sabores com preço correspondente', async ({ page }) => {
+  await menu(page, payload => {
+    payload.restaurante.id = 1;
+    payload.categorias.push({ id: 40, nome: 'Pastelões e Pastel Médio' });
+    payload.produtos.push(
+      { id: 'pastel-m-sol', nome: 'Pastel Médio de Carne de Sol', descricao: 'Carne de sol, queijo e catupiry', preco: 7, categoria_id: 40, imagem_url: '', familia_id: 'pastel-medio', familia_nome: 'Pastel Médio', familia_eixo: 'sabor', variacao_rotulo: 'Carne de Sol', grupos_modificadores: [] },
+      { id: 'pastel-m-frango', nome: 'Pastel Médio de Frango', descricao: 'Frango, catupiry e queijo', preco: 7, categoria_id: 40, imagem_url: '', familia_id: 'pastel-medio', familia_nome: 'Pastel Médio', familia_eixo: 'sabor', variacao_rotulo: 'Frango', grupos_modificadores: [] },
+      { id: 'pastel-g-sol', nome: 'Pastelão de Carne de Sol', descricao: 'Carne de sol, queijo e catupiry', preco: 17, categoria_id: 40, imagem_url: '', familia_id: 'pastelao', familia_nome: 'Pastelão', familia_eixo: 'sabor', variacao_rotulo: 'Carne de Sol', grupos_modificadores: [] },
+      { id: 'pastel-g-frango', nome: 'Pastelão de Frango', descricao: 'Frango, catupiry e queijo', preco: 16, categoria_id: 40, imagem_url: '', familia_id: 'pastelao', familia_nome: 'Pastelão', familia_eixo: 'sabor', variacao_rotulo: 'Frango', grupos_modificadores: [] },
+    );
+  });
+  const catalog = page.locator('[data-menu-category="Pastelões e Pastel Médio"]');
+  await expect(catalog.locator('[id^="product-card-"]')).toHaveCount(2);
+  await catalog.locator('#product-card-family-pastelao').click();
+  const modal = page.locator('#product-details-modal');
+  await expect(modal).toContainText('Pastelão');
+  await expect(modal).toContainText('Escolha o sabor:');
+  await expect(modal).not.toContainText('Tamanho');
+  await modal.locator('#btn-add-to-cart-action').click();
+  await expect(modal).toContainText('Escolha o sabor antes de adicionar');
+  await modal.locator('#variant-btn-pastel-g-sol').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 17,00');
+  await modal.locator('#btn-close-modal').click();
+  await catalog.locator('#product-card-family-pastel-medio').click();
+  await expect(modal).toContainText('Pastel Médio');
+  await modal.locator('#variant-btn-pastel-m-frango').click();
+  await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 7,00');
+});
+
+test('sacola vazia respeita os produtos escolhidos pelo restaurante', async ({ page }) => {
+  await menu(page, payload => {
+    payload.restaurante.recomendacoes_sacola_ids = ['301'];
+  });
+  await page.locator('#btn-cart-header').click();
+  const cart = page.locator('#cart-drawer-container');
+  await expect(cart).toBeVisible();
+  await expect(cart.locator('.koma-art-cart-item-card')).toHaveCount(1);
+  await expect(cart.locator('.koma-art-cart-item-card')).toContainText('Pizza de batata');
+});
+
+test('recomendação manual da sacola usa SKU escolhido em vez do motor automático',async({page})=>{
+  await menu(page, payload => {
+    // Pizza de batata é prato principal; o motor automático não a escolheria.
+    payload.restaurante.recomendacoes_sacola_ids = ['301'];
+  });
+  await page.locator('#btn-hero-fast-add-201').click();
+  if (!await page.locator('#cart-drawer-container').isVisible()) {
+    await page.locator('#btn-cart-header').click();
+  }
+  const cart = page.locator('#cart-drawer-container');
+  await expect(cart).toBeVisible();
+  await expect(cart.locator('#upsell-card-301')).toBeVisible();
+  await expect(cart.locator('[id^="upsell-card-"]')).toHaveCount(1);
+  await expect(cart.locator('#upsell-card-301')).toContainText('Pizza de batata');
+ });
+
  test('ranking real, IDs únicos e consulta única ao navegar', async({page})=>{
   const state=await menu(page);
   await expect(page.locator('#koma-art-hero-showcase')).toContainText('Vinho Tinto');
@@ -227,3 +469,44 @@ test('contato preserva foco quando a navegação chega atrasada',async({page})=>
   await page.locator('#input-guest-name').fill('Cliente local');
   await expect(page.locator('#input-guest-phone')).toHaveValue('(85) 99999-9999');
 });
+
+test('categorias permanecem visíveis ao navegar pelo cardápio', async ({page}) => {
+  await menu(page);
+  const nav = page.locator('#koma-art-category-nav');
+  await page.locator('#koma-art-catalog').scrollIntoViewIfNeeded();
+  await expect.poll(async () => (await nav.boundingBox())?.y ?? -100).toBeGreaterThanOrEqual(-1);
+  await expect.poll(async () => (await nav.boundingBox())?.y ?? 100).toBeLessThanOrEqual(2);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  await nav.getByRole('button', {name: 'Bebidas', exact: true}).click();
+  await expect.poll(async () => (await page.locator('#cat-bebidas').boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(50);
+});
+
+for (const width of [320, 360, 390, 430]) {
+  test(`a categoria ativa acompanha a rolagem no celular de ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await menu(page, payload => {
+      for (let i = 1; i <= 5; i++) {
+        payload.categorias.push({ id: 100 + i, nome: `Categoria longa ${i}` });
+        payload.produtos.push({ id: 500 + i, nome: `Produto ${i}`, preco: 10, categoria_id: 100 + i, grupos_modificadores: [] });
+      }
+    });
+    const nav = page.locator('#koma-art-category-nav');
+    const strip = nav.locator('.koma-art-category-scroll');
+    const target = page.locator('[data-menu-category="Categoria longa 4"]');
+    await target.evaluate(el => window.scrollTo(0, window.scrollY + el.getBoundingClientRect().top - 120));
+    const active = nav.getByRole('button', { name: 'Categoria longa 4', exact: true });
+    await expect(active).toHaveAttribute('aria-current', 'true');
+    await expect.poll(async () => {
+      const [button, container] = await Promise.all([active.boundingBox(), strip.boundingBox()]);
+      return !!button && !!container && button.x >= container.x - 1 && button.x + button.width <= container.x + container.width + 1;
+    }).toBe(true);
+    await page.locator('[data-menu-category="Categoria longa 1"]').evaluate(el => window.scrollTo(0, window.scrollY + el.getBoundingClientRect().top - 120));
+    const previous = nav.getByRole('button', { name: 'Categoria longa 1', exact: true });
+    await expect(previous).toHaveAttribute('aria-current', 'true');
+    await expect.poll(async () => {
+      const [button, container] = await Promise.all([previous.boundingBox(), strip.boundingBox()]);
+      return !!button && !!container && button.x >= container.x - 1 && button.x + button.width <= container.x + container.width + 1;
+    }).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  });
+}

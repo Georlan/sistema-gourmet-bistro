@@ -1453,3 +1453,89 @@ def test_waiter_batch_item_transfer_atomicity_and_financial_guards():
 
 
 
+
+def test_kitchen_http_role_cannot_dispatch_deliver_cancel_or_modify_fulfillment():
+    """A kitchen login confirms cooking only; the API protects fulfillment even without UI."""
+    from types import SimpleNamespace
+    from app.security import get_current_user
+
+    kitchen = SimpleNamespace(
+        id="kitchen-session-fixture", restaurante_id=1,
+        status="ativo", role="cozinha", cargo="cozinha",
+    )
+    app.dependency_overrides[get_current_user] = lambda: kitchen
+    try:
+        client = TestClient(app)
+        assert client.get("/comandas/motoboys/lista").status_code == 403
+        for method, path, body in (
+            ("put", "/comandas/kds-check/delivery/status?status_novo=finalizado", None),
+            ("put", "/comandas/kds-check/delivery/entregador", {"motoboy_id": 1}),
+            ("post", "/comandas/kds-check/delivery/entregador/reassign", {"motoboy_id": 1, "motivo": "teste"}),
+            ("post", "/comandas/kds-check/delivery/despachar", {"motoboy_id": 1}),
+        ):
+            response = client.request(method, path, json=body)
+            assert response.status_code == 403, (method, path, response.status_code)
+
+        with TestingSessionLocal() as db:
+            db.add(Categoria(id="kds-category", restaurante_id=1, nome="Cozinha", destino_impressao="COZINHA"))
+            db.add(Produto(
+                id="kds-product", restaurante_id=1, nome="Produto preparo",
+                preco=15.0, categoria_id="kds-category", ativo=True,
+            ))
+            db.add(Comanda(
+                id="kds-check", restaurante_id=1, mesa_id=0,
+                garcom_id="u-admin", tipo="Retirada", delivery_status="producao",
+                numero_pedido=88, fechada=False,
+            ))
+            db.add(Lancamento(
+                id="kds-launch", restaurante_id=1, comanda_id="kds-check",
+                garcom_id="u-admin", origem="caixa",
+            ))
+            for item_id in ("kds-first", "kds-second"):
+                db.add(Item(
+                    id=item_id, restaurante_id=1, comanda_id="kds-check",
+                    lancamento_id="kds-launch", produto_id="kds-product",
+                    preco_unit=15.0, status="preparando", pago=False,
+                ))
+            db.commit()
+
+        for requested_status in ("entregue", "cancelado", "preparando"):
+            response = client.put(
+                f"/comandas/itens/kds-first/status?status={requested_status}",
+            )
+            assert response.status_code == 403, (requested_status, response.status_code)
+
+        with TestingSessionLocal() as db:
+            assert db.query(Item).filter(Item.id == "kds-first").one().status == "preparando"
+
+        for _ in range(2):  # The second ACK is an idempotent replay.
+            response = client.put(
+                "/comandas/itens/kds-first/status?status=pronto&avancar_pedido=true",
+            )
+            assert response.status_code == 200, response.text
+            assert response.json()["status"] == "pronto"
+
+        with TestingSessionLocal() as db:
+            assert db.query(Item).filter(Item.id == "kds-first").one().status == "pronto"
+            assert db.query(Item).filter(Item.id == "kds-second").one().status == "preparando"
+            assert db.query(Comanda).filter(Comanda.id == "kds-check").one().delivery_status == "producao"
+
+        # A stale kitchen snapshot must not reopen production on orders already
+        # cancelled, dispatched or finished by Caixa/Entregas.
+        for terminal_status in ("recusado", "transito", "finalizado"):
+            with TestingSessionLocal() as db:
+                db.get(Comanda, "kds-check").delivery_status = terminal_status
+                db.commit()
+            single = client.put(
+                "/comandas/itens/kds-second/status?status=pronto&avancar_pedido=true",
+            )
+            batch = client.put(
+                "/comandas/kds/itens/prontos",
+                json={"item_ids": ["kds-second"]},
+            )
+            assert single.status_code == 409, (terminal_status, single.status_code)
+            assert batch.status_code == 409, (terminal_status, batch.status_code)
+            with TestingSessionLocal() as db:
+                assert db.get(Item, "kds-second").status == "preparando"
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)

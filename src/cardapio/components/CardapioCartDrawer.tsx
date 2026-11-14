@@ -59,6 +59,8 @@ import { getDeliveryMinimumRemaining, getDeliveryQuote } from "../deliveryPresen
 import CardapioPaymentOptions from "./CardapioPaymentOptions";
 import { getCheckoutPaymentMethods, getPaymentSelectionError, resolvePaymentSelection, type PaymentMethod } from "../paymentMethods";
 import { getPairingRecommendations, classifyProduct } from "../pairingRecommendations";
+import { resolvePairingDisplay } from "../resolvePairingDisplay";
+import { isGroupedProduct } from "../catalogGrouping";
 import { KomaPrimaryAction } from "./KomaActionPrimitives";
 
 /** PagBank Order requires a valid payer email of at least 6 characters; this checkout caps input at 254. */
@@ -397,13 +399,30 @@ export default function CardapioCartDrawer({
   const upsellSuggestions = useMemo(() => {
     if (!allProducts || allProducts.length === 0) return [];
     const cartProductIds = cart.map((item) => item.product.id);
-    return getPairingRecommendations({
-      catalog: allProducts,
-      cartProductIds,
-      limit: 4,
-      excludeCartItems: false,
-    });
-  }, [allProducts, cart]);
+    const manualIds = brandConfig?.cartRecommendationSkuIds;
+    const candidates = manualIds?.length
+      ? manualIds.map((skuId) => allProducts.find((product) => String(product.id) === skuId))
+        .filter((product): product is Product => Boolean(product && product.isAvailable !== false))
+      : getPairingRecommendations({
+          catalog: allProducts,
+          cartProductIds,
+          limit: 12,
+          excludeCartItems: false,
+        });
+    // The cart and artistic showcase must use the same family card and real SKUs.
+    return resolvePairingDisplay(allProducts, candidates, restaurantId, 4)
+      .filter((item) => item.isAvailable !== false);
+  }, [allProducts, cart, restaurantId, brandConfig?.cartRecommendationSkuIds]);
+
+  const emptyCartSuggestions = useMemo(() => {
+    const manualIds = brandConfig?.cartRecommendationSkuIds;
+    const candidates = manualIds?.length
+      ? manualIds.map((skuId) => allProducts.find((product) => String(product.id) === skuId))
+        .filter((product): product is Product => Boolean(product && product.isAvailable !== false))
+      : allProducts.filter((product) => product.isAvailable !== false);
+    return resolvePairingDisplay(allProducts, candidates, restaurantId, 3)
+      .filter((item) => item.isAvailable !== false);
+  }, [allProducts, restaurantId, brandConfig?.cartRecommendationSkuIds]);
 
   const upsellHeading = useMemo(() => {
     const types = new Set(upsellSuggestions.map(classifyProduct));
@@ -621,6 +640,7 @@ export default function CardapioCartDrawer({
       return;
     }
     const hasModifiers = Boolean(
+      isGroupedProduct(product) ||
       (product.modifierGroups && product.modifierGroups.length > 0) ||
       (product.modifiers && product.modifiers.length > 0)
     );
@@ -813,18 +833,16 @@ export default function CardapioCartDrawer({
               </p>
             </div>
 
-            {allProducts.length > 0 && (
+            {emptyCartSuggestions.length > 0 && (
               <div className="mt-8 w-full text-left">
                 <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-emerald-400 mb-3">
                   <Sparkles className="w-3.5 h-3.5" />
                   <span>Destaques da Casa</span>
                 </div>
                 <div className="space-y-2.5">
-                  {allProducts
-                    .filter((p) => p.isAvailable !== false)
-                    .slice(0, 3)
-                    .map((prod) => {
+                  {emptyCartSuggestions.map((prod) => {
                       const hasModifiers = Boolean(
+                        isGroupedProduct(prod) ||
                         (prod.modifierGroups && prod.modifierGroups.length > 0) ||
                         (prod.modifiers && prod.modifiers.length > 0)
                       );
@@ -845,7 +863,7 @@ export default function CardapioCartDrawer({
                             />
                             <div className="min-w-0">
                               <h4 className="text-xs font-bold text-koma-foreground truncate">{prod.name}</h4>
-                              <span className="font-serif text-xs font-black text-emerald-400">{formatPrice(prod.price)}</span>
+                              <span className="font-serif text-xs font-black text-emerald-400">{isGroupedProduct(prod) && prod.hasVariablePrice ? 'A partir de ' : ''}{formatPrice(prod.price)}</span>
                             </div>
                           </div>
                           <button
@@ -854,7 +872,7 @@ export default function CardapioCartDrawer({
                             className="flex items-center gap-1 px-3.5 py-2 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-black shrink-0 transition-all shadow-md shadow-emerald-950/30 cursor-pointer"
                           >
                             <Plus className="w-3.5 h-3.5" />
-                            <span>{hasModifiers ? "Montar" : "Adicionar"}</span>
+                            <span>{isGroupedProduct(prod) ? "Escolher opção" : hasModifiers ? "Montar" : "Adicionar"}</span>
                           </button>
                         </div>
                       );
@@ -995,9 +1013,14 @@ export default function CardapioCartDrawer({
                   </div>
                   <div className="flex gap-2.5 overflow-x-auto pb-2 no-scrollbar">
                     {upsellSuggestions.map((prod) => {
-                      const cartItem = cart.find((item) => String(item.product.id) === String(prod.id));
-                      const qty = cartItem ? cartItem.quantity : 0;
+                      const grouped = isGroupedProduct(prod);
+                      const cartItem = grouped ? undefined : cart.find((item) => String(item.product.id) === String(prod.id));
+                      const qty = grouped
+                        ? cart.reduce((sum, item) =>
+                            sum + (prod.variants.some((variant) => String(variant.id) === String(item.product.id)) ? item.quantity : 0), 0)
+                        : (cartItem?.quantity ?? 0);
                       const hasModifiers = Boolean(
+                        grouped ||
                         (prod.modifierGroups && prod.modifierGroups.length > 0) ||
                         (prod.modifiers && prod.modifiers.length > 0)
                       );
@@ -1020,7 +1043,7 @@ export default function CardapioCartDrawer({
                           />
                           <div>
                             <h4 className="text-xs font-bold text-koma-foreground line-clamp-1">{prod.name}</h4>
-                            <span className="font-serif text-xs font-black text-emerald-400 block mt-0.5">{formatPrice(prod.price)}</span>
+                            <span className="font-serif text-xs font-black text-emerald-400 block mt-0.5">{grouped && prod.hasVariablePrice ? 'A partir de ' : ''}{formatPrice(prod.price)}</span>
                           </div>
 
                           {!isAvailable ? (
@@ -1060,7 +1083,7 @@ export default function CardapioCartDrawer({
                               aria-label={`Montar outra ${prod.name}`}
                             >
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                              <span>Montar outra ({qty})</span>
+                              <span>{grouped ? "Escolher opção" : `Montar outra (${qty})`}</span>
                             </button>
                           ) : (
                             <button
@@ -1070,7 +1093,7 @@ export default function CardapioCartDrawer({
                               id={`btn-upsell-add-${prod.id}`}
                               aria-label={`Adicionar ${prod.name}`}
                             >
-                              <Plus className="w-3 h-3" /> {hasModifiers ? "Montar" : "Adicionar"}
+                              <Plus className="w-3 h-3" /> {grouped ? "Escolher opção" : hasModifiers ? "Montar" : "Adicionar"}
                             </button>
                           )}
                         </div>

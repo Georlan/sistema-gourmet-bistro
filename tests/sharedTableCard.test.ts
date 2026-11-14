@@ -42,7 +42,7 @@ for (const scenario of scenarios) {
     }));
     const cashier = renderToStaticMarkup(React.createElement(CaixaSalonTab, {
       cards, visibleCards: cards, counts: { all: 1, free: 0, occupied: 1, payment: 0 },
-      insights: { occupancy: 100, openValue: 112, oldestService: '12m' }, filter: 'all',
+      filter: 'all',
       onFilterChange() {}, actions: { inspectTable() {}, openTableOrder() {} },
     }));
     const presentation = tableCardPresentation(cards[0].operational);
@@ -104,7 +104,7 @@ test('card mostra só o pedido principal após mesclagem e preserva o pedido ao 
   assert.match(transferredMarkup, /title="Pedido #46"[^>]*>Ped\. 46<\/span>/);
 });
 
-test('overview keeps empty-session consumption reachable and suppresses merged-table actions', () => {
+test('overview keeps empty-session consumption reachable and merged origins inspect only the destination', () => {
   const cards = projectCashierSalonTables([{ ...table, status: 'ocupada' }, { id: 8, capacidade: 2 }], [], [], now);
   const actions = { inspectTable() {}, openTableOrder() {} };
   const empty = renderToStaticMarkup(React.createElement(CashierSalonCard, { card: cards[0], actions }));
@@ -113,7 +113,13 @@ test('overview keeps empty-session consumption reachable and suppresses merged-t
   const merged = projectCashierSalonTables([table], [makeCheck([], { mesaId: 8, mesaOrigemId: 7 })], [], now)[0];
   const markup = renderToStaticMarkup(React.createElement(CashierSalonCard, { card: merged, actions }));
   assert.match(markup, /Junto com mesa 8/);
-  assert.doesNotMatch(markup, /<button/);
+  assert.match(markup, /Ver mesa 08/);
+  assert.doesNotMatch(markup, /Abrir pedido|Adicionar consumo/);
+  const closed = projectCashierSalonTables([table], [makeCheck([], { mesaId: 8, mesaOrigemId: 7, status: 'fechada' })], [], now)[0];
+  const closedMarkup = renderToStaticMarkup(React.createElement(CashierSalonCard, { card: closed, actions }));
+  assert.match(closedMarkup, /Mesa unida/);
+  assert.match(closedMarkup, /disabled=""/);
+  assert.doesNotMatch(closedMarkup, /Ver mesa 08/);
 });
 
 test('identidades dos DTOs chegam aos lotes e fatias sem rotular a conta agregada', () => {

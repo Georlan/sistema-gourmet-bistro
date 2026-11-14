@@ -24,3 +24,7 @@ Arquivos separados, fundo transparente, sem fontes, scripts, filtros, animaçõe
 ## Ações compactas
 
 `src/components/caixa/orders/CashierDetailActionArt.tsx` contém nove silhuetas SVG originais separadas por intenção: adicionar, receber, imprimir, conta, transferir, mesclar, cancelar, itens e alterar modalidade. São decorativas; cada controle mantém um texto acessível. O cancelamento usa recibo recortado em vermelho fechado; conta usa papel azul; impressão usa papel claro.
+
+## PDV / Novo pedido
+
+- `pdv-empty-cart-v1.svg`: arte original, vetorial, sem gradientes, filtros, scripts nem imagem externa. Representa uma comanda sobre a bandeja do pedido, usada exclusivamente no carrinho vazio do PDV. Decoração com `alt=""`; o estado e a próxima ação permanecem em texto HTML. Criada para a refatoração visual de 12/11/2026, sem copiar a referência BeeFood.

@@ -197,6 +197,8 @@ class ProdutoUpdate(BaseModel):
     ordem_exibicao: Optional[int] = None
 
 class ProdutoResponse(ProdutoBase):
+    familia_id: Optional[str] = None
+    variacao_rotulo: Optional[str] = None
     marmitaria_tamanho: Optional[str] = None
     categoria: Optional[CategoriaResponse] = None
     model_config = ConfigDict(from_attributes=True)
@@ -1000,6 +1002,9 @@ class CardapioPublicRestaurantResponse(BaseModel):
     taxa_entrega_padrao: Optional[float] = None
     cardapio_ativo_id: Optional[str] = None
     cardapio_ativo_nome: Optional[str] = None
+    # None = automatic suggestions, ordered SKU IDs = manually selected in the cart.
+    recomendacoes_sacola_ids: Optional[List[str]] = None
+    destaque_cardapio_produto_id: Optional[str] = None
 
 
 class CardapioPublicCategoryResponse(BaseModel):
@@ -1008,6 +1013,12 @@ class CardapioPublicCategoryResponse(BaseModel):
 
 
 class CardapioPublicProductResponse(BaseModel):
+    familia_id: Optional[str] = None
+    familia_nome: Optional[str] = None
+    familia_descricao: Optional[str] = None
+    familia_eixo: Optional[str] = None
+    familia_imagem: Optional[str] = None
+    variacao_rotulo: Optional[str] = None
     marmitaria: bool = False
     id: str
     nome: str

@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, 
 from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import and_, func, or_
 from typing import List, Optional
+from time import perf_counter
+from pydantic import BaseModel, Field
 import logging
 
 from ..database import get_db, current_restaurante_id, require_tenant_id, tenant_session_scope
@@ -788,6 +790,92 @@ def update_item_details(
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, require_tenant_id())
     return item
 
+class KdsBatchReadyRequest(BaseModel):
+    # A single launch cannot contain more than forty separately persisted items
+    # in one operator action. No cross-order or cross-tenant bulk mutations.
+    item_ids: List[str] = Field(min_length=1, max_length=40)
+
+
+class KdsBatchReadyResponse(BaseModel):
+    confirmed_ids: List[str]
+    already_ready_ids: List[str]
+    delivery_status: Optional[str] = None
+
+
+def _advance_kds_check_if_all_ready(db: Session, comanda: Comanda, rest_id: int, operator_id: str) -> bool:
+    """A shared canonical projection for single-item and batch KDS confirmation."""
+    if normalize_to_order_status(comanda.delivery_status) not in {OrderStatus.ACCEPTED, OrderStatus.PREPARING}:
+        return False
+    active_items = db.query(Item).filter(
+        Item.restaurante_id == rest_id, Item.comanda_id == comanda.id,
+        or_(Item.status.is_(None), Item.status != "cancelado"),
+    ).all()
+    if active_items and all(entry.status in {"pronto", "entregue"} for entry in active_items):
+        from ..application.orders.lifecycle import OrderLifecycleCoordinator
+        outcome = OrderLifecycleCoordinator.transition_check_status(
+            db, restaurant_id=rest_id, comanda_id=comanda.id,
+            target_status="pronto", operator_user_id=operator_id, commit=False,
+        )
+        return bool(outcome.changed)
+    return False
+
+
+@router.put("/kds/itens/prontos", response_model=KdsBatchReadyResponse)
+def update_kds_items_ready(
+    payload: KdsBatchReadyRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """One atomic action per launch; no N HTTP calls or intermediary refreshes.
+
+    Locks the check first, as the single-item path does, to serialize requests
+    from concurrent cook/cashier terminals and avoid double lifecycle changes.
+    """
+    started_at = perf_counter()
+    ensure_permission(current_user, "pedidos:alterar_status")
+    rest_id = require_tenant_id()
+    ids = [item_id.strip() for item_id in payload.item_ids]
+    if any(not item_id for item_id in ids) or len(set(ids)) != len(ids):
+        raise HTTPException(status_code=422, detail="IDs de itens inválidos ou repetidos.")
+    owner = db.query(Item.comanda_id).filter(Item.restaurante_id == rest_id, Item.id == ids[0]).first()
+    if not owner:
+        raise HTTPException(status_code=404, detail="Item não encontrado.")
+    comanda = db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id, Comanda.id == owner.comanda_id,
+    ).with_for_update().first()
+    if not comanda or comanda.fechada:
+        raise HTTPException(status_code=409, detail="Pedido indisponível para preparo.")
+    if comanda.delivery_status in {"analise", "pendente", "recusado", "transito", "finalizado"}:
+        raise HTTPException(status_code=409, detail="O pedido não está autorizado para preparo.")
+    items = db.query(Item).filter(
+        Item.restaurante_id == rest_id, Item.id.in_(ids),
+    ).order_by(Item.id).with_for_update().all()
+    if (len(items) != len(ids)
+        or any(item.comanda_id != comanda.id for item in items)
+        or len({item.lancamento_id for item in items}) > 1):
+        raise HTTPException(status_code=409, detail="Os itens precisam pertencer ao mesmo lançamento.")
+    if any(item.status not in {None, "preparando", "pronto"} for item in items):
+        raise HTTPException(status_code=409, detail="O pedido foi alterado. Atualize a cozinha antes de confirmar.")
+    already_ready = [item.id for item in items if item.status == "pronto"]
+    changed = False
+    for item in items:
+        if item.status in (None, "preparando"):
+            item.status = "pronto"
+            changed = True
+    if changed:
+        db.flush()
+    # Reconcile a legacy all-ready check even when this is an idempotent replay.
+    lifecycle_changed = _advance_kds_check_if_all_ready(db, comanda, rest_id, current_user.id)
+    if changed or lifecycle_changed:
+        db.commit()
+        db.refresh(comanda)
+        background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
+    # Numeric metrics only: never put customer names, tokens or item IDs in logs.
+    logger.info("kds_batch_ready count=%d changed=%s duration_ms=%.1f", len(ids), changed, (perf_counter() - started_at) * 1000)
+    return KdsBatchReadyResponse(confirmed_ids=ids, already_ready_ids=already_ready, delivery_status=comanda.delivery_status)
+
+
 @router.put("/itens/{item_id}/status", response_model=ItemResponse)
 def update_item_status(
     item_id: str,
@@ -799,24 +887,35 @@ def update_item_status(
 ):
     """
     Atualiza o status de um item.
-    Operadores com 'pedidos:alterar_status' (admin, gerente, caixa, cozinha) podem alterar
-    o status de preparo. O garçom pode marcar um item pronto como 'entregue' (Servir).
+    A cozinha confirma apenas preparo -> pronto. Servir, cancelar, reabrir e
+    logística pertencem a outros papéis. O garçom pode servir um item pronto.
     """
+    kds_started_at = perf_counter() if avancar_pedido and status == "pronto" else None
     user_role = (current_garcom.role or current_garcom.cargo or "garcom").lower().strip()
     if not (user_role == "garcom" and status == "entregue"):
         ensure_permission(current_garcom, "pedidos:alterar_status")
+    if user_role == "cozinha" and status != "pronto":
+        raise HTTPException(
+            status_code=403,
+            detail="A equipe da cozinha pode apenas confirmar itens prontos.",
+        )
 
     rest_id = require_tenant_id()
     # Serialize KDS updates by order first, so concurrent last-item updates
     # observe one committed order state before deciding to advance it.
-    if avancar_pedido and status == "pronto":
+    if status == "pronto" and (avancar_pedido or user_role == "cozinha"):
         item_owner = db.query(Item.comanda_id).filter(
             Item.restaurante_id == rest_id, Item.id == item_id,
         ).first()
         if item_owner:
-            db.query(Comanda).filter(
+            locked_check = db.query(Comanda).filter(
                 Comanda.restaurante_id == rest_id, Comanda.id == item_owner.comanda_id,
             ).with_for_update().first()
+            if user_role == "cozinha" and (
+                not locked_check or locked_check.fechada
+                or locked_check.delivery_status in {"pendente", "analise", "recusado", "transito", "finalizado"}
+            ):
+                raise HTTPException(status_code=409, detail="Pedido indisponível para preparo.")
     item = db.query(Item).filter(
         Item.restaurante_id == rest_id,
         Item.id == item_id,
@@ -836,23 +935,18 @@ def update_item_status(
             status_code=409,
             detail="Somente itens prontos podem ser marcados como servidos pelo garçom."
         )
+    if user_role == "cozinha" and item.status not in (None, "preparando", "pronto"):
+        raise HTTPException(status_code=409, detail="O item não está mais em preparo.")
+    # Replays of 'pronto' must retain the canonical lifecycle reconciliation:
+    # a legacy all-ready check can still need the order-level transition.
     item.status = status
     db.flush()
     if avancar_pedido and status == "pronto":
         comanda = db.query(Comanda).filter(
             Comanda.restaurante_id == rest_id, Comanda.id == item.comanda_id,
         ).first()
-        if comanda and normalize_to_order_status(comanda.delivery_status) in {OrderStatus.ACCEPTED, OrderStatus.PREPARING}:
-            active_items = db.query(Item).filter(
-                Item.restaurante_id == rest_id, Item.comanda_id == comanda.id,
-                or_(Item.status.is_(None), Item.status != "cancelado"),
-            ).all()
-            if active_items and all(entry.status in {"pronto", "entregue"} for entry in active_items):
-                from ..application.orders.lifecycle import OrderLifecycleCoordinator
-                OrderLifecycleCoordinator.transition_check_status(
-                    db, restaurant_id=rest_id, comanda_id=comanda.id,
-                    target_status="pronto", operator_user_id=current_garcom.id, commit=False,
-                )
+        if comanda:
+            _advance_kds_check_if_all_ready(db, comanda, rest_id, current_garcom.id)
     db.commit()
     db.refresh(item)
 
@@ -861,6 +955,8 @@ def update_item_status(
     # belongs to the canonical order lifecycle and is emitted only when the
     # operator explicitly advances the order to `pronto`.
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
+    if kds_started_at is not None:
+        logger.info("kds_item_ready duration_ms=%.1f", (perf_counter() - kds_started_at) * 1000)
     return item
 
 
@@ -1155,7 +1251,7 @@ def listar_entregas_concluidas_recentes(
 @router.get("/motoboys/lista", response_model=List[MotoboyResponse])
 def listar_motoboys(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(require_permission("pedidos:alterar_status")),
+    current_user: Usuario = Depends(require_permission("pedidos:operar_logistica")),
 ):
     """
     Lista todos os motoboys cadastrados do restaurante atual.

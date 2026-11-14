@@ -692,13 +692,16 @@ export function CardapioDigitalSettingsPanel({
                       </div>
                     </label>
                     <label>
-                      <FieldLabel>Link do Google Maps</FieldLabel>
+                      <FieldLabel>Localização no Google Maps</FieldLabel>
                       <input
                         value={config.google_maps_url}
                         onChange={(event) => updateConfig('google_maps_url', event.target.value)}
                         className="h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3.5 text-sm text-koma-foreground outline-none focus:border-emerald-500/60"
-                        placeholder="https://maps.google.com/..."
+                        placeholder="Link do Google Maps, endereço ou Plus Code"
                       />
+                      <span className="mt-1 block text-[10px] leading-relaxed text-koma-muted">
+                        Aceita link do Google Maps, endereço completo ou Plus Code com cidade.
+                      </span>
                     </label>
                   </div>
                 </div>

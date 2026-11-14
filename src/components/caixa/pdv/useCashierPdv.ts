@@ -242,7 +242,7 @@ export function useCashierPdv({
 
       if (e.key === 'F1') {
         e.preventDefault();
-        const searchInput = document.getElementById('pdv-search-input');
+        const searchInput = document.getElementById('pdv-product-search-input');
         if (searchInput) {
           searchInput.focus();
           (searchInput as HTMLInputElement).select();
@@ -270,9 +270,25 @@ export function useCashierPdv({
         }, 50);
       } else if (e.key === 'F4') {
         e.preventDefault();
+        // Holding F4 cannot count as a second confirmation.
+        if (e.repeat) return;
         if (pdvCart.length > 0) {
-          const submitBtn = document.getElementById('pdv-submit-btn');
-          if (submitBtn) submitBtn.click();
+          // The first F4 reveals the order (mobile) or focuses its submission
+          // button (desktop). Only another deliberate F4 on that focused
+          // button may submit. No hidden or accidental single-keystroke sale.
+          const openOrder = document.getElementById('pdv-review-btn') as HTMLButtonElement | null;
+          if (openOrder && openOrder.getClientRects().length > 0 && !openOrder.disabled) {
+            openOrder.click();
+            setTimeout(() => {
+              (document.getElementById('pdv-submit-btn') as HTMLButtonElement | null)?.focus();
+            }, 0);
+            return;
+          }
+          const submitBtn = document.getElementById('pdv-submit-btn') as HTMLButtonElement | null;
+          if (submitBtn && !submitBtn.disabled) {
+            if (document.activeElement === submitBtn) submitBtn.click();
+            else submitBtn.focus();
+          }
         }
       } else if (e.key === 'Escape') {
         if (isInput) {
@@ -286,7 +302,7 @@ export function useCashierPdv({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeSubTab, allowedPdvOrderTypes, pdvCart]);
 
-  const handlePdvAddToCart = (product: Product) => {
+  const handlePdvAddToCart = useCallback((product: Product) => {
     setPdvCart((prev) => {
       const idx = prev.findIndex((item) =>
         item.product.id === product.id
@@ -301,7 +317,7 @@ export function useCashierPdv({
       }
       return [...prev, { product, quantity: 1, obs: '', client: 'Balcão', modifierIds: [], modifiers: [] }];
     });
-  };
+  }, []);
 
   const handlePdvUpdateCartQty = (idx: number, delta: number) => {
     setPdvCart((prev) => {

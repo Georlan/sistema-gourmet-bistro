@@ -1,5 +1,6 @@
 import { PagBankConnectionCard } from '../online-menu/PagBankConnectionCard';
 import { MercadoPagoConnectionCard } from '../online-menu/MercadoPagoConnectionCard';
+import { DirectPixSetup } from './DirectPixSetup';
 import { useCallback, useState } from 'react';
 import type { PaymentProvider, ReceiverConnectionStatus } from '../online-menu/PaymentConnectionCard';
 
@@ -26,12 +27,13 @@ export function KomaPaymentsSettings({ apiBaseUrl, authHeaders }: Props) {
   return <section aria-labelledby="koma-payments-heading" className="space-y-4">
     <header>
       <h3 id="koma-payments-heading" className="text-lg font-bold text-koma-foreground">Pagamentos online</h3>
-      <p className="mt-1 text-sm text-koma-muted">Conecte um banco recebedor por vez. Após a conexão, o Pix é habilitado automaticamente no cardápio online.</p>
+      <p className="mt-1 text-sm text-koma-muted">Escolha como receber o Pix dos pedidos online.</p>
     </header>
     <div className="grid items-start gap-4 xl:grid-cols-2">
       <PagBankConnectionCard apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} connectBlockedReason={blockedReason('pagbank')} refreshKey={refreshKeys.pagbank} onStatusChange={pagbankStatus} onBusyChange={pagbankBusy} onConnectionChange={pagbankChanged}/>
       <MercadoPagoConnectionCard apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} connectBlockedReason={blockedReason('mercado_pago')} refreshKey={refreshKeys.mercado_pago} onStatusChange={mercadoPagoStatus} onBusyChange={mercadoPagoBusy} onConnectionChange={mercadoPagoChanged}/>
     </div>
+    <DirectPixSetup apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onChanged={() => setRefreshKeys(current => ({ pagbank: current.pagbank + 1, mercado_pago: current.mercado_pago + 1 }))} />
     <p className="text-xs text-koma-muted">O KÔMA não cobra taxa sobre suas vendas. Consulte as tarifas do banco conectado.</p>
   </section>;
 }

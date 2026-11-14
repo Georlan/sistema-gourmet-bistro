@@ -49,7 +49,7 @@ export function CashierIntegrationsSettings({ apiBaseUrl, authHeaders, section =
           </div>
           {activeIntegration === 'payments' ? (
             <div role="tabpanel" aria-label="Integrações de pagamento">
-              <KomaPaymentsSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+              <KomaPaymentsSettings key={fiscalScopeKey} apiBaseUrl={apiBaseUrl} authHeaders={fiscalAuthHeaders} />
             </div>
           ) : (
             <div role="tabpanel" aria-label="Integrações de WhatsApp" className="space-y-4">

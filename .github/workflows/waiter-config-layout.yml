@@ -18,6 +18,7 @@ on:
       - 'src/components/MenuPanel.tsx'
       - 'src/components/shared/ModifierPicker.tsx'
       - 'e2e/waiter-config-layout.spec.ts'
+      - 'e2e/shared-resource-owners.spec.ts'
       - '.github/workflows/waiter-config-layout.yml'
 permissions:
   contents: read
@@ -45,6 +46,13 @@ jobs:
           e2e/waiter-quick-entry.spec.ts e2e/waiter-repeat.spec.ts
           e2e/waiter-sync.spec.ts e2e/waiter-history-support.spec.ts
           --project=mobile-390 --project=desktop-1366 --workers=2
+      - name: Catalog shared snapshot survives tab resume and WebSocket reconnect
+        env:
+          KOMA_E2E_PORT: '4297'
+        run: >-
+          npm run test:e2e -- e2e/shared-resource-owners.spec.ts
+          --grep 'catálogo compartilha snapshot e reconcilia'
+          --project=desktop-1366 --workers=1
       - uses: actions/upload-artifact@v6
         if: always()
         with:

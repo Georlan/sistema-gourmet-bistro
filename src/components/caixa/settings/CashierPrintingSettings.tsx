@@ -1,6 +1,21 @@
 import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 import { useState } from 'react';
-import { Activity, ChevronDown, ChevronRight, Lock, Printer, Receipt, RefreshCw, Truck } from 'lucide-react';
+import {
+  Activity,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  ExternalLink,
+  Lock,
+  Printer,
+  Receipt,
+  RefreshCw,
+  Smartphone,
+  Truck,
+  X,
+} from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { PrintMonitorPanel } from '../../printing/PrintMonitorPanel';
 import type { CashierTab } from '../cashierContracts';
 import type { useCashierSettings } from './useCashierSettings';
@@ -60,9 +75,63 @@ export function CashierPrintingSettings({
   const [waiterTestFeedback, setWaiterTestFeedback] = useState('');
   const [showAdvancedTests, setShowAdvancedTests] = useState(false);
 
+  const [isConnectingMobile, setIsConnectingMobile] = useState(false);
+  const [mobileConnectError, setMobileConnectError] = useState('');
+  const [mobileDeepLink, setMobileDeepLink] = useState<string | null>(null);
+  const [copiedMobileLink, setCopiedMobileLink] = useState(false);
+
   if (printingSettingsTab !== 'impressao') {
     return null;
   }
+
+  const handleConnectMobilePrinter = async () => {
+    if (isConnectingMobile) return;
+    setIsConnectingMobile(true);
+    setMobileConnectError('');
+    try {
+      const suffix = Math.random().toString(36).substring(2, 7);
+      const requestedAgentId = `android-bt-${suffix}`;
+      const response = await fetch(`${apiBaseUrl}/api/print-agents/register`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ agent_id: requestedAgentId, is_primary: true }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Não foi possível registrar o celular no servidor.');
+      }
+      const tenantId = data.restaurante_id || 1;
+      const agentId = data.agent_id || requestedAgentId;
+      const agentToken = data.agent_token;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('koma_print_mobile_agent_id', agentId);
+        void fetch(`${apiBaseUrl}/api/print-agents/set-primary`, {
+          method: 'POST',
+          headers: {
+            ...authHeaders,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ agent_id: agentId }),
+        }).catch(() => null);
+      }
+      const restaurantName = printHeader || 'KOMA GOURMET';
+      const deepLink = `koma-print://connect?backend=${encodeURIComponent(apiBaseUrl)}&tenant=${tenantId}&name=${encodeURIComponent(restaurantName)}&agent_id=${encodeURIComponent(agentId)}&token=${encodeURIComponent(agentToken)}`;
+
+      setMobileDeepLink(deepLink);
+
+      // Se o operador estiver no navegador mobile, dispara o intent automaticamente
+      if (/android|iphone|ipad|mobile/i.test(navigator.userAgent)) {
+        window.location.href = deepLink;
+      }
+    } catch (err) {
+      setMobileConnectError(err instanceof Error ? err.message : 'Falha ao gerar conexão.');
+    } finally {
+      setIsConnectingMobile(false);
+    }
+  };
 
   const handleTestWaiterPrinter = async (agentId: string | null) => {
     if (isTestingWaiterPrinter) return;
@@ -129,7 +198,90 @@ export function CashierPrintingSettings({
             </button>
           </div>
         ) : (
-          <PrintMonitorPanel
+          <>
+            <div className="overflow-hidden rounded-2xl border border-koma-border bg-koma-panel p-4 shadow-xs">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <Smartphone size={16} className="text-emerald-500" />
+                    <strong className="text-xs font-bold text-koma-foreground">
+                      Celular Android • Impressora Bluetooth 58mm
+                    </strong>
+                  </div>
+                  <p className="text-[11px] text-koma-muted leading-relaxed">
+                    Conecte o celular com 1 toque para imprimir direto na Kapbom KA-1445 via Bluetooth, sem computador e sem RawBT.
+                  </p>
+                  {mobileConnectError && (
+                    <p className="text-[11px] font-semibold text-rose-500">{mobileConnectError}</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleConnectMobilePrinter}
+                  disabled={isConnectingMobile}
+                  className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl koma-btn-success px-4 text-xs font-bold transition disabled:cursor-wait disabled:opacity-60 cursor-pointer shadow-xs"
+                >
+                  {isConnectingMobile ? (
+                    <RefreshCw size={15} className="animate-spin" />
+                  ) : (
+                    <Smartphone size={15} />
+                  )}
+                  {isConnectingMobile ? 'Gerando conexão…' : 'Conectar Celular'}
+                </button>
+              </div>
+            </div>
+
+            {mobileDeepLink && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+                <div className="relative w-full max-w-sm rounded-3xl border border-koma-border bg-koma-panel p-6 shadow-2xl space-y-4 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setMobileDeepLink(null)}
+                    className="absolute top-4 right-4 text-koma-muted hover:text-koma-foreground transition cursor-pointer"
+                    title="Fechar"
+                  >
+                    <X size={18} />
+                  </button>
+
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-bold text-koma-foreground">
+                      Conectar Celular ao KÔMA Print
+                    </h4>
+                    <p className="text-[11px] text-koma-muted leading-relaxed">
+                      Aponte a câmera do celular para o QR Code abaixo ou abra diretamente no app.
+                    </p>
+                  </div>
+
+                  <div className="flex justify-center p-3 bg-white rounded-2xl w-fit mx-auto shadow-inner">
+                    <QRCodeSVG value={mobileDeepLink} size={180} level="M" />
+                  </div>
+
+                  <div className="flex flex-col gap-2 pt-1">
+                    <a
+                      href={mobileDeepLink}
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer"
+                    >
+                      <ExternalLink size={15} />
+                      Abrir no KÔMA Print deste celular
+                    </a>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(mobileDeepLink);
+                        setCopiedMobileLink(true);
+                        window.setTimeout(() => setCopiedMobileLink(false), 2000);
+                      }}
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card hover:bg-koma-raised text-koma-foreground text-xs font-semibold transition cursor-pointer"
+                    >
+                      {copiedMobileLink ? <Check size={15} className="text-emerald-500" /> : <Copy size={15} />}
+                      {copiedMobileLink ? 'Link copiado!' : 'Copiar link de conexão'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <PrintMonitorPanel
                 isWsConnected={isWsConnected}
             apiBaseUrl={apiBaseUrl}
             authHeaders={authHeaders}
@@ -439,6 +591,7 @@ export function CashierPrintingSettings({
               </>
             )}
           </PrintMonitorPanel>
+        </>
         )}
       </section>
     </div>

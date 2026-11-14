@@ -199,7 +199,9 @@ test('all plans share the mobile shell while Pocket keeps its plan-specific refi
   assert.match(caixaPanel, /<CashierSubNavigation/);
   assert.match(cashierCss, /\.cashier-shell \.cashier-content/);
   assert.match(cashierCss, /padding-bottom: calc\(6\.5rem \+ env\(safe-area-inset-bottom\)\)/);
-  assert.match(cashierCss, /\.cashier-shell\[data-koma-plan="pocket"\] \.cashier-salon-grid/);
+  const salonCss = readFileSync(new URL('../src/components/caixa/salao/cashierSalon.css', import.meta.url), 'utf8');
+  assert.match(salonCss, /\.koma-salon__grid/);
+  assert.doesNotMatch(cashierCss, /\.cashier-salon-grid/);
 });
 
 

@@ -1,13 +1,16 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
 import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 
-async function setup(page: Page) {
+async function setup(page: Page, onSocket?: (socket: WebSocketRoute) => void) {
   // Behavior tests must not depend on the availability of the external font CDN.
   // Production styles are unchanged; visual density is covered by the salon suites.
   await page.route('https://fonts.googleapis.com/**', route => route.fulfill({ contentType: 'text/css', body: '' }));
   await mockCashierBackend(page);
   await seedCashierSession(page);
-  await page.routeWebSocket(/\/ws\//, socket => socket.onMessage(() => {}));
+  await page.routeWebSocket(/\/ws\//, socket => {
+    socket.onMessage(() => {});
+    onSocket?.(socket);
+  });
 }
 
 async function open(page: Page) {
@@ -38,6 +41,49 @@ const catalog = (name: string) => ({
     { id: '101', nome: name, preco: 42, categoria_id: 'cat-pratos', ativo: true },
     { id: '201', nome: 'Produto inativo', preco: 12, categoria_id: 'cat-pratos', ativo: false },
   ],
+});
+
+test('catálogo compartilha snapshot e reconcilia ao voltar da aba ou reconectar WebSocket', async ({ page }) => {
+  const sockets: WebSocketRoute[] = [];
+  await setup(page, socket => sockets.push(socket));
+  let reads = 0;
+  let name = 'Produto antes da pausa';
+  await page.route('**/produtos/catalogo', route => {
+    reads += 1;
+    return route.fulfill({ json: catalog(name) });
+  });
+
+  await open(page);
+  await navigate(page, 'Cardápio');
+  await expect(page.getByText(name, { exact: true })).toBeVisible();
+  await expect.poll(() => sockets.length).toBeGreaterThan(0);
+  // The first handshake has no extra reload; the authenticated catalog owner
+  // already loaded its initial snapshot.
+  await page.waitForTimeout(150);
+  const beforeResume = reads;
+
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  name = 'Produto alterado durante a pausa';
+  await page.waitForTimeout(150);
+  expect(reads).toBe(beforeResume);
+
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await expect(page.getByText(name, { exact: true })).toBeVisible();
+  expect(reads).toBe(beforeResume + 1);
+
+  // Simulates a message missed while the socket was offline: no new event is
+  // sent, but the new connection must load the authoritative snapshot.
+  name = 'Produto atualizado com conexão restaurada';
+  sockets.at(-1)!.close();
+  await expect.poll(() => sockets.length, { timeout: 12_000 }).toBeGreaterThan(1);
+  await expect(page.getByText(name, { exact: true })).toBeVisible();
+  expect(reads).toBe(beforeResume + 2);
 });
 
 test('cardápio online usa um painel, preserva rascunho e repete publicação após erro', async ({ page }) => {

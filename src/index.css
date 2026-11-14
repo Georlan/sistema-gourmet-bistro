@@ -1,6 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 @import "./styles/komaFoundation.css";
+@import "./components/caixa/pdv/cashierPdvVisual.css";
+@import "./components/caixa/pdv/cashierPdvCart.css";
+@import "./components/caixa/pdv/cashierPdvConfig.css";
+@import "./components/caixa/pdv/cashierPdvTone.css";
+@import "./components/caixa/kitchen/kdsWorkspace.css";
 @import "./components/mesas/waiterOperational.css";
 
 @custom-variant dark (&:where([data-koma-theme="dark"], [data-koma-theme="dark"] *));
@@ -2717,25 +2722,6 @@ body {
 }
 
 /*
- * Mobile/touch cashier uses the document as the single vertical scroll owner.
- * PDV desktop keeps its bounded internal scroll, but on touch these nested
- * overflow regions must not trap the swipe over product cards or the cart.
- */
-@media (max-width: 768px), (hover: none) and (pointer: coarse) {
-  .cashier-pdv-layout,
-  .cashier-pdv-catalog,
-  .cashier-pdv-cart {
-    overflow: visible !important;
-  }
-
-  .cashier-pdv-product-scroll,
-  .cashier-pdv-cart-scroll {
-    overflow-y: visible !important;
-    overscroll-behavior-y: auto;
-  }
-}
-
-/*
  * Keep every Kanban stage visible when the viewport has room for the board.
  * Narrow windows need the same readable stage tabs as phones, regardless of
  * whether their input device is a mouse or a touchscreen.
@@ -3255,21 +3241,6 @@ body {
     white-space: nowrap;
   }
 
-  .cashier-shell[data-koma-plan="pocket"] .cashier-salon-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.55rem;
-  }
-
-  .cashier-shell[data-koma-plan="pocket"] .cashier-salon-grid > * {
-    min-width: 0;
-  }
-
-  .cashier-shell[data-koma-plan="pocket"] .cashier-salon-grid .koma-table-free-action,
-  .cashier-shell[data-koma-plan="pocket"] .cashier-salon-grid .koma-table-occupied-action {
-    min-height: 2.75rem;
-    font-size: 0.68rem;
-  }
-
   .cashier-shell[data-koma-plan="pocket"] .orders-mobile-stages {
     position: sticky;
     top: 6.25rem;
@@ -3279,12 +3250,6 @@ body {
 
 .cashier-shell[data-koma-plan="pocket"] .cashier-mobile-bottom-bar {
   padding-bottom: env(safe-area-inset-bottom);
-}
-
-@media (max-width: 380px) {
-  .cashier-shell[data-koma-plan="pocket"] .cashier-salon-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Pocket: preparation on a phone must remain readable without printed tickets. */
@@ -3428,3 +3393,56 @@ html[data-koma-text-size]:not([data-koma-text-size="padrao"]) .cashier-subnav__b
 .orders-card__identity-side--digital { gap: .3rem; }
 .orders-card__money-actions { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: .4rem; }
 .orders-card__money-actions .orders-card__price { margin-left: 0; }
+
+/* Caixa Salão: the same operational color semantics as Garçom. */
+.koma-table-state-card {
+  --table-state-band: #28463a;
+  --table-state-label: var(--koma-text-secondary);
+  background: var(--koma-surface-card);
+  color: var(--koma-text-primary);
+  border-color: var(--koma-border-default);
+  box-shadow: none;
+}
+.koma-table-state-card.koma-table-occupied-card,
+.koma-table-state-card.koma-table-served-card {
+  --table-state-band: #b8798c;
+  --table-state-label: #f3a3b8;
+  background: #2c2026;
+  border-color: #9b6375;
+}
+.koma-table-state-card.koma-table-ready-card {
+  --table-state-band: #72ebc3;
+  --table-state-label: #72ebc3;
+  background: #163a30;
+  border-color: #56caa4;
+}
+.koma-table-state-card.koma-table-payment-card {
+  --table-state-band: #9ad5ff;
+  --table-state-label: #9ad5ff;
+  background: #1b2e3f;
+  border-color: #6898b9;
+}
+.koma-table-state-card.koma-table-merged-card { border-style:dashed; }
+.koma-table-state-band {
+  position:absolute; inset:0 0 auto; height:5px;
+  background:var(--table-state-band);
+}
+.koma-table-state-card .koma-table-state-label { color:var(--table-state-label); }
+.koma-table-state-card.koma-table-occupied-card .text-koma-foreground,
+.koma-table-state-card.koma-table-ready-card .text-koma-foreground,
+.koma-table-state-card.koma-table-payment-card .text-koma-foreground,
+.koma-table-state-card.koma-table-served-card .text-koma-foreground { color:#f5f8f7; }
+[data-koma-theme="light"] .koma-table-state-card.koma-table-occupied-card,
+[data-koma-theme="light"] .koma-table-state-card.koma-table-served-card {
+  --table-state-band:#9d3050; --table-state-label:#822540;
+  background:#fff1f4; border-color:#c58b9d;
+}
+[data-koma-theme="light"] .koma-table-state-card.koma-table-ready-card {
+  --table-state-band:#006c53; --table-state-label:#006c53;
+  background:#daf8ee; border-color:#69bba0;
+}
+[data-koma-theme="light"] .koma-table-state-card.koma-table-payment-card {
+  --table-state-band:#155e90; --table-state-label:#155e90;
+  background:#e5f2ff; border-color:#8ab5d2;
+}
+[data-koma-theme="light"] .koma-table-state-card .text-koma-foreground { color:var(--koma-text-primary); }

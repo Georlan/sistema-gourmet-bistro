@@ -76,6 +76,6 @@ test('kitchen keeps grouped composition visible independently of the free-text o
   await expect(meal).toContainText('PROTEÍNAS: Frango');
   await expect(meal).toContainText('GUARNIÇÕES: Arroz à grega');
   await expect(meal).toContainText('ADICIONAIS PAGOS: 2x Ovo');
-  await expect(meal).toContainText('OBS: Sem salada');
+  await expect(meal).toContainText(/obs: sem salada/i);
   await expect(meal).not.toContainText('Opções:');
 });

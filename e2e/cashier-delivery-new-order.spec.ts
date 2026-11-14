@@ -23,11 +23,16 @@ test('delivery envia endereço simplificado e mostra erro legível preservando c
   if ((page.viewportSize()?.width || 1366) < 1280) {
     await page.getByRole('button', { name: 'Carrinho (1)', exact: true }).click();
   }
-  await page.getByRole('button', { name: 'Delivery', exact: true }).click();
+  if ((page.viewportSize()?.width ?? 1366) < 1280) {
+    await page.locator('.cashier-pdv-cart__modality-option').filter({ hasText: 'Delivery' }).click();
+  } else {
+    await page.getByRole('button', { name: 'Delivery', exact: true }).click();
+  }
   await page.locator('#pdv-customer-phone-input').fill('85999991234');
   await expect(page.getByText('Novo número — o cliente será criado ao lançar o pedido.', { exact: true })).toBeVisible();
   await page.locator('#pdv-customer-name-input').fill('Maria Delivery');
-  await page.getByText('Editar entrega', { exact: true }).click();
+  // An empty delivery address is expanded automatically.
+  await expect(page.locator('#pdv-delivery-address-logradouro')).toBeVisible();
   await page.locator('#pdv-delivery-address-logradouro').fill('Rua das Flores');
   await page.locator('#pdv-delivery-address-numero').fill('123');
   await page.locator('#pdv-submit-btn').click();

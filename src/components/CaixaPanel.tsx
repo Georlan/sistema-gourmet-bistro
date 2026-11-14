@@ -32,6 +32,7 @@ import { CheckoutDialog } from './caixa/checkout/CheckoutDialog';
 import { useCheckoutController } from './caixa/checkout/useCheckoutController';
 import { useCashierCustomers } from './caixa/customers/useCashierCustomers';
 import { CashierKitchen } from './caixa/kitchen/CashierKitchen';
+import { isKdsKitchenOrderEligible } from './caixa/kitchen/kdsProjection';
 import { DeferredCashierSection } from './caixa/loading/DeferredCashierSection';
 import { CashierConversationsDrawer } from './caixa/chat/CashierConversationsDrawer';
 import { useCashierChat } from './caixa/chat/useCashierChat';
@@ -70,6 +71,9 @@ import { SuprimentoModal } from './caixa/SuprimentoModal';
 import { OperationalBanner } from './shared/OperationalBanner';
 import { SidebarProvider } from './ui/sidebar';
 import './caixa/navigation/cashierChrome.css';
+import './caixa/pdv/cashierPdvMobileWorkspace.css';
+import './caixa/salao/cashierSalon.css';
+import './caixa/pdv/cashierPdvTablePicker.css';
 import './caixa/orders/cashierOrderDetails.css';
 import './caixa/orders/cashierDetailActions.css';
 import './caixa/orders/cashierOrderControls.css';
@@ -81,6 +85,7 @@ import './caixa/navigation/cashierTypography.css';
 import { CashierTextSizeToggle } from './caixa/navigation/CashierTextSizeToggle';
 import { CashierThemeToggle } from './caixa/navigation/CashierThemeToggle';
 import './shared/komaThemeTransition.css';
+import './shared/tableOperationalVisual.css';
 const loadCashierInventory = () => import('./caixa/inventory/CashierInventory');
 const loadCashierCatalog = () => import('./caixa/catalog/CashierCatalog');
 const loadCashierCustomers = () => import('./caixa/customers/CashierCustomers');
@@ -320,6 +325,7 @@ export function CaixaPanel({
     handleFinalizarPedido,
     handleAddMotoboy,
     handleUpdateItemStatus,
+    handleConfirmTicketReady,
     handleAcceptPendingDeliveryOrder,
     handleRejectPendingDeliveryOrder,
     handleMarkTableItemsReady,
@@ -390,9 +396,10 @@ export function CaixaPanel({
   const {
     tableStatusFilter,
     setTableStatusFilter,
+    tableSearch,
+    setTableSearch,
     salonTableCards,
     tableStatusCounts,
-    salonInsights,
     pdvTableOptions,
     visibleSalonTableCards,
   } = useCashierSalonProjection({ salonTables, orders, pagamentosPendentes, nowTimestamp });
@@ -544,7 +551,7 @@ export function CaixaPanel({
   const activeKitchenItems = useMemo(() => orders.flatMap((order) =>
     order.itens
       .filter((item) => item.status === 'preparando' || item.status === 'pronto')
-      .filter(() => order.deliveryStatus !== 'pendente' && order.deliveryStatus !== 'recusado')
+      .filter(() => isKdsKitchenOrderEligible(order.deliveryStatus))
       .map((item) => ({
         ...item,
         orderId: order.id,
@@ -732,7 +739,7 @@ export function CaixaPanel({
   return (
     <div
       data-koma-plan={currentPlanId}
-      className={`cashier-shell ${activeTab === 'operacao' && activeSubTab === 'pedidos' ? 'cashier-shell--mobile-orders' : ''} flex w-full bg-koma-page text-koma-foreground font-sans selection:bg-[#10b981]/30 text-xs ${
+      className={`cashier-shell ${activeTab === 'operacao' && activeSubTab === 'pedidos' ? 'cashier-shell--mobile-orders' : ''} ${activeTab === 'operacao' && activeSubTab === 'balcao' ? 'cashier-shell--mobile-pdv' : ''} flex w-full bg-koma-page text-koma-foreground font-sans selection:bg-[#10b981]/30 text-xs ${
         fontSize === 'grande' ? 'font-large' : fontSize === 'gigante' ? 'font-huge' : ''
       }`}
     >
@@ -868,31 +875,39 @@ export function CaixaPanel({
 
           <KomaBillingNotice apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onOpenBilling={(consolidated)=>{setActiveTab(consolidated ? 'configuracoes' : 'assinatura_pix');setActiveSubTab(consolidated ? 'integracoes' : 'contrato_documentos');}} />
 
-          <CashierSubNavigation activeTab={activeTab} activeSubTab={activeSubTab} planId={currentPlanId} entitlements={planEntitlements} setupMode={setupMode} onNavigate={handleSidebarNavigation} counts={{ cardapio_produtos: apiProdutos.length, cardapio_preparo: apiCategorias.length }} />
+          <CashierSubNavigation
+            activeTab={activeTab}
+            activeSubTab={activeSubTab}
+            planId={currentPlanId}
+            entitlements={planEntitlements}
+            setupMode={setupMode}
+            onNavigate={handleSidebarNavigation}
+            counts={{ cardapio_produtos: apiProdutos.length, cardapio_preparo: apiCategorias.length }}
+          />
 
           <div ref={cashierContentRef} className={"cashier-content min-w-0 min-h-0 flex-1 p-5 pb-20 lg:pb-5 relative"}>
             {activeTab === 'operacao' && cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
-              <div className={"absolute inset-0 bg-black/80 backdrop-blur-xs z-30 flex flex-col items-center justify-center text-center p-8 space-y-4"}>
+              <div data-testid="cashier-shift-blocker" className={"absolute inset-0 bg-black/90 backdrop-blur-xs z-50 flex flex-col items-center justify-center text-center p-6 space-y-4"}>
                 <div className={clsx('p-4 bg-koma-panel rounded-full border', cashShiftUiState === 'closed' ? 'border-amber-500/20 text-amber-500' : 'border-koma-border text-koma-muted')}>
                   {cashShiftUiState === 'loading' ? <Loader2 size={32} className="animate-spin" /> : <Lock size={32} />}
                 </div>
-                <h3 className={"font-serif text-base font-bold text-koma-foreground"}>
+                <h3 className={"text-base font-bold text-white"}>
                   {cashShiftUiState === 'closed'
-                    ? 'Turno de Caixa Fechado'
+                    ? 'Turno de caixa fechado'
                     : cashShiftUiState === 'error'
                       ? 'Não foi possível confirmar o turno'
                       : 'Sincronizando turno de caixa'}
                 </h3>
-                <p className={"max-w-md text-[10px] text-koma-subtle leading-relaxed"}>
+                <p className={"max-w-md text-sm text-slate-200 leading-relaxed"}>
                   {cashShiftUiState === 'closed'
-                    ? 'Você precisa abrir o caixa digitando o fundo de troco inicial da noite para poder acessar as telas de vendas e comandas.'
+                    ? 'Abra o caixa para acessar vendas e pedidos.'
                     : cashShiftUiState === 'error'
                       ? 'O sistema não vai presumir que o caixa está aberto ou fechado enquanto o estado real estiver indisponível.'
                       : 'Confirmando o turno atual. Nenhum estado operacional é presumido antes da resposta do servidor.'}
                 </p>
                 {cashShiftUiState === 'closed' && (
-                  <button onClick={() => setShowAbrirModal(true)} className={"px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all cursor-pointer text-[10px] uppercase tracking-wider"}>
-                    Abrir Caixa Agora
+                  <button onClick={() => setShowAbrirModal(true)} className={"min-h-11 px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold rounded-xl transition-all cursor-pointer text-sm"}>
+                    Abrir caixa
                   </button>
                 )}
                 {cashShiftUiState === 'error' && (
@@ -969,9 +984,10 @@ export function CaixaPanel({
                 cards={salonTableCards}
                 visibleCards={visibleSalonTableCards}
                 counts={tableStatusCounts}
-                insights={salonInsights}
                 filter={tableStatusFilter}
                 onFilterChange={setTableStatusFilter}
+                search={tableSearch}
+                onSearchChange={setTableSearch}
                 fetchError={fetchError}
                 actions={{ inspectTable: handleInspectSalonTable, openTableOrder: handleOpenSalonTableOrder }}
               />
@@ -984,7 +1000,7 @@ export function CaixaPanel({
               sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, deliveryOrders, activeKitchenItems, apiCategorias }}
             />
 
-            <CashierKitchen mode={hasDedicatedKds ? 'kds' : 'queue'} activeSubTab={activeTab === 'operacao' ? activeSubTab : ''} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} />
+            <CashierKitchen mode={hasDedicatedKds ? 'kds' : 'queue'} activeSubTab={activeTab === 'operacao' ? activeSubTab : ''} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} handleConfirmTicketReady={handleConfirmTicketReady} onRefreshOrders={onRefreshOrders} />
 
             <CashierPickups
               isWsConnected={isWsConnected}

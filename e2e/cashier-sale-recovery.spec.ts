@@ -35,8 +35,13 @@ for (const status of [503, 422, 502]) {
       await newOrder().click();
       await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente', exact: true }).click();
       await showCart();
-      await page.getByRole('button', { name: 'Consumo local', exact: true }).click();
-      await page.locator('#pdv-target-table').selectOption('10');
+      if ((page.viewportSize()?.width ?? 1366) < 1280) {
+        await page.locator('.cashier-pdv-cart__modality-option').filter({ hasText: 'Consumo local' }).click();
+      } else {
+        await page.getByRole('button', { name: 'Consumo local', exact: true }).click();
+      }
+      await page.locator('#pdv-target-table').click();
+      await page.locator('#pdv-table-picker').getByRole('button', { name: /^Mesa 10 / }).click();
       await page.locator('#pdv-submit-btn').click();
       const message = status === 502 ? 'Falha no servidor. Tente novamente.'
         : status === 503 ? 'Falha controlada'
@@ -48,7 +53,7 @@ for (const status of [503, 422, 502]) {
       expect(requests).toHaveLength(1);
       await newOrder().click();
       await showCart();
-      await expect(page.locator('#pdv-target-table')).toHaveValue('10');
+      await expect(page.locator('#pdv-target-table')).toHaveAttribute('data-table-id', '10');
       await expect(page.locator('#pdv-submit-btn').locator('..').getByText('R$ 42,00', { exact: true })).toBeVisible();
       await page.locator('#pdv-submit-btn').click();
       await expect(page.getByText('Pedido confirmado e enviado à cozinha.', { exact: true })).toBeVisible();

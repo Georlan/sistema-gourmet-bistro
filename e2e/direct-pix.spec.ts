@@ -113,7 +113,7 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
     const request=route.request();
     const {pathname}=new URL(request.url());
     if(pathname==='/api/cardapio-digital/public') return route.fulfill({json:{
-      restaurante:{id:2,nome:'Burger teste',slug:'burger-teste',aceitando_pedidos:true,status_override:'Forçado Aberto',delivery_ativo:true,taxa_entrega_fixa:6,formas_pagamento_aceitas:['Dinheiro','Pix'],pagamento_online_ativo:enabled},
+      restaurante:{id:2,nome:'Burger teste',slug:'burger-teste',aceitando_pedidos:true,status_override:'Forçado Aberto',delivery_ativo:true,taxa_entrega_fixa:6,formas_pagamento_aceitas:['Dinheiro','Pix'],pagamento_online_ativo:enabled,socials:{whatsapp:'(88) 99961-6937'}},
       categorias:[{id:10,nome:'Bebidas'}],produtos:[{id:101,nome:'Água',preco:4.5,categoria_id:10,grupos_modificadores:[]}]}});
     if(pathname==='/cardapio/pedidos'&&request.method()==='POST') {
       submitted.push(request.postDataJSON());created=true;
@@ -162,6 +162,9 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   await expect(pix.getByLabel('Código Pix Copia e Cola')).toHaveValue('test-only-journey-do-not-pay');
 
   await expect(pix).toContainText('O restaurante conferirá o recebimento');
+  const receiptLink = pix.getByRole('link',{name:'Enviar comprovante no WhatsApp'});
+  await expect(receiptLink).toHaveAttribute('href', /wa\.me\/5588999616937\?text=/);
+  await expect(pix).toContainText('Anexe o comprovante na conversa');
   await expect(pix).not.toContainText('A confirmação do pagamento é automática');
   await consumer.getByRole('button',{name:'Fechar modal Pix',exact:true}).click();
   await consumer.locator((consumer.viewportSize()?.width||0)<=640 ? '#mobile-nav-orders' : '#floating-order-chat-trigger').click();
@@ -169,6 +172,7 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   const reopened=consumer.locator('#pix-payment-modal-backdrop');
   await expect(reopened.locator('svg[role="img"]')).toBeVisible();
   await expect(reopened).toContainText('O restaurante conferirá o recebimento');
+  await expect(reopened.getByRole('link',{name:'Enviar comprovante no WhatsApp'})).toHaveAttribute('href', /wa\.me\/5588999616937\?text=/);
   await expect(reopened).not.toContainText('A confirmação do pagamento é automática');
   await test.info().attach('pix-reaberto-manual',{body:await consumer.screenshot(),contentType:'image/png'});
   await page.reload();
