@@ -11,6 +11,7 @@ import "./components/shared/operationalHeader.css";
 import { KomaLoading } from "./components/app/KomaLoading";
 import { initializeKomaTheme } from "./config/theme";
 import { AppRecoveryBoundary } from "./components/auth/AppRecoveryBoundary";
+import { installChunkRecovery, tryAutoRecoverChunkSkew } from "./utils/chunkRecovery";
 
 const CustomerSupportWidget = React.lazy(() =>
   import("./components/app/CustomerSupportWidget").then((module) => ({
@@ -170,34 +171,16 @@ if (isPublicMenuRoute()) {
 }
 
 if (typeof window !== "undefined") {
+  installChunkRecovery();
   (window as unknown as { __KOMA_BUILD__?: unknown }).__KOMA_BUILD__ = {
     sha: import.meta.env.VITE_BUILD_SHA,
     builtAt: import.meta.env.VITE_BUILD_TIME,
   };
 
+  // Do not preventDefault: React.lazy must still reject if a refresh is unsafe,
+  // so a mounted operator sees the error boundary instead of losing drafts.
   window.addEventListener("vite:preloadError", (event) => {
-    const CHUNK_RELOAD_KEY = "koma_chunk_reload_attempt";
-    const now = Date.now();
-    let lastAttempt = 0;
-    try {
-      lastAttempt = Number(window.sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0);
-    } catch {
-      lastAttempt = 0;
-    }
-
-    // Preserve the rejected import while navigation is pending. Cancelling
-    // this event makes Vite resolve undefined, which React.lazy then reads
-    // as module.default and replaces the original error with a TypeError.
-    if (now - lastAttempt > 15000) {
-      try {
-        window.sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
-      } catch {
-        // Se sessionStorage estiver indisponível, ainda é melhor tentar um reload.
-      }
-      const url = new URL(window.location.href);
-      url.searchParams.set("__koma_refresh", String(now));
-      window.location.replace(url.toString());
-    }
+    tryAutoRecoverChunkSkew((event as Event & { payload?: unknown }).payload);
   });
 }
 
