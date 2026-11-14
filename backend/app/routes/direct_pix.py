@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from ..config import settings
 from ..database import get_db, require_tenant_id
-from ..models import Comanda, DirectPixReceipt, DirectPixFeeInvoice, OnlinePaymentIntent, RestaurantDirectPixConfig, Usuario
+from ..models import Comanda, CaixaTurno, DirectPixReceipt, DirectPixFeeInvoice, OnlinePaymentIntent, RestaurantDirectPixConfig, Usuario
 from ..security import require_permission
 from ..security import get_current_user
 from ..services.online_payments.direct_pix import normalize_key, merchant_text
@@ -23,6 +23,8 @@ from ..services.online_payments.service import OnlinePaymentService, OnlinePayme
 from ..services.direct_pix_billing import close_month
 from ..services.direct_pix_test_release import TEST_TERMS_VERSION, test_registration_allowed
 from ..websocket_manager import manager
+from ..online_order_control_models import OnlineOrderOperationalAudit
+from ..services.order_chat_service import queue_order_tracking_refresh
 
 router = APIRouter(prefix='/payments/direct-pix', tags=['Pix direto'])
 TERMS_VERSION = 'direct-pix-v2-zero-commission'
@@ -41,17 +43,25 @@ class PendingCancellation(BaseModel):
     checked_no_receipt: bool
 
 
+class UnpaidRelease(BaseModel):
+    acknowledge_payment_pending: bool
+
+
 class ReceiptConfirmation(BaseModel):
     received_amount: Decimal = Field(gt=0, max_digits=14, decimal_places=2)
-    bank_reference: str = Field(pattern=r'^[A-Za-z0-9][A-Za-z0-9._/-]{5,31}$')
+    bank_reference: str | None = Field(default=None, pattern=r'^[A-Za-z0-9][A-Za-z0-9._/-]{5,31}$')
     checked_bank_statement: bool
 
     @field_validator('bank_reference', mode='before')
     @classmethod
     def extract_bank_reference(cls, value: object) -> object:
+        if value is None:
+            return None
         if not isinstance(value, str):
             return value
         cleaned = value.strip()
+        if not cleaned:
+            return None
         if re.fullmatch(r'E[A-Za-z0-9]{31}', cleaned):
             return cleaned
         if any(ch.isspace() for ch in cleaned) or len(cleaned) > 32:
@@ -172,6 +182,7 @@ def pending_receipts(db: Session = Depends(get_db), user: Usuario = Depends(requ
         'status': 'aguardando_aprovacao_pix',
         'txid': intent.id.replace('-', '')[:25],
         'created_at': intent.created_at.isoformat() if intent.created_at else None,
+        'released_unpaid': order.online_payment_status == 'pending_released',
         'customer_reported': intent.reconciliation_attempted_at is not None,
         'customer_reported_at': intent.reconciliation_attempted_at.isoformat() if intent.reconciliation_attempted_at else None,
     } for intent, order in rows]
@@ -187,10 +198,10 @@ def confirm_receipt(intent_id: str, payload: ReceiptConfirmation, db: Session = 
         raise HTTPException(404,'Cobrança não encontrada.')
     if not payload.checked_bank_statement or payload.received_amount != Decimal(str(intent.amount)):
         raise HTTPException(422,'Confira o recebimento do valor integral no extrato bancário.')
-    if payload.bank_reference.lower() == intent.id.replace('-', '')[:25].lower():
+    if payload.bank_reference and payload.bank_reference.lower() == intent.id.replace('-', '')[:25].lower():
         raise HTTPException(422,'Informe o identificador da transferência no extrato bancário, não o TXID do QR Pix.')
     receipt = db.query(DirectPixReceipt).filter(DirectPixReceipt.restaurante_id == rest_id, DirectPixReceipt.intent_id == intent.id).one_or_none()
-    if receipt and receipt.bank_reference != payload.bank_reference:
+    if receipt and payload.bank_reference and receipt.bank_reference != payload.bank_reference:
         raise HTTPException(409,'Confirmação anterior tem outra referência bancária.')
     if intent.status not in {'created','pending','approved'}:
         raise HTTPException(409,'Cobrança encerrada não pode ser confirmada.')
@@ -212,6 +223,62 @@ def confirm_receipt(intent_id: str, payload: ReceiptConfirmation, db: Session = 
     return {'status':'approved','already_confirmed':not became_approved}
 
 
+@router.post('/{intent_id}/release-unpaid')
+def release_unpaid(
+    intent_id: str,
+    payload: UnpaidRelease,
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(require_permission('caixa:operar')),
+):
+    """Explicit operator override: publish to Kanban, NEVER approve the Pix."""
+    if not payload.acknowledge_payment_pending:
+        raise HTTPException(422, 'Confirme que o pedido será preparado sem pagamento confirmado.')
+    tenant = require_tenant_id()
+    intent = db.query(OnlinePaymentIntent).filter(
+        OnlinePaymentIntent.restaurante_id == tenant,
+        OnlinePaymentIntent.id == intent_id,
+        OnlinePaymentIntent.provider == 'direct_pix',
+    ).with_for_update().one_or_none()
+    if intent is None:
+        raise HTTPException(404, 'Cobrança Pix não encontrada.')
+    if intent.status not in {'created', 'pending'}:
+        raise HTTPException(409, 'Este Pix não está mais pendente.')
+    order = db.query(Comanda).filter(
+        Comanda.restaurante_id == tenant,
+        Comanda.id == intent.comanda_id,
+    ).with_for_update().one_or_none()
+    if order is None or order.fechada:
+        raise HTTPException(409, 'Pedido indisponível para liberação.')
+    if order.online_payment_status == 'pending_released':
+        return {'status': 'pending', 'released_unpaid': True, 'already_released': True}
+    if order.online_payment_status != 'pending' or str(order.delivery_status or '').lower() not in {'pendente', 'analise'}:
+        raise HTTPException(409, 'O pedido não está aguardando liberação.')
+    shift = db.query(CaixaTurno).filter(
+        CaixaTurno.restaurante_id == tenant, CaixaTurno.id == intent.turno_id,
+    ).one_or_none()
+    if shift is None or shift.status != 'aberto':
+        raise HTTPException(409, 'Abra ou regularize o caixa antes de liberar o pedido.')
+    order.online_payment_status = 'pending_released'
+    try:
+        OnlinePaymentService.publish_order_in_session(db, intent=intent, comanda=order)
+        db.add(OnlineOrderOperationalAudit(
+            restaurante_id=tenant,
+            actor_user_id=user.id,
+            action='direct_pix_unpaid_released',
+            reason='Operador autorizou preparo com Pix ainda não confirmado.',
+            before_data={'order_id': str(order.id), 'payment_status': 'pending'},
+            after_data={'order_id': str(order.id), 'payment_status': 'pending_released',
+                        'intent_id': str(intent.id), 'amount': str(intent.amount)},
+        ))
+        queue_order_tracking_refresh(db, tenant, str(order.id))
+        manager.queue_committed_broadcast(db, {'event': 'tables_updated'}, tenant)
+        db.commit()
+    except (OnlinePaymentConfigurationError, OnlinePaymentValidationError, IntegrityError) as exc:
+        db.rollback()
+        raise HTTPException(409, 'Não foi possível liberar o pedido sem pagamento.') from exc
+    return {'status': 'pending', 'released_unpaid': True, 'already_released': False}
+
+
 @router.post('/{intent_id}/cancel')
 def cancel_pending(intent_id: str, payload: PendingCancellation, db: Session = Depends(get_db), user: Usuario = Depends(require_permission('caixa:operar'))):
     if not payload.checked_no_receipt:
@@ -224,6 +291,8 @@ def cancel_pending(intent_id: str, payload: PendingCancellation, db: Session = D
     if intent.status == 'approved':
         raise HTTPException(409,'Pix confirmado exige devolução bancária, não cancelamento de cobrança.')
     order = db.query(Comanda).filter(Comanda.restaurante_id == rest_id,Comanda.id == intent.comanda_id).with_for_update().one()
+    if order.online_payment_status == 'pending_released' and str(order.delivery_status or '').lower() not in {'pendente', 'analise'}:
+        raise HTTPException(409, 'Pedido já em produção: regularize pela operação antes de cancelar o Pix.')
     intent.status = 'cancelled'
     order.online_payment_status = 'cancelled'
     OnlinePaymentService._finalize_unpaid_order_in_session(db,intent=intent,comanda=order)
