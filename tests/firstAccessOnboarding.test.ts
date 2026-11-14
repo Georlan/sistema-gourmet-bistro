@@ -199,3 +199,14 @@ test('audited support mode bypasses customer onboarding without mutating tenant 
   assert.match(boundary, /if \(internalSupportMode\) return <>\{children\}<\/>/);
   assert.match(boundary, /if \(setupMode\) return <>\{children\}<\/>/);
 });
+
+test('progressive onboarding answers the 3 core questions and allows safe cart simulation in preparation mode', () => {
+  const cardapioPage = source('../src/cardapio/CardapioPage.tsx');
+  assert.match(onboarding, /Já consigo entrar e configurar\?/);
+  assert.match(onboarding, /Já posso iniciar legitimamente meus sete dias\?/);
+  assert.match(onboarding, /O que posso completar mais tarde\?/);
+  assert.match(onboarding, /provisionalPreparation/);
+  assert.match(cardapioPage, /availabilitySource === "provisional_preparation"/);
+  assert.match(cardapioPage, /cartAssemblyEnabled = orderingEnabled \|\| isPreparationSimulation/);
+});
+

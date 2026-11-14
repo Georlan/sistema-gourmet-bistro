@@ -146,6 +146,12 @@ class SuperAdminOperationsUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+class SuperAdminReleaseRequest(BaseModel):
+    payment_method_type: Literal["pix"] | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class SuperAdminOperationalQaRequest(BaseModel):
     action: Literal["start", "end"]
     hours: int = Field(default=24, ge=1, le=72)
@@ -644,6 +650,7 @@ def update_operational_qa(
 @router.post("/onboarding/restaurantes/{tenant_id}/release")
 def release_commercial_operation(
     tenant_id: str,
+    payload: SuperAdminReleaseRequest | None = None,
     admin: dict[str, Any] = Depends(get_current_admin),
 ):
     """Starts the commercial trial only after an explicit SuperAdmin release."""
@@ -653,6 +660,15 @@ def release_commercial_operation(
     db = SessionLocal()
     try:
         with tenant_session_scope(db, tenant_id_int):
+            if payload and payload.payment_method_type == "pix":
+                sub = (
+                    db.query(SaaSSubscription)
+                    .filter(SaaSSubscription.restaurante_id == tenant_id_int)
+                    .one_or_none()
+                )
+                if sub is not None and not sub.payment_method_type:
+                    sub.payment_method_type = "pix"
+                    db.flush()
             preview = _commercial_release_preview(db, tenant_id_int)
             trial_ends_at = preview["subscription"]["trialEndsAt"]
             if isinstance(trial_ends_at, str):
@@ -704,6 +720,8 @@ def release_commercial_operation(
 @router.get("/trials")
 def list_trials(admin: dict[str, Any] = Depends(get_current_admin)):
     """Lista o entitlement de teste grátis sem inferir cobrança ou MRR."""
+    from ..services.restaurant_provisioning import is_provisional_preparation
+
     db = SessionLocal()
     now = _utc_now()
     result: list[dict[str, Any]] = []
@@ -725,6 +743,7 @@ def list_trials(admin: dict[str, Any] = Depends(get_current_admin)):
                     .filter(SaaSSubscription.restaurante_id == tenant_id)
                     .one_or_none()
                 )
+                provisional_prep = is_provisional_preparation(db, tenant_id)
                 result.append(
                     {
                         "restaurantId": str(tenant_id),
@@ -739,13 +758,18 @@ def list_trials(admin: dict[str, Any] = Depends(get_current_admin)):
                         ),
                         "trialEndsAt": snapshot["trial_ends_at"] if snapshot else None,
                         "daysRemaining": snapshot["days_remaining"] if snapshot else 0,
+                        "provisionalPreparation": provisional_prep,
                         "commercialOnboarding": bool(
-                            commercial_subscription
-                            and commercial_subscription.status in {"onboarding", "suspended"}
-                            and commercial_subscription.trial_started_at is None
+                            provisional_prep
+                            or (
+                                commercial_subscription
+                                and commercial_subscription.status in {"onboarding", "suspended"}
+                                and commercial_subscription.trial_started_at is None
+                            )
                         ),
                     }
                 )
+
 
         logger.info(
             "SUPERADMIN TRIAL LIST actor=%s tenant_count=%s",

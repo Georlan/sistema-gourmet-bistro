@@ -118,20 +118,35 @@ def _trial_status_payload(row: dict[str, Any] | None, *, setup_pending: bool = F
     }
 
 
-def _profile_is_configured(restaurant: Restaurante, *, require_essentials: bool = False) -> bool:
-    """New commercial setup requires identity; preserve released/legacy readiness."""
+def _profile_is_configured(
+    restaurant: Restaurante,
+    *,
+    require_essentials: bool = False,
+    require_address: bool = True,
+) -> bool:
+    """New commercial setup requires identity; preparation mode allows deferring definitive address."""
     if require_essentials:
-        socials = restaurant.socials
+        socials = getattr(restaurant, "socials", None)
         if isinstance(socials, str):
             try:
                 socials = json.loads(socials)
             except (TypeError, ValueError):
                 socials = {}
         whatsapp = socials.get("whatsapp") if isinstance(socials, dict) else None
-        return all(bool(str(value or "").strip()) for value in (
-            restaurant.nome, restaurant.endereco, whatsapp,
-        ))
-    return any(
+        has_name = bool(str(getattr(restaurant, "nome", "") or "").strip())
+        has_whatsapp = bool(str(whatsapp or "").strip())
+        has_address = bool(str(getattr(restaurant, "endereco", "") or "").strip())
+        if not require_address:
+            return has_name and (has_whatsapp or has_address)
+        return has_name and has_address and has_whatsapp
+    socials = getattr(restaurant, "socials", None)
+    if isinstance(socials, str):
+        try:
+            socials = json.loads(socials)
+        except (TypeError, ValueError):
+            socials = {}
+    whatsapp = socials.get("whatsapp") if isinstance(socials, dict) else None
+    return bool(str(whatsapp or "").strip()) or any(
         bool(str(value).strip())
         for value in (
             restaurant.endereco,
@@ -142,6 +157,7 @@ def _profile_is_configured(restaurant: Restaurante, *, require_essentials: bool 
         )
         if value is not None
     )
+
 
 
 def _required_progress(steps: dict[str, bool]) -> dict[str, int]:
@@ -329,21 +345,28 @@ def _build_onboarding_status(
         .filter(ConfiguracaoRestaurante.restaurante_id == tenant_id)
         .one_or_none()
     )
+    from ..services.restaurant_provisioning import is_provisional_preparation
+
+    provisional_preparation = is_provisional_preparation(db, tenant_id)
     subscription = (
         db.query(SaaSSubscription)
         .filter(SaaSSubscription.restaurante_id == tenant_id)
         .one_or_none()
     )
     subscription_status = str(getattr(subscription, "status", "") or "").strip().lower()
-    setup_pending = bool(
+    commercial_setup_pending = bool(
         subscription
         and subscription.trial_started_at is None
         and subscription_status in {"onboarding", "suspended"}
     )
+    setup_pending = bool(provisional_preparation or commercial_setup_pending)
     legacy_policy_allowed = bool(
-        subscription is None
-        or subscription.trial_started_at is not None
-        or subscription_status not in {"onboarding", "suspended"}
+        not provisional_preparation
+        and (
+            subscription is None
+            or subscription.trial_started_at is not None
+            or subscription_status not in {"onboarding", "suspended"}
+        )
     )
 
     product_count = int(
@@ -403,7 +426,11 @@ def _build_onboarding_status(
         dict(trial_row) if trial_row else None,
         setup_pending=setup_pending,
     )
-    onboarding_mode = "commercial" if subscription is not None else "administrative"
+    onboarding_mode = (
+        "commercial"
+        if (subscription is not None or provisional_preparation)
+        else "administrative"
+    )
     trial_started = bool(subscription and subscription.trial_started_at is not None)
     administrative_window_active = bool(
         onboarding_mode == "administrative"
@@ -441,7 +468,12 @@ def _build_onboarding_status(
         test_order_detected = query.first() is not None
 
     steps = {
-        "profile": _profile_is_configured(restaurant, require_essentials=setup_pending),
+        "profile": _profile_is_configured(
+            restaurant,
+            require_essentials=setup_pending,
+            # Endereço definitivo não bloqueia preparação nem onboarding comercial antes do trial.
+            require_address=not (provisional_preparation or commercial_setup_pending),
+        ),
         "hours": _structured_has_items(restaurant.horarios_funcionamento),
         "catalog": active_product_count > 0,
         "operations": _operations_step_is_complete(operations),
@@ -462,15 +494,35 @@ def _build_onboarding_status(
     else:
         release_state = "released"
 
-    blockers = [
+    if subscription_status in {"past_due", "unpaid", "suspended", "canceled"} or trial_snapshot["status"] == "expired":
+        canonical_stage = "past_due"
+    elif subscription_status == "active" and (subscription.trial_ends_at is None or trial_snapshot["status"] in {"converted", "expired"}):
+        canonical_stage = "active"
+    elif operation_released:
+        canonical_stage = "trialing"
+    elif configuration_complete:
+        canonical_stage = "pronto_para_teste"
+    else:
+        canonical_stage = "preparando"
+
+    essential_blockers = [
         key
         for key in ("profile", "hours", "catalog", "operations")
         if not steps[key]
     ]
+    blockers = list(essential_blockers)
     if configuration_complete and onboarding_mode == "commercial" and not trial_started:
+        if provisional_preparation and subscription is None:
+            blockers.append("contract")
         blockers.append("trial")
     elif configuration_complete and operation_released and not test_order_detected:
         blockers.append("test_order")
+
+    blockers_now = list(essential_blockers)
+    if provisional_preparation and subscription is None:
+        blockers_now.append("contract_terms")
+    elif onboarding_mode == "commercial" and not trial_started:
+        blockers_now.append("koma_release")
 
     return {
         "restaurant": {
@@ -483,12 +535,24 @@ def _build_onboarding_status(
         "trial": trial_snapshot,
         "onboarding": {
             "mode": onboarding_mode,
+            "stage": canonical_stage,
+            "provisionalPreparation": provisional_preparation,
+            "contractLinked": subscription is not None,
             "releaseState": release_state,
             "operationReleased": operation_released,
             "requiresKomaRelease": bool(onboarding_mode == "commercial" and not trial_started),
+            "blockersNow": blockers_now,
+            "canConfigureLater": [
+                "definitive_address",
+                "cpf_cnpj_fiscal",
+                "online_payment_gateway",
+                "thermal_printer",
+                "delivery_zones_and_couriers",
+                "team_and_waiter_app",
+            ],
         },
         "readyForRelease": bool(
-            setup_pending
+            commercial_setup_pending
             and configuration_complete
             and not getattr(current_user, "is_support_mode", False)
         ),

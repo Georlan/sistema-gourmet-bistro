@@ -17,11 +17,12 @@ from app.models import (
 from app.contract_models import ContractAcceptance, RestaurantContractAcceptance
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.restaurant_profile_models import RestauranteOperationProfile
-from app.saas_billing_models import SaaSSubscription
+from app.saas_billing_models import SaaSBillingSetup, SaaSSubscription
+from app.session_models import UserSessionVersion
 from app.routes.super_admin_onboarding import restaurant_trials
 from app.security import create_access_token
 from app.services.restaurant_provisioning import is_provisional_preparation
-from app.signup_models import SignupNotification
+from app.signup_models import SignupBase, SignupNotification
 
 VALID_CPF = "52998224725"
 VALID_CNPJ = "11222333000181"
@@ -78,22 +79,28 @@ def _tenant_admin_headers(restaurante_id: int, user_id: str = "u-admin-1") -> di
 TEST_TENANT_ID = 9876
 
 
-def _cleanup_test_data(db):
+def _cleanup_tenant(db, tenant_id: int = TEST_TENANT_ID):
     from app.session_models import UserSessionVersion
+    from app.saas_billing_models import SaaSBillingSetup
     db.query(SignupNotification).delete()
-    db.query(SuperAdminAuditLog).filter(SuperAdminAuditLog.restaurante_id == TEST_TENANT_ID).delete()
-    db.query(RestaurantContractAcceptance).filter(RestaurantContractAcceptance.restaurante_id == TEST_TENANT_ID).delete()
+    db.query(SuperAdminAuditLog).filter(SuperAdminAuditLog.restaurante_id == tenant_id).delete()
+    db.query(RestaurantContractAcceptance).filter(RestaurantContractAcceptance.restaurante_id == tenant_id).delete()
     db.query(ContractAcceptance).filter(ContractAcceptance.email == "contato@jelanches.com.br").delete()
-    db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == TEST_TENANT_ID).delete()
-    db.execute(restaurant_trials.delete().where(restaurant_trials.c.restaurante_id == TEST_TENANT_ID))
-    db.query(RestauranteOperationProfile).filter(RestauranteOperationProfile.restaurante_id == TEST_TENANT_ID).delete()
-    db.query(Produto).filter(Produto.restaurante_id == TEST_TENANT_ID).delete()
-    db.query(Categoria).filter(Categoria.restaurante_id == TEST_TENANT_ID).delete()
-    db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == TEST_TENANT_ID).delete()
-    db.query(UserSessionVersion).filter(UserSessionVersion.restaurante_id == TEST_TENANT_ID).delete()
-    db.query(Usuario).filter(Usuario.restaurante_id == TEST_TENANT_ID).delete()
-    db.query(Restaurante).filter(Restaurante.id == TEST_TENANT_ID).delete()
+    db.query(SaaSBillingSetup).filter(SaaSBillingSetup.restaurante_id == tenant_id).delete()
+    db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == tenant_id).delete()
+    db.execute(restaurant_trials.delete().where(restaurant_trials.c.restaurante_id == tenant_id))
+    db.query(RestauranteOperationProfile).filter(RestauranteOperationProfile.restaurante_id == tenant_id).delete()
+    db.query(Produto).filter(Produto.restaurante_id == tenant_id).delete()
+    db.query(Categoria).filter(Categoria.restaurante_id == tenant_id).delete()
+    db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == tenant_id).delete()
+    db.query(UserSessionVersion).filter(UserSessionVersion.restaurante_id == tenant_id).delete()
+    db.query(Usuario).filter(Usuario.restaurante_id == tenant_id).delete()
+    db.query(Restaurante).filter(Restaurante.id == tenant_id).delete()
     db.commit()
+
+
+def _cleanup_test_data(db):
+    _cleanup_tenant(db, TEST_TENANT_ID)
 
 
 @pytest.fixture(autouse=True)
@@ -107,9 +114,12 @@ def setup_test_db(monkeypatch):
     Base.metadata.create_all(bind=bind)
     RestaurantContractAcceptance.__table__.create(bind=bind, checkfirst=True)
     ContractAcceptance.__table__.create(bind=bind, checkfirst=True)
+    SaaSBillingSetup.__table__.create(bind=bind, checkfirst=True)
     SaaSSubscription.__table__.create(bind=bind, checkfirst=True)
+    UserSessionVersion.__table__.create(bind=bind, checkfirst=True)
     SuperAdminAuditLog.__table__.create(bind=bind, checkfirst=True)
     restaurant_trials.create(bind=bind, checkfirst=True)
+    SignupBase.metadata.create_all(bind=bind)
     SignupNotification.__table__.create(bind=bind, checkfirst=True)
 
     db = SessionLocal()
@@ -362,3 +372,194 @@ def test_provisional_onboarding_blocks_commercial_operations_and_transitions_cle
         assert sub.status == "trialing"
         assert sub.trial_started_at is not None
         assert sub.trial_ends_at is not None
+
+
+def test_je_lanches_progressive_onboarding_activate_inplace_and_manual_pix(monkeypatch):
+    """Regressão completa do caso real JE Lanches:
+    - Etapa A: provisionamento com defer_trial=True, login provisório, 28 produtos com famílias,
+      benefícios permanentes (printing + courier_app no Pocket), estado 'preparando' sem iniciar 7 dias.
+    - Etapa B: contrato eletrônico aceito sem gateway conectado -> ativação in-place no ID existente
+      via POST /api/super-admin/contracts/{protocol}/activate com payment_method_type='pix' ->
+      liberação comercial iniciando exatamente 7 dias sem zerar catálogo nem benefícios.
+    - Etapa C: atualização cadastral posterior não reinicia os 7 dias; troca de admin e confirmação
+      manual de Pix pós-teste mantêm o restaurante ativo.
+    """
+    from app.config import settings
+    monkeypatch.setenv("SUPERADMIN_BOOTSTRAP_ADMINS", "owner@komafood.com.br")
+    monkeypatch.setattr(settings, "KOMA_SAAS_MANUAL_RELEASE_REQUIRED", True)
+    test_tenant_id = 990102
+    protocol = "KOMA-2026-JELANCHES-01"
+    acceptance_id = str(uuid.uuid4())
+
+    with SessionLocal() as db:
+        _cleanup_tenant(db, test_tenant_id)
+        db.query(ContractAcceptance).filter(
+            ContractAcceptance.protocol == protocol
+        ).delete(synchronize_session=False)
+        db.commit()
+
+    client = TestClient(app)
+    admin_headers = _superadmin_headers()
+
+    # 1. Etapa A: Super Admin cria JE Lanches com defer_trial=True
+    res_prov = client.post(
+        "/api/super-admin/restaurantes/provisionar",
+        headers=admin_headers,
+        json={
+            "restaurant_id": test_tenant_id,
+            "name": "JE Lanches",
+            "subdomain": "je-lanches-test",
+            "plan": "pocket",
+            "operation_profile": "generic",
+            "admin_name": "Admin Provisório JE",
+            "admin_email": "provisorio@jelanches.test",
+            "temporary_password": "Password123!",
+            "defer_trial": True,
+        },
+    )
+    assert res_prov.status_code == 201, res_prov.text
+    prov_data = res_prov.json()
+    assert prov_data["trial"]["status"] == "pending_setup"
+
+    # 2. Configurar perfil (sem exigir endereço definitivo), horários, modalidades,
+    #    28 produtos (com tags [familia: ...]) e benefícios permanentes no Pocket
+    with SessionLocal() as db:
+        rest = db.query(Restaurante).filter(Restaurante.id == test_tenant_id).one()
+        rest.socials = {"whatsapp": "85988887777"}
+        rest.horarios_funcionamento = [{"days": "Seg a Dom", "hours": "18:00 - 23:30"}]
+        config = (
+            db.query(ConfiguracaoRestaurante)
+            .filter(ConfiguracaoRestaurante.restaurante_id == test_tenant_id)
+            .one_or_none()
+        )
+        if config is None:
+            config = ConfiguracaoRestaurante(restaurante_id=test_tenant_id)
+            db.add(config)
+        config.tipos_pedido_ativos = ["retirada"]
+        cat = Categoria(
+            id="cat-je-acai",
+            restaurante_id=test_tenant_id,
+            nome="Açaí & Lanches",
+        )
+        db.add(cat)
+        db.flush()
+        for idx in range(1, 29):
+            familia_tag = " [familia: Açaí Tradicional]" if idx <= 4 else ""
+            db.add(
+                Produto(
+                    id=f"prod-je-{idx}",
+                    restaurante_id=test_tenant_id,
+                    categoria_id="cat-je-acai",
+                    nome=f"Item JE {idx}",
+                    preco=15.0 + idx,
+                    descricao=f"Delicioso item {idx}{familia_tag}",
+                    ativo=True,
+                )
+            )
+        db.commit()
+
+        admin_user = db.query(Usuario).filter(Usuario.restaurante_id == test_tenant_id).one()
+        tenant_headers = _tenant_admin_headers(test_tenant_id, user_id=admin_user.id)
+
+    res_prep = client.get("/api/onboarding/status", headers=tenant_headers)
+    assert res_prep.status_code == 200, res_prep.text
+    status_prep = res_prep.json()
+    assert status_prep["onboarding"]["stage"] == "pronto_para_teste"
+    assert status_prep["onboarding"]["provisionalPreparation"] is True
+    assert status_prep["onboarding"]["contractLinked"] is False
+    assert status_prep["trial"]["status"] == "setup"
+    assert status_prep["steps"]["profile"] is True
+    assert status_prep["steps"]["hours"] is True
+    assert status_prep["steps"]["catalog"] is True
+    assert status_prep["steps"]["operations"] is True
+    assert status_prep["counts"]["activeProducts"] == 28
+    assert status_prep["onboarding"]["operationReleased"] is False
+
+    # 3. Etapa B: Aceite contratual registrado (sem gateway conectado, billing pending)
+    res_accept = client.post(
+        "/api/contracts/accept",
+        json=_contract_payload(plan="pocket", billing_cycle="mensal"),
+        headers={
+            "cf-connecting-ip": "203.0.113.26",
+            "user-agent": "KomaContractTest/1.0",
+        },
+    )
+    assert res_accept.status_code == 201, res_accept.text
+    protocol = res_accept.json()["protocol"]
+
+    # Selecionar Pix pós-teste sem precisar de gateway Mercado Pago conectado
+    res_pix = client.post(f"/api/contracts/{protocol}/billing/pix/select")
+    assert res_pix.status_code == 200, res_pix.text
+    assert res_pix.json()["paymentMethodType"] == "pix"
+
+    # Ativar o contrato in-place no ID provisório existente
+    res_act = client.post(
+        f"/api/super-admin/contracts/{protocol}/activate",
+        headers=admin_headers,
+        json={
+            "restaurant_id": test_tenant_id,
+            "payment_method_type": "pix",
+            "reason": "Transição in-place JE Lanches",
+        },
+    )
+    assert res_act.status_code == 200, res_act.text
+    assert res_act.json()["restaurantId"] == str(test_tenant_id)
+
+    # Verificar que está 'pronto_para_teste' com 28 produtos e overrides intactos, e trial ainda não iniciado
+    res_ready = client.get("/api/onboarding/status", headers=tenant_headers)
+    assert res_ready.status_code == 200, res_ready.text
+    status_ready = res_ready.json()
+    assert status_ready["onboarding"]["stage"] == "pronto_para_teste"
+    assert status_ready["onboarding"]["provisionalPreparation"] is False
+    assert status_ready["onboarding"]["contractLinked"] is True
+    assert status_ready["readyForRelease"] is True
+    assert status_ready["counts"]["activeProducts"] == 28
+    with SessionLocal() as db:
+        config = (
+            db.query(ConfiguracaoRestaurante)
+            .filter(ConfiguracaoRestaurante.restaurante_id == test_tenant_id)
+            .one()
+        )
+        assert config.tipos_pedido_ativos == ["retirada"]
+
+    # 4. Liberar operação e iniciar os 7 dias
+    res_rel = client.post(
+        f"/api/super-admin/onboarding/restaurantes/{test_tenant_id}/release",
+        headers=admin_headers,
+        json={"payment_method_type": "pix"},
+    )
+    assert res_rel.status_code == 200, res_rel.text
+    rel_data = res_rel.json()
+    assert rel_data["trialStarted"] is True
+    first_started_at = rel_data["subscription"]["trialStartedAt"]
+    first_ends_at = rel_data["subscription"]["trialEndsAt"]
+    assert first_started_at is not None
+    assert first_ends_at is not None
+
+    # 5. Etapa C: Completar endereço definitivo depois e chamar release de novo NÃO reinicia os 7 dias
+    with SessionLocal() as db:
+        rest = db.query(Restaurante).filter(Restaurante.id == test_tenant_id).one()
+        rest.endereco = "Av. Principal, 500 - Centro"
+        db.commit()
+
+    res_rel_again = client.post(
+        f"/api/super-admin/onboarding/restaurantes/{test_tenant_id}/release",
+        headers=admin_headers,
+    )
+    assert res_rel_again.status_code == 200, res_rel_again.text
+    assert res_rel_again.json()["subscription"]["trialStartedAt"] == first_started_at
+    assert res_rel_again.json()["subscription"]["trialEndsAt"] == first_ends_at
+
+    assert res_rel_again.json()["subscription"]["status"] == "trialing"
+
+    # 6. Preservação integral dos 28 produtos no mesmo tenant após liberação
+    with SessionLocal() as db:
+        assert db.query(Produto).filter(Produto.restaurante_id == test_tenant_id).count() == 28
+
+    with SessionLocal() as db:
+        _cleanup_tenant(db, test_tenant_id)
+        db.query(ContractAcceptance).filter(
+            ContractAcceptance.protocol == protocol
+        ).delete(synchronize_session=False)
+        db.commit()
+
