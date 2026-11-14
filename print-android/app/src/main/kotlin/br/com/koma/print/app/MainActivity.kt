@@ -103,7 +103,7 @@ class MainActivity : Activity() {
 
         if (scheme == "koma-print" && host == "connect") {
             val backendUrl = data.getQueryParameter("backend")
-                ?.takeIf { it.isNotBlank() } ?: "https://api.komagourmet.com.br"
+                ?.takeIf { it.isNotBlank() } ?: "https://sistema-gourmet-bistro-production.up.railway.app"
             val tenantId = data.getQueryParameter("tenant")?.toIntOrNull() ?: 1
             val restaurantName = data.getQueryParameter("name")
                 ?.takeIf { it.isNotBlank() } ?: "Restaurante #$tenantId"
@@ -324,7 +324,7 @@ class MainActivity : Activity() {
             setBackgroundColor(Color.parseColor("#1E293B"))
         }
 
-        backendUrlInput = labeledInput(advancedSection, "URL da API KÔMA", "https://api.komagourmet.com.br")
+        backendUrlInput = labeledInput(advancedSection, "URL da API KÔMA", "https://sistema-gourmet-bistro-production.up.railway.app")
         restauranteIdInput = labeledInput(advancedSection, "ID do Restaurante", "1", InputType.TYPE_CLASS_NUMBER)
         restaurantNameInput = labeledInput(advancedSection, "Nome no Cupom", "JE LANCHES")
         agentIdInput = labeledInput(advancedSection, "Identificador deste Celular (Agent ID)", "android-je-lanches-01")
@@ -461,7 +461,7 @@ class MainActivity : Activity() {
     }
 
     private fun performManualLoginAndRegister() {
-        val backendUrl = backendUrlInput.text?.toString()?.trim().orEmpty()
+        val backendUrl = backendUrlInput.text?.toString()?.trim()?.trimEnd('/').orEmpty()
         val restauranteId = restauranteIdInput.text?.toString()?.trim()?.toIntOrNull() ?: 1
         val restaurantName = restaurantNameInput.text?.toString()?.trim().orEmpty().ifBlank { "JE LANCHES" }
         val agentId = agentIdInput.text?.toString()?.trim().orEmpty().ifBlank { "android-je-lanches-01" }

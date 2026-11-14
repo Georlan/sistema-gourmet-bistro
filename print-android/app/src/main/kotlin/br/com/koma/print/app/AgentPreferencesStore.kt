@@ -73,7 +73,7 @@ class AgentPreferencesStore(context: Context) {
 
     companion object {
         private const val PREFS_NAME = "koma_print_android_prefs"
-        private const val DEFAULT_BACKEND_URL = "https://api.komagourmet.com.br"
+        private const val DEFAULT_BACKEND_URL = "https://sistema-gourmet-bistro-production.up.railway.app"
         private const val KEY_BACKEND_URL = "backend_url"
         private const val KEY_AGENT_ID = "agent_id"
         private const val KEY_AGENT_TOKEN = "agent_token"
