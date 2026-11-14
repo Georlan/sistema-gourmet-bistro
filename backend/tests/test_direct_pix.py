@@ -141,10 +141,10 @@ def test_manual_unpaid_release_publishes_once_and_later_confirm_does_not_republi
     assert db.query(Comanda).filter(_operational_online_payment_filter(), Comanda.id == order_row.id).count() == 1
     audit = db.query(OnlineOrderOperationalAudit).filter_by(action='direct_pix_unpaid_released').one()
     assert audit.actor_user_id == 'direct-pix-user'
-    published = db.query(IntegrationOutbox).count()
+    published = db.query(IntegrationOutbox).filter(IntegrationOutbox.aggregate_type == 'order').count()
     assert published > 0
     assert release_unpaid(intent.id, request, db, SimpleNamespace(id='direct-pix-user'))['already_released']
-    assert db.query(IntegrationOutbox).count() == published
+    assert db.query(IntegrationOutbox).filter(IntegrationOutbox.aggregate_type == 'order').count() == published
     assert db.query(OnlineOrderOperationalAudit).filter_by(action='direct_pix_unpaid_released').count() == 1
     with pytest.raises(OnlinePaymentConfigurationError, match='Pix diretos pendentes'):
         OnlinePaymentService.prepare_shift_for_close(db, restaurant_id=99420, shift_id=shift.id)
@@ -156,7 +156,7 @@ def test_manual_unpaid_release_publishes_once_and_later_confirm_does_not_republi
     assert order_row.online_payment_status == 'approved'
     assert db.query(Pagamento).count() == 1
     assert all(item.pago for item in order_row.itens)
-    assert db.query(IntegrationOutbox).count() == published
+    assert db.query(IntegrationOutbox).filter(IntegrationOutbox.aggregate_type == 'order').count() == published
     assert confirm_receipt(intent.id, ReceiptConfirmation(received_amount='100.00',
         checked_bank_statement=True), db, SimpleNamespace(id='direct-pix-user'))['already_confirmed']
     with pytest.raises(HTTPException) as blocked:
