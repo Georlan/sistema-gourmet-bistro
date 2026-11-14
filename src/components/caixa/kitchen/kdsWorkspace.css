@@ -168,6 +168,15 @@
   cursor: pointer;
 }
 .kds-workspace__menu button + button { border-top: 1px solid var(--kds-border); }
+.kds-workspace__offline {
+  margin: 0;
+  padding: .65rem .8rem;
+  border: 1px solid var(--kds-border);
+  border-radius: .6rem;
+  background: var(--kds-raised);
+  color: var(--kds-text);
+  font: 600 .82rem/1.45 var(--koma-font-body);
+}
 .kds-workspace__search {
   display: flex;
   align-items: center;

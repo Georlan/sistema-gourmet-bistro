@@ -42,6 +42,59 @@ test('KDS uses one responsive production queue, filters and All Day respecting s
   if (process.env.KOMA_CAPTURE_UI) await page.screenshot({path:testInfo.outputPath('kds-queue-mobile.png')});
 });
 
+test('KDS operator can request canonical queue reconciliation without changing any item', async ({page}) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  const statuses = { 'kds-burger-1': 'preparando', 'kds-burger-2': 'preparando' };
+  let reads = 0;
+  let statusMutations = 0;
+  await page.route('**/comandas/detalhes/todos?*', route => {
+    reads += 1;
+    return route.fulfill({json:[ticketData(statuses)]});
+  });
+  await page.route('**/comandas/delivery/ativos', route => route.fulfill({json:[ticketData(statuses)]}));
+  await page.route('**/comandas/itens/*/status?*', route => {
+    statusMutations += 1;
+    return route.fulfill({status:500,json:{detail:'Unexpected mutation from refresh'}});
+  });
+  await page.goto('/?view=caixa');
+  await page.getByRole('button', {name:'Cozinha', exact:true}).first().click();
+  const workspace = page.locator('.kds-workspace');
+  await expect(workspace.getByText('Pedido #333')).toBeVisible();
+  await page.waitForTimeout(300);
+  const before = reads;
+  await workspace.getByRole('button', {name:'Mais ferramentas da cozinha'}).click();
+  await workspace.getByRole('button', {name:'Atualizar fila'}).click();
+  await expect.poll(() => reads).toBeGreaterThan(before);
+  await expect(workspace.locator('[data-kds-item-status="preparando"]')).toHaveCount(2);
+  await page.evaluate(() => window.dispatchEvent(new Event('offline')));
+  await expect(workspace.getByRole('status')).toContainText('Dispositivo sem internet');
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await expect(workspace.getByRole('status')).toHaveCount(0);
+  expect(statusMutations).toBe(0);
+});
+
+test('cozinha standalone can request the same canonical refresh without access to service actions', async ({page}) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.addInitScript(() => sessionStorage.setItem('koma_caixa_role', 'cozinha'));
+  const statuses = { 'kds-burger-1': 'preparando', 'kds-burger-2': 'preparando' };
+  let reads = 0;
+  await page.route('**/comandas/detalhes/todos?*', route => {
+    reads += 1;
+    return route.fulfill({json:[ticketData(statuses)]});
+  });
+  await page.goto('/?view=caixa');
+  const kitchen = page.locator('.kds-workspace[data-kitchen-mode="standalone"]');
+  await expect(kitchen.getByText('Pedido #333')).toBeVisible();
+  const before = reads;
+  await kitchen.getByRole('button', {name:'Mais ferramentas da cozinha'}).click();
+  await kitchen.getByRole('button', {name:'Atualizar fila'}).click();
+  await expect.poll(() => reads).toBeGreaterThan(before);
+  await expect(kitchen.getByRole('button', {name:/Marcar como entregue/i})).toHaveCount(0);
+  await expect(kitchen.getByRole('button', {name:/Cancelar pedido/i})).toHaveCount(0);
+});
+
 test('KDS bulk marks all items atomically in one HTTP call and never falsely confirms failed batches', async ({page}) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);

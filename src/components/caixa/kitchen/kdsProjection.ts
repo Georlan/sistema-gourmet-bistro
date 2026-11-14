@@ -52,7 +52,7 @@ const ticketKeyFor = (item: KdsKitchenItem) =>
 
 /** A KDS ticket may start only after acceptance; local orders have no gate. */
 export const isKdsKitchenOrderEligible = (status?: Order['deliveryStatus'] | string | null) =>
-  !['pendente', 'analise', 'recusado'].includes(String(status || '').toLowerCase());
+  !['pendente', 'analise', 'recusado', 'transito', 'finalizado'].includes(String(status || '').toLowerCase());
 
 const normalizeSearchText = (value: unknown): string =>
   String(value ?? '')
