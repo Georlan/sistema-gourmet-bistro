@@ -1,142 +1,58 @@
-import { useEffect, useState } from "react";
-import { CheckCircle2, Clock3, Loader2 } from "lucide-react";
-import { API_BASE_URL } from "../../config/api";
-import {
-  type OrderPaymentStatus,
-  type StoredOrder,
-  reportDirectPixCustomerPayment,
-} from "../orderTracking";
+import {useEffect,useState} from 'react';
+import {Clock3,Loader2,Copy} from 'lucide-react';
+import {API_BASE_URL} from '../../config/api';
+import {type OrderPaymentStatus,type StoredOrder,reportDirectPixCustomerPayment} from '../orderTracking';
 
-interface DirectPixCustomerConfirmProps {
-  order: Pick<
-    StoredOrder,
-    "id" | "numero_pedido" | "idempotency_key" | "tracking_token" | "tracking_url" | "pagamento"
-  >;
-  apiBaseUrl?: string;
-  onReported?: (pagamento: OrderPaymentStatus) => void;
+interface Props {
+  order:Pick<StoredOrder,'id'|'numero_pedido'|'idempotency_key'|'tracking_token'|'tracking_url'|'pagamento'>;
+  apiBaseUrl?:string;
+  onReported?:(pagamento:OrderPaymentStatus)=>void;
 }
+const CLOSED=new Set(['approved','paid','cancelled','canceled','expired','rejected','refunded']);
 
-const SETTLED_OR_CLOSED_STATUSES = new Set([
-  "approved",
-  "paid",
-  "cancelled",
-  "canceled",
-  "expired",
-  "rejected",
-  "refunded",
-]);
+export function DirectPixCustomerConfirm({order,apiBaseUrl=API_BASE_URL,onReported}:Props){
+  const pagamento=order.pagamento;
+  const reportedFromServer=Boolean(pagamento?.cliente_informou_pagamento);
+  const [reported,setReported]=useState(reportedFromServer);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  const [copied,setCopied]=useState(false);
 
-export function DirectPixCustomerConfirm({
-  order,
-  apiBaseUrl = API_BASE_URL,
-  onReported,
-}: DirectPixCustomerConfirmProps) {
-  const pagamento = order.pagamento;
-  const serverReported = Boolean(pagamento?.cliente_informou_pagamento);
-  const [localReported, setLocalReported] = useState(serverReported);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [copyFeedback, setCopyFeedback] = useState("");
+  useEffect(()=>{
+    setReported(Boolean(pagamento?.cliente_informou_pagamento));
+    setCopied(false);setError('');
+  },[order.id,pagamento?.cliente_informou_pagamento]);
 
-  useEffect(() => {
-    setLocalReported(Boolean(pagamento?.cliente_informou_pagamento));
-    setError("");
-  }, [order.id, pagamento?.cliente_informou_pagamento]);
+  const status=String(pagamento?.status||'').toLowerCase();
+  if(!pagamento?.confirmacao_manual||CLOSED.has(status))return null;
+  const canReport=Boolean(order.tracking_token?.trim()||order.tracking_url?.trim()||order.idempotency_key?.trim());
+  const alreadyReported=reported||reportedFromServer;
 
-  const rawStatus = String(pagamento?.status || "").toLowerCase();
-  if (!pagamento?.confirmacao_manual || SETTLED_OR_CLOSED_STATUSES.has(rawStatus)) {
-    return null;
+  async function report(){
+    if(busy||alreadyReported)return;
+    setBusy(true);setError('');
+    try{
+      const next=await reportDirectPixCustomerPayment(order,apiBaseUrl);
+      setReported(true);onReported?.(next);
+    }catch(err){setError(err instanceof Error&&err.message.trim()?err.message:'Não foi possível avisar agora.');}
+    finally{setBusy(false);}
   }
 
-  const canAuthenticateReport = Boolean(
-    order.tracking_token?.trim()
-    || order.tracking_url?.trim()
-    || order.idempotency_key?.trim(),
-  );
-
-  const reported = serverReported || localReported;
-
-  const handleConfirm = async () => {
-    if (busy || reported) return;
-    setBusy(true);
-    setError("");
-    try {
-      const nextPayment = await reportDirectPixCustomerPayment(order, apiBaseUrl);
-      setLocalReported(true);
-      onReported?.(nextPayment);
-    } catch (err) {
-      setError(
-        err instanceof Error && err.message.trim()
-          ? err.message
-          : "Não foi possível informar o pagamento agora. Tente novamente.",
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="mt-3 space-y-2 text-left" data-testid="direct-pix-customer-confirm">
-      <div className="rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-3 text-center">
-        <p className="text-[11px] text-koma-muted">Código curto para localizar seu pedido</p>
-        <p className="my-1 text-xl font-black tracking-wide text-emerald-300">Pedido #{order.numero_pedido}</p>
-        <button type="button" className="min-h-10 rounded-lg border border-emerald-500/50 px-3 text-xs font-semibold text-koma-foreground" onClick={() => {
-          void navigator.clipboard.writeText('Pedido #' + order.numero_pedido)
-            .then(() => setCopyFeedback('Número do pedido copiado.'))
-            .catch(() => setCopyFeedback('Copie o número exibido acima.'));
-        }}>Copiar número do pedido</button>
-        {copyFeedback && <p role="status" className="mt-1 text-[11px] text-koma-muted">{copyFeedback}</p>}
-        <p className="mt-2 text-xs leading-relaxed text-koma-muted">Você pode pagar e fechar esta página. O restaurante já consegue localizar o pedido e conferir o Pix, mesmo sem tocar em “Já fiz o Pix”.</p>
-      </div>
-
-      {reported ? (
-        <div
-          role="status"
-          data-testid="direct-pix-customer-reported-banner"
-          className="flex items-start gap-2.5 rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2.5 text-emerald-200"
-        >
-          <Clock3 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
-          <div className="min-w-0">
-            <p className="text-xs font-bold leading-snug text-emerald-300">
-              Pagamento informado. Aguardando confirmação do restaurante.
-            </p>
-            <p className="mt-0.5 text-[10px] leading-relaxed text-koma-muted">
-              O restaurante conferirá o recebimento na conta bancária para liberar o preparo.
-            </p>
-          </div>
-        </div>
-      ) : (
-        canAuthenticateReport && (
-          <button
-            type="button"
-            disabled={busy}
-            data-testid="direct-pix-customer-report-btn"
-            onClick={() => void handleConfirm()}
-            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-xs font-black uppercase tracking-wide text-white shadow transition hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60"
-          >
-            {busy ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                Avisando restaurante…
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                Já fiz o Pix
-              </>
-            )}
-          </button>
-        )
-      )}
-
-      {error && (
-        <p
-          role="alert"
-          className="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11px] font-semibold text-rose-300"
-        >
-          {error}
-        </p>
-      )}
+  return <div data-testid="direct-pix-customer-confirm" className="mt-3 space-y-2">
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-koma-border px-3 py-2">
+      <div className="text-left"><span className="block text-[11px] text-koma-muted">Seu código</span><strong className="text-lg text-koma-foreground">#{order.numero_pedido}</strong></div>
+      <button type="button" className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-koma-border px-3 text-xs font-semibold text-koma-foreground" onClick={()=>{
+        void navigator.clipboard.writeText('Pedido #'+order.numero_pedido).then(()=>setCopied(true)).catch(()=>setError('Copie o número exibido.'));
+      }}><Copy size={14}/>{copied?'Copiado':'Copiar'}</button>
     </div>
-  );
+    <p className="text-center text-xs text-koma-muted">
+      {pagamento.preparo_liberado_sem_confirmacao
+        ? 'Pedido liberado para preparo. Pix ainda pendente.'
+        : 'Pode fechar esta tela. O restaurante já vê o pedido.'}
+    </p>
+    {alreadyReported
+      ? <p role="status" data-testid="direct-pix-customer-reported-banner" className="flex items-center justify-center gap-2 text-xs font-semibold text-emerald-400"><Clock3 size={14}/> Aviso enviado ao restaurante</p>
+      : canReport&&<button type="button" disabled={busy} data-testid="direct-pix-customer-report-btn" onClick={()=>void report()} className="min-h-10 w-full rounded-lg border border-koma-border px-3 text-xs font-semibold text-koma-foreground disabled:opacity-50">{busy?<><Loader2 className="mr-1 inline h-4 w-4 animate-spin"/>Avisando…</>:'Já paguei · avisar restaurante'}</button>}
+    {error&&<p role="alert" className="text-center text-xs text-rose-300">{error}</p>}
+  </div>;
 }
