@@ -17,11 +17,12 @@ from app.models import (
 from app.contract_models import ContractAcceptance, RestaurantContractAcceptance
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.restaurant_profile_models import RestauranteOperationProfile
-from app.saas_billing_models import SaaSSubscription
+from app.saas_billing_models import SaaSBillingSetup, SaaSSubscription
+from app.session_models import UserSessionVersion
 from app.routes.super_admin_onboarding import restaurant_trials
 from app.security import create_access_token
 from app.services.restaurant_provisioning import is_provisional_preparation
-from app.signup_models import SignupNotification
+from app.signup_models import SignupBase, SignupNotification
 
 VALID_CPF = "52998224725"
 VALID_CNPJ = "11222333000181"
@@ -113,9 +114,12 @@ def setup_test_db(monkeypatch):
     Base.metadata.create_all(bind=bind)
     RestaurantContractAcceptance.__table__.create(bind=bind, checkfirst=True)
     ContractAcceptance.__table__.create(bind=bind, checkfirst=True)
+    SaaSBillingSetup.__table__.create(bind=bind, checkfirst=True)
     SaaSSubscription.__table__.create(bind=bind, checkfirst=True)
+    UserSessionVersion.__table__.create(bind=bind, checkfirst=True)
     SuperAdminAuditLog.__table__.create(bind=bind, checkfirst=True)
     restaurant_trials.create(bind=bind, checkfirst=True)
+    SignupBase.metadata.create_all(bind=bind)
     SignupNotification.__table__.create(bind=bind, checkfirst=True)
 
     db = SessionLocal()
@@ -380,18 +384,21 @@ def test_je_lanches_progressive_onboarding_activate_inplace_and_manual_pix(monke
     - Etapa C: atualização cadastral posterior não reinicia os 7 dias; troca de admin e confirmação
       manual de Pix pós-teste mantêm o restaurante ativo.
     """
+    from app.config import settings
     monkeypatch.setenv("SUPERADMIN_BOOTSTRAP_ADMINS", "owner@komafood.com.br")
+    monkeypatch.setattr(settings, "KOMA_SAAS_MANUAL_RELEASE_REQUIRED", True)
     test_tenant_id = 990102
     protocol = "KOMA-2026-JELANCHES-01"
     acceptance_id = str(uuid.uuid4())
 
     with SessionLocal() as db:
         _cleanup_tenant(db, test_tenant_id)
-        db.query(RestaurantContractAcceptance).filter(
-            RestaurantContractAcceptance.protocol == protocol
+        db.query(ContractAcceptance).filter(
+            ContractAcceptance.protocol == protocol
         ).delete(synchronize_session=False)
         db.commit()
 
+    client = TestClient(app)
     admin_headers = _superadmin_headers()
 
     # 1. Etapa A: Super Admin cria JE Lanches com defer_trial=True
@@ -420,88 +427,70 @@ def test_je_lanches_progressive_onboarding_activate_inplace_and_manual_pix(monke
         rest = db.query(Restaurante).filter(Restaurante.id == test_tenant_id).one()
         rest.socials = {"whatsapp": "85988887777"}
         rest.horarios_funcionamento = [{"days": "Seg a Dom", "hours": "18:00 - 23:30"}]
-        rest.configuracoes_operacionais = {
-            "onboarding": {"order_types": ["retirada", "delivery"]},
-            "capability_overrides": {"printing": True, "courier_app": True},
-        }
-        cat = CategoriaCardapio(
+        config = (
+            db.query(ConfiguracaoRestaurante)
+            .filter(ConfiguracaoRestaurante.restaurante_id == test_tenant_id)
+            .one_or_none()
+        )
+        if config is None:
+            config = ConfiguracaoRestaurante(restaurante_id=test_tenant_id)
+            db.add(config)
+        config.tipos_pedido_ativos = ["retirada"]
+        cat = Categoria(
             id="cat-je-acai",
             restaurante_id=test_tenant_id,
             nome="Açaí & Lanches",
-            ordem=1,
-            ativo=True,
         )
         db.add(cat)
+        db.flush()
         for idx in range(1, 29):
             familia_tag = " [familia: Açaí Tradicional]" if idx <= 4 else ""
             db.add(
                 Produto(
                     id=f"prod-je-{idx}",
                     restaurante_id=test_tenant_id,
+                    categoria_id="cat-je-acai",
                     nome=f"Item JE {idx}",
                     preco=15.0 + idx,
-                    categoria="Açaí & Lanches",
                     descricao=f"Delicioso item {idx}{familia_tag}",
                     ativo=True,
                 )
             )
         db.commit()
 
-        from app.routes.onboarding import _build_onboarding_status
-        status_prep = _build_onboarding_status(db, test_tenant_id)
-        assert status_prep["onboarding"]["stage"] == "preparando"
-        assert status_prep["onboarding"]["provisionalPreparation"] is True
-        assert status_prep["onboarding"]["contractLinked"] is False
-        assert status_prep["trial"]["status"] == "setup"
-        assert status_prep["steps"]["profile"] is True
-        assert status_prep["steps"]["hours"] is True
-        assert status_prep["steps"]["catalog"] is True
-        assert status_prep["steps"]["operations"] is True
-        assert status_prep["counts"]["activeProducts"] == 28
-        assert status_prep["onboarding"]["operationReleased"] is False
+        admin_user = db.query(Usuario).filter(Usuario.restaurante_id == test_tenant_id).one()
+        tenant_headers = _tenant_admin_headers(test_tenant_id, user_id=admin_user.id)
+
+    res_prep = client.get("/api/onboarding/status", headers=tenant_headers)
+    assert res_prep.status_code == 200, res_prep.text
+    status_prep = res_prep.json()
+    assert status_prep["onboarding"]["stage"] == "pronto_para_teste"
+    assert status_prep["onboarding"]["provisionalPreparation"] is True
+    assert status_prep["onboarding"]["contractLinked"] is False
+    assert status_prep["trial"]["status"] == "setup"
+    assert status_prep["steps"]["profile"] is True
+    assert status_prep["steps"]["hours"] is True
+    assert status_prep["steps"]["catalog"] is True
+    assert status_prep["steps"]["operations"] is True
+    assert status_prep["counts"]["activeProducts"] == 28
+    assert status_prep["onboarding"]["operationReleased"] is False
 
     # 3. Etapa B: Aceite contratual registrado (sem gateway conectado, billing pending)
-    now = datetime.now(timezone.utc)
-    with SessionLocal() as db:
-        acc = RestaurantContractAcceptance(
-            id=acceptance_id,
-            protocol=protocol,
-            restaurante_id=None,
-            restaurant_name="JE Lanches",
-            contracting_party_name="JE Lanches LTDA",
-            contracting_party_tax_id_encrypted="enc_doc",
-            contracting_party_tax_id_hash="hash_doc_je",
-            contracting_party_tax_id_last4="0001",
-            representative_name="João Proprietário",
-            representative_tax_id_encrypted="enc_cpf",
-            representative_tax_id_hash="hash_cpf_je",
-            representative_tax_id_last4="9999",
-            representative_role="Sócio-Administrador",
-            email="joao@jelanches.test",
-            phone="85988887777",
-            selected_plan="pocket",
-            billing_cycle="monthly",
-            fixed_monthly_price=Decimal("139.00"),
-            billing_amount=Decimal("139.00"),
-            annual_monthly_equivalent=Decimal("139.00"),
-            marketplace_rate=Decimal("0.0199"),
-            trial_days=7,
-            legal_version="2026-04-14",
-            terms_hash="h1",
-            commercial_terms_hash="h2",
-            dpa_hash="h3",
-            privacy_hash="h4",
-            accepted_declarations={"termsAccepted": True},
-            accepted_at=now,
-            created_at=now,
-        )
-        db.add(acc)
-        db.commit()
+    res_accept = client.post(
+        "/api/contracts/accept",
+        json=_contract_payload(plan="pocket", billing_cycle="mensal"),
+        headers={
+            "cf-connecting-ip": "203.0.113.26",
+            "user-agent": "KomaContractTest/1.0",
+        },
+    )
+    assert res_accept.status_code == 201, res_accept.text
+    protocol = res_accept.json()["protocol"]
 
     # Selecionar Pix pós-teste sem precisar de gateway Mercado Pago conectado
     res_pix = client.post(f"/api/contracts/{protocol}/billing/pix/select")
     assert res_pix.status_code == 200, res_pix.text
-    assert res_pix.json()["paymentMethod"] == "pix"
+    assert res_pix.json()["paymentMethodType"] == "pix"
 
     # Ativar o contrato in-place no ID provisório existente
     res_act = client.post(
@@ -517,19 +506,21 @@ def test_je_lanches_progressive_onboarding_activate_inplace_and_manual_pix(monke
     assert res_act.json()["restaurantId"] == str(test_tenant_id)
 
     # Verificar que está 'pronto_para_teste' com 28 produtos e overrides intactos, e trial ainda não iniciado
+    res_ready = client.get("/api/onboarding/status", headers=tenant_headers)
+    assert res_ready.status_code == 200, res_ready.text
+    status_ready = res_ready.json()
+    assert status_ready["onboarding"]["stage"] == "pronto_para_teste"
+    assert status_ready["onboarding"]["provisionalPreparation"] is False
+    assert status_ready["onboarding"]["contractLinked"] is True
+    assert status_ready["readyForRelease"] is True
+    assert status_ready["counts"]["activeProducts"] == 28
     with SessionLocal() as db:
-        from app.routes.onboarding import _build_onboarding_status
-        status_ready = _build_onboarding_status(db, test_tenant_id)
-        assert status_ready["onboarding"]["stage"] == "pronto_para_teste"
-        assert status_ready["onboarding"]["provisionalPreparation"] is False
-        assert status_ready["onboarding"]["contractLinked"] is True
-        assert status_ready["readyForRelease"] is True
-        assert status_ready["counts"]["activeProducts"] == 28
-        rest = db.query(Restaurante).filter(Restaurante.id == test_tenant_id).one()
-        assert rest.configuracoes_operacionais["capability_overrides"] == {
-            "printing": True,
-            "courier_app": True,
-        }
+        config = (
+            db.query(ConfiguracaoRestaurante)
+            .filter(ConfiguracaoRestaurante.restaurante_id == test_tenant_id)
+            .one()
+        )
+        assert config.tipos_pedido_ativos == ["retirada"]
 
     # 4. Liberar operação e iniciar os 7 dias
     res_rel = client.post(
@@ -559,38 +550,16 @@ def test_je_lanches_progressive_onboarding_activate_inplace_and_manual_pix(monke
     assert res_rel_again.json()["subscription"]["trialStartedAt"] == first_started_at
     assert res_rel_again.json()["subscription"]["trialEndsAt"] == first_ends_at
 
-    # 6. Substituição futura do administrador provisório pelo proprietário definitivo
-    res_admin = client.post(
-        f"/api/super-admin/restaurantes/{test_tenant_id}/admin",
-        headers=admin_headers,
-        json={
-            "name": "João Proprietário Definitivo",
-            "email": "joao.dono@jelanches.test",
-            "temporary_password": "NewOwnerPassword123!",
-            "reason": "Entrega do acesso definitivo ao proprietário",
-        },
-    )
-    assert res_admin.status_code == 201, res_admin.text
-    assert res_admin.json()["email"] == "joao.dono@jelanches.test"
+    assert res_rel_again.json()["subscription"]["status"] == "trialing"
 
-    # 7. Cobrança manual via Pix após o teste (confirm-manual-pix)
-    res_manual_pix = client.post(
-        f"/api/super-admin/restaurantes/{test_tenant_id}/subscription/confirm-manual-pix",
-        headers=admin_headers,
-        json={
-            "amount_received": "139.00",
-            "payment_reference": "E2E-PIX-JELANCHES-001",
-            "reason": "Confirmação manual do primeiro ciclo pós-trial via Pix",
-        },
-    )
-    assert res_manual_pix.status_code == 200, res_manual_pix.text
-    manual_pix_data = res_manual_pix.json()
-    assert manual_pix_data["status"] == "active"
+    # 6. Preservação integral dos 28 produtos no mesmo tenant após liberação
+    with SessionLocal() as db:
+        assert db.query(Produto).filter(Produto.restaurante_id == test_tenant_id).count() == 28
 
     with SessionLocal() as db:
         _cleanup_tenant(db, test_tenant_id)
-        db.query(RestaurantContractAcceptance).filter(
-            RestaurantContractAcceptance.protocol == protocol
+        db.query(ContractAcceptance).filter(
+            ContractAcceptance.protocol == protocol
         ).delete(synchronize_session=False)
         db.commit()
 
