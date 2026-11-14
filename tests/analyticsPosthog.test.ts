@@ -181,6 +181,8 @@ test('react initialization and error tracking are configured cleanly in main and
 
   // Session replay disabled
   assert.match(posthogConfig, /disable_session_recording:\s*true/);
+  // Honor the legacy Cloudflare spelling until the production variable is renamed.
+  assert.match(posthogConfig, /VITE_POSTHOG_HOST\s*\|\|\s*import\.meta\.env\?\.VITE_POSTHOG_HOS/);
   assert.match(posthogConfig, /autocapture:\s*false/);
   assert.match(posthogConfig, /opt_out_useragent_filter:\s*true/);
 
