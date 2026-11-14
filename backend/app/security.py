@@ -284,13 +284,17 @@ def _authenticated_user_from_token(token: str, db: Session) -> Usuario:
         )
 
     row = (
-        db.query(Usuario, UserSessionVersion.token_version)
+        db.query(Usuario, UserSessionVersion.token_version, Restaurante.saas_status)
         .outerjoin(
             UserSessionVersion,
             and_(
                 UserSessionVersion.user_id == Usuario.id,
                 UserSessionVersion.restaurante_id == restaurante_id,
             ),
+        )
+        .outerjoin(
+            Restaurante,
+            Restaurante.id == Usuario.restaurante_id,
         )
         .filter(Usuario.id == str(user_id))
         .first()
@@ -300,7 +304,7 @@ def _authenticated_user_from_token(token: str, db: Session) -> Usuario:
             db.rollback()
         raise credentials_exception
 
-    user, stored_token_version = row
+    user, stored_token_version, tenant_saas_status = row
     if user.restaurante_id != restaurante_id:
         if db.in_transaction():
             db.rollback()
@@ -327,15 +331,13 @@ def _authenticated_user_from_token(token: str, db: Session) -> Usuario:
         )
 
     # Check SaaS tenant status
-    if restaurante_id and restaurante_id > 0:
-        tenant_status = db.query(Restaurante.saas_status).filter(Restaurante.id == restaurante_id).first()
-        if tenant_status is not None and tenant_status[0] == "suspended":
-            if db.in_transaction():
-                db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Restaurante temporariamente suspenso na plataforma KÔMA.",
-            )
+    if restaurante_id and restaurante_id > 0 and tenant_saas_status == "suspended":
+        if db.in_transaction():
+            db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Restaurante temporariamente suspenso na plataforma KÔMA.",
+        )
 
     # O restante da requisição só precisa dos campos já carregados do usuário.
     # Destacar antes do rollback preserva esses escalares sem manter a conexão

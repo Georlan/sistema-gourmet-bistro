@@ -317,8 +317,19 @@ def obter_resumo_turno_atual(
     check_caixa_permission(current_user)
     rest_id = require_tenant_id()
 
-    turno = db.query(CaixaTurno).filter_by(restaurante_id=rest_id, status="aberto").first()
-    if not turno:
+    turno_row = (
+        db.query(CaixaTurno, Usuario.nome)
+        .outerjoin(
+            Usuario,
+            and_(
+                CaixaTurno.aberto_por_id == Usuario.id,
+                Usuario.restaurante_id == rest_id,
+            ),
+        )
+        .filter(CaixaTurno.restaurante_id == rest_id, CaixaTurno.status == "aberto")
+        .first()
+    )
+    if not turno_row:
         return CaixaTurnoResumoResponse(
             turno_id=None,
             status="sem_turno",
@@ -341,8 +352,8 @@ def obter_resumo_turno_atual(
             resumo_dia=None
         )
 
-    operador = db.query(Usuario).filter_by(id=turno.aberto_por_id, restaurante_id=rest_id).first()
-    operador_nome = operador.nome if operador else "Operador"
+    turno, operador_nome_row = turno_row
+    operador_nome = operador_nome_row or "Operador"
 
     totals = _totais_financeiros_turno(db, rest_id, turno)
     atividades_recentes, ultima_atividade_caixa = _atividades_recentes_turno(

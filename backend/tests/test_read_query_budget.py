@@ -98,11 +98,11 @@ def test_auth_checks_live_suspension_without_reading_restaurant_branding(char_se
         with reads() as queries:
             user = _authenticated_user_from_token(token, db)
     assert user.id == 'usr-char-admin'
-    restaurant_queries = [(sql, columns) for sql, columns in queries if 'FROM restaurantes' in sql]
-    print('READ_BUDGET_AUTH=' + json.dumps({'restaurant_columns': [len(columns) for _, columns in restaurant_queries]}))
-    assert len(restaurant_queries) == 1
-    assert len(restaurant_queries[0][1]) == 1
-    assert 'saas_status' in restaurant_queries[0][0]
+    print('READ_BUDGET_AUTH=' + json.dumps({'queries': len(queries), 'columns': len(queries[0][1])}))
+    assert len(queries) == 1
+    sql, columns = queries[0]
+    assert 'restaurantes.saas_status' in sql
+    assert not any(col.startswith('restaurantes.') and col != 'restaurantes.saas_status' for col in columns)
 
 
 def test_suspension_still_takes_effect_on_the_next_authentication(char_setup):
