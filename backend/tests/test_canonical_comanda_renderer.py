@@ -76,8 +76,8 @@ def test_online_pickup_hides_operator_and_prints_customer_payment_and_paid_warni
     assert "OPERADOR:" not in ticket
     assert "CANAL:" not in ticket
     assert "CLIENTE" in ticket
-    assert "NOME: GEORLAN" in ticket
-    assert "TELEFONE: (88) 99999-1234" in ticket
+    assert "GEORLAN" in ticket
+    assert "TEL: (88) 99999-1234" in ticket
     assert "FIDELIDADE:" not in ticket
     assert "ITENS" in ticket
     assert "VALOR" in ticket
@@ -88,7 +88,7 @@ def test_online_pickup_hides_operator_and_prints_customer_payment_and_paid_warni
     assert "VALOR PAGO: R$ 12,00" in ticket
     assert "PAGO ONLINE" in ticket
     assert "NÃO COBRAR" in ticket
-    assert "SUBTOTAL ITENS:" in ticket
+    assert "SUBTOTAL ITENS:" not in ticket
     assert "TOTAL DO PEDIDO:" in ticket
     assert "TOTAL GERAL DA MESA:" not in ticket
     assert f"Gerenciado por {ESC_BOLD_ON}Kôma{ESC_BOLD_OFF}" in ticket
@@ -152,8 +152,8 @@ def test_delivery_keeps_customer_loyalty_payment_and_full_financial_breakdown():
     assert "OPERADOR:" not in ticket
     assert "CANAL:" not in ticket
     assert "CLIENTE" in ticket
-    assert "NOME: MARIA" in ticket
-    assert "TELEFONE: (88) 99999-1234" in ticket
+    assert "MARIA" in ticket
+    assert "TEL: (88) 99999-1234" in ticket
     assert "FIDELIDADE: 15 PEDIDOS ANTERIORES" in ticket
     assert "ENTREGA" in ticket
     assert "ENDEREÇO: Rua José de Alencar, 124," in ticket
@@ -188,8 +188,8 @@ def test_cashback_without_registered_loyalty_keeps_basic_customer_block_only():
         ),
     )
 
-    assert "NOME: VISITANTE" in ticket
-    assert "TELEFONE: (88) 99999-1234" in ticket
+    assert "VISITANTE" in ticket
+    assert "TEL: (88) 99999-1234" in ticket
     assert "FIDELIDADE:" not in ticket
     assert "DESCONTO CASHBACK:" in ticket
 
@@ -323,8 +323,8 @@ def test_online_dine_in_without_table_prints_customer_pix_and_never_fakes_delive
     assert "ENTREGA" not in ticket
     assert "TAXA DE ENTREGA:" not in ticket
     assert "CLIENTE" in ticket
-    assert "NOME: CLIENTE ONLINE COM NOME" in ticket
-    assert "TELEFONE: (88) 99999-1234" in ticket
+    assert "CLIENTE ONLINE COM NOME" in ticket
+    assert "TEL: (88) 99999-1234" in ticket
     assert "2x EXECUTIVO DA CASA" in ticket
     assert "1x COCA-COLA LATA" in ticket
     assert "FORMA: PIX ONLINE" in ticket
@@ -355,8 +355,8 @@ def test_online_dine_in_reprint_after_table_association_keeps_online_customer_an
     assert "CONSUMO NO LOCAL" in ticket
     assert "ORIGEM: CARDÁPIO ONLINE" in ticket
     assert "MESA: 4" in ticket
-    assert "NOME: GABRIELE" in ticket
-    assert "TELEFONE: (88) 99660-1927" in ticket
+    assert "GABRIELE" in ticket
+    assert "TEL: (88) 99660-1927" in ticket
     assert "FORMA: DINHEIRO" in ticket
     assert ticket.count("REIMPRESSÃO") == 1
 
@@ -542,8 +542,53 @@ def test_mixed_marmitaria_and_beverage_prices_are_right_aligned_at_real_paper_wi
         assert len(item_line) == columns
 
     assert ticket.index("GUARNIÇÕES:") < ticket.index("PROTEÍNAS:")
-    assert "SUBTOTAL ITENS:" in ticket
+    if delivery_fee > 0:
+        assert "SUBTOTAL ITENS:" in ticket
+    else:
+        assert "SUBTOTAL ITENS:" not in ticket
     assert "R$ 16,00" in ticket
     assert "TOTAL DO PEDIDO:" in ticket
     assert f"R$ {16 + delivery_fee:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") in ticket
 
+
+
+def test_canonical_je_ticket_is_compact_without_device_specific_label_logic():
+    """Mudanças de texto são publicadas no backend, sem exigir novo APK."""
+    ticket = _render(
+        [
+            PrintItem(
+                codigo="x-burguer",
+                nome="X-HAMBÚRGUER ARTESANAL COM CHEDDAR E BACON",
+                quantidade=2,
+                preco_unit=14.0,
+                observacao="Opções: Bacon, Carne de Hambúrguer",
+            ),
+            PrintItem(
+                codigo="acerola",
+                nome="SUCO DE ACEROLA",
+                preco_unit=5.0,
+                observacao="Sem açúcar",
+            ),
+        ],
+        ComandaVariant(
+            origin_label="CARDÁPIO ONLINE",
+            location_label=None,
+            operator_label=None,
+            customer_name="PAULO JOSÉ",
+            customer_phone="88996639284",
+            payment_method="dinheiro",
+            amount_due=33.0,
+            payment_required=True,
+            show_financial_breakdown=True,
+        ),
+    )
+    assert "CLIENTE" in ticket
+    assert "PAULO JOSÉ" in ticket
+    assert "NOME:" not in ticket
+    assert "TEL: (88) 99663-9284" in ticket
+    assert "OBS: OPÇÕES:" not in ticket
+    assert "OPÇÕES: BACON" in ticket
+    assert "OBS: SEM AÇÚCAR" in ticket
+    assert "SUBTOTAL ITENS:" not in ticket
+    assert "TOTAL DO PEDIDO:" in ticket
+    assert "R$ 33,00" in ticket

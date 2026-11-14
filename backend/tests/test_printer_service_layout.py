@@ -537,3 +537,63 @@ def test_delivery_motoboy_uses_same_hierarchy_as_unified_ticket():
     assert "ENDEREÇO DE ENTREGA" in motoboy
     assert "COBRAR R$ 22,00" in motoboy
 
+
+
+def test_selected_options_are_not_labeled_as_observation_in_any_koma_receipt():
+    """A regra nasce no backend; vale para todo tenant, Windows e Android."""
+    service = _service()
+    receipt = service.generate_receipt(
+        num_pedido=5,
+        tipo="Retirada",
+        mesa_id=None,
+        garcom_nome="Caixa",
+        taxa_servico_ativa=False,
+        comandas_details=[{
+            "identificador": "Consumo Geral",
+            "itens": [
+                {
+                    "produto": {"nome": "X-Hambúrguer"},
+                    "preco_unit": 14.0,
+                    "status": "preparando",
+                    "observacao": "Opções: Bacon, Carne de Hambúrguer",
+                },
+                {
+                    "produto": {"nome": "Suco de Acerola"},
+                    "preco_unit": 5.0,
+                    "status": "preparando",
+                    "observacao": "Sem açúcar, com gelo separado",
+                },
+            ],
+        }],
+    )
+
+    assert "OPÇÕES: BACON, CARNE DE HAMBÚRGUER" in receipt
+    assert "OBS: OPÇÕES:" not in receipt
+    assert "OBS: SEM AÇÚCAR, COM GELO SEPARADO" in receipt
+    assert "TOTAL GERAL DA MESA:" in receipt
+    assert "R$ 19,00" in receipt
+
+
+def test_long_product_name_retains_price_in_last_line_at_32_40_48_columns():
+    """Nenhum preço antecede o restante do nome ou sai da bobina."""
+    from app.printer_service import (
+        ESC_BOLD_OFF,
+        ESC_BOLD_ON,
+        _append_bold_amount_line,
+    )
+
+    name = "12x X-HAMBURGUER ARTESANAL COM CHEDDAR E BACON"
+    price = "R$ 129,90"
+    for columns in (32, 40, 48):
+        lines = []
+        _append_bold_amount_line(lines, name, price, columns)
+        visible = [
+            line.replace(ESC_BOLD_ON, "").replace(ESC_BOLD_OFF, "")
+            for line in lines
+        ]
+        assert all(len(line) <= columns for line in visible), visible
+        assert "".join(" ".join(line.split()) for line in visible).count(price) == 1
+        assert "X-HAMBURGUER" in " ".join(visible)
+        assert "CHEDDAR E BACON" in " ".join(" ".join(visible).split())
+        assert "R$ 129,90" in visible[-1]
+        assert all("R$" not in line for line in visible[:-1])

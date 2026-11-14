@@ -112,10 +112,11 @@ def test_online_remote_order_uses_same_renderer_without_operator_or_counter_chan
     assert "ORIGEM: CARDÁPIO ONLINE" in ticket
     assert "OPERADOR:" not in ticket
     assert "CANAL: BALCÃO" not in ticket
-    assert "NOME: Georlan" in ticket
+    assert "Georlan" in ticket
+    assert "NOME:" not in ticket
     assert "PAGAMENTO" in ticket
     assert "FORMA: DINHEIRO" in ticket
-    assert "SUBTOTAL ITENS:" in ticket
+    assert "SUBTOTAL ITENS:" not in ticket
     item_line = next(line for line in ticket.splitlines() if "1x BURGUER PÔR DO SOL" in line)
     assert "R$ 34,00" in item_line
 
