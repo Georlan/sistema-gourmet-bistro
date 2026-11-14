@@ -94,7 +94,7 @@ class KomaPrintAndroidCoreTest {
             "   OBS: SEM CEBOLA",
             "-".repeat(48), "-".repeat(48), "PAGAMENTO",
             "FORMA: DINHEIRO", "A COBRAR: R$ 129,90",
-            "SU`OTAL ITENS:".padEnd(48 - price.length) + price,
+            "SUBTOTAL ITENS:".padEnd(48 - price.length) + price,
             "TOTAL DO PEDIDO:".padEnd(48 - price.length) + price,
             "DOCUMENTO NÃO FISCAL",
         ).joinToString("\n")
@@ -108,7 +108,7 @@ class KomaPrintAndroidCoreTest {
         assertTrue(body.contains("PAULO JOSE"))
         assertTrue(body.contains("TEL: (88) 99999-9999"))
         assertFalse(body.contains("NOME:"))
-        assertFalse(body.contains("SU`OTAL ITENS:"))
+        assertFalse(body.contains("SUBTOTAL ITENS:"))
         assertTrue(lines.any { "CHEDDAR E BACON" in it && price in it })
         assertTrue(lines.zipWithNext().none { (a, b) ->
             a.trim().isNotEmpty() && a.trim().all { it == '-' || it == '=' } &&
@@ -120,7 +120,7 @@ class KomaPrintAndroidCoreTest {
     fun `compact 58mm retains subtotal with fees and discounts`() {
         val source = listOf(
             "-".repeat(48),
-            "SU`OTAL ITENS:".padEnd(40) + "R$ 19,00",
+            "SUBTOTAL ITENS:".padEnd(40) + "R$ 19,00",
             "TAXA DE ENTREGA:".padEnd(40) + "R$ 5,00",
             "DESCONTO CUPOM:".padEnd(40) + "-R$ 2,00",
             "TOTAL DO PEDIDO:".padEnd(40) + "R$ 22,00",
@@ -129,7 +129,7 @@ class KomaPrintAndroidCoreTest {
             EscPos58Renderer.buildEscPosPayload(source).drop(5).toByteArray(),
             Charsets.ISO_8859_1,
         )
-        assertTrue("SU`OTAL ITENS:" in text)
+        assertTrue("SUBTOTAL ITENS:" in text)
         assertTrue("TAXA DE ENTREGA:" in text)
         assertTrue("DESCONTO CUPOM:" in text)
         assertTrue("R$ 22,00" in text)
@@ -140,7 +140,7 @@ class KomaPrintAndroidCoreTest {
         val source = listOf(
             "=".repeat(48), "CLIENTE", "NOME: PAULO JOSE",
             "   OBS: OPÇÕES: BACON, CARNE DE HAMBURGUER",
-            "SU`OTAL ITENS:".padEnd(38) + "R$ 19,00",
+            "SUBTOTAL ITENS:".padEnd(38) + "R$ 19,00",
         ).joinToString("\n")
         val wide = PrinterPaperProfile.infer("Epson TM-T20X")
         val payload = EscPos58Renderer.buildEscPosPayload(source, profile = wide)
