@@ -331,10 +331,10 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
           />
 
           {pdvOrderType === 'dine_in' && selectedPdvTableOption && (
-            <div className="cashier-pdv-table-context" role="status" data-testid="pdv-selected-table-context">
+            <div className="cashier-pdv-table-context" data-table-status={selectedPdvTableOption.isOccupied ? 'occupied' : 'free'} role="status" data-testid="pdv-selected-table-context">
               <div className="cashier-pdv-table-context__text">
                 <MapPin size={21} aria-hidden="true" />
-                <span>Pedido para <strong>{formatPdvTableLabel(selectedPdvTableOption.table)}</strong></span>
+                <span><strong>{formatPdvTableLabel(selectedPdvTableOption.table)}</strong><small className="cashier-pdv-table-context__status">{selectedPdvTableOption.isOccupied ? 'Em atendimento · adicionar consumo' : 'Livre · novo atendimento'}</small></span>
               </div>
               <button type="button" onClick={() => setTablePickerOpen(true)}>Trocar mesa</button>
             </div>
@@ -648,7 +648,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                         type="button"
                         className="cashier-pdv-table-trigger"
                         data-table-id={pdvTargetMesaId || 0}
-                        data-table-status={selectedPdvTableOption?.isOccupied ? 'occupied' : selectedPdvTableOption ? 'free' : 'unselected'}
+                        data-table-status={selectedPdvTableOption ? (selectedPdvTableOption.isMerged ? 'merged' : selectedPdvTableOption.isOccupied ? 'occupied' : 'free') : 'unselected'}
                         aria-haspopup="dialog"
                         aria-expanded={tablePickerOpen}
                         aria-controls="pdv-table-picker"
@@ -656,7 +656,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                       >
                         <span className="cashier-pdv-table-trigger__details">
                           <strong>{selectedPdvTableOption ? formatPdvTableLabel(selectedPdvTableOption.table) : 'Escolher mesa'}</strong>
-                          <small>{selectedPdvTableOption ? selectedPdvTableOption.isOccupied ? 'Em atendimento' : 'Livre' : 'Ainda sem mesa'}</small>
+                          <small>{selectedPdvTableOption ? selectedPdvTableOption.isMerged ? 'Mesa unida' : selectedPdvTableOption.isOccupied ? 'Ocupada · adicionar consumo' : 'Livre · iniciar atendimento' : 'Ainda sem mesa'}</small>
                         </span>
                         <span className="cashier-pdv-table-trigger__change">Alterar <ChevronDown size={17} aria-hidden="true" /></span>
                       </button>

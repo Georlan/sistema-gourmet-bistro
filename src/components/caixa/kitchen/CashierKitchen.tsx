@@ -137,7 +137,7 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
         <strong>{item.nome}</strong>
         {isMeaningfulCustomer(customerName, destination) && <small>{customerName}</small>}
         {details.lines.map((line, index) => <small key={index} className="kds-ticket__composition">{line}</small>)}
-        {details.observation && <small className="kds-ticket__observation"><b>Obs:</b> {details.observation}</small>}
+        {details.observation && <small className="kds-ticket__observation"><b>OBS:</b> {details.observation}</small>}
       </div>
       {ready
         ? <span className="kds-ticket__item-complete" title="Preparo confirmado"><Check size={17} aria-hidden="true"/><span className="sr-only">Pronto</span></span>

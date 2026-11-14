@@ -19,12 +19,12 @@ export function tableCardPresentation(state: TableOperationalProjection, showPro
 }
 
 const tones: Record<string, string> = {
-  free: 'koma-table-free-card border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#111416] text-koma-foreground hover:border-emerald-500/50 shadow-xs',
-  occupied: 'border-zinc-300 dark:border-zinc-700/80 bg-white dark:bg-[#131618] text-koma-foreground hover:border-amber-500/50 shadow-xs',
-  ready: 'border-emerald-500/80 dark:border-emerald-500 bg-white dark:bg-[#0e1713] text-koma-foreground ring-1 ring-emerald-500/40 shadow-xs',
-  payment: 'border-sky-300 dark:border-sky-700/70 bg-white dark:bg-[#0f161c] text-koma-foreground hover:border-sky-500/50 shadow-xs',
-  served: 'border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 text-koma-foreground shadow-xs',
-  merged: 'border-dashed border-zinc-300 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/40 text-koma-muted shadow-xs',
+  free: 'koma-table-free-card',
+  occupied: 'koma-table-occupied-card',
+  ready: 'koma-table-ready-card',
+  payment: 'koma-table-payment-card',
+  served: 'koma-table-served-card',
+  merged: 'koma-table-merged-card',
 };
 
 interface Props {
@@ -98,9 +98,9 @@ export function SharedTableCard({
       data-table-status={filterStatus}
       data-operational-state={presentation.key}
       data-density={density}
-      className={`group relative flex min-w-0 min-h-[136px] flex-col justify-between overflow-hidden rounded-2xl border text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${fillHeight ? 'h-full' : ''} ${compact ? 'gap-2 p-3' : 'gap-2 p-3 sm:gap-2.5 sm:p-3.5'} ${tones[presentation.key]} ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
+      className={`group relative flex min-w-0 min-h-[136px] flex-col justify-between overflow-hidden rounded-2xl border text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${fillHeight ? 'h-full' : ''} ${compact ? 'gap-2 p-3' : 'gap-2 p-3 sm:gap-2.5 sm:p-3.5'} koma-table-state-card ${tones[presentation.key]} ${onClick ? 'cursor-pointer hover:shadow-md' : ''}`}
     >
-      <span className="absolute left-0 top-0 h-[2px] w-full bg-current opacity-40" aria-hidden="true" />
+      <span className="koma-table-state-band" aria-hidden="true" />
       <div className="flex items-start justify-between gap-1.5 min-w-0">
         <div className="min-w-0 flex-1">
           <strong
@@ -120,7 +120,7 @@ export function SharedTableCard({
 
       {!occupied && (
         <div className="my-auto py-1 space-y-1">
-          <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+          <div className="flex items-center gap-1.5 text-xs koma-table-state-label font-semibold">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
             <span>{presentation.label}</span>
           </div>
@@ -142,10 +142,10 @@ export function SharedTableCard({
           <div className="flex flex-wrap items-center justify-between gap-1">
             <span className={`text-[10px] font-semibold tracking-wide inline-flex items-center gap-1.5 ${
               presentation.key === 'ready'
-                ? 'text-emerald-600 dark:text-emerald-400 font-bold'
+                ? 'koma-table-state-label font-bold'
                 : presentation.key === 'payment'
-                ? 'text-sky-600 dark:text-sky-400 font-bold'
-                : 'text-zinc-500 dark:text-zinc-400'
+                ? 'koma-table-state-label font-bold'
+                : 'koma-table-state-label'
             }`}>
               {presentation.key === 'ready' && (
                 <span className="relative flex h-2 w-2">
