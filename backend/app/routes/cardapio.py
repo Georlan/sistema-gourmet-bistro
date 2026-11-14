@@ -280,7 +280,9 @@ def consultar_status_pedido_publico(
                 db.flush()
                 status_retorno = "cancelado"
                 payment_failed = True
-            elif payment_intent.status in {"created", "pending"} and not comanda.fechada and status_retorno not in {"recusado", "rejected", "cancelado", "cancelled"}:
+            elif (payment_intent.status in {"created", "pending"} and not comanda.fechada
+                  and comanda.online_payment_status != "pending_released"
+                  and status_retorno not in {"recusado", "rejected", "cancelado", "cancelled"}):
                 status_retorno = "aguardando_pagamento"
             elif payment_intent.status in {"error", "rejected"}:
                 status_retorno = "falha_pagamento"
