@@ -425,7 +425,7 @@ class OnlinePaymentService:
     @staticmethod
     def publish_order_in_session(
         db: Session, *, intent: OnlinePaymentIntent, comanda: Comanda
-    ) -> None:
+    ) -> bool:
         """Publish a public order once it is operationally released.
 
         Financial approval and explicit unpaid release both use this owner.
@@ -437,7 +437,9 @@ class OnlinePaymentService:
             Lancamento.comanda_id == comanda.id,
         ).order_by(Lancamento.timestamp.asc(), Lancamento.id.asc()).first()
         if lancamento is None:
-            raise OnlinePaymentValidationError("Pedido sem lançamento para publicar.")
+            # Provider webhooks can settle historical/synthetic financial-only
+            # checks without a kitchen launch. Preserve their approval flow.
+            return False
         event = OrderCreated(
             restaurant_id=intent.restaurante_id,
             order_id=lancamento.id,
@@ -459,6 +461,7 @@ class OnlinePaymentService:
         enqueue_staff_order_alert(db, event)
         from ..central_whatsapp import enqueue_operator_alert
         enqueue_operator_alert(db, event)
+        return True
 
     @classmethod
     def apply_provider_snapshot_in_session(
