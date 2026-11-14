@@ -143,7 +143,7 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
         ? <span className="kds-ticket__item-complete" title="Preparo confirmado"><Check size={17} aria-hidden="true"/><span className="sr-only">Pronto</span></span>
         : <button type="button" id={`kitchen-finish-btn-${item.id}`} className="kds-ticket__item-action"
             disabled={pending} aria-label={`Marcar como pronto: ${item.nome}`}
-            onClick={() => void markReady([item])}>{pending ? 'Salvando…' : <><Check size={17} aria-hidden="true"/> Pronto</>}</button>}
+            onClick={() => void markReady([item])}>{pending ? 'Salvando…' : <><span className="kds-ticket__action-symbol" aria-hidden="true"><Check size={15}/></span><span>Pronto</span></>}</button>}
     </div>;
   };
 
@@ -158,8 +158,10 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
     return <article key={ticket.key} className="kds-ticket" data-kds-ticket={ticket.key} data-stage={waiting ? 'preparo' : 'pronto'}>
       <header className="kds-ticket__header">
         <div className="kds-ticket__title-row">
-          <h3>Pedido {getKdsTicketLabel(ticket)}</h3>
-          <span className="kds-ticket__destination">{destination}</span>
+          <div className="kds-ticket__identity">
+            <h3>Pedido {getKdsTicketLabel(ticket)}</h3>
+            <span className="kds-ticket__destination">{destination}</span>
+          </div>
           <KitchenTimer itemTimestamp={ticket.timestamp} status={waiting ? 'preparando' : 'pronto'} now={clock} />
         </div>
         <div className="kds-ticket__underhead">
@@ -168,7 +170,7 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
           {waiting && ticket.deliveryStatus === 'aceito' && <span className="kds-ticket__accepted">Aceito</span>}
           {waiting && batchTargets.length > 1 && <button type="button" className="kds-ticket__batch-action"
             onClick={() => void markReady(batchTargets)} aria-label={`Concluir ${batchTargets.length} itens do pedido ${getKdsTicketLabel(ticket)}`}>
-            <Check size={16} aria-hidden="true"/> Concluir {batchTargets.length}
+            <Check size={16} aria-hidden="true"/><span>Concluir <strong>{batchTargets.length}</strong></span>
           </button>}
           {waiting && pendingCount > 0 && available.length <= 1 && <span className="kds-ticket__saving">{pendingCount} salvando</span>}
         </div>
