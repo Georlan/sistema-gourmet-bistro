@@ -67,6 +67,20 @@ def test_brcode_has_valid_structure_and_known_crc_vector():
     assert '010212' not in payload  # no false dynamic/single-use claim
 
 
+
+def test_same_pix_key_generates_distinct_codes_for_different_orders():
+    receiver = {'key': 'pix@example.com', 'name': 'Restaurante', 'city': 'Fortaleza'}
+    first = brcode(**receiver, amount=Decimal('48.90'), txid='KOMAORDER00001')
+    second = brcode(**receiver, amount=Decimal('72.40'), txid='KOMAORDER00002')
+    assert first != second
+    assert '540548.90' in first
+    assert '540572.40' in second
+    assert 'KOMAORDER00001' in first
+    assert 'KOMAORDER00002' in second
+    assert crc16(first[:-4]) == first[-4:]
+    assert crc16(second[:-4]) == second[-4:]
+
+
 @pytest.mark.parametrize('kind,key',[('cpf','11111111111'),('cpf','12345678901'),('phone','85999999999'),('random','not-a-uuid'),('email','broken')])
 def test_invalid_keys_are_rejected(kind,key):
     with pytest.raises(ValueError): normalize_key(kind,key)
