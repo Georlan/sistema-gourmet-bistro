@@ -579,3 +579,79 @@ def test_concurrent_courier_assignment_last_write_wins_authoritative(setup_db):
     finally:
         db.close()
 
+
+def test_dispatch_rejects_inactive_linked_user_and_checks_printing_entitlement_once(setup_db):
+    headers = _delivery_headers()
+
+    db = SessionLocal(restaurante_id=1)
+    try:
+        inactive_user = Usuario(
+            id="u-moto-inativo",
+            restaurante_id=1,
+            nome="Motoboy Inativo",
+            usuario="moto_inativo",
+            senha_hash=get_password_hash("123"),
+            role="motoboy",
+            status="inativo",
+        )
+        db.add(inactive_user)
+        db.flush()
+        inactive_mb = Motoboy(
+            restaurante_id=1,
+            usuario_id=inactive_user.id,
+            nome="Motoboy Inativo",
+            telefone="81 94444-5555",
+            ativo=True,
+        )
+        db.add(inactive_mb)
+        db.commit()
+        inactive_mb_id = inactive_mb.id
+    finally:
+        db.close()
+
+    order = client.post(
+        "/comandas/",
+        json={
+            "mesa_id": None,
+            "garcom_id": "u-del-01",
+            "tipo": "Delivery",
+            "identificador": "Cliente Dispatch",
+            "delivery_status": "pronto",
+            "delivery_telefone": "81 97777-6666",
+            "delivery_endereco": "Rua Dispatch, 10",
+            "delivery_taxa": 5.0,
+        },
+        headers=headers,
+    )
+    assert order.status_code == 201
+    order_id = order.json()["id"]
+
+    missing_res = client.post(f"/comandas/{order_id}/delivery/despachar", json={}, headers=headers)
+    assert missing_res.status_code == 400
+
+    inactive_res = client.post(
+        f"/comandas/{order_id}/delivery/despachar",
+        json={"motoboy_id": inactive_mb_id},
+        headers=headers,
+    )
+    assert inactive_res.status_code == 404
+
+    active_mb = client.post(
+        "/comandas/motoboys/cadastro",
+        json={"nome": "Motoboy Ativo", "telefone": "81 95555-6666"},
+        headers=headers,
+    )
+    assert active_mb.status_code == 201
+    active_mb_id = active_mb.json()["id"]
+
+    with patch("app.application.printing.service._printing_allowed", return_value=True) as mock_allowed:
+        ok_res = client.post(
+            f"/comandas/{order_id}/delivery/despachar",
+            json={"motoboy_id": active_mb_id},
+            headers=headers,
+        )
+    assert ok_res.status_code == 200
+    assert ok_res.json()["delivery_status"] == "transito"
+    assert mock_allowed.call_count == 1
+
+

@@ -20,6 +20,7 @@ from ...services.customer_relationship import load_customer_relationship_metrics
 from ...services.order_financials import open_balance
 from ...services.printing import (
     PrintingRequestError,
+    _printing_allowed,
     enqueue_cash_closing_receipt,
     enqueue_print_job,
     enqueue_table_receipt,
@@ -536,6 +537,9 @@ class PrintingApplicationService:
                 status_code=422,
             )
 
+        if not _printing_allowed(db, intent.restaurant_id):
+            return []
+
         config = db.query(ConfiguracaoRestaurante).filter(
             ConfiguracaoRestaurante.restaurante_id == intent.restaurant_id,
         ).first()
@@ -586,6 +590,7 @@ class PrintingApplicationService:
                 source_id=comanda.id,
                 payload_text=payload,
                 idempotency_key=f"{base_key}:{part}",
+                printing_allowed=True,
             )
             if job is not None:
                 jobs.append(job)
