@@ -7,6 +7,7 @@ import { QRCodeSVG } from 'qrcode.react';
  */
 
 import type { CardapioFulfillment } from "./fulfillment";
+import { fetchPopularProducts, registerPopularProductsAlias } from "./popularProductsClient";
 import { buildWhatsAppContactUrl } from "../config/whatsappUtils";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -280,9 +281,16 @@ export default function CardapioPage() {
     }
 
     try {
+      const isNumericIdentifier = /^\d+$/.test(identifier);
       const query = new URLSearchParams(
-        /^\d+$/.test(identifier) ? { restaurante_id: identifier } : { slug: identifier },
+        isNumericIdentifier ? { restaurante_id: identifier } : { slug: identifier },
       );
+      void fetchPopularProducts({
+        apiBaseUrl: API_BASE_URL,
+        slug: isNumericIdentifier ? null : identifier,
+        restaurantId: isNumericIdentifier ? identifier : null,
+        force: background,
+      }).catch(() => []);
       const response = await fetch(
         `${API_BASE_URL}/api/cardapio-digital/public?${query.toString()}`,
         { cache: "no-store" },
@@ -296,6 +304,14 @@ export default function CardapioPage() {
       }
 
       const restaurant = payload.restaurante;
+      if (restaurant?.id) {
+        const aliasSlug = typeof restaurant.slug === "string" && restaurant.slug.trim()
+          ? restaurant.slug.trim()
+          : (isNumericIdentifier ? "" : identifier);
+        if (aliasSlug) {
+          registerPopularProductsAlias(API_BASE_URL, restaurant.id, aliasSlug);
+        }
+      }
       const categoryMap: Record<string, string> = {};
       payload.categorias.forEach((category) => {
         categoryMap[String(category.id)] = String(category.nome || "");

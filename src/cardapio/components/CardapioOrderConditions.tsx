@@ -2,6 +2,7 @@ import CatalogProductImage from './CatalogProductImage';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Truck } from 'lucide-react';
 import type { BrandConfig, Product } from '../CardapioTypes';
+import { fetchPopularProducts } from '../popularProductsClient';
 import { resolveCatalogDisplayProduct } from '../resolvePairingDisplay';
 import { CardapioRecommendations } from './CardapioRecommendations';
 import { CardapioHighlights } from './CardapioHighlights';
@@ -58,33 +59,28 @@ function PopularProductsPreview({ brand }: { brand: BrandConfig }) {
 
   useEffect(() => {
     if (!brand.id) return;
+    let cancelled = false;
     setRankedIds([]);
-    const controller = new AbortController();
 
-    void fetch(`${resolveApiBaseUrl()}/api/cardapio-digital/populares?restaurante_id=${encodeURIComponent(brand.id)}`, {
-      signal: controller.signal,
+    void fetchPopularProducts({
+      apiBaseUrl: resolveApiBaseUrl(),
+      slug: brand.slug,
+      restaurantId: brand.id,
     })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        return response.json() as Promise<PopularProductsPayload>;
-      })
-      .then((payload) => {
-        if (!payload) return;
-        const ids = Array.isArray(payload.produtos)
-          ? payload.produtos.map((item) => String(item.produto_id || '')).filter(Boolean)
-          : [];
+      .then((ids) => {
+        if (cancelled) return;
         setRankedIds(ids);
         brand.popularProductIds = ids;
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('koma:popular-products-loaded', { detail: ids }));
         }
       })
-      .catch((error) => {
-        if ((error as Error)?.name !== 'AbortError') setRankedIds([]);
+      .catch(() => {
+        if (!cancelled) setRankedIds([]);
       });
 
-    return () => controller.abort();
-  }, [brand.id]);
+    return () => { cancelled = true; };
+  }, [brand.id, brand.slug]);
 
   const products = useMemo(() => {
     const byId = new Map(brand.products.map((product) => [String(product.id), product]));
