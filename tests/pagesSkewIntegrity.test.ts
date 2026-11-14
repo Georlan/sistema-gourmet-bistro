@@ -29,24 +29,25 @@ test('build metadata is uncached and emitted by Vite', () => {
   assert.match(viteConfig, /VITE_BUILD_TIME/);
 });
 
-test('Vite chunk preload recovery preserves the rejected lazy import during reload', () => {
+test('Vite preloading shares one safe recovery policy with both error boundaries', () => {
   const main = source('../src/main.tsx');
-  assert.match(main, /window\.addEventListener\(["']vite:preloadError["']/);
   const handler = main.slice(main.indexOf('window.addEventListener("vite:preloadError"'), main.indexOf('// O service worker'));
+  assert.match(main, /installChunkRecovery\(\)/);
+  assert.match(handler, /tryAutoRecoverChunkSkew/);
   assert.doesNotMatch(handler, /event\.preventDefault\(\)/);
-  assert.match(main, /now - lastAttempt > 15000/);
-  assert.match(main, /__koma_refresh/);
   assert.match(main, /__KOMA_BUILD__/);
-});
 
-test('recovery boundary remains usable without the main stylesheet', () => {
   const recovery = source('../src/components/auth/AppRecoveryBoundary.tsx');
   assert.match(recovery, /isChunkLoadError/);
-  assert.match(recovery, /dynamically imported module/);
-  assert.doesNotMatch(recovery, /message\.includes\(['"]failed to fetch['"]\)/);
   assert.match(recovery, /tryAutoRecoverChunkSkew/);
   assert.match(recovery, /backgroundColor:\s*['"]#090a0f['"]/);
   assert.match(recovery, /backgroundColor:\s*['"]#08caa3['"]/);
+
+  const feature = source('../src/components/shared/FeatureErrorBoundary.tsx');
+  assert.match(feature, /tryAutoRecoverChunkSkew/);
+  assert.match(feature, /reloadFreshAppEntry/);
+  assert.match(feature, /window\.confirm/);
+  assert.doesNotMatch(feature, /window\.location\.reload/);
 });
 
 test('production smoke treats missing asset fallback as a hard failure and waits for deployed SHA', () => {
