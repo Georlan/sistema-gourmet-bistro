@@ -578,8 +578,10 @@ def enqueue_print_job(
     source_id: str,
     payload_text: str,
     idempotency_key: str,
+    printing_allowed: Optional[bool] = None,
 ) -> Optional[PrintJob]:
-    if not _printing_allowed(db, restaurante_id):
+    allowed = _printing_allowed(db, restaurante_id) if printing_allowed is None else printing_allowed
+    if not allowed:
         return None
 
     existing = db.query(PrintJob).filter(
