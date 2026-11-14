@@ -113,7 +113,17 @@ def _wrap_visible_line(visible: str, columns: int, source_columns: int) -> list[
                 break_on_hyphens=False,
             ) or [left[:columns]]
             if len(right) <= columns:
-                wrapped_left.append(right.rjust(columns))
+                # O valor de um item pode ocupar o fim da última linha do nome.
+                # Nunca deixe valor ou nome ultrapassar a largura física.
+                if (
+                    re.match(r"^\d+x\s+", left, flags=re.IGNORECASE)
+                    and re.match(r"^R\$\s*\d", right, flags=re.IGNORECASE)
+                    and wrapped_left
+                    and len(wrapped_left[-1]) + len(right) + 1 <= columns
+                ):
+                    wrapped_left[-1] = wrapped_left[-1].ljust(columns - len(right)) + right
+                else:
+                    wrapped_left.append(right.rjust(columns))
             else:
                 wrapped_left.extend(
                     textwrap.wrap(
@@ -319,6 +329,75 @@ def _project_compact_semantics(payload_text: str, columns: int) -> str:
             break
 
     return "\n".join(lines)
+
+
+_OPTIONS_IN_NOTE_RE = re.compile(
+    r"^(?P<indent>\s*)OBS:\s*OP[ÇC][ÕO]ES:\s*(?P<choices>.+)$",
+    flags=re.IGNORECASE,
+)
+_AMOUNT_RE = re.compile(r"R\$\s*[\d.,]+", flags=re.IGNORECASE)
+
+
+def _compact_58_receipt_semantics(payload_text: str) -> str:
+    """Só texto de apresentação 58 mm: sem mudar dados, pedidos ou a via 80 mm."""
+    lines = (payload_text or "").split("\n")
+    visible = [_visible_text(line).strip() for line in lines]
+    subtotals = [
+        _AMOUNT_RE.search(line).group(0)
+        for line in visible if line.upper().startswith("SUBTOTAL ITENS:")
+        and _AMOUNT_RE.search(line)
+    ]
+    totals = [
+        _AMOUNT_RE.search(line).group(0)
+        for line in visible if line.upper().startswith("TOTAL DO PEDIDO:")
+        and _AMOUNT_RE.search(line)
+    ]
+    adjustments = any(
+        line.upper().startswith(("TAXA DE ENTREGA:", "DESCONTO ", "ACRÉSCIMO:", "ACRESCIMO:"))
+        for line in visible
+    )
+    hide_redundant_subtotal = (
+        not adjustments and len(subtotals) == len(totals) == 1
+        and subtotals[0].replace(" ", "") == totals[0].replace(" ", "")
+    )
+
+    result: list[str] = []
+    in_customer = False
+    for raw, text in zip(lines, visible):
+        if text.upper() == "CLIENTE":
+            in_customer = True
+        elif text.upper() in {"ITENS", "ENTREGA", "PAGAMENTO"} or text.upper().startswith("ITENS "):
+            in_customer = False
+
+        if hide_redundant_subtotal and text.upper().startswith("SUBTOTAL ITENS:"):
+            continue
+
+        leading, original, trailing = _edge_controls(raw)
+        choices = _OPTIONS_IN_NOTE_RE.match(original)
+        if choices:
+            # "OBS: OPÇÕES:" é o rótulo duplicado de um campo gerado,
+            # não uma observação livre. Mantemos toda a lista de escolhas.
+            raw = leading + choices.group("indent") + "OPCOES: " + choices.group("choices") + trailing
+        elif in_customer and text.upper().startswith("NOME:"):
+            raw = leading + original.replace("NOME:", "", 1).strip() + trailing
+        elif in_customer and text.upper().startswith("TELEFONE:"):
+            raw = leading + original.replace("TELEFONE:", "TEL:", 1) + trailing
+        result.append(raw)
+    return "\n".join(result)
+
+
+def _collapse_compact_58_separators(payload_text: str) -> str:
+    """Não gasta duas faixas horizontais seguidas entre os mesmos blocos."""
+    result: list[str] = []
+    previous_separator = False
+    for line in (payload_text or "").split("\n"):
+        visible = _visible_text(line).strip()
+        is_separator = bool(visible) and len(set(visible)) == 1 and visible[0] in "-="
+        if is_separator and previous_separator:
+            continue
+        result.append(line)
+        previous_separator = is_separator
+    return "\n".join(result)
 
 
 def _normalize_label(value: str) -> str:
@@ -540,12 +619,16 @@ def build_escpos_payload(
         if semantic_layout == "compact_58"
         else restored
     )
+    if semantic_layout == "compact_58":
+        projected = _compact_58_receipt_semantics(projected)
     fitted = fit_text_to_columns(projected, resolved_columns)
     if compact_layout:
         fitted = _compact_text_layout(
             fitted,
             allow_double_height=allow_double_height,
         )
+    if semantic_layout == "compact_58":
+        fitted = _collapse_compact_58_separators(fitted)
     fitted = _apply_charset_policy(fitted, charset_policy)
 
     normalized = fitted.replace(SIMULATED_CUT_MARKER, "")

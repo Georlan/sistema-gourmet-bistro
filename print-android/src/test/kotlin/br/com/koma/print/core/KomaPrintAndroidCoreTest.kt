@@ -81,6 +81,74 @@ class KomaPrintAndroidCoreTest {
     }
 
     @Test
+    fun `compact 58mm JE ticket removes duplicate options and aligns long price`() {
+        val name = "12x X-HAMBURGUER ARTESANAL COM CHEDDAR E BACON"
+        val price = "R$ 129,90"
+        val source = listOf(
+            "=".repeat(48), "JE LANCHES".padStart(29).padEnd(48),
+            "RETIRADA".padStart(27).padEnd(48), "PEDIDO #5",
+            "CLIENTE", "NOME: PAULO JOSE", "TELEFONE: (88) 99999-9999",
+            "-".repeat(48), "ITENS".padEnd(43) + "VALOR",
+            name.padEnd(48 - price.length) + price,
+            "   OBS: OPÇÕES: BACON, CARNE DE HAMBURGUER",
+            "   OBS: SEM CEBOLA",
+            "-".repeat(48), "-".repeat(48), "PAGAMENTO",
+            "FORMA: DINHEIRO", "A COBRAR: R$ 129,90",
+            "SUBTOTAL ITENS:".padEnd(48 - price.length) + price,
+            "TOTAL DO PEDIDO:".padEnd(48 - price.length) + price,
+            "DOCUMENTO NÃO FISCAL",
+        ).joinToString("\n")
+        val payload = EscPos58Renderer.buildEscPosPayload(source)
+        val body = String(payload.drop(5).toByteArray(), Charsets.ISO_8859_1).trimEnd()
+        val lines = body.lines().map { EscPos58Renderer.visibleText(it) }
+        assertTrue(lines.all { it.length <= 32 }, lines.joinToString("\n"))
+        assertTrue(body.contains("OPCOES: BACON"))
+        assertFalse(body.contains("OBS: OPCOES:"))
+        assertTrue(body.contains("OBS: SEM CEBOLA"))
+        assertTrue(body.contains("PAULO JOSE"))
+        assertTrue(body.contains("TEL: (88) 99999-9999"))
+        assertFalse(body.contains("NOME:"))
+        assertFalse(body.contains("SUBTOTAL ITENS:"))
+        assertTrue(lines.any { "CHEDDAR E BACON" in it && price in it })
+        assertTrue(lines.zipWithNext().none { (a, b) ->
+            a.trim().isNotEmpty() && a.trim().all { it == '-' || it == '=' } &&
+                b.trim().isNotEmpty() && b.trim().all { it == '-' || it == '=' }
+        })
+    }
+
+    @Test
+    fun `compact 58mm retains subtotal with fees and discounts`() {
+        val source = listOf(
+            "-".repeat(48),
+            "SUBTOTAL ITENS:".padEnd(40) + "R$ 19,00",
+            "TAXA DE ENTREGA:".padEnd(40) + "R$ 5,00",
+            "DESCONTO CUPOM:".padEnd(40) + "-R$ 2,00",
+            "TOTAL DO PEDIDO:".padEnd(40) + "R$ 22,00",
+        ).joinToString("\n")
+        val text = String(
+            EscPos58Renderer.buildEscPosPayload(source).drop(5).toByteArray(),
+            Charsets.ISO_8859_1,
+        )
+        assertTrue("SUBTOTAL ITENS:" in text)
+        assertTrue("TAXA DE ENTREGA:" in text)
+        assertTrue("DESCONTO CUPOM:" in text)
+        assertTrue("R$ 22,00" in text)
+    }
+
+    @Test
+    fun `standard 80mm keeps options and subtotal unchanged`() {
+        val source = listOf(
+            "=".repeat(48), "CLIENTE", "NOME: PAULO JOSE",
+            "   OBS: OPÇÕES: BACON, CARNE DE HAMBURGUER",
+            "SUBTOTAL ITENS:".padEnd(38) + "R$ 19,00",
+        ).joinToString("\n")
+        val wide = PrinterPaperProfile.infer("Epson TM-T20X")
+        val payload = EscPos58Renderer.buildEscPosPayload(source, profile = wide)
+        val text = String(payload.drop(5).toByteArray(), java.nio.charset.Charset.forName("IBM860"))
+        assertTrue(source in text)
+    }
+
+    @Test
     fun `FilePrintJournal persists stages atomically and blocks duplicate transport dispatch`() {
         val tempDir = Files.createTempDirectory("koma-print-journal-test")
         val journalPath = tempDir.resolve("journal.properties")

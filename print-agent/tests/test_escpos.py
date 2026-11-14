@@ -291,6 +291,76 @@ class EscPosPayloadTest(unittest.TestCase):
         self.assertIn(b"\x1b!\x10", body)
         self.assertTrue(payload.endswith(b"\n\n\n" + PARTIAL_CUT))
 
+    def test_58mm_je_ticket_compacts_notes_and_keeps_long_item_price(self):
+        name = "12x X-HAMBURGUER ARTESANAL COM CHEDDAR E BACON"
+        price = "R$ 129,90"
+        source = "\n".join([
+            "=" * 48, "JE LANCHES".center(48), "RETIRADA".center(48),
+            "PEDIDO #5", "CLIENTE", "NOME: PAULO JOSE",
+            "TELEFONE: (88) 99999-9999", "-" * 48,
+            "ITENS".ljust(43) + "VALOR",
+            name.ljust(48 - len(price)) + price,
+            "   OBS: OPÇÕES: BACON, CARNE DE HAMBURGUER",
+            "   OBS: SEM CEBOLA, MOLHO A PARTE",
+            "-" * 48, "-" * 48, "PAGAMENTO", "FORMA: DINHEIRO",
+            "A COBRAR: R$ 129,90",
+            "SUBTOTAL ITENS:".ljust(48 - len(price)) + price,
+            "TOTAL DO PEDIDO:".ljust(48 - len(price)) + price,
+            "DOCUMENTO NÃO FISCAL",
+        ])
+        profile = {
+            "columns": 32, "semantic_layout": "compact_58", "compact_layout": True,
+            "allow_double_height": False, "supports_cut": False,
+            "charset_policy": "ascii_safe", "feed_lines": 2,
+        }
+        payload = build_escpos_payload(source, profile_options=profile)
+        import re
+        body = payload[5:].decode("ascii", errors="ignore").rstrip()
+        lines = [re.sub(r"\x1b(?:M|E|!|3).", "", x) for x in body.splitlines()]
+        self.assertTrue(all(len(line) <= 32 for line in lines), lines)
+        self.assertIn("OPCOES: BACON", body)
+        self.assertNotIn("OBS: OPCOES:", body)
+        self.assertIn("OBS: SEM CEBOLA", body)
+        self.assertIn("PAULO JOSE", body)
+        self.assertIn("TEL: (88) 99999-9999", body)
+        self.assertNotIn("NOME:", body)
+        self.assertNotIn("SUBTOTAL ITENS:", body)
+        self.assertTrue(any("CHEDDAR E BACON" in x and price in x for x in lines), lines)
+        self.assertFalse(any(
+            a.strip() and b.strip() and set(a.strip()) in ({"-"}, {"="})
+            and set(b.strip()) in ({"-"}, {"="})
+            for a, b in zip(lines, lines[1:])
+        ), lines)
+
+    def test_58mm_keeps_subtotal_when_fee_or_discount_exists(self):
+        source = "\n".join([
+            "-" * 48,
+            "SUBTOTAL ITENS:".ljust(40) + "R$ 19,00",
+            "TAXA DE ENTREGA:".ljust(40) + "R$ 5,00",
+            "DESCONTO CUPOM:".ljust(40) + "-R$ 2,00",
+            "TOTAL DO PEDIDO:".ljust(40) + "R$ 22,00",
+        ])
+        result = build_escpos_payload(source, profile_options={
+            "columns": 32, "semantic_layout": "compact_58",
+            "compact_layout": True, "supports_cut": False,
+        }).decode("cp860", errors="replace")
+        self.assertIn("SUBTOTAL ITENS:", result)
+        self.assertIn("TAXA DE ENTREGA:", result)
+        self.assertIn("DESCONTO CUPOM:", result)
+        self.assertIn("R$ 22,00", result)
+
+    def test_80mm_keeps_note_prefixes_and_subtotals(self):
+        source = "\n".join([
+            "=" * 48, "CLIENTE", "NOME: PAULO JOSE",
+            "   OBS: OPÇÕES: BACON, CARNE DE HAMBURGUER",
+            "SUBTOTAL ITENS:".ljust(38) + "R$ 19,00",
+        ])
+        payload = build_escpos_payload(source, profile_options={
+            "columns": 48, "semantic_layout": "standard", "compact_layout": False,
+        })
+        self.assertIn(source, payload.decode("cp860", errors="replace"))
+        self.assertTrue(payload.endswith(PARTIAL_CUT))
+
     def test_80mm_profile_keeps_cut_double_height_and_three_line_feed(self):
         source = "\x1b!\x10TITULO\x1b!\x00"
         payload = build_escpos_payload(
