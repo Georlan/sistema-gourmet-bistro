@@ -1,6 +1,7 @@
 import { DeliveryReceiptCode } from "./DeliveryReceiptCode";
 import PixCopyCode from "./PixCopyCode";
 import { ManualPixReceiptContact } from "./ManualPixReceiptContact";
+import { DirectPixCustomerConfirm } from "./DirectPixCustomerConfirm";
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -22,6 +23,7 @@ import {
 import clsx from "clsx";
 import { API_BASE_URL } from "../../config/api";
 import {
+  OrderPaymentStatus,
   OrderStateContract,
   StoredOrder,
   customerOrderLabel,
@@ -41,6 +43,7 @@ interface CardapioOrdersDrawerProps {
   onSelectOrder: (orderId: string) => void;
   onRefresh: () => void;
   onRemoveOrder: (orderId: string) => void;
+  onOrderPaymentUpdated?: (orderId: string, pagamento: OrderPaymentStatus) => void;
   onRealtimeStatus?: (
     orderId: string,
     status: string,
@@ -95,6 +98,7 @@ export default function CardapioOrdersDrawer({
   onSelectOrder,
   onRefresh,
   onRemoveOrder,
+  onOrderPaymentUpdated,
   onRealtimeStatus,
   onRealtimeRefresh,
   isRefreshing = false,
@@ -730,7 +734,9 @@ export default function CardapioOrdersDrawer({
                               <div className="flex items-center gap-1.5">
                                 <QrCode className="h-4 w-4 text-amber-400 shrink-0" />
                                 <span className="text-[11px] font-black text-amber-300">
-                                  Aguardando pagamento Pix
+                                  {order.pagamento?.confirmacao_manual && order.pagamento?.cliente_informou_pagamento
+                                    ? "Pagamento informado"
+                                    : "Aguardando pagamento Pix"}
                                 </span>
                               </div>
                               {order.pagamento?.qr_code && (
@@ -745,7 +751,9 @@ export default function CardapioOrdersDrawer({
                               )}
                             </div>
                             <p className="mt-1 text-[10px] text-amber-200/80 leading-relaxed">
-                              O restaurante só começará o preparo após a confirmação do Pix.
+                              {order.pagamento?.confirmacao_manual && order.pagamento?.cliente_informou_pagamento
+                                ? "Pagamento informado. Aguardando confirmação do restaurante."
+                                : "O restaurante só começará o preparo após a confirmação do Pix."}
                             </p>
                           </div>
                         )}
@@ -978,6 +986,16 @@ export default function CardapioOrdersDrawer({
             )}
 
             {pixModalOrder.pagamento.qr_code && <PixCopyCode code={pixModalOrder.pagamento.qr_code} />}
+
+            <DirectPixCustomerConfirm
+              order={pixModalOrder}
+              apiBaseUrl={API_BASE_URL}
+              onReported={(nextPayment) => {
+                const updatedPayment = { ...pixModalOrder.pagamento, ...nextPayment };
+                setPixModalOrder((current) => (current ? { ...current, pagamento: updatedPayment } : current));
+                onOrderPaymentUpdated?.(pixModalOrder.id, updatedPayment);
+              }}
+            />
 
             <ManualPixReceiptContact order={pixModalOrder} phone={restaurantPhone} restaurantId={restaurantId} />
 

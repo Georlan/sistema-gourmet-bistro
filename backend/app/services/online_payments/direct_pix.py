@@ -1,10 +1,18 @@
 """Local Pix initiation. Never claims to validate a bank transfer."""
 from __future__ import annotations
 
+import datetime
 import re
 import unicodedata
 import uuid
 from decimal import Decimal, ROUND_HALF_UP
+from typing import TYPE_CHECKING
+
+from fastapi import HTTPException
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+    from ...models import Comanda, OnlinePaymentIntent
 
 
 def normalize_key(kind: str, value: str) -> str:
@@ -74,3 +82,78 @@ def brcode(*, key: str, name: str, city: str, amount: Decimal, txid: str) -> str
                + tlv('58','BR') + tlv('59',merchant_text(name,25)) + tlv('60',merchant_text(city,15))
                + tlv('62',tlv('05',txid)) + '6304')
     return payload + crc16(payload)
+
+
+def report_direct_pix_payment(
+    db: Session,
+    *,
+    restaurant_id: int,
+    comanda: Comanda,
+    intent: OnlinePaymentIntent | None,
+) -> OnlinePaymentIntent:
+    """Registra de forma idempotente que o cliente informou o Pix realizado.
+
+    Nunca aprova o pagamento financeiramente, não cria recibo bancário e não
+    libera o pedido para produção/cozinha antes da conferência no Caixa.
+    """
+    from ...models import OnlinePaymentIntent as IntentModel
+
+    if (
+        intent is None
+        or int(comanda.restaurante_id) != int(restaurant_id)
+        or int(intent.restaurante_id) != int(restaurant_id)
+        or str(intent.comanda_id) != str(comanda.id)
+    ):
+        raise HTTPException(status_code=404, detail="Cobrança Pix não encontrada.")
+
+    if intent.provider != "direct_pix":
+        raise HTTPException(status_code=409, detail="Este pagamento não utiliza conferência manual de Pix.")
+
+    locked = (
+        db.query(IntentModel)
+        .filter(
+            IntentModel.restaurante_id == int(restaurant_id),
+            IntentModel.id == intent.id,
+        )
+        .with_for_update()
+        .one_or_none()
+    )
+    if locked is None:
+        raise HTTPException(status_code=404, detail="Cobrança Pix não encontrada.")
+
+    if locked.status == "approved":
+        return locked
+
+    delivery_status = str(getattr(comanda, "delivery_status", "") or "").strip().lower()
+    if (
+        locked.status in {"cancelled", "expired", "rejected"}
+        or bool(comanda.fechada)
+        or delivery_status in {"cancelado", "cancelled", "recusado", "rejected", "finalizado"}
+    ):
+        raise HTTPException(status_code=409, detail="Este pedido não aceita mais confirmação de Pix.")
+
+    if locked.status not in {"created", "pending"}:
+        raise HTTPException(status_code=409, detail="Este pagamento não está mais pendente.")
+
+    if locked.reconciliation_attempted_at is None:
+        locked.reconciliation_attempted_at = datetime.datetime.now(datetime.timezone.utc)
+        from ...websocket_manager import manager
+        from ..order_chat_service import queue_order_tracking_refresh
+
+        manager.queue_committed_broadcast(
+            db,
+            {
+                "event": "tables_updated",
+                "detail": {
+                    "type": "direct_pix_reported",
+                    "comanda_id": str(comanda.id),
+                    "intent_id": str(locked.id),
+                },
+            },
+            int(restaurant_id),
+        )
+        queue_order_tracking_refresh(db, int(restaurant_id), str(comanda.id))
+        db.commit()
+        db.refresh(locked)
+
+    return locked

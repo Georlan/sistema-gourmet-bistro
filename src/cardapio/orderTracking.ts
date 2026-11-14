@@ -116,13 +116,19 @@ export interface StoredOrder {
     status?: string;
     cobranca_online?: boolean;
     confirmacao_manual?: boolean;
+    provedor?: string;
     metodo?: string;
+    txid?: string | null;
+    cliente_informou_pagamento?: boolean;
+    pagamento_informado_em?: string | null;
     qr_code?: string | null;
     qr_code_base64?: string | null;
     ticket_url?: string | null;
     expira_em?: string | null;
   };
 }
+
+export type OrderPaymentStatus = NonNullable<StoredOrder["pagamento"]>;
 
 const STATUS_ALIASES: Record<string, CanonicalOrderStatus> = {
   pendente: "pending",
@@ -616,4 +622,60 @@ export async function refreshAllStoredOrders(
   });
 
   return updatedList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+}
+
+export async function reportDirectPixCustomerPayment(
+  order: Pick<StoredOrder, "id" | "idempotency_key" | "tracking_token" | "tracking_url" | "pagamento">,
+  apiBaseUrl: string,
+): Promise<OrderPaymentStatus> {
+  const token = trackingTokenFromOrder(order);
+  const key = String(order.idempotency_key || "").trim();
+  const base = apiBaseUrl.replace(/\/+$/, "");
+
+  const postReport = async (url: string) => {
+    return fetch(url, {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  let response: Response;
+  if (token) {
+    response = await postReport(
+      `${base}/api/cardapio/pedidos/acompanhar/${encodeURIComponent(token)}/pix-informado`,
+    );
+    if (response.status === 404 && key) {
+      response = await postReport(
+        `${base}/cardapio/pedidos/${encodeURIComponent(order.id)}/pix-informado?key=${encodeURIComponent(key)}`,
+      );
+    }
+  } else if (key) {
+    response = await postReport(
+      `${base}/cardapio/pedidos/${encodeURIComponent(order.id)}/pix-informado?key=${encodeURIComponent(key)}`,
+    );
+  } else {
+    throw new Error("Identificação do pedido indisponível para informar o Pix.");
+  }
+
+  const data = await response.json().catch(() => ({})) as {
+    detail?: string;
+    pagamento?: OrderPaymentStatus;
+  };
+  if (!response.ok) {
+    throw new Error(
+      typeof data.detail === "string" && data.detail.trim()
+        ? data.detail
+        : "Não foi possível avisar o restaurante agora. Tente novamente.",
+    );
+  }
+
+  const nextPayment: OrderPaymentStatus = {
+    ...(order.pagamento || {}),
+    ...(data.pagamento || {}),
+    cliente_informou_pagamento: Boolean(data.pagamento?.cliente_informou_pagamento ?? true),
+    pagamento_informado_em: data.pagamento?.pagamento_informado_em || new Date().toISOString(),
+  };
+  updateStoredOrderStatus(order.id, { pagamento: nextPayment });
+  return nextPayment;
 }

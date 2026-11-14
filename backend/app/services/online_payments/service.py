@@ -771,12 +771,23 @@ class OnlinePaymentService:
 
     @staticmethod
     def public_payload(intent: OnlinePaymentIntent) -> dict:
+        is_direct_pix = intent.provider == "direct_pix"
         return {
             "status": intent.status,
             "cobranca_online": True,
             "provedor": intent.provider,
             "metodo": intent.method,
-            "confirmacao_manual": intent.provider == "direct_pix",
+            "confirmacao_manual": is_direct_pix,
+            "txid": intent.id.replace("-", "")[:25] if is_direct_pix else None,
+            "cliente_informou_pagamento": bool(
+                is_direct_pix
+                and (intent.reconciliation_attempted_at is not None or intent.status == "approved")
+            ),
+            "pagamento_informado_em": (
+                intent.reconciliation_attempted_at.isoformat()
+                if is_direct_pix and intent.reconciliation_attempted_at
+                else None
+            ),
             "qr_code": intent.qr_code,
             "qr_code_base64": intent.qr_code_base64,
             "ticket_url": intent.ticket_url,
@@ -792,6 +803,7 @@ class OnlinePaymentService:
         claimed = db.query(OnlinePaymentIntent).filter(
             OnlinePaymentIntent.restaurante_id == intent.restaurante_id,
             OnlinePaymentIntent.id == intent.id,
+            OnlinePaymentIntent.provider != "direct_pix",
             OnlinePaymentIntent.status.in_(("created", "pending", "error")),
             or_(OnlinePaymentIntent.reconciliation_attempted_at.is_(None),
                 OnlinePaymentIntent.reconciliation_attempted_at <= cutoff),

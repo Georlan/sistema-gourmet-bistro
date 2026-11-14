@@ -602,3 +602,338 @@ def test_zero_commission_direct_pix_does_not_accrue_usage_debt(db, monkeypatch):
     monkeypatch.setattr("app.services.direct_pix_billing.tenant_commercial_terms", lambda *_: SimpleNamespace(billing_amount=Decimal("862.92")))
     invoice = close_month(db, restaurant_id=99420, period="2025-01")
     assert invoice.fees == 0 and invoice.subscription_amount == 0 and invoice.status == "paid"
+
+
+def test_save_settings_enables_menu_pix_payment_method(db, monkeypatch):
+    from app.routes.direct_pix import PixConfiguration, save_settings
+    from app.services.billing_service import TenantCommercialTerms
+
+    monkeypatch.setattr(settings, "DIRECT_PIX_ENABLED", True)
+    monkeypatch.setattr(
+        "app.services.billing_service.tenant_commercial_terms",
+        lambda *_: TenantCommercialTerms(
+            protocol="P-DIRECT-PIX",
+            plan="pocket",
+            billing_cycle="monthly",
+            fixed_monthly_price=Decimal("49.00"),
+            billing_amount=Decimal("49.00"),
+            annual_monthly_equivalent=None,
+            marketplace_rate=Decimal("0.00"),
+            legal_version="1.0",
+        ),
+    )
+    db.add(SaaSSubscription(restaurante_id=99420, billing_cycle="monthly", status="active", payment_method_type="pix"))
+    db.commit()
+
+    payload = PixConfiguration(
+        enabled=True,
+        key_type="email",
+        pix_key="pix@example.test",
+        holder_name="Restaurante Teste",
+        city="SAO PAULO",
+        accept_manual_confirmation_and_monthly_fees=True,
+    )
+    user = SimpleNamespace(id="direct-pix-user")
+    saved = save_settings(payload, db, user)
+    assert saved["enabled"] is True
+
+    restaurant = db.query(Restaurante).filter(Restaurante.id == 99420).one()
+    assert restaurant.formas_pagamento_aceitas == ["Dinheiro", "Pix"]
+
+    save_settings(payload, db, user)
+    db.refresh(restaurant)
+    assert restaurant.formas_pagamento_aceitas == ["Dinheiro", "Pix"]
+
+
+def test_receipt_confirmation_extracts_end_to_end_id_from_pasted_receipt():
+    from pydantic import ValidationError
+    from app.routes.direct_pix import ReceiptConfirmation
+
+    e2e_id = "E12345678202611141230abcdef12345"
+    pasted = f"Comprovante Pix\nID da transacao: {e2e_id}\nValor: R$ 45,90"
+    parsed = ReceiptConfirmation(
+        received_amount="45.90",
+        bank_reference=pasted,
+        checked_bank_statement=True,
+    )
+    assert parsed.bank_reference == e2e_id
+
+    exact = ReceiptConfirmation(
+        received_amount="45.90",
+        bank_reference=e2e_id,
+        checked_bank_statement=True,
+    )
+    assert exact.bank_reference == e2e_id
+
+    with pytest.raises(ValidationError):
+        ReceiptConfirmation(
+            received_amount="45.90",
+            bank_reference="Comprovante sem identificador valido",
+            checked_bank_statement=True,
+        )
+
+    other_e2e = "E98765432202611141230abcdef54321"
+    with pytest.raises(ValidationError):
+        ReceiptConfirmation(
+            received_amount="45.90",
+            bank_reference=f"{e2e_id}\n{other_e2e}",
+            checked_bank_statement=True,
+        )
+
+
+def test_customer_report_direct_pix_endpoints_idempotency_and_pending_order(monkeypatch):
+    from fastapi.testclient import TestClient
+    from sqlalchemy.pool import StaticPool
+    from app.database import get_db
+    from app.main import app
+    from app.models import Comanda, PrintJob
+    from app.security import create_access_token
+    from app.services.online_payments import OnlinePaymentService
+    from app.services.online_payments.direct_pix import brcode
+    from app.services.order_chat_service import create_conversation_for_order
+
+    disposable = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(disposable)
+
+    def override_get_db():
+        session = SessionLocal(bind=disposable)
+        try:
+            yield session
+        finally:
+            session.close()
+
+    previous_override = app.dependency_overrides.get(get_db)
+    app.dependency_overrides[get_db] = override_get_db
+
+    def _seed_pix_order(session, *, rest_id: int, garcom_id: str, turno_id: int, order_id: str, numero: int, amount: Decimal, intent_id: str, cancelled: bool = False):
+        token = current_restaurante_id.set(rest_id)
+        try:
+            comanda = Comanda(
+                id=order_id,
+                restaurante_id=rest_id,
+                garcom_id=garcom_id,
+                tipo="Delivery",
+                identificador=f"Cliente {numero}",
+                numero_pedido=numero,
+                idempotency_key=f"idem-{order_id}",
+                fechada=cancelled,
+                status_comanda="aguardando_pagamento" if not cancelled else None,
+                delivery_status="recusado" if cancelled else "pendente",
+                online_payment_status="cancelled" if cancelled else "pending",
+            )
+            session.add(comanda)
+            session.flush()
+            txid = intent_id.replace("-", "")[:25]
+            qr = brcode(
+                key="pix@example.test",
+                name="Restaurante Teste",
+                city="SAO PAULO",
+                amount=amount,
+                txid=txid,
+            )
+            intent = OnlinePaymentIntent(
+                id=intent_id,
+                restaurante_id=rest_id,
+                comanda_id=comanda.id,
+                turno_id=turno_id,
+                provider="direct_pix",
+                method="pix",
+                status="cancelled" if cancelled else "pending",
+                amount=amount,
+                marketplace_fee=Decimal("0.00"),
+                fee_settlement="none",
+                idempotency_key=f"intent-idem-{intent_id}",
+                qr_code=qr,
+            )
+            session.add(intent)
+            session.flush()
+            return comanda, intent
+        finally:
+            current_restaurante_id.reset(token)
+
+    try:
+        setup_session = SessionLocal(bind=disposable)
+        try:
+            setup_session.add(Restaurante(id=99420, nome="Pix A", plano="pocket"))
+            setup_session.add(Restaurante(id=99421, nome="Pix B", plano="pocket"))
+            setup_session.add(
+                Usuario(
+                    id="direct-pix-user-a",
+                    restaurante_id=99420,
+                    nome="Operador A",
+                    email="a@example.test",
+                    senha_hash="unused",
+                    role="admin",
+                    cargo="admin",
+                    status="ativo",
+                )
+            )
+            setup_session.add(
+                Usuario(
+                    id="direct-pix-user-b",
+                    restaurante_id=99421,
+                    nome="Operador B",
+                    email="b@example.test",
+                    senha_hash="unused",
+                    role="admin",
+                    cargo="admin",
+                    status="ativo",
+                )
+            )
+            setup_session.flush()
+            turno_a = CaixaTurno(restaurante_id=99420, aberto_por_id="direct-pix-user-a", saldo_inicial=0, status="aberto")
+            turno_b = CaixaTurno(restaurante_id=99421, aberto_por_id="direct-pix-user-b", saldo_inicial=0, status="aberto")
+            setup_session.add(turno_a)
+            setup_session.add(turno_b)
+            setup_session.flush()
+
+            comanda1, intent1 = _seed_pix_order(
+                setup_session,
+                rest_id=99420,
+                garcom_id="direct-pix-user-a",
+                turno_id=turno_a.id,
+                order_id="cmd-dp-1",
+                numero=101,
+                amount=Decimal("32.50"),
+                intent_id="11111111-1111-1111-1111-111111111111",
+            )
+            comanda2, intent2 = _seed_pix_order(
+                setup_session,
+                rest_id=99420,
+                garcom_id="direct-pix-user-a",
+                turno_id=turno_a.id,
+                order_id="cmd-dp-2",
+                numero=102,
+                amount=Decimal("58.90"),
+                intent_id="22222222-2222-2222-2222-222222222222",
+            )
+            _seed_pix_order(
+                setup_session,
+                rest_id=99420,
+                garcom_id="direct-pix-user-a",
+                turno_id=turno_a.id,
+                order_id="cmd-dp-3-unreported",
+                numero=100,
+                amount=Decimal("19.90"),
+                intent_id="33333333-3333-3333-3333-333333333333",
+            )
+            comanda_cancelled, _ = _seed_pix_order(
+                setup_session,
+                rest_id=99420,
+                garcom_id="direct-pix-user-a",
+                turno_id=turno_a.id,
+                order_id="cmd-dp-cancelled",
+                numero=104,
+                amount=Decimal("25.00"),
+                intent_id="44444444-4444-4444-4444-444444444444",
+                cancelled=True,
+            )
+            _seed_pix_order(
+                setup_session,
+                rest_id=99421,
+                garcom_id="direct-pix-user-b",
+                turno_id=turno_b.id,
+                order_id="cmd-dp-tenant-b",
+                numero=201,
+                amount=Decimal("40.00"),
+                intent_id="55555555-5555-5555-5555-555555555555",
+            )
+
+            token_var = current_restaurante_id.set(99420)
+            try:
+                _conv1, raw_token1 = create_conversation_for_order(setup_session, 99420, comanda1.id)
+                assert raw_token1 is not None
+            finally:
+                current_restaurante_id.reset(token_var)
+
+            cmd1_id = str(comanda1.id)
+            cmd2_id = str(comanda2.id)
+            cmd2_key = str(comanda2.idempotency_key)
+            cmd_cancelled_id = str(comanda_cancelled.id)
+            cmd_cancelled_key = str(comanda_cancelled.idempotency_key)
+
+            payload1 = OnlinePaymentService.public_payload(intent1)
+            payload2 = OnlinePaymentService.public_payload(intent2)
+            assert payload1["qr_code"] != payload2["qr_code"]
+            assert payload1["txid"] != payload2["txid"]
+            assert payload1["cliente_informou_pagamento"] is False
+            assert payload2["cliente_informou_pagamento"] is False
+            setup_session.commit()
+        finally:
+            setup_session.close()
+
+        client = TestClient(app)
+
+        invalid_key_resp = client.post(f"/cardapio/pedidos/{cmd1_id}/pix-informado?key=chave-invalida")
+        assert invalid_key_resp.status_code == 404
+
+        invalid_token_resp = client.post("/api/cardapio/pedidos/acompanhar/token-invalido/pix-informado")
+        assert invalid_token_resp.status_code == 404
+
+        first_report = client.post(f"/cardapio/pedidos/{cmd2_id}/pix-informado?key={cmd2_key}")
+        assert first_report.status_code == 200, first_report.text
+        first_body = first_report.json()
+        assert first_body["status"] == "aguardando_pagamento"
+        assert first_body["pagamento"]["status"] == "pending"
+        assert first_body["pagamento"]["cliente_informou_pagamento"] is True
+        assert first_body["pagamento"]["pagamento_informado_em"] is not None
+
+        second_report = client.post(f"/cardapio/pedidos/{cmd2_id}/pix-informado?key={cmd2_key}")
+        assert second_report.status_code == 200, second_report.text
+        second_body = second_report.json()
+        assert second_body["pagamento"]["cliente_informou_pagamento"] is True
+        assert second_body["pagamento"]["pagamento_informado_em"] == first_body["pagamento"]["pagamento_informado_em"]
+        assert second_body["pagamento"]["status"] == "pending"
+
+        token_report = client.post(f"/api/cardapio/pedidos/acompanhar/{raw_token1}/pix-informado")
+        assert token_report.status_code == 200, token_report.text
+        assert token_report.json()["status"] == "aguardando_pagamento"
+        assert token_report.json()["pagamento"]["cliente_informou_pagamento"] is True
+        assert token_report.json()["pagamento"]["status"] == "pending"
+
+        cancelled_resp = client.post(
+            f"/cardapio/pedidos/{cmd_cancelled_id}/pix-informado?key={cmd_cancelled_key}"
+        )
+        assert cancelled_resp.status_code == 409
+
+        verify_session = SessionLocal(bind=disposable)
+        try:
+            refreshed_cmd2 = verify_session.query(Comanda).filter(Comanda.id == "cmd-dp-2").one()
+            refreshed_intent2 = verify_session.query(OnlinePaymentIntent).filter(
+                OnlinePaymentIntent.id == "22222222-2222-2222-2222-222222222222"
+            ).one()
+            assert refreshed_intent2.status == "pending"
+            assert refreshed_intent2.approved_at is None
+            assert refreshed_cmd2.status_comanda == "aguardando_pagamento"
+            assert refreshed_cmd2.online_payment_status == "pending"
+            assert verify_session.query(PrintJob).count() == 0
+            assert verify_session.query(DirectPixReceipt).count() == 0
+        finally:
+            verify_session.close()
+
+        token_a = create_access_token(subject="direct-pix-user-a", restaurante_id=99420, role="admin")
+        pending_a = client.get("/payments/direct-pix/pending", headers={"Authorization": f"Bearer {token_a}"})
+        assert pending_a.status_code == 200, pending_a.text
+        rows_a = pending_a.json()
+        assert [row["order_number"] for row in rows_a] == [102, 101, 100]
+        assert rows_a[0]["customer_reported"] is True
+        assert rows_a[0]["customer_reported_at"] is not None
+        assert rows_a[0]["txid"]
+        assert rows_a[1]["customer_reported"] is True
+        assert rows_a[2]["customer_reported"] is False
+        assert all(row["order_number"] != 201 for row in rows_a)
+
+        token_b = create_access_token(subject="direct-pix-user-b", restaurante_id=99421, role="admin")
+        pending_b = client.get("/payments/direct-pix/pending", headers={"Authorization": f"Bearer {token_b}"})
+        assert pending_b.status_code == 200, pending_b.text
+        assert [row["order_number"] for row in pending_b.json()] == [201]
+    finally:
+        if previous_override is None:
+            app.dependency_overrides.pop(get_db, None)
+        else:
+            app.dependency_overrides[get_db] = previous_override
+        disposable.dispose()

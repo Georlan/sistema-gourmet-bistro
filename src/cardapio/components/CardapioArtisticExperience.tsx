@@ -786,8 +786,18 @@ export function CardapioArtisticExperience({
             <div className="koma-art-tracker-pix-note">
               <QrCode className="w-4 h-4 shrink-0 text-amber-400" />
               <div>
-                <strong>Primeiro: confirme o Pix</strong>
-                <p>O andamento do preparo começa depois da confirmação automática do pagamento.</p>
+                <strong>
+                  {activeOrder.pagamento?.confirmacao_manual && activeOrder.pagamento?.cliente_informou_pagamento
+                    ? 'Pagamento informado'
+                    : 'Primeiro: confirme o Pix'}
+                </strong>
+                <p>
+                  {activeOrder.pagamento?.confirmacao_manual && activeOrder.pagamento?.cliente_informou_pagamento
+                    ? 'Pagamento informado. Aguardando confirmação do restaurante.'
+                    : activeOrder.pagamento?.confirmacao_manual
+                      ? 'Faça o Pix e toque em Pagar Pix para avisar o restaurante.'
+                      : 'O andamento do preparo começa depois da confirmação automática do pagamento.'}
+                </p>
               </div>
             </div>
           ) : !activeState.rejected ? (

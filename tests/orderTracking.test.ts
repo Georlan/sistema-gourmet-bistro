@@ -13,6 +13,7 @@ import {
   orderFulfillmentLabel,
   resolveOrderState,
   saveStoredOrder,
+  reportDirectPixCustomerPayment,
 } from '../src/cardapio/orderTracking';
 
 function createMockStorage() {
@@ -338,4 +339,92 @@ test('acesso negado remove código da memória; falha temporária não o apaga',
       assert.equal(result?.delivery_receipt_code, status === 503 ? '007' : null);
     }
   } finally { globalThis.fetch = originalFetch; }
+});
+
+test('reportDirectPixCustomerPayment usa tracking_token, fallback idempotency_key, persiste na sessão e propaga erro', async () => {
+  const originalFetch = globalThis.fetch;
+  const calledUrls: string[] = [];
+  sessionStorage.clear();
+
+  try {
+    const orderWithToken: StoredOrder = {
+      id: 'ord-token-1',
+      numero_pedido: 47,
+      total: 32.5,
+      restaurante_id: 8,
+      timestamp: Date.now(),
+      tipo: 'Delivery',
+      status: 'aguardando_pagamento',
+      tracking_token: 'tok-pix-123',
+      idempotency_key: 'idem-pix-1',
+      pagamento: {
+        status: 'pending',
+        cobranca_online: true,
+        confirmacao_manual: true,
+        metodo: 'pix',
+        txid: 'txid0001',
+        cliente_informou_pagamento: false,
+      },
+    };
+    saveStoredOrder(orderWithToken);
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      calledUrls.push(String(input));
+      return new Response(
+        JSON.stringify({
+          id: 'ord-token-1',
+          status: 'aguardando_pagamento',
+          pagamento: {
+            status: 'pending',
+            cobranca_online: true,
+            confirmacao_manual: true,
+            metodo: 'pix',
+            txid: 'txid0001',
+            cliente_informou_pagamento: true,
+            pagamento_informado_em: '2026-11-14T15:10:00Z',
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      );
+    }) as typeof fetch;
+
+    const updated = await reportDirectPixCustomerPayment(orderWithToken, 'https://example.test');
+    assert.equal(calledUrls[0], 'https://example.test/api/cardapio/pedidos/acompanhar/tok-pix-123/pix-informado');
+    assert.equal(updated.cliente_informou_pagamento, true);
+    assert.equal(updated.pagamento_informado_em, '2026-11-14T15:10:00Z');
+    const rawSaved = sessionStorage.getItem(ACTIVE_ORDERS_STORAGE_KEY) || '';
+    const parsedSaved = JSON.parse(rawSaved) as StoredOrder[];
+    const storedOrder = parsedSaved.find((item) => item.id === 'ord-token-1');
+    assert.equal(storedOrder?.pagamento?.cliente_informou_pagamento, true);
+    assert.equal(storedOrder?.pagamento?.pagamento_informado_em, '2026-11-14T15:10:00Z');
+
+    const orderFallback: StoredOrder = {
+      id: 'ord-idem-2',
+      numero_pedido: 48,
+      total: 19.9,
+      restaurante_id: 8,
+      timestamp: Date.now(),
+      tipo: 'Retirada',
+      status: 'aguardando_pagamento',
+      idempotency_key: 'idem-only-2',
+      pagamento: { status: 'pending', cobranca_online: true, confirmacao_manual: true, metodo: 'pix' },
+    };
+    saveStoredOrder(orderFallback);
+    await reportDirectPixCustomerPayment(orderFallback, 'https://example.test/');
+    assert.equal(calledUrls[1], 'https://example.test/cardapio/pedidos/ord-idem-2/pix-informado?key=idem-only-2');
+
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ detail: 'Este pedido não aceita mais confirmação de Pix.' }), {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      })) as typeof fetch;
+
+    await assert.rejects(
+      () => reportDirectPixCustomerPayment(orderWithToken, 'https://example.test'),
+      /Este pedido não aceita mais confirmação de Pix\./,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    sessionStorage.clear();
+  }
 });

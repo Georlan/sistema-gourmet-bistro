@@ -456,7 +456,9 @@ export default function CardapioOrderChatPanel({
         {state.phase === "payment_pending" ? (
           <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-amber-500/30 bg-amber-500/[0.08] p-3">
             <p className="min-w-0 text-[10px] leading-relaxed text-amber-200/80">
-              Confirme o Pix para liberar o pedido para o restaurante.
+              {order.pagamento?.confirmacao_manual && order.pagamento?.cliente_informou_pagamento
+                ? "Pagamento informado. Aguardando confirmação do restaurante."
+                : "Confirme o Pix para liberar o pedido para o restaurante."}
             </p>
             {order.pagamento?.qr_code && onPayPix && (
               <button

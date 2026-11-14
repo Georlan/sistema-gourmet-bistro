@@ -21,6 +21,7 @@ interface LegacyTrackingPayload {
   fechada?: boolean;
   criado_em?: string | null;
   itens?: StoredOrder["itens"];
+  pagamento?: StoredOrder["pagamento"];
   restaurante?: {
     id?: number | string;
   } | null;
@@ -120,6 +121,7 @@ export function OrderTrackingPage({ token: propToken }: OrderTrackingPageProps) 
           itens: Array.isArray(payload.itens) ? payload.itens : undefined,
           created_at: payload.criado_em || undefined,
           tracking_token: token,
+          pagamento: payload.pagamento,
         });
 
         window.location.replace(

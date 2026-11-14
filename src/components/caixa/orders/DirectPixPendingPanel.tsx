@@ -4,8 +4,30 @@ import {QrCode, X} from 'lucide-react';
 import {authFetch,authRequestErrorMessage} from '../../../utils/authRequest';
 import {formatCurrency} from '../cashierPresentation';
 import {startPendingPixPolling} from './pendingPixPolling';
-type Pending = {id:string;order_number:string;customer:string;amount:string};
+type Pending = {
+  id: string;
+  order_number: string;
+  customer: string;
+  amount: string;
+  txid?: string | null;
+  created_at?: string | null;
+  customer_reported?: boolean;
+  customer_reported_at?: string | null;
+};
 type Props = {apiBaseUrl:string;authHeaders:Record<string,string>;onRefreshOrders:()=>void};
+
+export function normalizeDirectPixReference(raw: string): string {
+  const match = raw.match(/(?:^|[^A-Za-z0-9])(E[A-Za-z0-9]{31})(?:[^A-Za-z0-9]|$)/);
+  if (match?.[1]) return match[1];
+  return raw.trim().slice(0, 32);
+}
+
+function formatShortTime(iso?: string | null): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
 export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:Props) {
   const [open,setOpen] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -69,11 +91,50 @@ export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:P
           <button type="button" autoFocus disabled={busy} aria-label="Fechar conferência Pix" className="flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-koma-border bg-koma-raised" onClick={()=>setOpen(false)}><X size={18}/></button>
         </header>
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          <p className="text-xs text-koma-muted">Confira o recebimento no extrato bancário. Comprovante enviado pelo cliente não confirma o pagamento.</p>
+          <p className="text-xs text-koma-muted">Confira o recebimento no extrato bancário. Comprovante ou aviso do cliente não confirma o pagamento.</p>
           {!rows.length && <p className="mt-4 text-sm text-koma-muted">Nenhum Pix aguardando conferência.</p>}
-    <div className="mt-3 flex flex-wrap gap-2">{rows.map(row=><button type="button" key={row.id} className="min-h-11 rounded-lg border border-koma-border px-3 text-xs text-koma-foreground" onClick={()=>{setSelected(row);setNotReceived(false);setChecked(false);setReference('');setError('');}}>Pedido #{row.order_number} · {formatCurrency(Number(row.amount))}</button>)}</div>
-    {selected && <div className="mt-4 space-y-3"><p className="text-sm text-koma-foreground">Pedido #{selected.order_number} · {selected.customer} · {formatCurrency(Number(selected.amount))}</p>
-      <label className="block text-xs text-koma-foreground">Identificador do Pix no extrato (EndToEndId)<input className="mt-1 w-full rounded-lg border border-koma-border bg-koma-page p-3" value={reference} maxLength={32} onChange={e=>setReference(e.target.value.trim())} /></label>
+    <div className="mt-3 flex flex-wrap gap-2">{rows.map(row => {
+      const reportedTime = formatShortTime(row.customer_reported_at);
+      return (
+        <button
+          type="button"
+          key={row.id}
+          className={`min-h-11 rounded-lg border px-3 py-1.5 text-left text-xs text-koma-foreground ${
+            row.customer_reported
+              ? 'border-emerald-500/60 bg-emerald-500/10'
+              : 'border-koma-border'
+          }`}
+          onClick={() => {
+            setSelected(row);
+            setNotReceived(false);
+            setChecked(false);
+            setReference('');
+            setError('');
+          }}
+        >
+          <span className="block font-semibold">Pedido #{row.order_number} · {formatCurrency(Number(row.amount))}</span>
+          {row.customer_reported && (
+            <span data-testid={`direct-pix-reported-${row.id}`} className="mt-0.5 block text-[11px] font-bold text-emerald-400">
+              Cliente informou o Pix{reportedTime ? ` · ${reportedTime}` : ''}
+            </span>
+          )}
+        </button>
+      );
+    })}</div>
+    {selected && <div className="mt-4 space-y-3">
+      <div className="rounded-lg border border-koma-border bg-koma-page/60 p-3">
+        <p className="text-sm font-semibold text-koma-foreground">Pedido #{selected.order_number} · {selected.customer} · {formatCurrency(Number(selected.amount))}</p>
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
+          <span
+            data-testid={`direct-pix-selected-status-${selected.id}`}
+            className={selected.customer_reported ? 'font-bold text-emerald-400' : 'text-koma-muted'}
+          >
+            {selected.customer_reported ? 'Cliente informou o Pix' : 'Aguardando aviso do cliente'}
+          </span>
+          {selected.txid && <span className="font-mono text-koma-muted">Ref: {selected.txid}</span>}
+        </div>
+      </div>
+      <label className="block text-xs text-koma-foreground">Identificador do Pix no extrato (EndToEndId)<input className="mt-1 w-full rounded-lg border border-koma-border bg-koma-page p-3" value={reference} onChange={e=>setReference(normalizeDirectPixReference(e.target.value))} /></label>
       <label className="flex min-h-11 items-center gap-2 text-xs text-koma-muted"><input type="checkbox" checked={checked} onChange={e=>setChecked(e.target.checked)}/>Conferi o valor integral recebido na conta correta.</label>
       <label className="flex min-h-11 items-center gap-2 text-xs text-koma-muted"><input type="checkbox" checked={notReceived} onChange={e=>setNotReceived(e.target.checked)}/>Para cancelar: conferi que o pagamento não foi recebido.</label>
       <div className="flex flex-wrap gap-2"><button type="button" disabled={busy || !checked || !/^E[A-Za-z0-9]{31}$/.test(reference)} onClick={()=>void resolve(false)} className="min-h-11 rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white disabled:opacity-50">Confirmar Pagamento Pix</button><button type="button" disabled={busy || !notReceived} onClick={()=>void resolve(true)} className="min-h-11 rounded-lg border border-koma-border px-3 text-xs text-koma-foreground">Cancelar pedido</button></div>
