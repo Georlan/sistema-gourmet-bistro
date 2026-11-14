@@ -13,6 +13,14 @@ const ACTIVE_DIGITAL_STATUSES = new Set<DeliveryOrderView['status']>([
   'finalizado',
 ]);
 
+// Mirrors the backend pending_only filter in _listar_delivery_operacional.
+// Keep this based on raw persisted status, before presentation normalization.
+const PENDING_DELIVERY_STATUSES = new Set(['pendente', 'analise', 'recebido', 'pending']);
+
+export function isPendingDeliveryComanda(order: { delivery_status?: unknown } | null | undefined): boolean {
+  return PENDING_DELIVERY_STATUSES.has(String(order?.delivery_status ?? ''));
+}
+
 const DELIVERY_TYPES = new Set(['delivery', 'entrega']);
 const PICKUP_TYPES = new Set(['retirada', 'pickup', 'viagem', 'balcao', 'balcão']);
 const DINE_IN_TYPES = new Set(['consumo no local', 'consumo_local', 'dine_in', 'mesa', 'local', 'salao', 'salão']);
