@@ -1,5 +1,8 @@
 # KÔMA — hierarquia visual da Cozinha (14/11/2026)
 
+> **Revisão visual posterior — 14/11/2026:** após avaliação em dispositivo real, a faixa âmbar, pontos amarelos, chip vermelho de tempo e ícones de confirmação dentro de círculos foram rejeitados como ruído e aparência genérica. Esses elementos deixam de ser a direção aprovada. Ver **kds-quiet-hierarchy-2026-11-14.md** para a solução revisada, fundamentada na paleta tonal do PDV/Salão.
+
+
 ## Problema observado
 As capturas Android em temas claro e escuro mostravam um KDS funcional, porém com duas ações de aparência praticamente idêntica: **Concluir N** (lote) e **Pronto** (item). O preenchimento verde em cada linha gerava competição visual com número/identidade do pedido, tempo de espera e nomes de produtos. Título, dados, observações e ações usavam pesos muito próximos, e o filtro ativo também lembrava um botão de ação.
 

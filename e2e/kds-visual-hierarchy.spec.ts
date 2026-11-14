@@ -60,6 +60,24 @@ test('KDS uses distinct batch/individual actions, readable typography and contra
     expect(p.height).toBeGreaterThanOrEqual(44);
     expect(s.height).toBeGreaterThanOrEqual(44);
 
+    // The queue stage is communicated by text, not amber stripes or nested check rings.
+    expect(await ticket.locator('.kds-ticket__item-indicator, .kds-ticket__action-symbol').count()).toBe(0);
+    const depth = await ticket.evaluate(node => {
+      const card = getComputedStyle(node);
+      const header = getComputedStyle(node.querySelector<HTMLElement>('.kds-ticket__header')!);
+      const timer = getComputedStyle(node.querySelector<HTMLElement>('.kds-ticket__timer')!);
+      return {
+        borderLeft: card.borderLeftColor,
+        borderTop: card.borderTopColor,
+        cardSurface: card.backgroundColor,
+        headerSurface: header.backgroundColor,
+        timerSurface: timer.backgroundColor,
+      };
+    });
+    expect(depth.borderLeft).toBe(depth.borderTop);
+    expect(depth.headerSurface).not.toBe(depth.cardSurface);
+    expect(depth.timerSurface).toBe('rgba(0, 0, 0, 0)');
+
     const titleSize = await ticket.getByRole('heading', { name: 'Pedido #333' }).evaluate(el => parseFloat(getComputedStyle(el).fontSize));
     const compositionSize = await ticket.locator('.kds-ticket__observation').evaluate(el => parseFloat(getComputedStyle(el).fontSize));
     expect(titleSize).toBeGreaterThan(compositionSize);

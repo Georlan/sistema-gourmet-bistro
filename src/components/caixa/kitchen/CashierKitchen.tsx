@@ -132,7 +132,6 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
     const details = itemCompositionPresentation(item);
     const customerName = item.clienteNome || item.cliente_nome;
     return <div className="kds-ticket__item" key={item.id} id={`kitchen-card-${item.id}`} data-kds-item-status={item.status}>
-      <span className="kds-ticket__item-indicator" data-state={item.status} aria-hidden="true" />
       <div className="kds-ticket__item-description">
         <strong>{item.nome}</strong>
         {isMeaningfulCustomer(customerName, destination) && <small>{customerName}</small>}
@@ -143,7 +142,7 @@ export function CashierKitchen({ activeSubTab, activeKitchenItems, handleUpdateI
         ? <span className="kds-ticket__item-complete" title="Preparo confirmado"><Check size={17} aria-hidden="true"/><span className="sr-only">Pronto</span></span>
         : <button type="button" id={`kitchen-finish-btn-${item.id}`} className="kds-ticket__item-action"
             disabled={pending} aria-label={`Marcar como pronto: ${item.nome}`}
-            onClick={() => void markReady([item])}>{pending ? 'Salvando…' : <><span className="kds-ticket__action-symbol" aria-hidden="true"><Check size={15}/></span><span>Pronto</span></>}</button>}
+            onClick={() => void markReady([item])}>{pending ? 'Salvando…' : <><Check size={16} aria-hidden="true"/><span>Pronto</span></>}</button>}
     </div>;
   };
 
