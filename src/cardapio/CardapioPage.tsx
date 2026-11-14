@@ -1,6 +1,5 @@
 import { DeliveryReceiptCode } from "./components/DeliveryReceiptCode";
 import PixCopyCode from "./components/PixCopyCode";
-import { QRCodeSVG } from 'qrcode.react';
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -8,6 +7,11 @@ import { QRCodeSVG } from 'qrcode.react';
 
 import type { CardapioFulfillment } from "./fulfillment";
 import { fetchPopularProducts, registerPopularProductsAlias } from "./popularProductsClient";
+import {
+  fetchPublicMenu,
+  getPublicMenuIdentifier,
+  getPublicMenuLoadDurationMs,
+} from "./publicMenuClient";
 import { buildWhatsAppContactUrl } from "../config/whatsappUtils";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -35,7 +39,6 @@ import {
   getRestaurantAssetUrl,
 } from "./CardapioTypes";
 import CardapioHeader from "./components/CardapioHeader";
-import CardapioBenefitsDrawer from "./components/CardapioBenefitsDrawer";
 import CardapioCategoryNav from "./components/CardapioCategoryNav";
 import CardapioProductCard from "./components/CardapioProductCard";
 import CardapioProductModal from "./components/CardapioProductModal";
@@ -45,25 +48,29 @@ import {
   type CatalogDisplayItem,
   type GroupedDisplayProduct,
 } from "./catalogGrouping";
-import CardapioPromotionWizard from "./components/CardapioPromotionWizard";
 import type { PromotionPartSelection } from "./promotionComposition";
 import CardapioCartDrawer, {
-  CardapioCheckoutRequest,
-  CartItem,
+  type CardapioCheckoutRequest,
+  type CartItem,
 } from "./components/CardapioCartDrawer";
-import CardapioAuthModal from "./components/CardapioAuthModal";
-import CardapioUserProfileModal from "./components/CardapioUserProfileModal";
 import type { CustomerHistoryOrder } from "./components/CardapioCustomerOrderHistory";
-import CardapioDigital from "./components/CardapioDigital";
-import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
 import { CardapioConditionsSummary } from "./components/CardapioOrderConditions";
-import CardapioOrdersDrawer from "./components/CardapioOrdersDrawer";
 import { ManualPixReceiptContact } from "./components/ManualPixReceiptContact";
 import { DirectPixCustomerConfirm } from "./components/DirectPixCustomerConfirm";
 import CardapioArtisticExperience from "./components/CardapioArtisticExperience";
 import { KomaLoading } from "../components/app/KomaLoading";
+
+const QRCodeSVG = React.lazy(() =>
+  import("qrcode.react").then((module) => ({ default: module.QRCodeSVG })),
+);
+const CardapioBenefitsDrawer = React.lazy(() => import("./components/CardapioBenefitsDrawer"));
+const CardapioPromotionWizard = React.lazy(() => import("./components/CardapioPromotionWizard"));
+const CardapioAuthModal = React.lazy(() => import("./components/CardapioAuthModal"));
+const CardapioUserProfileModal = React.lazy(() => import("./components/CardapioUserProfileModal"));
+const CardapioDigital = React.lazy(() => import("./components/CardapioDigital"));
+const CardapioStoreInfoDrawer = React.lazy(() => import("./components/CardapioStoreInfoDrawer"));
+const CardapioOrdersDrawer = React.lazy(() => import("./components/CardapioOrdersDrawer"));
 import { API_BASE_URL, WS_BASE_URL } from "../config/api";
-import { resolveKomaHost } from "../domain/komaHost";
 import { smartSearchMatch } from "../domain";
 import { buildKomaAttributionUrl } from "./komaAttribution";
 import {
@@ -100,15 +107,6 @@ const KOMA_BACKGROUND = "#090a0f";
 // A consulta pública de CEP é apenas conveniência progressiva; o checkout
 // permanece totalmente utilizável com preenchimento manual.
 
-interface PublicMenuPayload {
-  restaurante: Record<string, any>;
-  categorias: Array<Record<string, any>>;
-  produtos: Array<Record<string, any>>;
-  produtos_promocionais?: Array<Record<string, any>>;
-  promocoes?: Array<Record<string, any>>;
-  promocao_composicao_explicita?: boolean;
-}
-
 function parseStructuredValue(value: unknown): unknown {
   if (typeof value !== "string") return value;
   try {
@@ -126,20 +124,6 @@ function categorySectionId(name: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return `sec-${slug || "categoria"}`;
-}
-
-function getRestaurantIdentifier(): string | null {
-  const params = new URLSearchParams(window.location.search);
-  const restaurantId = params.get("restaurant_id") || params.get("restaurante_id");
-  if (restaurantId) return restaurantId;
-
-  const resolved = resolveKomaHost();
-  if (resolved.tenantSlug) return resolved.tenantSlug;
-
-  const slug = params.get("slug");
-  if (slug) return slug;
-
-  return null;
 }
 
 export default function CardapioPage() {
@@ -271,7 +255,7 @@ export default function CardapioPage() {
       setIsLoading(true);
       setErrorMsg("");
     }
-    const identifier = getRestaurantIdentifier();
+    const identifier = getPublicMenuIdentifier();
     if (!identifier) {
       if (!background) {
         setErrorMsg("Cardápio não encontrado ou ainda não publicado.");
@@ -282,26 +266,17 @@ export default function CardapioPage() {
 
     try {
       const isNumericIdentifier = /^\d+$/.test(identifier);
-      const query = new URLSearchParams(
-        isNumericIdentifier ? { restaurante_id: identifier } : { slug: identifier },
-      );
       void fetchPopularProducts({
         apiBaseUrl: API_BASE_URL,
         slug: isNumericIdentifier ? null : identifier,
         restaurantId: isNumericIdentifier ? identifier : null,
         force: background,
       }).catch(() => []);
-      const response = await fetch(
-        `${API_BASE_URL}/api/cardapio-digital/public?${query.toString()}`,
-        { cache: "no-store" },
-      );
-      if (response.status === 404) throw new Error("CARDAPIO_NOT_FOUND");
-      if (!response.ok) throw new Error(`CARDAPIO_HTTP_${response.status}`);
-
-      const payload = await response.json() as PublicMenuPayload;
-      if (!payload?.restaurante || !Array.isArray(payload.categorias) || !Array.isArray(payload.produtos)) {
-        throw new Error("CARDAPIO_INVALID_RESPONSE");
-      }
+      const payload = await fetchPublicMenu({
+        apiBaseUrl: API_BASE_URL,
+        identifier,
+        force: background,
+      });
 
       const restaurant = payload.restaurante;
       if (restaurant?.id) {
@@ -499,7 +474,7 @@ export default function CardapioPage() {
           categories_count: brand.categories.length,
           products_count: brand.products.length,
           store_status: brand.storeStatus,
-          catalog_load_ms: Math.round(performance.now() - loadStartedAt),
+          catalog_load_ms: getPublicMenuLoadDurationMs(API_BASE_URL, identifier) ?? Math.round(performance.now() - loadStartedAt),
         });
       }
       setActiveCategory((current) => current && brand.categories.includes(current) ? current : "");
@@ -1497,19 +1472,21 @@ export default function CardapioPage() {
       )}
 
       {selectedPromotion && (
-        <CardapioPromotionWizard
-          key={selectedPromotion.id}
-          title={selectedPromotion.nome}
-          basePrice={selectedPromotion.preco}
-          restaurantId={activeBrand.id}
-          steps={selectedPromotion.componentes.map(ids => {
-            const product = [...activeBrand.products, ...(activeBrand.promotionProducts || [])].find(candidate => ids.includes(candidate.id));
-            return product ? { product, label: product.name } : null;
-          }).filter((step): step is { product: Product; label: string } => Boolean(step))}
-          initialParts={editingPromotionItem?.promotionParts}
-          onClose={() => { setSelectedPromotion(null); setEditingPromotionItem(null); }}
-          onConfirm={handlePromotionConfirm}
-        />
+        <React.Suspense fallback={null}>
+          <CardapioPromotionWizard
+            key={selectedPromotion.id}
+            title={selectedPromotion.nome}
+            basePrice={selectedPromotion.preco}
+            restaurantId={activeBrand.id}
+            steps={selectedPromotion.componentes.map(ids => {
+              const product = [...activeBrand.products, ...(activeBrand.promotionProducts || [])].find(candidate => ids.includes(candidate.id));
+              return product ? { product, label: product.name } : null;
+            }).filter((step): step is { product: Product; label: string } => Boolean(step))}
+            initialParts={editingPromotionItem?.promotionParts}
+            onClose={() => { setSelectedPromotion(null); setEditingPromotionItem(null); }}
+            onConfirm={handlePromotionConfirm}
+          />
+        </React.Suspense>
       )}
 
       {selectedProduct && (
@@ -1524,196 +1501,214 @@ export default function CardapioPage() {
 
       {(isCartOpen || cart.length > 0) && (
         <div hidden={!isCartOpen}>
-        <CardapioCartDrawer
-          key={activeBrand.id}
-          cart={cart}
-          restaurantId={activeBrand.id}
-          restaurantAddress={activeBrand.address}
-          brandConfig={activeBrand}
-          initialFulfillment={fulfillmentChoice?.restaurantId === activeBrand.id ? fulfillmentChoice.method : null}
-          onFulfillmentChange={(method) => setFulfillmentChoice({ restaurantId: activeBrand.id, method })}
-          allProducts={activeBrand.products}
-          onAddToCart={handleAddToCart}
-          onSelectProduct={(product) => {
-            setSelectedProduct(product);
-            setIsCartOpen(false);
-          }}
-          initialCouponCode={couponToApply}
-          onClose={() => { setIsCartOpen(false); setCouponToApply(""); }}
-          onAdjustQty={(itemId, delta) => setCart(current => current.flatMap(item => {
-            if (item.id !== itemId) return [item];
-            const quantity = item.quantity + delta;
-            return quantity > 0 ? [{ ...item, quantity }] : [];
-          }))}
-          onUpdateQty={(itemId, quantity) => setCart((current) => quantity <= 0 ? current.filter((item) => item.id !== itemId) : current.map((item) => item.id === itemId ? { ...item, quantity } : item))}
-          onEditItem={item => {
-            if (item.promotionId) {
-              const promotion = activeBrand.promotions?.find(offer => offer.id === item.promotionId);
-              if (promotion) { setEditingPromotionItem(item); setSelectedPromotion(promotion); setIsCartOpen(false); }
-              else showNotification("A promoção não está mais disponível. Remova-a da sacola.");
-              return;
-            }
-            const product = activeBrand.products.find(candidate => candidate.id === item.product.id);
-            if (!product || product.isAvailable === false) { showNotification("Este produto não está mais disponível para edição."); return; }
-            setEditingCartItem(item);
-            setSelectedProduct(product);
-          }}
-          onComposeAnother={item => {
-            const product = activeBrand.products.find(candidate => candidate.id === item.product.id);
-            if (!product || product.isAvailable === false) { showNotification("Este produto não está mais disponível para montagem."); return; }
-            setEditingCartItem(null);
-            setSelectedProduct(product);
-          }}
-          onRemoveItem={(itemId) => setCart((current) => current.filter((item) => item.id !== itemId))}
-          onPlaceOrder={(request) => {
-            trackAnalyticsEvent('public_checkout_initiated', {
-              restaurant_id: activeBrand.id,
-              delivery_method: request.deliveryMethod,
-              items_count: cart.reduce((tot, item) => tot + item.quantity, 0),
-              cart_total: cartTotal,
-              delivery_fee: request.deliveryFee,
-              has_coupon: Boolean(request.cupomCodigo),
-              coupon_discount: request.descontoCupom || 0,
-              has_cashback: Boolean(request.usarCashback),
-              cashback_discount: request.descontoCashback || 0,
-              payment_method: request.paymentMethodDetail || 'nao_definido',
-            });
-            setCheckoutRequest(request);
-            setIsCartOpen(false);
-            setIsCheckoutOpen(true);
-          }}
-          user={user}
-          customerToken={customerToken}
-          accountRequired={activeBrand.customerAccountRequired === true}
-          onAuthClick={() => setIsAuthOpen(true)}
-          orderingEnabled={orderingEnabled}
-          orderingMessage={orderingMessage}
-        />
+          <CardapioCartDrawer
+            key={activeBrand.id}
+            cart={cart}
+            restaurantId={activeBrand.id}
+            restaurantAddress={activeBrand.address}
+            brandConfig={activeBrand}
+            initialFulfillment={fulfillmentChoice?.restaurantId === activeBrand.id ? fulfillmentChoice.method : null}
+            onFulfillmentChange={(method) => setFulfillmentChoice({ restaurantId: activeBrand.id, method })}
+            allProducts={activeBrand.products}
+            onAddToCart={handleAddToCart}
+            onSelectProduct={(product) => {
+              setSelectedProduct(product);
+              setIsCartOpen(false);
+            }}
+            initialCouponCode={couponToApply}
+            onClose={() => { setIsCartOpen(false); setCouponToApply(""); }}
+            onAdjustQty={(itemId, delta) => setCart(current => current.flatMap(item => {
+              if (item.id !== itemId) return [item];
+              const quantity = item.quantity + delta;
+              return quantity > 0 ? [{ ...item, quantity }] : [];
+            }))}
+            onUpdateQty={(itemId, quantity) => setCart((current) => quantity <= 0 ? current.filter((item) => item.id !== itemId) : current.map((item) => item.id === itemId ? { ...item, quantity } : item))}
+            onEditItem={item => {
+              if (item.promotionId) {
+                const promotion = activeBrand.promotions?.find(offer => offer.id === item.promotionId);
+                if (promotion) { setEditingPromotionItem(item); setSelectedPromotion(promotion); setIsCartOpen(false); }
+                else showNotification("A promoção não está mais disponível. Remova-a da sacola.");
+                return;
+              }
+              const product = activeBrand.products.find(candidate => candidate.id === item.product.id);
+              if (!product || product.isAvailable === false) { showNotification("Este produto não está mais disponível para edição."); return; }
+              setEditingCartItem(item);
+              setSelectedProduct(product);
+            }}
+            onComposeAnother={item => {
+              const product = activeBrand.products.find(candidate => candidate.id === item.product.id);
+              if (!product || product.isAvailable === false) { showNotification("Este produto não está mais disponível para montagem."); return; }
+              setEditingCartItem(null);
+              setSelectedProduct(product);
+            }}
+            onRemoveItem={(itemId) => setCart((current) => current.filter((item) => item.id !== itemId))}
+            onPlaceOrder={(request) => {
+              trackAnalyticsEvent('public_checkout_initiated', {
+                restaurant_id: activeBrand.id,
+                delivery_method: request.deliveryMethod,
+                items_count: cart.reduce((tot, item) => tot + item.quantity, 0),
+                cart_total: cartTotal,
+                delivery_fee: request.deliveryFee,
+                has_coupon: Boolean(request.cupomCodigo),
+                coupon_discount: request.descontoCupom || 0,
+                has_cashback: Boolean(request.usarCashback),
+                cashback_discount: request.descontoCashback || 0,
+                payment_method: request.paymentMethodDetail || 'nao_definido',
+              });
+              setCheckoutRequest(request);
+              setIsCartOpen(false);
+              setIsCheckoutOpen(true);
+            }}
+            user={user}
+            customerToken={customerToken}
+            accountRequired={activeBrand.customerAccountRequired === true}
+            onAuthClick={() => setIsAuthOpen(true)}
+            orderingEnabled={orderingEnabled}
+            orderingMessage={orderingMessage}
+          />
         </div>
       )}
 
       {isAuthOpen && (
-        <CardapioAuthModal
-          restaurantId={activeBrand.id}
-          accountRequired={activeBrand.customerAccountRequired === true}
-          hasBenefits={Boolean(activeBrand.benefits?.coupons || activeBrand.benefits?.loyalty)}
-          restaurantName={activeBrand.name}
-          onClose={() => setIsAuthOpen(false)}
-          onLoginSuccess={handleLoginSuccess}
-        />
+        <React.Suspense fallback={null}>
+          <CardapioAuthModal
+            restaurantId={activeBrand.id}
+            accountRequired={activeBrand.customerAccountRequired === true}
+            hasBenefits={Boolean(activeBrand.benefits?.coupons || activeBrand.benefits?.loyalty)}
+            restaurantName={activeBrand.name}
+            onClose={() => setIsAuthOpen(false)}
+            onLoginSuccess={handleLoginSuccess}
+          />
+        </React.Suspense>
       )}
 
       {isProfileOpen && (
-        <CardapioUserProfileModal
-          onClose={() => setIsProfileOpen(false)}
-          user={user}
-          customerToken={customerToken}
-          benefits={activeBrand.benefits}
-          onProfileUpdate={(profile) => {
-            setUser(profile);
-            if (customerToken) saveCustomerSession(activeBrand.id, { token: customerToken, profile });
-          }}
-          onLogout={handleLogout}
-          onRepeatOrder={handleRepeatOrder}
-        />
+        <React.Suspense fallback={null}>
+          <CardapioUserProfileModal
+            onClose={() => setIsProfileOpen(false)}
+            user={user}
+            customerToken={customerToken}
+            benefits={activeBrand.benefits}
+            onProfileUpdate={(profile) => {
+              setUser(profile);
+              if (customerToken) saveCustomerSession(activeBrand.id, { token: customerToken, profile });
+            }}
+            onLogout={handleLogout}
+            onRepeatOrder={handleRepeatOrder}
+          />
+        </React.Suspense>
       )}
 
-      <CardapioBenefitsDrawer
-        restaurantId={activeBrand.id}
-        capabilities={activeBrand.benefits}
-        isOpen={isBenefitsOpen && Boolean(activeBrand.benefits?.coupons || activeBrand.benefits?.loyalty)}
-        onClose={() => setIsBenefitsOpen(false)}
-        user={user}
-        onAuthClick={() => {
-          setIsBenefitsOpen(false);
-          setIsAuthOpen(true);
-        }}
-        onUseCoupon={(code) => {
-          setCouponToApply(code);
-          setIsBenefitsOpen(false);
-          if (cart.length > 0) openCart();
-          else {
-            showNotification("Cupom guardado. Adicione um produto e abra a sacola para aplicar.");
-            window.scrollTo({ top: 0, behavior: "smooth" });
-          }
-        }}
-      />
+      {isBenefitsOpen && Boolean(activeBrand.benefits?.coupons || activeBrand.benefits?.loyalty) && (
+        <React.Suspense fallback={null}>
+          <CardapioBenefitsDrawer
+            restaurantId={activeBrand.id}
+            capabilities={activeBrand.benefits}
+            isOpen={true}
+            onClose={() => setIsBenefitsOpen(false)}
+            user={user}
+            onAuthClick={() => {
+              setIsBenefitsOpen(false);
+              setIsAuthOpen(true);
+            }}
+            onUseCoupon={(code) => {
+              setCouponToApply(code);
+              setIsBenefitsOpen(false);
+              if (cart.length > 0) openCart();
+              else {
+                showNotification("Cupom guardado. Adicione um produto e abra a sacola para aplicar.");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }
+            }}
+          />
+        </React.Suspense>
+      )}
 
       {isCheckoutOpen && checkoutRequest && (
-        <CardapioDigital
-          activeBrand={activeBrand}
-          cart={cart}
-          deliveryFee={checkoutRequest.deliveryFee}
-          deliveryMethod={checkoutRequest.deliveryMethod}
-          address={checkoutRequest.address}
-          addressSnapshot={checkoutRequest.addressSnapshot}
-          customerName={checkoutRequest.customerName}
-          customerPhone={checkoutRequest.customerPhone}
-          customerEmail={checkoutRequest.customerEmail}
-          customerDocument={checkoutRequest.customerDocument}
-          customerToken={customerToken}
-          paymentMethodDetail={checkoutRequest.paymentMethodDetail}
-          trocoPara={checkoutRequest.trocoPara}
-          bairro={checkoutRequest.bairro}
-          cupomCodigo={checkoutRequest.cupomCodigo}
-          descontoCupom={checkoutRequest.descontoCupom}
-          usarCashback={checkoutRequest.usarCashback}
-          descontoCashback={checkoutRequest.descontoCashback}
-          onClose={() => {
-            setIsCheckoutOpen(false);
-            setCheckoutRequest(null);
-          }}
-          onEditCart={() => {
-            setIsCheckoutOpen(false);
-            setCheckoutRequest(null);
-            // Reopening the bag must use current products, not the old draft
-            // snapshot that may contain a now-disabled daily-menu option.
-            void loadRestaurantData(true).finally(() => setIsCartOpen(true));
-          }}
-          onOrderSuccess={() => {
-            setCart([]);
-            setFulfillmentChoice(null);
-            setCouponToApply("");
-            setIsCartOpen(false);
-            setIsCheckoutOpen(false);
-            setCheckoutRequest(null);
-            if (activeBrand?.id) {
-              const rid = Number(activeBrand.id);
-              setStoredOrders(current => mergeLocalOrderSnapshots(loadStoredOrders(rid), current));
-            }
-          }}
-          onSessionExpired={handleSessionExpired}
-        />
+        <React.Suspense fallback={null}>
+          <CardapioDigital
+            activeBrand={activeBrand}
+            cart={cart}
+            deliveryFee={checkoutRequest.deliveryFee}
+            deliveryMethod={checkoutRequest.deliveryMethod}
+            address={checkoutRequest.address}
+            addressSnapshot={checkoutRequest.addressSnapshot}
+            customerName={checkoutRequest.customerName}
+            customerPhone={checkoutRequest.customerPhone}
+            customerEmail={checkoutRequest.customerEmail}
+            customerDocument={checkoutRequest.customerDocument}
+            customerToken={customerToken}
+            paymentMethodDetail={checkoutRequest.paymentMethodDetail}
+            trocoPara={checkoutRequest.trocoPara}
+            bairro={checkoutRequest.bairro}
+            cupomCodigo={checkoutRequest.cupomCodigo}
+            descontoCupom={checkoutRequest.descontoCupom}
+            usarCashback={checkoutRequest.usarCashback}
+            descontoCashback={checkoutRequest.descontoCashback}
+            onClose={() => {
+              setIsCheckoutOpen(false);
+              setCheckoutRequest(null);
+            }}
+            onEditCart={() => {
+              setIsCheckoutOpen(false);
+              setCheckoutRequest(null);
+              // Reopening the bag must use current products, not the old draft
+              // snapshot that may contain a now-disabled daily-menu option.
+              void loadRestaurantData(true).finally(() => setIsCartOpen(true));
+            }}
+            onOrderSuccess={() => {
+              setCart([]);
+              setFulfillmentChoice(null);
+              setCouponToApply("");
+              setIsCartOpen(false);
+              setIsCheckoutOpen(false);
+              setCheckoutRequest(null);
+              if (activeBrand?.id) {
+                const rid = Number(activeBrand.id);
+                setStoredOrders(current => mergeLocalOrderSnapshots(loadStoredOrders(rid), current));
+              }
+            }}
+            onSessionExpired={handleSessionExpired}
+          />
+        </React.Suspense>
       )}
 
-      <CardapioStoreInfoDrawer brand={activeBrand} isOpen={isStoreInfoOpen} onClose={() => setIsStoreInfoOpen(false)} />
+      {isStoreInfoOpen && (
+        <React.Suspense fallback={null}>
+          <CardapioStoreInfoDrawer brand={activeBrand} isOpen={true} onClose={() => setIsStoreInfoOpen(false)} />
+        </React.Suspense>
+      )}
 
-      <CardapioOrdersDrawer
-        restaurantId={activeBrand?.id}
-        restaurantPhone={activeBrand?.phone}
-        isOpen={isOrdersDrawerOpen}
-        onClose={() => setIsOrdersDrawerOpen(false)}
-        orders={storedOrders}
-        selectedOrderId={activeOrder?.id || null}
-        onSelectOrder={(id) => {
-          setSelectedOrderId(id);
-          setIsOrdersDrawerOpen(false);
-        }}
-        onRefresh={() => {
-          if (activeBrand?.id) void checkActiveOrders(Number(activeBrand.id));
-        }}
-        onRemoveOrder={(id) => {
-          removeStoredOrder(id);
-          if (activeBrand?.id) {
-            setStoredOrders(current => mergeLocalOrderSnapshots(loadStoredOrders(Number(activeBrand.id)), current));
-          }
-        }}
-        onOrderPaymentUpdated={handleOrderPaymentUpdated}
-        onRealtimeStatus={handleRealtimeOrderStatus}
-        onRealtimeRefresh={handleRealtimeOrderRefresh}
-        isRefreshing={isRefreshingOrders}
-        hasFloatingCart={cartCount > 0 && !hasOpenOverlay}
-      />
+      {(isOrdersDrawerOpen || storedOrders.length > 0 || (typeof window !== 'undefined' && window.location.hash.startsWith('#koma-order='))) && (
+        <React.Suspense fallback={null}>
+          <CardapioOrdersDrawer
+            restaurantId={activeBrand?.id}
+            restaurantPhone={activeBrand?.phone}
+            isOpen={isOrdersDrawerOpen}
+            onClose={() => setIsOrdersDrawerOpen(false)}
+            orders={storedOrders}
+            selectedOrderId={activeOrder?.id || null}
+            onSelectOrder={(id) => {
+              setSelectedOrderId(id);
+              setIsOrdersDrawerOpen(false);
+            }}
+            onRefresh={() => {
+              if (activeBrand?.id) void checkActiveOrders(Number(activeBrand.id));
+            }}
+            onRemoveOrder={(id) => {
+              removeStoredOrder(id);
+              if (activeBrand?.id) {
+                setStoredOrders(current => mergeLocalOrderSnapshots(loadStoredOrders(Number(activeBrand.id)), current));
+              }
+            }}
+            onOrderPaymentUpdated={handleOrderPaymentUpdated}
+            onRealtimeStatus={handleRealtimeOrderStatus}
+            onRealtimeRefresh={handleRealtimeOrderRefresh}
+            isRefreshing={isRefreshingOrders}
+            hasFloatingCart={cartCount > 0 && !hasOpenOverlay}
+          />
+        </React.Suspense>
+      )}
 
       {pixModalOrder && pixModalOrder.pagamento?.qr_code && (
         <div
@@ -1762,7 +1757,11 @@ export default function CardapioPage() {
               </span>
             </div>
 
-            {!pixModalOrder.pagamento.qr_code_base64 && pixModalOrder.pagamento.qr_code && <QRCodeSVG value={pixModalOrder.pagamento.qr_code} size={208} level="M" marginSize={4} className="mx-auto" />}
+            {!pixModalOrder.pagamento.qr_code_base64 && pixModalOrder.pagamento.qr_code && (
+              <React.Suspense fallback={null}>
+                <QRCodeSVG value={pixModalOrder.pagamento.qr_code} size={208} level="M" marginSize={4} className="mx-auto" />
+              </React.Suspense>
+            )}
             {pixModalOrder.pagamento.qr_code_base64 && (
               <div className="mx-auto my-3 flex justify-center">
                 <img

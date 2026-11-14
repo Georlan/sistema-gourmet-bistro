@@ -141,6 +141,23 @@ function flushPendingQueue() {
   }
 }
 
+function getOrCreateTabDistinctId(): string {
+  const storageKey = 'koma_analytics_tab_id';
+  try {
+    const existing = window.sessionStorage.getItem(storageKey)?.trim();
+    if (existing) return existing;
+    const generated = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `koma-tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    window.sessionStorage.setItem(storageKey, generated);
+    return generated;
+  } catch {
+    return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `koma-tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
+
 export function initAnalytics(): Promise<boolean> {
   if (initPromise) return initPromise;
 
@@ -169,6 +186,7 @@ export function initAnalytics(): Promise<boolean> {
         import('posthog-js/dist/exception-autocapture'),
       ]);
       const posthog = (mod.default ?? mod) as PostHog;
+      const isOperationalSurface = ['caixa', 'garcom', 'entregador'].includes(resolveKomaHost().surface);
       posthog.init(projectToken, {
         api_host: host,
         // Desabilita Session Replay por padrão
@@ -194,6 +212,7 @@ export function initAnalytics(): Promise<boolean> {
         persistence: 'localStorage+cookie',
         // Operator accounts coexist in tabs; never restore or reset a shared identity.
         disable_persistence: ['caixa', 'garcom', 'entregador'].includes(resolveKomaHost().surface),
+        ...(isOperationalSurface ? { bootstrap: { distinctID: getOrCreateTabDistinctId() } } : {}),
       });
       posthog.register({
         frontend_build_sha: import.meta.env.VITE_BUILD_SHA || 'unknown',
