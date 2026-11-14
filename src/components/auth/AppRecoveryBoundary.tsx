@@ -1,53 +1,13 @@
 import React from 'react';
 import { captureAnalyticsException } from '../../analytics';
-
-const CHUNK_RELOAD_KEY = 'koma_chunk_reload_attempt';
-const AUTO_RELOAD_INTERVAL_MS = 15000;
-
-function reloadFreshAppEntry() {
-  const url = new URL(window.location.href);
-  url.searchParams.set('__koma_refresh', Date.now().toString());
-  window.location.replace(url.toString());
-}
-
-function isChunkLoadError(error: unknown): boolean {
-  if (!error) return false;
-  const message = String(error instanceof Error ? error.message : error).toLowerCase();
-  return (
-    message.includes('dynamically imported module')
-    || message.includes('loading chunk')
-    || message.includes('chunkloaderror')
-    || message.includes('importing a module script failed')
-  );
-}
-
-function tryAutoRecoverChunkSkew(error: unknown): boolean {
-  if (typeof window === 'undefined' || !isChunkLoadError(error)) return false;
-
-  const now = Date.now();
-  let lastAttempt = 0;
-  try {
-    lastAttempt = Number(window.sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0);
-  } catch {
-    lastAttempt = 0;
-  }
-  if (now - lastAttempt < AUTO_RELOAD_INTERVAL_MS) return false;
-
-  try {
-    window.sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
-  } catch {
-    // Recovery must still work when storage is unavailable.
-  }
-  reloadFreshAppEntry();
-  return true;
-}
+import { isChunkLoadError, reloadFreshAppEntry, tryAutoRecoverChunkSkew } from '../../utils/chunkRecovery';
 
 /** Loaded with the entry bundle, so recovery does not depend on a missing lazy chunk. */
-export class AppRecoveryBoundary extends React.Component<React.PropsWithChildren, { failed: boolean }> {
-  state = { failed: false };
+export class AppRecoveryBoundary extends React.Component<React.PropsWithChildren, { failed: boolean; chunkFailure: boolean }> {
+  state = { failed: false, chunkFailure: false };
 
-  static getDerivedStateFromError() {
-    return { failed: true };
+  static getDerivedStateFromError(error: unknown) {
+    return { failed: true, chunkFailure: isChunkLoadError(error) };
   }
 
   componentDidCatch(error: unknown) {
@@ -90,7 +50,9 @@ export class AppRecoveryBoundary extends React.Component<React.PropsWithChildren
             Vamos reabrir o Kôma
           </h1>
           <p style={{ margin: 0, opacity: 0.9, lineHeight: 1.5 }}>
-            Não foi possível carregar esta tela. Confira sua conexão e tente novamente.
+            {this.state.chunkFailure
+              ? 'Esta versão do Kôma não conseguiu carregar uma parte da tela após uma atualização. Reabra para usar a versão atual.'
+              : 'Não foi possível carregar esta tela. Confira sua conexão e tente novamente.'}
           </p>
           <p
             className="text-sm"

@@ -1,12 +1,17 @@
 import React, { Component } from 'react';
+import { isChunkLoadError, reloadFreshAppEntry, tryAutoRecoverChunkSkew } from '../../utils/chunkRecovery';
 
 type BoundaryProps = { label: string; children: React.ReactNode };
 
-export class FeatureErrorBoundary extends Component<BoundaryProps, { failed: boolean }> {
-  state = { failed: false };
+export class FeatureErrorBoundary extends Component<BoundaryProps, { failed: boolean; chunkFailure: boolean }> {
+  state = { failed: false, chunkFailure: false };
 
-  static getDerivedStateFromError() {
-    return { failed: true };
+  static getDerivedStateFromError(error: unknown) {
+    return { failed: true, chunkFailure: isChunkLoadError(error) };
+  }
+
+  componentDidCatch(error: unknown) {
+    tryAutoRecoverChunkSkew(error);
   }
 
   render() {
@@ -16,7 +21,9 @@ export class FeatureErrorBoundary extends Component<BoundaryProps, { failed: boo
         role="alert"
         className="rounded-xl border border-koma-border bg-koma-panel p-5 text-koma-foreground"
       >
-        <p>Não foi possível abrir {this.props.label}. As outras áreas continuam disponíveis.</p>
+        <p>{this.state.chunkFailure
+          ? `Uma atualização do Kôma interrompeu o carregamento de ${this.props.label}. As outras áreas continuam disponíveis.`
+          : `Não foi possível abrir ${this.props.label}. As outras áreas continuam disponíveis.`}</p>
         <p className="mt-2">
           Verifique a conexão. Salve ou conclua seus rascunhos antes de recarregar a página.
         </p>
@@ -30,7 +37,7 @@ export class FeatureErrorBoundary extends Component<BoundaryProps, { failed: boo
                 'Recarregar a página? Rascunhos não salvos serão perdidos. Conclua pagamentos em andamento antes de continuar.',
               )
             ) {
-              window.location.reload();
+              reloadFreshAppEntry();
             }
           }}
           className="mt-3 rounded-lg border border-koma-border px-4 py-2"
