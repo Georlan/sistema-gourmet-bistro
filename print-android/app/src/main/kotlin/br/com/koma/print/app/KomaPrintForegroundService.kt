@@ -53,10 +53,18 @@ class KomaPrintForegroundService : Service() {
             return START_NOT_STICKY
         }
 
+        try {
+            promoteToForeground("KÔMA Print • monitorando pedidos")
+        } catch (err: RuntimeException) {
+            store.setAutoStartEnabled(false)
+            store.updateLastStatus("Permissão do Android não permite ativar impressão. Abra o app.")
+            Log.w(TAG, "Não foi possível iniciar serviço Bluetooth: " + err.javaClass.simpleName)
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
         store.setAutoStartEnabled(true)
-        promoteToForeground("KÔMA Print 58mm ativo (tela bloqueada liberada)")
         startForegroundLoopIfNeeded()
-        Log.i(TAG, "Serviço KomaPrintForegroundService iniciado e promovido a primeiro plano.")
+        Log.i(TAG, "Serviço KomaPrintForegroundService iniciado.")
         return START_STICKY
     }
 
@@ -130,6 +138,7 @@ class KomaPrintForegroundService : Service() {
                     )
                     if (shouldSendHeartbeat) {
                         lastHeartbeatEpochMs = System.currentTimeMillis()
+                        store.recordBackendContact()
                     }
                     consecutiveErrors = 0
 
@@ -153,9 +162,12 @@ class KomaPrintForegroundService : Service() {
                 } catch (revoked: AgentRevokedException) {
                     updateStatusAndNotification(
                         store,
-                        "Token do agente revogado ou inválido. Refaça a vinculação no app.",
+                        "Vínculo expirado ou revogado. Reconecte pelo Caixa KÔMA.",
                     )
-                    sleepNextMs = 15_000L
+                    // Não faça polling infinito com credencial revogada.
+                    store.setAutoStartEnabled(false)
+                    running.set(false)
+                    stopSelf()
                 } catch (err: Throwable) {
                     consecutiveErrors = (consecutiveErrors + 1).coerceAtMost(5)
                     val backoff = min(ERROR_BASE_BACKOFF_MS * (1L shl (consecutiveErrors - 1)), MAX_BACKOFF_MS)
@@ -178,7 +190,7 @@ class KomaPrintForegroundService : Service() {
             "koma:print_dispatch_wakelock",
         )?.apply {
             setReferenceCounted(false)
-            runCatching { acquire(45_000L) }
+            runCatching { acquire(120_000L) }
         }
         try {
             block()
@@ -213,8 +225,7 @@ class KomaPrintForegroundService : Service() {
             startForeground(
                 NOTIFICATION_ID,
                 notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
             )
         } else {
             startForeground(NOTIFICATION_ID, notification)

@@ -13,6 +13,7 @@ import android.util.Log
 import br.com.koma.print.core.BluetoothPrinterDevice
 import br.com.koma.print.core.BluetoothReconnectPolicy
 import br.com.koma.print.core.BluetoothSppTransport
+import br.com.koma.print.core.BluetoothTransmissionGate
 import br.com.koma.print.core.OemCompatibilityPolicy
 import br.com.koma.print.core.PrinterPaperProfile
 import br.com.koma.print.core.SppSocketStrategy
@@ -107,6 +108,14 @@ class AndroidBluetoothSppAdapter(
     override fun sendRawPayload(
         device: BluetoothPrinterDevice,
         payload: ByteArray,
+    ): SppTransmissionResult = sharedTransmissionGate.send {
+        transmitRawPayload(device, payload)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun transmitRawPayload(
+        device: BluetoothPrinterDevice,
+        payload: ByteArray,
     ): SppTransmissionResult {
         if (!hasBluetoothPermission()) {
             return SppTransmissionResult(
@@ -150,9 +159,11 @@ class AndroidBluetoothSppAdapter(
             val strategy = reconnectPolicy.strategyForAttempt(attemptIdx)
             var socket: BluetoothSocket? = null
             try {
-                runCatching {
-                    if (adapter.isDiscovering) {
-                        adapter.cancelDiscovery()
+                // Não fazemos discovery. No Android 12+ cancelDiscovery
+                // exigiria BLUETOOTH_SCAN, desnecessária para pareados.
+                if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R) {
+                    runCatching {
+                        if (adapter.isDiscovering) adapter.cancelDiscovery()
                     }
                 }
                 socket = openSocket(remoteDevice, strategy)
@@ -168,6 +179,15 @@ class AndroidBluetoothSppAdapter(
                     attempts = attemptIdx + 1,
                 )
             } catch (err: Throwable) {
+                if (err is InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return SppTransmissionResult(
+                        success = false,
+                        attempts = attemptIdx + 1,
+                        errorCode = "send_interrupted",
+                        errorMessage = "Serviço de impressão interrompido.",
+                    )
+                }
                 lastError = err
                 if (attemptIdx + 1 < totalAttempts) {
                     val delayMs = reconnectPolicy.backoffDelayMs(attemptIdx)
@@ -227,5 +247,8 @@ class AndroidBluetoothSppAdapter(
 
     companion object {
         private const val TAG = "KomaPrintBT"
+        // O serviço automático e o botão de teste criam adaptadores diferentes.
+        // Compartilham uma única porta de transmissão por processo Android.
+        private val sharedTransmissionGate = BluetoothTransmissionGate()
     }
 }
