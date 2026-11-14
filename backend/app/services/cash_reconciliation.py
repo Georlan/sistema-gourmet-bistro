@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Iterable, Sequence
 
-from sqlalchemy import case, func
+from sqlalchemy import case, func, true
 from sqlalchemy.orm import Session
 
 from ..financial_models import PagamentoAlocacao, PagamentoEstorno
@@ -108,36 +108,30 @@ def cash_shift_totals(
     payment_method_expr = func.lower(func.trim(func.coalesce(Pagamento.metodo, "")))
     payment_val_expr = func.round(func.coalesce(Pagamento.valor, 0), 2)
 
-    payment_agg = (
+    payment_subq = (
         db.query(
-            func.coalesce(func.sum(payment_val_expr), 0),
+            func.coalesce(func.sum(payment_val_expr), 0).label("gross_total"),
             func.coalesce(
                 func.sum(case((payment_method_expr == "dinheiro", payment_val_expr), else_=0)),
                 0,
-            ),
+            ).label("gross_cash"),
             func.coalesce(
                 func.sum(case((payment_method_expr == "pix", payment_val_expr), else_=0)),
                 0,
-            ),
+            ).label("gross_pix"),
             func.coalesce(
                 func.sum(case((payment_method_expr.in_(card_methods_tuple), payment_val_expr), else_=0)),
                 0,
-            ),
-            func.count(func.distinct(Pagamento.comanda_id)),
+            ).label("gross_card"),
+            func.count(func.distinct(Pagamento.comanda_id)).label("paid_count"),
         )
         .filter(
             Pagamento.restaurante_id == restaurante_id,
             Pagamento.turno_id == turno.id,
             Pagamento.status == "aprovado",
         )
-        .one()
+        .subquery()
     )
-
-    gross_total = money(payment_agg[0])
-    gross_cash = money(payment_agg[1])
-    gross_pix = money(payment_agg[2])
-    gross_card = money(payment_agg[3])
-    paid_count = int(payment_agg[4] or 0)
 
     refund_method_expr = func.lower(
         func.trim(
@@ -150,21 +144,21 @@ def cash_shift_totals(
     )
     refund_val_expr = func.round(func.coalesce(PagamentoEstorno.valor, 0), 2)
 
-    refund_agg = (
+    refund_subq = (
         db.query(
-            func.coalesce(func.sum(refund_val_expr), 0),
+            func.coalesce(func.sum(refund_val_expr), 0).label("refund_total"),
             func.coalesce(
                 func.sum(case((refund_method_expr == "dinheiro", refund_val_expr), else_=0)),
                 0,
-            ),
+            ).label("refund_cash"),
             func.coalesce(
                 func.sum(case((refund_method_expr == "pix", refund_val_expr), else_=0)),
                 0,
-            ),
+            ).label("refund_pix"),
             func.coalesce(
                 func.sum(case((refund_method_expr.in_(card_methods_tuple), refund_val_expr), else_=0)),
                 0,
-            ),
+            ).label("refund_card"),
         )
         .select_from(PagamentoEstorno)
         .outerjoin(
@@ -176,35 +170,59 @@ def cash_shift_totals(
             PagamentoEstorno.restaurante_id == restaurante_id,
             PagamentoEstorno.turno_id == turno.id,
         )
-        .one()
+        .subquery()
     )
 
-    refund_total = money(refund_agg[0])
-    refund_cash = money(refund_agg[1])
-    refund_pix = money(refund_agg[2])
-    refund_card = money(refund_agg[3])
-
     mov_val_expr = func.round(func.coalesce(CaixaMovimentacao.valor, 0), 2)
-    mov_agg = (
+    mov_subq = (
         db.query(
             func.coalesce(
                 func.sum(case((CaixaMovimentacao.tipo == "suprimento", mov_val_expr), else_=0)),
                 0,
-            ),
+            ).label("supplies"),
             func.coalesce(
                 func.sum(case((CaixaMovimentacao.tipo == "sangria", mov_val_expr), else_=0)),
                 0,
-            ),
+            ).label("withdrawals"),
         )
         .filter(
             CaixaMovimentacao.restaurante_id == restaurante_id,
             CaixaMovimentacao.turno_id == turno.id,
         )
+        .subquery()
+    )
+
+    agg = (
+        db.query(
+            payment_subq.c.gross_total,
+            payment_subq.c.gross_cash,
+            payment_subq.c.gross_pix,
+            payment_subq.c.gross_card,
+            payment_subq.c.paid_count,
+            refund_subq.c.refund_total,
+            refund_subq.c.refund_cash,
+            refund_subq.c.refund_pix,
+            refund_subq.c.refund_card,
+            mov_subq.c.supplies,
+            mov_subq.c.withdrawals,
+        )
+        .select_from(payment_subq)
+        .join(refund_subq, true())
+        .join(mov_subq, true())
         .one()
     )
 
-    supplies = money(mov_agg[0])
-    withdrawals = money(mov_agg[1])
+    gross_total = money(agg[0])
+    gross_cash = money(agg[1])
+    gross_pix = money(agg[2])
+    gross_card = money(agg[3])
+    paid_count = int(agg[4] or 0)
+    refund_total = money(agg[5])
+    refund_cash = money(agg[6])
+    refund_pix = money(agg[7])
+    refund_card = money(agg[8])
+    supplies = money(agg[9])
+    withdrawals = money(agg[10])
 
     net_cash = money(gross_cash - refund_cash)
     net_pix = money(gross_pix - refund_pix)
