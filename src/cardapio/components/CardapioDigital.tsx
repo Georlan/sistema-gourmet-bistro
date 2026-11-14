@@ -688,6 +688,7 @@ export default function CardapioDigital({
                   <DirectPixCustomerConfirm
                     order={{
                       id: createdOrder.comanda_id,
+                      numero_pedido: createdOrder.numero_pedido,
                       idempotency_key: idempotencyKeyRef.current,
                       tracking_token: createdOrder.tracking_token,
                       tracking_url: createdOrder.tracking_url,
