@@ -98,7 +98,7 @@ def operational_counts(db: Session, restaurante_id: int) -> dict[str, int]:
             Comanda.delivery_status.in_(ACTIVE_OPERATIONAL_STATUSES),
             or_(
                 Comanda.online_payment_status.is_(None),
-                Comanda.online_payment_status == "approved",
+                Comanda.online_payment_status.in_(("approved", "pending_released")),
             ),
             ~unreleased_schedule,
         )

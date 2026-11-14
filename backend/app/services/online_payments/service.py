@@ -422,6 +422,47 @@ class OnlinePaymentService:
         if comanda.fechado_em is None:
             comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
 
+    @staticmethod
+    def publish_order_in_session(
+        db: Session, *, intent: OnlinePaymentIntent, comanda: Comanda
+    ) -> bool:
+        """Publish a public order once it is operationally released.
+
+        Financial approval and explicit unpaid release both use this owner.
+        The caller must hold the intent and order locks and choose idempotently
+        whether publication has already happened.
+        """
+        lancamento = db.query(Lancamento).filter(
+            Lancamento.restaurante_id == intent.restaurante_id,
+            Lancamento.comanda_id == comanda.id,
+        ).order_by(Lancamento.timestamp.asc(), Lancamento.id.asc()).first()
+        if lancamento is None:
+            # Provider webhooks can settle historical/synthetic financial-only
+            # checks without a kitchen launch. Preserve their approval flow.
+            return False
+        event = OrderCreated(
+            restaurant_id=intent.restaurante_id,
+            order_id=lancamento.id,
+            check_id=comanda.id,
+            display_number=str(comanda.numero_pedido),
+            check_number=comanda.numero_pedido,
+            channel=OrderChannel.WEB_CARDAPIO,
+            fulfillment=normalize_to_fulfillment(comanda.tipo),
+            total=_money(intent.amount),
+            items_count=len([item for item in comanda.itens if item.status != "cancelado"]),
+            customer_name=comanda.identificador,
+            customer_phone=comanda.delivery_telefone,
+            idempotency_key=comanda.idempotency_key,
+        )
+        enqueue_outbox_event_in_session(
+            db, event, aggregate_type="order", aggregate_id=str(lancamento.id)
+        )
+        from ..staff_push import enqueue_staff_order_alert
+        enqueue_staff_order_alert(db, event)
+        from ..central_whatsapp import enqueue_operator_alert
+        enqueue_operator_alert(db, event)
+        return True
+
     @classmethod
     def apply_provider_snapshot_in_session(
         cls,
@@ -488,6 +529,7 @@ class OnlinePaymentService:
             Comanda.restaurante_id == account.restaurante_id,
             Comanda.id == locked_intent.comanda_id,
         ).populate_existing().with_for_update().one()
+        was_released_unpaid = comanda.online_payment_status == "pending_released"
         locked_intent.status = mapped
         locked_intent.last_error = None
         comanda.online_payment_status = mapped
@@ -557,38 +599,10 @@ class OnlinePaymentService:
             if item.status != "cancelado":
                 item.pago = True
 
-        if approval_effects_applied:
-            lancamento = db.query(Lancamento).filter(
-                Lancamento.restaurante_id == account.restaurante_id,
-                Lancamento.comanda_id == comanda.id,
-            ).order_by(Lancamento.timestamp.asc()).first()
-            if lancamento is not None:
-                event = OrderCreated(
-                    restaurant_id=account.restaurante_id,
-                    order_id=lancamento.id,
-                    check_id=comanda.id,
-                    display_number=str(comanda.numero_pedido),
-                    check_number=comanda.numero_pedido,
-                    channel=OrderChannel.WEB_CARDAPIO,
-                    fulfillment=normalize_to_fulfillment(comanda.tipo),
-                    total=_money(locked_intent.amount),
-                    items_count=len([item for item in comanda.itens if item.status != "cancelado"]),
-                    customer_name=comanda.identificador,
-                    customer_phone=comanda.delivery_telefone,
-                    idempotency_key=comanda.idempotency_key,
-                )
-                enqueue_outbox_event_in_session(
-                    db,
-                    event,
-                    aggregate_type="order",
-                    aggregate_id=str(lancamento.id),
-                )
-                from ..staff_push import enqueue_staff_order_alert
-                enqueue_staff_order_alert(db, event)
-                from ..central_whatsapp import enqueue_operator_alert
-                enqueue_operator_alert(db, event)
+        if approval_effects_applied and not was_released_unpaid:
+            cls.publish_order_in_session(db, intent=locked_intent, comanda=comanda)
 
-        if approval_effects_applied:
+        if approval_effects_applied and not was_released_unpaid:
             from ..online_order_control import auto_accept_online_order_if_enabled
 
             auto_accept_online_order_if_enabled(

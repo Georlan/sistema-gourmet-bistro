@@ -198,6 +198,7 @@ def _resolve_tracking_payment_state(
     comanda_id: str,
     delivery_status: Any,
     fechada: bool,
+    operationally_released_unpaid: bool = False,
     intent: Any = _UNREAD_PAYMENT_INTENT,
 ) -> tuple[str, bool, bool, dict[str, Any] | None]:
     """Resolve o ciclo de vida do pagamento online para o acompanhamento público.
@@ -258,7 +259,9 @@ def _resolve_tracking_payment_state(
             payment_failed = True
 
         # 2. Intent pendente ainda válido
-        elif intent.status in {"created", "pending"} and not fechada and effective_status not in {"recusado", "rejected", "cancelado", "cancelled"}:
+        elif (intent.status in {"created", "pending"} and not fechada
+              and not (intent.provider == "direct_pix" and operationally_released_unpaid)
+              and effective_status not in {"recusado", "rejected", "cancelado", "cancelled"}):
             effective_status = "aguardando_pagamento"
             payment_pending = True
 
@@ -275,6 +278,8 @@ def _resolve_tracking_payment_state(
         from ..services.online_payments import OnlinePaymentService
 
         pagamento_payload = OnlinePaymentService.public_payload(intent)
+        if intent.provider == "direct_pix":
+            pagamento_payload["preparo_liberado_sem_confirmacao"] = bool(operationally_released_unpaid and intent.status in {"created", "pending"})
 
     return effective_status, payment_pending, payment_failed, pagamento_payload
 
@@ -296,6 +301,7 @@ def consultar_resumo_pedido_por_token(
             db.query(
                 Comanda.id.label("id"),
                 Comanda.delivery_status.label("delivery_status"),
+                Comanda.online_payment_status.label("online_payment_status"),
                 Comanda.tipo.label("tipo"),
                 Comanda.delivery_receipt_secret.label("delivery_receipt_secret"),
                 Comanda.fechada.label("fechada"),
@@ -330,6 +336,7 @@ def consultar_resumo_pedido_por_token(
             .group_by(
                 Comanda.id,
                 Comanda.delivery_status,
+                Comanda.online_payment_status,
                 Comanda.tipo,
                 Comanda.delivery_receipt_secret,
                 Comanda.fechada,
@@ -353,6 +360,7 @@ def consultar_resumo_pedido_por_token(
             comanda_id=row.id,
             delivery_status=row.delivery_status,
             fechada=bool(row.fechada),
+            operationally_released_unpaid=row.online_payment_status == "pending_released",
             intent=payment_intent,
         )
         state_contract = build_order_state_contract(
@@ -445,6 +453,7 @@ def consultar_pedido_por_token(
             comanda_id=comanda.id,
             delivery_status=comanda.delivery_status,
             fechada=bool(comanda.fechada),
+            operationally_released_unpaid=comanda.online_payment_status == "pending_released",
             intent=payment_intent,
         )
         state_contract = build_order_state_contract(

@@ -67,7 +67,7 @@ def enqueue_staff_order_alert(db: Session, order) -> bool:
         return False
     if getattr(order, "check_id", None):
         check = db.query(Comanda).filter_by(id=str(order.check_id), restaurante_id=order.restaurant_id).first()
-        if check is None or check.online_payment_status not in {None, "approved"}:
+        if check is None or check.online_payment_status not in {None, "approved", "pending_released"}:
             return False
     event = StaffOrderAlert(order.restaurant_id, str(order.order_id), str(order.display_number),
         str(uuid.uuid5(NAMESPACE, f"{order.restaurant_id}:{order.order_id}")))

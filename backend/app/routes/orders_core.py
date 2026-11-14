@@ -88,7 +88,7 @@ def _agendar_notificacao_whatsapp_status(
 def _operational_online_payment_filter():
     """Garante que pedidos originados com cobrança Pix online só aparecem no Caixa após aprovação."""
     return or_(
-        Comanda.online_payment_status == "approved",
+        Comanda.online_payment_status.in_(("approved", "pending_released")),
         and_(
             Comanda.online_payment_status.is_(None),
             or_(
