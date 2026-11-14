@@ -260,7 +260,8 @@ def release_unpaid(
         raise HTTPException(409, 'Abra ou regularize o caixa antes de liberar o pedido.')
     order.online_payment_status = 'pending_released'
     try:
-        OnlinePaymentService.publish_order_in_session(db, intent=intent, comanda=order)
+        if not OnlinePaymentService.publish_order_in_session(db, intent=intent, comanda=order):
+            raise OnlinePaymentValidationError('Pedido sem lançamento não pode entrar no Kanban.')
         db.add(OnlineOrderOperationalAudit(
             restaurante_id=tenant,
             actor_user_id=user.id,
