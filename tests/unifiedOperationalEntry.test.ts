@@ -58,7 +58,7 @@ test('canonical app shell bypasses stale browser/service-worker caches', () => {
   assert.match(headers, /\/cardapio[\s\S]*Cache-Control: no-store, no-cache, must-revalidate, max-age=0/);
   assert.match(headers, /\/assets\/\*[\s\S]*Cache-Control: public, max-age=31536000, immutable/);
 
-  const recovery = source('../src/components/auth/AppRecoveryBoundary.tsx');
+  const recovery = source('../src/utils/chunkRecovery.ts');
   assert.match(recovery, /__koma_refresh/);
   assert.match(recovery, /Date\.now\(\)/);
   assert.match(recovery, /window\.location\.replace\(url\.toString\(\)\)/);
