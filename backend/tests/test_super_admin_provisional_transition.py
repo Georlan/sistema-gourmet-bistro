@@ -78,22 +78,29 @@ def _tenant_admin_headers(restaurante_id: int, user_id: str = "u-admin-1") -> di
 TEST_TENANT_ID = 9876
 
 
-def _cleanup_test_data(db):
+def _cleanup_tenant(db, tenant_id: int = TEST_TENANT_ID):
     from app.session_models import UserSessionVersion
+    from app.saas_billing_models import SaaSBillingSetup, SaaSInvoice
     db.query(SignupNotification).delete()
-    db.query(SuperAdminAuditLog).filter(SuperAdminAuditLog.restaurante_id == TEST_TENANT_ID).delete()
-    db.query(RestaurantContractAcceptance).filter(RestaurantContractAcceptance.restaurante_id == TEST_TENANT_ID).delete()
+    db.query(SuperAdminAuditLog).filter(SuperAdminAuditLog.restaurante_id == tenant_id).delete()
+    db.query(RestaurantContractAcceptance).filter(RestaurantContractAcceptance.restaurante_id == tenant_id).delete()
     db.query(ContractAcceptance).filter(ContractAcceptance.email == "contato@jelanches.com.br").delete()
-    db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == TEST_TENANT_ID).delete()
-    db.execute(restaurant_trials.delete().where(restaurant_trials.c.restaurante_id == TEST_TENANT_ID))
-    db.query(RestauranteOperationProfile).filter(RestauranteOperationProfile.restaurante_id == TEST_TENANT_ID).delete()
-    db.query(Produto).filter(Produto.restaurante_id == TEST_TENANT_ID).delete()
-    db.query(Categoria).filter(Categoria.restaurante_id == TEST_TENANT_ID).delete()
-    db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == TEST_TENANT_ID).delete()
-    db.query(UserSessionVersion).filter(UserSessionVersion.restaurante_id == TEST_TENANT_ID).delete()
-    db.query(Usuario).filter(Usuario.restaurante_id == TEST_TENANT_ID).delete()
-    db.query(Restaurante).filter(Restaurante.id == TEST_TENANT_ID).delete()
+    db.query(SaaSInvoice).filter(SaaSInvoice.restaurante_id == tenant_id).delete()
+    db.query(SaaSBillingSetup).filter(SaaSBillingSetup.restaurante_id == tenant_id).delete()
+    db.query(SaaSSubscription).filter(SaaSSubscription.restaurante_id == tenant_id).delete()
+    db.execute(restaurant_trials.delete().where(restaurant_trials.c.restaurante_id == tenant_id))
+    db.query(RestauranteOperationProfile).filter(RestauranteOperationProfile.restaurante_id == tenant_id).delete()
+    db.query(Produto).filter(Produto.restaurante_id == tenant_id).delete()
+    db.query(Categoria).filter(Categoria.restaurante_id == tenant_id).delete()
+    db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == tenant_id).delete()
+    db.query(UserSessionVersion).filter(UserSessionVersion.restaurante_id == tenant_id).delete()
+    db.query(Usuario).filter(Usuario.restaurante_id == tenant_id).delete()
+    db.query(Restaurante).filter(Restaurante.id == tenant_id).delete()
     db.commit()
+
+
+def _cleanup_test_data(db):
+    _cleanup_tenant(db, TEST_TENANT_ID)
 
 
 @pytest.fixture(autouse=True)
