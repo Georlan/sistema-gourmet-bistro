@@ -38,3 +38,7 @@ Testar em 320, 390, 430px e desktop, claro/escuro, uma mesa pronta, ocupada, liv
 - Capturas de 390px em dark/light inspecionadas. Teste novo verificou contraste renderizado do texto e do cabeçalho >= 4,5:1 em ambos os temas, inclusive após troca sem transição intermediária; os alvos têm tamanho útil e o modal cabe entre 320 e 430px sem scroll horizontal.
 - Correções visuais relevantes comprovadas: regras antigas forçavam todo `span` de status do picker a 0,4rem, quebrando a leitura; removidas essas regras. Transição anterior de fundo de cartão criava instante com contraste ~1,7:1 ao alternar tema; desativada para esses cartões, sem motion gratuito.
 - Glyphs existentes (`KomaWaiterGlyphs.tsx`) foram reaproveitados. Nenhuma imagem ilustrativa ou dependência de IA foi necessária, pois é um problema de comunicação de estado, não de material publicitário.
+
+## Ajuste de teste legado detectado no CI
+
+O GitHub falhou 2/186 casos no job "Cardapio fulfillment, chat and Firefox smoke", ambos para `e2e/marmitaria-composition-presentation.spec.ts` em mobile e desktop: a expectativa antiga exigia o literal `OBS: Sem salada`, mas o KDS renderiza `Obs: Sem salada`. **O mesmo teste falhou nas duas larguras no `origin/main` isolado em worktree, sem o PR.** Corrigimos apenas a asserção do KDS para corresponder à observação independentemente de caixa (`/obs: sem salada/i`), preservando a obrigatoriedade de apresentar o texto. O componente de cozinha, pedidos e negócio não foi alterado por isso. O CI será reexecutado no SHA final.
