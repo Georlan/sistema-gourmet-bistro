@@ -24,11 +24,8 @@ export default function PixCopyCode({ code }: { code: string }) {
         className="flex min-h-11 w-full items-center justify-center rounded-xl bg-emerald-500 px-4 py-3 text-xs font-black text-white hover:bg-emerald-400">
         {copied ? "Código Pix copiado" : "Copiar código Pix"}
       </button>
-      <p role="status" className="mt-2 text-xs leading-relaxed text-koma-muted">
-        {copyFailed ? "A cópia automática não funcionou. Selecione e copie o código abaixo." : copied ? "Código copiado. Abra o aplicativo do seu banco, escolha Pix Copia e Cola e confirme o pagamento." : "Abra o aplicativo do seu banco, escolha Pix Copia e Cola e confirme o pagamento."}
-      </p>
-      <p className="mt-2 text-xs leading-relaxed text-koma-muted">
-        Confira o destinatário e o valor antes de confirmar o pagamento no seu banco.
+      <p role="status" className="mt-2 text-xs text-koma-muted">
+        {copyFailed ? "Não foi possível copiar; use a opção abaixo." : copied ? "Copiado. Confira destinatário e valor no banco." : "No banco, confira destinatário e valor."}
       </p>
       <button type="button" onClick={() => setShowCode(value => !value)} aria-expanded={showCode} aria-controls={fieldId}
         className="mt-2 min-h-11 w-full rounded-xl border border-koma-border px-3 py-2 text-xs font-bold text-koma-foreground">

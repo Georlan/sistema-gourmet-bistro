@@ -69,6 +69,7 @@ interface OnlinePaymentResponse {
   metodo?: string;
   txid?: string | null;
   cliente_informou_pagamento?: boolean;
+  preparo_liberado_sem_confirmacao?: boolean;
   pagamento_informado_em?: string | null;
   qr_code?: string | null;
   qr_code_base64?: string | null;
