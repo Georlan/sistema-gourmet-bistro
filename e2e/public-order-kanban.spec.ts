@@ -195,7 +195,7 @@ test('pedido do cardápio é aceito uma vez e surge no kanban com contexto útil
   await expect(digitalColumn).toContainText('Pizza Margherita');
   await expect(digitalColumn).toContainText('Online');
   await expect(digitalColumn).toContainText(/R\$\s*48,00/);
-  await expect(digitalColumn).toContainText(/EM PREPARO/i);
+  await expect(digitalColumn).toContainText(/Aceito · aguardando preparo/i);
 
   expect(state.getAcceptCalls()).toBe(1);
 
