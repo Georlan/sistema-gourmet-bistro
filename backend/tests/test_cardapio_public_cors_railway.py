@@ -94,3 +94,44 @@ def test_public_order_preflight_still_rejects_other_pages_projects(monkeypatch):
     )
 
     assert "access-control-allow-origin" not in response.headers
+
+
+def test_real_app_cors_sets_max_age_and_restricted_timing_allow_origin(monkeypatch):
+    cors_middleware = next(
+        middleware
+        for middleware in koma_app.user_middleware
+        if middleware.cls is CORSMiddleware
+    )
+    assert cors_middleware.kwargs["max_age"] == 7200
+
+    monkeypatch.setattr(settings, "CORS_ALLOWED_ORIGINS", OFFICIAL_PUBLIC_FRONTEND_ORIGIN)
+    client = TestClient(koma_app)
+
+    allowed_preflight = client.options(
+        "/health/live",
+        headers={
+            "Origin": OFFICIAL_PUBLIC_FRONTEND_ORIGIN,
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization",
+        },
+    )
+    assert allowed_preflight.headers.get("access-control-max-age") == "7200"
+
+    allowed_get = client.get(
+        "/health/live",
+        headers={"Origin": OFFICIAL_PUBLIC_FRONTEND_ORIGIN},
+    )
+    assert allowed_get.headers.get("timing-allow-origin") == OFFICIAL_PUBLIC_FRONTEND_ORIGIN
+
+    subdomain_get = client.get(
+        "/health/live",
+        headers={"Origin": "https://d8-burger.komafood.com.br"},
+    )
+    assert subdomain_get.headers.get("timing-allow-origin") == "https://d8-burger.komafood.com.br"
+
+    evil_get = client.get(
+        "/health/live",
+        headers={"Origin": "https://evil-hacker.pages.dev"},
+    )
+    assert "timing-allow-origin" not in evil_get.headers
+

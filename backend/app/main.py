@@ -432,6 +432,13 @@ async def add_security_headers_middleware(request: Request, call_next):
     is_localhost = hostname in ("localhost", "127.0.0.1")
     if env == "production" and is_https and not is_localhost:
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+    origin = request.headers.get("origin")
+    if origin and (
+        origin in settings.get_cors_allowed_origins()
+        or _KOMA_SUBDOMAIN_ORIGIN_RE.match(origin)
+    ):
+        response.headers["Timing-Allow-Origin"] = origin
     return response
 
 
@@ -455,6 +462,8 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
 
 
+_KOMA_SUBDOMAIN_ORIGIN_RE = re.compile(r"^https://[a-z0-9-]+(?:\.komafood\.com\.br)$")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.get_cors_allowed_origins(),
@@ -476,6 +485,7 @@ app.add_middleware(
         "X-Signup-Token",
     ],
     expose_headers=["X-Request-ID", "X-Total-Count", "X-Page-Limit", "X-Page-Offset", "X-Has-More", "X-Products-Included"],
+    max_age=7200,
 )
 
 
