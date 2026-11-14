@@ -703,6 +703,138 @@ def test_kds_last_item_ready_advances_order_without_advancing_partial_items(char
 
 @patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)
 @patch("app.services.whatsapp.enviar_notificacao_whatsapp_task", lambda *args, **kwargs: None)
+def test_kds_batch_ready_is_atomic_fast_and_advances_canonical_cycle(char_client, char_setup):
+    """One PUT changes all items and the check; retry is safe and idempotent."""
+    import uuid
+    headers = char_setup["headers"]
+    check_id = _create_pickup(char_client, phone="11977770410", customer_name="Atomic KDS test")
+    started = char_client.put(f"/comandas/{check_id}/delivery/status", params={"status_novo": "producao"}, headers=headers)
+    assert started.status_code == 200, started.text
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        first = db.query(Item).filter(Item.restaurante_id == CHAR_RESTAURANT_ID, Item.comanda_id == check_id).one()
+        second_id = f"kds-batch-{uuid.uuid4().hex}"
+        second = Item(id=second_id, restaurante_id=CHAR_RESTAURANT_ID, comanda_id=check_id,
+                      lancamento_id=first.lancamento_id, produto_id=first.produto_id,
+                      preco_unit=first.preco_unit, status="preparando", pago=False)
+        db.add(second)
+        first_id = first.id
+        db.commit()
+    finally:
+        db.close()
+
+    result = char_client.put("/comandas/kds/itens/prontos", json={"item_ids": [first_id, second_id]}, headers=headers)
+    assert result.status_code == 200, result.text
+    assert set(result.json()["confirmed_ids"]) == {first_id, second_id}
+    assert result.json()["already_ready_ids"] == []
+    assert result.json()["delivery_status"] == "pronto"
+    replay = char_client.put("/comandas/kds/itens/prontos", json={"item_ids": [first_id, second_id]}, headers=headers)
+    assert replay.status_code == 200, replay.text
+    assert set(replay.json()["already_ready_ids"]) == {first_id, second_id}
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        check = db.query(Comanda).filter(Comanda.restaurante_id == CHAR_RESTAURANT_ID, Comanda.id == check_id).one()
+        statuses = {item.status for item in db.query(Item).filter(Item.restaurante_id == CHAR_RESTAURANT_ID, Item.id.in_([first_id, second_id]))}
+        assert check.delivery_status == "pronto"
+        assert statuses == {"pronto"}
+    finally:
+        db.close()
+
+
+@patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)
+@patch("app.services.whatsapp.enviar_notificacao_whatsapp_task", lambda *args, **kwargs: None)
+def test_kds_batch_never_partially_commits_when_an_item_is_invalid_or_cancelled(char_client, char_setup):
+    headers = char_setup["headers"]
+    check_id = _create_pickup(char_client, phone="11977770411", customer_name="Rollback KDS test")
+    assert char_client.put(f"/comandas/{check_id}/delivery/status", params={"status_novo": "producao"}, headers=headers).status_code == 200
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        first = db.query(Item).filter(Item.restaurante_id == CHAR_RESTAURANT_ID, Item.comanda_id == check_id).one()
+        first_id = first.id
+    finally:
+        db.close()
+    bad = char_client.put("/comandas/kds/itens/prontos", json={"item_ids": [first_id, "does-not-exist"]}, headers=headers)
+    assert bad.status_code == 409
+    for invalid_ids in [[], [first_id, first_id]]:
+        assert char_client.put("/comandas/kds/itens/prontos", json={"item_ids": invalid_ids}, headers=headers).status_code == 422
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        item = db.query(Item).filter(Item.restaurante_id == CHAR_RESTAURANT_ID, Item.id == first_id).one()
+        assert item.status == "preparando"
+        assert db.query(Comanda).filter(Comanda.id == check_id).one().delivery_status == "producao"
+    finally:
+        db.close()
+
+
+@patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)
+@patch("app.services.whatsapp.enviar_notificacao_whatsapp_task", lambda *args, **kwargs: None)
+def test_kds_batch_rejects_items_from_another_check_and_preserves_both(char_client, char_setup):
+    headers = char_setup["headers"]
+    first_check = _create_pickup(char_client, phone="11977770412", customer_name="First KDS")
+    second_check = _create_pickup(char_client, phone="11977770413", customer_name="Second KDS")
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        ids = [db.query(Item.id).filter(Item.restaurante_id == CHAR_RESTAURANT_ID, Item.comanda_id == check_id).scalar()
+               for check_id in [first_check, second_check]]
+    finally:
+        db.close()
+    response = char_client.put("/comandas/kds/itens/prontos", json={"item_ids": ids}, headers=headers)
+    assert response.status_code == 409, response.text
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        assert {item.status for item in db.query(Item).filter(Item.restaurante_id == CHAR_RESTAURANT_ID, Item.id.in_(ids))} == {"preparando"}
+    finally:
+        db.close()
+
+
+@patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)
+@patch("app.services.whatsapp.enviar_notificacao_whatsapp_task", lambda *args, **kwargs: None)
+def test_kds_batch_refuses_pending_order_until_accepted_and_preserves_item(char_client, char_setup):
+    headers = char_setup["headers"]
+    check_id = _create_pickup(char_client, phone="11977770414", customer_name="Pending KDS")
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        first_id = db.query(Item.id).filter(Item.restaurante_id == CHAR_RESTAURANT_ID, Item.comanda_id == check_id).scalar()
+        assert db.query(Comanda).filter(Comanda.restaurante_id == CHAR_RESTAURANT_ID, Comanda.id == check_id).one().delivery_status == "pendente"
+    finally:
+        db.close()
+    rejected = char_client.put("/comandas/kds/itens/prontos", json={"item_ids": [first_id]}, headers=headers)
+    assert rejected.status_code == 409, rejected.text
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        assert db.query(Item).filter(Item.id == first_id).one().status == "preparando"
+    finally:
+        db.close()
+    acceptance = char_client.put(f"/comandas/{check_id}/delivery/status", params={"status_novo": "aceito"}, headers=headers)
+    assert acceptance.status_code == 200, acceptance.text
+    accepted = char_client.put("/comandas/kds/itens/prontos", json={"item_ids": [first_id]}, headers=headers)
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["delivery_status"] == "pronto"
+
+
+@patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)
+@patch("app.services.whatsapp.enviar_notificacao_whatsapp_task", lambda *args, **kwargs: None)
+def test_kds_batch_rejects_waiter_without_preparation_permission(char_client, char_setup):
+    from app.security import create_access_token
+    check_id = _create_pickup(char_client, phone="11977770415", customer_name="Waiter blocked")
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        first_id = db.query(Item.id).filter(Item.restaurante_id == CHAR_RESTAURANT_ID, Item.comanda_id == check_id).scalar()
+    finally:
+        db.close()
+    waiter_token = create_access_token(subject="usr-char-garcom", restaurante_id=CHAR_RESTAURANT_ID, role="garcom")
+    rejected = char_client.put("/comandas/kds/itens/prontos", json={"item_ids": [first_id]},
+                               headers={"Authorization": f"Bearer {waiter_token}"})
+    assert rejected.status_code == 403, rejected.text
+    db = SessionLocal(restaurante_id=CHAR_RESTAURANT_ID)
+    try:
+        assert db.query(Item).filter(Item.id == first_id).one().status == "preparando"
+    finally:
+        db.close()
+
+
+@patch("app.routes.cardapio._enforce_public_order_rate_limits", lambda *args, **kwargs: None)
+@patch("app.services.whatsapp.enviar_notificacao_whatsapp_task", lambda *args, **kwargs: None)
 def test_kds_completes_accepted_pickup_without_intermediate_start(char_client, char_setup):
     headers = char_setup['headers']
     comanda_id = _create_pickup(char_client, phone='11977770334', customer_name='KDS sem etapa extra')

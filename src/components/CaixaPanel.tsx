@@ -324,6 +324,7 @@ export function CaixaPanel({
     handleFinalizarPedido,
     handleAddMotoboy,
     handleUpdateItemStatus,
+    handleConfirmTicketReady,
     handleAcceptPendingDeliveryOrder,
     handleRejectPendingDeliveryOrder,
     handleMarkTableItemsReady,
@@ -998,7 +999,7 @@ export function CaixaPanel({
               sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, deliveryOrders, activeKitchenItems, apiCategorias }}
             />
 
-            <CashierKitchen mode={hasDedicatedKds ? 'kds' : 'queue'} activeSubTab={activeTab === 'operacao' ? activeSubTab : ''} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} />
+            <CashierKitchen mode={hasDedicatedKds ? 'kds' : 'queue'} activeSubTab={activeTab === 'operacao' ? activeSubTab : ''} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} handleConfirmTicketReady={handleConfirmTicketReady} />
 
             <CashierPickups
               isWsConnected={isWsConnected}
