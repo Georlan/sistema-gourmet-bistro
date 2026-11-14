@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useRef,useState} from 'react';
 import {createPortal} from 'react-dom';
-import {QrCode,X,MessageCircle,Copy,ChevronDown} from 'lucide-react';
+import {QrCode,X,MessageCircle} from 'lucide-react';
 import {buildWhatsAppContactUrl} from '../../../config/whatsappUtils';
 import {authFetch,authRequestErrorMessage} from '../../../utils/authRequest';
 import {formatCurrency} from '../cashierPresentation';
@@ -19,16 +19,6 @@ type Pending = {
 };
 type Props = {apiBaseUrl:string;authHeaders:Record<string,string>;onRefreshOrders:()=>void};
 type Resolution = 'confirm'|'release-unpaid'|'cancel';
-
-/** The optional bank ID is evidence, never the local order code or QR TXID. */
-export function normalizeDirectPixReference(raw:string):string {
-  const match=raw.match(/(?:^|[^A-Za-z0-9])(E[A-Za-z0-9]{31})(?:[^A-Za-z0-9]|$)/);
-  return match?.[1] || raw.trim().slice(0,32);
-}
-export function isValidDirectPixBankReference(reference:string,txid?:string|null):boolean {
-  return !reference.trim() || (/^[A-Za-z0-9][A-Za-z0-9._/-]{5,31}$/.test(reference)
-    && reference.toLowerCase() !== (txid || '').toLowerCase());
-}
 
 function whatsappUrl(row:Pending):string {
   const phone=buildWhatsAppContactUrl(row.customer_phone);
@@ -52,10 +42,8 @@ export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:P
       ? recentPendingPixSnapshot.rows : [];
   });
   const [selected,setSelected]=useState<Pending|null>(null);
-  const [reference,setReference]=useState('');
   const [checked,setChecked]=useState(false);
   const [notReceived,setNotReceived]=useState(false);
-  const [confirmUnpaidRelease,setConfirmUnpaidRelease]=useState(false);
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const refreshPendingRef=useRef<(()=>void)|null>(null);
@@ -94,8 +82,7 @@ export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:P
   },[load]);
 
   const select=(row:Pending)=>{
-    setSelected(row);setReference('');setChecked(false);setNotReceived(false);
-    setConfirmUnpaidRelease(false);setError('');
+    setSelected(row);setChecked(false);setNotReceived(false);setError('');
   };
 
   async function resolve(action:Resolution) {
@@ -103,9 +90,9 @@ export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:P
     setBusy(true);setError('');
     try {
       const body=action==='confirm'
-        ? {received_amount:selected.amount,bank_reference:reference.trim() || null,checked_bank_statement:checked}
+        ? {received_amount:selected.amount,bank_reference:null,checked_bank_statement:checked}
         : action==='cancel' ? {checked_no_receipt:notReceived}
-        : {acknowledge_payment_pending:confirmUnpaidRelease};
+        : {acknowledge_payment_pending:true};
       const response=await authFetch(`${apiBaseUrl}/payments/direct-pix/${selected.id}/${action}`,{
         method:'POST',headers:{...authHeaders,'Content-Type':'application/json'},body:JSON.stringify(body),
       });
@@ -113,9 +100,8 @@ export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:P
       if(!response.ok)throw new Error(typeof payload.detail==='string'?payload.detail:'Não foi possível atualizar o pedido.');
       if(action==='release-unpaid'){
         setSelected(current=>current?{...current,released_unpaid:true}:null);
-        setConfirmUnpaidRelease(false);
       } else {
-        setSelected(null);setChecked(false);setReference('');setNotReceived(false);
+        setSelected(null);setChecked(false);setNotReceived(false);
       }
       refreshPendingRef.current?.();onRefreshOrders();
     }catch(err){setError(authRequestErrorMessage(err,'Não foi possível atualizar o pedido.'));}
@@ -153,27 +139,23 @@ export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:P
             </div>;
           })}</div>
           {selected&&<div className="space-y-3 border-t border-koma-border pt-3">
-            <div className="flex items-center justify-between gap-2">
-              <strong className="text-base">Pedido #{selected.order_number}</strong>
-              <button type="button" className="inline-flex min-h-10 items-center gap-1 rounded-lg border border-koma-border px-2 text-xs" onClick={()=>{void navigator.clipboard.writeText('Pedido #'+selected.order_number).catch(()=>setError('Não foi possível copiar o número.'));}}><Copy size={14}/> Copiar</button>
-            </div>
             <div className="space-y-2 rounded-xl border border-koma-border p-3">
-              <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={checked} onChange={e=>setChecked(e.target.checked)}/> Conferi o recebimento no banco</label>
-              <button type="button" disabled={busy||!checked||!isValidDirectPixBankReference(reference,selected.txid)} onClick={()=>void resolve('confirm')} className="min-h-11 w-full rounded-lg bg-emerald-500 px-4 text-sm font-semibold text-emerald-950 disabled:opacity-40">Confirmar Pix recebido</button>
-              <details className="text-xs text-koma-muted">
-                <summary className="flex min-h-9 cursor-pointer items-center gap-1">ID bancário (opcional) <ChevronDown size={13}/></summary>
-                <input aria-label="Identificador do Pix no extrato (EndToEndId)" className="mt-1 min-h-11 w-full rounded-lg border border-koma-border bg-koma-page p-2 text-koma-foreground" placeholder="EndToEndId ou referência do banco" value={reference} onChange={e=>setReference(normalizeDirectPixReference(e.target.value))}/>
-              </details>
+              <label className="flex min-h-11 items-center gap-2 text-sm">
+                <input type="checkbox" checked={checked} onChange={e=>setChecked(e.target.checked)}/>
+                Conferi o Pix na conta bancária
+              </label>
+              <button type="button" disabled={busy||!checked} onClick={()=>void resolve('confirm')} className="min-h-11 w-full rounded-lg bg-emerald-500 px-4 text-sm font-semibold text-emerald-950 disabled:opacity-40">
+                Confirmar Pix recebido
+              </button>
             </div>
-            {!selected.released_unpaid&&<div className="space-y-2">
-              {!confirmUnpaidRelease
-                ? <button type="button" disabled={busy} className="min-h-11 w-full rounded-lg border border-amber-500/40 text-sm text-amber-200" onClick={()=>setConfirmUnpaidRelease(true)}>Liberar preparo sem receber</button>
-                : <div className="space-y-2 rounded-lg border border-amber-500/40 p-3 text-sm">
-                    <p className="text-amber-200">O pedido entrará no Kanban. O Pix continuará pendente no caixa.</p>
-                    <button type="button" disabled={busy} className="min-h-11 w-full rounded-lg bg-amber-500 px-2 font-semibold text-amber-950" onClick={()=>void resolve('release-unpaid')}>Sim, liberar sem pagamento</button>
-                    <button type="button" className="min-h-10 w-full text-koma-muted" onClick={()=>setConfirmUnpaidRelease(false)}>Voltar</button>
-                  </div>}
-            </div>}
+            {selected.released_unpaid
+              ? <p className="rounded-lg border border-amber-500/30 px-3 py-2 text-xs text-amber-200">Pedido liberado. Pix ainda pendente.</p>
+              : <div className="space-y-1">
+                  <button type="button" disabled={busy} onClick={()=>void resolve('release-unpaid')} className="min-h-11 w-full rounded-lg border border-amber-500/50 px-3 text-sm font-semibold text-amber-200 disabled:opacity-40">
+                    Liberar preparo · conferir depois
+                  </button>
+                  <p className="text-center text-xs text-koma-muted">Entra no Kanban. O Pix continua pendente.</p>
+                </div>}
             <details className="rounded-lg border border-koma-border px-3 py-2 text-xs text-koma-muted">
               <summary className="min-h-9 cursor-pointer py-2">Cancelar pedido</summary>
               <label className="mt-2 flex min-h-11 items-center gap-2"><input type="checkbox" checked={notReceived} onChange={e=>setNotReceived(e.target.checked)}/> Confirmei que não houve recebimento</label>
