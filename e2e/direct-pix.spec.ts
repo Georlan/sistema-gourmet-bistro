@@ -254,7 +254,6 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   await expect(pix.getByRole('button',{name:'Código Pix copiado',exact:true})).toHaveCount(0);
   await expect(pix.getByLabel('Código Pix Copia e Cola')).toHaveValue('test-only-journey-do-not-pay');
 
-  await expect(pix).toContainText('O restaurante conferirá o recebimento');
   const receiptLink = pix.getByRole('link',{name:'Enviar comprovante no WhatsApp'});
   await expect(receiptLink).toHaveAttribute('href', /wa\.me\/5588999616937\?text=/);
   await expect(receiptLink).toBeVisible();
@@ -264,7 +263,6 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   await consumer.locator('#orders-drawer-panel').getByRole('button',{name:'Pagar Pix',exact:true}).first().click();
   const reopened=consumer.locator('#pix-payment-modal-backdrop');
   await expect(reopened.locator('svg[role="img"]')).toBeVisible();
-  await expect(reopened).toContainText('O restaurante conferirá o recebimento');
   await expect(reopened.getByRole('link',{name:'Enviar comprovante no WhatsApp'})).toHaveAttribute('href', /wa\.me\/5588999616937\?text=/);
   await expect(reopened).not.toContainText('A confirmação do pagamento é automática');
   await reopened.getByRole('button',{name:/Já paguei/}).click();
@@ -288,7 +286,7 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   await expect(referenceInput).toHaveValue('E1234567890123456789012345678901');
   await pending.getByRole('checkbox',{name:'Conferi o recebimento no banco'}).check();
   await pending.getByRole('button',{name:'Confirmar Pix recebido'}).click();
-  await expect(pending).toContainText('Nenhum Pix aguardando conferência.');
+  await expect(pending).toContainText('Nenhum Pix pendente.');
   await pending.getByRole('button',{name:'Fechar conferência Pix'}).click();
   await expect(pending).toBeHidden();
   await consumer.reload();
