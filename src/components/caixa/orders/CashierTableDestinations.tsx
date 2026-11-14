@@ -1,6 +1,7 @@
 import React from 'react';
 import type { KanbanOrderDetailsProps } from './KanbanOrderDetails';
 import { CashierDetailActionArt } from './CashierDetailActionArt';
+import { TableStatusMark } from '../../shared/TableStatusMark';
 
 type Props = { source: number; transfer: KanbanOrderDetailsProps['transfer']; actions: KanbanOrderDetailsProps['actions']; association?: boolean };
 /** Reuses the existing tenant-scoped table snapshot; opening the picker makes no request. */
@@ -28,13 +29,13 @@ export function CashierTableDestinations({ source, transfer, actions, associatio
       <div className="kd-destination-head"><strong>{mode === 'associate' ? 'Qual mesa?' : 'Mesa de destino'}</strong><button type="button" aria-label="Fechar escolha de mesa" disabled={transfer.isTransferring} onClick={close}>×</button></div>
       <div className="kd-destination-legend"><span><i data-occupied="false" />Livres</span><span><i data-occupied="true" />Com consumo</span></div>
       <div role="radiogroup" aria-label="Mesa de destino" className="kd-destination-grid">
-        {transfer.tables.filter(table => Number(table.id) !== source).map((table, index, tables) => <button key={table.id} type="button" role="radio" tabIndex={String(table.id) === transfer.targetId || (!transfer.targetId && index === 0) ? 0 : -1} aria-checked={String(table.id) === transfer.targetId} aria-label={`Mesa ${table.id}${table.nome && !/^mesa\s*0*\d+$/i.test(table.nome) ? ` · ${table.nome}` : ''} · ${table.isOccupied ? 'ocupada' : 'livre'}`} data-occupied={Boolean(table.isOccupied)} disabled={transfer.isTransferring} onClick={() => transfer.onTargetChange(String(table.id))}
+        {transfer.tables.filter(table => Number(table.id) !== source).map((table, index, tables) => <button key={table.id} type="button" role="radio" tabIndex={String(table.id) === transfer.targetId || (!transfer.targetId && index === 0) ? 0 : -1} aria-checked={String(table.id) === transfer.targetId} aria-label={`Mesa ${table.id}${table.nome && !/^mesa\s*0*\d+$/i.test(table.nome) ? ` · ${table.nome}` : ''} · ${table.isOccupied ? 'ocupada' : 'livre'}`} data-occupied={Boolean(table.isOccupied)} data-operational-state={table.isOccupied ? 'occupied' : 'free'} disabled={transfer.isTransferring} onClick={() => transfer.onTargetChange(String(table.id))}
           onKeyDown={event => {
             const direction = ['ArrowRight','ArrowDown'].includes(event.key) ? 1 : ['ArrowLeft','ArrowUp'].includes(event.key) ? -1 : 0;
             if (!direction) return; event.preventDefault();
             const target = tables[(index + direction + tables.length) % tables.length]; transfer.onTargetChange(String(target.id));
             const controls = root.current?.querySelectorAll<HTMLButtonElement>('[role=radio]'); controls?.[(index + direction + tables.length) % tables.length]?.focus();
-          }}><strong>{String(table.id).padStart(2,'0')}</strong>{table.nome && !/^mesa\s*0*\d+$/i.test(table.nome) && <span>{table.nome}</span>}<i aria-hidden="true" /></button>)}
+          }}><strong>{String(table.id).padStart(2,'0')}</strong>{table.nome && !/^mesa\s*0*\d+$/i.test(table.nome) && <span>{table.nome}</span>}<TableStatusMark>{table.isOccupied ? 'Ocupada' : 'Livre'}</TableStatusMark></button>)}
       </div>
       {selected && <p className="kd-destination-note">{mode === 'merge' ? `Unir o consumo na Mesa ${selected.id} e liberar a Mesa ${source}.` : mode === 'associate' && selected.isOccupied ? 'Esta mesa já possui consumo.' : `Destino: Mesa ${selected.id}.`}</p>}
       <button type="button" className="kd-destination-confirm" disabled={!selected || transfer.isTransferring} onClick={() => { if (mode === 'merge') void actions.mergeTable?.(); else if (mode === 'associate') actions.associateTable(); else actions.transferTable(); }}>

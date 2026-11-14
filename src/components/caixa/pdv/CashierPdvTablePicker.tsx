@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Clock3, Search, UsersRound, X } from 'lucide-react';
-import type { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
+import { Check, Search, UsersRound, X } from 'lucide-react';
+import { KomaWaiterGlyph } from '../../shared/KomaWaiterGlyphs';
+import { TableStatusMark, TABLE_STATE_GLYPH } from '../../shared/TableStatusMark';
 import { tableCardPresentation } from '../../shared/SharedTableCard';
+import type { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 
 export type PdvTableOption = ReturnType<typeof projectCashierSalonTables>[number] & { label: string };
 
@@ -128,26 +130,33 @@ export function CashierPdvTablePicker({ options, selectedId, open, onOpenChange,
                 const presentation = tableCardPresentation(option.operational);
                 const status = presentation.label;
                 const tone = presentation.key;
+                const displayName = formatPdvTableLabel(option.table);
+                const customName = option.table.nome?.trim()
+                  && !/^mesa\s*0*\d+$/i.test(option.table.nome.trim()) ? option.table.nome.trim() : null;
                 return (
                   <button
                     key={option.table.id}
                     type="button"
-                    aria-label={`${formatPdvTableLabel(option.table)} · ${status}`}
+                    aria-label={`${displayName} · ${status}`}
                     aria-pressed={selected}
                     className="koma-table-picker__tile"
                     data-table-status={tone}
+                    data-operational-state={tone}
                     onClick={() => select(option.table.id)}
                   >
                     <span className="koma-table-picker__tile-top">
                       <strong>{String(option.table.id).padStart(2, '0')}</strong>
-                      {selected && <Check size={20} aria-hidden="true" />}
+                      <span className="koma-table-picker__tile-symbols">
+                        <KomaWaiterGlyph name={TABLE_STATE_GLYPH[presentation.key] || 'table-service'} size={18} aria-hidden="true" />
+                        {selected && <Check size={19} aria-hidden="true" />}
+                      </span>
                     </span>
-                    <span className="koma-table-picker__tile-name">{formatPdvTableLabel(option.table)}</span>
-                    <span className="koma-table-picker__tile-status"><span aria-hidden="true" />{status}</span>
-                    {option.isMerged ? <small>Destino: mesa {option.displayMesaId}</small> : option.isOccupied ? (
-                      <small><Clock3 size={13} aria-hidden="true" />{option.total > 0 ? currency(option.total) : 'Atendimento aberto'}</small>
+                    {customName && <span className="koma-table-picker__tile-name">{customName}</span>}
+                    <span className="koma-table-picker__tile-status"><TableStatusMark>{status}</TableStatusMark></span>
+                    {option.isMerged ? <small className="koma-table-picker__tile-detail">Na mesa {String(option.displayMesaId).padStart(2, '0')}</small> : option.isOccupied ? (
+                      <small className="koma-table-picker__tile-detail">{option.total > 0 ? currency(option.total) : 'Atendimento aberto'}</small>
                     ) : option.table.capacidade > 0 ? (
-                      <small><UsersRound size={13} aria-hidden="true" />{option.table.capacidade} lugares</small>
+                      <small className="koma-table-picker__tile-detail"><UsersRound size={13} aria-hidden="true" />{option.table.capacidade} lugares</small>
                     ) : null}
                   </button>
                 );

@@ -1,16 +1,9 @@
 import { ChevronRight } from 'lucide-react';
-import { KomaWaiterGlyph, type KomaGlyphName } from '../../shared/KomaWaiterGlyphs';
+import { KomaWaiterGlyph } from '../../shared/KomaWaiterGlyphs';
+import { TABLE_STATE_GLYPH, TableStatusMark } from '../../shared/TableStatusMark';
 import { tableCardPresentation } from '../../shared/SharedTableCard';
 import type { SalonActions, SalonCard } from './cashierSalonContracts';
 
-const symbols: Record<string, KomaGlyphName> = {
-  free: 'table-free',
-  occupied: 'table-service',
-  ready: 'table-ready',
-  payment: 'table-payment',
-  served: 'table-served',
-  merged: 'table-merged',
-};
 
 const currency = (value: number) =>
   value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -62,12 +55,12 @@ export function CashierSalonCard({ card, actions }: { card: SalonCard; actions: 
       >
         <span className="koma-salon-card__identity">
           <strong className="koma-salon-card__number">{displayNumber}</strong>
-          <KomaWaiterGlyph name={symbols[presentation.key] || 'table-service'} size={19} className="koma-salon-card__glyph" aria-hidden="true" />
+          <KomaWaiterGlyph name={TABLE_STATE_GLYPH[presentation.key] || 'table-service'} size={19} className="koma-salon-card__glyph" aria-hidden="true" />
         </span>
 
         <span className="koma-salon-card__context">
           {customName && <strong className="koma-salon-card__name">{customName}</strong>}
-          <span className="koma-salon-card__state">{presentation.label}</span>
+          <span className="koma-salon-card__state"><TableStatusMark>{presentation.label}</TableStatusMark></span>
           {isMerged ? (
             <span className="koma-salon-card__meta">Atendimento na mesa {String(destinationId).padStart(2, '0')}</span>
           ) : isOccupied || hasPendingPayment ? (

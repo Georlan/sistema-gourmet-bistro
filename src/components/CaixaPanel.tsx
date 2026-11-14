@@ -85,6 +85,7 @@ import './caixa/navigation/cashierTypography.css';
 import { CashierTextSizeToggle } from './caixa/navigation/CashierTextSizeToggle';
 import { CashierThemeToggle } from './caixa/navigation/CashierThemeToggle';
 import './shared/komaThemeTransition.css';
+import './shared/tableOperationalVisual.css';
 const loadCashierInventory = () => import('./caixa/inventory/CashierInventory');
 const loadCashierCatalog = () => import('./caixa/catalog/CashierCatalog');
 const loadCashierCustomers = () => import('./caixa/customers/CashierCustomers');
