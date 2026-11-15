@@ -748,7 +748,10 @@ export function CaixaPanel({
     : undefined;
 
   const hasLocalServiceWork = tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0;
-  const showSalon = shouldShowSalon(restauranteConfig?.tipos_pedido_ativos, hasLocalServiceWork || pagamentosPendentes.length > 0);
+  const hasLocalPendingPayment = pagamentosPendentes.some(payment => orders.some(order =>
+    order.id === payment.comanda_id && Number(order.mesaId) > 0,
+  ));
+  const showSalon = shouldShowSalon(restauranteConfig?.tipos_pedido_ativos, hasLocalServiceWork || hasLocalPendingPayment);
 
   return (
     <div
