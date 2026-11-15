@@ -26,9 +26,14 @@ from ...services.printing import (
     enqueue_table_receipt,
     get_print_preferences,
 )
-from .comanda_renderer import ComandaVariant, render_canonical_comanda
+from .comanda_renderer import (
+    ComandaVariant,
+    apply_compact_58_projection,
+    render_canonical_comanda,
+)
 from .engine import PrintEngineType, resolve_order_engine
 from .intent import PrintAction, PrintIntent, PrintSourceType, PrintTrigger
+from .paper_profile import resolve_printer_paper_profile
 
 
 class UniversalPrintingError(PrintingRequestError):
@@ -288,6 +293,11 @@ class PrintingApplicationService:
         )
         operator_name = cls._operator_name(lancamento, comanda)
         print_items = cls._to_print_items(db, intent.restaurant_id, active_items)
+        paper_profile = resolve_printer_paper_profile(
+            db,
+            intent.restaurant_id,
+            destination="COZINHA",
+        )
         payload = render_canonical_comanda(
             restaurant_name=preferences.restaurant_name,
             restaurant_name_position=preferences.restaurant_name_position,
@@ -304,6 +314,8 @@ class PrintingApplicationService:
                 table_id=mesa_id,
                 preserve_item_customers=True,
             ),
+            paper_width=paper_profile.width,
+            compact_58=paper_profile.compact_58,
         )
 
         idempotency_key = intent.idempotency_key
@@ -481,6 +493,11 @@ class PrintingApplicationService:
                 payment_required=payment_required,
                 show_financial_breakdown=is_primary,
             )
+            paper_profile = resolve_printer_paper_profile(
+                db,
+                intent.restaurant_id,
+                destination=destination_key,
+            )
             payload = render_canonical_comanda(
                 restaurant_name=preferences.restaurant_name,
                 restaurant_name_position=preferences.restaurant_name_position,
@@ -490,6 +507,8 @@ class PrintingApplicationService:
                 operator_name=operator_name,
                 items=destination_items,
                 variant=variant,
+                paper_width=paper_profile.width,
+                compact_58=paper_profile.compact_58,
             )
 
             idempotency_key = cls._job_idempotency_key(
@@ -550,6 +569,11 @@ class PrintingApplicationService:
             comanda_id=comanda.id,
         )
 
+        paper_profile = resolve_printer_paper_profile(
+            db,
+            intent.restaurant_id,
+            destination="ENTREGA",
+        )
         payloads: list[tuple[str, str]]
         if unified:
             payloads = [
@@ -559,6 +583,7 @@ class PrintingApplicationService:
                         comanda,
                         courier_name,
                         address_snapshot=address_snapshot,
+                        paper_width=paper_profile.width,
                     ),
                 )
             ]
@@ -566,7 +591,10 @@ class PrintingApplicationService:
             payloads = [
                 (
                     "cozinha",
-                    printer_service.generate_delivery_kitchen_ticket(comanda),
+                    printer_service.generate_delivery_kitchen_ticket(
+                        comanda,
+                        paper_width=paper_profile.width,
+                    ),
                 ),
                 (
                     "motoboy",
@@ -574,12 +602,18 @@ class PrintingApplicationService:
                         comanda,
                         courier_name,
                         address_snapshot=address_snapshot,
+                        paper_width=paper_profile.width,
                     ),
                 ),
             ]
 
         jobs: list[PrintJob] = []
         for part, payload in payloads:
+            if paper_profile.compact_58:
+                payload = apply_compact_58_projection(
+                    payload,
+                    width=paper_profile.width,
+                )
             base_key = intent.idempotency_key or f"universal:despacho:{comanda.id}"
             job = enqueue_print_job(
                 db,
