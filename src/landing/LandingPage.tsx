@@ -15,6 +15,8 @@ import { Plans } from './sections/Plans';
 import { FinalCTA } from './sections/FinalCTA';
 import { LANDING_SEO, landingStructuredData, serializeStructuredData } from './seo';
 import { KOMA_SLOGAN } from '../brand/komaBrand';
+import { trackAnalyticsEvent } from '../analytics/posthog';
+import { currentLandingTrafficSource } from './marketingAttribution';
 
 type DividerVariant = 'dark-light' | 'light-dark' | 'light-green';
 
@@ -25,6 +27,7 @@ function AngleDivider({ variant }: { variant: DividerVariant }) {
 export default function LandingPage() {
   useEffect(() => {
     document.title = LANDING_SEO.title;
+    trackAnalyticsEvent('landing_viewed', { traffic_source: currentLandingTrafficSource() });
 
     const setMeta = (nameOrProp: string, content: string, isProperty = false) => {
       const attr = isProperty ? 'property' : 'name';

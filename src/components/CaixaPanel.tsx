@@ -21,6 +21,7 @@ import {
 } from '../domain/cashierOrderProjection';
 import { normalizeOperationalTimestamp } from '../domain/operationalTime';
 import { clearOperatorSession } from '../utils/authSession';
+import { waitForInstalledOperatorSessionWrite } from '../utils/installedOperatorSession';
 import { AssinaturaPixTab } from './assinatura/AssinaturaPixTab';
 import { CaixaFechamentoTab } from './caixa/CaixaFechamentoTab';
 import { CaixaMovimentacoesTab } from './caixa/CaixaMovimentacoesTab';
@@ -511,7 +512,9 @@ export function CaixaPanel({
     sessionStorage.removeItem('koma_user_name');
     sessionStorage.removeItem('koma_user_role');
     sessionStorage.removeItem('koma_auth_token');
-    window.location.reload();
+    // Mantém o contrato síncrono do handler; somente o reload aguarda a
+    // remoção da credencial persistida para não abortar a transação do PWA.
+    void waitForInstalledOperatorSessionWrite().then(() => window.location.reload());
   };
 
   const [expandedCardIds, setExpandedCardIds] = useState<Record<string, boolean>>({});
