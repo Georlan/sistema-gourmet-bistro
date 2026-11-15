@@ -104,6 +104,23 @@ test('sem consumo local usa duas etapas para qualquer perfil e plano de impress�
   }
 });
 
+test('pagamento digital pendente não reabre o Salão, mas pagamento de mesa preserva acesso', () => {
+  const base = workspace([]);
+  const onlyDigital = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
+    ...base,
+    pendingCashPayments: [{ id: 'cash-digital', comanda_id: 'digital', valor: 25, mesaNum: '?' }],
+    restaurantConfig: { tipos_pedido_ativos: ['delivery', 'retirada'] },
+  }));
+  assert.doesNotMatch(onlyDigital, /orders-column--salon/);
+
+  const pendingTable = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
+    ...base,
+    pendingCashPayments: [{ id: 'cash-table', comanda_id: 'table', valor: 25, mesaNum: 7 }],
+    restaurantConfig: { tipos_pedido_ativos: ['delivery', 'retirada'] },
+  }));
+  assert.match(pendingTable, /orders-column--salon/);
+});
+
 test('busca sem resultados não esconde um atendimento local ainda ativo', () => {
   const base = workspace([]);
   const html = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
