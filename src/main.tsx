@@ -4,6 +4,8 @@ import "./components/auth/passwordRecoveryToken";
 import "./components/auth/customerRegistrationToken";
 import React from "react";
 import { initializeTabSessionOwnership } from "./utils/tabSessionOwnership";
+import { getPersistedOperationalPortal, saveOperatorSession } from "./utils/authSession";
+import { forgetInstalledOperatorSession, loadInstalledOperatorSession } from "./utils/installedOperatorSession";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 import "./landing/siara-event.css";
@@ -296,6 +298,21 @@ async function mountApplication() {
   if (isUnifiedOperationalRoute || isOnboardingAwareManagementRoute || isEmbeddedOperationalPreview || pathname.startsWith("/entregador")) {
     await initializeTabSessionOwnership();
   }
+
+  // O PWA fechado perde seu sessionStorage. A retomada cifrada só é considerada
+  // para a entrada operacional e antes do React montar login ou dados do tenant.
+  if (isUnifiedOperationalRoute && !getPersistedOperationalPortal()) {
+    const restored = await loadInstalledOperatorSession();
+    if (restored) {
+      try {
+        saveOperatorSession(restored.token, restored.user);
+        if (!getPersistedOperationalPortal()) await forgetInstalledOperatorSession();
+      } catch {
+        await forgetInstalledOperatorSession();
+      }
+    }
+  }
+
   const appTree = (
     <>
       <React.Suspense fallback={<RouteLoading />}>

@@ -12,6 +12,7 @@ import { parseStaffLogin } from '../../utils/staffDestination';
 import { useOperatorSessionToken } from './useOperatorSessionToken';
 import { requestCourierAccess, persistCourierAccess, clearCourierAccess } from '../../utils/courierAccessSession';
 import { releaseTabSessionOwnershipForNavigation } from '../../utils/tabSessionOwnership';
+import { waitForInstalledOperatorSessionWrite } from '../../utils/installedOperatorSession';
 import { authFetchJson, authRequestErrorMessage } from '../../utils/authRequest';
 import {
   clearOperatorSession,
@@ -145,6 +146,9 @@ export default function UnifiedOperationalEntry() {
       // O login substitui a identidade apenas desta aba e vincula seu portal.
       clearCourierAccess();
       saveOperatorSession(token, user);
+      // Uma primeira instalação não deve perder o login se a janela for fechada
+      // logo depois de entrar; o save continua opcional no navegador comum.
+      await waitForInstalledOperatorSessionWrite();
       identifyOperator({
         id: user.id,
         role: user.role,
