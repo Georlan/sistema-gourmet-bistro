@@ -1053,3 +1053,79 @@ def test_customer_report_direct_pix_endpoints_idempotency_and_pending_order(monk
         else:
             app.dependency_overrides[get_db] = previous_override
         disposable.dispose()
+
+
+def test_confirm_receipt_advances_order_to_accepted_without_second_accept_and_is_idempotent(db, monkeypatch):
+    from app.online_order_control_models import OnlineOrderOperationalAudit
+
+    intent, _ = order(db, monkeypatch)
+    comanda = db.query(Comanda).filter(Comanda.id == intent.comanda_id).one()
+    assert comanda.delivery_status == 'pendente'
+    assert comanda.online_payment_status == 'pending'
+
+    with pytest.raises(HTTPException) as unchecked:
+        confirm_receipt(
+            intent.id,
+            ReceiptConfirmation(received_amount='100.00', checked_bank_statement=False),
+            db,
+            SimpleNamespace(id='direct-pix-user'),
+        )
+    assert unchecked.value.status_code == 422
+    db.refresh(comanda)
+    assert comanda.delivery_status == 'pendente'
+    assert comanda.online_payment_status == 'pending'
+
+    payload = ReceiptConfirmation(received_amount='100.00', bank_reference='E' + '4' * 31, checked_bank_statement=True)
+    result = confirm_receipt(intent.id, payload, db, SimpleNamespace(id='direct-pix-user'))
+    assert result == {'status': 'approved', 'already_confirmed': False}
+
+    db.refresh(comanda)
+    assert comanda.online_payment_status == 'approved'
+    assert comanda.delivery_status == 'aceito'
+    assert comanda.delivery_status not in {'pendente', 'analise', 'pronto', 'finalizado'}
+    assert db.query(OnlineOrderOperationalAudit).filter_by(action='direct_pix_confirmed_accepted').count() == 1
+    outbox_count = db.query(IntegrationOutbox).count()
+    assert outbox_count > 0
+
+    retry = confirm_receipt(intent.id, payload, db, SimpleNamespace(id='direct-pix-user'))
+    assert retry == {'status': 'approved', 'already_confirmed': True}
+    assert db.query(Pagamento).count() == 1
+    assert db.query(DirectPixReceipt).count() == 1
+    assert db.query(IntegrationOutbox).count() == outbox_count
+    assert db.query(OnlineOrderOperationalAudit).filter_by(action='direct_pix_confirmed_accepted').count() == 1
+
+
+def test_release_unpaid_advances_order_to_kanban_keeping_pix_pending(db, monkeypatch):
+    from app.online_order_control_models import OnlineOrderOperationalAudit
+
+    intent, _ = order(db, monkeypatch)
+    comanda = db.query(Comanda).filter(Comanda.id == intent.comanda_id).one()
+    assert comanda.delivery_status == 'pendente'
+
+    released = release_unpaid(
+        intent.id,
+        UnpaidRelease(acknowledge_payment_pending=True),
+        db,
+        SimpleNamespace(id='direct-pix-user'),
+    )
+    assert released == {'status': 'pending', 'released_unpaid': True, 'already_released': False}
+
+    db.refresh(comanda)
+    assert comanda.online_payment_status == 'pending_released'
+    assert comanda.delivery_status == 'aceito'
+    assert db.query(Pagamento).count() == 0
+    outbox_after_release = db.query(IntegrationOutbox).count()
+
+    confirmed = confirm_receipt(
+        intent.id,
+        ReceiptConfirmation(received_amount='100.00', checked_bank_statement=True),
+        db,
+        SimpleNamespace(id='direct-pix-user'),
+    )
+    assert confirmed == {'status': 'approved', 'already_confirmed': False}
+    db.refresh(comanda)
+    assert comanda.online_payment_status == 'approved'
+    assert comanda.delivery_status == 'aceito'
+    assert db.query(Pagamento).count() == 1
+    assert db.query(IntegrationOutbox).count() == outbox_after_release
+    assert db.query(OnlineOrderOperationalAudit).filter_by(action='direct_pix_confirmed_accepted').count() == 0
