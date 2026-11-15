@@ -230,6 +230,15 @@ test('mobile order stage names match the columns they actually project', () => {
   assert.doesNotMatch(ordersWorkspace, /id: 'digital' as const, label: 'Balcão'/);
 });
 
+test('mobile order stage preserves rounded header corners without a nested scroller', () => {
+  const chromeCss = readFileSync(new URL('../src/components/caixa/navigation/cashierChrome.css', import.meta.url), 'utf8');
+  const columnsCss = readFileSync(new URL('../src/components/caixa/orders/cashierOrderColumns.css', import.meta.url), 'utf8');
+
+  assert.match(chromeCss, /\.orders-workspace__scroll-region \.orders-column \{[\s\S]*?border-radius: 1\.25rem;[\s\S]*?overflow: clip;/);
+  assert.match(chromeCss, /\.orders-workspace__scroll-region \.orders-column__header \{[\s\S]*?border-start-start-radius: calc\(1\.25rem - 1px\);[\s\S]*?border-start-end-radius: calc\(1\.25rem - 1px\);/);
+  assert.match(columnsCss, /\.orders-workspace \.orders-column__header \{[\s\S]*?border-radius: calc\(1\.25rem - 1px\) calc\(1\.25rem - 1px\) 0 0;/);
+});
+
 test('mobile orders prioritize actionable controls above the fold', () => {
   const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
 
