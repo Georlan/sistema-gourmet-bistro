@@ -1041,12 +1041,11 @@ def _expire_stale_unresolved_jobs(
 
 
 def _coalesce_pending_reprints(db: Session, restaurante_id: int) -> int:
-    """Evita rajada de reimpressões antigas quando o agente reconecta.
+    """Consolida as cópias idênticas pendentes antes da reconexão.
 
-    Mantém as vias automáticas pendentes e, somente se não houver original
-    pendente/claimed/printing da mesma origem e destino, preserva a primeira
-    reimpressão manual. Não toca em impressões já concluídas nem em outros
-    restaurantes, destinos ou documentos.
+    Conserva os trabalhos automáticos e a primeira via manual de cada
+    conteúdo físico; duas mesas/versões com conteúdo diferente continuam
+    independentes. Jamais mexe em registros já impressos ou outros tenants.
     """
     query = (
         db.query(PrintJob)
@@ -1064,37 +1063,37 @@ def _coalesce_pending_reprints(db: Session, restaurante_id: int) -> int:
     if not pending_reprints:
         return 0
 
-    active_originals_or_reprints = (
-        db.query(PrintJob.source_id, PrintJob.document_type, PrintJob.destination)
+    in_progress = (
+        db.query(
+            PrintJob.source_id,
+            PrintJob.document_type,
+            PrintJob.destination,
+            PrintJob.payload_text,
+        )
         .filter(
             PrintJob.restaurante_id == restaurante_id,
             PrintJob.document_type == "producao",
-            PrintJob.status.in_(UNRESOLVED_JOB_STATUSES),
-            or_(
-                PrintJob.source_type.in_(("pedido", "lancamento")),
-                and_(
-                    PrintJob.source_type == "reimpressao",
-                    PrintJob.status.in_(("claimed", "printing")),
-                ),
-            ),
+            PrintJob.source_type == "reimpressao",
+            PrintJob.status.in_(("claimed", "printing")),
         )
         .all()
     )
     reserved = {
-        (row.source_id, row.document_type, row.destination)
-        for row in active_originals_or_reprints
+        (row.source_id, row.document_type, row.destination, row.payload_text)
+        for row in in_progress
     }
     suppressed = 0
     for job in pending_reprints:
-        identity = (job.source_id, job.document_type, job.destination)
+        identity = (
+            job.source_id, job.document_type, job.destination, job.payload_text,
+        )
         if identity in reserved:
             job.status = "cancelled"
             job.claimed_at = None
             job.agent_id = None
             job.last_error = (
-                "Reimpressão redundante cancelada para evitar impressão "
-                "em duplicidade após reconexão. A via original ou outra "
-                "reimpressão continua na fila."
+                "Reimpressão idêntica redundante cancelada. Uma via manual "
+                "equivalente continua na fila ou já está em processamento."
             )
             suppressed += 1
         else:
