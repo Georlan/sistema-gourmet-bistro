@@ -21,76 +21,50 @@ recente nem que ele é restaurável.
 
 ## Restaurar em banco descartável
 
-No diretório do repositório, defina o caminho absoluto do dump no shell. O
-container abaixo é novo e só escuta em `127.0.0.1`; confira que o nome ainda
-não existe antes de prosseguir.
+Para backups Railway com extensão supabase_vault use a imagem compatível com a origem, atualmente supabase/postgres:17.6.1.141. A imagem postgres:17 padrão não contém essa extensão; além disso, nessa imagem Supabase o papel postgres não é superusuário: use supabase_admin somente dentro do container descartável e crie o papel aplicativo koma_app NOLOGIN apenas nesse container.
 
-```bash
-export KOMA_DRILL_DUMP=/caminho/controlado/application.dump
+O exemplo abaixo utiliza rede desativada, nenhum mapeamento de porta e PGDATA em tmpfs (memória, não volume persistente). O arquivo de origem deve estar em local controlado; alternativamente, use um cliente S3 autenticado no processo Railway existente para transmitir o objeto em memória, sem salvar dump em disco. Nunca envie o dump para GitHub Actions, issues, PRs ou este chat.
+
+~~~bash
+export KOMA_DRILL_DUMP=/caminho/controlado/backup.tar.gz
 test -f "$KOMA_DRILL_DUMP"
 docker container inspect koma-restore-drill >/dev/null 2>&1 && exit 1
-docker run --detach --name koma-restore-drill \
-  --publish 127.0.0.1:55432:5432 \
+docker run --detach --rm --name koma-restore-drill \
+  --network none --tmpfs /var/lib/postgresql/data:rw,size=1g \
   --env POSTGRES_PASSWORD=drill-only-password \
-  postgres:17
-docker exec koma-restore-drill sh -c 'until pg_isready -U postgres; do sleep 1; done'
+  supabase/postgres:17.6.1.141
+# A imagem Supabase reinicia um servidor temporário durante o bootstrap.
+# Aguarde a inicialização FINAL, não apenas o primeiro pg_isready.
+sleep 25
+docker exec koma-restore-drill psql -U postgres -d postgres -v ON_ERROR_STOP=1 -Atc 'SELECT 1'
 docker exec koma-restore-drill createdb -U postgres koma_restore_drill
-if [[ "$KOMA_DRILL_DUMP" == *.gz ]]; then
-  set -o pipefail
-  gzip -dc "$KOMA_DRILL_DUMP" | docker exec -i koma-restore-drill pg_restore \
-    -F t -U postgres --no-owner --no-acl --exit-on-error \
-    --dbname=koma_restore_drill
-else
-  docker cp "$KOMA_DRILL_DUMP" koma-restore-drill:/tmp/application.dump
-  docker exec koma-restore-drill pg_restore -U postgres \
-    --no-owner --no-acl --exit-on-error \
-    --dbname=koma_restore_drill /tmp/application.dump
-fi
-```
+docker exec koma-restore-drill psql -U supabase_admin -d postgres \
+  -v ON_ERROR_STOP=1 -c 'CREATE ROLE koma_app NOLOGIN'
+set -o pipefail
+gzip -dc "$KOMA_DRILL_DUMP" | docker exec -i koma-restore-drill pg_restore \
+  -F t -U supabase_admin --no-owner --no-acl --exit-on-error \
+  --dbname=koma_restore_drill
+~~~
 
-Não use `--clean` nem reutilize um banco existente. O serviço `Postgres S3 Backup`
-produz um `pg_dump` em formato tar comprimido com `gzip` (`.gz`). O comando
-acima descomprime e envia o tar diretamente para `pg_restore`. A imagem
-`postgres:17` padrão falhou ao recriar a extensão `supabase_vault` encontrada
-no backup de 24/09/2026; para esse backup, substitua a imagem no comando
-`docker run` por uma que tenha a mesma extensão e versão da origem.
-Não exclua a extensão e não marque um restore parcial como comprovado. Nunca
-execute `pg_restore` contra produção.
+O comando de restore acima é específico do arquivo tar comprimido em gzip produzido pelo serviço atual. Para dumps customizados por scripts próprios, confirme o formato com pg_restore antes de usar outra opção. Nunca use --clean, --create ou uma string de conexão remota; NÃO execute nada contra produção. Não ignore erro de extensão, papel, índice, constraint ou policy para declarar sucesso.
 
-## Conferir integridade e leitura pelo backend
+## Conferir integridade e leitura
 
-As consultas abaixo mostram somente contagens e versão de migration. Compare
-as tabelas e contagens com o manifesto quando ele existir. Não exporte linhas
-com nomes, e-mails, telefones ou pedidos para o relatório.
+Execute as consultas agregadas abaixo apenas dentro do container isolado. Não extraia nomes, e-mails, telefones ou registros de pedidos.
 
-```bash
-docker exec koma-restore-drill psql -U postgres -d koma_restore_drill \
-  -v ON_ERROR_STOP=1 -Atc 'SELECT version_num FROM alembic_version'
-docker exec koma-restore-drill psql -U postgres -d koma_restore_drill \
-  -v ON_ERROR_STOP=1 -Atc \
-  "SELECT count(*) FROM information_schema.tables WHERE table_schema IN ('public','koma_internal')"
-docker exec koma-restore-drill psql -U postgres -d koma_restore_drill \
-  -v ON_ERROR_STOP=1 -Atc 'SELECT count(*) FROM restaurantes'
-```
+~~~bash
+docker exec koma-restore-drill psql -U supabase_admin -d koma_restore_drill -v ON_ERROR_STOP=1 -Atc 'SELECT version_num FROM public.alembic_version'
+docker exec koma-restore-drill psql -U supabase_admin -d koma_restore_drill -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='public'"
+docker exec koma-restore-drill psql -U supabase_admin -d koma_restore_drill -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM pg_policies WHERE schemaname NOT IN ('pg_catalog','information_schema')"
+docker exec koma-restore-drill psql -U supabase_admin -d koma_restore_drill -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relrowsecurity"
+docker exec koma-restore-drill psql -U supabase_admin -d koma_restore_drill -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM pg_constraint WHERE contype='f'"
+docker exec koma-restore-drill psql -U supabase_admin -d koma_restore_drill -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM pg_indexes WHERE schemaname='public'"
+docker exec koma-restore-drill psql -U supabase_admin -d koma_restore_drill -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM public.restaurantes"
+docker exec koma-restore-drill psql -U supabase_admin -d koma_restore_drill -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM pg_extension WHERE extname='supabase_vault'"
+docker stop koma-restore-drill  # O container é --rm e os dados em tmpfs são descartados
+~~~
 
-Com as dependências do backend instaladas, confirme que o modelo da aplicação
-consegue ler o banco restaurado. O endereço abaixo aponta exclusivamente para
-o container local.
-
-```bash
-DATABASE_URL=postgresql://postgres:drill-only-password@127.0.0.1:55432/koma_restore_drill \
-PYTHONPATH=backend python -c \
-  'from app.database import SessionLocal; from app.models import Restaurante; db=SessionLocal(); print("restaurantes:", db.query(Restaurante).count()); db.close()'
-```
-
-Registre data, origem e checksum do backup, versão PostgreSQL, extensões necessárias, head Alembic,
-contagens sem PII, resultado da leitura pelo backend e responsável pelo teste.
-Marque **restore comprovado** somente se todos os passos passarem. Ao terminar,
-remova o container e apague o dump local conforme a política de retenção segura:
-
-```bash
-docker rm --force koma-restore-drill
-```
+Registre hash SHA-256 do objeto, horário, origem, imagem, resultado do pg_restore e contagens sem PII. A restauração estrutural NÃO comprova sozinha funcionamento completo do backend, credenciais reais, ACLs, Redis, mídias ou operação multi-tenant. Um teste adicional de leitura pelo backend pode ser planejado em ambiente isolado que preserve essas dependências, sem expor porta pública ou usar conexões de produção.
 
 ## Cobertura, monitoramento e estado de validação (15/11/2026)
 
@@ -98,4 +72,4 @@ docker rm --force koma-restore-drill
 - **Não cobertos por esta rotina:** PostgreSQL auxiliar da Evolution API (Railway), Redis (Railway) e arquivos do Supabase Storage (`cardapio-assets`, `koma-legacy-archives`). O plano Supabase Free não inclui backups agendados nem PITR nativos.
 - **Monitoramento automático:** `.github/workflows/backup-freshness-monitor.yml` executa `node scripts/check-backup-freshness.mjs --github-issue` diariamente às `05:00 UTC` e sob demanda (`workflow_dispatch`), abrindo/fechando a issue `[KÔMA] Falha no monitor de backup` sem duplicar alertas.
   - **Passo de ativação no GitHub Actions:** cadastrar o secret `RAILWAY_TOKEN` (com permissão de leitura de logs do projeto `passionate-truth`) em *Settings → Secrets and variables → Actions*. Sem esse secret, o workflow falha explicitamente (sem falso verde).
-- **Estado da restauração isolada:** o último ensaio documentado ocorreu em `09/10/2026` (PR `#1058`). A validação sobre o dump atual (`2026-11-15`) permanece **pendente** até que o arquivo `.tar.gz` seja baixado pelo proprietário em ambiente controlado e restaurado conforme os comandos acima.
+- **Restauração isolada em 15/11/2026 — VALIDADA para o PostgreSQL principal:** objeto S3 de `03:01:22 UTC` (2.387.236 bytes, SHA-256 `df3ffa4b3b761757af6969b92c64b0c291a3bcbfda4b49cdd8438e1fd487213a`) foi transmitido em memória pelo terminal Railway autenticado, descomprimido e restaurado com `pg_restore` **exit code 0** em `supabase/postgres:17.6.1.141` isolado (`--network none`, PGDATA tmpfs, nenhuma porta exposta). O papel `koma_app NOLOGIN` foi criado **somente** no container; o restore usou `supabase_admin`. Conferência: 126 tabelas públicas, 166 policies, 119 tabelas com RLS habilitado, 273 chaves estrangeiras, 537 índices, 5 restaurantes (contagem agregada), Alembic `c6a1d2e3f4b5`, extensão `supabase_vault` presente. Container removido. **Limitado à restauração estrutural e leitura SQL**: não houve teste de inicialização do backend nem recuperação de Storage/Redis/PostgreSQL Evolution.
