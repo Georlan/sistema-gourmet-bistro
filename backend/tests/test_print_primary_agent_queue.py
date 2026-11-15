@@ -588,6 +588,99 @@ def test_retry_failed_jobs_preserves_targeted_agent():
         db.close()
 
 
+@pytest.mark.parametrize("primary_online", [True, False])
+def test_register_support_agent_cannot_take_restaurant_queue_even_if_primary_offline(primary_online):
+    """Registration from the administrator's device is not a primary switch."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    db = TestingSessionLocal()
+    try:
+        existing = db.query(PrintAgentToken).filter_by(id="ag-win").one()
+        existing.last_seen_at = now if primary_online else now - datetime.timedelta(minutes=10)
+        db.commit()
+    finally:
+        db.close()
+
+    client = TestClient(app)
+    registered = client.post(
+        "/api/print-agents/register",
+        headers=get_jwt("admin-1", 1),
+        # Simulates an older browser that automatically requested is_primary.
+        json={"agent_id": "administrator-office", "is_primary": True},
+    )
+    assert registered.status_code == 200, registered.text
+    secondary_token = registered.json()["agent_token"]
+
+    db = TestingSessionLocal()
+    try:
+        primary = db.query(PrintAgentToken).filter_by(id="ag-win").one()
+        secondary = db.query(PrintAgentToken).filter_by(
+            restaurante_id=1, agent_id="administrator-office"
+        ).one()
+        assert primary.is_primary is True
+        assert secondary.is_primary is False
+        db.add_all([
+            PrintJob(
+                id="restaurant-production", restaurante_id=1,
+                document_type="producao", destination="COZINHA",
+                source_type="pedido", source_id="customer-order",
+                payload_text="Order for restaurant", status="pending",
+                agent_id=None, idempotency_key="idemp:primary:production",
+            ),
+            PrintJob(
+                id="explicit-office-test", restaurante_id=1,
+                document_type="producao", destination="COZINHA",
+                source_type="teste_extremo_cardapio", source_id="office-test",
+                payload_text="Explicit test for administrator", status="pending",
+                agent_id="administrator-office", idempotency_key="idemp:primary:test",
+            ),
+        ])
+        db.commit()
+    finally:
+        db.close()
+
+    # Even when the restaurant has temporarily stopped sending heartbeats,
+    # the support computer may only claim a job explicitly targeted to it.
+    office = client.post(
+        "/api/print-agents/jobs/claim-batch?limit=10",
+        headers={"X-Agent-Token": secondary_token},
+    )
+    assert office.status_code == 200, office.text
+    assert [job["id"] for job in office.json()] == ["explicit-office-test"]
+
+    restaurant = client.post(
+        "/api/print-agents/jobs/claim-batch?limit=10",
+        headers={"X-Agent-Token": "token_win_primary"},
+    )
+    assert restaurant.status_code == 200, restaurant.text
+    assert [job["id"] for job in restaurant.json()] == ["restaurant-production"]
+
+
+def test_register_secondary_preserves_legacy_only_agent_without_primary_flag():
+    """A legacy standalone printer must keep receiving orders after a new pairing."""
+    context = current_restaurante_id.set(2)
+    try:
+        client = TestClient(app)
+        registered = client.post(
+            "/api/print-agents/register",
+            headers=get_jwt("admin-2", 2),
+            json={"agent_id": "office-support", "is_primary": True},
+        )
+        assert registered.status_code == 200, registered.text
+
+        db = TestingSessionLocal()
+        try:
+            old = db.query(PrintAgentToken).filter_by(id="ag-solo").one()
+            new = db.query(PrintAgentToken).filter_by(
+                restaurante_id=2, agent_id="office-support"
+            ).one()
+            assert old.is_primary is True
+            assert new.is_primary is False
+        finally:
+            db.close()
+    finally:
+        current_restaurante_id.reset(context)
+
+
 def test_set_primary_agent_endpoint_switches_priority_and_updates_monitor():
     """
     Endpoint administrativo /set-primary alterna qual máquina é o agente principal.
