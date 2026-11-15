@@ -361,6 +361,7 @@ export function PrintMonitorPanel({
   const [startingAgent, setStartingAgent] = useState(false);
   const startingAgentRef = useRef(false);
   const [reprintingId, setReprintingId] = useState<string | null>(null);
+  const reprintingRequestRef = useRef(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
@@ -848,6 +849,7 @@ export function PrintMonitorPanel({
   };
 
   const requestReprint = async (job: PrintJobHistory, targetThisDevice = false) => {
+    if (reprintingRequestRef.current) return;
     // Manual fallback produces a COPY. Never claim or erase the original
     // restaurant job just because a support computer is connected.
     if (targetThisDevice && (!localAgentId || !hasDispatchablePrinter)) return;
@@ -856,8 +858,8 @@ export function PrintMonitorPanel({
         ? `Imprimir uma CÓPIA de ${job.reference || friendlyDocumentType(job.document_type)} neste dispositivo? O pedido original continuará na fila do restaurante e poderá sair novamente quando a impressora dele voltar.`
         : `Reimprimir ${job.reference || friendlyDocumentType(job.document_type)} de ${formatDate(job.created_at)}?`
     );
-    if (!confirmed) return;
-
+    if (!confirmed || reprintingRequestRef.current) return;
+    reprintingRequestRef.current = true;
     setReprintingId(job.id);
     try {
       const response = await fetch(
@@ -883,6 +885,7 @@ export function PrintMonitorPanel({
           : 'Não foi possível solicitar a reimpressão.'
       );
     } finally {
+      reprintingRequestRef.current = false;
       setReprintingId(null);
     }
   };
