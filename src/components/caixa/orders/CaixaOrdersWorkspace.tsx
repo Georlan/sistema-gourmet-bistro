@@ -284,7 +284,8 @@ export function CaixaOrdersWorkspaceView({
 
   const showSalon = shouldShowSalon(
     restaurantConfig?.tipos_pedido_ativos,
-    Boolean(hasLocalServiceWork) || filteredCol1.length > 0 || filteredCol2Table.length > 0 || pagamentosPendentes.length > 0,
+    Boolean(hasLocalServiceWork) || filteredCol1.length > 0 || filteredCol2Table.length > 0
+      || pagamentosPendentes.some(payment => Number(payment.mesaNum) > 0),
   );
   const withoutSalon = !showSalon;
 
