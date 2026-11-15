@@ -438,6 +438,19 @@ def resolve_tenant_entitlement(db: Session, restaurante_id: int) -> TenantEntitl
                 ends_at = ends_at.replace(tzinfo=datetime.timezone.utc)
             if ends_at is None or now <= ends_at:
                 return TenantEntitlement(allowed=True, reason="trial_active", billing_status="trialing")
+            # Uma concessão explícita de suporte, gravada/auditada pelo Super Admin,
+            # pode permitir a operação após o trial sem reiniciar os sete dias,
+            # converter o status financeiro para "paid" ou alterar o vencimento.
+            grace = sub.grace_until
+            if grace is not None and grace.tzinfo is None:
+                grace = grace.replace(tzinfo=datetime.timezone.utc)
+            if grace is not None and now <= grace:
+                return TenantEntitlement(
+                    allowed=True,
+                    reason="trial_expired_in_operational_grace",
+                    billing_status="past_due",
+                    grace_until=grace,
+                )
             return TenantEntitlement(allowed=False, reason="trial_expired", billing_status="past_due")
 
         # Durante a implantação a autorização recorrente fica pausada no provedor.
