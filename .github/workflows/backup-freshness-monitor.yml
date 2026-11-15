@@ -1,0 +1,44 @@
+name: Backup freshness monitor
+
+on:
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: backup-freshness-monitor
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check daily S3 backup freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Verify RAILWAY_TOKEN secret is configured
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::error::Secret RAILWAY_TOKEN ausente. Cadastre RAILWAY_TOKEN nos secrets do repositório para ativar o monitor automático de backup."
+            exit 1
+          fi
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Check S3 backup freshness and reconcile issue
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/check-backup-freshness.mjs --github-issue

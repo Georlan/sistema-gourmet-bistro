@@ -91,3 +91,11 @@ remova o container e apague o dump local conforme a política de retenção segu
 ```bash
 docker rm --force koma-restore-drill
 ```
+
+## Cobertura, monitoramento e estado de validação (15/11/2026)
+
+- **Origem e destino ativos:** `Postgres S3 Backup` (Railway, cron `0 3 * * *` UTC) executa `pg_dump` do PostgreSQL principal (Supabase) e envia `.tar.gz` para o bucket Railway `pre-purge-backup-20260916` (`sjc` / `t3.storageapi.dev`), com retenção `MAX_BACKUPS=10` (10 arquivos diários de `2026-11-06` a `2026-11-15`, ~2,0–2,4 MB cada).
+- **Não cobertos por esta rotina:** PostgreSQL auxiliar da Evolution API (Railway), Redis (Railway) e arquivos do Supabase Storage (`cardapio-assets`, `koma-legacy-archives`). O plano Supabase Free não inclui backups agendados nem PITR nativos.
+- **Monitoramento automático:** `.github/workflows/backup-freshness-monitor.yml` executa `node scripts/check-backup-freshness.mjs --github-issue` diariamente às `05:00 UTC` e sob demanda (`workflow_dispatch`), abrindo/fechando a issue `[KÔMA] Falha no monitor de backup` sem duplicar alertas.
+  - **Passo de ativação no GitHub Actions:** cadastrar o secret `RAILWAY_TOKEN` (com permissão de leitura de logs do projeto `passionate-truth`) em *Settings → Secrets and variables → Actions*. Sem esse secret, o workflow falha explicitamente (sem falso verde).
+- **Estado da restauração isolada:** o último ensaio documentado ocorreu em `09/10/2026` (PR `#1058`). A validação sobre o dump atual (`2026-11-15`) permanece **pendente** até que o arquivo `.tar.gz` seja baixado pelo proprietário em ambiente controlado e restaurado conforme os comandos acima.
