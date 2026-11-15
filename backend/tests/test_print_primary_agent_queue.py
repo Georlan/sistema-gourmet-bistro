@@ -681,6 +681,124 @@ def test_register_secondary_preserves_legacy_only_agent_without_primary_flag():
         current_restaurante_id.reset(context)
 
 
+def test_targeted_reprint_keeps_original_queue_and_goes_only_to_admin_device():
+    """Manual backup is a second ticket, not a claim of the restaurant order."""
+    mark_agent_ready("ag-win")
+    mark_agent_ready("ag-lin")
+    db = TestingSessionLocal()
+    try:
+        db.add(PrintJob(
+            id="job-original-admin-backup", restaurante_id=1,
+            document_type="producao", destination="COZINHA", source_type="pedido",
+            source_id="p-backup", payload_text="1 sandwich", status="pending",
+            agent_id=None, idempotency_key="idemp:admin-backup",
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    client = TestClient(app)
+    auth = get_jwt("admin-1", 1)
+    response = client.post(
+        "/api/print-agents/jobs/job-original-admin-backup/reprint"
+        "?agent_id=lin-suporte-dev", headers=auth,
+    )
+    assert response.status_code == 200, response.text
+    copy_id = response.json()["new_job_id"]
+    assert copy_id != "job-original-admin-backup"
+
+    db = TestingSessionLocal()
+    try:
+        original = db.query(PrintJob).filter_by(id="job-original-admin-backup").one()
+        copy = db.query(PrintJob).filter_by(id=copy_id).one()
+        assert original.status == "pending" and original.agent_id is None
+        assert copy.status == "pending" and copy.agent_id == "lin-suporte-dev"
+        assert copy.idempotency_key.startswith("reprint:targeted:")
+    finally:
+        db.close()
+
+    secondary = client.post(
+        "/api/print-agents/jobs/claim-batch?limit=10",
+        headers={"X-Agent-Token": "token_lin_secondary"},
+    )
+    assert secondary.status_code == 200, secondary.text
+    assert [job["id"] for job in secondary.json()] == [copy_id]
+
+    primary = client.post(
+        "/api/print-agents/jobs/claim-batch?limit=10",
+        headers={"X-Agent-Token": "token_win_primary"},
+    )
+    assert primary.status_code == 200, primary.text
+    assert [job["id"] for job in primary.json()] == ["job-original-admin-backup"]
+
+
+def test_targeted_reprint_rejects_another_tenants_agent():
+    db = TestingSessionLocal()
+    try:
+        db.add(PrintJob(
+            id="job-isolated-copy", restaurante_id=1,
+            document_type="producao", destination="COZINHA",
+            source_type="pedido", source_id="p-isolated",
+            payload_text="Sensitive tenant order", status="printed",
+            idempotency_key="idemp:isolated-copy",
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/print-agents/jobs/job-isolated-copy/reprint"
+        "?agent_id=solo-agent", headers=get_jwt("admin-1", 1),
+    )
+    assert response.status_code == 404
+    db = TestingSessionLocal()
+    try:
+        assert db.query(PrintJob).filter_by(restaurante_id=1).count() == 1
+    finally:
+        db.close()
+
+
+def test_targeted_reprint_recovery_keeps_destination_for_retry_and_stuck_claim():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    db = TestingSessionLocal()
+    try:
+        db.add(PrintJob(
+            id="job-target-recovery", restaurante_id=1,
+            document_type="producao", destination="COZINHA",
+            source_type="pedido", source_id="p-target-recovery",
+            payload_text="Targeted copy", status="claimed",
+            claimed_at=now - datetime.timedelta(minutes=10),
+            agent_id="lin-suporte-dev",
+            idempotency_key="reprint:targeted:original:123",
+        ))
+        db.commit()
+        assert print_agents_route._release_stuck_jobs(db, 1, now) == 1
+        db.commit()
+        recovered = db.query(PrintJob).filter_by(id="job-target-recovery").one()
+        assert recovered.status == "pending"
+        assert recovered.agent_id == "lin-suporte-dev"
+        recovered.status = "failed"
+        db.commit()
+    finally:
+        db.close()
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/print-agents/jobs/retry-batch",
+        headers=get_jwt("admin-1", 1),
+        json={"job_ids": ["job-target-recovery"]},
+    )
+    assert response.status_code == 200, response.text
+    db = TestingSessionLocal()
+    try:
+        recovered = db.query(PrintJob).filter_by(id="job-target-recovery").one()
+        assert recovered.status == "pending"
+        assert recovered.agent_id == "lin-suporte-dev"
+    finally:
+        db.close()
+
+
 def test_set_primary_agent_endpoint_switches_priority_and_updates_monitor():
     """
     Endpoint administrativo /set-primary alterna qual máquina é o agente principal.
