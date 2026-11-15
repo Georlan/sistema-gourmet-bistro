@@ -8,7 +8,10 @@ test('real histories and monitor: idle savings, event bursts, offline and cleanu
     if (url.includes('retiradas')) calls.pickup++;
     else if (url.includes('entregas')) calls.courier++;
     else if (url.includes('/monitor')) calls.monitor++;
-    await route.fulfill({json: url.includes('/monitor') ? {agents: [], jobs: [], summary: {}} : []});
+    await route.fulfill({json: url.includes('/monitor')
+      ? {agents: [{agent_id: 'fixture-primary', online: true, is_primary: true}],
+          jobs: [], summary: {primary_agent_id: 'fixture-primary'}}
+      : []});
   });
   await page.route(/http:\/\/127\.0\.0\.1:176\d+\/.*/, route => route.abort());
   await page.clock.install();
@@ -17,7 +20,7 @@ test('real histories and monitor: idle savings, event bursts, offline and cleanu
   // A request being issued is not the same as its React state having settled.
   // Advance the fake 60s only after the monitor rendered the first response,
   // otherwise the periodic timer may not exist yet under Playwright clock.
-  await expect(page.getByText(/KÔMA Print (não identificado neste computador|desconectado)/)).toBeVisible();
+  await expect(page.getByText('fixture-primary — agente online')).toBeVisible();
   await page.clock.runFor(60_000);
   expect(calls.pickup).toBe(1); expect(calls.courier).toBe(1);
   expect(calls.monitor).toBeGreaterThanOrEqual(2);
