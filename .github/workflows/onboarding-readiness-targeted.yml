@@ -28,6 +28,7 @@ on:
       - 'src/utils/authSession.ts'
       - 'src/main.tsx'
       - 'e2e/auth-persistence.spec.ts'
+      - 'e2e/installed-pwa-auth-persistence.spec.ts'
       - 'e2e/onboarding-first-client-ux.spec.ts'
       - 'src/components/caixa/pdv/useCashierPdv.ts'
       - 'tests/firstAccessOnboarding.test.ts'
@@ -52,6 +53,7 @@ jobs:
         run: >-
           KOMA_E2E_PORT=4283 npm run test:e2e --
           e2e/auth-persistence.spec.ts e2e/onboarding-first-client-ux.spec.ts
+          e2e/installed-pwa-auth-persistence.spec.ts
           --project=desktop-1366 --project=mobile-390 --workers=2
       - uses: actions/upload-artifact@v4
         if: failure()

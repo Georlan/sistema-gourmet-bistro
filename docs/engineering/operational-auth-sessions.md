@@ -23,6 +23,14 @@ Referências da plataforma: [cópia de sessionStorage pelo opener](https://devel
 
 A identificação de analytics nas superfícies operacionais fica em memória por documento (`disable_persistence`), para login/reset de uma aba não alterar a identidade de outra por cookie. O comportamento público do Cardápio não foi alterado.
 
+## Atalho/PWA operacional instalado (15/11/2026)
+
+- Somente no PWA instalado de `app.komafood.com.br` (desktop/mobile), o login operacional mantém uma cópia cifrada da sessão no IndexedDB. Abas comuns continuam usando apenas `sessionStorage` e preservam o isolamento entre restaurantes.
+- A chave AES-GCM de 256 bits é não exportável (Web Crypto) e armazenada no próprio IndexedDB; o JWT não vai para `localStorage` nem para a URL. Esta proteção não substitui defesa contra XSS ou proteção física do dispositivo desbloqueado.
+- Ao reabrir o atalho sem sessão da janela, o bootstrap recupera a credencial somente se `sub`, `restaurante_id` e `exp` do JWT corresponderem à identidade cifrada e o prazo ainda não tiver vencido. As permissões, o status e a revogação continuam sendo conferidos nas requisições pelo backend.
+- Salvar login e trocar de loja atualizam o snapshot persistente; logout/suspensão apagam a cópia. Sessões de suporte e tokens do entregador não entram nesse armazenamento. Sem IndexedDB/Web Crypto, o login continua funcional mas não persiste após fechar o PWA.
+- O prazo permanece o configurado no backend (padrão atual de 30 dias), sem renovação automática nem necessidade de schema, cookie cross-site ou endpoint novo. Um JWT expirado/revogado pede novo login.
+
 ## Entregador
 
 Após `/auth/login`, o JWT da equipe é usado apenas na troca `POST /comandas/motoboys/me/acesso`. O servidor seleciona o Motoboy ativo vinculado ao usuário autenticado no tenant atual e exige o entitlement existente. O cliente não escolhe tenant nem entregador por parâmetros.
