@@ -154,6 +154,13 @@ class SuperAdminOperationalQaRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
 
+class SuperAdminOperationalGraceRequest(BaseModel):
+    days: int = Field(default=30, ge=1, le=90)
+    reason: str = Field(min_length=10, max_length=1000)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
 def _normalize_payload(payload: TenantOnboardingRequest) -> dict[str, str]:
     name = payload.name.strip()
     slug = payload.subdomain.strip().lower()
@@ -381,6 +388,7 @@ def _commercial_release_preview(
             "paymentMethod": subscription.payment_method_type,
             "trialStartedAt": _as_utc(subscription.trial_started_at).isoformat() if subscription.trial_started_at else None,
             "trialEndsAt": _as_utc(subscription.trial_ends_at).isoformat() if subscription.trial_ends_at else None,
+            "graceUntil": _as_utc(subscription.grace_until).isoformat() if getattr(subscription, "grace_until", None) else None,
         } if subscription else None,
         "steps": {key: snapshot["steps"][key] for key in ("profile", "hours", "catalog", "operations")},
         "operations": snapshot["operations"],
@@ -633,6 +641,92 @@ def update_operational_qa(
                 "message": "Homologação operacional temporária liberada." if payload.action == "start"
                     else "Homologação operacional encerrada.",
             }
+    except HTTPException:
+        if db.in_transaction():
+            db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+@router.post("/onboarding/restaurantes/{tenant_id}/operational-grace")
+def grant_operational_grace(
+    tenant_id: str,
+    payload: SuperAdminOperationalGraceRequest,
+    admin: dict[str, Any] = Depends(get_current_admin),
+):
+    """Acesso operacional emergencial, auditado e temporário para trial comercial expirado.
+
+    Não altera status da assinatura, contrato, preço, pagamentos ou datas do trial.
+    Não funciona para restaurante suspenso nem para implantação provisória sem contrato.
+    """
+    from ..contract_models import RestaurantContractAcceptance
+
+    tenant_id_int = _parse_tenant_id(tenant_id)
+    now = _utc_now()
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, tenant_id_int):
+            restaurante = (
+                db.query(Restaurante)
+                .filter(Restaurante.id == tenant_id_int)
+                .with_for_update()
+                .one_or_none()
+            )
+            if restaurante is None:
+                raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+            if str(restaurante.saas_status or "").strip().lower() != "active":
+                raise HTTPException(status_code=409, detail="Restaurante suspenso não pode receber liberação emergencial.")
+
+            subscription = (
+                db.query(SaaSSubscription)
+                .filter(SaaSSubscription.restaurante_id == tenant_id_int)
+                .with_for_update()
+                .one_or_none()
+            )
+            if subscription is None or str(subscription.status or "").strip().lower() != "trialing":
+                raise HTTPException(status_code=409, detail="Esta autorização só se aplica ao trial comercial expirado.")
+            trial_ends_at = _as_utc(subscription.trial_ends_at)
+            if trial_ends_at is None or trial_ends_at > now:
+                raise HTTPException(status_code=409, detail="O trial comercial ainda não expirou.")
+            linked_contract = (
+                db.query(RestaurantContractAcceptance.id)
+                .filter(RestaurantContractAcceptance.restaurante_id == tenant_id_int)
+                .first()
+            )
+            if linked_contract is None:
+                raise HTTPException(status_code=409, detail="Contrato comercial vinculado obrigatório.")
+            existing_grace = _as_utc(subscription.grace_until)
+            if existing_grace is not None and existing_grace > now:
+                # Idempotente: não estende repetidamente a mesma concessão.
+                return _commercial_release_preview(db, tenant_id_int)
+
+            new_end = now + datetime.timedelta(days=payload.days)
+            subscription.grace_until = new_end
+            subscription.updated_at = now
+            db.add(SuperAdminAuditLog(
+                restaurante_id=tenant_id_int,
+                actor=f"superadmin:{admin.get('user') or 'unknown'}",
+                action="SUPERADMIN_OPERATIONAL_GRACE_GRANTED",
+                reason=payload.reason,
+                before_data={
+                    "subscription_status": subscription.status,
+                    "trial_ends_at": trial_ends_at.isoformat(),
+                    "grace_until": existing_grace.isoformat() if existing_grace else None,
+                },
+                after_data={
+                    "subscription_status": subscription.status,
+                    "trial_ends_at": trial_ends_at.isoformat(),
+                    "grace_until": new_end.isoformat(),
+                    "days": payload.days,
+                    "financial_status_changed": False,
+                    "trial_restarted": False,
+                },
+            ))
+            db.commit()
+            logger.info("SUPERADMIN OPERATIONAL GRACE GRANTED tenant=%s actor=%s days=%s",
+                        tenant_id_int, admin.get("user"), payload.days)
+            return _commercial_release_preview(db, tenant_id_int)
     except HTTPException:
         if db.in_transaction():
             db.rollback()
