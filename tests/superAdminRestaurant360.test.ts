@@ -11,6 +11,20 @@ const tenantsTab = readFileSync(
   'utf8',
 );
 
+const releaseModal = readFileSync(
+  new URL('../src/super-admin/SuperAdminReleaseModal.tsx', import.meta.url),
+  'utf8',
+);
+
+test('Liberação não depende de preencher mesas e o atalho de salão é opcional', () => {
+  assert.match(releaseModal, /Mesas não são requisito para operação de retirada ou delivery/);
+  assert.match(releaseModal, /Criar ou completar mesas \(opcional\)/);
+  assert.match(releaseModal, /preview\.operations\?\.orderTypes\?\.includes\('consumo_local'\)/);
+  assert.match(releaseModal, /onClick=\{\(\) => void release\(\)\}/);
+  assert.match(releaseModal, /onClick=\{\(\) => void bootstrapTables\(\)\}/);
+  assert.match(releaseModal, /<details className="mt-3">/);
+});
+
 test('Restaurante 360 usa somente fontes administrativas reais já existentes', () => {
   assert.match(restaurant360, /\/api\/super-admin\/trials/);
   assert.match(restaurant360, /\/api\/super-admin\/onboarding\/restaurantes\//);

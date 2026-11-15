@@ -100,7 +100,11 @@ def test_quentinhas_are_first_in_public_category_order():
 def test_current_public_menu_loads_one_catalog_snapshot():
     source = (REPO_ROOT / "src/cardapio/CardapioPage.tsx").read_text(encoding="utf-8")
 
-    assert "/api/cardapio-digital/public?" in source
+    client_source = (REPO_ROOT / "src/cardapio/publicMenuClient.ts").read_text(encoding="utf-8")
+
+    assert "fetchPublicMenu({" in source
+    assert "/api/cardapio-digital/public?" in client_source
+    assert "{ cache: 'no-store' }" in client_source
     assert "/api/cardapio-digital/categorias" not in source
     assert "/api/cardapio-digital/produtos" not in source
 

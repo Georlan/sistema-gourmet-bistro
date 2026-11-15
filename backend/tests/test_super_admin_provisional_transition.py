@@ -127,7 +127,7 @@ def setup_test_db(monkeypatch):
         db.close()
 
 
-def test_provisional_onboarding_blocks_commercial_operations_and_transitions_cleanly():
+def test_provisional_onboarding_blocks_commercial_operations_and_transitions_cleanly(monkeypatch):
     client = TestClient(app)
     admin_headers = _superadmin_headers()
     test_tenant_id = TEST_TENANT_ID
@@ -177,6 +177,29 @@ def test_provisional_onboarding_blocks_commercial_operations_and_transitions_cle
         )
         db.add(prod)
         db.commit()
+
+    # A exceção via configuração é explícita, restrita ao tenant e não cria
+    # contrato nem trial. Entradas inválidas e suspensão falham fechadas.
+    with monkeypatch.context() as operational_override:
+        operational_override.setenv(
+            "KOMA_PROVISIONAL_OPERATION_ALLOWLIST", str(test_tenant_id)
+        )
+        with SessionLocal() as db:
+            assert is_provisional_preparation(db, test_tenant_id) is False
+            restaurant = db.query(Restaurante).filter(Restaurante.id == test_tenant_id).one()
+            restaurant.saas_status = "suspended"
+            db.flush()
+            assert is_provisional_preparation(db, test_tenant_id) is True
+            db.rollback()
+
+        operational_override.setenv(
+            "KOMA_PROVISIONAL_OPERATION_ALLOWLIST", f"{test_tenant_id},*"
+        )
+        with SessionLocal() as db:
+            assert is_provisional_preparation(db, test_tenant_id) is True
+
+    with SessionLocal() as db:
+        assert is_provisional_preparation(db, test_tenant_id) is True
 
     # 3. Operação comercial DEVE estar impedida durante a preparação
     tenant_headers = _tenant_admin_headers(test_tenant_id, user_id=data["admin"]["id"])

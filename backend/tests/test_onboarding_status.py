@@ -201,6 +201,22 @@ def test_dine_in_without_table_map_is_ready_without_tables():
     assert result["ready"] is True
 
 
+def test_delivery_and_pickup_never_require_tables_even_when_table_map_is_enabled():
+    result = evaluate_operation_readiness(
+        config=_config(
+            tipos_pedido_ativos=["retirada", "delivery"],
+            mapa_mesas_ativo=True,
+            delivery_ativo=True,
+        ),
+        restaurant=_restaurant(),
+        table_count=0,
+        legacy_policy_allowed=False,
+    )
+    assert result["ready"] is True
+    assert result["capabilities"]["dineIn"]["enabled"] is False
+    assert "dine_in_tables" not in result["blockers"]
+
+
 def test_dine_in_with_table_map_requires_one_table():
     result = evaluate_operation_readiness(
         config=_config(tipos_pedido_ativos=["consumo_local"], mapa_mesas_ativo=True),
