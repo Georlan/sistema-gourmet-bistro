@@ -109,7 +109,7 @@ test('marmitaria sem consumo local reaproveita duas etapas sem coluna de salão'
   await page.route('**/comandas/detalhes/todos?*', route => route.fulfill({ json: [] }));
   await page.route('**/comandas/detalhes/todos', route => route.fulfill({ json: [] }));
   await page.goto('/?view=caixa');
-  const board = page.locator('.orders-board--marmitaria');
+  const board = page.locator('.orders-board--without-salon');
   await expect(board).toBeVisible();
   await expect(page.locator('.orders-column--salon')).toHaveCount(0);
   await expect(page.locator('.orders-column--digital')).toHaveClass(/is-mobile-active/);
@@ -120,4 +120,21 @@ test('marmitaria sem consumo local reaproveita duas etapas sem coluna de salão'
   }
   await expect(page.locator('.orders-column--digital')).toContainText('Em preparo');
   await expect(page.locator('.orders-column--closing')).toContainText('Entrega e recebimento');
+});
+
+test('restaurante genérico com impressão e sem consumo local não reserva coluna nem menu Salão', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.route('**/caixa/configuracoes', route => route.fulfill({ json: {
+    plano: 'pro', plano_efetivo: 'pro', operation_profile: 'generic',
+    tipos_pedido_ativos: ['delivery', 'retirada'],
+    entitlements: { printing: true, kds: true, waiter_app: true },
+  } }));
+  await page.route('**/comandas/detalhes/todos?*', route => route.fulfill({ json: [] }));
+  await page.route('**/comandas/detalhes/todos', route => route.fulfill({ json: [] }));
+  await page.goto('/?view=caixa');
+  await expect(page.locator('.orders-board--without-salon')).toBeVisible();
+  await expect(page.locator('.orders-column--salon')).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Telas desta área' })
+    .getByRole('button', { name: 'Salão', exact: true })).toHaveCount(0);
 });
