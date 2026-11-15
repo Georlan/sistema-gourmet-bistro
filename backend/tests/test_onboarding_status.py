@@ -38,6 +38,7 @@ def test_onboarding_routes_are_registered_once():
     assert "post" in openapi_paths["/api/onboarding/start-trial"]
     assert "get" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/release"]
     assert "post" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/release"]
+    assert "post" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/operational-grace"]
     assert "post" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/tables/bootstrap"]
     assert "put" in openapi_paths["/api/super-admin/onboarding/restaurantes/{tenant_id}/operations"]
 
@@ -49,6 +50,7 @@ def test_onboarding_routes_are_registered_once():
         assert client.post("/api/onboarding/start-trial").status_code == 401
         assert client.get("/api/super-admin/onboarding/restaurantes/1/release").status_code == 401
         assert client.post("/api/super-admin/onboarding/restaurantes/1/release").status_code == 401
+        assert client.post("/api/super-admin/onboarding/restaurantes/1/operational-grace", json={"days": 30, "reason": "Revisão administrativa"}).status_code == 401
         assert client.post(
             "/api/super-admin/onboarding/restaurantes/1/tables/bootstrap",
             json={"count": 30, "default_capacity": 4, "reason": "implantação"},
@@ -201,15 +203,29 @@ def test_dine_in_without_table_map_is_ready_without_tables():
     assert result["ready"] is True
 
 
-def test_dine_in_with_table_map_requires_one_table():
+def test_dine_in_table_map_is_optional_for_commercial_release():
     result = evaluate_operation_readiness(
         config=_config(tipos_pedido_ativos=["consumo_local"], mapa_mesas_ativo=True),
         restaurant=_restaurant(),
         table_count=0,
         legacy_policy_allowed=False,
     )
-    assert result["ready"] is False
-    assert "dine_in_tables" in result["blockers"]
+    assert result["ready"] is True
+    assert "dine_in_tables" not in result["blockers"]
+    assert result["advisories"] == ["dine_in_tables"]
+    assert result["capabilities"]["dineIn"]["ready"] is False
+
+
+def test_delivery_only_never_requires_table_count():
+    result = evaluate_operation_readiness(
+        config=_config(tipos_pedido_ativos=["delivery"], delivery_ativo=True, tipo_taxa_entrega="fixa", taxa_entrega_fixa=0, mapa_mesas_ativo=True),
+        restaurant=_restaurant(),
+        table_count=0,
+        legacy_policy_allowed=False,
+    )
+    assert result["ready"] is True
+    assert "dine_in_tables" not in result["blockers"]
+    assert result["advisories"] == []
 
 
 def test_delivery_requires_existing_delivery_configuration_only_when_selected():
