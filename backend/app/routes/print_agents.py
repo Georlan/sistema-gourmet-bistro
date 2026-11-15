@@ -105,7 +105,10 @@ def _log_cached_invalid_agent_token() -> None:
     global _cached_invalid_auth_last_log_at, _cached_invalid_auth_suppressed
     now = time.monotonic()
     with _cached_invalid_auth_log_lock:
-        if now - _cached_invalid_auth_last_log_at < _CACHED_INVALID_AUTH_LOG_INTERVAL_SECONDS:
+        if (
+            _cached_invalid_auth_last_log_at > 0
+            and now - _cached_invalid_auth_last_log_at < _CACHED_INVALID_AUTH_LOG_INTERVAL_SECONDS
+        ):
             _cached_invalid_auth_suppressed += 1
             return
         attempts = _cached_invalid_auth_suppressed + 1
