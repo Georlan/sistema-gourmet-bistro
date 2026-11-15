@@ -117,7 +117,7 @@ export function SuperAdminReleaseModal({ restaurantId, onClose, onReleased }: {
 
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="dialog" aria-modal="true" aria-label="Liberação da operação">
     <div className="w-full max-w-lg rounded-2xl border border-zinc-700 bg-koma-card p-6 text-koma-foreground">
-      <h2 className="text-lg font-bold">Liberar operação e iniciar 7 dias</h2>
+      <h2 className="text-lg font-bold">{preview?.trialStarted ? 'Situação da operação comercial' : 'Liberar operação e iniciar 7 dias'}</h2>
       {preview ? <>
         <p className="mt-2 text-sm">{preview.restaurant.name} · {preview.restaurant.plan} · {preview.subscription.billingCycle === 'annual' || preview.subscription.billingCycle === 'anual' ? 'Anual' : 'Mensal'}</p>
         <p className="mt-1 text-xs text-koma-muted">Autorização: {preview.subscription.paymentMethod || 'não disponível'} · Status: {preview.subscription.status}</p>
@@ -125,13 +125,16 @@ export function SuperAdminReleaseModal({ restaurantId, onClose, onReleased }: {
         <div className="mt-4 grid gap-2 rounded-xl border border-zinc-700 bg-zinc-900/40 p-3 text-xs">
           <p><strong>Tipo de operação:</strong> {preview.restaurant.operationProfile || 'não informado'}</p>
           <p><strong>Modalidades:</strong> {preview.operations?.orderTypes?.length ? preview.operations.orderTypes.join(', ') : 'não configuradas'}</p>
-          <p><strong>Mesas cadastradas:</strong> {preview.counts?.tables ?? 0}</p>
+          {preview.operations?.orderTypes?.includes('consumo_local') && <p><strong>Mesas cadastradas:</strong> {preview.counts?.tables ?? 0}</p>}
           {preview.catalogAssistance?.filename && <p><strong>Cardápio enviado:</strong> {preview.catalogAssistance.filename} · {preview.catalogAssistance.status || 'status indisponível'}</p>}
         </div>
+        <p className="mt-3 text-xs text-koma-muted">Mesas não são requisito para operação de retirada ou delivery. A liberação comercial é independente do atalho de criação de mesas.</p>
         {preview.operations?.orderTypes?.includes('consumo_local') && (
           <section className="mt-4 rounded-xl border border-emerald-900/60 bg-emerald-950/20 p-3">
-            <p className="text-sm font-bold text-emerald-200">Atalho de implantação do salão</p>
-            <p className="mt-1 text-[11px] text-koma-muted">Cria apenas mesas padronizadas que estiverem faltando. Não remove nem sobrescreve mesas existentes.</p>
+            <p className="text-sm font-bold text-emerald-200">Atalho de implantação do salão (opcional)</p>
+            <p className="mt-1 text-[11px] text-koma-muted">Use este atalho somente se precisar de mesas para o atendimento no local. Ele não substitui o botão de liberação e preserva as mesas existentes.</p>
+            <details className="mt-3">
+              <summary className="cursor-pointer text-xs font-bold text-emerald-200">Criar ou completar mesas (opcional)</summary>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <label className="text-[10px] font-bold text-koma-muted">Quantidade total
                 <input value={tableCount} onChange={event => setTableCount(event.target.value)} inputMode="numeric" placeholder="Ex.: 30" className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100" />
@@ -147,6 +150,7 @@ export function SuperAdminReleaseModal({ restaurantId, onClose, onReleased }: {
               {tableBusy ? 'Criando…' : 'CRIAR / COMPLETAR MESAS'}
             </button>
             {tableNotice && <p className="mt-2 text-[11px] font-bold text-emerald-300">{tableNotice}</p>}
+            </details>
           </section>
         )}
         {preview.trialStarted && <p className="mt-4 text-sm text-emerald-300">Trial iniciado em {preview.subscription.trialStartedAt ? new Date(preview.subscription.trialStartedAt).toLocaleString('pt-BR') : 'data indisponível'}; termina em {preview.subscription.trialEndsAt ? new Date(preview.subscription.trialEndsAt).toLocaleString('pt-BR') : 'data indisponível'}.</p>}
