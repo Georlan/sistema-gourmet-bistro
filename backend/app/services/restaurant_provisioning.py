@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import logging
 import re
 import unicodedata
@@ -670,7 +671,27 @@ def is_provisional_preparation(db: Session, restaurante_id: int) -> bool:
     if contract_exists is not None:
         return False
 
-    # Somente a ação privilegiada específica de QA suspende temporariamente
-    # o bloqueio provisório. Iniciar trial administrativo genérico não basta.
+    # Exceção operacional explícita e reversível, configurada pelo responsável
+    # pela implantação no ambiente (ex.: "1"). Não cria assinatura, contrato,
+    # aceite ou trial e não substitui a posterior regularização comercial.
+    # Entrada inválida falha fechada; IDs de outros restaurantes não são afetados.
+    allowed_raw = os.getenv("KOMA_PROVISIONAL_OPERATION_ALLOWLIST", "").strip()
+    allowed_ids = [value.strip() for value in allowed_raw.split(",")] if allowed_raw else []
+    if (
+        allowed_ids
+        and all(re.fullmatch(r"[1-9][0-9]*", value) for value in allowed_ids)
+        and str(restaurante_id) in allowed_ids
+    ):
+        restaurant = (
+            db.query(Restaurante)
+            .filter(Restaurante.id == restaurante_id)
+            .one_or_none()
+        )
+        if restaurant is not None and str(restaurant.saas_status or "").lower() == "active":
+            logger.warning("PROVISIONAL_OPERATION_OVERRIDE tenant=%s", restaurante_id)
+            return False
+
+    # Somente QA autenticado ou a exceção explícita acima suspendem o bloqueio.
+    # Iniciar trial administrativo genérico não basta.
     return not is_superadmin_operational_qa_active(db, restaurante_id)
 

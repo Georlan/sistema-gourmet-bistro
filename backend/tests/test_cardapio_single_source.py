@@ -106,6 +106,7 @@ def test_current_public_menu_loads_one_catalog_snapshot():
     assert 'from "./publicMenuClient"' in page
     assert "const payload = await fetchPublicMenu({" in page
     assert "${apiBaseUrl}/api/cardapio-digital/public?" in client
+    assert "{ cache: 'no-store' }" in client
     assert "const query = new URLSearchParams(" in client
     assert "isNumericIdentifier ? { restaurante_id: cleanIdentifier } : { slug: cleanIdentifier }" in client
     assert "/api/cardapio-digital/categorias" not in page + client
