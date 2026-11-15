@@ -79,7 +79,16 @@ export async function prerenderLanding(root: string, outDir: string) {
     // handler into this worker so missing hashes still return real 404s.
     await build({
       configFile: false, root, publicDir: false,
-      define: { __KOMA_SECURITY_HEADERS__: JSON.stringify(securityHeaders) },
+      define: {
+        __KOMA_SECURITY_HEADERS__: JSON.stringify(securityHeaders),
+        // The edge preview reads the same public API and image storage as the SPA.
+        __KOMA_PUBLIC_API_BASE_URL__: JSON.stringify(
+          (process.env.VITE_API_URL || 'https://sistema-gourmet-bistro-production.up.railway.app').replace(/\/+$/, ''),
+        ),
+        __KOMA_PUBLIC_STORAGE_ORIGIN__: JSON.stringify(
+          (process.env.VITE_SUPABASE_URL || 'https://iiowhekvahxiepwcdidm.supabase.co').replace(/\/+$/, ''),
+        ),
+      },
       build: {
         outDir: directory, emptyOutDir: false, minify: false,
         lib: { entry: path.join(root, 'public/_worker.js'), formats: ['es'], fileName: () => '_worker.js' },

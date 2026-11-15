@@ -150,3 +150,87 @@ test('unsubscribe aliases invoke the worker and suppress referrers without chang
     assert.match(response.headers.get('X-Robots-Tag')!, /^noindex/);
   }
 });
+
+
+test('WhatsApp and social crawlers receive the matching restaurant title and logo in server HTML', async () => {
+  const configCalls: string[] = [];
+  const worker = createSeoWorker({}, 'https://api.example.test', async (url: string, init: RequestInit) => {
+    configCalls.push(url);
+    assert.equal(init.cache, 'no-store');
+    return Response.json({
+      id: 66,
+      slug: 'je-lanches',
+      nome: 'Jé & Lanches <Centro>',
+      logo_url: 'https://iiowhekvahxiepwcdidm.supabase.co/storage/v1/object/public/cardapio-assets/66/logo/brand.webp',
+    });
+  });
+  const assetPaths: string[] = [];
+  const assets = { fetch: async (request: Request) => {
+    assetPaths.push(new URL(request.url).pathname);
+    return new Response('<html><head><title>Kôma</title></head><body><div id="root"></div></body></html>', {
+      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': '84', ETag: '"static"' },
+    });
+  } };
+  for (const crawler of ['WhatsApp/2.24', 'facebookexternalhit/1.1', 'TelegramBot', 'Twitterbot']) {
+    const response = await worker.fetch(new Request('https://app.komafood.com.br/c/je-lanches?utm_source=share', {
+      headers: { 'User-Agent': crawler },
+    }), { ASSETS: assets });
+    const html = await response.text();
+    assert.match(html, /<title>Jé &amp; Lanches &lt;Centro&gt; \| Cardápio<\/title>/);
+    assert.match(html, /property="og:title" content="Jé &amp; Lanches &lt;Centro&gt; \| Cardápio"/);
+    assert.match(html, /property="og:image" content="https:\/\/iiowhekvahxiepwcdidm.supabase.co\/storage\/v1\/object\/public\/cardapio-assets\/66\/logo\/brand.webp"/);
+    assert.match(html, /property="og:url" content="https:\/\/app.komafood.com.br\/c\/je-lanches"/);
+    assert.match(html, /name="twitter:image"/);
+    assert.equal(response.headers.get('X-Robots-Tag'), 'noindex');
+    assert.match(response.headers.get('Cache-Control')!, /no-store/);
+    assert.equal(response.headers.get('Content-Length'), null);
+    assert.equal(response.headers.get('ETag'), null);
+  }
+  assert.deepEqual(assetPaths, Array(4).fill('/c/je-lanches'));
+  assert.deepEqual(configCalls, Array(4).fill('https://api.example.test/api/cardapio-digital/config?slug=je-lanches'));
+});
+
+test('menu preview never leaks another tenant and falls back safely when logo is missing or unsafe', async () => {
+  const shell = '<html><head><title>Kôma</title></head><body>app</body></html>';
+  const assets = { fetch: async () => new Response(shell, { headers: { 'Content-Type': 'text/html' } }) };
+  for (const logo of [null, 'javascript:alert(1)', 'http://localhost/internal.png']) {
+    const worker = createSeoWorker({}, 'https://api.example.test', async () => Response.json({
+      id: 22, slug: 'loja-b', nome: 'Loja B', logo_url: logo,
+    }));
+    const res = await worker.fetch(new Request('https://app.komafood.com.br/c/loja-b', {
+      headers: { 'User-Agent': 'facebookexternalhit/1.1' },
+    }), { ASSETS: assets });
+    assert.match(await res.text(), /property="og:image" content="https:\/\/app.komafood.com.br\/logo-koma.png"/);
+  }
+
+  for (const payload of [{ id: 22, slug: 'loja-b', nome: 'Loja B', logo_url: 'https://example.test/b.webp' }, null]) {
+    const worker = createSeoWorker({}, 'https://api.example.test', async () => Response.json(payload));
+    const res = await worker.fetch(new Request('https://app.komafood.com.br/c/loja-a', {
+      headers: { 'User-Agent': 'WhatsApp' },
+    }), { ASSETS: assets });
+    assert.equal(await res.text(), shell, 'unmatched or missing tenant must not produce another restaurant preview');
+  }
+});
+
+test('regular menu visits and HEAD never call the metadata API or modify the SPA response', async () => {
+  let requests = 0;
+  const worker = createSeoWorker({}, 'https://api.example.test', async () => {
+    requests++;
+    throw Error('Unexpected metadata request');
+  });
+  const assets = { fetch: async () => new Response('<html><head><title>Kôma</title></head><body>app</body></html>', {
+    headers: { 'Content-Type': 'text/html' },
+  }) };
+  for (const request of [
+    new Request('https://app.komafood.com.br/c/je-lanches'),
+    new Request('https://app.komafood.com.br/c/je-lanches', { method: 'HEAD', headers: { 'User-Agent': 'WhatsApp' } }),
+    new Request('https://preview.pages.dev/c/je-lanches', { headers: { 'User-Agent': 'WhatsApp' } }),
+  ]) {
+    const response = await worker.fetch(request, { ASSETS: assets });
+    const html = await response.text();
+    assert.equal(request.method === 'HEAD' ? html : html.includes('property="og:image"'), request.method === 'HEAD' ? '' : false);
+  }
+  assert.equal(requests, 0);
+  const routes = JSON.parse(readFileSync(new URL('../public/_routes.json', import.meta.url), 'utf8'));
+  assert.ok(routes.include.includes('/c/*'), 'Cloudflare must invoke the worker for the tenant cardápio');
+});

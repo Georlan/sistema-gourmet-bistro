@@ -5,9 +5,95 @@ const PRIVATE_HOSTS = new Set(['app.komafood.com.br', 'central.komafood.com.br',
   'admin.komafood.com.br', 'superadmin.komafood.com.br', 'super-admin.komafood.com.br']);
 const LANDING_PATHS = new Set(['/', '/index.html', '/landing', '/landing/']);
 
+const PUBLIC_API_BASE_URL = typeof __KOMA_PUBLIC_API_BASE_URL__ === 'undefined'
+  ? 'https://sistema-gourmet-bistro-production.up.railway.app'
+  : __KOMA_PUBLIC_API_BASE_URL__;
+const PUBLIC_STORAGE_ORIGIN = typeof __KOMA_PUBLIC_STORAGE_ORIGIN__ === 'undefined'
+  ? 'https://iiowhekvahxiepwcdidm.supabase.co'
+  : __KOMA_PUBLIC_STORAGE_ORIGIN__;
+const SOCIAL_CRAWLER = /(?:whatsapp|facebookexternalhit|facebot|twitterbot|telegrambot|discordbot|slackbot|linkedinbot|pinterestbot)/i;
+const PUBLIC_MENU_PATH = /^\/c\/([a-z0-9][a-z0-9_-]{0,126})\/?$/i;
+const FALLBACK_MENU_IMAGE = 'https://app.komafood.com.br/logo-koma.png';
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[char]);
+}
+
+function resolveMenuImage(value) {
+  if (typeof value !== 'string' || !value.trim() || value.length > 2048) return FALLBACK_MENU_IMAGE;
+  const input = value.trim();
+  let resolved;
+  if (/^https:\/\//i.test(input)) {
+    resolved = input;
+  } else if (input.startsWith('/storage/v1/object/public/')) {
+    resolved = PUBLIC_STORAGE_ORIGIN.replace(/\/$/, '') + input;
+  } else if (input.startsWith('/') && !input.startsWith('//')) {
+    resolved = 'https://app.komafood.com.br' + input;
+  } else if (/^[a-z0-9_./-]+$/i.test(input) && !input.includes('..')) {
+    resolved = PUBLIC_STORAGE_ORIGIN.replace(/\/$/, '')
+      + '/storage/v1/object/public/cardapio-assets/' + input;
+  } else {
+    return FALLBACK_MENU_IMAGE;
+  }
+  try {
+    const url = new URL(resolved);
+    if (url.protocol !== 'https:' || url.username || url.password || url.hostname === 'localhost'
+      || /^(?:127\.|10\.|192\.168\.)/.test(url.hostname)) return FALLBACK_MENU_IMAGE;
+    return url.href;
+  } catch {
+    return FALLBACK_MENU_IMAGE;
+  }
+}
+
+async function fetchPublicMenuPreview(slug, apiBaseUrl, metadataFetch) {
+  try {
+    // Use the existing public, tenant-scoped projection. Never fetch with an
+    // operator token, and never allow a user-supplied host to reach the edge.
+    const endpoint = new URL('/api/cardapio-digital/config', apiBaseUrl);
+    endpoint.searchParams.set('slug', slug);
+    const response = await metadataFetch(endpoint.href, {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(2500),
+    });
+    if (!response.ok) return null;
+    const restaurant = await response.json();
+    if (!restaurant || !Number.isSafeInteger(restaurant.id) || restaurant.id <= 0
+      || typeof restaurant.nome !== 'string' || !restaurant.nome.trim()
+      || (String(restaurant.id) !== slug
+        && String(restaurant.slug || '').toLowerCase() !== slug.toLowerCase())) return null;
+
+    const name = restaurant.nome.trim().slice(0, 120);
+    const title = escapeHtml(name + ' | Cardápio');
+    const description = escapeHtml('Confira o cardápio de ' + name + '.');
+    const image = escapeHtml(resolveMenuImage(restaurant.logo_url));
+    const canonical = 'https://app.komafood.com.br/c/' + encodeURIComponent(slug);
+    const tags = [
+      '<meta property="og:type" content="website" />',
+      '<meta property="og:locale" content="pt_BR" />',
+      '<meta property="og:title" content="' + title + '" />',
+      '<meta property="og:description" content="' + description + '" />',
+      '<meta property="og:url" content="' + canonical + '" />',
+      '<meta property="og:image" content="' + image + '" />',
+      '<meta property="og:image:alt" content="' + escapeHtml(name + ' — logo do restaurante') + '" />',
+      '<meta name="twitter:card" content="summary" />',
+      '<meta name="twitter:title" content="' + title + '" />',
+      '<meta name="twitter:description" content="' + description + '" />',
+      '<meta name="twitter:image" content="' + image + '" />',
+    ].join('\n');
+    return { title, tags };
+  } catch {
+    // API unavailable: keep the original SPA shell, without leaking errors or
+    // injecting metadata from another restaurant.
+    return null;
+  }
+}
+
 // This worker only serves build-time public HTML. It never resolves sessions,
 // queries the API, or changes the operational SPA's authentication/router.
-export function createSeoWorker(securityHeaders = {}) {
+export function createSeoWorker(securityHeaders = {}, apiBaseUrl = PUBLIC_API_BASE_URL, metadataFetch = fetch) {
   return {
     async fetch(request, env) {
       const url = new URL(request.url);
@@ -37,7 +123,28 @@ export function createSeoWorker(securityHeaders = {}) {
       } else {
         response = await env.ASSETS.fetch(request);
       }
+      let menuMarkup = null;
+      const menuPath = PUBLIC_MENU_PATH.exec(url.pathname);
+      if (request.method === 'GET' && url.hostname === 'app.komafood.com.br'
+        && menuPath && SOCIAL_CRAWLER.test(request.headers.get('User-Agent') || '')
+        && response.ok && (response.headers.get('Content-Type') || '').toLowerCase().includes('text/html')) {
+        const preview = await fetchPublicMenuPreview(menuPath[1], apiBaseUrl, metadataFetch);
+        if (preview) {
+          const shell = await response.text();
+          if (shell.includes('</head>')) {
+            menuMarkup = shell.replace('</head>', preview.tags + '\n</head>')
+              .replace(/<title>[^<]*<\/title>/, '<title>' + preview.title + '</title>');
+          } else {
+            menuMarkup = shell;
+          }
+        }
+      }
       const headers = new Headers(response.headers);
+      if (menuMarkup !== null) {
+        headers.delete('Content-Length');
+        headers.delete('Content-Encoding');
+        headers.delete('ETag');
+      }
       for (const [name, value] of Object.entries(securityHeaders)) headers.set(name, String(value));
       headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
       if (url.pathname === '/w/a' || url.pathname === '/whatsapp/avisos') {
@@ -50,7 +157,7 @@ export function createSeoWorker(securityHeaders = {}) {
         headers.set('X-Robots-Tag', 'index, follow, max-image-preview:large');
         headers.set('Link', '<https://komafood.com.br/>; rel="canonical"');
       }
-      return new Response(request.method === 'HEAD' ? null : response.body, {
+      return new Response(request.method === 'HEAD' ? null : (menuMarkup === null ? response.body : menuMarkup), {
         status: response.status, statusText: response.statusText, headers,
       });
     },
