@@ -52,9 +52,17 @@
   }
   .cashier-shell--mobile-orders .orders-workspace__scroll-region .orders-column {
     min-height: 0;
-    /* Column has a rounded border, but the header has a square background.
-       Clip that paint to the parent's radius without creating a new scroller. */
+    /* The stage's header and its inset decoration must share the outer radius.
+       overflow: clip does not create a second scroll container on mobile. */
+    border-radius: 1.25rem;
     overflow: clip;
+    overflow-clip-margin: 0;
+    isolation: isolate;
+  }
+  .cashier-shell--mobile-orders .orders-workspace__scroll-region .orders-column__header {
+    border-start-start-radius: calc(1.25rem - 1px);
+    border-start-end-radius: calc(1.25rem - 1px);
+    background-clip: padding-box;
   }
   .cashier-shell--mobile-orders .orders-workspace__scroll-region .orders-column__body {
     flex: none;
