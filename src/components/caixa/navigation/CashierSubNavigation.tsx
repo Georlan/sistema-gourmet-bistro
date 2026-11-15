@@ -8,13 +8,14 @@ interface Props {
   activeSubTab: string;
   planId: SubscriptionPlanId;
   entitlements?: SubscriptionEntitlements;
+  showSalon?: boolean;
   setupMode: boolean;
   onNavigate: (id: string) => void;
   counts?: Record<string, number>;
 }
 
-export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlements, setupMode, onNavigate, counts = {} }: Props) {
-  const items = getCashierHorizontalItems(activeTab, planId, entitlements, setupMode);
+export function CashierSubNavigation({ activeTab, activeSubTab, planId, entitlements, showSalon = true, setupMode, onNavigate, counts = {} }: Props) {
+  const items = getCashierHorizontalItems(activeTab, planId, entitlements, setupMode, showSalon);
   const scrollRef = useRef<HTMLDivElement>(null);
   const position = useRef({ userPositioned: false, revealed: 0 });
   useEffect(() => { position.current = { userPositioned: false, revealed: 0 }; }, [activeTab, activeSubTab]);
