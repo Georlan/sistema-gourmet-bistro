@@ -445,6 +445,17 @@ def test_entitlement_resolution_lifecycle(client_and_session):
         )
         db.add_all([r2, s2])
 
+        # Tenant 8: trial vencido, com autorização operacional explícita vigente.
+        r8 = Restaurante(id=108, nome="Tenant 108", slug="t108", plano="pro", saas_status="active")
+        s8 = SaaSSubscription(
+            restaurante_id=108,
+            status="trialing",
+            trial_started_at=now - datetime.timedelta(days=14),
+            trial_ends_at=now - datetime.timedelta(days=7),
+            grace_until=now + datetime.timedelta(days=30),
+        )
+        db.add_all([r8, s8])
+
         # Tenant 3: past_due dentro do grace period
         r3 = Restaurante(id=103, nome="Tenant 103", slug="t103", plano="pro", saas_status="active")
         s3 = SaaSSubscription(
@@ -498,6 +509,11 @@ def test_entitlement_resolution_lifecycle(client_and_session):
         e2 = resolve_tenant_entitlement(db, 102)
         assert e2.allowed is False
         assert e2.reason == "trial_expired"
+
+        e8 = resolve_tenant_entitlement(db, 108)
+        assert e8.allowed is True
+        assert e8.reason == "trial_expired_in_operational_grace"
+        assert e8.billing_status == "past_due"
 
         e3 = resolve_tenant_entitlement(db, 103)
         assert e3.allowed is True
