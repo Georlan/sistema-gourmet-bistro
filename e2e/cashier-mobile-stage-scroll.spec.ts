@@ -53,4 +53,35 @@ test('barra de etapas fixa e lista de pedidos em rolagem independente no celular
   const salon = stages.getByRole('tab', { name: /Salão/ });
   await salon.click();
   await expect(salon).toHaveAttribute('aria-selected', 'true');
+
+  // O cabeçalho verde deve acompanhar o raio da coluna; com overflow visível
+  // na rolagem interna, um cabeçalho sem raio produz pontas nos cantos.
+  for (const label of [/Salão/, /Digitais/, /Concluir/]) {
+    const tab = stages.getByRole('tab', { name: label });
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+
+    const column = workspace.locator('.orders-column.is-mobile-active');
+    await expect(column).toBeVisible();
+    const corners = await column.locator('.orders-column__header').evaluate(header => {
+      const outer = header.parentElement;
+      if (!outer) throw new Error('Coluna sem contêiner');
+      const headStyle = getComputedStyle(header);
+      const outerStyle = getComputedStyle(outer);
+      return {
+        left: parseFloat(headStyle.borderTopLeftRadius),
+        right: parseFloat(headStyle.borderTopRightRadius),
+        bottomLeft: parseFloat(headStyle.borderBottomLeftRadius),
+        bottomRight: parseFloat(headStyle.borderBottomRightRadius),
+        parentLeft: parseFloat(outerStyle.borderTopLeftRadius),
+        parentRight: parseFloat(outerStyle.borderTopRightRadius),
+      };
+    });
+
+    expect(corners.parentLeft).toBeGreaterThan(12);
+    expect(corners.left).toBeCloseTo(corners.parentLeft - 1, 0);
+    expect(corners.right).toBeCloseTo(corners.parentRight - 1, 0);
+    expect(corners.bottomLeft).toBe(0);
+    expect(corners.bottomRight).toBe(0);
+  }
 });

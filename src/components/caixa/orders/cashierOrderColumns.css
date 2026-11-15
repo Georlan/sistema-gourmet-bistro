@@ -29,6 +29,10 @@
   min-height: 4.5rem;
   padding: .8rem;
   border-bottom: 1px solid var(--kc-column-edge);
+  /* A coluna mantém overflow:visible para a rolagem mobile. Portanto o
+     cabeçalho precisa respeitar o mesmo raio superior, descontando a borda
+     de 1px do contêiner; sem isto, seu fundo cria cantos quadrados visíveis. */
+  border-radius: calc(1.25rem - 1px) calc(1.25rem - 1px) 0 0;
   background: var(--kc-column-head);
   box-shadow: inset 0 1px 0 #d2f4e31c, 0 2px 0 #00000024;
   color: #f0faf5;
