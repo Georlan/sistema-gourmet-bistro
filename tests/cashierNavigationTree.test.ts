@@ -626,3 +626,15 @@ test('backend entitlements, not the plan slug, govern inventory and advanced rep
     { tab: 'operacao', subTab: 'pedidos' },
   );
 });
+
+test('sem atendimento presencial oculta Salão na lateral e navegação horizontal sem depender do perfil', () => {
+  const visible = getCashierSidebarGroupsForPlan('pro', proEntitlements);
+  const hidden = getCashierSidebarGroupsForPlan('pro', proEntitlements, false);
+  const salesChildren = (groups: typeof hidden) => groups
+    .flatMap(group => group.items).find(item => item.id === 'operacao')?.children ?? [];
+  assert.ok(salesChildren(visible).some(item => item.id === 'vendas_salao'));
+  assert.equal(salesChildren(hidden).some(item => item.id === 'vendas_salao'), false);
+  assert.ok(salesChildren(hidden).some(item => item.id === 'vendas_novo_pedido'));
+  assert.equal(getCashierHorizontalItems('operacao', 'pro', proEntitlements, false, false)
+    .some(item => item.id === 'vendas_salao'), false);
+});
