@@ -130,8 +130,8 @@ export function SuperAdminReleaseModal({ restaurantId, onClose, onReleased }: {
         </div>
         {preview.operations?.orderTypes?.includes('consumo_local') && (
           <section className="mt-4 rounded-xl border border-emerald-900/60 bg-emerald-950/20 p-3">
-            <p className="text-sm font-bold text-emerald-200">Atalho de implantação do salão</p>
-            <p className="mt-1 text-[11px] text-koma-muted">Cria apenas mesas padronizadas que estiverem faltando. Não remove nem sobrescreve mesas existentes.</p>
+            <p className="text-sm font-bold text-emerald-200">Cadastro opcional de mesas</p>
+            <p className="mt-1 text-[11px] text-koma-muted">Somente para restaurantes que usam mesas. Não é necessário cadastrar mesas para liberar vendas, delivery ou retirada. Não remove nem sobrescreve mesas existentes.</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <label className="text-[10px] font-bold text-koma-muted">Quantidade total
                 <input value={tableCount} onChange={event => setTableCount(event.target.value)} inputMode="numeric" placeholder="Ex.: 30" className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-zinc-100" />
