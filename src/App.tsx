@@ -59,6 +59,7 @@ const CardapioPage = React.lazy(() => import('./cardapio/CardapioPage'));
 const LandingPage = React.lazy(() => import('./landing/LandingPage'));
 const SuperAdminGate = React.lazy(() => import('./super-admin/SuperAdminGate').then(module => ({ default: module.SuperAdminGate })));
 const CaixaAtivarPage = React.lazy(() => import('./components/CaixaAtivarPage').then(module => ({ default: module.CaixaAtivarPage })));
+const ContractInviteAcceptPage = React.lazy(() => import('./legal/ContractInviteAcceptPage').then(module => ({ default: module.ContractInviteAcceptPage })));
 const MotoboyPwaPage = React.lazy(() => import('./components/MotoboyPwaPage').then(module => ({ default: module.MotoboyPwaPage })));
 const OrderTrackingPage = React.lazy(() => import('./cardapio/OrderTrackingPage').then(module => ({ default: module.OrderTrackingPage })));
 
@@ -115,6 +116,12 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
   if (hostConfig.surface === 'central' || invalidCentralSupportBridge) {
     return <AppRouteBoundary label="administração"><SuperAdminGate /></AppRouteBoundary>;
+  }
+
+  // Detect single-use contract acceptance page (?view=aceitar-contrato or /aceitar-contrato)
+  if (hostConfig.surface === 'aceitar-contrato') {
+    const tokenFromUrl = new URLSearchParams(window.location.search).get('token');
+    return <AppRouteBoundary label="aceite contratual"><ContractInviteAcceptPage token={tokenFromUrl} /></AppRouteBoundary>;
   }
 
   // Detect activation page (?view=ativar or /ativar)
