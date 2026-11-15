@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Optional
 
+from sqlalchemy import and_, or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -590,6 +591,54 @@ def enqueue_print_job(
     ).first()
     if existing:
         return existing
+
+    # Uma reimpressão manual legítima pode ser solicitada antes de a via
+    # automática sair ou após alteração/movimentação de itens. Coalesce
+    # somente cópias idênticas da mesma reimpressão, sem suprimir documentos
+    # distintos (p.ex., diferentes fragmentos de um pedido dividido).
+    if source_type.strip().casefold() == "reimpressao" and document_type == "producao":
+        if db.get_bind().dialect.name == "postgresql":
+            # Serializa requisições concorrentes da mesma via/tenant, sem
+            # bloquear pedidos de outros restaurantes.
+            db.execute(
+                text(
+                    "SELECT pg_advisory_xact_lock("
+                    "hashtext(:namespace), hashtext(:document_identity))"
+                ),
+                {
+                    "namespace": "koma_reprint_coalesce",
+                    "document_identity": (
+                        f"{restaurante_id}:{document_type}:"
+                        f"{destination}:{source_id}"
+                    ),
+                },
+            )
+        recently_printed_since = (
+            datetime.datetime.now(datetime.timezone.utc)
+            - datetime.timedelta(seconds=90)
+        )
+        pending_or_recent = (
+            db.query(PrintJob)
+            .filter(
+                PrintJob.restaurante_id == restaurante_id,
+                PrintJob.document_type == document_type,
+                PrintJob.destination == destination,
+                PrintJob.source_type == "reimpressao",
+                PrintJob.source_id == str(source_id),
+                PrintJob.payload_text == payload_text.replace("\x00", "\\x00"),
+                or_(
+                    PrintJob.status.in_(("pending", "claimed", "printing")),
+                    and_(
+                        PrintJob.status == "printed",
+                        PrintJob.printed_at >= recently_printed_since,
+                    ),
+                ),
+            )
+            .order_by(PrintJob.created_at.asc(), PrintJob.id.asc())
+            .first()
+        )
+        if pending_or_recent is not None:
+            return pending_or_recent
 
     job = PrintJob(
         restaurante_id=restaurante_id,
