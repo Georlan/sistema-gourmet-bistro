@@ -592,9 +592,10 @@ def enqueue_print_job(
     if existing:
         return existing
 
-    # A key de reimpressão contém timestamp: cliques repetidos geram keys
-    # diferentes. Coalesce por identidade do documento físico enquanto
-    # houver qualquer via aguardando/saindo ou reimpressão recém-concluída.
+    # Uma reimpressão manual legítima pode ser solicitada antes de a via
+    # automática sair ou após alteração/movimentação de itens. Coalesce
+    # somente cópias idênticas da mesma reimpressão, sem suprimir documentos
+    # distintos (p.ex., diferentes fragmentos de um pedido dividido).
     if source_type.strip().casefold() == "reimpressao" and document_type == "producao":
         if db.get_bind().dialect.name == "postgresql":
             # Serializa requisições concorrentes da mesma via/tenant, sem
@@ -622,11 +623,12 @@ def enqueue_print_job(
                 PrintJob.restaurante_id == restaurante_id,
                 PrintJob.document_type == document_type,
                 PrintJob.destination == destination,
+                PrintJob.source_type == "reimpressao",
                 PrintJob.source_id == str(source_id),
+                PrintJob.payload_text == payload_text.replace("\\x00", "\\\\x00"),
                 or_(
                     PrintJob.status.in_(("pending", "claimed", "printing")),
                     and_(
-                        PrintJob.source_type == "reimpressao",
                         PrintJob.status == "printed",
                         PrintJob.printed_at >= recently_printed_since,
                     ),
