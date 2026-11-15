@@ -109,6 +109,13 @@ test('HEAD preserves public response headers without a body', async () => {
   assert.match(response.headers.get('X-Robots-Tag')!, /^index/);
 });
 
+test('homepage SEO matches real search intent without promising unavailable capabilities', () => {
+  assert.match(LANDING_SEO.title, /KÔMA.*Sistema para restaurantes.*PDV.*cardápio digital/i);
+  assert.match(LANDING_SEO.description, /gestão para restaurantes.*PDV, mesas, comandas, caixa.*cardápio digital/i);
+  assert.match(LANDING_SEO.description, /Recursos avançados disponíveis conforme o plano/);
+  assert.doesNotMatch(LANDING_SEO.title + LANDING_SEO.description, /ERP completo|fiscal completo|24 horas/i);
+});
+
 test('structured data uses canonical prices and safely serializes text', () => {
   const data = landingStructuredData('</script>');
   const app = data['@graph'].find(item => item['@type'] === 'SoftwareApplication')!;
