@@ -11,7 +11,8 @@ export type KomaSurface =
   | 'garcom'
   | 'entregador'
   | 'acompanhar'
-  | 'ativar';
+  | 'ativar'
+  | 'aceitar-contrato';
 
 export interface ResolvedKomaHost {
   kind: 'landing' | 'central' | 'tenant' | 'generic';
@@ -145,6 +146,15 @@ export function resolveKomaHost(
       kind: 'central',
       surface: 'central',
       tenantSlug: null,
+      rawHostname: cleanHost,
+    };
+  }
+
+  if (pathname.startsWith('/aceitar-contrato') || viewParam === 'aceitar-contrato') {
+    return {
+      kind: 'generic',
+      surface: 'aceitar-contrato',
+      tenantSlug: params.get('slug') || null,
       rawHostname: cleanHost,
     };
   }

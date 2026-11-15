@@ -121,3 +121,40 @@ class RestaurantContractAcceptance(Base):
             "linked_at",
         ),
     )
+
+
+class ContractInvite(Base):
+    """Convite de uso único emitido pelo Super Admin para aceite contratual direto."""
+
+    __tablename__ = "contract_invites"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    plan = Column(String(20), nullable=False)
+    billing_cycle = Column(String(16), nullable=False)
+    created_by = Column(String(120), nullable=False)
+    reason = Column(Text, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    acceptance_id = Column(String(36), nullable=True)
+    protocol = Column(String(64), nullable=True)
+
+    __table_args__ = (
+        Index(
+            "ix_contract_invites_tenant_created",
+            "restaurante_id",
+            "created_at",
+        ),
+    )
