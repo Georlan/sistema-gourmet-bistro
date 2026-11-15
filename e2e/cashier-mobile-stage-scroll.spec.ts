@@ -1,36 +1,44 @@
 import { expect, test } from '@playwright/test';
 import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 
-test('seletor de etapas acompanha o topo da rolagem interna de pedidos, sem flutuar sobre cards', async ({ page }) => {
+test('barra de etapas fixa e lista de pedidos em rolagem independente no celular', async ({ page }) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.goto('/?view=caixa');
 
   const shell = page.locator('.cashier-shell--mobile-orders');
   const content = shell.locator('.cashier-content');
-  const stages = content.getByRole('tablist', { name: 'Etapa dos pedidos' });
+  const workspace = content.locator('.orders-workspace');
+  const stages = workspace.getByRole('tablist', { name: 'Etapa dos pedidos' });
+  const scroller = workspace.locator('.orders-workspace__scroll-region');
   await expect(stages).toBeVisible();
 
-  // Simula o perfil Pocket observado no restaurante sem mudar dados do tenant.
+  // Garante que os planos Pocket e maiores compartilham o mesmo comportamento.
   await shell.evaluate(el => el.setAttribute('data-koma-plan', 'pocket'));
-  await expect.poll(() => content.evaluate(el => el.scrollHeight - el.clientHeight)).toBeGreaterThan(300);
-  await content.evaluate(el => { el.scrollTop = 680; });
-  await expect.poll(() => content.evaluate(el => el.scrollTop)).toBeGreaterThan(250);
+  await expect.poll(() => scroller.evaluate(el => el.scrollHeight - el.clientHeight)).toBeGreaterThan(250);
 
-  // O topo da área de pedidos já fica ABAIXO do cabeçalho e da subnavegação.
-  // Um offset adicional de 6.25rem prende a barra no meio da tela e cobre cards.
-  const distanceFromScrollerTop = await stages.evaluate(element => {
-    const viewport = element.closest('.cashier-content');
-    if (!viewport) throw new Error('Área de rolagem dos pedidos não encontrada');
-    return element.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+  const before = await stages.boundingBox();
+  expect(before).not.toBeNull();
+  await scroller.evaluate(el => { el.scrollTop = 700; });
+  await expect.poll(() => scroller.evaluate(el => el.scrollTop)).toBeGreaterThan(250);
+
+  const after = await stages.boundingBox();
+  expect(after).not.toBeNull();
+  expect(Math.abs(after!.y - before!.y)).toBeLessThan(2);
+  expect(await content.evaluate(el => el.scrollTop)).toBe(0);
+
+  // O conteúdo começa abaixo da barra, em vez de passar por trás dela.
+  const gap = await stages.evaluate(element => {
+    const scroller = element.nextElementSibling as HTMLElement | null;
+    if (!scroller?.classList.contains('orders-workspace__scroll-region')) throw Error('scroller isolado ausente');
+    return scroller.getBoundingClientRect().top - element.getBoundingClientRect().bottom;
   });
-  expect(distanceFromScrollerTop).toBeGreaterThanOrEqual(-2);
-  expect(distanceFromScrollerTop).toBeLessThan(24);
+  expect(gap).toBeGreaterThanOrEqual(-1);
 
   const digital = stages.getByRole('tab', { name: /Digitais/ });
   await digital.click();
   await expect(digital).toHaveAttribute('aria-selected', 'true');
-  await expect(content.locator('.orders-column--digital')).toHaveClass(/is-mobile-active/);
+  await expect(workspace.locator('.orders-column--digital')).toHaveClass(/is-mobile-active/);
   const salon = stages.getByRole('tab', { name: /Salão/ });
   await salon.click();
   await expect(salon).toHaveAttribute('aria-selected', 'true');
