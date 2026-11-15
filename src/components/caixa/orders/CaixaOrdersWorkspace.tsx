@@ -306,7 +306,7 @@ export function CaixaOrdersWorkspaceView({
 
 
   return (
-    <div className={"orders-workspace flex flex-col space-y-4"}>
+    <div className={"orders-workspace flex flex-col gap-4"}>
       <div className="orders-mobile-stages" style={{ gridTemplateColumns: `repeat(${ordersStages.length}, minmax(0, 1fr))` }} role="tablist" aria-label="Etapa dos pedidos">
         {ordersStages.map(stage => (
           <button
