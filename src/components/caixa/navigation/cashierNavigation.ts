@@ -239,6 +239,7 @@ function isNavigationEntryAvailable(
 export function getCashierSidebarGroupsForPlan(
   planId: SubscriptionPlanId,
   entitlements?: SubscriptionEntitlements,
+  showSalon = true,
 ): readonly CashierNavigationGroup[] {
   return CASHIER_SIDEBAR_GROUPS
     .map((group) => ({
@@ -249,7 +250,8 @@ export function getCashierSidebarGroupsForPlan(
           if (!item.children?.length) return item;
 
           const children = item.children
-            .filter((child) => isNavigationEntryAvailable(child.plans, planId, child.requiredFeature, entitlements)
+            .filter((child) => (showSalon || child.id !== 'vendas_salao')
+              && isNavigationEntryAvailable(child.plans, planId, child.requiredFeature, entitlements)
               && (!child.requiredAnyFeatures?.length || child.requiredAnyFeatures.some((feature) => operationalEntitlementEnabled(entitlements, feature))))
             .map((child) => {
               if (child.id === 'config_atendimento' && !operationalEntitlementEnabled(entitlements, 'waiter_app')) return { ...child, searchAliases: [] };
@@ -590,7 +592,7 @@ export function getCashierNavigationAction(id: string): CashierNavigationAction 
   return getCashierNavigationChild(id)?.action;
 }
 /** Horizontal navigation shares labels, order, capabilities and owners with the sidebar. */
-export function getCashierHorizontalItems(tab: string, planId: SubscriptionPlanId, entitlements?: SubscriptionEntitlements, setupMode = false): readonly CashierNavigationChild[] {
-  const groups = setupMode ? getCashierSetupSidebarGroupsForPlan(planId, entitlements) : getCashierSidebarGroupsForPlan(planId, entitlements);
+export function getCashierHorizontalItems(tab: string, planId: SubscriptionPlanId, entitlements?: SubscriptionEntitlements, setupMode = false, showSalon = true): readonly CashierNavigationChild[] {
+  const groups = setupMode ? getCashierSetupSidebarGroupsForPlan(planId, entitlements) : getCashierSidebarGroupsForPlan(planId, entitlements, showSalon);
   return groups.flatMap(group => group.items).find(item => item.id === (tab === 'dashboard' ? 'relatorios' : tab))?.children?.filter(child => !child.navigationHidden) ?? [];
 }
