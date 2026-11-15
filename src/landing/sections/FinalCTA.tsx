@@ -5,6 +5,7 @@ import { KomaLogo } from '../../components/KomaLogo';
 import { KOMA_LANDING_CONFIG } from '../config/landingConfig';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import { useLeadCapture } from '../components/LeadCaptureProvider';
+import { LANDING_SEO } from '../seo';
 
 const NEXT_STEPS = [
   'Escolha o plano e o período de cobrança.',
@@ -59,6 +60,7 @@ export function FinalCTA() {
         <span>© {new Date().getFullYear()} KÔMA. TODOS OS DIREITOS RESERVADOS.</span>
         <nav aria-label="Navegação do rodapé">
           <a href="#gestao">Recursos</a>
+          <a href={LANDING_SEO.instagram} target="_blank" rel="noopener noreferrer">Instagram oficial</a>
           <a href="#como-funciona">Como funciona</a>
           <a href="#duvidas">Dúvidas</a>
           <a href="#planos">Planos</a>

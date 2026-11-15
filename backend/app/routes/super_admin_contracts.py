@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
 import logging
 import re
+import secrets
 import uuid
 from decimal import Decimal
 from typing import Any
@@ -12,7 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from ..contract_models import ContractAcceptance, RestaurantContractAcceptance
+from ..config import settings
+from ..contract_models import ContractAcceptance, ContractInvite, RestaurantContractAcceptance
 from ..database import SessionLocal, tenant_session_scope
 from ..models import Restaurante, SuperAdminAuditLog
 from ..saas_billing_models import SaaSBillingSetup, SaaSPlanChange, SaaSSubscription
@@ -56,6 +59,27 @@ class ContractActivationRequest(BaseModel):
     restaurant_id: int | None = Field(default=None, ge=1, le=2_147_483_647)
 
     model_config = ConfigDict(extra="forbid")
+
+
+class ContractInviteCreateRequest(BaseModel):
+    restaurant_id: int = Field(gt=0)
+    billing_cycle: str = Field(default="mensal", min_length=5, max_length=16)
+    expires_hours: int = Field(default=72, ge=1, le=168)
+    reason: str = Field(
+        default="Envio de link único para aceite contratual pelo lojista",
+        min_length=3,
+        max_length=1000,
+    )
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("billing_cycle")
+    @classmethod
+    def normalize_billing_cycle(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"mensal", "anual"}:
+            raise ValueError("Ciclo de cobrança inválido")
+        return normalized
 
 
 def _decimal_text(value: Any, quantum: str) -> str | None:
@@ -781,5 +805,89 @@ def link_contract(
             status_code=status.HTTP_409_CONFLICT,
             detail="Este aceite já foi vinculado ou o vínculo já existe.",
         ) from exc
+    finally:
+        db.close()
+
+
+@router.post("/invite", status_code=status.HTTP_201_CREATED)
+def create_contract_invite(
+    payload: ContractInviteCreateRequest,
+    admin: dict[str, Any] = Depends(get_current_admin),
+):
+    tenant_id = int(payload.restaurant_id)
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, tenant_id):
+            restaurant = (
+                db.query(Restaurante)
+                .filter(Restaurante.id == tenant_id)
+                .one_or_none()
+            )
+            if restaurant is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Restaurante não encontrado.",
+                )
+
+            current_contract = (
+                db.query(RestaurantContractAcceptance.id)
+                .filter(RestaurantContractAcceptance.restaurante_id == tenant_id)
+                .first()
+            )
+            if current_contract is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Este restaurante já possui autoridade contratual vinculada.",
+                )
+
+            plan = str(restaurant.plano or "pocket").strip().lower()
+            now = datetime.datetime.now(datetime.timezone.utc)
+            expires_at = now + datetime.timedelta(hours=int(payload.expires_hours))
+            raw_token = f"{tenant_id}.{secrets.token_urlsafe(32)}"
+            token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+            actor = str(admin.get("user") or "superadmin")
+
+            invite = ContractInvite(
+                id=str(uuid.uuid4()),
+                restaurante_id=tenant_id,
+                token_hash=token_hash,
+                plan=plan,
+                billing_cycle=payload.billing_cycle,
+                created_by=actor,
+                reason=payload.reason.strip(),
+                created_at=now,
+                expires_at=expires_at,
+            )
+            db.add(invite)
+            db.add(
+                SuperAdminAuditLog(
+                    restaurante_id=tenant_id,
+                    actor=actor,
+                    action="SUPERADMIN_CONTRACT_INVITE_CREATED",
+                    reason=payload.reason.strip(),
+                    before_data=None,
+                    after_data={
+                        "invite_id": invite.id,
+                        "plan": plan,
+                        "billing_cycle": payload.billing_cycle,
+                        "expires_at": expires_at.isoformat(),
+                    },
+                )
+            )
+            db.commit()
+
+            invite_path = f"/aceitar-contrato?token={raw_token}"
+            base_url = settings.KOMA_PUBLIC_APP_URL.rstrip("/")
+            return {
+                "inviteId": invite.id,
+                "restaurantId": str(tenant_id),
+                "restaurantName": restaurant.nome,
+                "plan": plan,
+                "billingCycle": payload.billing_cycle,
+                "expiresAt": expires_at.isoformat(),
+                "token": raw_token,
+                "invitePath": invite_path,
+                "inviteUrl": f"{base_url}{invite_path}",
+            }
     finally:
         db.close()

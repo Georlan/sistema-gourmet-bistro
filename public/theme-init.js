@@ -1,7 +1,22 @@
 (function () {
   var pathname = window.location.pathname;
-  var params = new URLSearchParams(window.location.search);
   var hostname = window.location.hostname.toLowerCase();
+  var isOperationalAppHost = hostname === 'app.komafood.com.br';
+
+  // Corrige atalhos PWA antigos, instalados com start_url=/cardapio.
+  // Redireciona somente a entrada sem identificador; links reais de cardápio
+  // com restaurante_id, slug ou hash continuam intactos.
+  if (
+    isOperationalAppHost
+    && (pathname === '/cardapio' || pathname === '/cardapio/')
+    && !window.location.search
+    && !window.location.hash
+  ) {
+    window.history.replaceState(window.history.state, '', '/');
+    pathname = '/';
+  }
+
+  var params = new URLSearchParams(window.location.search);
   var parts = hostname.split('.');
   var ignoredSubdomains = ['www', 'localhost', 'sistema-gourmet-bistro', 'komafood'];
   var isPlatformHost = hostname.endsWith('.pages.dev')
@@ -21,6 +36,7 @@
       && parts[0].indexOf('ais-dev') !== 0
       && parts[0].indexOf('ais-pre') !== 0
       && !isPlatformHost
+      && !isOperationalAppHost
     );
 
   // O mesmo origin atende duas superfícies instaláveis diferentes. O manifesto

@@ -37,7 +37,7 @@ export function Management() {
       <div className="koma-section-heading koma-section-heading--light">
         <span>02 / O QUE VOCÊ RESOLVE</span>
         <h2 id="management-title">VENDER. OPERAR.<br />CONTROLAR.</h2>
-        <p>Veja primeiro o que muda na rotina. Depois compare os planos sem misturar recursos.</p>
+        <p>PDV, pedidos, cardápio digital e caixa no mesmo fluxo. Estoque e relatórios nos planos Pro e Premium.</p>
       </div>
 
       <div className="koma-management-grid">

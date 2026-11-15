@@ -87,16 +87,38 @@ test('aceite reaproveita composição persistida e preserva personalizações di
   assert.doesNotMatch(html, /Não produzir|Cancelado/);
 });
 
-test('Marmitaria sem consumo local tem duas etapas e inicia no preparo no mobile', () => {
+test('sem consumo local usa duas etapas para qualquer perfil e plano de impressão', () => {
   const base = workspace([]);
-  const html = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
-    ...base, restaurantConfig: { operation_profile: 'marmitaria', tipos_pedido_ativos: ['delivery'] },
+  for (const profile of ['marmitaria', 'generic', 'pizzaria', 'acai']) {
+    for (const hasPrinting of [true, false]) {
+      const html = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
+        ...base, hasPrinting,
+        restaurantConfig: { operation_profile: profile, tipos_pedido_ativos: ['delivery', 'retirada'] },
+      }));
+      assert.doesNotMatch(html, /orders-column--salon|Mesas em Atendimento/);
+      assert.match(html, /orders-board--without-salon/);
+      assert.match(html, /orders-column--digital[^"<]*is-mobile-active/);
+      assert.match(html, /Entrega e recebimento/);
+      assert.match(html, /grid-template-columns:repeat\(2, minmax\(0, 1fr\)\)/);
+    }
+  }
+});
+
+test('pagamento digital pendente não reabre o Salão, mas pagamento de mesa preserva acesso', () => {
+  const base = workspace([]);
+  const onlyDigital = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
+    ...base,
+    pendingCashPayments: [{ id: 'cash-digital', comanda_id: 'digital', valor: 25, mesaNum: '?' }],
+    restaurantConfig: { tipos_pedido_ativos: ['delivery', 'retirada'] },
   }));
-  assert.doesNotMatch(html, /orders-column--salon|Mesas em Atendimento/);
-  assert.match(html, /orders-board--marmitaria/);
-  assert.match(html, /orders-column--digital[^"<]*is-mobile-active/);
-  assert.match(html, /Entrega e recebimento/);
-  assert.match(html, /grid-template-columns:repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.doesNotMatch(onlyDigital, /orders-column--salon/);
+
+  const pendingTable = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
+    ...base,
+    pendingCashPayments: [{ id: 'cash-table', comanda_id: 'table', valor: 25, mesaNum: 7 }],
+    restaurantConfig: { tipos_pedido_ativos: ['delivery', 'retirada'] },
+  }));
+  assert.match(pendingTable, /orders-column--salon/);
 });
 
 test('busca sem resultados não esconde um atendimento local ainda ativo', () => {
@@ -108,18 +130,17 @@ test('busca sem resultados não esconde um atendimento local ainda ativo', () =>
   assert.match(html, /orders-column--salon/);
 });
 
-test('outros perfis e Marmitaria com consumo local ou mesas ativas preservam o salão', () => {
+test('salão permanece disponível com consumo local, legado sem política ou comandas ativas', () => {
   const cases = [
-    { base: workspace([]), config: { operation_profile: 'pizzaria', tipos_pedido_ativos: ['delivery'] } },
-    { base: workspace([]), config: { operation_profile: 'generic', tipos_pedido_ativos: ['delivery'] } },
-    { base: workspace([]), config: { operation_profile: 'marmitaria', tipos_pedido_ativos: ['delivery', 'consumo_local'] } },
-    { base: workspace(), config: { operation_profile: 'marmitaria', tipos_pedido_ativos: ['delivery'] } },
+    { base: workspace([]), config: { operation_profile: 'pizzaria', tipos_pedido_ativos: ['delivery', 'consumo_local'] } },
+    { base: workspace([]), config: { operation_profile: 'generic', tipos_pedido_ativos: ['consumo_local'] } },
+    { base: workspace(), config: { operation_profile: 'generic', tipos_pedido_ativos: ['delivery'] } },
     { base: workspace([]), config: { operation_profile: 'marmitaria' } },
   ];
   for (const { base, config } of cases) {
     const html = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, { ...base, restaurantConfig: config }));
     assert.match(html, /orders-column--salon/);
-    assert.doesNotMatch(html, /orders-board--marmitaria/);
+    assert.doesNotMatch(html, /orders-board--without-salon/);
   }
 });
 

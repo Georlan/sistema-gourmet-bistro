@@ -538,9 +538,10 @@ def apply_operational_visual_hierarchy(
     identity_label: str = "PEDIDO",
     document_title: Optional[str] = None,
     show_item_values: bool = True,
+    paper_width: Optional[int] = None,
 ) -> str:
     """Aplica o sistema visual compartilhado a qualquer documento operacional."""
-    width = int(getattr(printer_service, "width", 40) or 40)
+    width = int(paper_width or getattr(printer_service, "width", 40) or 40)
     lines = receipt.split("\n")
     resolved_identity, is_full_reprint = _resolve_operational_identity(
         identity_label=identity_label,
@@ -647,6 +648,33 @@ def _replace_total(
     lines[total_index] = ESC_BOLD_ON + replacement + ESC_BOLD_OFF
 
 
+def apply_compact_58_projection(payload_text: str, *, width: int = 32) -> str:
+    """Aplica semântica compacta de 58 mm no backend (compatível com agentes legados)."""
+    output: list[str] = []
+    last_sep: Optional[str] = None
+    for raw_line in payload_text.split("\n"):
+        visible = _clean_esc_text(raw_line)
+        lowered = visible.casefold()
+        if lowered in {"gerenciado por kôma", "gerenciado por koma"}:
+            continue
+        if not visible:
+            continue
+        if lowered in {"documento não fiscal", "documento nao fiscal"}:
+            output.append(align_center("DOCUMENTO NAO FISCAL", width))
+            last_sep = None
+            continue
+        if len(visible) >= 8 and set(visible) in ({"-"}, {"="}):
+            sep_char = visible[0]
+            if last_sep is not None:
+                continue
+            output.append(sep_char * width)
+            last_sep = sep_char
+            continue
+        last_sep = None
+        output.append(raw_line)
+    return "\n".join(output)
+
+
 def render_canonical_comanda(
     *,
     restaurant_name: str,
@@ -657,6 +685,8 @@ def render_canonical_comanda(
     operator_name: str,
     items: list[PrintItem],
     variant: ComandaVariant,
+    paper_width: Optional[int] = None,
+    compact_58: bool = False,
 ) -> str:
     """Fonte única do layout de toda comanda operacional do Kôma.
 
@@ -665,7 +695,7 @@ def render_canonical_comanda(
     total e rodapé pertencem a esta função. Documentos semanticamente diferentes
     (fechamento, caixa, despacho e delta de item) permanecem fora deste modelo.
     """
-    width = int(getattr(printer_service, "width", 40) or 40)
+    width = int(paper_width or getattr(printer_service, "width", 40) or 40)
     production_hierarchy = _order_type_label(order_type) in {"RETIRADA", "DELIVERY"}
     receipt = printer_service.generate_receipt(
         num_pedido=order_number,
@@ -690,6 +720,7 @@ def render_canonical_comanda(
         apenas_valores=False,
         restaurant_name_position=restaurant_name_position,
         production_hierarchy=production_hierarchy,
+        paper_width=width,
     )
     receipt = apply_operational_visual_hierarchy(
         receipt,
@@ -699,6 +730,7 @@ def render_canonical_comanda(
         operator_name=operator_name,
         location_label=variant.location_label,
         show_item_values=True,
+        paper_width=width,
     )
     lines = receipt.split("\n")
     _insert_variant_header(lines, tipo=order_type, variant=variant, width=width)
@@ -711,4 +743,7 @@ def render_canonical_comanda(
         order_type=order_type,
         width=width,
     )
-    return "\n".join(lines)
+    rendered = "\n".join(lines)
+    if compact_58:
+        return apply_compact_58_projection(rendered, width=width)
+    return rendered

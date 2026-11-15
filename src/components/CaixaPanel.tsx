@@ -21,6 +21,7 @@ import {
 } from '../domain/cashierOrderProjection';
 import { normalizeOperationalTimestamp } from '../domain/operationalTime';
 import { clearOperatorSession } from '../utils/authSession';
+import { waitForInstalledOperatorSessionWrite } from '../utils/installedOperatorSession';
 import { AssinaturaPixTab } from './assinatura/AssinaturaPixTab';
 import { CaixaFechamentoTab } from './caixa/CaixaFechamentoTab';
 import { CaixaMovimentacoesTab } from './caixa/CaixaMovimentacoesTab';
@@ -41,6 +42,7 @@ import { CashierMobileBottomBar } from './caixa/navigation/CashierMobileBottomBa
 import { CashierMobileSidebar } from './caixa/navigation/CashierMobileSidebar';
 import { CashierOperatorDrawer } from './caixa/navigation/CashierOperatorDrawer';
 import { CashierSubNavigation } from './caixa/navigation/CashierSubNavigation';
+import { shouldShowSalon } from '../domain/cashierSalonVisibility';
 import { useCashierNavigation } from './caixa/navigation/useCashierNavigation';
 import { useCashierPreferences } from './caixa/navigation/useCashierPreferences';
 import { CaixaOrdersWorkspace } from './caixa/orders/CaixaOrdersWorkspace';
@@ -510,7 +512,9 @@ export function CaixaPanel({
     sessionStorage.removeItem('koma_user_name');
     sessionStorage.removeItem('koma_user_role');
     sessionStorage.removeItem('koma_auth_token');
-    window.location.reload();
+    // Mantém o contrato síncrono do handler; somente o reload aguarda a
+    // remoção da credencial persistida para não abortar a transação do PWA.
+    void waitForInstalledOperatorSessionWrite().then(() => window.location.reload());
   };
 
   const [expandedCardIds, setExpandedCardIds] = useState<Record<string, boolean>>({});
@@ -746,6 +750,12 @@ export function CaixaPanel({
     ? salonTableCards.find(card => card.table.id === Number(selectedKanbanOrder.mesaId) && !card.isMerged)
     : undefined;
 
+  const hasLocalServiceWork = tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0;
+  const hasLocalPendingPayment = pagamentosPendentes.some(payment => orders.some(order =>
+    order.id === payment.comanda_id && Number(order.mesaId) > 0,
+  ));
+  const showSalon = shouldShowSalon(restauranteConfig?.tipos_pedido_ativos, hasLocalServiceWork || hasLocalPendingPayment);
+
   return (
     <div
       data-koma-plan={currentPlanId}
@@ -769,6 +779,7 @@ export function CaixaPanel({
           setShowAbrirModal={setShowAbrirModal}
           planId={currentPlanId}
           entitlements={planEntitlements}
+            showSalon={showSalon}
           hasOnlineMenu={hasOnlineMenu}
           isWsConnected={isWsConnected}
           isSidebarTabActive={isSidebarTabActive}
@@ -790,6 +801,7 @@ export function CaixaPanel({
           setShowAbrirModal={setShowAbrirModal}
           planId={currentPlanId}
           entitlements={planEntitlements}
+            showSalon={showSalon}
           hasOnlineMenu={hasOnlineMenu}
           isWsConnected={isWsConnected}
           isSidebarTabActive={isSidebarTabActive}
@@ -890,6 +902,7 @@ export function CaixaPanel({
             activeSubTab={activeSubTab}
             planId={currentPlanId}
             entitlements={planEntitlements}
+            showSalon={showSalon}
             setupMode={setupMode}
             onNavigate={handleSidebarNavigation}
             counts={{ cardapio_produtos: apiProdutos.length, cardapio_preparo: apiCategorias.length }}
@@ -933,7 +946,7 @@ export function CaixaPanel({
               {deliveryOrdersLoadState === 'error' && <div role="alert" className="p-3 text-koma-muted">A atualização dos pedidos digitais falhou. Mantendo os últimos dados. <button onClick={() => void fetchDeliveryOrders()}>Tentar novamente</button></div>}
               <CaixaOrdersWorkspace
                 pixConferenceTrigger={<DirectPixPendingPanel apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onRefreshOrders={onRefreshOrders} />}
-                hasLocalServiceWork={tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0}
+                hasLocalServiceWork={hasLocalServiceWork}
                 columns={cashierOrderColumns}
                 pendingCashPayments={pagamentosPendentes.map((pag) => {
                   const comandaMesa = orders.find((order) => order.id === pag.comanda_id);

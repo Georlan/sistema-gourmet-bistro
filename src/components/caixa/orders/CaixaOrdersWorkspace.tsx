@@ -1,4 +1,5 @@
 import { formatBackendDateTime } from "../../../utils/dateTime";
+import { shouldShowSalon } from '../../../domain/cashierSalonVisibility';
 import { CashierPrintGlyph } from './CashierPrintGlyph';
 import { CheckoutPaymentArt } from '../checkout/CheckoutPaymentArt';
 import { CashierOrderMark } from './CashierOrderMark';
@@ -281,17 +282,19 @@ export function CaixaOrdersWorkspaceView({
 
   const totalResultadosBusca = filteredCol1.length + filteredDigitalProduction.length + filteredCol2Table.length + filteredDeliveryFinalization.length;
 
-  const activeOrderTypes = restaurantConfig?.tipos_pedido_ativos;
-  const compactMarmitaria = (restaurantConfig?.operation_profile === "marmitaria" || hasPrinting === false)
-    && Array.isArray(activeOrderTypes) && !activeOrderTypes.includes("consumo_local")
-    && !hasLocalServiceWork && filteredCol1.length === 0 && filteredCol2Table.length === 0 && pagamentosPendentes.length === 0;
+  const showSalon = shouldShowSalon(
+    restaurantConfig?.tipos_pedido_ativos,
+    Boolean(hasLocalServiceWork) || filteredCol1.length > 0 || filteredCol2Table.length > 0
+      || pagamentosPendentes.some(payment => Number(payment.mesaNum) > 0),
+  );
+  const withoutSalon = !showSalon;
 
   const ordersStages = [
-    ...(!compactMarmitaria ? [{ id: 'salon' as const, label: 'Salão', count: filteredCol1.length }] : []),
-    { id: 'digital' as const, label: compactMarmitaria ? 'Preparo' : 'Digitais', count: filteredDigitalProduction.length },
-    { id: 'closing' as const, label: compactMarmitaria ? 'Entrega e recebimento' : 'Concluir', count: filteredCol2Table.length + filteredDeliveryFinalization.length },
+    ...(showSalon ? [{ id: 'salon' as const, label: 'Salão', count: filteredCol1.length }] : []),
+    { id: 'digital' as const, label: withoutSalon ? 'Preparo' : 'Digitais', count: filteredDigitalProduction.length },
+    { id: 'closing' as const, label: withoutSalon ? 'Entrega e recebimento' : 'Concluir', count: filteredCol2Table.length + filteredDeliveryFinalization.length },
   ];
-  const effectiveMobileOrdersStage = compactMarmitaria && mobileOrdersStage === "salon" ? "digital" : mobileOrdersStage;
+  const effectiveMobileOrdersStage = withoutSalon && mobileOrdersStage === "salon" ? "digital" : mobileOrdersStage;
   const ordersColumnCounts = ordersStages.map(stage => stage.count);
   const activeOrdersColumns = ordersColumnCounts.filter(count => count > 0).length;
   const ordersColumnWeight = activeOrdersColumns === 1 ? 1.7 : activeOrdersColumns === 2 ? 1.25 : 1;
@@ -534,11 +537,11 @@ export function CaixaOrdersWorkspaceView({
       )}
       {/* Kanban operacional universal: mesas, pedidos online e finalização. */}
       <div
-        className={clsx("orders-board flex-1 gap-3 pb-3", compactMarmitaria && "orders-board--marmitaria")}
+        className={clsx("orders-board flex-1 gap-3 pb-3", withoutSalon && "orders-board--without-salon")}
         style={ordersBoardStyle}
       >
         {/* COLUMN 1: Em produção */}
-        {!compactMarmitaria && <div className={clsx('orders-column orders-column--salon flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'salon' && 'is-mobile-active', filteredCol1.length === 0 && 'is-empty')}>
+        {showSalon && <div className={clsx('orders-column orders-column--salon flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'salon' && 'is-mobile-active', filteredCol1.length === 0 && 'is-empty')}>
           <CashierColumnHeader kind="salon" title="Salão" count={filteredCol1.length} />
           <div className={"orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5"}>
             {filteredCol1.length === 0 ? (
@@ -665,7 +668,7 @@ export function CaixaOrdersWorkspaceView({
         </div>}
         {/* COLUMN 2: pedidos sem mesa, de venda rápida, delivery ou retirada. */}
         <div className={clsx('orders-column orders-column--digital flex flex-col overflow-hidden', effectiveMobileOrdersStage === 'digital' && 'is-mobile-active', filteredDigitalProduction.length === 0 && 'is-empty')}>
-          <CashierColumnHeader kind="digital" title={compactMarmitaria ? "Em preparo" : "Balcão e online"} count={filteredDigitalProduction.length} />
+          <CashierColumnHeader kind="digital" title={withoutSalon ? "Em preparo" : "Balcão e online"} count={filteredDigitalProduction.length} />
           <div className={"orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5"}>
             {filteredDigitalProduction.length === 0 ? (
               <div className={"orders-empty-state py-16 text-center text-koma-subtle text-xs space-y-1"}>
@@ -797,7 +800,7 @@ export function CaixaOrdersWorkspaceView({
         </div>
         {/* COLUMN 3: pagamento e finalização de todas as modalidades. */}
         <div className={clsx('orders-column orders-column--closing flex flex-col overflow-hidden', arrivals.size > 0 && 'orders-column--arrived', effectiveMobileOrdersStage === 'closing' && 'is-mobile-active', filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 && 'is-empty')}>
-          <CashierColumnHeader kind="closing" title={compactMarmitaria ? "Entrega e recebimento" : "Prontos e recebimentos"} count={filteredCol2Table.length + filteredDeliveryFinalization.length} />
+          <CashierColumnHeader kind="closing" title={withoutSalon ? "Entrega e recebimento" : "Prontos e recebimentos"} count={filteredCol2Table.length + filteredDeliveryFinalization.length} />
           <div className={"orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5"}>
             {filteredCol2Table.length === 0 && filteredDeliveryFinalization.length === 0 ? (
               <div className={"orders-empty-state py-16 text-center text-koma-subtle text-xs space-y-1"}>

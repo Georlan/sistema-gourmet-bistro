@@ -3,6 +3,12 @@ import assert from "node:assert/strict";
 import { nextMonitorState, previousRunState, reconcileMonitor } from "../scripts/ops-monitor.mjs";
 import { parseTraceLines } from "../scripts/ops-trace.mjs";
 import { diagnose } from "../scripts/ops-doctor.mjs";
+import {
+  BACKUP_ISSUE_TITLE,
+  checkBackupFreshness,
+  evaluateBackupLogs,
+  reconcileBackupIssue,
+} from "../scripts/check-backup-freshness.mjs";
 
 test("support code is a searchable request ID prefix", async () => {
   Object.assign(globalThis, { window: { location: { hostname: "localhost", protocol: "http:", href: "http://localhost:3000/" } } });
@@ -74,4 +80,83 @@ test("doctor reports failed public checks with nonzero health", async () => {
   const result = await diagnose(async () => { throw new Error("controlled timeout"); });
   assert.equal(result.healthy, false);
   assert.equal(result.lines.filter(line => line.includes("FALHA")).length, 3);
+});
+
+function buildBackupLogLines(completedIso: string, extras: string[] = []): string {
+  const baseMs = Date.parse(completedIso);
+  const messages = [
+    { offsetMs: -20_000, message: "Backup archive file is valid" },
+    { offsetMs: -15_000, message: "Backup filesize: 2.39 MB" },
+    { offsetMs: -5_000, message: "Backup uploaded to S3..." },
+    { offsetMs: 0, message: "Database backup complete." },
+  ];
+  return [
+    ...messages.map(({ offsetMs, message }) =>
+      JSON.stringify({ timestamp: new Date(baseMs + offsetMs).toISOString(), message }),
+    ),
+    ...extras,
+  ].join("\n");
+}
+
+test("backup freshness passes on valid recent S3 backup", () => {
+  const nowMs = Date.parse("2026-11-15T15:00:00.000Z");
+  const stdout = buildBackupLogLines("2026-11-15T03:01:29.000Z");
+  const result = evaluateBackupLogs(stdout, nowMs);
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, "ok");
+  assert.match(result.message, /2\.39 MB/);
+});
+
+test("backup freshness fails when latest backup is stale (>36h)", () => {
+  const nowMs = Date.parse("2026-11-16T18:00:00.000Z");
+  const stdout = buildBackupLogLines("2026-11-15T03:01:29.000Z");
+  const result = evaluateBackupLogs(stdout, nowMs);
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "stale");
+});
+
+test("backup freshness fails when backup is missing in last 48h", () => {
+  const result = evaluateBackupLogs("", Date.parse("2026-11-15T15:00:00.000Z"));
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "missing");
+});
+
+test("backup freshness fails explicitly on Railway access error", () => {
+  const result = checkBackupFreshness({
+    spawn: () => ({ status: 1, stdout: "", stderr: "Unauthorized" } as any),
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "access_error");
+});
+
+test("backup issue reconciliation deduplicates and closes on recovery", async () => {
+  const calls: string[] = [];
+  const handlers = {
+    createIssue: async (title: string) => {
+      assert.equal(title, BACKUP_ISSUE_TITLE);
+      calls.push("create");
+      return 99;
+    },
+    updateIssue: async () => { calls.push("update"); },
+    closeIssue: async () => { calls.push("close"); },
+  };
+  let issue = await reconcileBackupIssue({
+    result: { ok: false, reason: "stale", message: "último backup tem 40.0 horas" },
+    existingIssueNumber: null,
+    ...handlers,
+  });
+  assert.equal(issue, 99);
+  issue = await reconcileBackupIssue({
+    result: { ok: false, reason: "missing", message: "nenhuma execução" },
+    existingIssueNumber: issue,
+    ...handlers,
+  });
+  assert.equal(issue, 99);
+  issue = await reconcileBackupIssue({
+    result: { ok: true, reason: "ok", message: "ok" },
+    existingIssueNumber: issue,
+    ...handlers,
+  });
+  assert.equal(issue, null);
+  assert.deepEqual(calls, ["create", "update", "close"]);
 });

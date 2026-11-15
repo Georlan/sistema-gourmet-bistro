@@ -322,6 +322,11 @@ export function SuperAdminRestaurant360({
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
+  const [contractInviteCycle, setContractInviteCycle] = useState<"mensal" | "anual">("mensal");
+  const [contractInviteBusy, setContractInviteBusy] = useState(false);
+  const [contractInviteUrl, setContractInviteUrl] = useState<string | null>(null);
+  const [contractInviteError, setContractInviteError] = useState<string | null>(null);
+  const [contractInviteCopied, setContractInviteCopied] = useState(false);
   const [operationsEditing, setOperationsEditing] = useState(false);
   const [operationModes, setOperationModes] = useState<OperationMode[]>([]);
   const [operationReason, setOperationReason] = useState("");
@@ -673,6 +678,32 @@ export function SuperAdminRestaurant360({
       setInviteError(superAdminErrorMessage(error));
     } finally {
       setInviteBusy(false);
+    }
+  };
+
+  const generateContractInvite = async () => {
+    if (linkedContract || contractInviteBusy) return;
+    setContractInviteBusy(true);
+    setContractInviteError(null);
+    setContractInviteCopied(false);
+    try {
+      const response = await superAdminFetch("/api/super-admin/contracts/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurant_id: Number(tenant.id),
+          billing_cycle: contractInviteCycle,
+          expires_hours: 72,
+          reason: "Link único de aceite contratual gerado pela ficha Restaurante 360",
+        }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body?.detail || "Não foi possível gerar o link de aceite.");
+      setContractInviteUrl(String(body.inviteUrl || body.invitePath || ""));
+    } catch (error) {
+      setContractInviteError(superAdminErrorMessage(error));
+    } finally {
+      setContractInviteBusy(false);
     }
   };
 
@@ -1332,8 +1363,52 @@ export function SuperAdminRestaurant360({
                 <p className="mt-4 text-[11px] text-koma-muted">Benefícios individuais não alteram automaticamente cobrança, ciclo ou taxa do aceite.</p>
               </>
             ) : (
-              <div className="mt-3 rounded-lg border border-zinc-800 bg-koma-page p-4 text-xs text-koma-muted">
-                {contractsAvailable ? "Nenhum aceite vinculado foi localizado para este tenant." : "Inbox de contratações indisponível; termos não são inferidos pelo plano."}
+              <div className="mt-3 space-y-3 rounded-lg border border-zinc-800 bg-koma-page p-4 text-xs text-koma-muted">
+                <p>
+                  {contractsAvailable ? "Nenhum aceite vinculado foi localizado para este tenant." : "Inbox de contratações indisponível; termos não são inferidos pelo plano."}
+                </p>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <select
+                    aria-label="Ciclo do link de aceite"
+                    value={contractInviteCycle}
+                    onChange={(event) => setContractInviteCycle(event.target.value === "anual" ? "anual" : "mensal")}
+                    className="rounded-lg border border-zinc-700 bg-koma-card px-2.5 py-1.5 text-xs text-koma-foreground"
+                  >
+                    <option value="mensal">Mensal</option>
+                    <option value="anual">Anual</option>
+                  </select>
+                  <button
+                    type="button"
+                    disabled={contractInviteBusy}
+                    onClick={() => void generateContractInvite()}
+                    className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-zinc-950 disabled:opacity-50"
+                  >
+                    {contractInviteBusy ? "Gerando link…" : "Gerar link único de aceite"}
+                  </button>
+                </div>
+                {contractInviteError && <p className="text-rose-400" role="alert">{contractInviteError}</p>}
+                {contractInviteUrl && (
+                  <div className="space-y-2 rounded-lg border border-emerald-800/50 bg-emerald-950/20 p-3">
+                    <p className="text-[11px] font-bold text-emerald-300">Link de uso único pronto (válido por 72h):</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        readOnly
+                        value={contractInviteUrl}
+                        className="w-full rounded border border-zinc-700 bg-koma-card px-2 py-1 font-mono text-[11px] text-koma-foreground"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void navigator.clipboard?.writeText(contractInviteUrl);
+                          setContractInviteCopied(true);
+                        }}
+                        className="shrink-0 rounded border border-emerald-700 px-2.5 py-1 text-[11px] font-bold text-emerald-200"
+                      >
+                        {contractInviteCopied ? "Copiado" : "Copiar"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
