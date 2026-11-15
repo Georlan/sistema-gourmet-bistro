@@ -1040,6 +1040,76 @@ def _expire_stale_unresolved_jobs(
     )
 
 
+def _coalesce_pending_reprints(db: Session, restaurante_id: int) -> int:
+    """Evita rajada de reimpressões antigas quando o agente reconecta.
+
+    Mantém as vias automáticas pendentes e, somente se não houver original
+    pendente/claimed/printing da mesma origem e destino, preserva a primeira
+    reimpressão manual. Não toca em impressões já concluídas nem em outros
+    restaurantes, destinos ou documentos.
+    """
+    query = (
+        db.query(PrintJob)
+        .filter(
+            PrintJob.restaurante_id == restaurante_id,
+            PrintJob.document_type == "producao",
+            PrintJob.source_type == "reimpressao",
+            PrintJob.status == "pending",
+        )
+        .order_by(PrintJob.created_at.asc(), PrintJob.id.asc())
+    )
+    if db.get_bind().dialect.name == "postgresql":
+        query = query.with_for_update(skip_locked=True)
+    pending_reprints = query.all()
+    if not pending_reprints:
+        return 0
+
+    active_originals_or_reprints = (
+        db.query(PrintJob.source_id, PrintJob.document_type, PrintJob.destination)
+        .filter(
+            PrintJob.restaurante_id == restaurante_id,
+            PrintJob.document_type == "producao",
+            PrintJob.status.in_(UNRESOLVED_JOB_STATUSES),
+            or_(
+                PrintJob.source_type.in_(("pedido", "lancamento")),
+                and_(
+                    PrintJob.source_type == "reimpressao",
+                    PrintJob.status.in_(("claimed", "printing")),
+                ),
+            ),
+        )
+        .all()
+    )
+    reserved = {
+        (row.source_id, row.document_type, row.destination)
+        for row in active_originals_or_reprints
+    }
+    suppressed = 0
+    for job in pending_reprints:
+        identity = (job.source_id, job.document_type, job.destination)
+        if identity in reserved:
+            job.status = "cancelled"
+            job.claimed_at = None
+            job.agent_id = None
+            job.last_error = (
+                "Reimpressão redundante cancelada para evitar impressão "
+                "em duplicidade após reconexão. A via original ou outra "
+                "reimpressão continua na fila."
+            )
+            suppressed += 1
+        else:
+            reserved.add(identity)
+
+    if suppressed:
+        db.flush()
+        log.info(
+            "print_reprint_backlog_coalesced restaurante_id=%s suppressed=%s",
+            restaurante_id,
+            suppressed,
+        )
+    return suppressed
+
+
 def _claim_pending_jobs(
     db: Session,
     agent: PrintAgentToken,
@@ -1048,6 +1118,7 @@ def _claim_pending_jobs(
 ) -> list[dict]:
     """Reserva atomicamente até ``limit`` trabalhos na ordem da fila."""
     safe_limit = max(1, min(limit, MAX_CLAIM_BATCH_SIZE))
+    coalesced_reprints = _coalesce_pending_reprints(db, agent.restaurante_id)
     # The recovery probes are intentionally off the hot claim path. Their own
     # thresholds are five minutes / hours, so checking once per tenant every
     # 30s preserves recovery semantics while removing two write-capable queries
@@ -1128,7 +1199,7 @@ def _claim_pending_jobs(
             for row in ordered_rows
         ]
         _log_claim_batch(agent, payload, role=role)
-        if claimed_rows or maintenance_ran:
+        if claimed_rows or maintenance_ran or coalesced_reprints:
             db.commit()
         return payload
 
@@ -1189,7 +1260,7 @@ def _claim_pending_jobs(
         claimed_jobs.append(_claimed_job_payload(job, now))
 
     _log_claim_batch(agent, claimed_jobs, role=role)
-    if claimed_jobs or maintenance_ran:
+    if claimed_jobs or maintenance_ran or coalesced_reprints:
         db.commit()
     return claimed_jobs
 
@@ -2649,7 +2720,8 @@ def get_next_job(
         now,
     )
     released_jobs = _release_stuck_jobs(db, agent.restaurante_id, now)
-    if expired_jobs or released_jobs:
+    coalesced_reprints = _coalesce_pending_reprints(db, agent.restaurante_id)
+    if expired_jobs or released_jobs or coalesced_reprints:
         db.commit()
 
     can_claim_generic, _ = _can_agent_claim_generic_jobs(db, agent)
@@ -2749,7 +2821,8 @@ def claim_job(
         agent.restaurante_id,
         now,
     )
-    if expired_jobs:
+    coalesced_reprints = _coalesce_pending_reprints(db, agent.restaurante_id)
+    if expired_jobs or coalesced_reprints:
         db.commit()
 
     can_claim_generic, _ = _can_agent_claim_generic_jobs(db, agent)
