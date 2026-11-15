@@ -5,6 +5,7 @@ export const LANDING_SEO = {
   title: 'KÔMA | Sistema para restaurantes, PDV e cardápio digital',
   description: 'Sistema de gestão para restaurantes com PDV, mesas, comandas, caixa e cardápio digital integrado. Pedidos de salão, retirada e delivery em um só fluxo. Recursos avançados disponíveis conforme o plano.',
   image: 'https://komafood.com.br/logo-koma.png',
+  instagram: 'https://www.instagram.com/komafoodbr/',
 };
 
 export function landingStructuredData(slogan: string) {
@@ -16,6 +17,7 @@ export function landingStructuredData(slogan: string) {
         '@type': 'Organization', '@id': `${LANDING_SEO.url}#organization`,
         name: 'KÔMA', alternateName: ['Koma', 'Koma Food'],
         url: LANDING_SEO.url, logo: LANDING_SEO.image,
+        sameAs: [LANDING_SEO.instagram],
       },
       {
         '@type': 'WebSite', '@id': `${LANDING_SEO.url}#website`,
