@@ -2,8 +2,8 @@ import { SUBSCRIPTION_PLANS } from '../config/subscriptionPlans';
 
 export const LANDING_SEO = {
   url: 'https://komafood.com.br/',
-  title: 'KÔMA | Sistema para restaurantes, PDV, mesas e cozinha',
-  description: 'Sistema para restaurantes com PDV, mesas, comandas, caixa e cardápio digital. KDS, impressão automática e recursos avançados disponíveis conforme o plano.',
+  title: 'KÔMA | Sistema para restaurantes, PDV e cardápio digital',
+  description: 'Sistema de gestão para restaurantes com PDV, mesas, comandas, caixa e cardápio digital integrado. Pedidos de salão, retirada e delivery em um só fluxo. Recursos conforme o plano.',
   image: 'https://komafood.com.br/logo-koma.png',
 };
 
