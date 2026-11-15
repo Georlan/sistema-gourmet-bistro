@@ -108,7 +108,7 @@ export function CashierPrintingSettings({
       const agentId = data.agent_id || requestedAgentId;
       const agentToken = data.agent_token;
       if (typeof window !== 'undefined') {
-        localStorage.setItem('koma_print_mobile_agent_id', agentId);
+        localStorage.setItem(`koma_print_mobile_agent_id:${tenantId}`, agentId);
       }
       const restaurantName = printHeader || 'KOMA GOURMET';
       const deepLink = `koma-print://connect?backend=${encodeURIComponent(apiBaseUrl)}&tenant=${tenantId}&name=${encodeURIComponent(restaurantName)}&agent_id=${encodeURIComponent(agentId)}&token=${encodeURIComponent(agentToken)}`;
