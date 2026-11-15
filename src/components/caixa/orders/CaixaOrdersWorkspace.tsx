@@ -307,6 +307,22 @@ export function CaixaOrdersWorkspaceView({
 
   return (
     <div className={"orders-workspace flex flex-col space-y-4"}>
+      <div className="orders-mobile-stages" style={{ gridTemplateColumns: `repeat(${ordersStages.length}, minmax(0, 1fr))` }} role="tablist" aria-label="Etapa dos pedidos">
+        {ordersStages.map(stage => (
+          <button
+            key={stage.id}
+            type="button"
+            role="tab"
+            aria-selected={effectiveMobileOrdersStage === stage.id}
+            onClick={() => setMobileOrdersStage(stage.id)}
+            className={clsx('orders-mobile-stages__button', effectiveMobileOrdersStage === stage.id && 'is-active', stage.id === 'closing' && arrivals.size > 0 && 'orders-stage--arrived')}
+          >
+            <span>{stage.label}</span>
+            <strong>{stage.count}</strong>
+          </button>
+        ))}
+      </div>
+      <div className="orders-workspace__scroll-region">
       <OperationalBanner
         id="orders-heading"
         eyebrow="OPERAÇÃO"
@@ -516,21 +532,6 @@ export function CaixaOrdersWorkspaceView({
           </div>
         </div>
       )}
-      <div className="orders-mobile-stages" style={{ gridTemplateColumns: `repeat(${ordersStages.length}, minmax(0, 1fr))` }} role="tablist" aria-label="Etapa dos pedidos">
-        {ordersStages.map(stage => (
-          <button
-            key={stage.id}
-            type="button"
-            role="tab"
-            aria-selected={effectiveMobileOrdersStage === stage.id}
-            onClick={() => setMobileOrdersStage(stage.id)}
-            className={clsx('orders-mobile-stages__button', effectiveMobileOrdersStage === stage.id && 'is-active', stage.id === 'closing' && arrivals.size > 0 && 'orders-stage--arrived')}
-          >
-            <span>{stage.label}</span>
-            <strong>{stage.count}</strong>
-          </button>
-        ))}
-      </div>
       {/* Kanban operacional universal: mesas, pedidos online e finalização. */}
       <div
         className={clsx("orders-board flex-1 gap-3 pb-3", compactMarmitaria && "orders-board--marmitaria")}
@@ -1061,6 +1062,7 @@ export function CaixaOrdersWorkspaceView({
             )}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
