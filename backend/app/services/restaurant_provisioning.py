@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import json
 import logging
+import os
 import re
 import unicodedata
 import uuid
@@ -637,6 +638,17 @@ def is_provisional_preparation(db: Session, restaurante_id: int) -> bool:
     Durante este estado, a operação comercial (pedidos e abertura de caixa) permanece impedida.
     """
     if restaurante_id is None or restaurante_id <= 0:
+        return False
+
+    # Explicit operator-controlled exemption for an existing tenant.
+    # Does not alter subscriptions, billing, contract acceptance, or other tenants.
+    # Never use a blanket bypass: only IDs explicitly listed by the operator.
+    released_ids = {
+        int(value)
+        for value in os.getenv("KOMA_OPERATIONAL_RELEASE_TENANT_IDS", "").split(",")
+        if value.strip().isdigit() and int(value) > 0
+    }
+    if restaurante_id in released_ids:
         return False
 
     audit = (
