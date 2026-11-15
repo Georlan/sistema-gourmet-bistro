@@ -127,6 +127,39 @@ test('salão permanece disponível com consumo local, legado sem política ou co
   }
 });
 
+type ViewElement = React.ReactElement<Record<string, unknown>>;
+function elements(node: ReactNode): ViewElement[] {
+  if (Array.isArray(node)) return node.flatMap(elements);
+  if (!React.isValidElement<Record<string, unknown>>(node)) return [];
+  return [node, ...elements(node.props.children as ReactNode)];
+}
+function textOf(node: ReactNode): string {
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join('');
+  return React.isValidElement<{ children?: ReactNode }>(node) ? textOf(node.props.children) : '';
+}
+function find(view: ReactNode, predicate: (element: ViewElement) => boolean): ViewElement {
+  const found = elements(view).find(predicate);
+  assert.ok(found, 'Expected control to be rendered');
+  return found;
+}
+function button(view: ReactNode, label: string): ViewElement {
+  return find(view, element => element.type === 'button'
+    && textOf(element).replace(/\s+/g, ' ').trim() === label);
+}
+function invoke(element: ViewElement, eventName: string, event?: unknown) {
+  const handler = element.props[eventName];
+  assert.equal(typeof handler, 'function');
+  (handler as (event?: unknown) => void)(event);
+}
+function freeze<T>(value: T): T {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.values(value).forEach(freeze);
+    Object.freeze(value);
+  }
+  return value;
+}
+
 test('workspace consumes frozen projections: 112/48 remain separate; requested bill remains 160', () => {
   const props = freeze(workspace());
   const markup = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, props));
