@@ -2391,26 +2391,31 @@ def register_agent(
             )
         log.warning("print_agent_registration_collision_preserved")
 
-    cutoff_online = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
-        seconds=AGENT_ONLINE_THRESHOLD_SECONDS * 3
-    )
-    has_active_primary = (
-        db.query(PrintAgentToken.id)
+    # A priority belongs to the restaurant installation, not the session
+    # registering another device. An offline principal remains the principal.
+    # Automatic promotion is only safe for a truly first installation. For
+    # legacy tenants with one active unassigned agent, promote that incumbent
+    # rather than letting a newly connected support computer steal its queue.
+    active_agents = (
+        db.query(PrintAgentToken)
         .filter(
             PrintAgentToken.restaurante_id == rest_id,
             PrintAgentToken.ativo == True,
-            PrintAgentToken.is_primary == True,
-            PrintAgentToken.last_seen_at >= cutoff_online,
         )
-        .first()
-        is not None
+        .all()
     )
+    has_primary = any(bool(agent.is_primary) for agent in active_agents)
+    if not has_primary and len(active_agents) == 1:
+        active_agents[0].is_primary = True
 
-    make_primary = bool(req.is_primary) or (not has_active_primary)
-    if make_primary:
-        db.query(PrintAgentToken).filter(
-            PrintAgentToken.restaurante_id == rest_id,
-        ).update({"is_primary": False}, synchronize_session=False)
+    make_primary = len(active_agents) == 0
+    if req.is_primary and not make_primary:
+        log.info(
+            "print_agent_registration_primary_request_ignored restaurante=%s "
+            "agent=%s; use explicit /set-primary to switch",
+            rest_id,
+            agent_id_clean,
+        )
 
     raw_token = f"koma_ag_{secrets.token_urlsafe(32)}"
     token_h = hash_token(raw_token)
