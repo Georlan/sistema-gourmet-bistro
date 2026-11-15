@@ -76,17 +76,26 @@ test('prompt does not scan automatically; user click connects without pairing or
 });
 
 for (const permission of ['granted', 'unsupported'] as const) {
-  test(`${permission} preserves automatic discovery and on-demand Bluetooth`, async ({ page }) => {
-    const { writes } = await setup(page, permission);
+  test(`${permission} does not scan an administrator's computer until explicit connection`, async ({ page }) => {
+    const { reads, writes } = await setup(page, permission);
+    // Simulate time passing: opening another tenant's settings must never
+    // start the former 11-port scan every five seconds.
+    await page.clock.install();
+    await page.clock.fastForward(20_000);
+    expect(reads).toHaveLength(0);
+    await page.getByRole('button', { name: 'Preparar impressão', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Imprimir teste', exact: true })).toBeEnabled();
     await expect(page.getByText('Remote POS80')).toHaveCount(0);
+    expect(reads.length).toBeGreaterThan(0);
     expect(writes).toHaveLength(0);
   });
 }
 
-test('permission revocation clears local identity and regrant reconciles automatically', async ({ page }) => {
+test('permission revocation clears local identity and regrant reconciles after explicit pairing', async ({ page }) => {
   const { writes } = await setup(page, 'granted');
   const testPrint = page.getByRole('button', { name: 'Imprimir teste', exact: true });
+  await expect(testPrint).toBeDisabled();
+  await page.getByRole('button', { name: 'Preparar impressão', exact: true }).click();
   await expect(testPrint).toBeEnabled();
   await page.evaluate(() => (window as any).setPrintPermission('denied'));
   await expect(testPrint).toBeDisabled();
