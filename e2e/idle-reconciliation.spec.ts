@@ -14,6 +14,10 @@ test('real histories and monitor: idle savings, event bursts, offline and cleanu
   await page.clock.install();
   await page.goto('/e2e/fixtures/idle-reconciliation.html');
   await expect.poll(() => calls).toEqual({pickup:1,courier:1,monitor:1});
+  // A request being issued is not the same as its React state having settled.
+  // Advance the fake 60s only after the monitor rendered the first response,
+  // otherwise the periodic timer may not exist yet under Playwright clock.
+  await expect(page.getByText(/KÔMA Print (não identificado neste computador|desconectado)/)).toBeVisible();
   await page.clock.runFor(60_000);
   expect(calls.pickup).toBe(1); expect(calls.courier).toBe(1);
   expect(calls.monitor).toBeGreaterThanOrEqual(2);
