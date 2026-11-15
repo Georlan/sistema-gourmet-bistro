@@ -233,7 +233,7 @@ test('mobile order stage names match the columns they actually project', () => {
 test('mobile orders prioritize actionable controls above the fold', () => {
   const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
 
-  assert.match(cashierCss, /\.orders-workspace > \.operational-header \.orders-hero__copy > p:last-child/);
+  assert.match(cashierCss, /\.orders-workspace > \.orders-workspace__scroll-region > \.operational-header \.orders-hero__copy > p:last-child/);
   assert.match(cashierCss, /\.orders-search__input \{[\s\S]*min-height: 2\.75rem/);
   assert.match(cashierCss, /\.orders-new-orders \{[\s\S]*min-height: 2\.75rem/);
 });

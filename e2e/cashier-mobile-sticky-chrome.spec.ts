@@ -23,10 +23,12 @@ for (const theme of ['dark', 'light'] as const) {
       await page.setViewportSize(viewport);
       await openCashier(page, theme);
 
-      await page.locator('.cashier-content').evaluate((content) => {
+      const scroller = page.locator('.orders-workspace__scroll-region');
+      await scroller.evaluate((content) => {
         const spacer = document.createElement('div');
         spacer.setAttribute('data-testid', 'sticky-scroll-spacer');
         spacer.style.height = '1600px';
+        spacer.style.flexShrink = '0';
         spacer.style.pointerEvents = 'none';
         content.appendChild(spacer);
       });
@@ -50,8 +52,9 @@ for (const theme of ['dark', 'light'] as const) {
       expect(initial.subnavPosition).toBe('sticky');
       expect(initial.topbarHeight).toBeGreaterThanOrEqual(56);
 
-      await page.locator('.cashier-content').evaluate((content) => content.scrollTo({ top: 700, behavior: 'instant' }));
-      await expect.poll(() => page.locator('.cashier-content').evaluate((content) => content.scrollTop)).toBeGreaterThan(300);
+      await scroller.evaluate((content) => content.scrollTo({ top: 700, behavior: 'instant' }));
+      await expect.poll(() => scroller.evaluate((content) => content.scrollTop)).toBeGreaterThan(300);
+      await expect(page.locator('.cashier-content')).toHaveJSProperty('scrollTop', 0);
 
       const geometry = await page.evaluate(() => {
         const topbar = document.querySelector('.cashier-topbar') as HTMLElement;
