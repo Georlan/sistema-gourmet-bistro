@@ -625,7 +625,7 @@ def enqueue_print_job(
                 PrintJob.destination == destination,
                 PrintJob.source_type == "reimpressao",
                 PrintJob.source_id == str(source_id),
-                PrintJob.payload_text == payload_text.replace("\\x00", "\\\\x00"),
+                PrintJob.payload_text == payload_text.replace("\x00", "\\x00"),
                 or_(
                     PrintJob.status.in_(("pending", "claimed", "printing")),
                     and_(
