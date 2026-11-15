@@ -522,6 +522,7 @@ class PrinterService:
         restaurant_name_position: str = "cabecalho",
         print_footer: Optional[str] = None,
         source_committed: bool = False,
+        paper_width: Optional[int] = None,
     ) -> str:
         """Compatibilidade com os fluxos antigos de produção.
 
@@ -588,9 +589,10 @@ class PrinterService:
                 taxa_servico_padrao=taxa_servico_padrao,
                 apenas_valores=False,
                 restaurant_name_position=restaurant_name_position,
+                paper_width=paper_width,
             )
 
-        width = self.width
+        width = int(paper_width or self.width)
         lines: list[str] = [ESC_TIGHT_LINE + ESC_FONT_A, draw_separator("=", width)]
         position = (
             restaurant_name_position
@@ -695,6 +697,7 @@ class PrinterService:
         apenas_valores: bool = False,
         restaurant_name_position: str = "cabecalho",
         production_hierarchy: bool = False,
+        paper_width: Optional[int] = None,
     ) -> str:
         """Renderizador canônico de mesa.
 
@@ -702,7 +705,7 @@ class PrinterService:
         de toda via automática/reimpressão de Consumo no Local.
         apenas_valores=True mantém o modelo FECHAMENTO.
         """
-        width = self.width
+        width = int(paper_width or self.width)
         # Comandas de cliente usam a mesma fonte de antes, mas com entrelinha
         # confortável. Este renderizador é compartilhado por garçom, Caixa,
         # reimpressão e pedidos locais originados na Maquininha.
@@ -900,8 +903,9 @@ class PrinterService:
         motoboy_nome: str,
         *,
         address_snapshot: Optional[dict] = None,
+        paper_width: Optional[int] = None,
     ) -> str:
-        width = self.width
+        width = int(paper_width or self.width)
         total = _delivery_ticket_total(comanda)
         now = get_operational_now()
         customer = (
@@ -962,15 +966,22 @@ class PrinterService:
         motoboy_nome: str,
         *,
         address_snapshot: Optional[dict] = None,
+        paper_width: Optional[int] = None,
     ) -> str:
         return self._generate_delivery_courier_ticket(
             comanda,
             motoboy_nome,
             address_snapshot=address_snapshot,
+            paper_width=paper_width,
         )
 
-    def generate_delivery_kitchen_ticket(self, comanda) -> str:
-        width = self.width
+    def generate_delivery_kitchen_ticket(
+        self,
+        comanda,
+        *,
+        paper_width: Optional[int] = None,
+    ) -> str:
+        width = int(paper_width or self.width)
         lines = [
             ESC_RECEIPT_LINE + ESC_FONT_A,
             draw_separator("=", width),
@@ -1007,11 +1018,13 @@ class PrinterService:
         motoboy_nome: str,
         *,
         address_snapshot: Optional[dict] = None,
+        paper_width: Optional[int] = None,
     ) -> str:
         return self._generate_delivery_courier_ticket(
             comanda,
             motoboy_nome,
             address_snapshot=address_snapshot,
+            paper_width=paper_width,
         )
 
 
