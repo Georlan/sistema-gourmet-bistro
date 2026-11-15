@@ -99,7 +99,7 @@ test('sem consumo local usa duas etapas para qualquer perfil e plano de impress√
       assert.match(html, /orders-board--without-salon/);
       assert.match(html, /orders-column--digital[^"<]*is-mobile-active/);
       assert.match(html, /Entrega e recebimento/);
-      assert.match(html, /grid-template-columns:repeat\\(2, minmax\\(0, 1fr\\)\\)/);
+      assert.match(html, /grid-template-columns:repeat\(2, minmax\(0, 1fr\)\)/);
     }
   }
 });
