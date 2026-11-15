@@ -1780,6 +1780,7 @@ def get_print_monitor(
         }
 
     return {
+        "restaurante_id": int(rest_id),
         "generated_at": now.isoformat(),
         "history_date": history_date,
         "history_limit": PRINT_HISTORY_VISIBLE_LIMIT,
