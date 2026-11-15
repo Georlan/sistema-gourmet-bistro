@@ -8,6 +8,10 @@ on:
       - 'backend/tests/test_staff_push*.py'
       - 'src/components/caixa/realtime/StaffPushNotifications.tsx'
       - 'src/components/caixa/orders/CaixaOrdersWorkspace.tsx'
+      - 'src/components/caixa/navigation/cashierChrome.css'
+      - 'src/index.css'
+      - 'e2e/cashier-mobile-stage-scroll.spec.ts'
+      - 'e2e/cashier-mobile-sticky-chrome.spec.ts'
       - 'public/koma-sw.js'
       - 'e2e/pocket-android-alerts.spec.ts'
       - '.github/workflows/pocket-android-targeted.yml'
@@ -55,4 +59,4 @@ jobs:
           node-version: '24'
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: KOMA_E2E_PORT=4283 npm run test:e2e -- e2e/pocket-android-alerts.spec.ts e2e/cashier-mobile-sticky-chrome.spec.ts --project=mobile-390 --workers=2
+      - run: KOMA_E2E_PORT=4283 npm run test:e2e -- e2e/pocket-android-alerts.spec.ts e2e/cashier-mobile-sticky-chrome.spec.ts e2e/cashier-mobile-stage-scroll.spec.ts --project=mobile-390 --workers=2
