@@ -59,10 +59,12 @@ def evaluate_operation_readiness(
     blockers: list[str] = []
     if not configured:
         blockers.append("order_types")
-    if dine_in_enabled and table_map_enabled and table_count <= 0:
-        blockers.append("dine_in_tables")
     if delivery_enabled and not delivery_configuration_ready(config, restaurant):
         blockers.append("delivery_configuration")
+
+    # O mapa de mesas é uma capacidade do salão, não um pré-requisito para
+    # liberar pedidos de retirada/delivery ou iniciar a operação do restaurante.
+    advisories = ["dine_in_tables"] if dine_in_enabled and table_map_enabled and table_count <= 0 else []
 
     service_charge_enabled = bool(config and config.taxa_servico_ativa)
     try:
@@ -92,4 +94,5 @@ def evaluate_operation_readiness(
             },
         },
         "blockers": blockers,
+        "advisories": advisories,
     }
