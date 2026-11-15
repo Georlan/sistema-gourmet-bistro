@@ -121,6 +121,7 @@ test('structured data uses canonical prices and safely serializes text', () => {
   const app = data['@graph'].find(item => item['@type'] === 'SoftwareApplication')!;
   assert.equal(app.offers!.lowPrice, String(Math.min(...SUBSCRIPTION_PLANS.map(plan => plan.price))));
   assert.equal(app.offers!.highPrice, String(Math.max(...SUBSCRIPTION_PLANS.map(plan => plan.price))));
+  assert.match(serializeStructuredData(data), /instagram\\.com\\/komafoodbr/);
   const encoded = serializeStructuredData(data);
   assert.ok(!encoded.includes('</script>'));
   assert.deepEqual(JSON.parse(encoded), data);
