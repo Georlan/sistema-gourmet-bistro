@@ -122,6 +122,7 @@ interface PrintJobHistory {
 }
 
 interface PrintMonitorResponse {
+  restaurante_id?: number;
   generated_at: string;
   history_date: string;
   history_limit: number;
@@ -343,7 +344,12 @@ export function PrintMonitorPanel({
 }: PrintMonitorPanelProps) {
   const isMobileClient = isMobileClientDevice();
   const authorization = authHeaders.Authorization || authHeaders.authorization || '';
-  const connectionScope = `${apiBaseUrl}|${authorization}`;
+  // The tenant can change under the same admin login: include all auth/context
+  // headers so pending local discovery from another restaurant is discarded.
+  const connectionScope = `${apiBaseUrl}|${Object.entries(authHeaders)
+    .map(([name, value]) => `${name.toLowerCase()}:${value}`)
+    .sort()
+    .join('|')}`;
   const activeScopeRef = useRef(connectionScope); activeScopeRef.current = connectionScope;
   const [monitorSnapshot, setMonitorSnapshot] = useState<{ scope: string; data: PrintMonitorResponse } | null>(null);
   const monitorData = monitorSnapshot?.scope === connectionScope ? monitorSnapshot.data : null;
@@ -366,7 +372,9 @@ export function PrintMonitorPanel({
     // the customer's printer while an administrator is visiting their tenant.
     // The device ID is stored only after an explicit pairing and must also
     // exist in the currently authenticated restaurant's monitor.
-    const stored = localStorage.getItem('koma_print_mobile_agent_id');
+    const stored = monitorData.restaurante_id
+      ? localStorage.getItem(`koma_print_mobile_agent_id:${monitorData.restaurante_id}`)
+      : null;
     return stored && monitorData.agents.some(agent => agent.agent_id === stored)
       ? stored : null;
   }, [isMobileClient, monitorData]);
@@ -814,7 +822,7 @@ export function PrintMonitorPanel({
         const agentId = data.agent_id || requestedAgentId;
         const agentToken = data.agent_token;
         if (isMobileClient && typeof window !== 'undefined') {
-          localStorage.setItem('koma_print_mobile_agent_id', agentId);
+          localStorage.setItem(`koma_print_mobile_agent_id:${tenantId}`, agentId);
         }
         const restaurantName = (data as Record<string, unknown>)?.restaurant_name as string || 'KOMA GOURMET';
         targetUrl = `koma-print://connect?backend=${encodeURIComponent(apiBaseUrl)}&tenant=${tenantId}&name=${encodeURIComponent(restaurantName)}&agent_id=${encodeURIComponent(agentId)}&token=${encodeURIComponent(agentToken)}`;
