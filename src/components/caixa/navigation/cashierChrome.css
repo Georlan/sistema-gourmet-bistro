@@ -52,7 +52,9 @@
   }
   .cashier-shell--mobile-orders .orders-workspace__scroll-region .orders-column {
     min-height: 0;
-    overflow: visible;
+    /* Column has a rounded border, but the header has a square background.
+       Clip that paint to the parent's radius without creating a new scroller. */
+    overflow: clip;
   }
   .cashier-shell--mobile-orders .orders-workspace__scroll-region .orders-column__body {
     flex: none;

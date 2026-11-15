@@ -17,6 +17,15 @@ test('barra de etapas fixa e lista de pedidos em rolagem independente no celular
   await shell.evaluate(el => el.setAttribute('data-koma-plan', 'pocket'));
   await expect.poll(() => scroller.evaluate(el => el.scrollHeight - el.clientHeight)).toBeGreaterThan(250);
 
+  // A header background must stay INSIDE the rounded column corners.
+  // The mobile scroll fix must not reintroduce overflow: visible on columns.
+  const salonColumn = workspace.locator('.orders-column--salon');
+  await expect(salonColumn).toBeVisible();
+  await expect(salonColumn).toHaveCSS('overflow-x', 'clip');
+  await expect(salonColumn).toHaveCSS('overflow-y', 'clip');
+  const salonRadius = await salonColumn.evaluate(el => parseFloat(getComputedStyle(el).borderTopLeftRadius));
+  expect(salonRadius).toBeGreaterThanOrEqual(16);
+
   const before = await stages.boundingBox();
   expect(before).not.toBeNull();
   await scroller.evaluate(el => { el.scrollTop = 700; });
@@ -38,7 +47,9 @@ test('barra de etapas fixa e lista de pedidos em rolagem independente no celular
   const digital = stages.getByRole('tab', { name: /Digitais/ });
   await digital.click();
   await expect(digital).toHaveAttribute('aria-selected', 'true');
-  await expect(workspace.locator('.orders-column--digital')).toHaveClass(/is-mobile-active/);
+  const digitalColumn = workspace.locator('.orders-column--digital');
+  await expect(digitalColumn).toHaveClass(/is-mobile-active/);
+  await expect(digitalColumn).toHaveCSS('overflow-y', 'clip');
   const salon = stages.getByRole('tab', { name: /Salão/ });
   await salon.click();
   await expect(salon).toHaveAttribute('aria-selected', 'true');
