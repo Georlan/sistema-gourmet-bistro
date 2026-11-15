@@ -2,6 +2,14 @@ import React from 'react';
 
 const QUESTIONS = [
   {
+    question: 'O KÔMA é um sistema de gestão para restaurantes com PDV?',
+    answer: 'Sim. O KÔMA reúne ponto de venda (PDV), mesas, comandas, pedidos de balcão, retirada, delivery e caixa. Estoque, fichas técnicas e relatórios financeiros estão disponíveis nos planos Pro e Premium.',
+  },
+  {
+    question: 'O cardápio digital aceita pedidos sem WhatsApp?',
+    answer: 'Sim. Seu cliente acessa o cardápio pelo link ou QR Code e faz o pedido pelo checkout web. O pedido chega ao PDV do restaurante. Pedidos recebidos por WhatsApp ou telefone são lançados pela equipe.',
+  },
+  {
     question: 'Preciso comprar uma impressora?',
     answer: 'Não. No Pocket, você acompanha a fila de preparo na tela. Para impressão automática no Pro ou Premium, conferimos o modelo e a conexão da sua impressora antes da contratação.',
   },

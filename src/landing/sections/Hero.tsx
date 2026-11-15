@@ -110,7 +110,7 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.45 }}
           >
-            Mesas, balcão, retirada, delivery e caixa em um só lugar. Com cardápio digital incluído desde o primeiro plano.
+            Sistema de gestão para restaurantes com PDV, mesas, comandas, balcão, retirada, delivery e caixa em um só lugar. Cardápio digital incluído desde o primeiro plano.
           </motion.p>
 
           <motion.ul
