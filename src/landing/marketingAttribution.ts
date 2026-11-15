@@ -14,7 +14,8 @@ function sourceFromReferrer(referrer: string): LandingTrafficSource {
     if (host === 'instagram.com' || host.endsWith('.instagram.com')) return 'instagram';
     if (host === 'facebook.com' || host.endsWith('.facebook.com') || host === 'fb.com') return 'facebook';
     if (host === 'bing.com' || host.endsWith('.bing.com')) return 'bing';
-    if (/^(?:[a-z0-9-]+\.)*google\.[a-z.]+$/.test(host)) return 'google';
+    if (['google.com', 'google.com.br', 'google.co.uk', 'google.pt']
+      .some(domain => host === domain || host.endsWith('.' + domain))) return 'google';
     return 'other';
   } catch {
     return 'other';
