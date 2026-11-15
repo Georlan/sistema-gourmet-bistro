@@ -847,16 +847,21 @@ export function PrintMonitorPanel({
     }, 3_000);
   };
 
-  const requestReprint = async (job: PrintJobHistory) => {
+  const requestReprint = async (job: PrintJobHistory, targetThisDevice = false) => {
+    // Manual fallback produces a COPY. Never claim or erase the original
+    // restaurant job just because a support computer is connected.
+    if (targetThisDevice && (!localAgentId || !hasDispatchablePrinter)) return;
     const confirmed = window.confirm(
-      `Reimprimir ${job.reference || friendlyDocumentType(job.document_type)} de ${formatDate(job.created_at)}?`
+      targetThisDevice
+        ? `Imprimir uma CÓPIA de ${job.reference || friendlyDocumentType(job.document_type)} neste dispositivo? O pedido original continuará na fila do restaurante e poderá sair novamente quando a impressora dele voltar.`
+        : `Reimprimir ${job.reference || friendlyDocumentType(job.document_type)} de ${formatDate(job.created_at)}?`
     );
     if (!confirmed) return;
 
     setReprintingId(job.id);
     try {
       const response = await fetch(
-        `${apiBaseUrl}/api/print-agents/jobs/${job.id}/reprint`,
+        `${apiBaseUrl}/api/print-agents/jobs/${job.id}/reprint${targetThisDevice ? `?agent_id=${encodeURIComponent(localAgentId!)}` : ''}`,
         {
           method: 'POST',
           headers: {
@@ -1624,17 +1629,32 @@ export function PrintMonitorPanel({
                         </td>
                         <td className="px-3 py-2 text-right">
                           {job.can_reprint ? (
-                            <button
-                              type="button"
-                              onClick={() => void requestReprint(job)}
-                              disabled={reprintingId === job.id}
-                              className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#35353a] px-2.5 py-1 text-[8px] font-bold text-koma-secondary transition hover:border-gray-500 disabled:opacity-50 cursor-pointer"
-                            >
-                              {reprintingId === job.id
-                                ? <RefreshCw size={10} className="animate-spin" />
-                                : <RotateCcw size={10} />}
-                              Reimprimir
-                            </button>
+                            <div className="flex flex-wrap justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => void requestReprint(job)}
+                                disabled={reprintingId === job.id}
+                                className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#35353a] px-2.5 py-1 text-[8px] font-bold text-koma-secondary transition hover:border-gray-500 disabled:opacity-50 cursor-pointer"
+                              >
+                                {reprintingId === job.id
+                                  ? <RefreshCw size={10} className="animate-spin" />
+                                  : <RotateCcw size={10} />}
+                                Reimprimir
+                              </button>
+                              {localAgentId && hasDispatchablePrinter
+                                && restaurantPrimary?.agent_id !== localAgentId
+                                && !restaurantPrimary?.online && (
+                                  <button
+                                    type="button"
+                                    onClick={() => void requestReprint(job, true)}
+                                    disabled={Boolean(reprintingId)}
+                                    title="Cria uma cópia dirigida somente a este dispositivo. O job original não é removido."
+                                    className="inline-flex min-h-8 items-center gap-1 rounded-lg border border-amber-500/60 px-2 py-1 text-[8px] font-bold text-koma-secondary disabled:opacity-50"
+                                  >
+                                    <Printer size={10} /> Imprimir aqui
+                                  </button>
+                                )}
+                            </div>
                           ) : job.accepted_by_spooler ? (
                             <CheckCircle2 size={13} className="ml-auto text-emerald-400" />
                           ) : null}
