@@ -11,24 +11,25 @@ from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import insert, text
+from sqlalchemy import insert, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..contract_models import ContractAcceptance, RestaurantContractAcceptance
+from ..contract_models import ContractAcceptance, ContractInvite, RestaurantContractAcceptance
 from ..contract_validation import is_valid_cpf, normalize_tax_id, tax_id_kind
 from ..crypt import decrypt_field, encrypt_field
-from ..database import SessionLocal, get_db, require_tenant_id
+from ..database import SessionLocal, get_db, require_tenant_id, tenant_session_scope
 from ..legal_config import (
     LEGAL_SOURCE_BLOB_SHA,
     LEGAL_SOURCE_COMMIT,
     LEGAL_VERSION,
     get_legal_provider_identity,
 )
-from ..models import Usuario
+from ..models import Restaurante, SuperAdminAuditLog, Usuario
+from ..saas_billing_models import SaaSSubscription
 from ..security import IPRateLimiter, get_current_user
 from ..subscription import (
     COMMERCIAL_PRICING_VERSION,
@@ -103,6 +104,74 @@ class ContractAcceptanceRequest(BaseModel):
         if not _EMAIL_RE.fullmatch(normalized):
             raise ValueError("Informe um e-mail válido")
         return normalized
+
+
+class ContractInviteAcceptRequest(BaseModel):
+    token: str = Field(min_length=16, max_length=256)
+    request_id: str = Field(min_length=36, max_length=36)
+    contracting_party_name: str = Field(min_length=2, max_length=255)
+    contracting_party_tax_id: str = Field(min_length=11, max_length=32)
+    restaurant_name: str = Field(min_length=2, max_length=255)
+    representative_name: str = Field(min_length=2, max_length=255)
+    representative_tax_id: str = Field(min_length=11, max_length=32)
+    representative_role: str = Field(min_length=2, max_length=100)
+    email: str = Field(min_length=3, max_length=100)
+    phone: str = Field(min_length=8, max_length=50)
+    powers_declared: bool
+    legal_version: str = Field(min_length=1, max_length=16)
+    legal_source_commit: str = Field(min_length=40, max_length=40)
+    legal_source_blob_sha: str = Field(min_length=40, max_length=40)
+    documents: dict[str, dict[str, Any]]
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("request_id")
+    @classmethod
+    def validate_request_id(cls, value: str) -> str:
+        try:
+            return str(uuid.UUID(value))
+        except ValueError as exc:
+            raise ValueError("request_id deve ser UUID válido") from exc
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not _EMAIL_RE.fullmatch(normalized):
+            raise ValueError("Informe um e-mail válido")
+        return normalized
+
+
+def _as_utc(dt: datetime.datetime) -> datetime.datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=datetime.timezone.utc)
+    return dt.astimezone(datetime.timezone.utc)
+
+
+def _hash_invite_token(token: str) -> str:
+    return hashlib.sha256(token.strip().encode("utf-8")).hexdigest()
+
+
+def _parse_invite_token(token: str) -> int:
+    raw = token.strip()
+    if "." not in raw:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Link de aceite contratual inválido.",
+        )
+    prefix, secret = raw.split(".", 1)
+    if not prefix.isdigit() or not secret or len(secret) < 16:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Link de aceite contratual inválido.",
+        )
+    tenant_id = int(prefix)
+    if tenant_id <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Link de aceite contratual inválido.",
+        )
+    return tenant_id
 
 
 def _clean_text(value: str) -> str:
@@ -201,21 +270,35 @@ def _receipt_from_row(row: ContractAcceptance) -> dict[str, Any]:
     return json.loads(raw)
 
 
-@router.post("/accept", status_code=status.HTTP_201_CREATED)
-def accept_contract(
-    payload: ContractAcceptanceRequest,
+def _build_contract_acceptance_record(
+    *,
     request: Request,
-    background_tasks: BackgroundTasks,
-):
-    _accept_contract_rate_limiter.check(request)
-
-    if not payload.powers_declared:
+    request_id: str,
+    contracting_party_name: str,
+    contracting_party_tax_id: str,
+    restaurant_name_input: str,
+    representative_name_input: str,
+    representative_tax_id_input: str,
+    representative_role: str,
+    email: str,
+    phone_input: str,
+    plan: str,
+    billing_cycle: str,
+    powers_declared: bool,
+    legal_version: str,
+    legal_source_commit: str,
+    legal_source_blob_sha: str,
+    documents: dict[str, dict[str, Any]],
+    provisioning_status: str = "pending",
+    provisioning_message: str = "Aceite registrado. O tenant será vinculado a este protocolo no provisionamento.",
+) -> tuple[str, str, datetime.datetime, dict[str, Any], dict[str, Any], str, str, str, str]:
+    if not powers_declared:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="A declaração de poderes para contratar é obrigatória.",
         )
 
-    contracting_tax_id = normalize_tax_id(payload.contracting_party_tax_id)
+    contracting_tax_id = normalize_tax_id(contracting_party_tax_id)
     contracting_kind = tax_id_kind(contracting_tax_id)
     if contracting_kind is None:
         raise HTTPException(
@@ -223,14 +306,22 @@ def accept_contract(
             detail="CPF/CNPJ do contratante inválido.",
         )
 
-    representative_tax_id = normalize_tax_id(payload.representative_tax_id)
+    representative_tax_id = normalize_tax_id(representative_tax_id_input)
     if not is_valid_cpf(representative_tax_id):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="CPF do representante inválido.",
         )
 
-    snapshots = _validate_legal_bundle(payload)
+    class _BundleView:
+        pass
+
+    bundle_proxy = _BundleView()
+    bundle_proxy.legal_version = legal_version  # type: ignore[attr-defined]
+    bundle_proxy.legal_source_commit = legal_source_commit  # type: ignore[attr-defined]
+    bundle_proxy.legal_source_blob_sha = legal_source_blob_sha  # type: ignore[attr-defined]
+    bundle_proxy.documents = documents  # type: ignore[attr-defined]
+    snapshots = _validate_legal_bundle(bundle_proxy)  # type: ignore[arg-type]
     hashes = {key: _document_hash(value) for key, value in snapshots.items()}
 
     try:
@@ -248,18 +339,18 @@ def accept_contract(
     source_ip, ip_source = _resolve_source_ip(request)
     user_agent = (request.headers.get("user-agent") or "não informado").strip()[:1024]
 
-    fixed_monthly_price = subscription_monthly_price(payload.plan)
-    marketplace_rate = subscription_marketplace_rate(payload.plan)
-    if payload.billing_cycle == "anual":
-        billing_amount = subscription_annual_total(payload.plan)
-        annual_monthly_equivalent = subscription_annual_monthly_equivalent(payload.plan)
+    fixed_monthly_price = subscription_monthly_price(plan)
+    marketplace_rate = subscription_marketplace_rate(plan)
+    if billing_cycle == "anual":
+        billing_amount = subscription_annual_total(plan)
+        annual_monthly_equivalent = subscription_annual_monthly_equivalent(plan)
     else:
         billing_amount = fixed_monthly_price
         annual_monthly_equivalent = None
 
-    restaurant_name = _clean_text(payload.restaurant_name)
-    representative_name = _clean_text(payload.representative_name)
-    phone = _clean_text(payload.phone)
+    restaurant_name = _clean_text(restaurant_name_input)
+    representative_name = _clean_text(representative_name_input)
+    phone = _clean_text(phone_input)
 
     receipt: dict[str, Any] = {
         "protocol": protocol,
@@ -272,23 +363,23 @@ def accept_contract(
             "location": provider.location,
         },
         "contractingParty": {
-            "name": _clean_text(payload.contracting_party_name),
+            "name": _clean_text(contracting_party_name),
             "taxId": contracting_tax_id,
             "taxIdKind": contracting_kind,
             "restaurantName": restaurant_name,
-            "email": payload.email,
+            "email": email,
             "phone": phone,
         },
         "representative": {
             "name": representative_name,
             "taxId": representative_tax_id,
-            "role": _clean_text(payload.representative_role),
+            "role": _clean_text(representative_role),
             "powersDeclared": True,
         },
         "commercial": {
             "pricingVersion": COMMERCIAL_PRICING_VERSION,
-            "plan": payload.plan,
-            "billingCycle": payload.billing_cycle,
+            "plan": plan,
+            "billingCycle": billing_cycle,
             "fixedMonthlyPrice": _serialize_money(fixed_monthly_price),
             "billingAmount": _serialize_money(billing_amount),
             "annualMonthlyEquivalent": _serialize_money(annual_monthly_equivalent),
@@ -307,7 +398,7 @@ def accept_contract(
             "sourceBlobSha": LEGAL_SOURCE_BLOB_SHA,
         },
         "evidence": {
-            "requestId": payload.request_id,
+            "requestId": request_id,
             "sourceIp": source_ip,
             "ipSource": ip_source,
             "sourceIpHash": _evidence_hash(source_ip),
@@ -315,27 +406,27 @@ def accept_contract(
             "userAgentHash": _evidence_hash(user_agent),
         },
         "provisioning": {
-            "status": "pending",
-            "message": "Aceite registrado. O tenant será vinculado a este protocolo no provisionamento.",
+            "status": provisioning_status,
+            "message": provisioning_message,
         },
     }
 
     values = {
         "id": acceptance_id,
         "protocol": protocol,
-        "request_id": payload.request_id,
-        "contracting_party_name": _clean_text(payload.contracting_party_name),
+        "request_id": request_id,
+        "contracting_party_name": _clean_text(contracting_party_name),
         "contracting_party_tax_id_encrypted": encrypt_field(contracting_tax_id),
         "contracting_party_tax_id_last4": contracting_tax_id[-4:],
         "restaurant_name": restaurant_name,
         "representative_name": representative_name,
         "representative_tax_id_encrypted": encrypt_field(representative_tax_id),
         "representative_tax_id_last4": representative_tax_id[-4:],
-        "representative_role": _clean_text(payload.representative_role),
-        "email": payload.email,
+        "representative_role": _clean_text(representative_role),
+        "email": email,
         "phone": phone,
-        "plan": payload.plan,
-        "billing_cycle": payload.billing_cycle,
+        "plan": plan,
+        "billing_cycle": billing_cycle,
         "fixed_monthly_price": fixed_monthly_price,
         "billing_amount": billing_amount,
         "annual_monthly_equivalent": annual_monthly_equivalent,
@@ -361,6 +452,46 @@ def accept_contract(
             json.dumps(receipt, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         ),
     }
+    return acceptance_id, protocol, now, receipt, values, restaurant_name, representative_name, email, phone
+
+
+@router.post("/accept", status_code=status.HTTP_201_CREATED)
+def accept_contract(
+    payload: ContractAcceptanceRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+):
+    _accept_contract_rate_limiter.check(request)
+
+    (
+        _acceptance_id,
+        protocol,
+        now,
+        receipt,
+        values,
+        restaurant_name,
+        representative_name,
+        email,
+        phone,
+    ) = _build_contract_acceptance_record(
+        request=request,
+        request_id=payload.request_id,
+        contracting_party_name=payload.contracting_party_name,
+        contracting_party_tax_id=payload.contracting_party_tax_id,
+        restaurant_name_input=payload.restaurant_name,
+        representative_name_input=payload.representative_name,
+        representative_tax_id_input=payload.representative_tax_id,
+        representative_role=payload.representative_role,
+        email=payload.email,
+        phone_input=payload.phone,
+        plan=payload.plan,
+        billing_cycle=payload.billing_cycle,
+        powers_declared=payload.powers_declared,
+        legal_version=payload.legal_version,
+        legal_source_commit=payload.legal_source_commit,
+        legal_source_blob_sha=payload.legal_source_blob_sha,
+        documents=payload.documents,
+    )
 
     db = SessionLocal()
     try:
@@ -506,3 +637,242 @@ def get_current_contract(
         "acceptedDocuments": accepted_documents,
         "tenantId": tenant_id,
     }
+
+
+def _load_active_invite(db: Session, tenant_id: int, token_hash: str) -> tuple[ContractInvite, Restaurante]:
+    invite = (
+        db.query(ContractInvite)
+        .filter(
+            ContractInvite.restaurante_id == tenant_id,
+            ContractInvite.token_hash == token_hash,
+        )
+        .one_or_none()
+    )
+    if invite is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Link de aceite contratual não encontrado.",
+        )
+    if invite.used_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este link de aceite já foi utilizado.",
+        )
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if _as_utc(invite.expires_at) <= now:
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail="Este link de aceite expirou. Solicite um novo link ao suporte.",
+        )
+    restaurant = (
+        db.query(Restaurante)
+        .filter(Restaurante.id == tenant_id)
+        .one_or_none()
+    )
+    if restaurant is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Restaurante não encontrado.",
+        )
+    existing_contract = (
+        db.query(RestaurantContractAcceptance.id)
+        .filter(RestaurantContractAcceptance.restaurante_id == tenant_id)
+        .first()
+    )
+    if existing_contract is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este restaurante já possui contrato vinculado.",
+        )
+    return invite, restaurant
+
+
+@router.get("/invite")
+def get_contract_invite(
+    request: Request,
+    token: str = Query(..., min_length=16, max_length=256),
+):
+    _accept_contract_rate_limiter.check(request)
+    tenant_id = _parse_invite_token(token)
+    token_hash = _hash_invite_token(token)
+
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, tenant_id):
+            invite, restaurant = _load_active_invite(db, tenant_id, token_hash)
+            return {
+                "restaurantId": str(restaurant.id),
+                "restaurantName": restaurant.nome,
+                "plan": invite.plan,
+                "billingCycle": invite.billing_cycle,
+                "expiresAt": _as_utc(invite.expires_at).isoformat(),
+                "legalVersion": LEGAL_VERSION,
+                "legalSourceCommit": LEGAL_SOURCE_COMMIT,
+                "legalSourceBlobSha": LEGAL_SOURCE_BLOB_SHA,
+            }
+    finally:
+        db.close()
+
+
+@router.post("/invite/accept", status_code=status.HTTP_201_CREATED)
+def accept_contract_invite(
+    payload: ContractInviteAcceptRequest,
+    request: Request,
+):
+    _accept_contract_rate_limiter.check(request)
+    tenant_id = _parse_invite_token(payload.token)
+    token_hash = _hash_invite_token(payload.token)
+
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, tenant_id):
+            invite, restaurant = _load_active_invite(db, tenant_id, token_hash)
+            if str(restaurant.plano or "").strip().lower() != str(invite.plan).strip().lower():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="O plano do restaurante foi alterado após a emissão deste link. Solicite um novo link.",
+                )
+
+            (
+                acceptance_id,
+                protocol,
+                now,
+                receipt,
+                values,
+                restaurant_name,
+                representative_name,
+                email,
+                phone,
+            ) = _build_contract_acceptance_record(
+                request=request,
+                request_id=payload.request_id,
+                contracting_party_name=payload.contracting_party_name,
+                contracting_party_tax_id=payload.contracting_party_tax_id,
+                restaurant_name_input=payload.restaurant_name,
+                representative_name_input=payload.representative_name,
+                representative_tax_id_input=payload.representative_tax_id,
+                representative_role=payload.representative_role,
+                email=payload.email,
+                phone_input=payload.phone,
+                plan=invite.plan,
+                billing_cycle=invite.billing_cycle,
+                powers_declared=payload.powers_declared,
+                legal_version=payload.legal_version,
+                legal_source_commit=payload.legal_source_commit,
+                legal_source_blob_sha=payload.legal_source_blob_sha,
+                documents=payload.documents,
+                provisioning_status="linked",
+                provisioning_message="Aceite registrado via link único e vinculado automaticamente ao restaurante.",
+            )
+
+            consumed = db.execute(
+                update(ContractInvite)
+                .where(
+                    ContractInvite.id == invite.id,
+                    ContractInvite.restaurante_id == tenant_id,
+                    ContractInvite.used_at.is_(None),
+                )
+                .values(
+                    used_at=now,
+                    acceptance_id=acceptance_id,
+                    protocol=protocol,
+                )
+            )
+            if consumed.rowcount != 1:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Este link de aceite já foi utilizado.",
+                )
+
+            db.execute(insert(ContractAcceptance.__table__).values(**values))
+            db.add(
+                RestaurantContractAcceptance(
+                    id=str(uuid.uuid4()),
+                    restaurante_id=tenant_id,
+                    acceptance_id=acceptance_id,
+                    linked_at=now,
+                )
+            )
+
+            existing_subscription = (
+                db.query(SaaSSubscription)
+                .filter(SaaSSubscription.restaurante_id == tenant_id)
+                .one_or_none()
+            )
+            created_subscription = False
+            if existing_subscription is None:
+                db.add(
+                    SaaSSubscription(
+                        restaurante_id=tenant_id,
+                        provider="mercado_pago",
+                        provider_customer_id=None,
+                        provider_subscription_id=None,
+                        payment_method_type=None,
+                        status="onboarding",
+                        trial_started_at=None,
+                        trial_ends_at=None,
+                        billing_cycle=invite.billing_cycle,
+                    )
+                )
+                created_subscription = True
+
+            subscription_status = (
+                "onboarding"
+                if created_subscription
+                else getattr(existing_subscription, "status", None)
+            )
+
+            db.add(
+                SuperAdminAuditLog(
+                    restaurante_id=tenant_id,
+                    actor=f"contract_invite:{invite.id}",
+                    action="CONTRACT_INVITE_ACCEPTED",
+                    reason=invite.reason,
+                    before_data=None,
+                    after_data={
+                        "invite_id": invite.id,
+                        "protocol": protocol,
+                        "acceptance_id": acceptance_id,
+                        "plan": invite.plan,
+                        "billing_cycle": invite.billing_cycle,
+                        "created_subscription": created_subscription,
+                        "subscription_status": subscription_status,
+                    },
+                )
+            )
+
+            from ..services.signup_notifications import enqueue_acceptance
+            enqueue_acceptance(
+                db,
+                protocol=protocol,
+                restaurant_name=restaurant_name,
+                representative_name=representative_name,
+                email=email,
+                phone=phone,
+            )
+            db.commit()
+
+            return {
+                "protocol": protocol,
+                "acceptedAt": now.isoformat(),
+                "restaurantId": str(tenant_id),
+                "restaurantName": restaurant_name,
+                "plan": invite.plan,
+                "billingCycle": invite.billing_cycle,
+                "subscriptionStatus": subscription_status,
+                "receipt": receipt,
+                "message": "Contrato aceito e vinculado ao restaurante com sucesso.",
+            }
+    except HTTPException:
+        if db.in_transaction():
+            db.rollback()
+        raise
+    except IntegrityError as exc:
+        if db.in_transaction():
+            db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este aceite já foi registrado ou o restaurante já possui contrato vinculado.",
+        ) from exc
+    finally:
+        db.close()
