@@ -87,16 +87,21 @@ test('aceite reaproveita composição persistida e preserva personalizações di
   assert.doesNotMatch(html, /Não produzir|Cancelado/);
 });
 
-test('Marmitaria sem consumo local tem duas etapas e inicia no preparo no mobile', () => {
+test('sem consumo local usa duas etapas para qualquer perfil e plano de impressão', () => {
   const base = workspace([]);
-  const html = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
-    ...base, restaurantConfig: { operation_profile: 'marmitaria', tipos_pedido_ativos: ['delivery'] },
-  }));
-  assert.doesNotMatch(html, /orders-column--salon|Mesas em Atendimento/);
-  assert.match(html, /orders-board--marmitaria/);
-  assert.match(html, /orders-column--digital[^"<]*is-mobile-active/);
-  assert.match(html, /Entrega e recebimento/);
-  assert.match(html, /grid-template-columns:repeat\(2, minmax\(0, 1fr\)\)/);
+  for (const profile of ['marmitaria', 'generic', 'pizzaria', 'acai']) {
+    for (const hasPrinting of [true, false]) {
+      const html = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, {
+        ...base, hasPrinting,
+        restaurantConfig: { operation_profile: profile, tipos_pedido_ativos: ['delivery', 'retirada'] },
+      }));
+      assert.doesNotMatch(html, /orders-column--salon|Mesas em Atendimento/);
+      assert.match(html, /orders-board--without-salon/);
+      assert.match(html, /orders-column--digital[^"<]*is-mobile-active/);
+      assert.match(html, /Entrega e recebimento/);
+      assert.match(html, /grid-template-columns:repeat\\(2, minmax\\(0, 1fr\\)\\)/);
+    }
+  }
 });
 
 test('busca sem resultados não esconde um atendimento local ainda ativo', () => {
@@ -108,53 +113,19 @@ test('busca sem resultados não esconde um atendimento local ainda ativo', () =>
   assert.match(html, /orders-column--salon/);
 });
 
-test('outros perfis e Marmitaria com consumo local ou mesas ativas preservam o salão', () => {
+test('salão permanece disponível com consumo local, legado sem política ou comandas ativas', () => {
   const cases = [
-    { base: workspace([]), config: { operation_profile: 'pizzaria', tipos_pedido_ativos: ['delivery'] } },
-    { base: workspace([]), config: { operation_profile: 'generic', tipos_pedido_ativos: ['delivery'] } },
-    { base: workspace([]), config: { operation_profile: 'marmitaria', tipos_pedido_ativos: ['delivery', 'consumo_local'] } },
-    { base: workspace(), config: { operation_profile: 'marmitaria', tipos_pedido_ativos: ['delivery'] } },
+    { base: workspace([]), config: { operation_profile: 'pizzaria', tipos_pedido_ativos: ['delivery', 'consumo_local'] } },
+    { base: workspace([]), config: { operation_profile: 'generic', tipos_pedido_ativos: ['consumo_local'] } },
+    { base: workspace(), config: { operation_profile: 'generic', tipos_pedido_ativos: ['delivery'] } },
     { base: workspace([]), config: { operation_profile: 'marmitaria' } },
   ];
   for (const { base, config } of cases) {
     const html = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, { ...base, restaurantConfig: config }));
     assert.match(html, /orders-column--salon/);
-    assert.doesNotMatch(html, /orders-board--marmitaria/);
+    assert.doesNotMatch(html, /orders-board--without-salon/);
   }
 });
-
-type ViewElement = React.ReactElement<Record<string, unknown>>;
-function elements(node: ReactNode): ViewElement[] {
-  if (Array.isArray(node)) return node.flatMap(elements);
-  if (!React.isValidElement<Record<string, unknown>>(node)) return [];
-  return [node, ...elements(node.props.children as ReactNode)];
-}
-function textOf(node: ReactNode): string {
-  if (typeof node === 'string' || typeof node === 'number') return String(node);
-  if (Array.isArray(node)) return node.map(textOf).join('');
-  return React.isValidElement<{ children?: ReactNode }>(node) ? textOf(node.props.children) : '';
-}
-function find(view: ReactNode, predicate: (element: ViewElement) => boolean): ViewElement {
-  const found = elements(view).find(predicate);
-  assert.ok(found, 'Expected control to be rendered');
-  return found;
-}
-function button(view: ReactNode, label: string): ViewElement {
-  return find(view, element => element.type === 'button'
-    && textOf(element).replace(/\s+/g, ' ').trim() === label);
-}
-function invoke(element: ViewElement, eventName: string, event?: unknown) {
-  const handler = element.props[eventName];
-  assert.equal(typeof handler, 'function');
-  (handler as (event?: unknown) => void)(event);
-}
-function freeze<T>(value: T): T {
-  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
-    Object.values(value).forEach(freeze);
-    Object.freeze(value);
-  }
-  return value;
-}
 
 test('workspace consumes frozen projections: 112/48 remain separate; requested bill remains 160', () => {
   const props = freeze(workspace());
