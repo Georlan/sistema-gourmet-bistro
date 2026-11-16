@@ -8,7 +8,7 @@ from app.contract_models import ContractAcceptance, ContractInvite, RestaurantCo
 from app.database import Base, SessionLocal, engine
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.main import app
-from app.models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
+from app.models import Categoria, ConfiguracaoRestaurante, Produto, Restaurante, SuperAdminAuditLog, Usuario
 from app.restaurant_profile_models import RestauranteOperationProfile
 from app.saas_billing_models import SaaSSubscription
 from app.security import create_access_token
@@ -224,3 +224,87 @@ def test_expired_contract_invite_is_rejected():
 
     res_preview = client.get("/api/contracts/invite", params={"token": token})
     assert res_preview.status_code == 410
+
+
+def test_contract_invite_accept_then_release_with_post_trial_pix():
+    client = TestClient(app)
+    admin_headers = _superadmin_headers()
+
+    res_provision = client.post(
+        "/api/super-admin/restaurantes/provisionar",
+        headers=admin_headers,
+        json={
+            "restaurant_id": TEST_TENANT_ID,
+            "name": "JE Lanches Link Pix",
+            "subdomain": "je-lanches-link-pix-9877",
+            "plan": "pocket",
+            "operation_profile": "generic",
+            "admin_name": "Admin Link Pix",
+            "admin_email": "admin.linkpix@koma.test",
+            "temporary_password": "SenhaForteConvite123!",
+            "defer_trial": True,
+        },
+    )
+    assert res_provision.status_code == 201
+
+    with SessionLocal() as db:
+        rest = db.query(Restaurante).filter(Restaurante.id == TEST_TENANT_ID).one()
+        rest.socials = {"whatsapp": "85988887777"}
+        rest.horarios_funcionamento = [{"days": "Seg a Dom", "hours": "18:00 - 23:30"}]
+        config = db.query(ConfiguracaoRestaurante).filter(ConfiguracaoRestaurante.restaurante_id == TEST_TENANT_ID).one()
+        config.tipos_pedido_ativos = ["retirada"]
+        cat = Categoria(id="cat-link-pix", restaurante_id=TEST_TENANT_ID, nome="Lanches")
+        db.add(cat)
+        db.flush()
+        db.add(Produto(id="prod-link-pix-1", restaurante_id=TEST_TENANT_ID, categoria_id="cat-link-pix", nome="X-Tudo", preco=25.0, ativo=True))
+        db.commit()
+
+    res_invite = client.post(
+        "/api/super-admin/contracts/invite",
+        headers=admin_headers,
+        json={"restaurant_id": TEST_TENANT_ID, "billing_cycle": "mensal", "expires_hours": 24},
+    )
+    assert res_invite.status_code == 201
+    token = res_invite.json()["token"]
+
+    res_accept = client.post(
+        "/api/contracts/invite/accept",
+        json={
+            "request_id": str(uuid.uuid4()),
+            "token": token,
+            "contracting_party_name": "JE Lanches LTDA",
+            "contracting_party_tax_id": VALID_CNPJ,
+            "restaurant_name": "JE Lanches",
+            "representative_name": "Joao",
+            "representative_tax_id": VALID_CPF,
+            "representative_role": "Sócio",
+            "email": "contato.invite.pix@jelanches.test",
+            "phone": "85988887777",
+            "powers_declared": True,
+            "legal_version": LEGAL_VERSION,
+            "legal_source_commit": LEGAL_SOURCE_COMMIT,
+            "legal_source_blob_sha": LEGAL_SOURCE_BLOB_SHA,
+            "documents": {
+                "terms": {"slug": "termos", "version": LEGAL_VERSION, "sections": []},
+                "commercial": {"slug": "planos", "version": LEGAL_VERSION, "sections": []},
+                "dpa": {"slug": "dpa", "version": LEGAL_VERSION, "sections": []},
+                "privacy": {"slug": "privacidade", "version": LEGAL_VERSION, "sections": []},
+            },
+        },
+        headers={"cf-connecting-ip": "203.0.113.27", "user-agent": "KomaTest/1.0"},
+    )
+    assert res_accept.status_code == 201, res_accept.text
+
+    res_rel = client.post(
+        f"/api/super-admin/onboarding/restaurantes/{TEST_TENANT_ID}/release",
+        headers=admin_headers,
+        json={"payment_method_type": "pix"},
+    )
+    assert res_rel.status_code == 200, res_rel.text
+    assert res_rel.json()["trialStarted"] is True
+    assert res_rel.json()["subscription"]["paymentMethod"] == "pix"
+
+    with SessionLocal() as db:
+        db.query(Produto).filter(Produto.restaurante_id == TEST_TENANT_ID).delete()
+        db.query(Categoria).filter(Categoria.restaurante_id == TEST_TENANT_ID).delete()
+        db.commit()

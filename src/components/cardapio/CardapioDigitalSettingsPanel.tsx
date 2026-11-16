@@ -493,7 +493,12 @@ export function CardapioDigitalSettingsPanel({
           markSaved();
           returnToInitialSetup();
         } else {
-          setFeedback({ type: 'error', text: 'Dados salvos. Para concluir esta etapa, informe nome público, WhatsApp e endereço.' });
+          setFeedback({
+            type: 'error',
+            text: status?.onboarding?.provisionalPreparation
+              ? 'Dados salvos. Para concluir esta etapa, informe nome público e WhatsApp (o endereço definitivo pode ser completado depois).'
+              : 'Dados salvos. Para concluir esta etapa, informe nome público, WhatsApp e endereço.',
+          });
         }
       }
     } catch (error) {
