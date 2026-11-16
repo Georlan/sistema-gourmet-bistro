@@ -26,7 +26,17 @@ test('only public brand hosts receive prerendered landing, with canonical and se
       assert.equal(await response.text(), 'public marketing');
       assert.match(response.headers.get('Link')!, /https:\/\/komafood.com.br\//);
       assert.match(response.headers.get('X-Robots-Tag')!, /^index/);
-      assert.equal(response.headers.get('Content-Security-Policy'), "default-src 'self'");
+      const policy = response.headers.get('Content-Security-Policy') || '';
+      assert.match(policy, /default-src 'self'/);
+      if (host === 'komafood.com.br') {
+        assert.match(policy, /script-src 'self' https:\/\/www\.googletagmanager\.com/);
+        assert.match(policy, /connect-src 'self' https:\/\/www\.google-analytics\.com/);
+        assert.match(policy, /https:\/\/region1\.google-analytics\.com/);
+        assert.match(policy, /img-src 'self' https:\/\/www\.google-analytics\.com/);
+        assert.doesNotMatch(policy, /unsafe-inline|unsafe-eval/);
+      } else {
+        assert.equal(policy, "default-src 'self'", 'www host must not receive external marketing CSP');
+      }
       assert.equal(response.headers.get('X-Frame-Options'), 'DENY');
     }
   }
@@ -42,6 +52,7 @@ test('app/admin/preview and operational view keep the original shell and noindex
     assert.equal(await response.text(), 'operational shell');
     assert.equal(response.headers.get('X-Robots-Tag'), 'noindex');
     assert.equal(response.headers.get('Link'), null);
+    assert.equal(response.headers.get('Content-Security-Policy'), "default-src 'self'");
   }
 });
 
