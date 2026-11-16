@@ -1,5 +1,5 @@
 import React from 'react';
-import tabletShell from '../../assets/koma-tablet-graphite-shell-v2.png';
+import tabletShell from '../../assets/koma-tablet-graphite-shell-v2.webp';
 import { ProductScreen } from './ProductScreen';
 import { EditableTabletFrame } from './EditableTabletFrame';
 import type { DeviceScreenshot } from './DeviceScreenshot';

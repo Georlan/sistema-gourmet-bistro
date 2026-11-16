@@ -1,5 +1,5 @@
 import React from 'react';
-import laptopShell from '../../assets/koma-notebook-graphite-shell-v2.png';
+import laptopShell from '../../assets/koma-notebook-graphite-shell-v2.webp';
 import { EditableLaptopFrame } from './EditableLaptopFrame';
 import { ProductScreen } from './ProductScreen';
 import type { DeviceScreenshot } from './DeviceScreenshot';

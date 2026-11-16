@@ -40,7 +40,12 @@ export async function prerenderLanding(root: string, outDir: string) {
       entry.css?.forEach(file => css.add(file));
       entry.imports?.forEach(collectCss);
     };
-    collectCss('src/landing/LandingPage.tsx');
+    const publicEntry = manifest['src/landing/publicMain.tsx'];
+    const operationalEntry = manifest['index.html'];
+    if (!publicEntry || !operationalEntry) throw new Error('Missing separate public and operational Vite entries');
+    collectCss('src/landing/publicMain.tsx');
+    const operationalCss = new Set(operationalEntry.css ?? []);
+    for (const file of operationalCss) css.delete(file);
     const escape = (text: string) => text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const head = [
       `<meta name="description" content="${escape(seo.description)}" />`,
@@ -63,7 +68,16 @@ export async function prerenderLanding(root: string, outDir: string) {
       `<script defer src="/ga4-landing.js" data-measurement-id="${ga4MeasurementId}"></script>`,
       ...[...css].map(file => `<link rel="stylesheet" href="/${file}" />`),
     ].join('\n');
-    const shell = await readFile(path.join(directory, 'index.html'), 'utf8');
+    let shell = await readFile(path.join(directory, 'index.html'), 'utf8');
+    // Never hydrate the public pre-render with the operational main entry.
+    // It would re-introduce the entire operational CSS and thousands of unused modules.
+    const operationalScript = `<script type="module" crossorigin src="/${operationalEntry.file}"></script>`;
+    const publicScript = `<script type="module" crossorigin src="/${publicEntry.file}"></script>`;
+    if (!shell.includes(operationalScript)) throw new Error('Missing operational entry script in shell');
+    shell = shell.replace(operationalScript, publicScript);
+    for (const file of operationalCss) {
+      shell = shell.replace(`<link rel="stylesheet" crossorigin href="/${file}">`, '');
+    }
     const document = shell.replace(/<title>[^<]*<\/title>/, `<title>${escape(seo.title)}</title>`)
       .replace('</head>', `${head}\n</head>`)
       .replace('<div id="root"></div>', `<div id="root">${markup}</div>`);

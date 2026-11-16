@@ -52,7 +52,15 @@ export default defineConfig(() => {
       },
     ],
     css: { postcss: { plugins: [scaleOperationalText()] } },
-    build: { manifest: true },
+    build: {
+      manifest: true,
+      rollupOptions: {
+        input: {
+          app: path.resolve(__dirname, 'index.html'),
+          publicMarketing: path.resolve(__dirname, 'src/landing/publicMain.tsx'),
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

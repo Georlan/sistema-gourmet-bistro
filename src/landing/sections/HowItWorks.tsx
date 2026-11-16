@@ -4,7 +4,7 @@ import { EditablePhoneFrame, type PhoneScreenshot } from '../product/EditablePho
 import { ProductScreen } from '../product/ProductScreen';
 import { TabletFrame } from '../product/TabletFrame';
 import type { DeviceScreenshot } from '../product/DeviceScreenshot';
-import phoneShell from '../../assets/koma-phone-graphite-shell-v2.png';
+import phoneShell from '../../assets/koma-phone-graphite-shell-v2.webp';
 import '../product/editable-phone.css';
 
 export const PRODUCT_TOUR = [
