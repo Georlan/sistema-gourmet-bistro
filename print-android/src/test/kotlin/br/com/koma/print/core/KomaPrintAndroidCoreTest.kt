@@ -403,6 +403,16 @@ class KomaPrintAndroidCoreTest {
         assertTrue(OemCompatibilityPolicy.lockScreenGuidanceForManufacturer("Xiaomi").contains("HyperOS"))
         assertTrue(OemCompatibilityPolicy.lockScreenGuidanceForManufacturer("samsung").contains("One UI"))
     }
+
+    @Test
+    fun `idle poll backoff scales smoothly from 4s to 12s and resets on work`() {
+        assertEquals(4_000L, nextIdlePollIntervalMs(0))
+        assertEquals(6_000L, nextIdlePollIntervalMs(1))
+        assertEquals(8_000L, nextIdlePollIntervalMs(2))
+        assertEquals(10_000L, nextIdlePollIntervalMs(3))
+        assertEquals(12_000L, nextIdlePollIntervalMs(4))
+        assertEquals(12_000L, nextIdlePollIntervalMs(10))
+    }
 }
 
 private class FakeBluetoothSppTransport(

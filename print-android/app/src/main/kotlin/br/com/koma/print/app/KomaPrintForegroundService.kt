@@ -17,6 +17,7 @@ import br.com.koma.print.core.AndroidPrintWorker
 import br.com.koma.print.core.FilePrintJournal
 import br.com.koma.print.core.JdkPrintAgentHttpTransport
 import br.com.koma.print.core.KomaPrintAgentClient
+import br.com.koma.print.core.nextIdlePollIntervalMs
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.min
 
@@ -101,6 +102,7 @@ class KomaPrintForegroundService : Service() {
 
         var lastHeartbeatEpochMs = 0L
         var consecutiveErrors = 0
+        var consecutiveEmptyCycles = 0
 
         while (running.get() && !Thread.currentThread().isInterrupted) {
             val cfg = store.load()
@@ -154,10 +156,21 @@ class KomaPrintForegroundService : Service() {
                     }
                     updateStatusAndNotification(store, statusText)
 
+                    if (outcome.claimedCount > 0 || outcome.executedCommandId != null || outcome.failedJobId != null) {
+                        consecutiveEmptyCycles = 0
+                    } else {
+                        consecutiveEmptyCycles = (consecutiveEmptyCycles + 1).coerceAtMost(10)
+                    }
+
                     sleepNextMs = when {
                         outcome.failedJobId != null -> ERROR_BASE_BACKOFF_MS
                         outcome.claimedCount >= 5 -> FAST_BATCH_FOLLOWUP_MS
-                        else -> IDLE_POLL_INTERVAL_MS
+                        outcome.claimedCount > 0 || outcome.executedCommandId != null -> IDLE_POLL_INTERVAL_MS
+                        else -> nextIdlePollIntervalMs(
+                            consecutiveEmptyCycles = consecutiveEmptyCycles,
+                            baseIntervalMs = IDLE_POLL_INTERVAL_MS,
+                            maxIntervalMs = MAX_IDLE_POLL_INTERVAL_MS,
+                        )
                     }
                 } catch (revoked: AgentRevokedException) {
                     updateStatusAndNotification(
@@ -270,6 +283,7 @@ class KomaPrintForegroundService : Service() {
 
         private const val HEARTBEAT_INTERVAL_MS = 30_000L
         private const val IDLE_POLL_INTERVAL_MS = 4_000L
+        private const val MAX_IDLE_POLL_INTERVAL_MS = 12_000L
         private const val FAST_BATCH_FOLLOWUP_MS = 800L
         private const val ERROR_BASE_BACKOFF_MS = 4_000L
         private const val MAX_BACKOFF_MS = 20_000L

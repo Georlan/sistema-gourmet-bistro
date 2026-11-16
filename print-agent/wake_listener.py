@@ -21,8 +21,8 @@ from retry_budget import RetryBudget
 log = logging.getLogger("print-agent.wakeup")
 # Com SSE/LISTEN saudável, polling é apenas reconciliação de segurança.
 # Um evento print-job acorda o agente imediatamente; se o push cair,
-# push_available volta a False e o loop retoma o polling rápido configurado.
-PUSH_FALLBACK_POLL_SECONDS = 30.0
+# push_available volta a False e o loop retoma o polling adaptativo configurado.
+PUSH_FALLBACK_POLL_SECONDS = 60.0
 
 
 def iter_sse_events(lines: Iterable[object]) -> Iterator[Tuple[str, str]]:
