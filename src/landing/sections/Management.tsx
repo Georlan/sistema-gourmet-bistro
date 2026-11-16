@@ -7,17 +7,17 @@ const GROUPS = [
     slug: 'vender',
     eyebrow: 'VENDER',
     icon: ShoppingBag,
-    title: 'ATENDA EM TODOS OS CANAIS.',
-    text: 'Salão, balcão, retirada, delivery e cardápio digital alimentam a mesma operação.',
-    features: ['PDV, mesas e comandas', 'Retirada e delivery', 'Cardápio digital e QR Code em todos os planos'],
+    title: 'PDV, MESAS E COMANDAS.',
+    text: 'Controle mesas e comandas digitais pelo PDV e App do Garçom. Salão, balcão e pedidos online alimentam a mesma operação.',
+    features: ['App do Garçom no navegador desde o Pocket', 'Retirada e delivery próprio', 'Cardápio digital com QR Code integrado ao PDV'], 
   },
   {
     num: '02',
     slug: 'operar',
     eyebrow: 'OPERAR',
     icon: Workflow,
-    title: 'AGILIZE O PREPARO.',
-    text: 'Itens e observações chegam à produção sem precisar repetir o pedido.',
+    title: 'COZINHA EM SINCRONIA.',
+    text: 'A fila de preparo recebe itens e observações na tela. Nos planos Pro e Premium, o KDS organiza a cozinha sem redigitar pedidos.',
     features: ['Fila de preparo na tela em todos os planos', 'KDS e impressão automática no Pro e Premium', 'Status compartilhado pela equipe'],
   },
   {
@@ -37,7 +37,7 @@ export function Management() {
       <div className="koma-section-heading koma-section-heading--light">
         <span>02 / O QUE VOCÊ RESOLVE</span>
         <h2 id="management-title">VENDER. OPERAR.<br />CONTROLAR.</h2>
-        <p>PDV, pedidos, cardápio digital e caixa no mesmo fluxo. Estoque e relatórios nos planos Pro e Premium.</p>
+        <p>Sistema de comandas para restaurantes, cardápio digital integrado ao PDV e delivery próprio no mesmo fluxo. Estoque e relatórios nos planos Pro e Premium.</p>
       </div>
 
       <div className="koma-management-grid">

@@ -55,6 +55,17 @@ test('tenant root and activation/deep links are forwarded without rewriting', as
   }
 });
 
+test('public legal SPA shells stay accessible but do not compete with the marketing homepage', async () => {
+  for (const path of ['/legal', '/legal/termos', '/legal/privacidade']) {
+    const { response } = await serve(`https://komafood.com.br${path}`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('X-Robots-Tag'), 'noindex');
+    assert.equal(response.headers.get('Link'), null);
+  }
+  const { response } = await serve('https://komafood.com.br/');
+  assert.match(response.headers.get('X-Robots-Tag')!, /^index/);
+});
+
 test('both internal asset URLs are blocked while the public root avoids Pages extension redirects', async () => {
   for (const path of ['/seo-landing.html', '/seo-landing']) {
     const { response, paths } = await serve(`https://komafood.com.br${path}`);

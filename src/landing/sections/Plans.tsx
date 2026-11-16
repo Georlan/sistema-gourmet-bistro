@@ -20,7 +20,7 @@ const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
   pocket: {
     stage: 'ENTRADA SIMPLES',
     action: 'COMEÇAR',
-    fit: 'Para quem quer vender no salão, balcão e delivery com uma operação enxuta.',
+    fit: 'Para restaurantes pequenos e operações enxutas que atendem salão, balcão e delivery próprio.',
     note: 'Tudo o que é essencial para começar: cardápio digital, App do Garçom, equipe, pedidos, caixa, clientes e fila de preparo na tela.',
   },
   pro: {

@@ -45,19 +45,22 @@ export function LeadCaptureModal({ open, onClose, selection }: LeadCaptureModalP
     submitting.current = true;
     setSubmitStatus('sending');
     try {
+      const trafficSource = currentLandingTrafficSource();
+      const interest = selection ? `Demonstração: ${selection.plan} · ${selection.billing}` : 'Demonstração do KÔMA';
       const response = await fetch(`${API_BASE_URL}/api/leads/landing`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nome: form.responsavel, empresa_nome: form.estabelecimento,
           whatsapp: form.whatsapp, consent_whatsapp: consent,
-          interesse: selection ? `Demonstração: ${selection.plan} · ${selection.billing}` : 'Demonstração do KÔMA' }),
+          interesse: `${interest} · origem: ${trafficSource}` }),
         signal: AbortSignal.timeout(15000),
       });
       if (!response.ok) throw new Error('capture_failed');
       const result = await response.json();
       if (!result.success) throw new Error('capture_failed');
       trackAnalyticsEvent('landing_demo_submitted', {
-        traffic_source: currentLandingTrafficSource(),
+        traffic_source: trafficSource,
         entry_point: selection ? 'plan' : 'general',
+        deduplicated: result.deduplicated === true,
       });
       setSubmitStatus('sent');
     } catch {

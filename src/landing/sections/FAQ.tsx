@@ -6,6 +6,14 @@ const QUESTIONS = [
     answer: 'Sim. O KÔMA reúne ponto de venda (PDV), mesas, comandas, pedidos de balcão, retirada, delivery e caixa. Estoque, fichas técnicas e relatórios financeiros estão disponíveis nos planos Pro e Premium.',
   },
   {
+    question: 'Como funcionam as mesas e comandas digitais no App do Garçom?',
+    answer: 'No salão, sua equipe acompanha mesas e comandas pelo App do Garçom no navegador, com informações sincronizadas ao PDV e ao caixa. O recurso está incluído desde o Pocket.',
+  },
+  {
+    question: 'O KÔMA atende restaurantes pequenos com delivery próprio?',
+    answer: 'Sim. O Pocket reúne atendimento, caixa, cardápio digital e delivery próprio com 0% de comissão KÔMA sobre pedidos online. Há mensalidade e tarifas de processamento de pagamento cobradas por terceiros, quando aplicáveis.',
+  },
+  {
     question: 'O cardápio digital aceita pedidos sem WhatsApp?',
     answer: 'Sim. Seu cliente acessa o cardápio pelo link ou QR Code e faz o pedido pelo checkout web. O pedido chega ao PDV do restaurante. Pedidos recebidos por WhatsApp ou telefone são lançados pela equipe.',
   },
