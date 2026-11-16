@@ -1,6 +1,12 @@
 # Contrato de entrega: Caixa → Pedido → Entregador
 
-Estado: implementação local, branch `design/courier-refinement-20261025`. Não certifica integrações comerciais nem publicação.
+## Reconciliação incerta e quitação de entrega concluída
+
+- Releitura falha após reconexão (`refreshFailed`) não pode permitir confirmação sobre a lista antiga: bloqueia botão e handler em `MotoboyPwaPage` até `GET /comandas/motoboys/painel-entregador` válido; Maps e leitura da lista continuam acessíveis.
+- HTTP `408` e `5xx` na confirmação (`POST /comandas/motoboys/pedidos/{id}/confirmar-entrega`) seguem o mesmo tratamento de resultado incerto de `AbortError`/`TypeError`: fecham o diálogo, limpam o código digitado, marcam `uncertainId` e disparam releitura autoritativa sem repetir `POST` automaticamente.
+- `backend/app/routes/caixa.py::_apply_fully_paid_state` fecha financeiramente a comanda quando `tipo` é `delivery`/`entrega`, `delivery_status` normaliza para `OrderStatus.COMPLETED` e o saldo foi quitado. Pagamento parcial mantém a conta aberta; pagamento durante preparo/trânsito não conclui a operação logística.
+
+Estado: contrato vigente na `main`. Não certifica integrações comerciais externas.
 
 ## Fonte de verdade e entrada
 

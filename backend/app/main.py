@@ -108,6 +108,7 @@ async def lifespan(app: FastAPI):
         print("[OUTBOX] Worker de integração assíncrona iniciado no lifespan.", flush=True)
 
     from .services.order_chat_hub import order_chat_hub
+    from .services.print_delivery import print_wakeup_hub
     from .websocket_manager import manager
     manager.start()
     # O listener do chat inicia no primeiro assinante SSE, evitando reservar uma
@@ -118,6 +119,7 @@ async def lifespan(app: FastAPI):
     finally:
         import asyncio
         await asyncio.to_thread(order_chat_hub.stop)
+        await asyncio.to_thread(print_wakeup_hub.stop)
         await asyncio.to_thread(manager.stop)
         if online_reconciliation_task:
             import contextlib
