@@ -82,3 +82,28 @@ def test_new_order_and_transient_network_failure_adjust_backoff(tmp_path):
     # Loop 6 (empty after jobs -> 1s again, NOT 5s!), Loop 7 breaks before wait.
     assert wait_calls == [1.0, 2.0, 4.0, 1.0]
     assert (tmp_path / "out").exists()
+
+
+def test_first_heartbeat_fires_immediately_even_when_system_uptime_is_low(tmp_path):
+    from threading import Lock
+    from worker import AgentMaintenance
+
+    cfg = AgentConfig(
+        api_url="https://api.example.test",
+        agent_token="tok",
+        adapter="file",
+        output_dir=str(tmp_path / "out"),
+        config_path=str(tmp_path / "config.json"),
+        heartbeat_interval_seconds=25.0,
+    )
+    client = MagicMock()
+    client.heartbeat.return_value = {"status": "ok"}
+    adapter = MagicMock()
+    adapter.get_diagnostics.return_value = {"printers": []}
+
+    with patch("worker.KomaApiClient", return_value=client), \
+         patch("worker.time.monotonic", return_value=1.0):
+        maintenance = AgentMaintenance(cfg, adapter, Lock())
+        maintenance.tick()
+
+    client.heartbeat.assert_called_once()

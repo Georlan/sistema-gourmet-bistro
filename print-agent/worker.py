@@ -55,7 +55,7 @@ class AgentMaintenance:
         self.hardware_lock = hardware_lock
         self.client = KomaApiClient(config.api_url, config.agent_token)
         self.snapshot = ({}, 0.0)
-        self.last_heartbeat = 0.0
+        self.last_heartbeat = None
         self.last_command_id = ""
         self.last_command_result = None
         self.refresh()
@@ -83,7 +83,10 @@ class AgentMaintenance:
         now = time.monotonic()
         if now - self.snapshot[1] >= DIAGNOSTIC_REFRESH_INTERVAL_SECONDS:
             self.refresh()
-        if now - self.last_heartbeat < self.config.heartbeat_interval_seconds:
+        if (
+            self.last_heartbeat is not None
+            and now - self.last_heartbeat < self.config.heartbeat_interval_seconds
+        ):
             return
         self.last_heartbeat = now
         response = self.client.heartbeat(diagnostics=self.snapshot[0])
