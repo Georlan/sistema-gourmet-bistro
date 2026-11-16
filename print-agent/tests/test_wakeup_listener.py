@@ -33,7 +33,7 @@ def test_ready_and_print_job_interrupt_idle_wait():
     listener._consume_event("transport", '{"push_available":true}')
     assert listener.push_available is True
     assert wakeup.is_set() is False
-    assert listener.fallback_poll_seconds(0.5) == 30.0
+    assert listener.fallback_poll_seconds(0.5) == 60.0
 
     listener._consume_event("ready", '{"push_available":true}')
     assert wakeup.is_set() is True
@@ -50,7 +50,7 @@ def test_transport_degradation_restores_configured_polling():
         Event(),
     )
     listener._consume_event("transport", '{"push_available":true}')
-    assert listener.fallback_poll_seconds(0.5) == 30.0
+    assert listener.fallback_poll_seconds(0.5) == 60.0
 
     listener._consume_event("transport", '{"push_available":false}')
     assert listener.push_available is False
