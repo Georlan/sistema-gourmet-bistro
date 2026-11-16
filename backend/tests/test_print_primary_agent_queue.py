@@ -1181,3 +1181,46 @@ def test_targeted_copy_is_not_coalesced_with_generic_reprint(generic_status):
         assert copy.agent_id == "lin-suporte-dev"
     finally:
         db.close()
+
+
+def test_legacy_claim_does_not_return_already_printed_job():
+    mark_agent_ready("ag-win")
+    db = TestingSessionLocal()
+    try:
+        db.add(PrintJob(
+            id="already-printed-claim", restaurante_id=1,
+            document_type="producao", destination="COZINHA", source_type="pedido",
+            source_id="order-printed", payload_text="already printed",
+            status="printed", agent_id="win-caixa-real",
+            idempotency_key="printed-claim-test",
+        ))
+        db.commit()
+    finally:
+        db.close()
+    response = TestClient(app).post(
+        "/api/print-agents/jobs/already-printed-claim/claim",
+        headers={"X-Agent-Token": "token_win_primary"},
+    )
+    assert response.status_code == 409
+
+
+def test_legacy_claim_replay_for_same_agent_remains_idempotent():
+    mark_agent_ready("ag-win")
+    db = TestingSessionLocal()
+    try:
+        db.add(PrintJob(
+            id="replayed-claim", restaurante_id=1, document_type="producao",
+            destination="COZINHA", source_type="pedido", source_id="order-claim",
+            payload_text="reserved", status="claimed", agent_id="win-caixa-real",
+            claimed_at=datetime.datetime.now(datetime.timezone.utc),
+            idempotency_key="replayed-claim-test",
+        ))
+        db.commit()
+    finally:
+        db.close()
+    response = TestClient(app).post(
+        "/api/print-agents/jobs/replayed-claim/claim",
+        headers={"X-Agent-Token": "token_win_primary"},
+    )
+    assert response.status_code == 200
+    assert response.json()["id"] == "replayed-claim"

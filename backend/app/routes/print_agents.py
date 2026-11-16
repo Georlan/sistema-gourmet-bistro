@@ -2875,7 +2875,7 @@ def claim_job(
             raise HTTPException(status_code=404, detail="Job de impressão não encontrado")
         
         # Se o job já foi reservado por ESTE MESMO AGENTE, aceita o claim como sucesso (200 OK)
-        if existing.agent_id == agent.agent_id:
+        if existing.agent_id == agent.agent_id and existing.status in ("claimed", "printing"):
             return {
                 "id": existing.id,
                 "restaurante_id": existing.restaurante_id,
