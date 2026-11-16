@@ -22,6 +22,20 @@ Registrar commit e build, tela e cenário, dimensão, cache frio/quente, navegad
 
 Nesta rodada não houve medição comparável de rede nem alteração de backend ou de contratos. O build alertou sobre tamanho de chunk; isso é um indício para análise de bundle, não uma regressão ou economia quantificada.
 
-## Medição de build local — 02/11/2026
+## Otimizações recentes integradas à `main` (até `57cc6a36`)
 
-Build Vite de produção baseado em `214cdc1`, com a alteração local de tipografia de endereço proposta no PR #1242 e dependências do lockfile, reportou `CaixaPanel` 512,37 kB minificado (138,88 kB gzip), `CardapioPage` 310,09 kB (84,02 kB gzip) e o asset `koma-phone-graphite-shell-v2.png` 1.146,50 kB. Esses são tamanhos de arquivos emitidos, não bytes totais baixados por uma visita, nem impacto medido de LCP ou custo real. O aviso do Vite para chunks acima de 500 kB identifica uma oportunidade de investigação; avaliar dependências, rotas e frequência de uso antes de dividir ou recomprimir. A medição precede o PR #1239 e não estabelece baseline de produção.
+- **#1328 (`3dff6c8a`):** consolidação de consultas de totais de turno e status do tenant no Caixa/Auth.
+- **#1332 (`8f871e53`):** deduplicação de fetches no mount para `/caixa/configuracoes` e `/api/online-orders/control`.
+- **#1335 (`9223c656`):** derivação de pedidos digitais pendentes a partir do snapshot ativo, evitando leitura redundante da fila.
+- **#1340 (`7cb1c701`):** lazy-load da aba de clientes/fidelidade e deduplicação de fetches na troca de abas.
+- **#1342 (`e5042d86`):** bypass do shell completo de `App.tsx` na entrada pública do Cardápio e paralelização da busca de populares.
+- **#1348 (`3e36e213`):** deduplicação de probes de catálogo no boot do Cardápio e Garçom, e estabilização do `distinctID` por aba no PostHog.
+- **#1371 (`72064065`):** redução de consumo ocioso dos Print Agents Desktop e Android.
+
+## Medição de build local — 16/11/2026 (`57cc6a36`)
+
+Build Vite de produção executado em `57cc6a36`:
+- `CaixaPanel-*.js`: `509,47 kB` minificado (`139,48 kB` gzip) — redução frente a `512,37 kB` em 02/11.
+- `CardapioPage-*.js`: `199,69 kB` minificado (`57,32 kB` gzip) — redução frente a `310,09 kB` (`84,02 kB` gzip) em 02/11 após lazy loading/splitting (#1340/#1342).
+- `App-*.js`: `275,36 kB` (`76,11 kB` gzip); `SuperAdminGate-*.js`: `336,42 kB` (`75,42 kB` gzip); `MotoboyPwaPage-*.js`: `46,77 kB` (`19,30 kB` gzip); `CashierPdvView-*.js`: `45,39 kB` (`12,94 kB` gzip).
+- O aviso do Vite para chunks acima de 500 kB permanece apenas em `CaixaPanel` (`509,47 kB`). Valores acima são tamanhos de emissão de bundle, não medição de LCP ou tráfego real em dispositivo.

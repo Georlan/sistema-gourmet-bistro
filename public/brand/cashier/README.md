@@ -5,6 +5,7 @@ SVGs originais desenhados em código para acompanhar CourierRideArtwork e os gli
 - `cashier-counter-v1.svg`: personagem no balcão com pedido e PDV. Cabeçalho do Caixa; decorativo, sem texto ou estado de operação.
 - `salon-empty-v1.svg`: mesa ilustrada para o estado vazio do Salão, decorativa.
 - `order-ticket-v1.svg`: comanda e cloche. Estado vazio dos pedidos sem mesa.
+- `closing-empty-v1.svg`: comprovante serrilhado, terminal menta e selo de confirmação. Estado vazio da coluna "Prontos e recebimentos" (`CaixaOrdersWorkspace.tsx`).
 
 Arquivos separados, fundo transparente, sem fontes, scripts, filtros, animações ou dependências. A marca completa continua nos arquivos oficiais existentes. Preservar a paleta verde/minta e a geometria arredondada assimétrica; nunca sobrepor os desenhos a valores ou ações. Use alt vazio quando a arte for decorativa e deixe a mensagem do estado no texto HTML.
 

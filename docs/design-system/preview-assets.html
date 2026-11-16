@@ -1,6 +1,146 @@
 <!doctype html>
-<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>KÔMA — prévia da marca</title>
-<style>body{font:16px/1.5 system-ui;margin:2rem auto;max-width:65rem;padding:0 1rem;color:#17251f}section{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem}.sample{padding:2rem;border:1px solid #afbeb6;border-radius:12px}.dark{background:#121614;color:#fff}.light{background:#fff}.sample img{display:block;width:min(100%,240px);height:90px;object-fit:contain}p{max-width:70ch}</style></head><body>
-<h1>Prévia da marca KÔMA</h1><p>As variantes são apresentadas em fundos explícitos. A presença neste catálogo não comprova cessão ou licença: consulte ASSET_PROVENANCE.md antes de uso comercial.</p>
-<section><div class="sample dark"><h2>Fundo escuro</h2><img src="../../src/assets/brand/koma-wordmark-on-dark.svg" alt="Assinatura KÔMA clara"></div><div class="sample light"><h2>Fundo claro</h2><img src="../../src/assets/brand/koma-wordmark-on-light.svg" alt="Assinatura KÔMA escura"></div></section>
-</body></html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>KÔMA — Galeria visual de assets</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: Inter, system-ui, -apple-system, sans-serif; margin: 2rem auto; max-width: 72rem; padding: 0 1.25rem; background: #13231b; color: #f3faf5; line-height: 1.5; }
+    h1, h2 { font-family: "Space Grotesk", system-ui, sans-serif; letter-spacing: -0.025em; }
+    h1 { margin-bottom: .4rem; }
+    h2 { margin-top: 2.25rem; border-bottom: 1px solid #496754; padding-bottom: .4rem; font-size: 1.2rem; }
+    p.lead { color: #c0d5c6; max-width: 72ch; margin-top: 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; margin-top: 1rem; }
+    .card { border: 1px solid #577664; border-radius: 14px; background: #1d3328; overflow: hidden; display: flex; flex-direction: column; }
+    .previews { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid #496754; }
+    .bg-dark { background: #15271e; padding: 1rem; display: grid; place-items: center; min-height: 92px; }
+    .bg-light { background: #e8ede6; padding: 1rem; display: grid; place-items: center; min-height: 92px; }
+    .previews img { max-width: 100%; max-height: 64px; object-fit: contain; display: block; }
+    .meta { padding: .85rem; font-size: .82rem; display: flex; flex-direction: column; gap: .3rem; }
+    .meta strong { font-size: .9rem; color: #f3faf5; }
+    .meta code { font-family: "JetBrains Mono", monospace; font-size: .72rem; color: #83e3c6; word-break: break-all; }
+    .tag { display: inline-block; width: fit-content; font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: .15rem .45rem; border-radius: 6px; background: #284235; color: #c0d5c6; border: 1px solid #496754; }
+    .tag.third { background: #2c2414; color: #fde68a; border-color: #78551b; }
+    .note { color: #b0c8b8; font-size: .78rem; margin: 0; }
+  </style>
+</head>
+<body>
+  <h1>KÔMA — Galeria visual de assets</h1>
+  <p class="lead">Consulta visual em fundos escuro (<code>#15271e</code>) e claro (<code>#e8ede6</code>). A presença neste catálogo não comprova cessão ou licença comercial: consulte <code>ASSET_PROVENANCE.md</code> e <code>docs/design-system/ASSETS.md</code> antes de publicar.</p>
+
+  <h2>1. Marca oficial (símbolos e assinaturas)</h2>
+  <div class="grid">
+    <article class="card">
+      <div class="previews">
+        <div class="bg-dark"><img src="../../src/assets/brand/koma-wordmark-on-dark.svg" alt="Wordmark escuro"></div>
+        <div class="bg-light"><img src="../../src/assets/brand/koma-wordmark-on-light.svg" alt="Wordmark claro"></div>
+      </div>
+      <div class="meta"><span class="tag">Marca</span><strong>Wordmark KÔMA (on-dark / on-light)</strong><code>src/assets/brand/koma-wordmark-on-{dark,light}.svg</code><p class="note">Usar via <code>src/brand/komaBrand.ts</code> conforme contraste do fundo.</p></div>
+    </article>
+    <article class="card">
+      <div class="previews">
+        <div class="bg-dark"><img src="../../src/assets/brand/koma-symbol-on-dark.svg" alt="Símbolo escuro"></div>
+        <div class="bg-light"><img src="../../src/assets/brand/koma-symbol-on-light.svg" alt="Símbolo claro"></div>
+      </div>
+      <div class="meta"><span class="tag">Marca</span><strong>Símbolo KÔMA (on-dark / on-light)</strong><code>src/assets/brand/koma-symbol-on-{dark,light}.svg</code><p class="note">Uso compacto, favicons e cabeçalhos estreitos.</p></div>
+    </article>
+  </div>
+
+  <h2>2. Caixa e Operação — Estados vazios e cabeçalhos</h2>
+  <div class="grid">
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/closing-empty-v1.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/closing-empty-v1.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Decorativo</span><strong>Prontos e recebimentos (vazio)</strong><code>public/brand/cashier/closing-empty-v1.svg</code><p class="note">Coluna Closing em <code>CaixaOrdersWorkspace.tsx</code>.</p></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/order-ticket-v1.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/order-ticket-v1.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Decorativo</span><strong>Balcão e online (vazio)</strong><code>public/brand/cashier/order-ticket-v1.svg</code><p class="note">Coluna Digital em <code>CaixaOrdersWorkspace.tsx</code>.</p></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/salon-empty-v1.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/salon-empty-v1.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Decorativo</span><strong>Salão (vazio)</strong><code>public/brand/cashier/salon-empty-v1.svg</code><p class="note">Coluna Salão em <code>CaixaOrdersWorkspace.tsx</code>.</p></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/pdv-empty-cart-v1.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/pdv-empty-cart-v1.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Decorativo (preservado)</span><strong>Carrinho vazio PDV</strong><code>public/brand/cashier/pdv-empty-cart-v1.svg</code><p class="note">Sem referência ativa após #1314; mantido no catálogo.</p></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/cashier-counter-v1.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/cashier-counter-v1.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Decorativo</span><strong>Balcão do Caixa (topbar)</strong><code>public/brand/cashier/cashier-counter-v1.svg</code><p class="note">Cabeçalho desktop em <code>CaixaPanel.tsx</code>.</p></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/inbox-orders-v1.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/inbox-orders-v1.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Operacional</span><strong>Novos pedidos (botão)</strong><code>public/brand/cashier/inbox-orders-v1.svg</code><p class="note">Gatilho do drawer de pedidos pendentes.</p></div>
+    </article>
+  </div>
+
+  <h2>3. Caixa e Operação — Modalidades, detalhes e painéis</h2>
+  <div class="grid">
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/delivery-v1.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/delivery-v1.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Operacional</span><strong>Entrega (delivery)</strong><code>public/brand/cashier/delivery-v1.svg</code></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/pickup-v1.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/pickup-v1.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Operacional</span><strong>Retirada (pickup)</strong><code>public/brand/cashier/pickup-v1.svg</code></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/counter-v1.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/counter-v1.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Operacional</span><strong>Balcão (counter)</strong><code>public/brand/cashier/counter-v1.svg</code></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/dine-in-v1.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/dine-in-v1.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Operacional</span><strong>Salão / Mesa (dine-in)</strong><code>public/brand/cashier/dine-in-v1.svg</code></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/detail-delivery-v2.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/detail-delivery-v2.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Operacional</span><strong>Detalhe Delivery</strong><code>public/brand/cashier/detail-delivery-v2.svg</code></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/detail-pickup-v2.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/detail-pickup-v2.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Operacional</span><strong>Detalhe Retirada</strong><code>public/brand/cashier/detail-pickup-v2.svg</code></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/detail-table-v2.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/detail-table-v2.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Operacional</span><strong>Detalhe Mesa</strong><code>public/brand/cashier/detail-table-v2.svg</code></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/detail-print-v2.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/detail-print-v2.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Operacional</span><strong>Detalhe Impressão</strong><code>public/brand/cashier/detail-print-v2.svg</code></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/chat-pair-v1.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/chat-pair-v1.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Decorativo</span><strong>Conversas dos Pedidos</strong><code>public/brand/cashier/chat-pair-v1.svg</code></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/operator-access-v1.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/operator-access-v1.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Decorativo</span><strong>Credencial do Operador</strong><code>public/brand/cashier/operator-access-v1.svg</code></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/pause-menu-v1.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/pause-menu-v1.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Decorativo</span><strong>Pausa de Cardápio Online</strong><code>public/brand/cashier/pause-menu-v1.svg</code></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../public/brand/cashier/support-note-v1.svg" alt=""></div><div class="bg-light"><img src="../../public/brand/cashier/support-note-v1.svg" alt=""></div></div>
+      <div class="meta"><span class="tag">Decorativo</span><strong>Suporte KÔMA</strong><code>public/brand/cashier/support-note-v1.svg</code></div>
+    </article>
+  </div>
+
+  <h2>4. Parceiros de entrega (Terceiros — direitos dos titulares)</h2>
+  <div class="grid">
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../src/assets/brand/delivery/ifood.png" alt="iFood"></div><div class="bg-light"><img src="../../src/assets/brand/delivery/ifood.png" alt="iFood"></div></div>
+      <div class="meta"><span class="tag third">Terceiro</span><strong>iFood</strong><code>src/assets/brand/delivery/ifood.png</code><p class="note">Identificação de origem apenas; ver <code>delivery/sources.json</code>.</p></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../src/assets/brand/delivery/99food.png" alt="99Food"></div><div class="bg-light"><img src="../../src/assets/brand/delivery/99food.png" alt="99Food"></div></div>
+      <div class="meta"><span class="tag third">Terceiro</span><strong>99Food</strong><code>src/assets/brand/delivery/99food.png</code><p class="note">Identificação de origem apenas; ver <code>delivery/sources.json</code>.</p></div>
+    </article>
+    <article class="card">
+      <div class="previews"><div class="bg-dark"><img src="../../src/assets/brand/delivery/keeta.png" alt="Keeta"></div><div class="bg-light"><img src="../../src/assets/brand/delivery/keeta.png" alt="Keeta"></div></div>
+      <div class="meta"><span class="tag third">Terceiro</span><strong>Keeta</strong><code>src/assets/brand/delivery/keeta.png</code><p class="note">Identificação de origem apenas; ver <code>delivery/sources.json</code>.</p></div>
+    </article>
+  </div>
+</body>
+</html>

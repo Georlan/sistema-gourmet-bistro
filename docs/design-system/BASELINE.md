@@ -1,6 +1,6 @@
-# Fundação visual KÔMA — levantamento inicial
+# Fundação visual KÔMA — baseline da Fase 0
 
-Estado: **inventário parcial, não homologado**. Base de código: `214cdc1005fe6063f6bca166d9d97e27164dac58` (main, 02/11/2026). Este documento não certifica consistência visual nem substitui os contratos das telas. Para decisões já registradas, consulte [fundação CSS](../../src/styles/komaFoundation.css), [cores operacionais](../engineering/operational-brand-colors.md) e [direção do Caixa](../design/cashier-visual-direction.md). O documento do Entregador em `docs/design/courier-local-refinement.md` descreve fases históricas: confira a implementação atual antes de extrapolar suas afirmações.
+Estado: **fundação consolidada para as 9 superfícies modernizadas; módulos pendentes mapeados para fases futuras**. Base de código: `57cc6a36` (main, 16/11/2026). Este documento não substitui os contratos funcionais das telas. Para decisões registradas, consulte [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md), [UI_IDENTITY_CONTRACT.md](UI_IDENTITY_CONTRACT.md), [fundação CSS](../../src/styles/komaFoundation.css), [cores operacionais](../engineering/operational-brand-colors.md) e [direção do Caixa](../design/cashier-visual-direction.md).
 
 ## Perfis
 
@@ -38,15 +38,20 @@ Inventário ainda incompleto: botões, campos, navegação, overlays e duplicaç
 - Cardápio tem WebSocket e canais SSE com contingências; `paymentStatusPolling.ts` trata um fluxo financeiro. Não eliminar polling somente por existir outro canal: confirmar consumidores, freshness, falhas e isolamento.
 - Preferir compartilhar leitura no owner existente, evitar consulta por card, interromper trabalho dispensável fora de vista, carregar imagens fora da área visível sob demanda e reservar suas dimensões. Preservar imagem crítica e reconciliação operacional. Essas são orientações, não melhorias medidas nesta rodada.
 
-## Cobertura e pendências
+## Cobertura das superfícies na Fase 0 (16/11/2026)
 
-[Comparação visual inicial e capturas](VISUAL-2026-11-02.md), com limites e resultados dos testes.
-
-| Superfície | Código identificado | Validação visual atual |
+| Superfície | Código principal | Status na Fase 0 |
 | --- | --- | --- |
-| Cardápio | `src/cardapio/CardapioPage.tsx` | Captura local em 390 e 1366; ver comparação |
-| Garçom | `src/components/mesas/` e `src/components/MenuPanel.tsx` | Captura local em 390 e 1366; ver comparação |
-| Caixa/Pedidos | `src/components/caixa/orders/CaixaOrdersWorkspace.tsx` | Captura local em 390 e 1366; PR #1232 incorporado à main |
-| Entregador | `src/components/MotoboyPwaPage.tsx`, `src/components/courier/` | Captura local em 390 e 1366; dispositivo físico não validado |
+| Cardápio Digital | `src/cardapio/CardapioPage.tsx` | Modernizado e validado (E2E + unit) |
+| App do Garçom | `src/components/mesas/`, `src/components/MenuPanel.tsx` | Modernizado e validado (E2E + unit) |
+| App do Entregador | `src/components/MotoboyPwaPage.tsx`, `src/components/courier/` | Modernizado e validado (produção somente leitura + E2E) |
+| Caixa — Pedidos/Kanban | `src/components/caixa/orders/CaixaOrdersWorkspace.tsx` | Modernizado e validado (produção somente leitura + E2E) |
+| Caixa — PDV/Balcão | `src/components/caixa/pdv/CashierPdvView.tsx` | Modernizado e validado (E2E) |
+| Caixa — Salão | `src/components/caixa/salao/CaixaSalonTab.tsx` | Modernizado e validado (E2E) |
+| Caixa — Cozinha/KDS | `src/components/caixa/kitchen/` | Modernizado e validado (E2E) |
+| Login unificado | `src/components/auth/UnifiedOperationalEntry.tsx`, `OperationalLogin.tsx` | Modernizado e validado (produção + unit) |
+| Relacionamento/CRM | `src/components/caixa/customers/` | Modernizado com `KomaEmptyState` e `KomaMetricGroup` |
 
-Faltam capturas de estados adicionais e temas, matriz completa de contraste e interações, escala tipográfica e espaçamento acordados, inventário completo de assets e componentes, medições de rede e testes de regressão. Nenhuma das três tarefas da Fase 0 está encerrada por este levantamento.
+### Módulos pendentes para fases futuras (não homologados como modernizados)
+- **Estoque, Relatórios, Configurações:** compatíveis com tokens `--koma-*`, pendentes de modernização visual dedicada.
+- **Super Admin (`src/super-admin/`):** usa parcialmente `koma-*`, mas mantém cores hardcoded (`zinc-*`, `violet-*`, etc.) e tipografia/densidade pré-fundação; redesenho planejado para fase própria.
