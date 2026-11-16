@@ -106,6 +106,7 @@ type ActivationResult = {
 type BillingCapabilities = {
   credit_card: boolean;
   pix: boolean;
+  pixMode?: string;
   publicKey: string;
   environment?: string;
   isTestMode?: boolean;
@@ -282,6 +283,7 @@ export default function PlanContractPageV2() {
     && !activationResult;
 
   const billingMethodLabel = billingMethod === 'pix' ? 'Pix' : 'cartão de crédito';
+  const pixManualMode = capabilities.pixMode === 'manual_post_trial';
 
   useEffect(() => {
     const controller = new AbortController();
@@ -292,6 +294,7 @@ export default function PlanContractPageV2() {
         setCapabilities({
           credit_card: Boolean(payload.credit_card),
           pix: Boolean(payload.pix),
+          pixMode: String(payload.pixMode || ''),
           publicKey: String(payload.publicKey || ''),
           environment: payload.environment,
           isTestMode: Boolean(payload.isTestMode),
@@ -648,7 +651,7 @@ export default function PlanContractPageV2() {
             <p>{activationResult.message || (!fixedBillingRequired
               ? (receipt ? 'Condição contratual histórica mantida: Pocket sem mensalidade fixa conforme contrato anterior.' : 'Pocket ativado com sucesso.')
               : pixSelected
-                ? 'Nenhum Pix é cobrado hoje. Depois da implantação essencial começam seus 7 dias grátis; o primeiro QR aparece no KÔMA somente no vencimento.'
+                ? (pixManualMode ? 'Nenhum Pix é cobrado hoje. Depois da implantação e dos 7 dias grátis, a cobrança Pix será informada pelo KÔMA para pagamento e conferência administrativa.' : 'Nenhum Pix é cobrado hoje. Depois da implantação essencial começam seus 7 dias grátis; o primeiro QR aparece no KÔMA somente no vencimento.')
                 : 'Cobrança de hoje concluída: R$ 0 (7 dias grátis iniciados após a implantação essencial).')}</p>
             {activationResult.slug && <div className="koma-sub-success-detail"><span>Endereço do estabelecimento</span><strong>https://{activationResult.slug}.komafood.com.br</strong></div>}
             {activationResult.status === 'awaiting_release' ? (
@@ -788,7 +791,7 @@ export default function PlanContractPageV2() {
                   <div className="koma-sub-section-title"><span><CreditCard size={18} /></span><div><h2>Forma de pagamento</h2><p>Escolha o meio para o componente fixo após o trial.</p></div></div>
                   <div className="koma-sub-methods" role="radiogroup" aria-label="Forma de pagamento disponível">
                     <button type="button" role="radio" aria-checked={billingMethod === 'credit_card'} className={billingMethod === 'credit_card' ? 'is-selected' : ''} onClick={() => setBillingMethod('credit_card')}><span className="koma-sub-method-radio" /><CreditCard size={19} /><div><strong>Cartão de crédito{!capabilities.credit_card ? ' · indisponível no momento' : ''}</strong><small>Recorrente · R$ 0 hoje · cobrança automática depois do trial</small></div></button>
-                    <button type="button" role="radio" aria-checked={billingMethod === 'pix'} className={billingMethod === 'pix' ? 'is-selected' : ''} onClick={() => setBillingMethod('pix')}><span className="koma-sub-method-radio" /><QrCode size={19} /><div><strong>Pix{!capabilities.pix ? ' · indisponível no momento' : ''}</strong><small>QR Code + Pix Copia e Cola · pague com qualquer banco · R$ 0 hoje</small></div></button>
+                    <button type="button" role="radio" aria-checked={billingMethod === 'pix'} className={billingMethod === 'pix' ? 'is-selected' : ''} onClick={() => setBillingMethod('pix')}><span className="koma-sub-method-radio" /><QrCode size={19} /><div><strong>Pix{!capabilities.pix ? ' · indisponível no momento' : ''}</strong><small>{pixManualMode ? 'Pix pós-teste · pagamento orientado pelo KÔMA · R$ 0 hoje' : 'QR Code + Pix Copia e Cola · pague com qualquer banco · R$ 0 hoje'}</small></div></button>
                   </div>
 
                   {billingMethod === 'credit_card' && (
@@ -800,7 +803,7 @@ export default function PlanContractPageV2() {
                       <label className="koma-sub-field koma-sub-field-full"><span>CPF/CNPJ do titular <small>(opcional se for o mesmo responsável)</small></span><div><FileText size={16} /><input value={cardDoc} onChange={event => setCardDoc(event.target.value)} /></div></label>
                     </div>
                   )}
-                  {billingMethod === 'pix' && capabilities.pix && <div className="koma-sub-locked-note"><QrCode size={17} /> Nenhum Pix é cobrado hoje. {activeBillingCycle === 'anual' ? 'Depois da implantação e dos 7 dias grátis, o KÔMA gerará um único QR Code e Pix Copia e Cola do valor anual, quitando os próximos 12 meses.' : 'Quando a primeira mensalidade vencer, o KÔMA exibirá o QR Code e o Pix Copia e Cola; um novo QR será gerado a cada vencimento mensal.'} Você poderá pagar com qualquer banco ou PSP Pix.</div>}
+                  {billingMethod === 'pix' && capabilities.pix && <div className="koma-sub-locked-note"><QrCode size={17} /> Nenhum Pix é cobrado hoje. {pixManualMode ? 'Após a implantação e os 7 dias grátis, você receberá as instruções de pagamento Pix pelo KÔMA; a quitação será conferida administrativamente, sem confirmação automática do gateway.' : activeBillingCycle === 'anual' ? 'Depois da implantação e dos 7 dias grátis, o KÔMA gerará um único QR Code e Pix Copia e Cola do valor anual, quitando os próximos 12 meses.' : 'Quando a primeira mensalidade vencer, o KÔMA exibirá o QR Code e o Pix Copia e Cola; um novo QR será gerado a cada vencimento mensal.'} Você poderá pagar com qualquer banco ou PSP Pix.</div>}
                   {!methodAvailable && <p role="status" className="koma-sub-locked-note">{billingMethodLabel} está indisponível nesta contratação. Escolha outro meio disponível para continuar; sua inscrição permanece salva.</p>}
                   {!capabilities.credit_card && !capabilities.pix && <p role="status">Os pagamentos estão temporariamente indisponíveis. Sua inscrição fica salva para continuar depois.</p>}
                 </section>
@@ -820,7 +823,9 @@ export default function PlanContractPageV2() {
                     {!fixedBillingRequired
                       ? <strong>Confirmo a condição histórica do Pocket com mensalidade fixa de R$ 0 e taxa KÔMA de {formatPercentage(marketplaceRate)} sobre pagamentos online elegíveis conforme contrato anterior. Não há recorrência fixa a autorizar.</strong>
                       : billingMethod === 'pix'
-                        ? activeBillingCycle === 'anual'
+                        ? pixManualMode
+                          ? <strong>Escolho Pix pós-teste: R$ 0 hoje; após a implantação e os 7 dias grátis, pagarei {formatCurrency(nextChargeAmount)} por ciclo conforme as instruções do KÔMA, com confirmação administrativa. Não há débito Pix automático.</strong>
+                        : activeBillingCycle === 'anual'
                           ? <strong>Escolho Pix anual: R$ 0 hoje; depois da implantação e dos 7 dias grátis, será gerado um único QR Code/Pix Copia e Cola de {formatCurrency(nextChargeAmount)}, quitando os próximos 12 meses. Não há débito Pix automático.</strong>
                           : <strong>Escolho Pix mensal: R$ 0 hoje; depois da implantação e dos 7 dias grátis, cada vencimento mensal será pago por um novo QR Code/Pix Copia e Cola de {formatCurrency(nextChargeAmount)}. Não há débito Pix automático.</strong>
                         : <strong>Autorizo a recorrência por {billingMethodLabel}: R$ 0 hoje e primeira cobrança automática de {formatCurrency(nextChargeAmount)} somente depois dos 7 dias grátis.</strong>}
@@ -851,7 +856,7 @@ export default function PlanContractPageV2() {
                 <>
                   <div><span className="is-active"><Gift size={16} /></span><div><strong>Hoje</strong><p>Cobrança de hoje: R$ 0. Seus 7 dias grátis começam depois da implantação e liberação.</p></div></div>
                   <div><span><Info size={16} /></span><div><strong>Após a implantação</strong><p>Começam 7 dias grátis completos.</p></div></div>
-                  <div><span>{billingMethod === 'pix' ? <QrCode size={16} /> : <CreditCard size={16} />}</span><div><strong>Depois do trial</strong><p>{billingMethod === 'pix' ? `QR Pix disponível: ${formatCurrency(nextChargeAmount)}.` : `Primeira cobrança automática: ${formatCurrency(nextChargeAmount)}.`}</p></div></div>
+                  <div><span>{billingMethod === 'pix' ? <QrCode size={16} /> : <CreditCard size={16} />}</span><div><strong>Depois do trial</strong><p>{billingMethod === 'pix' ? (pixManualMode ? `Pix pós-teste a pagar conforme instruções do KÔMA: ${formatCurrency(nextChargeAmount)}.` : `QR Pix disponível: ${formatCurrency(nextChargeAmount)}.`) : `Primeira cobrança automática: ${formatCurrency(nextChargeAmount)}.`}</p></div></div>
                 </>
               )}
             </div>
@@ -859,7 +864,9 @@ export default function PlanContractPageV2() {
             <p className="koma-sub-summary-note">{!fixedBillingRequired
               ? 'Condição histórica do contrato anterior: sem recorrência de mensalidade fixa. A conta Mercado Pago do restaurante para receber clientes é conectada separadamente.'
               : billingMethod === 'pix'
-              ? activeBillingCycle === 'anual'
+              ? pixManualMode
+                ? 'Pix pós-teste não é débito automático: a cobrança será informada pelo KÔMA e o recebimento confirmado administrativamente.'
+              : activeBillingCycle === 'anual'
                 ? 'Pix anual não é débito automático: depois do trial, um único QR/Copia e Cola universal quita os próximos 12 meses.'
                 : 'Pix mensal não é débito automático: cada vencimento gera um novo QR/Copia e Cola universal.'
               : 'Cartão de crédito é recorrente: a primeira cobrança automática acontece somente depois da implantação e dos 7 dias grátis.'}</p>

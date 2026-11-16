@@ -374,7 +374,7 @@ export function MotoboyPwaPage() {
   }, [realtimePending, token, isOnline, accessInvalid, cacheHydrating, loading, isRefreshing, confirmingId, carregarDadosPainel]);
 
   const handleConfirmarEntrega = async (comandaId: string) => {
-    if (!token || accessInvalid || cacheOnly || !isOnline || !navigator.onLine || reconnectRequested || getRef.current || isConfirmingRef.current || uncertainId) return;
+    if (!token || accessInvalid || cacheOnly || refreshFailed || !isOnline || !navigator.onLine || reconnectRequested || getRef.current || isConfirmingRef.current || uncertainId) return;
     if (isCourierTokenExpired(token)) {
       invalidateCourierSession('expired');
       return;
@@ -392,6 +392,7 @@ export function MotoboyPwaPage() {
     const timeoutId = window.setTimeout(() => controller.abort(), CONFIRM_DELIVERY_REQUEST_TIMEOUT_MS);
     if (!requiresCode) setReviewId(null);
     setConfirmingId(comandaId);
+    let outcomeUncertain = false;
     try {
       const res = await fetch(`${API_BASE_URL}/comandas/motoboys/pedidos/${comandaId}/confirmar-entrega`, {
         method: 'POST', headers: { [DELIVERY_TOKEN_HEADER]: token, ...(requiresCode ? { 'Content-Type': 'application/json' } : {}) }, signal: controller.signal,
@@ -408,6 +409,9 @@ export function MotoboyPwaPage() {
           invalidateCourierSession(reason, detailText);
           return;
         }
+        // A proxy/server timeout or 5xx can arrive after the transaction committed.
+        // Reconcile the authorized list before allowing another explicit attempt.
+        outcomeUncertain = res.status >= 500 || res.status === 408;
         throw new Error(typeof body.detail === 'string' ? body.detail : 'Não foi possível confirmar a entrega.');
       }
       setReviewId(null); setReceiptCode('');
@@ -418,7 +422,8 @@ export function MotoboyPwaPage() {
       showToast('Entrega confirmada com sucesso.');
     } catch (err: any) {
       if (postRef.current !== controller) return;
-      if (err?.name === 'AbortError' || err instanceof TypeError) {
+      if (outcomeUncertain || err?.name === 'AbortError' || err instanceof TypeError) {
+        setReviewId(null); setReceiptCode('');
         setUncertainId(comandaId);
         showToast('A confirmação demorou demais. Atualizando o painel antes de permitir nova tentativa.', 'error');
         await carregarDadosPainel(token, true);
@@ -474,7 +479,7 @@ export function MotoboyPwaPage() {
     return copy;
   });
   const blocked = Boolean(confirmingId) || isRefreshing || Boolean(uncertainId);
-  const confirmationBlocked = blocked || cacheOnly || !isOnline || reconnectRequested;
+  const confirmationBlocked = blocked || cacheOnly || refreshFailed || !isOnline || reconnectRequested;
   useEffect(() => {
     if (reviewId && !entregas.some(item => item.id === reviewId)) setReviewId(null);
     if (detailsId && !entregas.some(item => item.id === detailsId)) setDetailsId(null);
