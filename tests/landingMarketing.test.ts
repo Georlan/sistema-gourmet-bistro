@@ -30,6 +30,12 @@ test('marketing events are wired at visit, demo opening and confirmed lead only'
   }
   const eventTypes = source('src/analytics/types.ts');
   assert.match(eventTypes, /landing_demo_submitted: \{ traffic_source:/);
+  assert.match(eventTypes, /deduplicated: boolean/);
+  assert.match(modal, /interesse: `\$\{interest\} · origem: \$\{trafficSource\}`/);
+  assert.match(modal, /deduplicated: result\.deduplicated === true/);
+  const attribution = source('src/landing/marketingAttribution.ts');
+  assert.match(attribution, /let capturedSource: LandingTrafficSource \| null = null/);
+  assert.match(attribution, /if \(capturedSource === null\) capturedSource = landingTrafficSource/);
   assert.doesNotMatch(eventTypes.match(/landing_demo_submitted: \{[^}]+\}/)?.[0] || '', /nome|telefone|email|whatsapp|referrer|utm_/i);
 });
 

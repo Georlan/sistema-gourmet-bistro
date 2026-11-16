@@ -36,10 +36,12 @@ test('Pocket, Pro e Premium mensais seguem direto para suas telas de contrataç�
 
 test('FAQ starts closed and explains delivery, pricing, internet and support without new promises', () => {
   const html = renderToStaticMarkup(createElement(FAQ));
-  assert.equal((html.match(/<details>/g) ?? []).length, 8);
+  assert.equal((html.match(/<details>/g) ?? []).length, 10);
   assert.equal(html.includes('<details open'), false);
   assert.ok(html.includes('sistema de gestão para restaurantes com PDV?'));
   assert.ok(html.includes('cardápio digital aceita pedidos sem WhatsApp?'));
+  assert.ok(html.includes('mesas e comandas digitais no App do Garçom?'));
+  assert.ok(html.includes('restaurantes pequenos com delivery próprio?'));
   assert.ok(html.includes('inclusive no Pocket'));
   assert.ok(html.includes('O app do entregador faz parte do Premium'));
   assert.ok(html.includes('não cobra taxa de implantação'));

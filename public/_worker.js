@@ -151,7 +151,10 @@ export function createSeoWorker(securityHeaders = {}, apiBaseUrl = PUBLIC_API_BA
         headers.set('Referrer-Policy', 'no-referrer');
         headers.set('X-Robots-Tag', 'noindex, nofollow');
       }
-      if (privateHost || (brandHost && LANDING_PATHS.has(url.pathname) && !landing) || response.status === 404) {
+      // Public legal documents remain accessible, but their generic SPA shell
+      // must not compete with the canonical marketing landing in brand search.
+      const publicLegalPage = brandHost && /^\/legal(?:\/|$)/.test(url.pathname);
+      if (privateHost || publicLegalPage || (brandHost && LANDING_PATHS.has(url.pathname) && !landing) || response.status === 404) {
         headers.set('X-Robots-Tag', 'noindex');
       } else if (landing) {
         headers.set('X-Robots-Tag', 'index, follow, max-image-preview:large');
