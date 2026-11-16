@@ -54,6 +54,15 @@ export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:P
     if(!open && dialog?.open) dialog.close();
   },[open]);
 
+  useEffect(()=>{
+    if(open && !selected && rows.length===1){
+      setSelected(rows[0]);
+      setChecked(false);
+      setNotReceived(false);
+      setError('');
+    }
+  },[open,selected,rows]);
+
   const load=useCallback(async(signal:AbortSignal,force=false)=>{
     const key=apiBaseUrl+String.fromCharCode(0)+(authHeaders.Authorization||authHeaders.authorization||'');
     if(!force&&recentPendingPixSnapshot&&recentPendingPixSnapshot.key===key&&recentPendingPixSnapshot.expiresAt>Date.now()){
@@ -125,44 +134,60 @@ export function DirectPixPendingPanel({apiBaseUrl,authHeaders,onRefreshOrders}:P
         </header>
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {!rows.length&&<p className="text-sm text-koma-muted">Nenhum Pix pendente.</p>}
-          <div className="space-y-2">{rows.map(row=>{
+          <div className="space-y-2.5">{rows.map(row=>{
             const link=whatsappUrl(row);
-            return <div key={row.id} className={'rounded-xl border p-3 '+(selected?.id===row.id?'border-emerald-500 bg-emerald-500/10':'border-koma-border')}>
-              <button type="button" className="w-full text-left" onClick={()=>select(row)}>
-                <span className="flex items-center justify-between gap-2"><strong className="text-sm">#{row.order_number} · {row.customer || 'Cliente'}</strong><strong className="text-sm tabular-nums">{formatCurrency(Number(row.amount))}</strong></span>
+            const isSelected=selected?.id===row.id;
+            const statusTone=row.released_unpaid
+              ? 'border-amber-500/35 bg-amber-500/10 text-amber-200'
+              : row.customer_reported
+                ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-300'
+                : 'border-koma-border bg-koma-raised text-koma-muted';
+            const dotTone=row.released_unpaid
+              ? 'bg-amber-400'
+              : row.customer_reported
+                ? 'bg-emerald-400'
+                : 'bg-koma-muted';
+            return <div key={row.id} className={'rounded-xl border p-3.5 transition-colors '+(isSelected?'border-emerald-500 bg-emerald-500/10':'border-koma-border bg-koma-raised/40')}>
+              <button type="button" className="w-full min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 rounded-lg" onClick={()=>select(row)}>
+                <span className="flex items-start justify-between gap-2">
+                  <strong className="min-w-0 break-words text-sm font-bold text-koma-foreground">#{row.order_number} · {row.customer || 'Cliente'}</strong>
+                  <strong className="shrink-0 text-sm font-bold tabular-nums text-emerald-300">{formatCurrency(Number(row.amount))}</strong>
+                </span>
                 <span className="mt-1 block text-xs text-koma-muted">{row.customer_phone || 'Sem telefone'}</span>
-                <span data-testid={'direct-pix-reported-'+row.id} className={'mt-1 block text-xs '+(row.released_unpaid?'text-amber-300':row.customer_reported?'text-emerald-400':'text-koma-muted')}>
+                <span data-testid={'direct-pix-reported-'+row.id} className={'mt-2 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold '+statusTone}>
+                  <span className={'h-1.5 w-1.5 shrink-0 rounded-full '+dotTone} aria-hidden="true"/>
                   {row.released_unpaid?'Na operação · Pix pendente':row.customer_reported?'Cliente avisou que pagou':'Aguardando Pix'}
                 </span>
               </button>
-              {link&&<a href={link} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-lg border border-koma-border px-3 text-xs text-emerald-300"><MessageCircle size={15}/> Pedir comprovante no WhatsApp</a>}
+              {link&&<a href={link} target="_blank" rel="noopener noreferrer" className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"><MessageCircle size={15} aria-hidden="true"/> Pedir comprovante no WhatsApp <span className="font-normal text-emerald-300/80">(opcional)</span></a>}
             </div>;
           })}</div>
-          {selected&&<div className="space-y-3 border-t border-koma-border pt-3">
-            <div className="space-y-2 rounded-xl border border-koma-border p-3">
-              <label className="flex min-h-11 items-center gap-2 text-sm">
-                <input type="checkbox" checked={checked} onChange={e=>setChecked(e.target.checked)}/>
-                Conferi o Pix na conta bancária
+          {selected&&<div className="space-y-3 border-t border-koma-border pt-3.5">
+            <div className="space-y-2.5 rounded-xl border border-koma-border bg-koma-raised/50 p-3.5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-koma-muted">Conferência bancária · #{selected.order_number}</p>
+              <label className="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-lg px-1 text-sm font-medium text-koma-foreground">
+                <input type="checkbox" className="h-4 w-4 shrink-0 accent-emerald-500" checked={checked} onChange={e=>setChecked(e.target.checked)}/>
+                <span>Conferi o Pix na conta bancária</span>
               </label>
-              <button type="button" disabled={busy||!checked} onClick={()=>void resolve('confirm')} className="min-h-11 w-full rounded-lg bg-emerald-500 px-4 text-sm font-semibold text-emerald-950 disabled:opacity-40">
+              <button type="button" disabled={busy||!checked} onClick={()=>void resolve('confirm')} className="min-h-11 w-full rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-bold text-emerald-950 shadow-sm transition-colors hover:bg-emerald-400 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 disabled:cursor-not-allowed disabled:bg-emerald-500/20 disabled:text-emerald-200/50 disabled:shadow-none">
                 Confirmar Pix recebido
               </button>
             </div>
             {selected.released_unpaid
-              ? <p className="rounded-lg border border-amber-500/30 px-3 py-2 text-xs text-amber-200">Pedido liberado. Pix ainda pendente.</p>
-              : <div className="space-y-1">
-                  <button type="button" disabled={busy} onClick={()=>void resolve('release-unpaid')} className="min-h-11 w-full rounded-lg border border-amber-500/50 px-3 text-sm font-semibold text-amber-200 disabled:opacity-40">
+              ? <p className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2.5 text-xs font-medium text-amber-200">Pedido liberado para preparo. Pix ainda pendente.</p>
+              : <div className="space-y-1.5">
+                  <button type="button" disabled={busy} onClick={()=>void resolve('release-unpaid')} className="min-h-11 w-full rounded-xl border border-amber-400/50 bg-amber-500/10 px-3 py-2.5 text-sm font-semibold text-amber-200 transition-colors hover:bg-amber-500/20 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-40">
                     Liberar preparo · conferir depois
                   </button>
                   <p className="text-center text-xs text-koma-muted">Entra no Kanban. O Pix continua pendente.</p>
                 </div>}
-            <details className="rounded-lg border border-koma-border px-3 py-2 text-xs text-koma-muted">
-              <summary className="min-h-9 cursor-pointer py-2">Cancelar pedido</summary>
-              <label className="mt-2 flex min-h-11 items-center gap-2"><input type="checkbox" checked={notReceived} onChange={e=>setNotReceived(e.target.checked)}/> Confirmei que não houve recebimento</label>
-              <button type="button" disabled={busy||!notReceived} onClick={()=>void resolve('cancel')} className="mt-2 min-h-11 w-full rounded-lg border border-rose-600/50 text-sm text-rose-300 disabled:opacity-40">Cancelar pedido</button>
+            <details className="rounded-xl border border-koma-border px-3 py-2 text-xs text-koma-muted">
+              <summary className="min-h-10 cursor-pointer py-2 font-medium text-koma-foreground/80">Cancelar pedido</summary>
+              <label className="mt-2 flex min-h-11 cursor-pointer items-center gap-2.5 text-koma-foreground"><input type="checkbox" className="h-4 w-4 shrink-0 accent-rose-500" checked={notReceived} onChange={e=>setNotReceived(e.target.checked)}/><span>Confirmei que não houve recebimento</span></label>
+              <button type="button" disabled={busy||!notReceived} onClick={()=>void resolve('cancel')} className="mt-2 min-h-11 w-full rounded-xl border border-rose-500/50 bg-rose-500/10 px-3 text-sm font-semibold text-rose-200 transition-colors hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-40">Cancelar pedido</button>
               <p className="mt-2">Cancelar no KÔMA não invalida o QR no banco.</p>
             </details>
-            {error&&<p role="alert" className="text-xs text-rose-300">{error}</p>}
+            {error&&<p role="alert" className="text-xs font-medium text-rose-300">{error}</p>}
           </div>}
         </div>
       </section>

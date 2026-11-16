@@ -230,6 +230,9 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   await expect(manualNotice.getByRole('button',{name:'Copiar',exact:true})).toHaveCount(0);
 
   await expect(consumer.getByText('No banco, confira destinatário e valor.')).toBeVisible();
+  await expect(consumer.getByRole('button',{name:/Ver código para copiar manualmente|Ocultar código Pix/})).toHaveCount(0);
+  await expect(consumer.getByLabel('Código Pix Copia e Cola')).toBeVisible();
+  await expect(consumer.getByLabel('Código Pix Copia e Cola')).toHaveValue('test-only-journey-do-not-pay');
   await consumer.evaluate(() => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => { (window as any).__copiedPix = value; } } });
   });
