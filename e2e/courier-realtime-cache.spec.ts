@@ -11,6 +11,53 @@ async function sockets(page:Page){
 async function open(page:Page){await page.goto('/entregador#token='+token);await expect(page.getByRole('heading',{name:'Entregas'})).toBeVisible();}
 const cached=(page:Page)=>page.evaluate(()=>Object.keys(localStorage).filter(key=>key.startsWith('koma_courier_snapshot_v1:')).length);
 
+test('reconexão com releitura falha bloqueia lista antiga até conferir a atribuição',async({page})=>{
+ let fail=false,posts=0,gets=0;
+ await page.route(`${API}/**`,route=>{
+  if(route.request().method()==='POST'){posts++;return route.fulfill({json:{status:'sucesso'}});}
+  gets++;return route.fulfill(fail?{status:503,json:{detail:'Servidor indisponível'}}:{json:panel([delivery])});
+ });
+ await open(page);
+ const confirm=page.getByRole('button',{name:'Confirmar com código',exact:true});
+ await expect(confirm).toBeEnabled();
+ fail=true;
+ await page.evaluate(()=>window.dispatchEvent(new Event('offline')));
+ await expect(confirm).toBeDisabled();
+ const before=gets;
+ await page.evaluate(()=>window.dispatchEvent(new Event('online')));
+ await expect.poll(()=>gets).toBeGreaterThan(before);
+ await expect(page.getByRole('status').filter({hasText:'Atualização pendente'})).toBeVisible();
+ await expect(confirm).toBeDisabled();
+ expect(posts).toBe(0);
+ fail=false;
+ await page.getByRole('button',{name:'Atualizar Pedidos'}).click();
+ await expect(confirm).toBeEnabled();
+ expect(posts).toBe(0);
+});
+
+for(const status of [500,502,503,504,408]){
+ test(`HTTP ${status} na confirmação exige releitura sem repetir POST`,async({page})=>{
+  let posts=0,recover=false;
+  await page.route(`${API}/**`,route=>{
+   if(route.request().method()==='POST'){posts++;return route.fulfill({status,json:{detail:'Resposta incerta'}});}
+   if(posts&&!recover)return route.fulfill({status:503,json:{detail:'Releitura indisponível'}});
+   return route.fulfill({json:panel(recover?[]:[delivery])});
+  });
+  await open(page);
+  await page.getByRole('button',{name:'Confirmar com código',exact:true}).click();
+  await page.getByLabel('Código de entrega').fill('012');
+  await page.getByRole('button',{name:'Confirmar',exact:true}).click();
+  await expect(page.getByRole('alert').filter({hasText:'Confirmação pendente'})).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Confirmar com código',exact:true})).toBeDisabled();
+  expect(posts).toBe(1);
+  recover=true;
+  await page.getByRole('button',{name:'Verificar',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'Nenhuma entrega em rota'})).toBeVisible();
+  expect(posts).toBe(1);
+ });
+}
+
 test('cache cifrado restaura no reload sem API; outra credencial não herda a lista',async({page})=>{
  await sockets(page);
  await page.route(`${API}/**`,route=>route.fulfill({json:panel([delivery])}));
