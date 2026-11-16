@@ -102,11 +102,11 @@ export function withPublicLandingAnalyticsCsp(policy) {
   };
   const directives = policy.split(';').map(value => value.trim()).filter(Boolean);
   for (const [name, sources] of Object.entries(permitted)) {
-    const index = directives.findIndex(value => value.split(/\\s+/, 1)[0] === name);
+    const index = directives.findIndex(value => value.split(/\s+/, 1)[0] === name);
     if (index === -1) {
       directives.push(name + " 'self' " + sources.join(' '));
     } else {
-      const parts = directives[index].split(/\\s+/);
+      const parts = directives[index].split(/\s+/);
       directives[index] = [...parts, ...sources.filter(source => !parts.includes(source))].join(' ');
     }
   }
