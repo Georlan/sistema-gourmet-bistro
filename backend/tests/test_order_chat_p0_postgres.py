@@ -89,7 +89,10 @@ def test_two_listeners_receive_only_committed_keys_and_rehydrate(pg):
             for hub, (sub, _) in zip(hubs, subscriptions):
                 hub.unsubscribe_conversation(conv_id, sub)
                 await asyncio.to_thread(hub.stop)
-            assert all(not hub._listener_thread.is_alive() for hub in hubs)
+            assert all(
+                hub._listener_thread is None or not hub._listener_thread.is_alive()
+                for hub in hubs
+            )
     asyncio.run(scenario())
 
 
