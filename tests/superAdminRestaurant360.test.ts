@@ -16,6 +16,24 @@ const releaseModal = readFileSync(
   'utf8',
 );
 
+const komaHost = readFileSync(
+  new URL('../src/domain/komaHost.ts', import.meta.url),
+  'utf8',
+);
+
+const contractInvitePage = readFileSync(
+  new URL('../src/legal/ContractInviteAcceptPage.tsx', import.meta.url),
+  'utf8',
+);
+
+test('Super Admin gera link único de aceite e /aceitar-contrato consome o convite', () => {
+  assert.match(restaurant360, /\/api\/super-admin\/contracts\/invite/);
+  assert.match(restaurant360, /Gerar link único de aceite/);
+  assert.match(komaHost, /\/aceitar-contrato/);
+  assert.match(contractInvitePage, /\/api\/contracts\/invite\?token=/);
+  assert.match(contractInvitePage, /\/api\/contracts\/invite\/accept/);
+});
+
 test('Liberação não depende de preencher mesas e o atalho de salão é opcional', () => {
   assert.match(releaseModal, /Mesas não são requisito para operação de retirada ou delivery/);
   assert.match(releaseModal, /Criar ou completar mesas \(opcional\)/);

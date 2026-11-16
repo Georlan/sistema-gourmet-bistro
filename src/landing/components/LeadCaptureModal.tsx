@@ -1,6 +1,8 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { KOMA_LANDING_CONFIG, type LeadFormData, type LeadSelection } from '../config/landingConfig';
 import { API_BASE_URL } from '../../config/api';
+import { trackAnalyticsEvent } from '../../analytics/posthog';
+import { currentLandingTrafficSource } from '../marketingAttribution';
 
 interface LeadCaptureModalProps {
   open: boolean;
@@ -53,6 +55,10 @@ export function LeadCaptureModal({ open, onClose, selection }: LeadCaptureModalP
       if (!response.ok) throw new Error('capture_failed');
       const result = await response.json();
       if (!result.success) throw new Error('capture_failed');
+      trackAnalyticsEvent('landing_demo_submitted', {
+        traffic_source: currentLandingTrafficSource(),
+        entry_point: selection ? 'plan' : 'general',
+      });
       setSubmitStatus('sent');
     } catch {
       setSubmitStatus('error');

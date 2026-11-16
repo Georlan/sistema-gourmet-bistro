@@ -61,6 +61,9 @@ export interface PublicOrderSubmittedProps {
 }
 
 export interface AnalyticsEventMap {
+  landing_viewed: { traffic_source: import('../landing/marketingAttribution').LandingTrafficSource };
+  landing_demo_opened: { traffic_source: import('../landing/marketingAttribution').LandingTrafficSource; entry_point: 'general' | 'plan' };
+  landing_demo_submitted: { traffic_source: import('../landing/marketingAttribution').LandingTrafficSource; entry_point: 'general' | 'plan' };
   public_checkout_result: import('./checkoutDiagnostic').CheckoutDiagnosticSignal;
   operational_action: { action: 'cashier_navigation' | 'signup_checkout'; target: string; outcome: 'requested' | 'succeeded' | 'failed' | 'blocked' };
   operational_api_signal: import('./operational').OperationalSignal;

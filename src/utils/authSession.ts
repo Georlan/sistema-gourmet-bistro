@@ -1,4 +1,5 @@
 import { normalizeStaffRole, resolveOperationalPortal, type OperationalPortal } from './staffDestination';
+import { forgetInstalledOperatorSession, rememberInstalledOperatorSession } from './installedOperatorSession';
 export type { OperationalPortal } from './staffDestination';
 
 /**
@@ -178,6 +179,9 @@ export function saveOperatorSession(token: string, user: any, requestedPortal?: 
     clearOperatorSession(undefined, false);
     throw new Error('Não foi possível guardar a sessão nesta aba. Permita o armazenamento do site e tente novamente.');
   }
+  // Só o PWA instalado grava uma cópia cifrada para novas aberturas.
+  // As abas comuns continuam exclusivamente em sessionStorage.
+  void rememberInstalledOperatorSession(session);
   notifySessionChanged();
 }
 
@@ -210,7 +214,12 @@ export function clearOperatorSession(portal?: OperationalPortal, notify = true):
     'koma_caixa_selected_table_v3', 'koma_garcom_selected_table_v3', 'koma_onboarding_setup_mode']);
   clearKeys(storage, [ACTIVE_PORTAL_KEY]);
   try { storage?.setItem(LOGGED_OUT_TAB_KEY, '1'); } catch { /* No persistence available. */ }
-  if (notify) notifySessionChanged();
+  if (notify) {
+    // Logout/bloqueio explícito também invalida a retomada do atalho instalado.
+    // Limpeza silenciosa de sessão copiada por outra aba não toca o dispositivo.
+    void forgetInstalledOperatorSession();
+    notifySessionChanged();
+  }
 }
 
 /** Notifications stay in this window: signing out must not sign out other tabs. */

@@ -14,6 +14,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base, get_db, current_restaurante_id
 from app.models import Restaurante, Usuario, PrintAgentToken, PrintJob
+from app.services.printing import enqueue_print_job
 from app.routes import print_agents as print_agents_route
 from app.routes.print_agents import hash_token
 from app.security import create_access_token
@@ -924,3 +925,197 @@ def test_legacy_endpoint_get_next_and_claim_respects_primary_priority():
     )
     assert win_claim.status_code == 200
     assert win_claim.json()["id"] == "job-legacy-generic"
+
+
+def test_repeated_manual_reprint_coalesces_same_copy_but_preserves_original():
+    """O clique manual cria uma via; cliques seguintes não criam cópias extras."""
+    with TestingSessionLocal() as db:
+        original = enqueue_print_job(
+            db,
+            restaurante_id=1,
+            document_type="producao",
+            destination="COZINHA",
+            source_type="pedido",
+            source_id="c-repeat-11",
+            payload_text="PEDIDO #11",
+            idempotency_key="aceite:pedido:c-repeat-11:producao:cozinha",
+            printing_allowed=True,
+        )
+        assert original is not None
+        first_reprint_id = None
+        for suffix in ("one", "two", "three"):
+            repeated = enqueue_print_job(
+                db,
+                restaurante_id=1,
+                document_type="producao",
+                destination="COZINHA",
+                source_type="reimpressao",
+                source_id="c-repeat-11",
+                payload_text="PEDIDO #11 - REIMPRESSAO",
+                idempotency_key=f"universal:reimpressao:c-repeat-11:cozinha:{suffix}",
+                printing_allowed=True,
+            )
+            assert repeated is not None
+            if first_reprint_id is None:
+                first_reprint_id = repeated.id
+                assert first_reprint_id != original.id
+            assert repeated.id == first_reprint_id
+        db.commit()
+        assert db.query(PrintJob).filter(
+            PrintJob.restaurante_id == 1,
+            PrintJob.source_id == "c-repeat-11",
+        ).count() == 2
+
+
+def test_recently_printed_manual_reprint_has_short_cooldown():
+    """Não bloqueia reimpressões futuras, só rajadas após impressão recente."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    with TestingSessionLocal() as db:
+        db.add(PrintJob(
+            id="job-already-reprinted",
+            restaurante_id=1,
+            document_type="producao",
+            destination="COZINHA",
+            source_type="reimpressao",
+            source_id="c-cooldown",
+            payload_text="REIMPRESSAO",
+            status="printed",
+            printed_at=now,
+            idempotency_key="reprint:cooldown:first",
+        ))
+        db.commit()
+        duplicate = enqueue_print_job(
+            db, restaurante_id=1, document_type="producao",
+            destination="COZINHA", source_type="reimpressao",
+            source_id="c-cooldown", payload_text="REIMPRESSAO",
+            idempotency_key="reprint:cooldown:duplicate", printing_allowed=True,
+        )
+        assert duplicate is not None
+        assert duplicate.id == "job-already-reprinted"
+        db.add(PrintJob(
+            id="job-old-reprint",
+            restaurante_id=1, document_type="producao",
+            destination="BAR", source_type="reimpressao",
+            source_id="c-cooldown", payload_text="BAR",
+            status="printed", printed_at=now - datetime.timedelta(minutes=3),
+            idempotency_key="reprint:cooldown:old",
+        ))
+        db.flush()
+        another = enqueue_print_job(
+            db, restaurante_id=1, document_type="producao",
+            destination="BAR", source_type="reimpressao",
+            source_id="c-cooldown", payload_text="BAR",
+            idempotency_key="reprint:cooldown:new", printing_allowed=True,
+        )
+        assert another is not None
+        assert another.id != "job-old-reprint"
+
+
+def test_reconnecting_primary_claims_one_manual_copy_per_original_not_backlog():
+    """A fila do JE libera originais e uma via manual, nunca 8 duplicatas."""
+    mark_agent_ready("ag-win")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    jobs = []
+    for number in (11, 12):
+        source = f"c-regression-{number}"
+        jobs.append(PrintJob(
+            id=f"original-{number}", restaurante_id=1,
+            document_type="producao", destination="COZINHA",
+            source_type="pedido", source_id=source,
+            payload_text=f"PEDIDO #{number}", status="pending",
+            created_at=now - datetime.timedelta(minutes=4),
+            idempotency_key=f"auto:{source}",
+        ))
+        for click in range(4):
+            jobs.append(PrintJob(
+                id=f"duplicate-{number}-{click}", restaurante_id=1,
+                document_type="producao", destination="COZINHA",
+                source_type="reimpressao", source_id=source,
+                payload_text=f"REIMPRESSAO #{number}", status="pending",
+                created_at=now - datetime.timedelta(minutes=3, seconds=-click),
+                idempotency_key=f"reprint:{source}:{click}",
+            ))
+    with TestingSessionLocal() as db:
+        db.add_all(jobs)
+        db.commit()
+
+    response = TestClient(app).post(
+        "/api/print-agents/jobs/claim-batch?limit=10",
+        headers={"X-Agent-Token": "token_win_primary"},
+    )
+    assert response.status_code == 200, response.text
+    assert {job["id"] for job in response.json()} == {
+        "original-11", "original-12", "duplicate-11-0", "duplicate-12-0",
+    }
+    with TestingSessionLocal() as db:
+        queued = db.query(PrintJob).filter(PrintJob.restaurante_id == 1).all()
+        assert sum(job.status == "claimed" for job in queued) == 4
+        assert sum(job.status == "cancelled" for job in queued) == 6
+        assert all(job.status != "pending" for job in queued)
+
+
+def test_reconnecting_after_original_printed_preserves_one_manual_copy():
+    """Sem original na fila, apenas uma via de reimpressão é necessária."""
+    mark_agent_ready("ag-win")
+    now = datetime.datetime.now(datetime.timezone.utc)
+    with TestingSessionLocal() as db:
+        db.add(PrintJob(
+            id="printed-original", restaurante_id=1,
+            document_type="producao", destination="COZINHA",
+            source_type="pedido", source_id="c-copy",
+            payload_text="ORIGINAL", status="printed", printed_at=now,
+            idempotency_key="auto:copy",
+        ))
+        for click in range(3):
+            db.add(PrintJob(
+                id=f"repeat-copy-{click}", restaurante_id=1,
+                document_type="producao", destination="COZINHA",
+                source_type="reimpressao", source_id="c-copy",
+                payload_text="COPY", status="pending",
+                created_at=now - datetime.timedelta(seconds=30 - click),
+                idempotency_key=f"reprint:copy:{click}",
+            ))
+        db.commit()
+
+    response = TestClient(app).post(
+        "/api/print-agents/jobs/claim-batch?limit=10",
+        headers={"X-Agent-Token": "token_win_primary"},
+    )
+    assert response.status_code == 200, response.text
+    assert [job["id"] for job in response.json()] == ["repeat-copy-0"]
+    with TestingSessionLocal() as db:
+        assert db.query(PrintJob).filter(
+            PrintJob.restaurante_id == 1,
+            PrintJob.status == "cancelled",
+        ).count() == 2
+
+
+def test_same_source_different_print_content_preserves_distinct_copies():
+    """Duas mesas com fragmentos distintos não são deduplicadas entre si."""
+    with TestingSessionLocal() as db:
+        first = enqueue_print_job(
+            db, restaurante_id=1, document_type="producao",
+            destination="COZINHA", source_type="reimpressao",
+            source_id="l-split", payload_text="MESA: 3 - ITEM A",
+            idempotency_key="reprint:split:m3", printing_allowed=True,
+        )
+        second = enqueue_print_job(
+            db, restaurante_id=1, document_type="producao",
+            destination="COZINHA", source_type="reimpressao",
+            source_id="l-split", payload_text="MESA: 5 - ITEM B",
+            idempotency_key="reprint:split:m5", printing_allowed=True,
+        )
+        duplicate = enqueue_print_job(
+            db, restaurante_id=1, document_type="producao",
+            destination="COZINHA", source_type="reimpressao",
+            source_id="l-split", payload_text="MESA: 3 - ITEM A",
+            idempotency_key="reprint:split:m3-again", printing_allowed=True,
+        )
+        assert first is not None and second is not None and duplicate is not None
+        assert first.id != second.id
+        assert first.id == duplicate.id
+        db.commit()
+        assert db.query(PrintJob).filter(
+            PrintJob.restaurante_id == 1,
+            PrintJob.source_id == "l-split",
+        ).count() == 2

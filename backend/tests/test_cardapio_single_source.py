@@ -98,15 +98,19 @@ def test_quentinhas_are_first_in_public_category_order():
 
 
 def test_current_public_menu_loads_one_catalog_snapshot():
-    source = (REPO_ROOT / "src/cardapio/CardapioPage.tsx").read_text(encoding="utf-8")
+    page = (REPO_ROOT / "src/cardapio/CardapioPage.tsx").read_text(encoding="utf-8")
+    client = (REPO_ROOT / "src/cardapio/publicMenuClient.ts").read_text(encoding="utf-8")
 
-    client_source = (REPO_ROOT / "src/cardapio/publicMenuClient.ts").read_text(encoding="utf-8")
-
-    assert "fetchPublicMenu({" in source
-    assert "/api/cardapio-digital/public?" in client_source
-    assert "{ cache: 'no-store' }" in client_source
-    assert "/api/cardapio-digital/categorias" not in source
-    assert "/api/cardapio-digital/produtos" not in source
+    # Fetch implementation moved into the shared tenant-scoped client. Verify
+    # both the page's use of it and its single-snapshot HTTP contract.
+    assert 'from "./publicMenuClient"' in page
+    assert "const payload = await fetchPublicMenu({" in page
+    assert "${apiBaseUrl}/api/cardapio-digital/public?" in client
+    assert "{ cache: 'no-store' }" in client
+    assert "const query = new URLSearchParams(" in client
+    assert "isNumericIdentifier ? { restaurante_id: cleanIdentifier } : { slug: cleanIdentifier }" in client
+    assert "/api/cardapio-digital/categorias" not in page + client
+    assert "/api/cardapio-digital/produtos" not in page + client
 
 
 def test_caixa_settings_round_trip_to_public_storefront():
