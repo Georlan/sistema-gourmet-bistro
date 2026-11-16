@@ -1001,10 +1001,7 @@ def _release_stuck_jobs(
                 "claimed_at": None,
                 "agent_id": case(
                     (
-                        or_(
-                            PrintJob.source_type.in_(targeted_test_types),
-                            PrintJob.idempotency_key.like("reprint:targeted:%"),
-                        ),
+                        PrintJob.source_type.in_(targeted_test_types),
                         PrintJob.agent_id,
                     ),
                     else_=None,
@@ -1075,8 +1072,6 @@ def _coalesce_pending_reprints(db: Session, restaurante_id: int) -> int:
             PrintJob.document_type,
             PrintJob.destination,
             PrintJob.payload_text,
-            PrintJob.agent_id,
-            PrintJob.idempotency_key,
         )
         .filter(
             PrintJob.restaurante_id == restaurante_id,
@@ -1086,19 +1081,16 @@ def _coalesce_pending_reprints(db: Session, restaurante_id: int) -> int:
         )
         .all()
     )
-    def identity(job):
-        target = (
-            job.agent_id
-            if (job.idempotency_key or "").startswith("reprint:targeted:")
-            else None
-        )
-        return (job.source_id, job.document_type, job.destination, job.payload_text, target)
-
-    reserved = {identity(row) for row in in_progress}
+    reserved = {
+        (row.source_id, row.document_type, row.destination, row.payload_text)
+        for row in in_progress
+    }
     suppressed = 0
     for job in pending_reprints:
-        job_identity = identity(job)
-        if job_identity in reserved:
+        identity = (
+            job.source_id, job.document_type, job.destination, job.payload_text,
+        )
+        if identity in reserved:
             job.status = "cancelled"
             job.claimed_at = None
             job.agent_id = None
@@ -1108,7 +1100,7 @@ def _coalesce_pending_reprints(db: Session, restaurante_id: int) -> int:
             )
             suppressed += 1
         else:
-            reserved.add(job_identity)
+            reserved.add(identity)
 
     if suppressed:
         db.flush()
@@ -3006,8 +2998,7 @@ def release_job_batch(
     for job in jobs:
         job.status = "pending"
         job.claimed_at = None
-        if not (job.idempotency_key or "").startswith("reprint:targeted:"):
-            job.agent_id = None
+        job.agent_id = None
         released_ids.append(job.id)
     db.commit()
     return {
@@ -3132,10 +3123,7 @@ def fail_job(
         # Libera para tentativa futura
         job.status = "pending"
         job.claimed_at = None
-        if (
-            job.source_type not in targeted_test_types
-            and not (job.idempotency_key or "").startswith("reprint:targeted:")
-        ):
+        if job.source_type not in targeted_test_types:
             job.agent_id = None
 
     response = {
@@ -3191,10 +3179,7 @@ def retry_failed_jobs(
     for job in failed_jobs:
         job.status = "pending"
         job.attempts = 0
-        if (
-            job.source_type not in targeted_test_types
-            and not (job.idempotency_key or "").startswith("reprint:targeted:")
-        ):
+        if job.source_type not in targeted_test_types:
             job.agent_id = None
         job.printer_name = None
         job.claimed_at = None
@@ -3217,7 +3202,6 @@ def retry_failed_jobs(
 def request_reprint(
     job_id: str,
     background_tasks: BackgroundTasks,
-    agent_id: Optional[str] = Query(default=None, min_length=1, max_length=200),
     current_user: Usuario = Depends(require_permission("impressao:administrar")),
     db: Session = Depends(get_db)
 ):
@@ -3241,25 +3225,8 @@ def request_reprint(
             ),
         )
 
-    # An explicit secondary-device copy must never claim or mutate the
-    # original restaurant job. Default reprints remain generic/primary.
-    target_agent_id = None
-    if agent_id is not None:
-        target_agent_id = agent_id.strip()
-        target = db.query(PrintAgentToken.id).filter(
-            PrintAgentToken.restaurante_id == rest_id,
-            PrintAgentToken.agent_id == target_agent_id,
-            PrintAgentToken.ativo == True,
-        ).first()
-        if not target:
-            raise HTTPException(
-                status_code=404,
-                detail="Agente de destino não encontrado neste restaurante.",
-            )
-
     timestamp_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d%H%M%S%f")
-    prefix = "reprint:targeted:" if target_agent_id else "reprint:"
-    new_idempotency_key = f"{prefix}{original_job.id}:{timestamp_str}"
+    new_idempotency_key = f"reprint:{original_job.id}:{timestamp_str}"
 
     reprint_job = PrintJob(
         restaurante_id=rest_id,
@@ -3269,7 +3236,6 @@ def request_reprint(
         source_id=original_job.source_id,
         payload_text=original_job.payload_text,
         status="pending",
-        agent_id=target_agent_id,
         idempotency_key=new_idempotency_key
     )
 
