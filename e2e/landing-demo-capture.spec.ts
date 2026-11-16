@@ -32,6 +32,11 @@ test('landing SEO is readable without horizontal overflow and mobile navigation 
     await page.setViewportSize({ width, height: 844 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
       `landing must not overflow horizontally at ${width}px`).toBe(true);
+    for (const selector of ['body', '.koma-hero', '.koma-management-section', '.koma-footer', '.koma-header']) {
+      const bounds = await page.locator(selector).boundingBox();
+      expect(bounds, `${selector} must be measurable at ${width}px`).not.toBeNull();
+      expect(bounds!.width, `${selector} must fit within ${width}px`).toBeLessThanOrEqual(width + 1);
+    }
     if (width <= 768) {
       await expect(page.locator('.koma-header-nav')).toBeHidden();
       await expect(page.getByRole('button', { name: 'Abrir menu' })).toBeVisible();
