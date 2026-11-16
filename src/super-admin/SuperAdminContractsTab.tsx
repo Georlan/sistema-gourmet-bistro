@@ -140,6 +140,7 @@ export function SuperAdminContractsTab({
   const [activationNotice, setActivationNotice] = useState<string | null>(null);
   const [activationError, setActivationError] = useState<string | null>(null);
   const [manualRestaurantId, setManualRestaurantId] = useState("");
+  const [confirmPixPostTrial, setConfirmPixPostTrial] = useState(true);
   const [suggestedRestaurantId, setSuggestedRestaurantId] = useState<number | null>(null);
   const [eligibleRestaurantIds, setEligibleRestaurantIds] = useState<number[]>([]);
 
@@ -221,6 +222,9 @@ export function SuperAdminContractsTab({
       if (parsedRestaurantId !== null) {
         bodyPayload.restaurant_id = parsedRestaurantId;
       }
+      if (selected.billingStatus === "pending" && confirmPixPostTrial) {
+        bodyPayload.payment_method_type = "pix";
+      }
 
       const response = await superAdminFetch(
         `/api/super-admin/contracts/${encodeURIComponent(selected.protocol)}/activate`,
@@ -235,7 +239,7 @@ export function SuperAdminContractsTab({
       setActivationNotice(
         data.idempotent
           ? `A contratação já estava ativada no restaurante #${data.restaurantId}.`
-          : `Restaurante #${data.restaurantId} ativado. O acesso inicial aguardará envio seguro na etapa de notificações.`,
+          : `Restaurante #${data.restaurantId} vinculado ao contrato. Cardápio e configurações existentes foram preservados.`,
       );
       await refreshContracts();
     } catch (error) {
@@ -406,27 +410,40 @@ export function SuperAdminContractsTab({
                           className="w-24 bg-transparent font-mono text-[11px] text-koma-foreground focus:outline-none"
                         />
                       </label>
+                      {selected.billingStatus === "pending" && (
+                        <label className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-800/50 bg-emerald-950/30 px-2.5 py-1.5 text-[10px] text-emerald-200">
+                          <input
+                            type="checkbox"
+                            checked={confirmPixPostTrial}
+                            onChange={event => setConfirmPixPostTrial(event.target.checked)}
+                          />
+                          <span>Pix pós-teste (0 nos 7 dias)</span>
+                        </label>
+                      )}
                       <button
                         type="button"
                         onClick={() => void activateSelected()}
                         disabled={
                           activatingProtocol === selected.protocol ||
-                          (selected.activationEligible !== undefined
-                            ? !selected.activationEligible
-                            : (selected.billingStatus === "pending" || selected.billingStatus === "failed"))
+                          selected.billingStatus === "failed" ||
+                          (selected.billingStatus === "pending" && !confirmPixPostTrial && selected.activationEligible === false)
                         }
                         title={
-                          (selected.activationEligible === false || selected.billingStatus === "pending" || selected.billingStatus === "failed")
-                            ? "Aguardando confirmação da forma de pagamento pelo restaurante"
-                            : undefined
+                          selected.billingStatus === "failed"
+                            ? "Billing falhou; corrija antes de ativar"
+                            : "Ativa novo restaurante ou vincula ao ID em preparação informado (preservando cardápio e configurações)"
                         }
                         className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-700/70 bg-[#00b894] px-3 py-2 text-[11px] font-black text-black transition-opacity disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         <Rocket className="h-3.5 w-3.5" />
                         {activatingProtocol === selected.protocol
                           ? "Ativando..."
-                          : (selected.activationEligible === false || selected.billingStatus === "pending" || selected.billingStatus === "failed")
+                          : selected.billingStatus === "failed"
+                          ? "Falha no billing"
+                          : selected.billingStatus === "pending" && !confirmPixPostTrial
                           ? "Aguardando pagamento"
+                          : manualRestaurantId.trim()
+                          ? `Vincular ao #${manualRestaurantId.trim()}`
                           : "Ativar restaurante"}
                       </button>
                     </>
