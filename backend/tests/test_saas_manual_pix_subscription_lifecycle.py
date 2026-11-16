@@ -33,33 +33,36 @@ from app.services.direct_pix_billing import (
 
 @contextmanager
 def freeze_time(target_dt: dt.datetime):
-    orig_dt = dt.datetime
+    import datetime as real_datetime
+    import app.routes.saas_pix as saas_pix_mod
+    import app.routes.super_admin as super_admin_mod
+    import app.services.direct_pix_billing as direct_pix_mod
 
-    class MockDatetime(orig_dt):
+    orig_dt_cls = real_datetime.datetime
+
+    class MockDatetime(orig_dt_cls):
         @classmethod
         def now(cls, tz=None):
             if tz is not None:
                 return target_dt.astimezone(tz)
             return target_dt
 
-    import datetime
-    import app.routes.saas_pix as saas_pix_mod
-    import app.routes.super_admin as super_admin_mod
-    import app.services.direct_pix_billing as direct_pix_mod
+    fake_dt_module = SimpleNamespace(**{k: getattr(real_datetime, k) for k in dir(real_datetime) if not k.startswith("__")})
+    fake_dt_module.datetime = MockDatetime
 
-    dt.datetime = MockDatetime
-    datetime.datetime = MockDatetime
-    saas_pix_mod.dt.datetime = MockDatetime
-    direct_pix_mod.dt.datetime = MockDatetime
-    super_admin_mod.datetime.datetime = MockDatetime
+    orig_saas_pix_dt = saas_pix_mod.dt
+    orig_direct_pix_dt = direct_pix_mod.dt
+    orig_super_admin_dt = super_admin_mod.datetime
+
+    saas_pix_mod.dt = fake_dt_module
+    direct_pix_mod.dt = fake_dt_module
+    super_admin_mod.datetime = fake_dt_module
     try:
         yield
     finally:
-        dt.datetime = orig_dt
-        datetime.datetime = orig_dt
-        saas_pix_mod.dt.datetime = orig_dt
-        direct_pix_mod.dt.datetime = orig_dt
-        super_admin_mod.datetime.datetime = orig_dt
+        saas_pix_mod.dt = orig_saas_pix_dt
+        direct_pix_mod.dt = orig_direct_pix_dt
+        super_admin_mod.datetime = orig_super_admin_dt
 
 
 TENANT_ID = 99882
