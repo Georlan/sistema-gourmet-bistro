@@ -43,7 +43,7 @@ class AgentConfig:
     adapter: str = "auto"  # 'auto', 'file', 'linux', 'windows'
     output_dir: str = "print_output"
     poll_interval_seconds: float = 0.5
-    heartbeat_interval_seconds: float = 5.0
+    heartbeat_interval_seconds: float = 25.0
     claim_batch_size: int = 10
     max_parallel_printers: int = 2
     printers: Dict[str, str] = field(default_factory=lambda: {"PADRAO": "Padrão"})

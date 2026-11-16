@@ -1,5 +1,18 @@
 package br.com.koma.print.core
 
+fun nextIdlePollIntervalMs(
+    consecutiveEmptyCycles: Int,
+    baseIntervalMs: Long = 4_000L,
+    maxIntervalMs: Long = 12_000L,
+): Long {
+    val safeBase = baseIntervalMs.coerceAtLeast(1_000L)
+    val safeMax = maxIntervalMs.coerceAtLeast(safeBase)
+    if (consecutiveEmptyCycles <= 0) return safeBase
+    val step = (consecutiveEmptyCycles - 1).coerceAtMost(4)
+    val candidate = safeBase + (step.toLong() + 1L) * 2_000L
+    return candidate.coerceAtMost(safeMax)
+}
+
 data class PrintCycleOutcome(
     val claimedCount: Int = 0,
     val printedAndSentCount: Int = 0,

@@ -20,9 +20,26 @@ from simulator import simulate_payload, start_simulator_server
 log = logging.getLogger("print-agent.worker")
 
 RECONCILIATION_INTERVAL_SECONDS = 5.0
-DIAGNOSTIC_REFRESH_INTERVAL_SECONDS = 5.0
+DIAGNOSTIC_REFRESH_INTERVAL_SECONDS = 25.0
 NOT_READY_LOG_INTERVAL_SECONDS = 300.0
-MAX_DIAGNOSTIC_AGE_SECONDS = 30.0
+MAX_DIAGNOSTIC_AGE_SECONDS = 75.0
+IDLE_POLL_MAX_SECONDS = 5.0
+
+
+def compute_idle_poll_seconds(
+    configured_poll_seconds: float,
+    consecutive_empty_polls: int,
+    wakeup_listener=None,
+) -> float:
+    """Calcula a espera ociosa preservando wake-up imediato por SSE e backoff limitado sem SSE."""
+    configured = max(0.1, float(configured_poll_seconds))
+    if wakeup_listener is not None and wakeup_listener.push_available:
+        return wakeup_listener.fallback_poll_seconds(configured)
+    if consecutive_empty_polls <= 0:
+        return configured
+    # Backoff exponencial limitado quando SSE está indisponível (ex.: 0.5 -> 1 -> 2 -> 4 -> 5s).
+    backoff = configured * (2 ** min(consecutive_empty_polls, 6))
+    return min(max(configured, IDLE_POLL_MAX_SECONDS), backoff)
 
 
 class AgentMaintenance:
@@ -38,7 +55,7 @@ class AgentMaintenance:
         self.hardware_lock = hardware_lock
         self.client = KomaApiClient(config.api_url, config.agent_token)
         self.snapshot = ({}, 0.0)
-        self.last_heartbeat = 0.0
+        self.last_heartbeat = None
         self.last_command_id = ""
         self.last_command_result = None
         self.refresh()
@@ -66,7 +83,10 @@ class AgentMaintenance:
         now = time.monotonic()
         if now - self.snapshot[1] >= DIAGNOSTIC_REFRESH_INTERVAL_SECONDS:
             self.refresh()
-        if now - self.last_heartbeat < self.config.heartbeat_interval_seconds:
+        if (
+            self.last_heartbeat is not None
+            and now - self.last_heartbeat < self.config.heartbeat_interval_seconds
+        ):
             return
         self.last_heartbeat = now
         response = self.client.heartbeat(diagnostics=self.snapshot[0])
@@ -502,6 +522,7 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
     ack_items = []
     next_ack_at = last_reconciliation = 0.0
     loop_count = 0
+    consecutive_empty_polls = 0
     log.info(
         "[AGENTE] Transporte independente; polling=%ss, lote=%s, wakeup=%s",
         config.poll_interval_seconds,
@@ -563,6 +584,7 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
                             jobs = client.claim_jobs(config.claim_batch_size)
                             claim_ms = round((time.perf_counter() - started) * 1000)
                             if jobs:
+                                consecutive_empty_polls = 0
                                 with hardware_lock:
                                     outcomes = dispatch_claimed_jobs(adapter, journal, jobs, config, config.max_parallel_printers)
                                 failures = [item for item in outcomes if item["state"] == "failed"]
@@ -580,24 +602,26 @@ def run_agent_loop(config: AgentConfig, max_loops: int = None):
                                 if failures:
                                     maintenance.snapshot = ({}, 0.0)
                                 should_wait = bool(failures)
+                            else:
+                                consecutive_empty_polls += 1
                         if ack_future is None and pending and now >= next_ack_at:
                             ack_items = list(pending.values())[:10]
                             ack_future = acknowledgments.submit(ack_client.complete_jobs, ack_items)
                     except AgentAuthenticationError:
                         raise
                     except Exception:
+                        consecutive_empty_polls += 1
                         log.exception("[AGENTE] Falha transitória; a fila local será reconciliada.")
                     if max_loops is not None and loop_count >= max_loops:
                         break
                     if should_wait:
-                        wait_seconds = (
-                            wakeup_listener.fallback_poll_seconds(
-                                config.poll_interval_seconds
-                            )
-                            if wakeup_listener is not None
-                            else config.poll_interval_seconds
+                        wait_seconds = compute_idle_poll_seconds(
+                            config.poll_interval_seconds,
+                            consecutive_empty_polls,
+                            wakeup_listener,
                         )
-                        wakeup_event.wait(wait_seconds)
+                        if wakeup_event.wait(wait_seconds):
+                            consecutive_empty_polls = 0
                         wakeup_event.clear()
             finally:
                 # Bounded HTTP timeouts; leave unacknowledged jobs durable on
