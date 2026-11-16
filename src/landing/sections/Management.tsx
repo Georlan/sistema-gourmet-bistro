@@ -7,8 +7,8 @@ const GROUPS = [
     slug: 'vender',
     eyebrow: 'VENDER',
     icon: ShoppingBag,
-    title: 'PDV, MESAS E COMANDAS.'
-    text: 'Controle mesas e comandas digitais pelo PDV e App do Garçom. Salão, balcão e pedidos online alimentam a mesma operação.'
+    title: 'PDV, MESAS E COMANDAS.',
+    text: 'Controle mesas e comandas digitais pelo PDV e App do Garçom. Salão, balcão e pedidos online alimentam a mesma operação.',
     features: ['App do Garçom no navegador desde o Pocket', 'Retirada e delivery próprio', 'Cardápio digital com QR Code integrado ao PDV'], 
   },
   {
@@ -16,8 +16,8 @@ const GROUPS = [
     slug: 'operar',
     eyebrow: 'OPERAR',
     icon: Workflow,
-    title: 'COZINHA EM SINCRONIA.'
-    text: 'A fila de preparo recebe itens e observações na tela. Nos planos Pro e Premium, o KDS organiza a cozinha sem redigitar pedidos.'
+    title: 'COZINHA EM SINCRONIA.',
+    text: 'A fila de preparo recebe itens e observações na tela. Nos planos Pro e Premium, o KDS organiza a cozinha sem redigitar pedidos.',
     features: ['Fila de preparo na tela em todos os planos', 'KDS e impressão automática no Pro e Premium', 'Status compartilhado pela equipe'],
   },
   {
