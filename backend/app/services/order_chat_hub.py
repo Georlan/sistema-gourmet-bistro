@@ -18,6 +18,7 @@ from typing import Any
 from sqlalchemy import event, text
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..database import SessionLocal, engine, tenant_session_scope
 from .postgres_listen_multiplexer import PostgresListenMultiplexer, listen_multiplexer
 
@@ -55,6 +56,10 @@ class OrderChatHub:
         return engine.dialect.name == "postgresql" and self._listen_to_postgres
 
     @property
+    def _listener_thread(self) -> threading.Thread | None:
+        return self._multiplexer._thread
+
+    @property
     def generation(self) -> int:
         if self._uses_postgres_multiplexer():
             return self._multiplexer.generation + self._local_generation
@@ -67,11 +72,24 @@ class OrderChatHub:
         else:
             self._local_generation = int(value)
 
+    @staticmethod
+    def _postgres_dsn() -> str:
+        dsn = settings.DATABASE_URL
+        if dsn.startswith("postgresql+psycopg2://"):
+            dsn = "postgresql://" + dsn.split("://", 1)[1]
+        elif dsn.startswith("postgres://"):
+            dsn = "postgresql://" + dsn.split("://", 1)[1]
+        return dsn
+
     def ensure_started(self) -> None:
         self._multiplexer.register_handler(ORDER_CHAT_CHANNEL, self._handle_notify)
         if not self._uses_postgres_multiplexer():
             self._listener_ready.set()
             return
+        self._multiplexer.configure_runtime(
+            dsn_provider=self._postgres_dsn,
+            dialect_provider=lambda: engine.dialect.name,
+        )
         self._multiplexer.start()
 
     def stop(self) -> None:

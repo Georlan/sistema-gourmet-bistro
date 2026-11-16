@@ -54,11 +54,29 @@ class PostgresListenMultiplexer:
         self._backoff_schedule = backoff_schedule or (1.0,)
 
         self._lock = threading.Lock()
-        self._handlers: dict[str, Callable[[str], None]] = {}
+        self._handlers: dict[str, list[Callable[[str], None]]] = {}
+        self._application_name = "koma-listen-multiplexer"
         self._stop = threading.Event()
         self.ready = threading.Event()
         self._thread: threading.Thread | None = None
         self.generation = 0
+
+    def set_application_name(self, name: str) -> None:
+        if name:
+            with self._lock:
+                self._application_name = name
+
+    def configure_runtime(
+        self,
+        *,
+        dsn_provider: Callable[[], str] | None = None,
+        dialect_provider: Callable[[], str] | None = None,
+    ) -> None:
+        with self._lock:
+            if dsn_provider is not None:
+                self._dsn_provider = dsn_provider
+            if dialect_provider is not None:
+                self._dialect_provider = dialect_provider
 
     def _is_postgresql(self) -> bool:
         if self._dialect_provider is not None:
@@ -71,7 +89,9 @@ class PostgresListenMultiplexer:
         if channel not in self._channels:
             raise ValueError(f"Canal LISTEN não registrado no multiplexador: {channel}")
         with self._lock:
-            self._handlers[channel] = handler
+            handlers = self._handlers.setdefault(channel, [])
+            if handler not in handlers:
+                handlers.append(handler)
 
     def start(self) -> None:
         if not self._is_postgresql():
@@ -108,28 +128,29 @@ class PostgresListenMultiplexer:
 
     def _dispatch_notification(self, channel: str, payload: str) -> None:
         with self._lock:
-            handler = self._handlers.get(channel)
-        if handler is None:
-            return
-        try:
-            handler(payload)
-        except Exception as exc:
-            # Never let one consumer failure break other channels or the loop.
-            logger.warning(
-                "Listen multiplexer handler error channel=%s error=%s",
-                channel,
-                type(exc).__name__,
-            )
+            handlers = list(self._handlers.get(channel, ()))
+        for handler in handlers:
+            try:
+                handler(payload)
+            except Exception as exc:
+                # Never let one consumer failure break other channels or the loop.
+                logger.warning(
+                    "Listen multiplexer handler error channel=%s error=%s",
+                    channel,
+                    type(exc).__name__,
+                )
 
     def _open_connection(self, dsn: str):
         if self._connect_fn is not None:
             return self._connect_fn(dsn)
         import psycopg2
 
+        with self._lock:
+            app_name = self._application_name
         return psycopg2.connect(
             dsn,
             connect_timeout=10,
-            application_name="koma-listen-multiplexer",
+            application_name=app_name,
         )
 
     def _listen_forever(self) -> None:

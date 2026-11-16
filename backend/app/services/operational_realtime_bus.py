@@ -47,6 +47,7 @@ class OperationalRealtimeBus:
 
     def start(self) -> None:
         self._multiplexer.register_handler(CHANNEL, self._handle_notify)
+        self._multiplexer.set_application_name(f"koma-operational-{self.instance_id[:8]}")
         if engine.dialect.name != "postgresql":
             self.ready.set()
             return
