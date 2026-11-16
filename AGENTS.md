@@ -26,7 +26,7 @@
 ## Interfaces
 
 Antes de projetar ou alterar interfaces, consulte `docs/design-system/DESIGN_SYSTEM.md`, `docs/design-system/UI_IDENTITY_CONTRACT.md` e os documentos especializados referenciados; preserve contratos, exceções de contexto e distinção entre direção e padrão validado.
-- **Regras obrigatórias de geração/edição de UI:** proibido emojis na interface, múltiplas variações não solicitadas, `backdrop-blur`/neon decorativo e cores fixas que quebrem claro/escuro. Usar exclusivamente os tokens `--koma-*` / `--kc-*` (`komaFoundation.css` / `cashierChrome.css`), fontes `--koma-font-body` (`Inter`) e `--koma-font-display` (`Space Grotesk`), ícones `lucide-react` e assets existentes de `public/brand/cashier/` ou `src/brand/komaBrand.ts`.
+- **Regras obrigatórias de geração/edição de UI:** proibido emojis na interface, múltiplas variações não solicitadas, `backdrop-blur`/neon decorativo e cores fixas que quebrem claro/escuro. Preferir tokens `--koma-*` / `--kc-*` (`komaFoundation.css` / `cashierChrome.css`), fontes `--koma-font-body` (`Inter`) e `--koma-font-display` (`Space Grotesk`), ícones `lucide-react` e assets de `public/brand/cashier/` ou `src/brand/komaBrand.ts` — preservando glifos proprietários do KÔMA, personalizações legítimas de restaurantes no Cardápio e a criação justificada de novos recursos quando documentados.
 
 ## Abrir somente o contexto da tarefa
 

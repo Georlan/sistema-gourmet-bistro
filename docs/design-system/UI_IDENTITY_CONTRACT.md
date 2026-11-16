@@ -73,9 +73,8 @@ Dentro de `.cashier-shell`, os tokens `--koma-surface-*` já assumem automaticam
 
 ## 5. Ícones, componentes e assets existentes
 
-- **Ícones de UI:** usar exclusivamente `lucide-react` (ex.: `Menu`, `Search`, `Check`, `MessageSquare`, `ReceiptText`, `CirclePlus`, `ChefHat`, `Wallet`, `AlertTriangle`, `Clock`, `MapPin`).
-- **Estados vazios:**
-  - Para telas gerais: usar [`KomaEmptyState`](../../src/components/shared/KomaEmptyState.tsx).
-  - Para ilustrações vetoriais do Caixa: reutilizar os SVGs oficiais em `public/brand/cashier/` (`closing-empty-v1.svg`, `order-ticket-v1.svg`, `salon-empty-v1.svg`, `pdv-empty-cart-v1.svg`, `inbox-orders-v1.svg`, `cashier-counter-v1.svg`, `operator-access-v1.svg`, `chat-pair-v1.svg`, `pause-menu-v1.svg`, `support-note-v1.svg`) com `alt=""` e `aria-hidden="true"`.
-- **Marca:** importar via [`src/brand/komaBrand.ts`](../../src/brand/komaBrand.ts) (`on-dark` para fundo escuro, `on-light` para fundo claro).
-- **Não inventar novos assets SVG/PNG** quando já existir equivalente no catálogo em [`docs/design-system/ASSETS.md`](./ASSETS.md).
+- **Ícones de UI (preferência):** preferir `lucide-react` para controles e navegação padrão (ex.: `Menu`, `Search`, `Check`, `MessageSquare`, `ReceiptText`, `CirclePlus`, `ChefHat`, `Wallet`, `AlertTriangle`, `Clock`, `MapPin`).
+- **Glifos e ilustrações proprietárias do KÔMA:** preservar os SVGs proprietários inline (`CashierColumnHeader`, `CashierPrintGlyph`, `CashierDetailActionArt`, `KomaWaiterGlyphs`) e os SVGs em `public/brand/cashier/` (`closing-empty-v1.svg`, `order-ticket-v1.svg`, `salon-empty-v1.svg`, `pdv-empty-cart-v1.svg`, `inbox-orders-v1.svg`, `cashier-counter-v1.svg`, `operator-access-v1.svg`, `chat-pair-v1.svg`, `pause-menu-v1.svg`, `support-note-v1.svg`), sempre com `alt=""` e `aria-hidden="true"` quando decorativos.
+- **Estados vazios:** usar [`KomaEmptyState`](../../src/components/shared/KomaEmptyState.tsx) em módulos gerais ou o padrão ilustrado de `CaixaOrdersWorkspace` nas colunas operacionais.
+- **Marca e personalização de restaurantes:** importar a marca KÔMA via [`src/brand/komaBrand.ts`](../../src/brand/komaBrand.ts) (`on-dark` / `on-light`). No Cardápio público, preservar a personalização legítima do restaurante (cores, logo e fotos autorizadas do tenant) sem perder contraste nem legibilidade.
+- **Evolução e novos recursos:** reutilizar o catálogo de [`docs/design-system/ASSETS.md`](./ASSETS.md) antes de criar algo redundante; novos assets ou variantes visuais são permitidos quando houver necessidade real, desde que sigam o sistema e sejam registrados em `ASSETS.md` e `ASSET_PROVENANCE.md`.

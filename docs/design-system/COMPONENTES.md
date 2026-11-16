@@ -1,6 +1,6 @@
 # Componentes e responsabilidades
 
-Inventário atualizado com base no código da `main` em `57cc6a36` (16/11/2026). **Global** significa uso potencial entre módulos; verificar nome acessível, foco, tema e testes antes de reutilizar.
+Inventário atualizado com base no código da `main` em `8eeb1e15` (16/11/2026). **Global** significa uso potencial entre módulos; verificar nome acessível, foco, tema e testes antes de reutilizar.
 
 | Componente e localização | Classificação, consumidores e variantes | Reutilização e limites |
 | --- | --- | --- |

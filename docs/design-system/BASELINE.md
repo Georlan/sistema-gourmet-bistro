@@ -1,6 +1,10 @@
 # Fundação visual KÔMA — baseline da Fase 0
 
-Estado: **fundação consolidada para as 9 superfícies modernizadas; módulos pendentes mapeados para fases futuras**. Base de código: `57cc6a36` (main, 16/11/2026). Este documento não substitui os contratos funcionais das telas. Para decisões registradas, consulte [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md), [UI_IDENTITY_CONTRACT.md](UI_IDENTITY_CONTRACT.md), [fundação CSS](../../src/styles/komaFoundation.css), [cores operacionais](../engineering/operational-brand-colors.md) e [direção do Caixa](../design/cashier-visual-direction.md).
+Estado: **fundação visual compartilhada validada nas superfícies de referência; módulos pendentes mapeados para fases futuras**. Base de código reconciliada: `8eeb1e15` (`main`, 16/11/2026).
+
+> **Escopo desta validação:** este documento registra a **validação da fundação visual compartilhada** (tokens, contraste claro/escuro, tipografia, integridade de rotas/assets e componentes base), o que **não** equivale à homologação operacional completa de cada aplicação em produção. Homologação funcional/operacional depende das suítes E2E de domínio, testes de backend e verificação física em dispositivo/impressora quando aplicável.
+
+Para decisões registradas, consulte [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md), [UI_IDENTITY_CONTRACT.md](UI_IDENTITY_CONTRACT.md), [fundação CSS](../../src/styles/komaFoundation.css), [cores operacionais](../engineering/operational-brand-colors.md) e [direção do Caixa](../design/cashier-visual-direction.md).
 
 ## Perfis
 
@@ -40,17 +44,19 @@ Inventário ainda incompleto: botões, campos, navegação, overlays e duplicaç
 
 ## Cobertura das superfícies na Fase 0 (16/11/2026)
 
-| Superfície | Código principal | Status na Fase 0 |
+A tabela abaixo relaciona a validação da **fundação visual compartilhada** desta rodada (`audit:light` 27/27 pares AA, `surface-integrity`, `brand-hierarchy`, `cashier-header-art`) com as suítes dedicadas e PRs anteriores de cada superfície. Ela **não** substitui a homologação operacional completa de produção.
+
+| Superfície | Código principal | Evidências reais por superfície (fundação visual + histórico) |
 | --- | --- | --- |
-| Cardápio Digital | `src/cardapio/CardapioPage.tsx` | Modernizado e validado (E2E + unit) |
-| App do Garçom | `src/components/mesas/`, `src/components/MenuPanel.tsx` | Modernizado e validado (E2E + unit) |
-| App do Entregador | `src/components/MotoboyPwaPage.tsx`, `src/components/courier/` | Modernizado e validado (produção somente leitura + E2E) |
-| Caixa — Pedidos/Kanban | `src/components/caixa/orders/CaixaOrdersWorkspace.tsx` | Modernizado e validado (produção somente leitura + E2E) |
-| Caixa — PDV/Balcão | `src/components/caixa/pdv/CashierPdvView.tsx` | Modernizado e validado (E2E) |
-| Caixa — Salão | `src/components/caixa/salao/CaixaSalonTab.tsx` | Modernizado e validado (E2E) |
-| Caixa — Cozinha/KDS | `src/components/caixa/kitchen/` | Modernizado e validado (E2E) |
-| Login unificado | `src/components/auth/UnifiedOperationalEntry.tsx`, `OperationalLogin.tsx` | Modernizado e validado (produção + unit) |
-| Relacionamento/CRM | `src/components/caixa/customers/` | Modernizado com `KomaEmptyState` e `KomaMetricGroup` |
+| Cardápio Digital | `src/cardapio/CardapioPage.tsx` | E2E `cardapio-foundation-accessibility.spec.ts`, `cardapio-mobile-layout.spec.ts`, `cardapio-artistic-parity.spec.ts`; PRs `#1289`, `#1342`, `#1348`; `surface-integrity` (`mobile-390` e `desktop-1366`). |
+| App do Garçom | `src/components/mesas/`, `src/components/MenuPanel.tsx` | E2E `waiter-modal-keyboard.spec.ts`, `waiter-salon-wave1.spec.ts`, `waiter-config-layout.spec.ts`; PR `#1348`; unit `waiter*.test.ts`. |
+| App do Entregador | `src/components/MotoboyPwaPage.tsx`, `src/components/courier/` | E2E `courier-refinement.spec.ts`, `courier-theme-transition.spec.ts`, `courier-realtime-cache.spec.ts`; PR `#1374`; inspeção somente leitura em `app.komafood.com.br/entregador`. |
+| Caixa — Pedidos/Kanban | `src/components/caixa/orders/CaixaOrdersWorkspace.tsx` | E2E `brand-hierarchy.spec.ts`, `cashier-header-art.spec.ts`, `cashier-detail-design.spec.ts`, `surface-integrity.spec.ts`; PRs `#1350`–`#1354`, `#1357`; inspeção somente leitura em `app.komafood.com.br`. |
+| Caixa — PDV/Balcão | `src/components/caixa/pdv/CashierPdvView.tsx` | E2E `cashier-pdv-tone.spec.ts`, `cashier-pdv-product-card.spec.ts`, `cashier-pdv-mobile-viewport.spec.ts`, `surface-integrity.spec.ts`; PRs `#1302`–`#1316`. |
+| Caixa — Salão | `src/components/caixa/salao/CaixaSalonTab.tsx` | E2E `cashier-salon-hierarchy.spec.ts`, `surface-integrity.spec.ts`; PRs `#1310`–`#1313`, `#1319`/`#1320`; unit `sharedTableCard.test.ts`. |
+| Caixa — Cozinha/KDS | `src/components/caixa/kitchen/` | E2E `kds-visual-hierarchy.spec.ts`, `kds-workspace-refactor.spec.ts`, `kds-start-ready.spec.ts`, `surface-integrity.spec.ts`; PRs `#1317`–`#1324`. |
+| Login unificado | `src/components/auth/UnifiedOperationalEntry.tsx`, `OperationalLogin.tsx` | E2E `login-refinement.spec.ts`, `auth-persistence.spec.ts`, `installed-pwa-auth-persistence.spec.ts`; PR `#1366`; unit `unifiedOperationalEntry.test.ts`; inspeção em `app.komafood.com.br`. |
+| Relacionamento/CRM | `src/components/caixa/customers/` | E2E `relationship-navigation.spec.ts`, `customer-crm.spec.ts`, `surface-integrity.spec.ts`; PR `#1340`; reutiliza `KomaEmptyState` e `KomaMetricGroup`. |
 
 ### Módulos pendentes para fases futuras (não homologados como modernizados)
 - **Estoque, Relatórios, Configurações:** compatíveis com tokens `--koma-*`, pendentes de modernização visual dedicada.
