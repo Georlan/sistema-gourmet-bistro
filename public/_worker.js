@@ -91,6 +91,28 @@ async function fetchPublicMenuPreview(slug, apiBaseUrl, metadataFetch) {
   }
 }
 
+// Keep the global operational CSP untouched; allow GA4 on the canonical
+// public landing response only, without unsafe-inline or wildcard hosts.
+export function withPublicLandingAnalyticsCsp(policy) {
+  if (!policy) return policy;
+  const permitted = {
+    'script-src': ['https://www.googletagmanager.com'],
+    'connect-src': ['https://www.google-analytics.com', 'https://region1.google-analytics.com', 'https://www.googletagmanager.com'],
+    'img-src': ['https://www.google-analytics.com', 'https://www.googletagmanager.com'],
+  };
+  const directives = policy.split(';').map(value => value.trim()).filter(Boolean);
+  for (const [name, sources] of Object.entries(permitted)) {
+    const index = directives.findIndex(value => value.split(/\\s+/, 1)[0] === name);
+    if (index === -1) {
+      directives.push(name + " 'self' " + sources.join(' '));
+    } else {
+      const parts = directives[index].split(/\\s+/);
+      directives[index] = [...parts, ...sources.filter(source => !parts.includes(source))].join(' ');
+    }
+  }
+  return directives.join('; ');
+}
+
 // This worker only serves build-time public HTML. It never resolves sessions,
 // queries the API, or changes the operational SPA's authentication/router.
 export function createSeoWorker(securityHeaders = {}, apiBaseUrl = PUBLIC_API_BASE_URL, metadataFetch = fetch) {
@@ -146,6 +168,10 @@ export function createSeoWorker(securityHeaders = {}, apiBaseUrl = PUBLIC_API_BA
         headers.delete('ETag');
       }
       for (const [name, value] of Object.entries(securityHeaders)) headers.set(name, String(value));
+      if (landing && url.hostname === 'komafood.com.br' && response.ok) {
+        const policy = headers.get('Content-Security-Policy');
+        if (policy) headers.set('Content-Security-Policy', withPublicLandingAnalyticsCsp(policy));
+      }
       headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
       if (url.pathname === '/w/a' || url.pathname === '/whatsapp/avisos') {
         headers.set('Referrer-Policy', 'no-referrer');
