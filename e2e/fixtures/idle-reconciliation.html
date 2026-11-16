@@ -4,6 +4,9 @@ import {createRoot} from 'react-dom/client';
 import {CashierPickups} from '/src/components/caixa/orders/CashierPickups.tsx';
 import {CashierCouriers} from '/src/components/caixa/orders/CashierCouriers.tsx';
 import {PrintMonitorPanel} from '/src/components/printing/PrintMonitorPanel.tsx';
+// This case measures the foreground idle budget. Parallel headless tabs can be
+// backgrounded by Chromium and suppress polling regardless of fake clock.
+Object.defineProperty(document, 'hidden', {configurable: true, get: () => false});
 const headers = {Authorization: 'Bearer isolated-test'};
 const noop = async () => {};
 function Harness() {

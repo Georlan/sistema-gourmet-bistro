@@ -83,9 +83,10 @@ test('cashier printing settings keeps every action while prioritizing daily oper
   assert.match(printing, /Impressão não incluída no Kôma Pocket/);
   assert.doesNotMatch(printing, /Fila ativa/);
 
-  // O monitor prioriza apenas o estado do KÔMA Print e da impressora no fluxo diário.
-  assert.match(monitor, /label: 'KÔMA Print'/);
-  assert.match(monitor, /label: 'Impressora'/);
+  // O monitor distingue o dispositivo local da impressora principal do restaurante.
+  assert.match(monitor, /label: 'KÔMA Print local'/);
+  assert.match(monitor, /label: 'Impressora local'/);
+  assert.match(monitor, /Impressora principal do restaurante/);
   assert.match(monitor, /impressora indisponível/);
   assert.doesNotMatch(monitor, /agente online · USB desconectado/);
   assert.doesNotMatch(monitor, /impressora física no USB/);
