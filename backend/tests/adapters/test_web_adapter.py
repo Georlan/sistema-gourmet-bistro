@@ -66,6 +66,20 @@ class TestCardapioWebAdapter:
             assert len(cmd.items) == 1
             assert cmd.items[0].product_id == "prod-char-simples"
 
+    @pytest.mark.parametrize("provider, expected", [("direct_pix", 418), ("pagbank", 422), ("mercado_pago", 422)])
+    def test_pix_order_without_email_depends_on_receiver(self, char_client, char_setup, provider, expected):
+        from fastapi import HTTPException
+        from app.services.online_payments.service import OnlinePaymentService
+        payload = {"restaurante_id": CHAR_RESTAURANT_ID, "cliente_nome": "Cliente Teste",
+                   "cliente_telefone": "11999990001", "tipo_pedido": "retirada",
+                   "itens": [{"produto_id": "prod-char-simples", "quantidade": 1, "modificador_ids": []}],
+                   "forma_pagamento": "online", "forma_pagamento_detalhe": "pix", "idempotency_key": "sem-email-12345"}
+        with patch.object(OnlinePaymentService, "active_account", return_value=MagicMock(provider=provider)), \
+             patch.object(OnlinePaymentService, "open_shift", return_value=MagicMock(id="shift")), \
+             patch.object(OrderApplicationService, "create_order", side_effect=HTTPException(418, "reached order creation")):
+            response = char_client.post("/cardapio/pedidos", json=payload)
+        assert response.status_code == expected, response.text
+
     def test_web_adapter_maps_pagbank_email_rejection_to_422(self, char_client, char_setup):
         from app.services.online_payments.pagbank.provider import PagBankError
 

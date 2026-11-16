@@ -20,6 +20,20 @@ from app.services.online_payments.pagbank import oauth
 A, B = 99581, 99582
 
 
+@pytest.mark.parametrize('provider,email,allowed', [
+    ('direct_pix', None, True), ('mercado_pago', None, False),
+    ('pagbank', None, False), ('mercado_pago', 'buyer@example.test', True),
+])
+def test_pix_email_requirement_depends_on_provider(provider, email, allowed):
+    from app.adapters.orders.web_adapter import validate_pix_payer_email
+    if allowed:
+        validate_pix_payer_email(provider, email)
+    else:
+        with pytest.raises(HTTPException) as exc:
+            validate_pix_payer_email(provider, email)
+        assert exc.value.status_code == 422
+
+
 @pytest.fixture
 def onboarding_db(monkeypatch):
     monkeypatch.setattr(settings, 'KOMA_PUBLIC_API_URL', 'https://api.example.test')
