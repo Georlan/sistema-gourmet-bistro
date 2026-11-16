@@ -698,7 +698,7 @@ export default function CardapioCartDrawer({
       reportValidationError("Informe o CPF ou CNPJ do comprador para gerar o Pix PagBank.", "input-customer-document");
       return;
     }
-    if (paymentDetail === "pix" && (
+    if (paymentDetail === "pix" && brandConfig?.pixDirect !== true && (
       brandConfig?.pixPayerDocumentRequired
         ? !isValidPixPayerEmail(guestEmail)
         : !/^\S+@\S+\.\S+$/.test(guestEmail.trim())
@@ -725,7 +725,7 @@ export default function CardapioCartDrawer({
       customerName: customerName.trim(),
       customerPhone: normalizeBrazilianPhone(customerPhone),
       customerDocument: paymentDetail === "pix" && brandConfig?.pixPayerDocumentRequired ? guestDocument : undefined,
-      customerEmail: paymentDetail === "pix" ? guestEmail.trim().toLowerCase() : undefined,
+      customerEmail: paymentDetail === "pix" && brandConfig?.pixDirect !== true ? guestEmail.trim().toLowerCase() : undefined,
       paymentMethodDetail: paymentDetail,
       trocoPara: paymentDetail === "dinheiro" && precisaTroco && trocoValorNum > 0 ? trocoValorNum : undefined,
       bairro: addressSnapshot?.bairro || undefined,
@@ -1461,7 +1461,7 @@ export default function CardapioCartDrawer({
                     <span className="mt-1 block">O PagBank exige o documento para emitir o Pix deste pedido.</span>
                   </label>
                 )}
-                {paymentDetail === "pix" && (
+                {paymentDetail === "pix" && brandConfig?.pixDirect !== true && (
                   <label className="mt-3 block">
                     <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">E-mail para o Pix</span>
                     <span className="relative block"><Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="email" autoComplete="email" maxLength={254} placeholder="voce@exemplo.com" value={guestEmail} onChange={(event) => { setGuestEmail(event.target.value); clearValidation("input-customer-email"); }} aria-invalid={invalidField === "input-customer-email"} aria-describedby={invalidField === "input-customer-email" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-2xl border bg-white/[0.03] pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-stone-500 focus:border-emerald-500 ${invalidField === "input-customer-email" ? "border-rose-500" : "border-white/10"}`} id="input-customer-email" /></span>

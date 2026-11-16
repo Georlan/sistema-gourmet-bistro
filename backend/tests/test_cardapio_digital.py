@@ -273,7 +273,7 @@ def test_delete_asset_never_removes_object_from_another_tenant(
 def test_public_menu_preserves_pagbank_payer_document_requirement(test_setup, endpoint, requires_document):
     with patch(
         "app.routes.cardapio_digital.OnlinePaymentService.public_payment_capabilities",
-        return_value=(True, requires_document),
+        return_value=(True, requires_document, False),
     ):
         response = client.get(f"/api/cardapio-digital/{endpoint}?restaurante_id=999")
 
