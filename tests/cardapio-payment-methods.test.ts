@@ -40,6 +40,16 @@ test('Pix valida o contrato de e-mail da API Order antes de enviar a sacola', ()
   }
 });
 
+test('Pix próprio dispensa e-mail; outros provedores e configuração antiga continuam exigindo', () => {
+  for (const [direct, expected] of [[true, false], [false, true], [undefined, true]] as const) {
+    const html = renderToStaticMarkup(createElement(CardapioCartDrawer, {
+      restaurantId: '901', brandConfig: { ...brand(['Pix']), pixDirect: direct }, cart, user: null,
+      onClose() {}, onUpdateQty() {}, onRemoveItem() {}, onPlaceOrder() {},
+    }));
+    assert.equal(html.includes('E-mail para o Pix'), expected);
+  }
+});
+
 test('normaliza quatro formas cadastradas, acentos, caixa, espaços e códigos legados', () => {
   assert.deepEqual(getAvailablePaymentMethods(groups(' Pix ', 'DINHEIRO', 'Cartão de Crédito', 'Cartão de Débito')), ['pix', 'dinheiro', 'cartao_credito', 'cartao_debito']);
   assert.deepEqual(getAvailablePaymentMethods(groups('CREDITO', 'Débito', 'cartao_credito', 'Cartao de debito', ' cartao   debito ')), ['cartao_credito', 'cartao_debito']);

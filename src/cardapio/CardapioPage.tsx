@@ -419,6 +419,7 @@ export default function CardapioPage() {
         paymentMethods,
         onlinePaymentEnabled: restaurant.pagamento_online_ativo === true,
         pixPayerDocumentRequired: restaurant.documento_pix_obrigatorio === true,
+        pixDirect: restaurant.pix_proprio === true,
         benefits: {
           coupons: restaurant.beneficios?.coupons === true,
           loyalty: restaurant.beneficios?.loyalty === true,

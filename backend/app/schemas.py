@@ -979,6 +979,7 @@ class CardapioPublicRestaurantResponse(BaseModel):
     formas_pagamento_aceitas: Optional[Any] = None
     pagamento_online_ativo: bool = False
     documento_pix_obrigatorio: bool = False
+    pix_proprio: bool = False
     conta_cliente_obrigatoria: bool = False
     avisos_whatsapp_disponiveis: bool = False
     beneficios: CardapioPublicBenefitsResponse = Field(default_factory=CardapioPublicBenefitsResponse)

@@ -132,6 +132,7 @@ export interface BrandConfig {
   paymentMethods?: PaymentMethodGroup[];
   onlinePaymentEnabled?: boolean;
   pixPayerDocumentRequired?: boolean;
+  pixDirect?: boolean;
   benefits?: { coupons: boolean; loyalty: boolean; cashback: boolean };
   customerAccountRequired?: boolean;
   customerWhatsAppStatusEnabled?: boolean;

@@ -251,6 +251,11 @@ def _log_validation_rejection(
     logger.info(json.dumps(diagnostic, separators=(",", ":")))
 
 
+def validate_pix_payer_email(provider: str, email: str | None) -> None:
+    if provider != "direct_pix" and not email:
+        raise HTTPException(status_code=422, detail="Informe o e-mail para gerar o pagamento Pix.")
+
+
 class CardapioWebAdapter:
     """Adaptador HTTP do Cardápio Digital para criação canônica de pedidos."""
 
@@ -321,11 +326,6 @@ class CardapioWebAdapter:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Neste momento o pagamento online disponível é Pix.",
-                )
-            if not payload.cliente_email:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="Informe o e-mail para gerar o pagamento Pix.",
                 )
             if not idempotency_key:
                 raise HTTPException(
@@ -406,6 +406,7 @@ class CardapioWebAdapter:
                     OnlinePaymentIntent.comanda_id == existing_comanda.id,
                 ).first()
                 if online_payment and existing_intent and not existing_intent.external_payment_id:
+                    validate_pix_payer_email(existing_intent.provider, payload.cliente_email)
                     OnlinePaymentService.ensure_pix_created(
                         db,
                         intent=existing_intent,
@@ -512,6 +513,7 @@ class CardapioWebAdapter:
             payment_shift = None
             if online_payment:
                 payment_account = OnlinePaymentService.active_account(db, rest_id)
+                validate_pix_payer_email(payment_account.provider, payload.cliente_email)
                 if payment_account.provider == "pagbank":
                     from ...tax_ids import is_valid_cpf, is_valid_cnpj
                     from ...services.online_payments.pagbank.provider import valid_order_payer_email
