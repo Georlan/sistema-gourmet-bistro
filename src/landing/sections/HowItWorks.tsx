@@ -10,22 +10,22 @@ import '../product/editable-phone.css';
 export const PRODUCT_TOUR = [
   {
     id: 'pedidos', num: '01', label: 'Pedidos',
-    title: 'CADA PEDIDO NO SEU LUGAR.',
+    title: 'CONTROLE DE PEDIDOS NO PDV.'
     description: 'Veja o que entrou, o que está em preparo e o que já pode sair. Mesas e delivery na mesma operação.',
     note: 'Pedidos e fila de preparo em todos os planos.',
     device: 'laptop', view: 'pdv',
   },
   {
     id: 'salao', num: '02', label: 'Cozinha',
-    title: 'MENOS PERGUNTAS. MAIS AGILIDADE.',
+    title: 'FILA DE PREPARO NA TELA.'
     description: 'A cozinha recebe itens, quantidades e observações na tela. Sem repetir o pedido no balcão.',
     note: 'Painel de cozinha (KDS) e impressão automática no Pro e Premium.',
     device: 'tablet', view: 'kds',
   },
   {
     id: 'cardapio', num: '03', label: 'Cardápio',
-    title: 'SEU CLIENTE PEDE PELO CELULAR.',
-    description: 'Compartilhe o link ou o QR Code. O pedido chega ao Kôma, sem você precisar digitar tudo de novo.',
+    title: 'CARDÁPIO DIGITAL INTEGRADO AO PDV.'
+    description: 'Seu cliente acessa o cardápio pelo link ou QR Code, escolhe no celular e conclui no checkout web. O pedido chega ao PDV sem redigitação.'
     note: 'Cardápio digital incluído em todos os planos.',
     device: 'phone', view: 'cardapio',
   },
