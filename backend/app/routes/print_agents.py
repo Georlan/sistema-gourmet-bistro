@@ -1075,6 +1075,8 @@ def _coalesce_pending_reprints(db: Session, restaurante_id: int) -> int:
             PrintJob.document_type,
             PrintJob.destination,
             PrintJob.payload_text,
+            PrintJob.agent_id,
+            PrintJob.idempotency_key,
         )
         .filter(
             PrintJob.restaurante_id == restaurante_id,
@@ -1084,16 +1086,19 @@ def _coalesce_pending_reprints(db: Session, restaurante_id: int) -> int:
         )
         .all()
     )
-    reserved = {
-        (row.source_id, row.document_type, row.destination, row.payload_text)
-        for row in in_progress
-    }
+    def identity(job):
+        target = (
+            job.agent_id
+            if (job.idempotency_key or "").startswith("reprint:targeted:")
+            else None
+        )
+        return (job.source_id, job.document_type, job.destination, job.payload_text, target)
+
+    reserved = {identity(row) for row in in_progress}
     suppressed = 0
     for job in pending_reprints:
-        identity = (
-            job.source_id, job.document_type, job.destination, job.payload_text,
-        )
-        if identity in reserved:
+        job_identity = identity(job)
+        if job_identity in reserved:
             job.status = "cancelled"
             job.claimed_at = None
             job.agent_id = None
@@ -1103,7 +1108,7 @@ def _coalesce_pending_reprints(db: Session, restaurante_id: int) -> int:
             )
             suppressed += 1
         else:
-            reserved.add(identity)
+            reserved.add(job_identity)
 
     if suppressed:
         db.flush()

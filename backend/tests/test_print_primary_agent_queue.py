@@ -1154,3 +1154,30 @@ def test_same_source_different_print_content_preserves_distinct_copies():
             PrintJob.restaurante_id == 1,
             PrintJob.source_id == "l-split",
         ).count() == 2
+
+
+@pytest.mark.parametrize("generic_status", ["pending", "claimed"])
+def test_targeted_copy_is_not_coalesced_with_generic_reprint(generic_status):
+    db = TestingSessionLocal()
+    try:
+        for job_id, target, key in [
+            ("generic-copy", None, "reprint:generic:1"),
+            ("directed-copy", "lin-suporte-dev", "reprint:targeted:generic:2"),
+        ]:
+            db.add(PrintJob(
+                id=job_id, restaurante_id=1, document_type="producao",
+                destination="COZINHA", source_type="reimpressao",
+                source_id="same-order", payload_text="same-ticket",
+                status=generic_status if job_id == "generic-copy" else "pending",
+                agent_id=("win-principal" if job_id == "generic-copy" and generic_status == "claimed" else target),
+                idempotency_key=key,
+            ))
+        db.commit()
+        print_agents_route._coalesce_pending_reprints(db, 1)
+        db.commit()
+        assert db.query(PrintJob).filter_by(id="generic-copy").one().status == generic_status
+        copy = db.query(PrintJob).filter_by(id="directed-copy").one()
+        assert copy.status == "pending"
+        assert copy.agent_id == "lin-suporte-dev"
+    finally:
+        db.close()
