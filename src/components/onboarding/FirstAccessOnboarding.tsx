@@ -65,9 +65,14 @@ type OnboardingStatus = {
   readyForRelease: boolean;
   onboarding?: {
     mode: 'commercial' | 'administrative';
+    stage?: 'preparando' | 'pronto_para_teste' | 'trialing' | 'active' | 'past_due';
+    provisionalPreparation?: boolean;
+    contractLinked?: boolean;
     releaseState: 'configuring' | 'awaiting_koma' | 'released';
     operationReleased?: boolean;
     requiresKomaRelease: boolean;
+    blockersNow?: string[];
+    canConfigureLater?: string[];
   };
   payments: {
     mercadoPagoConnected: boolean;
@@ -166,7 +171,8 @@ const planLabel = (plan: string) => {
 };
 
 const trialLabel = (trial: OnboardingStatus['trial']) => {
-  if (trial.status === 'setup') return 'Ainda não iniciado';
+  if (trial.status === 'setup' || trial.status === 'not_started') return 'Ainda não iniciado';
+  if (trial.status === 'unavailable' && !trial.startsAt) return 'Ainda não iniciado';
   if (trial.status === 'expired' || trial.status === 'ended') return 'Trial encerrado';
   if (trial.status === 'converted') return 'Plano ativo';
   if (typeof trial.daysRemaining === 'number') {
@@ -640,6 +646,8 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   const configurationComplete = snapshot.readiness.configurationComplete;
   const inferredCommercial = snapshot.trial.status === 'setup' || snapshot.readyForRelease;
   const onboardingMode = snapshot.onboarding?.mode || (inferredCommercial ? 'commercial' : 'administrative');
+  const isProvisionalPrep = Boolean(snapshot.onboarding?.provisionalPreparation);
+  const contractLinked = snapshot.onboarding?.contractLinked !== false;
   const operationReleased = snapshot.onboarding?.operationReleased
     ?? snapshot.readiness.operationReleased
     ?? snapshot.readiness.trialStarted;
@@ -805,11 +813,49 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
             </div>
             <h2 className="mt-5 text-sm font-black">{configurationComplete ? 'Essenciais concluídos · pronto para revisão' : `${remainingEssentials === 1 ? 'Falta 1 essencial' : `Faltam ${remainingEssentials} essenciais`} para revisão`}</h2>
             <p className="mt-1 text-xs text-koma-muted">{guidedMode ? 'Uma etapa por vez. Salve para abrir a próxima; toque em uma etapa concluída para revisar.' : 'Você pode configurar os itens em qualquer ordem. O primeiro pendente está destacado.'}</p>
+
+            {isCommercial && (
+              <div className="mt-4 grid gap-2 sm:grid-cols-3" aria-label="Resumo rápido das 3 etapas">
+                <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] p-3">
+                  <p className="text-[10px] font-black text-emerald-300">Já consigo entrar e configurar?</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
+                    Sim. Perfil, horários, produtos, adicionais e simulação da sacola no cardápio público já estão liberados no celular sem consumir os 7 dias.
+                  </p>
+                </div>
+                <div className={`rounded-2xl border p-3 ${operationReleased ? 'border-emerald-500/25 bg-emerald-500/[0.06]' : 'border-amber-500/25 bg-amber-500/[0.06]'}`}>
+                  <p className={`text-[10px] font-black ${operationReleased ? 'text-emerald-300' : 'text-amber-300'}`}>Já posso iniciar legitimamente meus sete dias?</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
+                    {operationReleased
+                      ? 'Sim. Seus 7 dias já começaram e vendas reais estão liberadas.'
+                      : configurationComplete && contractLinked
+                        ? 'Sim. Os 4 essenciais e o aceite contratual estão prontos; aguardando liberação KÔMA.'
+                        : configurationComplete && !contractLinked
+                          ? 'Os 4 essenciais estão prontos. Falta apenas registrar o aceite dos termos para liberar o teste (sem exigir gateway prévio).'
+                          : 'Complete os 4 essenciais abaixo e o aceite dos termos para iniciar os 7 dias sem cobrança.'}
+                  </p>
+                  {isProvisionalPrep && !contractLinked && (
+                    <a
+                      href={`/contratar/${encodeURIComponent(planId)}`}
+                      className="mt-2 inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1.5 text-[10px] font-black text-zinc-950"
+                    >
+                      Aceitar termos para o teste de 7 dias <ArrowRight size={11} />
+                    </a>
+                  )}
+                </div>
+                <div className="rounded-2xl border border-koma-border bg-koma-page p-3">
+                  <p className="text-[10px] font-black text-koma-foreground">O que posso completar mais tarde?</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
+                    Endereço definitivo na preparação, CPF/CNPJ e dados fiscais adiáveis, gateway de pagamento online, impressora térmica e equipe.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {guidedMode && (
               <div id="setup-guided-steps" tabIndex={-1} className="mt-5 space-y-3" aria-label="Etapas da inscrição">
                 {guidedSteps.map((step, index) => {
                   const active = guidedStep === step.id;
-                  const locked = !step.done && step !== nextStep;
+                  const locked = !isProvisionalPrep && !step.done && step !== nextStep;
                   const Icon = step.icon;
                   return (
                     <section key={step.id} id={`setup-step-${step.id}`} tabIndex={-1} className={`scroll-mt-4 overflow-hidden rounded-2xl border ${active ? 'border-koma-accent ring-2 ring-koma-accent/25' : 'border-koma-border'}`}>
