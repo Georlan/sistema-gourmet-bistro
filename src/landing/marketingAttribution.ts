@@ -29,7 +29,12 @@ export function landingTrafficSource(search: string, referrer = ''): LandingTraf
   return sourceFromReferrer(referrer);
 }
 
+// Keep acquisition attribution across same-page hash navigation and opened dialogs.
+// Never persist raw URLs, referrer strings, contact information or arbitrary UTMs.
+let capturedSource: LandingTrafficSource | null = null;
+
 export function currentLandingTrafficSource(): LandingTrafficSource {
   if (typeof window === 'undefined') return 'direct';
-  return landingTrafficSource(window.location.search, document.referrer);
+  if (capturedSource === null) capturedSource = landingTrafficSource(window.location.search, document.referrer);
+  return capturedSource;
 }
