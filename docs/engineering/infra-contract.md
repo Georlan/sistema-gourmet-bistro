@@ -10,13 +10,16 @@
 - Recuperação: ver o escopo e as limitações do ensaio pós-STS em `post-sts-reliability-tracker.md`. Arquivo válido e upload recente não equivalem a recuperação integral de banco, mídias, configuração e agentes.
 - Smoke público: `.github/workflows/production-smoke.yml`, diário e manual, somente GET/OPTIONS.
 
-### Orçamento de conexões verificado em 2026-10-03
+### Orçamento de conexões verificado em 2026-10-03 (atualizado B2 em 2026-11-16)
 
 O runtime usa o pool de sessão Supabase (porta 5432), com QueuePool de quatro
-conexões e overflow zero. Além desse pool, há uma conexão LISTEN operacional,
-uma de chat e, quando há agente inscrito, uma de wakeup de impressão. O teto é
-sete conexões por processo; duas versões em rolling deploy podem ocupar 14.
-Migrações usam porta 6543. Homologação tem banco distinto.
+conexões e overflow zero. Além desse pool, os três canais LISTEN
+(`koma_operational_realtime`, `koma_order_chat` e `koma_print_jobs`) agora
+compartilham **1 única conexão dedicada por processo** via
+`PostgresListenMultiplexer` (`application_name=koma-listen-multiplexer`). O teto
+teórico cai de **7 para 5 conexões por processo**; duas versões em rolling
+deploy passam de **14 para 10 sessões** (folga de 5 no limite `pool_size=15` do
+Supavisor Session Mode). Migrações usam porta 6543. Homologação tem banco distinto.
 
 Os logs Supavisor de 2026-10-01 06:28:35 UTC registraram limite de sessão
 `pool_size=15`, junto ao 500 de categorias do tenant 6. Esse limite é distinto

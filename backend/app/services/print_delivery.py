@@ -10,7 +10,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import select
 import threading
 import time
 from time import perf_counter
@@ -19,9 +18,9 @@ from typing import Any
 from sqlalchemy import event, inspect
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from ..database import engine
 from ..models import PrintJob
+from .postgres_listen_multiplexer import PostgresListenMultiplexer, listen_multiplexer
 
 
 log = logging.getLogger("koma.print_delivery")
@@ -39,45 +38,45 @@ PRINT_WAKEUP_RETRY_DELAYS_SECONDS = (0.75, 2.0)
 class PrintWakeupHub:
     """Fans PostgreSQL NOTIFY hints out to connected agent SSE streams."""
 
-    def __init__(self, *, listen_to_postgres: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        listen_to_postgres: bool = True,
+        multiplexer: PostgresListenMultiplexer | None = None,
+    ) -> None:
         self._listen_to_postgres = listen_to_postgres
+        self._multiplexer = multiplexer or listen_multiplexer
         self._lock = threading.Lock()
         self._subscribers: dict[int, dict[int, tuple[asyncio.AbstractEventLoop, asyncio.Queue]]] = {}
         self._stop = threading.Event()
         self._listener_ready = threading.Event()
-        self._listener_thread: threading.Thread | None = None
         self._publish_generation: dict[int, int] = {}
         self._retry_timers: dict[int, list[threading.Timer]] = {}
 
+    def _uses_postgres_multiplexer(self) -> bool:
+        return engine.dialect.name == "postgresql" and self._listen_to_postgres
+
     def ensure_started(self) -> None:
-        if engine.dialect.name != "postgresql" or not self._listen_to_postgres:
+        self._multiplexer.register_handler(PRINT_WAKEUP_CHANNEL, self._handle_notify)
+        if not self._uses_postgres_multiplexer():
             self._listener_ready.set()
             return
-        with self._lock:
-            if self._listener_thread is not None and self._listener_thread.is_alive():
-                return
-            self._stop.clear()
-            self._listener_thread = threading.Thread(
-                target=self._listen_forever,
-                name="koma-print-wakeup",
-                daemon=True,
-            )
-            self._listener_thread.start()
+        self._stop.clear()
+        self._multiplexer.start()
 
     def stop(self) -> None:
         self._stop.set()
         with self._lock:
             for tenant_id in list(self._retry_timers):
                 self._cancel_retries_locked(tenant_id)
-        thread = self._listener_thread
-        if thread is not None and thread.is_alive():
-            thread.join(timeout=2.0)
+        if self._uses_postgres_multiplexer():
+            self._multiplexer.stop()
         self._listener_ready.clear()
 
     def transport_status(self) -> dict[str, Any]:
-        if engine.dialect.name == "postgresql" and self._listen_to_postgres:
+        if self._uses_postgres_multiplexer():
             return {
-                "push_available": self._listener_ready.is_set(),
+                "push_available": self._multiplexer.is_ready(),
                 "transport": "postgres-notify-sse-v1",
             }
         return {
@@ -192,69 +191,14 @@ class PrintWakeupHub:
         except asyncio.QueueFull:
             pass
 
-    @staticmethod
-    def _postgres_dsn() -> str:
-        dsn = settings.DATABASE_URL
-        if dsn.startswith("postgresql+psycopg2://"):
-            dsn = "postgresql://" + dsn.split("://", 1)[1]
-        elif dsn.startswith("postgres://"):
-            dsn = "postgresql://" + dsn.split("://", 1)[1]
-        return dsn
-
-    def _listen_forever(self) -> None:
-        import psycopg2
-
-        while not self._stop.is_set():
-            connection = None
-            cursor = None
-            try:
-                connection = psycopg2.connect(
-                    self._postgres_dsn(),
-                    connect_timeout=10,
-                    application_name="koma-print-wakeup",
-                )
-                connection.autocommit = True
-                cursor = connection.cursor()
-                cursor.execute(f'LISTEN "{PRINT_WAKEUP_CHANNEL}"')
-                self._listener_ready.set()
-                log.info("[PRINT WAKEUP] PostgreSQL LISTEN ativo.")
-
-                while not self._stop.is_set():
-                    readable, _, _ = select.select([connection], [], [], 5.0)
-                    if not readable:
-                        continue
-                    connection.poll()
-                    while connection.notifies:
-                        notification = connection.notifies.pop(0)
-                        try:
-                            restaurante_id = int(notification.payload)
-                        except (TypeError, ValueError):
-                            log.warning(
-                                "[PRINT WAKEUP] Payload PostgreSQL inválido ignorado."
-                            )
-                            continue
-                        if restaurante_id > 0:
-                            self.publish(restaurante_id, reason="postgres-notify")
-            except Exception as exc:
-                self._listener_ready.clear()
-                if not self._stop.is_set():
-                    log.warning(
-                        "[PRINT WAKEUP] LISTEN indisponível; agentes usarão polling: %s",
-                        exc,
-                    )
-                    self._stop.wait(2.0)
-            finally:
-                self._listener_ready.clear()
-                if cursor is not None:
-                    try:
-                        cursor.close()
-                    except Exception:
-                        pass
-                if connection is not None:
-                    try:
-                        connection.close()
-                    except Exception:
-                        pass
+    def _handle_notify(self, payload: str) -> None:
+        try:
+            restaurante_id = int(payload)
+        except (TypeError, ValueError):
+            log.warning("[PRINT WAKEUP] Payload PostgreSQL inválido ignorado.")
+            return
+        if restaurante_id > 0:
+            self.publish(restaurante_id, reason="postgres-notify")
 
 
 print_wakeup_hub = PrintWakeupHub()
