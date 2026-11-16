@@ -13,6 +13,7 @@ test('public landing is readable and styled without JavaScript', async ({ browse
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page).toHaveTitle(/KÔMA.*Sistema para restaurantes/);
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://komafood.com.br/');
+  await expect(page.locator('script[src="/ga4-landing.js"]')).toHaveAttribute('data-measurement-id', 'G-71DWSMX2JM');
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /PDV, mesas, comandas/);
   const images = await page.locator('img').evaluateAll<{ src: string | null; loaded: boolean }[], HTMLImageElement>(elements => elements.map(element => ({ src: element.getAttribute('src'), loaded: element.complete && element.naturalWidth > 0 })));
   expect(images.length).toBeGreaterThan(5);
