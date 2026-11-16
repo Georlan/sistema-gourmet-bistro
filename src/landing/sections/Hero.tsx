@@ -79,16 +79,16 @@ export function Hero() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         >
-          <motion.p
+          <motion.h1
             className="koma-hero-eyebrow"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.55, delay: 0.08 }}
           >
             SISTEMA PARA RESTAURANTES
-          </motion.p>
+          </motion.h1>
 
-          <h1 className="koma-hero-headline" aria-label="Venda mais. Controle a operação do restaurante.">
+          <p className="koma-hero-headline" aria-label="Venda mais. Controle a operação do restaurante.">
             <span className="koma-hero-line koma-hero-line--sm">VENDA</span>
             <span className="koma-hero-title-axis">
               <span className="koma-hero-line koma-hero-line--xl">MAIS.</span>
@@ -102,7 +102,7 @@ export function Hero() {
               </span>
             </span>
             <span className="koma-hero-line koma-hero-line--lg koma-hero-line--accent koma-hero-line--benefit">CONTROLE A OPERAÇÃO.</span>
-          </h1>
+          </p>
 
           <motion.p
             className="koma-hero-sub"
@@ -110,7 +110,7 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.45 }}
           >
-            Sistema de gestão para restaurantes com PDV, mesas, comandas, balcão, retirada, delivery e caixa em um só lugar. Cardápio digital incluído desde o primeiro plano.
+            PDV, mesas e comandas com cardápio digital integrado ao caixa. Salão, balcão, retirada e delivery no mesmo fluxo — com 0% de comissão KÔMA por pedido online. Tarifas de pagamento de terceiros são cobradas à parte.
           </motion.p>
 
           <motion.ul

@@ -1,5 +1,6 @@
 from __future__ import annotations
 import datetime as dt
+import logging
 import re
 from decimal import Decimal
 from typing import Annotated
@@ -27,7 +28,92 @@ from ..online_order_control_models import OnlineOrderOperationalAudit
 from ..services.order_chat_service import queue_order_tracking_refresh
 
 router = APIRouter(prefix='/payments/direct-pix', tags=['Pix direto'])
+logger = logging.getLogger('koma.direct_pix')
 TERMS_VERSION = 'direct-pix-v2-zero-commission'
+
+
+def _advance_direct_pix_order_to_operation_in_session(
+    db: Session,
+    *,
+    restaurant_id: int,
+    intent: OnlinePaymentIntent,
+    operator_user_id: str,
+    audit_action: str | None = 'direct_pix_confirmed_accepted',
+) -> bool:
+    """Encaminha pedido Pix manual confirmado diretamente para a etapa operacional.
+
+    Evita o segundo aceite redundante em "Novos pedidos" sem marcar o pedido
+    como pronto/finalizado. É idempotente e preserva pedidos que já avançaram.
+    """
+    order = db.query(Comanda).filter(
+        Comanda.restaurante_id == restaurant_id,
+        Comanda.id == intent.comanda_id,
+    ).with_for_update().one_or_none()
+    if order is None or order.fechada:
+        return False
+    current_status = str(order.delivery_status or '').strip().lower()
+    if current_status not in {'pendente', 'analise'}:
+        return False
+
+    from ..application.orders.lifecycle import OrderLifecycleCoordinator
+    from ..application.printing import (
+        PrintAction,
+        PrintIntent,
+        PrintSourceType,
+        PrintTrigger,
+        PrintingApplicationService,
+        UniversalPrintingError,
+    )
+
+    target_status = (
+        'aceito'
+        if str(order.tipo or '').strip().lower() in {'entrega', 'delivery', 'retirada', 'viagem'}
+        else 'producao'
+    )
+    transition = OrderLifecycleCoordinator.transition_check_status(
+        db,
+        restaurant_id=restaurant_id,
+        comanda_id=order.id,
+        target_status=target_status,
+        operator_user_id=operator_user_id,
+        commit=False,
+        locked_comanda=order,
+    )
+    if not transition.changed:
+        return False
+
+    if transition.first_accept:
+        try:
+            PrintingApplicationService.request_print(
+                db,
+                PrintIntent(
+                    restaurant_id=restaurant_id,
+                    source_type=PrintSourceType.ORDER,
+                    source_id=order.id,
+                    action=PrintAction.PRINT,
+                    trigger=PrintTrigger.AUTOMATIC,
+                    requested_by='Confirmação manual Pix',
+                    idempotency_key=f'aceite:pedido:{order.id}:producao',
+                ),
+            )
+        except UniversalPrintingError as exc:
+            logger.warning(
+                'Impressão automática falhou após confirmação manual Pix do pedido %s: %s',
+                order.id,
+                exc,
+            )
+
+    if audit_action:
+        db.add(OnlineOrderOperationalAudit(
+            restaurante_id=restaurant_id,
+            actor_user_id=str(operator_user_id),
+            action=audit_action,
+            reason='Pedido encaminhado diretamente para preparo após confirmação manual do Pix.',
+            before_data={'order_id': str(order.id), 'status': current_status},
+            after_data={'order_id': str(order.id), 'status': order.delivery_status},
+        ))
+    queue_order_tracking_refresh(db, restaurant_id, str(order.id))
+    return True
 
 
 class PixConfiguration(BaseModel):
@@ -215,6 +301,12 @@ def confirm_receipt(intent_id: str, payload: ReceiptConfirmation, db: Session = 
             payment=ProviderPayment(external_id=intent.external_payment_id or f'direct:{intent.id}',status='approved',
                 amount=payload.received_amount,external_reference=intent.id))
         if became_approved:
+            _advance_direct_pix_order_to_operation_in_session(
+                db,
+                restaurant_id=rest_id,
+                intent=intent,
+                operator_user_id=user.id,
+            )
             manager.queue_committed_broadcast(db, {'event':'tables_updated'},rest_id)
         db.commit()
     except (IntegrityError,OnlinePaymentConfigurationError,OnlinePaymentValidationError) as exc:
@@ -262,6 +354,13 @@ def release_unpaid(
     try:
         if not OnlinePaymentService.publish_order_in_session(db, intent=intent, comanda=order):
             raise OnlinePaymentValidationError('Pedido sem lançamento não pode entrar no Kanban.')
+        _advance_direct_pix_order_to_operation_in_session(
+            db,
+            restaurant_id=tenant,
+            intent=intent,
+            operator_user_id=user.id,
+            audit_action=None,
+        )
         db.add(OnlineOrderOperationalAudit(
             restaurante_id=tenant,
             actor_user_id=user.id,

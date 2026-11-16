@@ -13,6 +13,7 @@ on:
       - 'vite.config.ts'
       - 'index.html'
       - 'e2e/public-seo.spec.ts'
+      - 'e2e/landing-demo-capture.spec.ts'
       - '.github/workflows/public-seo-targeted.yml'
 permissions:
   contents: read
@@ -32,7 +33,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: >-
           KOMA_E2E_PREVIEW=true KOMA_E2E_PORT=4283 npm run test:e2e --
-          e2e/public-seo.spec.ts e2e/auth-persistence.spec.ts
+          e2e/public-seo.spec.ts e2e/auth-persistence.spec.ts e2e/landing-demo-capture.spec.ts
           --project=desktop-1366 --project=mobile-390 --workers=2
       - uses: actions/upload-artifact@v4
         if: failure()
