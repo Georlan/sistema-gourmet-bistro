@@ -11,7 +11,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import select
 import threading
 import uuid
 from typing import Any
@@ -19,8 +18,8 @@ from typing import Any
 from sqlalchemy import event, text
 from sqlalchemy.orm import Session
 
-from ..config import settings
 from ..database import SessionLocal, engine, tenant_session_scope
+from .postgres_listen_multiplexer import PostgresListenMultiplexer, listen_multiplexer
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +29,16 @@ _ALLOWED_KINDS = frozenset({"message", "status", "read", "refresh"})
 
 
 class OrderChatHub:
-    """Fan-out from one PostgreSQL LISTEN connection to local SSE subscribers."""
+    """Fan-out from the shared PostgreSQL LISTEN multiplexer to local SSE subscribers."""
 
-    def __init__(self, *, listen_to_postgres: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        listen_to_postgres: bool = True,
+        multiplexer: PostgresListenMultiplexer | None = None,
+    ) -> None:
         self._listen_to_postgres = listen_to_postgres
+        self._multiplexer = multiplexer or listen_multiplexer
         self._lock = threading.Lock()
         # conversation_id -> {sub_id: (event_loop, queue)}
         self._conversation_subscribers: dict[
@@ -43,31 +48,35 @@ class OrderChatHub:
         self._caixa_subscribers: dict[
             int, dict[str, tuple[asyncio.AbstractEventLoop, asyncio.Queue]]
         ] = {}
-        self._stop = threading.Event()
         self._listener_ready = threading.Event()
-        self._listener_thread: threading.Thread | None = None
-        self.generation = 0
+        self._local_generation = 0
+
+    def _uses_postgres_multiplexer(self) -> bool:
+        return engine.dialect.name == "postgresql" and self._listen_to_postgres
+
+    @property
+    def generation(self) -> int:
+        if self._uses_postgres_multiplexer():
+            return self._multiplexer.generation + self._local_generation
+        return self._local_generation
+
+    @generation.setter
+    def generation(self, value: int) -> None:
+        if self._uses_postgres_multiplexer():
+            self._local_generation = max(0, int(value) - self._multiplexer.generation)
+        else:
+            self._local_generation = int(value)
 
     def ensure_started(self) -> None:
-        if engine.dialect.name != "postgresql" or not self._listen_to_postgres:
+        self._multiplexer.register_handler(ORDER_CHAT_CHANNEL, self._handle_notify)
+        if not self._uses_postgres_multiplexer():
             self._listener_ready.set()
             return
-        with self._lock:
-            if self._listener_thread is not None and self._listener_thread.is_alive():
-                return
-            self._stop.clear()
-            self._listener_thread = threading.Thread(
-                target=self._listen_forever,
-                name="koma-order-chat-realtime",
-                daemon=True,
-            )
-            self._listener_thread.start()
+        self._multiplexer.start()
 
     def stop(self) -> None:
-        self._stop.set()
-        thread = self._listener_thread
-        if thread is not None and thread.is_alive():
-            thread.join(timeout=12.0)
+        if self._uses_postgres_multiplexer():
+            self._multiplexer.stop()
         self._listener_ready.clear()
 
     def subscribe_conversation(self, conversation_id: str) -> tuple[str, asyncio.Queue]:
@@ -242,73 +251,24 @@ class OrderChatHub:
 
     async def wait_ready(self) -> bool:
         self.ensure_started()
+        if self._uses_postgres_multiplexer():
+            return await asyncio.to_thread(self._multiplexer.wait_ready, 10.0)
         return await asyncio.to_thread(self._listener_ready.wait, 10.0)
 
     @property
     def ready(self) -> bool:
+        if self._uses_postgres_multiplexer():
+            return self._multiplexer.is_ready()
         return self._listener_ready.is_set()
 
-    @staticmethod
-    def _postgres_dsn() -> str:
-        dsn = settings.DATABASE_URL
-        if dsn.startswith("postgresql+psycopg2://"):
-            dsn = "postgresql://" + dsn.split("://", 1)[1]
-        elif dsn.startswith("postgres://"):
-            dsn = "postgresql://" + dsn.split("://", 1)[1]
-        return dsn
-
-    def _listen_forever(self) -> None:
-        import psycopg2
-
-        while not self._stop.is_set():
-            connection = None
-            cursor = None
-            try:
-                connection = psycopg2.connect(
-                    self._postgres_dsn(),
-                    connect_timeout=10,
-                    application_name="koma-order-chat-realtime",
-                )
-                connection.autocommit = True
-                cursor = connection.cursor()
-                cursor.execute(f'LISTEN "{ORDER_CHAT_CHANNEL}"')
-                self.generation += 1
-                self._listener_ready.set()
-                logger.info("[ORDER CHAT] PostgreSQL LISTEN ativo.")
-
-                while not self._stop.is_set():
-                    readable, _, _ = select.select([connection], [], [], 0.5)
-                    if not readable:
-                        continue
-                    connection.poll()
-                    while connection.notifies:
-                        notification = connection.notifies.pop(0)
-                        try:
-                            envelope = json.loads(notification.payload)
-                        except (TypeError, ValueError):
-                            logger.warning(
-                                "[ORDER CHAT] Payload PostgreSQL inválido ignorado."
-                            )
-                            continue
-                        if isinstance(envelope, dict):
-                            self.publish_committed(envelope)
-            except Exception as exc:
-                self._listener_ready.clear()
-                if not self._stop.is_set():
-                    logger.warning("[ORDER CHAT] LISTEN indisponível (%s); reconectar SSE.", type(exc).__name__)
-                    self._stop.wait(2.0)
-            finally:
-                self._listener_ready.clear()
-                if cursor is not None:
-                    try:
-                        cursor.close()
-                    except Exception:
-                        pass
-                if connection is not None:
-                    try:
-                        connection.close()
-                    except Exception:
-                        pass
+    def _handle_notify(self, payload: str) -> None:
+        try:
+            envelope = json.loads(payload)
+        except (TypeError, ValueError):
+            logger.warning("[ORDER CHAT] Payload PostgreSQL inválido ignorado.")
+            return
+        if isinstance(envelope, dict):
+            self.publish_committed(envelope)
 
 
 order_chat_hub = OrderChatHub()
