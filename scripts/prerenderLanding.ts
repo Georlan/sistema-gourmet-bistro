@@ -11,6 +11,15 @@ export async function prerenderLanding(root: string, outDir: string) {
   if (functionFiles.some(file => file !== 'assets/[[catchall]].ts')) {
     throw new Error('New Pages Functions must be integrated into the SEO worker before deployment');
   }
+  // The GA4 measurement ID is public (not a secret). Cloudflare may override it
+  // with VITE_GA4_MEASUREMENT_ID; the tracked default makes the first deploy work.
+  const publicAnalytics = JSON.parse(await readFile(
+    path.join(root, 'src/landing/config/publicMarketingAnalytics.json'), 'utf8',
+  )) as { ga4MeasurementId: string };
+  const ga4MeasurementId = (process.env.VITE_GA4_MEASUREMENT_ID || publicAnalytics.ga4MeasurementId).trim();
+  if (!/^G-[A-Z0-9]{6,20}$/.test(ga4MeasurementId)) {
+    throw new Error('Invalid public GA4 measurement ID');
+  }
   const manifest: Manifest = JSON.parse(await readFile(path.join(directory, '.vite/manifest.json'), 'utf8'));
   const server = await createServer({ root, server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
   try {
@@ -50,6 +59,8 @@ export async function prerenderLanding(root: string, outDir: string) {
       `<meta name="twitter:description" content="${escape(seo.description)}" />`,
       `<meta name="twitter:image" content="${seo.image}" />`,
       `<script type="application/ld+json" id="koma-software-schema">${structuredData}</script>`,
+      // Included only in the public prerender (never the shared operational index.html).
+      `<script defer src="/ga4-landing.js" data-measurement-id="${ga4MeasurementId}"></script>`,
       ...[...css].map(file => `<link rel="stylesheet" href="/${file}" />`),
     ].join('\n');
     const shell = await readFile(path.join(directory, 'index.html'), 'utf8');
