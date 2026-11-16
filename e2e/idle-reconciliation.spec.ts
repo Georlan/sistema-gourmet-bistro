@@ -23,7 +23,7 @@ test('real histories and monitor: idle savings, event bursts, offline and cleanu
   await expect(page.getByText('fixture-primary — agente online')).toBeVisible();
   await page.clock.runFor(60_000);
   expect(calls.pickup).toBe(1); expect(calls.courier).toBe(1);
-  expect(calls.monitor).toBeGreaterThanOrEqual(2);
+  await expect.poll(() => calls.monitor).toBeGreaterThanOrEqual(2);
   const monitorBaseline = calls.monitor;
   await page.evaluate(() => { for(let i=0;i<1000;i++) {
     window.dispatchEvent(new Event('koma_orders_updated'));

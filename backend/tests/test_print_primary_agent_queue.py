@@ -619,6 +619,7 @@ def test_register_support_agent_cannot_take_restaurant_queue_even_if_primary_off
         ).one()
         assert primary.is_primary is True
         assert secondary.is_primary is False
+        secondary_record_id = secondary.id
         db.add_all([
             PrintJob(
                 id="restaurant-production", restaurante_id=1,
@@ -639,6 +640,8 @@ def test_register_support_agent_cannot_take_restaurant_queue_even_if_primary_off
     finally:
         db.close()
 
+    # Registration alone does not establish printer readiness.
+    mark_agent_ready(secondary_record_id)
     # Even when the restaurant has temporarily stopped sending heartbeats,
     # the support computer may only claim a job explicitly targeted to it.
     office = client.post(
@@ -648,6 +651,8 @@ def test_register_support_agent_cannot_take_restaurant_queue_even_if_primary_off
     assert office.status_code == 200, office.text
     assert [job["id"] for job in office.json()] == ["explicit-office-test"]
 
+    # The restaurant reconnects before it can consume its own queue.
+    mark_agent_ready("ag-win")
     restaurant = client.post(
         "/api/print-agents/jobs/claim-batch?limit=10",
         headers={"X-Agent-Token": "token_win_primary"},
@@ -796,6 +801,36 @@ def test_targeted_reprint_recovery_keeps_destination_for_retry_and_stuck_claim()
         recovered = db.query(PrintJob).filter_by(id="job-target-recovery").one()
         assert recovered.status == "pending"
         assert recovered.agent_id == "lin-suporte-dev"
+    finally:
+        db.close()
+
+
+def test_release_batch_preserves_targeted_reprint_destination():
+    db = TestingSessionLocal()
+    try:
+        db.add(PrintJob(
+            id="job-target-release", restaurante_id=1,
+            document_type="producao", destination="COZINHA",
+            source_type="pedido", source_id="release-copy",
+            payload_text="Targeted copy", status="claimed",
+            agent_id="lin-suporte-dev",
+            idempotency_key="reprint:targeted:original:release",
+        ))
+        db.commit()
+    finally:
+        db.close()
+    response = TestClient(app).post(
+        "/api/print-agents/jobs/release-batch",
+        headers={"X-Agent-Token": "token_lin_secondary"},
+        json={"job_ids": ["job-target-release"]},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["released_job_ids"] == ["job-target-release"]
+    db = TestingSessionLocal()
+    try:
+        job = db.query(PrintJob).filter_by(id="job-target-release").one()
+        assert job.status == "pending"
+        assert job.agent_id == "lin-suporte-dev"
     finally:
         db.close()
 

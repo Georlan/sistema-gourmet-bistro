@@ -3001,7 +3001,8 @@ def release_job_batch(
     for job in jobs:
         job.status = "pending"
         job.claimed_at = None
-        job.agent_id = None
+        if not (job.idempotency_key or "").startswith("reprint:targeted:"):
+            job.agent_id = None
         released_ids.append(job.id)
     db.commit()
     return {
@@ -3185,7 +3186,10 @@ def retry_failed_jobs(
     for job in failed_jobs:
         job.status = "pending"
         job.attempts = 0
-        if job.source_type not in targeted_test_types:
+        if (
+            job.source_type not in targeted_test_types
+            and not (job.idempotency_key or "").startswith("reprint:targeted:")
+        ):
             job.agent_id = None
         job.printer_name = None
         job.claimed_at = None
