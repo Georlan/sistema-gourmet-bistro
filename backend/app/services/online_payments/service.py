@@ -183,7 +183,7 @@ class OnlinePaymentService:
         return account
 
     @staticmethod
-    def public_payment_capabilities(db: Session, restaurant_id: int) -> tuple[bool, bool]:
+    def public_payment_capabilities(db: Session, restaurant_id: int, *, include_direct: bool = False):
         from ..direct_pix_test_release import TEST_TERMS_VERSION, test_tenant_allowed
         # One roundtrip: keep the public catalog's existing read budget.
         direct = db.query(RestaurantDirectPixConfig.restaurante_id).filter(
@@ -223,11 +223,13 @@ class OnlinePaymentService:
             RestaurantDirectPixConfig.enabled.is_(True),
         ).exists()
         receiver_count = case((any_direct, 1), else_=0) + automatic_count
-        enabled, document = db.query(
+        enabled, document, direct_enabled = db.query(
             (receiver_count == 1) & case((direct, bool(settings.DIRECT_PIX_ENABLED)), else_=(mercado_pago | pagbank)),
             (receiver_count == 1) & pagbank,
+            (receiver_count == 1) & direct & bool(settings.DIRECT_PIX_ENABLED),
         ).one()
-        return bool(enabled), bool(document)
+        result = (bool(enabled), bool(document))
+        return (*result, bool(direct_enabled)) if include_direct else result
 
     @classmethod
     def has_active_account(cls, db: Session, restaurant_id: int) -> bool:

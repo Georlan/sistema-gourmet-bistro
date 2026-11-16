@@ -190,7 +190,7 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
     const request=route.request();
     const {pathname}=new URL(request.url());
     if(pathname==='/api/cardapio-digital/public') return route.fulfill({json:{
-      restaurante:{id:2,nome:'Burger teste',slug:'burger-teste',aceitando_pedidos:true,status_override:'Forçado Aberto',delivery_ativo:true,taxa_entrega_fixa:6,formas_pagamento_aceitas:['Dinheiro','Pix'],pagamento_online_ativo:enabled,socials:{whatsapp:'(88) 99961-6937'}},
+      restaurante:{id:2,nome:'Burger teste',slug:'burger-teste',aceitando_pedidos:true,status_override:'Forçado Aberto',delivery_ativo:true,taxa_entrega_fixa:6,formas_pagamento_aceitas:['Dinheiro','Pix'],pagamento_online_ativo:enabled,pix_proprio:true,socials:{whatsapp:'(88) 99961-6937'}},
       categorias:[{id:10,nome:'Bebidas'}],produtos:[{id:101,nome:'Água',preco:4.5,categoria_id:10,grupos_modificadores:[]}]}});
     if(pathname==='/cardapio/pedidos'&&request.method()==='POST') {
       submitted.push(request.postDataJSON());created=true;
@@ -219,7 +219,7 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   await cart.getByRole('button',{name:'Contato',exact:true}).click();
   await consumer.locator('#input-guest-name').fill('Cliente teste');
   await consumer.locator('#input-guest-phone').fill('85999999999');
-  await consumer.locator('#input-customer-email').fill('cliente@example.test');
+  await expect(consumer.locator('#input-customer-email')).toHaveCount(0);
   await consumer.getByRole('button',{name:'Revisar pedido',exact:true}).click();
   await consumer.getByRole('button',{name:'Fazer pedido',exact:true}).click();
   await expect(consumer.getByText('Aguardando pagamento',{exact:true}).first()).toBeVisible();
@@ -289,6 +289,7 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   await expect(consumer.getByRole('button',{name:'Pagar Pix',exact:true})).toHaveCount(0);
   expect(confirmations).toBe(1);
   expect(submitted).toHaveLength(1);
+  expect(submitted[0]).not.toHaveProperty('cliente_email');
   expect(submitted[0]).toMatchObject({forma_pagamento:'online',forma_pagamento_detalhe:'pix',tipo_pedido:'delivery',taxa_entrega:6});
 });
 
