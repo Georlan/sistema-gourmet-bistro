@@ -1,0 +1,9 @@
+/* Only shared primitives needed by the public landing; no cashier/admin UI. */
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Montserrat:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import "../styles/komaFoundation.css";
+@import "../components/caixa/kitchen/kdsWorkspace.css";
+@import "../components/mesas/waiterOperational.css";
+html, body, #root { margin: 0; min-width: 0; min-height: 100%; width: 100%; }
+*, *::before, *::after { box-sizing: border-box; }
+body { background: #0a0a0a; }
+button, input, textarea, select { font: inherit; }
