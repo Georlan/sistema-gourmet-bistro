@@ -153,6 +153,7 @@ export type CourierDeliveryBuckets = {
   preparing: DeliveryOrderView[];
   ready: DeliveryOrderView[];
   inTransit: DeliveryOrderView[];
+  awaitingPayment: DeliveryOrderView[];
 };
 
 export type PickupOrderBuckets = {
@@ -261,6 +262,7 @@ export function bucketCourierDeliveryOrders(
     preparing: [],
     ready: [],
     inTransit: [],
+    awaitingPayment: [],
   };
 
   orders.forEach((order) => {
@@ -272,6 +274,8 @@ export function bucketCourierDeliveryOrders(
       buckets.ready.push(order);
     } else if (order.status === 'transito') {
       buckets.inTransit.push(order);
+    } else if (order.status === 'finalizado' && !order.pago && Number(order.amountDue) > 0) {
+      buckets.awaitingPayment.push(order);
     }
   });
 

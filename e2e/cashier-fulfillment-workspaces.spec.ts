@@ -391,6 +391,7 @@ test('Retiradas e Entregas permitem completar o trabalho normal sem voltar ao Ka
   await expect.poll(state.getDispatchCalls).toBe(1);
   await expect(deliveries).toContainText('Em rota');
   await expect(deliveries).toContainText('Pedro Entregador');
+  await deliveries.locator('summary').filter({ hasText: 'Entregas concluídas hoje' }).click();
   await expect(deliveries).toContainText('Pedido #4999');
 
   state.setFailActiveReads(true);

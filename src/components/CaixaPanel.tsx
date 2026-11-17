@@ -1,3 +1,4 @@
+import './caixa/orders/fulfillmentBoard.css';
 import { useCashierNotice } from './caixa/navigation/useCashierNotice';
 import { StaffPushNotifications } from './caixa/realtime/StaffPushNotifications';
 import { DirectPixPendingPanel } from './caixa/orders/DirectPixPendingPanel';
@@ -1030,6 +1031,8 @@ export function CaixaPanel({
               activeSubTab={activeTab === 'operacao' ? activeSubTab : ''}
               deliveryOrders={deliveryOrders}
               deliveryOrdersLoadState={deliveryOrdersLoadState}
+              hasDeliverySnapshot={hasDeliverySnapshot}
+              onRetry={fetchDeliveryOrders}
               apiBaseUrl={apiBaseUrl}
               authHeaders={authHeaders}
               now={nowTimestamp}
@@ -1231,9 +1234,11 @@ export function CaixaPanel({
 
             <CashierCouriers
               isWsConnected={isWsConnected}
-              activeSubTab={activeSubTab}
+              activeSubTab={activeTab === 'operacao' ? activeSubTab : ''}
               deliveryOrders={deliveryOrders}
               deliveryOrdersLoadState={deliveryOrdersLoadState}
+              hasDeliverySnapshot={hasDeliverySnapshot}
+              onRetry={fetchDeliveryOrders}
               selectedMotoboys={selectedMotoboys}
               setSelectedMotoboys={setSelectedMotoboys}
               motoboys={motoboys}

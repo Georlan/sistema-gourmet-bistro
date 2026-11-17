@@ -1,0 +1,35 @@
+.fulfillment-board { display:grid; gap:1rem; text-align:start; color:var(--koma-text-primary); }
+.fulfillment-tools,.fulfillment-history,.fulfillment-notice { border:1px solid var(--koma-border-default); background:var(--koma-surface-panel); border-radius:1rem; padding:.8rem 1rem; }
+.fulfillment-tools { display:flex; align-items:center; gap:1rem; flex-wrap:wrap; }
+.fulfillment-tools h2,.fulfillment-ticket h4 { font-family:var(--koma-font-display); font-weight:700; line-height:1.25; }
+.fulfillment-tools h2 { font-size:1.25rem; }
+.fulfillment-tools label { display:flex; flex:1 1 18rem; gap:.65rem; align-items:center; background:var(--koma-surface-input); border:1px solid var(--koma-border-default); padding:.5rem .75rem; min-height:2.75rem; border-radius:.7rem; }
+.fulfillment-tools input { min-width:0; width:100%; background:transparent; }
+.fulfillment-board :is(input,select,button,summary):focus-visible { outline:2px solid var(--koma-focus-ring); outline-offset:2px; }
+.fulfillment-lanes { display:grid; gap:.75rem; grid-template-columns:repeat(auto-fit,minmax(min(100%,19rem),1fr)); align-items:start; }
+.fulfillment-lane { min-width:0; border:1px solid var(--koma-border-default); border-radius:1rem; background:var(--koma-surface-panel); overflow:hidden; }
+.fulfillment-lane .orders-column__header { position:static; background:var(--koma-accent-soft); }
+.fulfillment-list { display:grid; gap:.65rem; padding:.65rem; }
+.fulfillment-list > p,.fulfillment-history > p { font-size:.875rem; color:var(--koma-text-muted); padding:.5rem; }
+.fulfillment-ticket { min-width:0; padding:1rem; border-radius:.85rem; background:var(--koma-surface-raised); border:1px solid var(--koma-border-default); display:grid; gap:.55rem; overflow-wrap:anywhere; font-size:.875rem; }
+.fulfillment-ticket > header { display:grid; grid-template-columns:auto 1fr auto; align-items:start; gap:.65rem; }
+.fulfillment-ticket h4,.fulfillment-ticket header > strong { font-size:1rem; }
+.fulfillment-ticket header span,.fulfillment-ticket header p,.fulfillment-meta { color:var(--koma-text-secondary); font-size:.8125rem; }
+
+.fulfillment-items { border-top:1px solid var(--koma-border-default); padding-top:.6rem; }
+.fulfillment-payment,.fulfillment-ticket header > strong { font-weight:650; font-variant-numeric:tabular-nums; }
+.fulfillment-ticket footer { display:flex; flex-wrap:wrap; align-items:end; gap:.4rem; }
+.fulfillment-ticket footer label { width:100%; font-size:.875rem; }
+.fulfillment-ticket :is(button,select),.fulfillment-notice button { min-height:2.75rem; padding:.4rem .75rem; border:1px solid var(--koma-border-strong); border-radius:.6rem; color:var(--koma-text-primary); background:var(--koma-surface-card); font-size:.875rem; font-weight:600; }
+.fulfillment-ticket button.primary { width:100%; background:var(--koma-action-bg); color:var(--koma-action-text); }
+.fulfillment-ticket button.primary:hover { background:var(--koma-action-hover); }
+.fulfillment-ticket :disabled { opacity:.55; }
+.fulfillment-history summary { cursor:pointer; padding:.5rem 0; font-weight:650; }
+.fulfillment-history article { border-top:1px solid var(--koma-border-default); padding:.65rem 0; display:flex; flex-wrap:wrap; gap:.4rem 1rem; align-items:baseline; font-size:.875rem; }
+.fulfillment-history article strong:last-child { margin-inline-start:auto; }
+@media (max-width:35rem) { .fulfillment-tools { gap:.5rem; }  }
+.fulfillment-lane .orders-column__header { display:grid; grid-template-columns:2rem 1fr auto; align-items:center; gap:.75rem; padding:.85rem 1rem; border-bottom:1px solid var(--koma-border-default); }
+.fulfillment-lane .orders-column__title { font:600 1.05rem/1.3 var(--koma-font-display); }
+.fulfillment-lane .orders-column__count { font-size:1.25rem; font-variant-numeric:tabular-nums; }
+.fulfillment-number { display:grid; max-width:6rem; justify-items:center; gap:.1rem; padding:.35rem; min-width:3.5rem; border-radius:.85rem .85rem .85rem .25rem; background:#b5edda; color:#103d31; }
+.fulfillment-number strong { font:700 1.25rem/1.15 var(--koma-font-display); }
