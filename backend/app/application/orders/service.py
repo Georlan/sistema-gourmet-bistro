@@ -462,11 +462,9 @@ class OrderApplicationService:
         )
         # O servidor impede venda avulsa mesmo via payload manual ou outro canal.
         exclusive_ids = {
-            str(p.id) for p in db.query(Produto).filter(
-                Produto.restaurante_id == cmd.restaurant_id,
-                Produto.id.in_([str(item.product_id) for item in cmd.items]),
-                Produto.somente_promocao.is_(True),
-            ).all()
+            str(pid)
+            for pid, vp in val_context.catalog_products.items()
+            if vp.is_promotion_exclusive
         }
         if exclusive_ids and not cmd.promotion_id:
             raise OrderValidationError("Este item está disponível somente dentro de uma promoção.")

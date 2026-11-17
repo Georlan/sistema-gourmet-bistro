@@ -47,6 +47,7 @@ class ValidationProduct:
     price: Decimal
     is_active: bool
     cardapio_id: str | None = None
+    is_promotion_exclusive: bool = False
     allowed_modifier_group_ids: tuple[str, ...] = ()
     modifier_selection_limits: tuple[tuple[str, int, int, str], ...] = ()
 
