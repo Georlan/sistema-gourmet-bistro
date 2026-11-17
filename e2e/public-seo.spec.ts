@@ -35,3 +35,25 @@ test('prerendered public landing boots the interactive application', async ({ pa
   expect(errors).toEqual([]);
   await expect(page.locator('#koma-software-schema')).toHaveCount(1);
 });
+
+test('dedicated landing entry keeps KDS styled without shipping operational CSS', async ({ page, baseURL }) => {
+  const html = await artifact();
+  const manifest = JSON.parse(await readFile(new URL('../dist/.vite/manifest.json', import.meta.url), 'utf8'));
+  const publicEntry = manifest['src/landing/publicMain.tsx'];
+  const operationalEntry = manifest['index.html'];
+  expect(publicEntry).toBeTruthy();
+  expect(operationalEntry).toBeTruthy();
+  expect(html).toContain('src="/' + publicEntry.file + '"');
+  expect(html).not.toContain('src="/' + operationalEntry.file + '"');
+  for (const stylesheet of operationalEntry.css ?? []) {
+    expect(html).not.toContain('href="/' + stylesheet + '"');
+  }
+  await page.route(`${baseURL}/`, route => route.fulfill({ contentType: 'text/html', body: html }));
+  await page.goto(baseURL!);
+  await page.getByRole('tab', { name: /Cozinha/ }).click();
+  const toolbar = page.locator('#salao .kds-workspace__toolbar');
+  await expect(toolbar).toBeVisible();
+  expect(await toolbar.evaluate(element => getComputedStyle(element).display)).toBe('flex');
+  expect(await toolbar.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+});
