@@ -606,6 +606,11 @@ def is_superadmin_operational_qa_active(db: Session, restaurante_id: int) -> boo
     Esta janela é independente de contrato, assinatura, cobrança e trial SaaS.
     É revogável, possui validade curta e nunca concede acesso entre tenants.
     """
+    db_info = getattr(db, "info", None)
+    qa_cache = db_info.get("_koma_qa_active_by_rid") if isinstance(db_info, dict) else None
+    if isinstance(qa_cache, dict) and int(restaurante_id) in qa_cache:
+        return bool(qa_cache[int(restaurante_id)])
+
     record = (
         db.query(SuperAdminAuditLog)
         .filter(
@@ -615,21 +620,20 @@ def is_superadmin_operational_qa_active(db: Session, restaurante_id: int) -> boo
         .order_by(SuperAdminAuditLog.id.desc())
         .first()
     )
-    if record is None or record.action != QA_OPERATION_START:
-        return False
-    data = record.after_data
-    if not isinstance(data, dict) or data.get("mode") != "operational_qa":
-        return False
-    raw_expiry = data.get("expires_at")
-    if not isinstance(raw_expiry, str):
-        return False
-    try:
-        expires_at = datetime.datetime.fromisoformat(raw_expiry.replace("Z", "+00:00"))
-        if expires_at.tzinfo is None:
-            return False
-    except ValueError:
-        return False
-    return datetime.datetime.now(datetime.timezone.utc) < expires_at.astimezone(datetime.timezone.utc)
+    active = False
+    if record is not None and record.action == QA_OPERATION_START:
+        data = record.after_data
+        raw_expiry = data.get("expires_at") if isinstance(data, dict) and data.get("mode") == "operational_qa" else None
+        if isinstance(raw_expiry, str):
+            try:
+                expires_at = datetime.datetime.fromisoformat(raw_expiry.replace("Z", "+00:00"))
+                if expires_at.tzinfo is not None:
+                    active = datetime.datetime.now(datetime.timezone.utc) < expires_at.astimezone(datetime.timezone.utc)
+            except ValueError:
+                active = False
+    if isinstance(db_info, dict):
+        db_info.setdefault("_koma_qa_active_by_rid", {})[int(restaurante_id)] = active
+    return active
 
 
 def is_provisional_preparation(db: Session, restaurante_id: int) -> bool:
