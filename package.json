@@ -47,6 +47,10 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "ws": "^8.22.0"
+    "ws": "^8.22.0",
+    "picomatch": "file:vendor/picomatch"
+  },
+  "overrides": {
+    "picomatch": "$picomatch"
   }
 }

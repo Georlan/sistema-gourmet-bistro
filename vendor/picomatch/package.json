@@ -1,0 +1,12 @@
+{
+  "name": "@koma/picomatch",
+  "version": "4.0.7",
+  "private": true,
+  "description": "Internal build dependency based on picomatch 4.0.7, with repeated extglobs disabled",
+  "license": "MIT",
+  "main": "index.js",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=12"
+  }
+}
