@@ -78,7 +78,7 @@ def test_checkout_and_status_stay_within_query_budget(char_client, char_setup):
     comanda_id = resp.json()["comanda_id"]
 
     create_selects = sum(1 for op, _ in create_queries if op == "SELECT")
-    assert create_selects <= 42, f"Checkout SELECT budget regressed: {create_selects}"
+    assert create_selects <= 33, f"Checkout SELECT budget regressed: {create_selects}"
     print(
         "CHECKOUT_5_ITEMS="
         + json.dumps(
