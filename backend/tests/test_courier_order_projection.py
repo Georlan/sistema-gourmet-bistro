@@ -172,3 +172,44 @@ def test_code_cannot_confirm_another_tenant_or_another_couriers_order(handoff):
         assert row.delivery_status == 'transito' and not row.delivery_receipt_failed_attempts
     ok = h.client.post(endpoint,headers=h.headers,json={'code':'007'})
     assert ok.status_code == 200, ok.text
+
+
+@pytest.mark.parametrize(("kind", "history"), [("Retirada", "retiradas"), ("Delivery", "entregas")])
+def test_closed_history_batches_order_details(handoff, kind, history):
+    from datetime import datetime, timezone
+
+    token = create_access_token(subject=handoff.uid, restaurante_id=handoff.rid, role="admin")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    def measure(expected):
+        statements = []
+
+        def count_select(conn, cursor, statement, parameters, context, executemany):
+            if statement.lstrip().upper().startswith("SELECT"):
+                statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", count_select)
+        try:
+            result = handoff.client.get(f"/comandas/delivery/{history}/concluidas-recentes", headers=headers)
+        finally:
+            event.remove(engine, "before_cursor_execute", count_select)
+        assert result.status_code == 200, result.text
+        assert len(result.json()) == expected
+        assert all(row["itens"][0]["produto"]["nome"] for row in result.json())
+        return len(statements)
+
+    def close(db, order_id):
+        order = db.get(Comanda, order_id)
+        order.tipo = kind
+        order.fechada = True
+        order.fechado_em = datetime.now(timezone.utc)
+
+    with SessionLocal() as db:
+        close(db, handoff.first)
+        db.commit()
+    single = measure(1)
+    with SessionLocal() as db:
+        for index in range(1, 9):
+            close(db, handoff.add_order(db, index))
+        db.commit()
+    assert measure(9) <= single + 1

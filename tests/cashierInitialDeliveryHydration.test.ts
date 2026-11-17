@@ -315,6 +315,9 @@ test('entregue com saldo continua no Caixa e não é tratado como recebido', () 
   const [row] = projectDeliveryOrdersFromSharedSnapshot([baseOrder({deliveryStatus:'finalizado',valorPago:5})]);
   assert.equal(row.status, 'finalizado');
   assert.equal(row.amountDue, 8);
+  const buckets = bucketCourierDeliveryOrders([row]);
+  assert.deepEqual(buckets.awaitingPayment, [row]);
+  assert.deepEqual(buckets.inTransit, []);
   assert.equal(row.pago, false);
 });
 

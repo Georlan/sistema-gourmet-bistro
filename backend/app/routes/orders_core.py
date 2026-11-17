@@ -1192,6 +1192,15 @@ def converter_delivery_para_retirada(
     return comanda
 
 
+def _completed_fulfillment_query(db: Session):
+    """Load the history DTO relationships in batches before serialization."""
+    return db.query(Comanda).options(
+        joinedload(Comanda.criada_por),
+        selectinload(Comanda.itens).joinedload(Item.produto),
+        selectinload(Comanda.lancamentos).selectinload(Lancamento.itens).joinedload(Item.produto),
+    )
+
+
 @router.get("/delivery/retiradas/concluidas-recentes", response_model=List[ComandaDetail])
 def listar_retiradas_concluidas_recentes(
     db: Session = Depends(get_db),
@@ -1206,7 +1215,7 @@ def listar_retiradas_concluidas_recentes(
     """
     cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=36)
     return (
-        db.query(Comanda)
+        _completed_fulfillment_query(db)
         .filter(
             Comanda.restaurante_id == require_tenant_id(),
             Comanda.tipo.in_(["Retirada", "Viagem"]),
@@ -1233,7 +1242,7 @@ def listar_entregas_concluidas_recentes(
     """
     cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=36)
     return (
-        db.query(Comanda)
+        _completed_fulfillment_query(db)
         .filter(
             Comanda.restaurante_id == require_tenant_id(),
             Comanda.tipo.in_(["Delivery", "Entrega"]),

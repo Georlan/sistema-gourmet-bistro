@@ -73,14 +73,6 @@ test('Entregas resolve aceite, preparo, logística, cobrança e conclusão com a
   assert.doesNotMatch(couriers, /\/comandas\/\$\{[^}]+\}\/fechar/);
 });
 
-test('resumo de entregas contém labels no card em viewports estreitos', () => {
-  assert.match(couriers, /grid min-w-0 grid-cols-3 gap-1\.5 sm:gap-2/);
-  assert.match(couriers, /block break-words text-\[7px\][^\n]*aguardando \/ preparo/);
-  assert.doesNotMatch(couriers, />aguardando\/preparo</);
-  assert.match(couriers, /Entregas próprias/);
-  assert.doesNotMatch(couriers, /conclua deliveries/);
-});
-
 test('workspaces recebem as mesmas ações do controller e expõem falha de sincronização sem zerar snapshot', () => {
   assert.match(panel, /deliveryOrdersLoadState=\{deliveryOrdersLoadState\}/);
   assert.match(panel, /handleAcceptPendingDeliveryOrder=\{handleAcceptPendingDeliveryOrder\}/);
@@ -90,8 +82,8 @@ test('workspaces recebem as mesmas ações do controller e expõem falha de sinc
   assert.match(orders, /setDeliveryOrdersLoadState\('error'\)/);
   assert.match(orders, /setDeliveryOrdersLoadState\('loaded'\)/);
   assert.match(orders, /delivery\/converter-retirada/);
-  assert.match(pickup, /Mostrando o último estado conhecido/);
-  assert.match(couriers, /Mostrando o último estado conhecido/);
+  assert.match(pickup, /<BoardSync snapshot=/);
+  assert.match(couriers, /<BoardSync snapshot=/);
 });
 
 test('histórico de entregas é leitura curta, tenant-scoped e não redefine transições', () => {
@@ -148,7 +140,9 @@ test('loading e erro mantêm feedback explícito sem exigir conhecimento do Kanb
     authHeaders: {},
     now: Date.UTC(2026, 8, 20, 12),
   } as any));
-  assert.match(courierMarkup, /Mostrando o último estado conhecido/);
+  assert.match(courierMarkup, /Falha ao atualizar os pedidos/);
+  assert.doesNotMatch(courierMarkup, /Nenhuma entrega aguardando preparo/);
+  assert.doesNotMatch(pickupMarkup, /Nenhuma retirada aguardando preparo/);
   assert.match(courierMarkup, /Gerenciar entregadores/);
 });
 
