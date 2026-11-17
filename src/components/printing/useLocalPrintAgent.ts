@@ -5,6 +5,8 @@ import { probeLocalAgent, queryLoopbackPermission, type LocalConnection } from '
 export function useLocalPrintAgent(scope: string) {
   const scopeRef = useRef(scope); scopeRef.current = scope;
   const permissionRef = useRef<PermissionStatus | null>(null);
+  // Never discover this computer just because someone opened a tenant's settings.
+  const explicitlyConnectedRef = useRef(false);
   const requestRef = useRef<AbortController | null>(null);
   const [snapshot, setSnapshot] = useState<LocalConnection & { scope: string }>({ scope, status: 'checking', identity: null });
   const publish = useCallback((next: LocalConnection) => {
@@ -15,6 +17,7 @@ export function useLocalPrintAgent(scope: string) {
 
   const refresh = useCallback(async (interactive = false) => {
     if (scopeRef.current !== scope || requestRef.current) return null;
+    explicitlyConnectedRef.current = true;
     const permission = permissionRef.current?.state || 'unsupported';
     if (permission === 'denied' || (permission === 'prompt' && !interactive)) {
       const status = permission === 'denied' ? 'permission_denied' : 'permission_prompt';
@@ -40,28 +43,36 @@ export function useLocalPrintAgent(scope: string) {
   useEffect(() => {
     let active = true;
     let permission: PermissionStatus | null = null;
-    let interval: ReturnType<typeof setInterval> | undefined;
     const changed = () => {
       if (!active || scopeRef.current !== scope) return;
       if (permission?.state === 'denied' || permission?.state === 'prompt') {
         requestRef.current?.abort(); requestRef.current = null;
         publish({ status: permission.state === 'denied' ? 'permission_denied' : 'permission_prompt', identity: null });
-      } else void refresh();
+      } else if (explicitlyConnectedRef.current) {
+        // Re-check only after a deliberate attempt on this device.
+        void refresh();
+      } else {
+        publish({ status: 'unavailable', identity: null });
+      }
     };
     permissionRef.current = null;
+    explicitlyConnectedRef.current = false;
     void (async () => {
       permission = await queryLoopbackPermission(navigator.permissions);
       if (!active || scopeRef.current !== scope) return;
       permissionRef.current = permission;
       permission?.addEventListener('change', changed);
-      await refresh();
-      if (!active) return;
-      interval = setInterval(() => { if (document.visibilityState === 'visible') void refresh(); }, 5_000);
+      // Permission lookup is local browser state, not a network probe. The
+      // user must explicitly choose to connect this computer.
+      publish({
+        status: permission?.state === 'denied' ? 'permission_denied'
+          : permission?.state === 'prompt' ? 'permission_prompt' : 'unavailable',
+        identity: null,
+      });
     })();
     return () => {
       active = false;
       permission?.removeEventListener('change', changed);
-      clearInterval(interval);
       requestRef.current?.abort(); requestRef.current = null;
     };
   }, [scope, refresh, publish]);
