@@ -28,6 +28,12 @@
   function Probe() {
     const [scope, setScope] = React.useState('session-A');
     const connection = useLocalPrintAgent(scope);
+    React.useEffect(() => {
+      // This fixture intentionally invokes discovery; production settings do not.
+      if (!resetCase) return;
+      const timer = setTimeout(() => { void connection.refresh(); }, 50);
+      return () => clearTimeout(timer);
+    }, [scope]);
     return React.createElement('main', null,
       React.createElement('output', null, connection.status),
       React.createElement('button', { onClick: () => connection.refresh() }, 'Refresh identity'),
