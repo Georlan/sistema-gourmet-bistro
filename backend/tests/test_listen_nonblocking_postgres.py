@@ -60,12 +60,7 @@ def test_slow_chat_rehydration_does_not_block_print_or_operational_channels(monk
     mux.register_handler(ORDER_CHAT_CHANNEL, chat_hub._handle_notify)
 
     async def scenario():
-        from concurrent.futures import ThreadPoolExecutor
-
-        with chat_hub._lock:
-            chat_hub._notify_executor = ThreadPoolExecutor(
-                max_workers=1, thread_name_prefix="test-chat-rehydrate",
-            )
+        chat_hub._ensure_notify_worker()
         mux.start()
         assert mux.ready.wait(timeout=5.0)
         try:
@@ -96,11 +91,7 @@ def test_slow_chat_rehydration_does_not_block_print_or_operational_channels(monk
                 conn.close()
         finally:
             mux.stop(timeout=3.0)
-            with chat_hub._lock:
-                ex = chat_hub._notify_executor
-                chat_hub._notify_executor = None
-            if ex is not None:
-                ex.shutdown(wait=True)
+            chat_hub.stop(timeout=1.0)
 
     asyncio.run(scenario())
     print(
