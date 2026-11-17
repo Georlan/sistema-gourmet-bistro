@@ -9,7 +9,7 @@ hook. SSE remains a delivery hint; HTTP snapshots stay authoritative.
 from __future__ import annotations
 
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
+from collections import deque
 import json
 import logging
 import threading
@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 ORDER_CHAT_CHANNEL = "koma_order_chat"
 _LOCAL_PENDING_KEY = "order_chat_pending_realtime"
 _ALLOWED_KINDS = frozenset({"message", "status", "read", "refresh"})
+DEFAULT_MAX_NOTIFY_QUEUE_SIZE = 256
+DEFAULT_SHUTDOWN_TIMEOUT_SECONDS = 2.0
 
 
 class OrderChatHub:
@@ -38,9 +40,11 @@ class OrderChatHub:
         *,
         listen_to_postgres: bool = True,
         multiplexer: PostgresListenMultiplexer | None = None,
+        max_notify_queue_size: int = DEFAULT_MAX_NOTIFY_QUEUE_SIZE,
     ) -> None:
         self._listen_to_postgres = listen_to_postgres
         self._multiplexer = multiplexer or listen_multiplexer
+        self._max_notify_queue_size = max(1, int(max_notify_queue_size))
         self._lock = threading.Lock()
         # conversation_id -> {sub_id: (event_loop, queue)}
         self._conversation_subscribers: dict[
@@ -52,7 +56,12 @@ class OrderChatHub:
         ] = {}
         self._listener_ready = threading.Event()
         self._local_generation = 0
-        self._notify_executor: ThreadPoolExecutor | None = None
+        self._queue_cond = threading.Condition()
+        self._notify_queue: deque[dict[str, Any]] = deque()
+        self._worker_thread: threading.Thread | None = None
+        self._worker_stopping = False
+        self._coalesced_notify_count = 0
+        self._overflow_refresh_count = 0
 
     def _uses_postgres_multiplexer(self) -> bool:
         return engine.dialect.name == "postgresql" and self._listen_to_postgres
@@ -83,14 +92,35 @@ class OrderChatHub:
             dsn = "postgresql://" + dsn.split("://", 1)[1]
         return dsn
 
+    def _ensure_notify_worker(self) -> None:
+        with self._queue_cond:
+            if self._worker_thread is not None and self._worker_thread.is_alive():
+                return
+            self._worker_stopping = False
+            thread = threading.Thread(
+                target=self._notify_worker_loop,
+                name="koma-chat-rehydrate",
+                daemon=True,
+            )
+            self._worker_thread = thread
+            thread.start()
+
+    def _notify_worker_loop(self) -> None:
+        while True:
+            with self._queue_cond:
+                while not self._notify_queue and not self._worker_stopping:
+                    self._queue_cond.wait()
+                if self._worker_stopping:
+                    return
+                envelope = self._notify_queue.popleft()
+            try:
+                self.publish_committed(envelope)
+            except Exception:
+                logger.exception("[ORDER CHAT] Falha ao processar notificação em fila.")
+
     def ensure_started(self) -> None:
         self._multiplexer.register_handler(ORDER_CHAT_CHANNEL, self._handle_notify)
-        with self._lock:
-            if self._notify_executor is None:
-                self._notify_executor = ThreadPoolExecutor(
-                    max_workers=1,
-                    thread_name_prefix="koma-chat-rehydrate",
-                )
+        self._ensure_notify_worker()
         if not self._uses_postgres_multiplexer():
             self._listener_ready.set()
             return
@@ -100,14 +130,17 @@ class OrderChatHub:
         )
         self._multiplexer.start()
 
-    def stop(self) -> None:
+    def stop(self, timeout: float = DEFAULT_SHUTDOWN_TIMEOUT_SECONDS) -> None:
         if self._uses_postgres_multiplexer():
             self._multiplexer.stop()
-        with self._lock:
-            executor = self._notify_executor
-            self._notify_executor = None
-        if executor is not None:
-            executor.shutdown(wait=True, cancel_futures=False)
+        with self._queue_cond:
+            self._worker_stopping = True
+            self._notify_queue.clear()
+            thread = self._worker_thread
+            self._worker_thread = None
+            self._queue_cond.notify_all()
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=max(0.0, float(timeout)))
         self._listener_ready.clear()
 
     def subscribe_conversation(self, conversation_id: str) -> tuple[str, asyncio.Queue]:
@@ -239,6 +272,7 @@ class OrderChatHub:
             self.broadcast_to_caixa(restaurante_id, "status_changed", enriched)
         elif kind == "refresh":
             self.broadcast_to_conversation(conversation_id, "refresh", enriched)
+            self.broadcast_to_caixa(restaurante_id, "refresh", enriched)
         else:
             self.broadcast_to_conversation(conversation_id, "read_update", enriched)
             self.broadcast_to_caixa(restaurante_id, "read_update", enriched)
@@ -292,6 +326,68 @@ class OrderChatHub:
             return self._multiplexer.is_ready()
         return self._listener_ready.is_set()
 
+    def _emit_overflow_refresh(self, restaurante_id: Any, conversation_id: Any) -> None:
+        conv_id = str(conversation_id or "").strip()
+        if not conv_id:
+            return
+        payload = {"conversation_id": conv_id, "coalesced": True}
+        self.broadcast_to_conversation(conv_id, "refresh", payload)
+        if restaurante_id is not None:
+            try:
+                self.broadcast_to_caixa(int(restaurante_id), "refresh", payload)
+            except (TypeError, ValueError):
+                pass
+
+    def _enqueue_notify(self, envelope: dict[str, Any]) -> None:
+        restaurante_id = envelope.get("restaurante_id")
+        conversation_id = envelope.get("conversation_id")
+        emit_direct_refresh = False
+
+        with self._queue_cond:
+            if self._worker_thread is None or not self._worker_thread.is_alive():
+                # Fallback síncrono quando o worker ainda não foi iniciado (ex.: testes unitários).
+                sync_fallback = True
+            else:
+                sync_fallback = False
+                if self._worker_stopping:
+                    return
+                if len(self._notify_queue) < self._max_notify_queue_size:
+                    self._notify_queue.append(envelope)
+                    self._queue_cond.notify()
+                else:
+                    # Sobrecarga: coalesce em um único refresh na fila para a mesma conversa/tenant,
+                    # ou sinaliza refresh direto via SSE para reconciliação por snapshot HTTP.
+                    upgraded = False
+                    for idx in range(len(self._notify_queue) - 1, -1, -1):
+                        queued = self._notify_queue[idx]
+                        if (
+                            queued.get("restaurante_id") == restaurante_id
+                            and queued.get("conversation_id") == conversation_id
+                        ):
+                            self._notify_queue[idx] = {
+                                "restaurante_id": restaurante_id,
+                                "conversation_id": conversation_id,
+                                "kind": "refresh",
+                                "data": {},
+                            }
+                            self._coalesced_notify_count += 1
+                            upgraded = True
+                            break
+                    if not upgraded:
+                        self._overflow_refresh_count += 1
+                        emit_direct_refresh = True
+
+        if sync_fallback:
+            self.publish_committed(envelope)
+        elif emit_direct_refresh:
+            if self._overflow_refresh_count in (1, 10, 50) or self._overflow_refresh_count % 100 == 0:
+                logger.warning(
+                    "[ORDER CHAT] Fila de reidratação saturada (maxsize=%s); sinalizando refresh direto (total=%s).",
+                    self._max_notify_queue_size,
+                    self._overflow_refresh_count,
+                )
+            self._emit_overflow_refresh(restaurante_id, conversation_id)
+
     def _handle_notify(self, payload: str) -> None:
         try:
             envelope = json.loads(payload)
@@ -299,12 +395,7 @@ class OrderChatHub:
             logger.warning("[ORDER CHAT] Payload PostgreSQL inválido ignorado.")
             return
         if isinstance(envelope, dict):
-            with self._lock:
-                executor = self._notify_executor
-            if executor is not None:
-                executor.submit(self.publish_committed, envelope)
-            else:
-                self.publish_committed(envelope)
+            self._enqueue_notify(envelope)
 
 
 order_chat_hub = OrderChatHub()
