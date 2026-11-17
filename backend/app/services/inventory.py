@@ -13,29 +13,50 @@ _PENDING_ACCEPTANCE_STATUSES = {"analise", "pendente"}
 _PENDING_ACCEPTANCE_TYPES = {"delivery", "entrega", "retirada"}
 
 
-def _aguarda_aceite_operacional(db: Session, item: Item) -> bool:
+def _aguarda_aceite_operacional(
+    db: Session,
+    item: Item,
+    *,
+    cache: dict[tuple[int, str], bool] | None = None,
+) -> bool:
     """Retorna True quando o item pertence a um pedido ainda não aceito.
 
     A regra vale para qualquer origem que use a gaveta de aceite. Vendas diretas
     do caixa nascem em ``producao`` e continuam baixando estoque imediatamente.
     """
-    comanda = (
-        db.query(Comanda)
-        .filter(
-            Comanda.restaurante_id == int(item.restaurante_id),
-            Comanda.id == item.comanda_id,
-        )
-        .first()
-    )
+    cache_key = (int(item.restaurante_id), str(item.comanda_id))
+    if cache is not None and cache_key in cache:
+        return cache[cache_key]
+
+    comanda = None
+    get_fn = getattr(db, "get", None)
+    if callable(get_fn):
+        candidate = get_fn(Comanda, item.comanda_id)
+        if candidate is not None and int(candidate.restaurante_id) == int(item.restaurante_id):
+            comanda = candidate
     if comanda is None:
+        comanda = (
+            db.query(Comanda)
+            .filter(
+                Comanda.restaurante_id == int(item.restaurante_id),
+                Comanda.id == item.comanda_id,
+            )
+            .first()
+        )
+    if comanda is None:
+        if cache is not None:
+            cache[cache_key] = False
         return False
 
     status = (comanda.delivery_status or "").strip().casefold()
     tipo = (comanda.tipo or "").strip().casefold()
-    return (
+    pending = (
         status in _PENDING_ACCEPTANCE_STATUSES
         and tipo in _PENDING_ACCEPTANCE_TYPES
     )
+    if cache is not None:
+        cache[cache_key] = pending
+    return pending
 
 
 def consumir_estoque_dos_itens(
@@ -57,9 +78,10 @@ def consumir_estoque_dos_itens(
     como alerta para correção no inventário.
     """
 
+    aguarda_cache: dict[tuple[int, str], bool] = {}
     eligible_items = [
         item for item in itens
-        if liberar_pendente or not _aguarda_aceite_operacional(db, item)
+        if liberar_pendente or not _aguarda_aceite_operacional(db, item, cache=aguarda_cache)
     ]
     if not eligible_items:
         return

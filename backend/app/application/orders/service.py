@@ -815,7 +815,20 @@ class OrderApplicationService:
 
             # 9. Persistência dos Itens e Modificadores
             itens_criados: list[Item] = []
+            item_modifiers_by_item_id: dict[str, tuple[OrderModifierDTO, ...]] = {}
+            product_names_by_id: dict[str, str] = {}
             for v_item in validated_input.items:
+                val_prod = val_context.catalog_products.get(str(v_item.product_id))
+                if val_prod is not None:
+                    product_names_by_id[v_item.product_id] = val_prod.name
+                mods_tuple = tuple(
+                    OrderModifierDTO(
+                        modifier_id=mod.id,
+                        name=mod.name,
+                        price=to_money_decimal(mod.price),
+                    )
+                    for mod in v_item.modifiers
+                )
                 unit_price = float(v_item.base_price + sum(m.price for m in v_item.modifiers))
                 qty_int = int(v_item.quantity)
                 for _ in range(qty_int):
@@ -834,6 +847,7 @@ class OrderApplicationService:
                     )
                     db.add(item_db)
                     itens_criados.append(item_db)
+                    item_modifiers_by_item_id[item_id] = mods_tuple
 
                     for mod in v_item.modifiers:
                         item_mod = ItemModificador(
@@ -935,6 +949,9 @@ class OrderApplicationService:
             sequence=sequence,
             display_number=display_number,
             quote=quote,
+            items_override=itens_criados,
+            product_names_by_id=product_names_by_id,
+            item_modifiers_by_item_id=item_modifiers_by_item_id,
         )
 
     @classmethod
@@ -1443,6 +1460,9 @@ class OrderApplicationService:
         sequence: int | None = None,
         display_number: str | None = None,
         quote: OrderQuote | None = None,
+        items_override: list[Item] | None = None,
+        product_names_by_id: dict[str, str] | None = None,
+        item_modifiers_by_item_id: dict[str, tuple[OrderModifierDTO, ...]] | None = None,
     ) -> OrderDTO:
         """Mapeia Lancamento + Comanda para o OrderDTO canônico."""
         if (sequence is None or display_number is None) and lancamento and db is not None:
@@ -1462,34 +1482,43 @@ class OrderApplicationService:
                 else str(comanda.numero_pedido)
             )
 
-        target_items = (
-            [it for it in comanda.itens if it.lancamento_id == lancamento.id]
-            if lancamento and comanda.itens
-            else comanda.itens
-        )
+        if items_override is not None:
+            target_items = items_override
+        else:
+            target_items = (
+                [it for it in comanda.itens if it.lancamento_id == lancamento.id]
+                if lancamento and comanda.itens
+                else comanda.itens
+            )
 
         itens_dto: list[OrderItemDTO] = []
         subtotal_calc = Decimal("0.00")
 
         for it in target_items:
-            mods_dto: list[OrderModifierDTO] = []
-            for m in getattr(it, "modificadores", []):
-                mod_op = getattr(m, "opcao", None)
-                mod_name = mod_op.nome if mod_op else f"Mod {m.opcao_modificador_id}"
-                mods_dto.append(
-                    OrderModifierDTO(
-                        modifier_id=m.opcao_modificador_id,
-                        name=mod_name,
-                        price=to_money_decimal(m.preco_aplicado or 0.0),
+            if item_modifiers_by_item_id is not None and it.id in item_modifiers_by_item_id:
+                mods_dto = list(item_modifiers_by_item_id[it.id])
+            else:
+                mods_dto = []
+                for m in getattr(it, "modificadores", []):
+                    mod_op = getattr(m, "opcao", None)
+                    mod_name = mod_op.nome if mod_op else f"Mod {m.opcao_modificador_id}"
+                    mods_dto.append(
+                        OrderModifierDTO(
+                            modifier_id=m.opcao_modificador_id,
+                            name=mod_name,
+                            price=to_money_decimal(m.preco_aplicado or 0.0),
+                        )
                     )
-                )
 
             it_price = to_money_decimal(it.preco_unit or 0.0)
             if it.status != "cancelado":
                 subtotal_calc += it_price
 
-            prod = getattr(it, "produto", None)
-            prod_name = prod.nome if prod else f"Produto {it.produto_id}"
+            if product_names_by_id is not None and it.produto_id in product_names_by_id:
+                prod_name = product_names_by_id[it.produto_id]
+            else:
+                prod = getattr(it, "produto", None)
+                prod_name = prod.nome if prod else f"Produto {it.produto_id}"
 
             itens_dto.append(
                 OrderItemDTO(

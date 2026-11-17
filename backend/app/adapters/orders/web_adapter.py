@@ -594,14 +594,16 @@ class CardapioWebAdapter:
                 commit=False,
             )
 
-            comanda = (
-                db.query(Comanda)
-                .filter(
-                    Comanda.restaurante_id == rest_id,
-                    Comanda.id == order_dto.comanda_id,
+            comanda = db.get(Comanda, order_dto.comanda_id)
+            if comanda is None or int(comanda.restaurante_id) != rest_id:
+                comanda = (
+                    db.query(Comanda)
+                    .filter(
+                        Comanda.restaurante_id == rest_id,
+                        Comanda.id == order_dto.comanda_id,
+                    )
+                    .first()
                 )
-                .first()
-            )
             numero_pedido = comanda.numero_pedido if comanda else int(order_dto.sequence)
             cliente_id = comanda.cliente_id if comanda else (order_dto.customer.customer_id if order_dto.customer else None)
             payment_intent = None
