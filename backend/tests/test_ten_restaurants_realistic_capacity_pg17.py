@@ -12,6 +12,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import os
+import random
 import resource
 import statistics
 import threading
@@ -313,25 +314,87 @@ def test_ten_restaurants_realistic_pool_capacity_pg17(realistic_pg17_env):
     assert ro.status_code == 201, ro.text
     orders_to_accept[1001].append(ro.json()["comanda_id"])
 
-    # Progressive mixed workload across 10 restaurants:
-    # 30% public menu GET, 40% create order POST, 20% status polling GET, 10% operational accept_order
-    # Note: 100% of orders use distinct IPs/phones to reflect distinct customers across 10 restaurants.
+    # Progressive mixed workload across 10 restaurants (decorrelated from tenant index):
+    # Pre-seed 1 pending order per tenant in pending_accept_pool so concurrent `accept`
+    # runs across all tenants without falling back to status.
+    rng = random.Random(20261117)
     stage_results = {}
     cpu_start = time.process_time()
     accept_lock = threading.Lock()
     pending_accept_pool: list[tuple[int, str]] = []
+    for rid in TENANT_IDS:
+        pre_idem = f"pre-accept-{rid}-{uuid.uuid4().hex[:6]}"
+        pre_resp = client.post(
+            "/cardapio/pedidos",
+            json={
+                "restaurante_id": rid,
+                "tipo_pedido": "retirada",
+                "cliente_nome": f"PreAccept {rid}",
+                "cliente_telefone": f"1195544{rid:04d}",
+                "forma_pagamento": "na_entrega",
+                "forma_pagamento_detalhe": "dinheiro",
+                "idempotency_key": pre_idem,
+                "itens": [
+                    {
+                        "produto_id": seeded[rid]["pids"][0],
+                        "quantidade": 1,
+                        "modificador_ids": [seeded[rid]["opt_id"]],
+                    },
+                    {"produto_id": seeded[rid]["pids"][1], "quantidade": 1},
+                ],
+            },
+            headers={"X-Forwarded-For": f"10.11.{rid - 1000}.1"},
+        )
+        assert pre_resp.status_code == 201, pre_resp.text
+        pre_cid = pre_resp.json()["comanda_id"]
+        orders_to_accept[rid].append(pre_cid)
+        pending_accept_pool.append((rid, pre_cid))
 
-    def _run_op(op_idx: int):
-        rid = TENANT_IDS[op_idx % len(TENANT_IDS)]
+    # Idempotent retry check under concurrency (5 identical replays -> 1 comanda)
+    idem_probe_key = f"idem-10r-{uuid.uuid4().hex[:8]}"
+    idem_probe_payload = {
+        "restaurante_id": 1005,
+        "tipo_pedido": "retirada",
+        "cliente_nome": "Idem Probe",
+        "cliente_telefone": "11944449999",
+        "forma_pagamento": "na_entrega",
+        "forma_pagamento_detalhe": "dinheiro",
+        "idempotency_key": idem_probe_key,
+        "itens": [{"produto_id": seeded[1005]["pids"][0], "quantidade": 1}],
+    }
+    with ThreadPoolExecutor(max_workers=5) as idem_pool:
+        idem_resps = list(
+            idem_pool.map(
+                lambda _: client.post(
+                    "/cardapio/pedidos",
+                    json=idem_probe_payload,
+                    headers={"X-Forwarded-For": "10.99.5.1"},
+                ),
+                range(5),
+            )
+        )
+    assert all(r.status_code in (200, 201) for r in idem_resps)
+    assert len({r.json()["comanda_id"] for r in idem_resps}) == 1
+    orders_to_accept[1005].append(idem_resps[0].json()["comanda_id"])
+
+    def _build_stage_schedule(count: int) -> list[tuple[int, str]]:
+        # 30% menu, 40% create, 20% status, 10% accept — shuffled across all 10 tenants
+        op_weights = ["menu"] * 3 + ["create"] * 4 + ["status"] * 2 + ["accept"] * 1
+        schedule = []
+        for idx in range(count):
+            rid = TENANT_IDS[(idx + rng.randrange(len(TENANT_IDS))) % len(TENANT_IDS)]
+            op_type = op_weights[idx % len(op_weights)]
+            schedule.append((rid, op_type))
+        rng.shuffle(schedule)
+        return schedule
+
+    def _run_op(op_idx: int, rid: int, op_type: str):
         ip = f"10.{(op_idx // 250) + 20}.{(op_idx % 250) + 1}.{(rid % 200) + 1}"
-        mod = op_idx % 10
         t0 = time.perf_counter()
-        if mod < 3:
-            op_type = "menu"
+        if op_type == "menu":
             res = client.get("/api/cardapio-digital/public", params={"restaurante_id": rid}, headers={"X-Forwarded-For": ip})
             return op_type, rid, None, res.status_code, (time.perf_counter() - t0) * 1000.0
-        if mod < 7:
-            op_type = "create"
+        if op_type == "create":
             res = client.post(
                 "/cardapio/pedidos",
                 json={
@@ -355,8 +418,7 @@ def test_ten_restaurants_realistic_pool_capacity_pg17(realistic_pg17_env):
             )
             cid = res.json().get("comanda_id") if res.status_code in (200, 201) else None
             return op_type, rid, cid, res.status_code, (time.perf_counter() - t0) * 1000.0
-        if mod < 9:
-            op_type = "status"
+        if op_type == "status":
             cid, key = baseline_orders[rid]
             res = client.get(
                 f"/cardapio/pedidos/{cid}/status",
@@ -364,7 +426,6 @@ def test_ten_restaurants_realistic_pool_capacity_pg17(realistic_pg17_env):
                 headers={"X-Forwarded-For": ip},
             )
             return op_type, rid, None, res.status_code, (time.perf_counter() - t0) * 1000.0
-        op_type = "accept"
         with accept_lock:
             target = pending_accept_pool.pop(0) if pending_accept_pool else None
         if target is None:
@@ -381,14 +442,23 @@ def test_ten_restaurants_realistic_pool_capacity_pg17(realistic_pg17_env):
                     operator_user_id=seeded[t_rid]["user_id"],
                 ),
             )
+            db.execute(
+                text("SELECT pg_notify('koma_print_jobs', :p), pg_notify('koma_order_chat', :c)"),
+                {
+                    "p": str(t_rid),
+                    "c": json.dumps({"restaurante_id": t_rid, "conversation_id": f"conv-{t_cid}", "kind": "refresh"}),
+                },
+            )
+            db.commit()
         return op_type, t_rid, None, 200, (time.perf_counter() - t0) * 1000.0
 
     # For each concurrency level N in (1, 10, 25, 50), launch N concurrent clients
     for n in (1, 10, 25, 50):
+        schedule = _build_stage_schedule(n)
         t_stage = time.perf_counter()
         results = []
         with ThreadPoolExecutor(max_workers=n) as pool:
-            futs = [pool.submit(_run_op, n * 1000 + i) for i in range(n)]
+            futs = [pool.submit(_run_op, n * 1000 + i, rid, op_type) for i, (rid, op_type) in enumerate(schedule)]
             for fut in as_completed(futs):
                 results.append(fut.result())
         elapsed_s = time.perf_counter() - t_stage
@@ -467,6 +537,8 @@ def test_ten_restaurants_realistic_pool_capacity_pg17(realistic_pg17_env):
         pg_conns = db.execute(text("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()")).scalar()
 
     # Verify LISTEN channels & bounded chat queue remained healthy
+    time.sleep(0.05)
+    assert len(print_events) > 0, "Expected print wakeup events via shared LISTEN multiplexer"
     with chat_hub._queue_cond:
         chat_q_len = len(chat_hub._notify_queue)
     assert chat_q_len <= chat_hub._max_notify_queue_size
@@ -488,6 +560,8 @@ def test_ten_restaurants_realistic_pool_capacity_pg17(realistic_pg17_env):
                 "pool_wait_p95_ms": round(sorted_waits[min(len(sorted_waits) - 1, int(0.95 * len(sorted_waits)))], 2),
                 "pool_wait_max_ms": round(max(sorted_waits), 2),
                 "pg_stat_activity_conns": pg_conns,
+                "print_events_received": len(print_events),
+                "ops_events_received": len(ops_events),
                 "menu_sql_count": len(menu_sql),
                 "order_sql_total": len(order_sql),
                 "order_sql_selects": sum(1 for op in order_sql if op == "SELECT"),
