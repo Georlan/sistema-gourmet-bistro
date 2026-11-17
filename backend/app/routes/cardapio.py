@@ -4,9 +4,9 @@ import datetime
 import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request, status
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 from ..database import get_db, current_restaurante_id, tenant_session_scope
-from ..models import Comanda, OnlinePaymentIntent
+from ..models import Comanda, Item, OnlinePaymentIntent
 from ..schemas import CardapioPedidoCreate
 from ..services.order_state_contract import build_order_state_contract
 from ..services.order_financials import payable_total
@@ -171,11 +171,16 @@ def consultar_status_pedido_publico(
         )
 
     with tenant_session_scope(db, int(rest_id)):
-        comanda = db.query(Comanda).filter(
-            Comanda.restaurante_id == int(rest_id),
-            Comanda.id == comanda_id,
-            Comanda.idempotency_key == key,
-        ).first()
+        comanda = (
+            db.query(Comanda)
+            .options(selectinload(Comanda.itens).joinedload(Item.produto))
+            .filter(
+                Comanda.restaurante_id == int(rest_id),
+                Comanda.id == comanda_id,
+                Comanda.idempotency_key == key,
+            )
+            .first()
+        )
         if not comanda:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

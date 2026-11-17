@@ -100,6 +100,7 @@ class ValidationDataLoader:
                     price=to_money_decimal(p.preco),
                     is_active=bool(p.ativo),
                     cardapio_id=p.cardapio_id,
+                    is_promotion_exclusive=bool(getattr(p, "somente_promocao", False)),
                     allowed_modifier_group_ids=tuple(grupos_by_prod.get(str(p.id), ())),
                     modifier_selection_limits=tuple((group, *limits) for group, limits in limits_by_product.get(str(p.id), {}).items()),
                 )

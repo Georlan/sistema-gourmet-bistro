@@ -17,7 +17,7 @@ from typing import Any, Optional
 from fastapi import BackgroundTasks, HTTPException, Request, status
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from ...application.orders.addressing import delivery_address_from_payload
 from ...application.orders.commands import (
@@ -50,6 +50,7 @@ from ...domain.orders.types import FulfillmentType, OrderChannel
 from ...models import (
     Comanda,
     ConfiguracaoRestaurante,
+    Item,
     OnlinePaymentIntent,
     Restaurante,
     Usuario,
@@ -481,12 +482,18 @@ class CardapioWebAdapter:
             recentes = []
             if not is_scheduled and cliente is not None:
                 cinco_minutos_atras = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
-                recentes = db.query(Comanda).filter(
-                    Comanda.restaurante_id == rest_id,
-                    Comanda.cliente_id == cliente.id,
-                    Comanda.tipo == tipo_comanda,
-                    Comanda.criado_em >= cinco_minutos_atras,
-                ).order_by(Comanda.criado_em.desc()).all()
+                recentes = (
+                    db.query(Comanda)
+                    .options(selectinload(Comanda.itens))
+                    .filter(
+                        Comanda.restaurante_id == rest_id,
+                        Comanda.cliente_id == cliente.id,
+                        Comanda.tipo == tipo_comanda,
+                        Comanda.criado_em >= cinco_minutos_atras,
+                    )
+                    .order_by(Comanda.criado_em.desc())
+                    .all()
+                )
 
             payload_items_sig = _payload_items_signature(payload)
             for rec in recentes:
@@ -622,8 +629,6 @@ class CardapioWebAdapter:
 
             if not (online_payment or is_scheduled):
                 db.commit()
-                if comanda is not None:
-                    db.refresh(comanda)
 
             if is_scheduled:
                 if comanda is None or normalized_schedule is None:
