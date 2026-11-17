@@ -9,6 +9,7 @@ hook. SSE remains a delivery hint; HTTP snapshots stay authoritative.
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import json
 import logging
 import threading
@@ -51,6 +52,7 @@ class OrderChatHub:
         ] = {}
         self._listener_ready = threading.Event()
         self._local_generation = 0
+        self._notify_executor: ThreadPoolExecutor | None = None
 
     def _uses_postgres_multiplexer(self) -> bool:
         return engine.dialect.name == "postgresql" and self._listen_to_postgres
@@ -83,6 +85,12 @@ class OrderChatHub:
 
     def ensure_started(self) -> None:
         self._multiplexer.register_handler(ORDER_CHAT_CHANNEL, self._handle_notify)
+        with self._lock:
+            if self._notify_executor is None:
+                self._notify_executor = ThreadPoolExecutor(
+                    max_workers=1,
+                    thread_name_prefix="koma-chat-rehydrate",
+                )
         if not self._uses_postgres_multiplexer():
             self._listener_ready.set()
             return
@@ -95,6 +103,11 @@ class OrderChatHub:
     def stop(self) -> None:
         if self._uses_postgres_multiplexer():
             self._multiplexer.stop()
+        with self._lock:
+            executor = self._notify_executor
+            self._notify_executor = None
+        if executor is not None:
+            executor.shutdown(wait=True, cancel_futures=False)
         self._listener_ready.clear()
 
     def subscribe_conversation(self, conversation_id: str) -> tuple[str, asyncio.Queue]:
@@ -286,7 +299,12 @@ class OrderChatHub:
             logger.warning("[ORDER CHAT] Payload PostgreSQL inválido ignorado.")
             return
         if isinstance(envelope, dict):
-            self.publish_committed(envelope)
+            with self._lock:
+                executor = self._notify_executor
+            if executor is not None:
+                executor.submit(self.publish_committed, envelope)
+            else:
+                self.publish_committed(envelope)
 
 
 order_chat_hub = OrderChatHub()

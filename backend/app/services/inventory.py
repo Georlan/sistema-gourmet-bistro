@@ -57,30 +57,57 @@ def consumir_estoque_dos_itens(
     como alerta para correção no inventário.
     """
 
-    for item in itens:
-        restaurante_id = int(item.restaurante_id)
-        if not liberar_pendente and _aguarda_aceite_operacional(db, item):
-            continue
+    eligible_items = [
+        item for item in itens
+        if liberar_pendente or not _aguarda_aceite_operacional(db, item)
+    ]
+    if not eligible_items:
+        return
 
-        receitas = (
+    by_rest_prods: dict[int, set[str]] = {}
+    for item in eligible_items:
+        by_rest_prods.setdefault(int(item.restaurante_id), set()).add(str(item.produto_id))
+
+    receitas_by_key: dict[tuple[int, str], list[ProdutoInsumo]] = {}
+    for rest_id, prod_ids in by_rest_prods.items():
+        fallback_pid = next(iter(prod_ids)) if len(prod_ids) == 1 else None
+        for rec in (
             db.query(ProdutoInsumo)
             .filter(
-                ProdutoInsumo.restaurante_id == restaurante_id,
-                ProdutoInsumo.produto_id == item.produto_id,
+                ProdutoInsumo.restaurante_id == rest_id,
+                ProdutoInsumo.produto_id.in_(prod_ids),
             )
             .all()
-        )
+        ):
+            rec_pid = getattr(rec, "produto_id", None) or fallback_pid
+            if rec_pid is not None:
+                receitas_by_key.setdefault((rest_id, str(rec_pid)), []).append(rec)
+
+    if not receitas_by_key:
+        return
+
+    produtos_by_key: dict[tuple[int, str], Produto] = {}
+    for rest_id, prod_ids in {
+        rid: {pid for (r, pid) in receitas_by_key if r == rid}
+        for rid, _ in receitas_by_key
+    }.items():
+        for prod in (
+            db.query(Produto)
+            .filter(
+                Produto.restaurante_id == rest_id,
+                Produto.id.in_(prod_ids),
+            )
+            .all()
+        ):
+            produtos_by_key[(rest_id, str(prod.id))] = prod
+
+    for item in eligible_items:
+        restaurante_id = int(item.restaurante_id)
+        receitas = receitas_by_key.get((restaurante_id, str(item.produto_id)), [])
         if not receitas:
             continue
 
-        produto = (
-            db.query(Produto)
-            .filter(
-                Produto.restaurante_id == restaurante_id,
-                Produto.id == item.produto_id,
-            )
-            .first()
-        )
+        produto = produtos_by_key.get((restaurante_id, str(item.produto_id)))
         produto_nome = produto.nome if produto else item.produto_id
 
         for receita in receitas:
