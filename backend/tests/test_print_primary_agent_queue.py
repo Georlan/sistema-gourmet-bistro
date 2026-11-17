@@ -589,6 +589,108 @@ def test_retry_failed_jobs_preserves_targeted_agent():
         db.close()
 
 
+@pytest.mark.parametrize("primary_online", [True, False])
+def test_register_support_agent_cannot_take_restaurant_queue_even_if_primary_offline(primary_online):
+    """Registration from the administrator's device is not a primary switch."""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    db = TestingSessionLocal()
+    try:
+        existing = db.query(PrintAgentToken).filter_by(id="ag-win").one()
+        existing.last_seen_at = now if primary_online else now - datetime.timedelta(minutes=10)
+        db.commit()
+    finally:
+        db.close()
+
+    client = TestClient(app)
+    registered = client.post(
+        "/api/print-agents/register",
+        headers=get_jwt("admin-1", 1),
+        # Simulates an older browser that automatically requested is_primary.
+        json={"agent_id": "administrator-office", "is_primary": True},
+    )
+    assert registered.status_code == 200, registered.text
+    secondary_token = registered.json()["agent_token"]
+
+    db = TestingSessionLocal()
+    try:
+        primary = db.query(PrintAgentToken).filter_by(id="ag-win").one()
+        secondary = db.query(PrintAgentToken).filter_by(
+            restaurante_id=1, agent_id="administrator-office"
+        ).one()
+        assert primary.is_primary is True
+        assert secondary.is_primary is False
+        secondary_record_id = secondary.id
+        db.add_all([
+            PrintJob(
+                id="restaurant-production", restaurante_id=1,
+                document_type="producao", destination="COZINHA",
+                source_type="pedido", source_id="customer-order",
+                payload_text="Order for restaurant", status="pending",
+                agent_id=None, idempotency_key="idemp:primary:production",
+            ),
+            PrintJob(
+                id="explicit-office-test", restaurante_id=1,
+                document_type="producao", destination="COZINHA",
+                source_type="teste_extremo_cardapio", source_id="office-test",
+                payload_text="Explicit test for administrator", status="pending",
+                agent_id="administrator-office", idempotency_key="idemp:primary:test",
+            ),
+        ])
+        db.commit()
+    finally:
+        db.close()
+
+    # Registration alone does not establish printer readiness.
+    mark_agent_ready(secondary_record_id)
+    # Even when the restaurant has temporarily stopped sending heartbeats,
+    # the support computer may only claim a job explicitly targeted to it.
+    office = client.post(
+        "/api/print-agents/jobs/claim-batch?limit=10",
+        headers={"X-Agent-Token": secondary_token},
+    )
+    assert office.status_code == 200, office.text
+    assert [job["id"] for job in office.json()] == ["explicit-office-test"]
+
+    # The restaurant reconnects before it can consume its own queue.
+    mark_agent_ready("ag-win")
+    restaurant = client.post(
+        "/api/print-agents/jobs/claim-batch?limit=10",
+        headers={"X-Agent-Token": "token_win_primary"},
+    )
+    assert restaurant.status_code == 200, restaurant.text
+    assert [job["id"] for job in restaurant.json()] == ["restaurant-production"]
+
+
+def test_register_secondary_preserves_legacy_only_agent_without_primary_flag():
+    """A legacy standalone printer must keep receiving orders after a new pairing."""
+    context = current_restaurante_id.set(2)
+    try:
+        client = TestClient(app)
+        registered = client.post(
+            "/api/print-agents/register",
+            headers=get_jwt("admin-2", 2),
+            json={"agent_id": "office-support", "is_primary": True},
+        )
+        assert registered.status_code == 200, registered.text
+
+        db = TestingSessionLocal()
+        try:
+            old = db.query(PrintAgentToken).filter_by(id="ag-solo").one()
+            new = db.query(PrintAgentToken).filter_by(
+                restaurante_id=2, agent_id="office-support"
+            ).one()
+            assert old.is_primary is True
+            assert new.is_primary is False
+        finally:
+            db.close()
+    finally:
+        current_restaurante_id.reset(context)
+
+
+
+
+
+
 def test_set_primary_agent_endpoint_switches_priority_and_updates_monitor():
     """
     Endpoint administrativo /set-primary alterna qual máquina é o agente principal.
@@ -908,3 +1010,47 @@ def test_same_source_different_print_content_preserves_distinct_copies():
             PrintJob.restaurante_id == 1,
             PrintJob.source_id == "l-split",
         ).count() == 2
+
+
+
+def test_legacy_claim_does_not_return_already_printed_job():
+    mark_agent_ready("ag-win")
+    db = TestingSessionLocal()
+    try:
+        db.add(PrintJob(
+            id="already-printed-claim", restaurante_id=1,
+            document_type="producao", destination="COZINHA", source_type="pedido",
+            source_id="order-printed", payload_text="already printed",
+            status="printed", agent_id="win-caixa-real",
+            idempotency_key="printed-claim-test",
+        ))
+        db.commit()
+    finally:
+        db.close()
+    response = TestClient(app).post(
+        "/api/print-agents/jobs/already-printed-claim/claim",
+        headers={"X-Agent-Token": "token_win_primary"},
+    )
+    assert response.status_code == 409
+
+
+def test_legacy_claim_replay_for_same_agent_remains_idempotent():
+    mark_agent_ready("ag-win")
+    db = TestingSessionLocal()
+    try:
+        db.add(PrintJob(
+            id="replayed-claim", restaurante_id=1, document_type="producao",
+            destination="COZINHA", source_type="pedido", source_id="order-claim",
+            payload_text="reserved", status="claimed", agent_id="win-caixa-real",
+            claimed_at=datetime.datetime.now(datetime.timezone.utc),
+            idempotency_key="replayed-claim-test",
+        ))
+        db.commit()
+    finally:
+        db.close()
+    response = TestClient(app).post(
+        "/api/print-agents/jobs/replayed-claim/claim",
+        headers={"X-Agent-Token": "token_win_primary"},
+    )
+    assert response.status_code == 200
+    assert response.json()["id"] == "replayed-claim"

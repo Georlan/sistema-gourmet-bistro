@@ -68,6 +68,7 @@ interface AgentCommandResult {
 interface PrintAgentHealth {
   agent_id: string;
   online: boolean;
+  is_primary?: boolean;
   last_seen_at: string | null;
   seconds_since_heartbeat: number | null;
   diagnostics_fresh?: boolean;
@@ -121,6 +122,7 @@ interface PrintJobHistory {
 }
 
 interface PrintMonitorResponse {
+  restaurante_id?: number;
   generated_at: string;
   history_date: string;
   history_limit: number;
@@ -136,6 +138,8 @@ interface PrintMonitorResponse {
   summary: {
     online_agents: number;
     active_agents: number;
+    has_primary_agent?: boolean;
+    primary_agent_id?: string | null;
     pending: number;
     claimed: number;
     printing: number;
@@ -340,7 +344,12 @@ export function PrintMonitorPanel({
 }: PrintMonitorPanelProps) {
   const isMobileClient = isMobileClientDevice();
   const authorization = authHeaders.Authorization || authHeaders.authorization || '';
-  const connectionScope = `${apiBaseUrl}|${authorization}`;
+  // The tenant can change under the same admin login: include all auth/context
+  // headers so pending local discovery from another restaurant is discarded.
+  const connectionScope = `${apiBaseUrl}|${Object.entries(authHeaders)
+    .map(([name, value]) => `${name.toLowerCase()}:${value}`)
+    .sort()
+    .join('|')}`;
   const activeScopeRef = useRef(connectionScope); activeScopeRef.current = connectionScope;
   const [monitorSnapshot, setMonitorSnapshot] = useState<{ scope: string; data: PrintMonitorResponse } | null>(null);
   const monitorData = monitorSnapshot?.scope === connectionScope ? monitorSnapshot.data : null;
@@ -352,32 +361,28 @@ export function PrintMonitorPanel({
   const [startingAgent, setStartingAgent] = useState(false);
   const startingAgentRef = useRef(false);
   const [reprintingId, setReprintingId] = useState<string | null>(null);
+  const reprintingRequestRef = useRef(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   const localConnection = useLocalPrintAgent(connectionScope);
   const detectedMobileAgentId = useMemo(() => {
-    if (!isMobileClient) return null;
-    const onlineAgent = (monitorData?.agents || []).find(a => (
-      a.online && (
-        a.agent_id.startsWith('android-')
-        || a.printer_diagnostics?.platform === 'android'
-        || a.printer_diagnostics?.adapter === 'android_bluetooth_spp'
-      )
-    ))?.agent_id || (monitorData?.agents || []).find(a => a.online)?.agent_id || null;
-    if (onlineAgent) {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('koma_print_mobile_agent_id', onlineAgent);
-      }
-      return onlineAgent;
-    }
-    const stored = typeof window !== 'undefined' ? localStorage.getItem('koma_print_mobile_agent_id') : null;
-    if (stored) return stored;
-    return null;
+    if (!isMobileClient || !monitorData || typeof window === 'undefined') return null;
+    // Never guess "this phone" from the first online agent: that could be
+    // the customer's printer while an administrator is visiting their tenant.
+    // The device ID is stored only after an explicit pairing and must also
+    // exist in the currently authenticated restaurant's monitor.
+    const stored = monitorData.restaurante_id
+      ? localStorage.getItem(`koma_print_mobile_agent_id:${monitorData.restaurante_id}`)
+      : null;
+    return stored && monitorData.agents.some(agent => agent.agent_id === stored)
+      ? stored : null;
   }, [isMobileClient, monitorData]);
   const localAgentId = localConnection.identity?.agent_id || detectedMobileAgentId || null;
   const localAgentResolved = localConnection.status !== 'checking';
+  const restaurantPrimary = monitorData?.agents.find(agent => agent.is_primary
+    || agent.agent_id === monitorData?.summary?.primary_agent_id) || null;
   const connectionNeedsPermission = localConnection.status === 'permission_prompt' || localConnection.status === 'permission_denied';
 
   const loadMonitor = useCallback(async (showLoading = false) => {
@@ -810,7 +815,7 @@ export function PrintMonitorPanel({
           ...authHeaders,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ agent_id: requestedAgentId, is_primary: true }),
+        body: JSON.stringify({ agent_id: requestedAgentId, is_primary: false }),
       });
       const data = await response.json().catch(() => null);
       if (response.ok && data?.agent_token) {
@@ -818,15 +823,7 @@ export function PrintMonitorPanel({
         const agentId = data.agent_id || requestedAgentId;
         const agentToken = data.agent_token;
         if (isMobileClient && typeof window !== 'undefined') {
-          localStorage.setItem('koma_print_mobile_agent_id', agentId);
-          void fetch(`${apiBaseUrl}/api/print-agents/set-primary`, {
-            method: 'POST',
-            headers: {
-              ...authHeaders,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ agent_id: agentId }),
-          }).catch(() => null);
+          localStorage.setItem(`koma_print_mobile_agent_id:${tenantId}`, agentId);
         }
         const restaurantName = (data as Record<string, unknown>)?.restaurant_name as string || 'KOMA GOURMET';
         targetUrl = `koma-print://connect?backend=${encodeURIComponent(apiBaseUrl)}&tenant=${tenantId}&name=${encodeURIComponent(restaurantName)}&agent_id=${encodeURIComponent(agentId)}&token=${encodeURIComponent(agentToken)}`;
@@ -852,11 +849,12 @@ export function PrintMonitorPanel({
   };
 
   const requestReprint = async (job: PrintJobHistory) => {
+    if (reprintingRequestRef.current) return;
     const confirmed = window.confirm(
       `Reimprimir ${job.reference || friendlyDocumentType(job.document_type)} de ${formatDate(job.created_at)}?`
     );
-    if (!confirmed) return;
-
+    if (!confirmed || reprintingRequestRef.current) return;
+    reprintingRequestRef.current = true;
     setReprintingId(job.id);
     try {
       const response = await fetch(
@@ -882,6 +880,7 @@ export function PrintMonitorPanel({
           : 'Não foi possível solicitar a reimpressão.'
       );
     } finally {
+      reprintingRequestRef.current = false;
       setReprintingId(null);
     }
   };
@@ -959,6 +958,13 @@ export function PrintMonitorPanel({
         tone: 'warning',
         title: 'Autorize a conexão com o KÔMA Print.',
         detail: 'Toque em Conectar KÔMA Print e permita o acesso solicitado pelo navegador. Seu vínculo e suas impressoras serão preservados.'
+      };
+    }
+    if (!localAgentId && restaurantPrimary?.online) {
+      return {
+        tone: 'success',
+        title: 'Impressora principal do restaurante conectada',
+        detail: 'A impressão do restaurante continua na máquina principal. Este dispositivo só será identificado se você solicitar a conexão local.'
       };
     }
     if (!localAgentId && !hasOnlineAgent) {
@@ -1070,6 +1076,7 @@ export function PrintMonitorPanel({
     localAgentId,
     localAgentResolved,
     localConnection.status,
+    restaurantPrimary,
     hasFreshPrinterDiagnostics,
     hasOnlineAgent,
     hasReadyPrinter,
@@ -1105,8 +1112,10 @@ export function PrintMonitorPanel({
       : (allDetectedPrinters.length > 0 || presentUsbPrinters.length > 0)
         ? 'Impressora encontrada'
         : 'Desconectada';
-  const operationAccent = !hasOnlineAgent
-    ? 'agente offline'
+  const operationAccent = !hasOnlineAgent && restaurantPrimary?.online
+    ? 'principal do restaurante conectada'
+    : !hasOnlineAgent
+    ? 'agente local offline'
     : queueTotal > 0
       ? `${queueTotal} na fila`
       : hasReadyPrinter
@@ -1151,17 +1160,28 @@ export function PrintMonitorPanel({
         description="Veja se o KÔMA Print está conectado e qual impressora está pronta."
         metrics={[
           {
-            label: 'KÔMA Print',
+            label: 'KÔMA Print local',
             value: agentState,
             valueClassName: hasOnlineAgent ? 'text-emerald-700 dark:text-emerald-400 font-bold' : 'text-rose-700 dark:text-rose-300 font-bold'
           },
           {
-            label: 'Impressora',
+            label: 'Impressora local',
             value: equipmentState,
             valueClassName: hasReadyPrinter ? 'text-emerald-700 dark:text-emerald-400 font-bold' : 'text-amber-800 dark:text-amber-300 font-bold'
           }
         ]}
       />
+
+      <div className="rounded-xl border border-koma-border bg-koma-card px-4 py-3 text-xs text-koma-foreground"
+        aria-label="Agente principal do restaurante">
+        <strong className="block font-bold">Impressora principal do restaurante</strong>
+        <span className="mt-1 block text-koma-muted">
+          {restaurantPrimary
+            ? `${restaurantPrimary.agent_id} — ${restaurantPrimary.online ? 'agente online' : 'sem comunicação'}`
+            : 'Nenhuma instalação principal definida'}
+          . A consulta desta configuração não conecta impressoras neste aparelho.
+        </span>
+      </div>
 
       {/* 1. Estado atual */}
       <section className="space-y-3 text-left" aria-label="Monitor de impressão">
@@ -1607,17 +1627,19 @@ export function PrintMonitorPanel({
                         </td>
                         <td className="px-3 py-2 text-right">
                           {job.can_reprint ? (
-                            <button
-                              type="button"
-                              onClick={() => void requestReprint(job)}
-                              disabled={reprintingId === job.id}
-                              className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#35353a] px-2.5 py-1 text-[8px] font-bold text-koma-secondary transition hover:border-gray-500 disabled:opacity-50 cursor-pointer"
-                            >
-                              {reprintingId === job.id
-                                ? <RefreshCw size={10} className="animate-spin" />
-                                : <RotateCcw size={10} />}
-                              Reimprimir
-                            </button>
+                            <div className="flex flex-wrap justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => void requestReprint(job)}
+                                disabled={reprintingId === job.id}
+                                className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-[#35353a] px-2.5 py-1 text-[8px] font-bold text-koma-secondary transition hover:border-gray-500 disabled:opacity-50 cursor-pointer"
+                              >
+                                {reprintingId === job.id
+                                  ? <RefreshCw size={10} className="animate-spin" />
+                                  : <RotateCcw size={10} />}
+                                Reimprimir
+                              </button>
+                            </div>
                           ) : job.accepted_by_spooler ? (
                             <CheckCircle2 size={13} className="ml-auto text-emerald-400" />
                           ) : null}

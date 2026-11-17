@@ -97,7 +97,8 @@ export function CashierPrintingSettings({
           ...authHeaders,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ agent_id: requestedAgentId, is_primary: true }),
+        // Pair this device without displacing the restaurant's primary printer.
+        body: JSON.stringify({ agent_id: requestedAgentId, is_primary: false }),
       });
       const data = await response.json().catch(() => null);
       if (!response.ok) {
@@ -107,15 +108,7 @@ export function CashierPrintingSettings({
       const agentId = data.agent_id || requestedAgentId;
       const agentToken = data.agent_token;
       if (typeof window !== 'undefined') {
-        localStorage.setItem('koma_print_mobile_agent_id', agentId);
-        void fetch(`${apiBaseUrl}/api/print-agents/set-primary`, {
-          method: 'POST',
-          headers: {
-            ...authHeaders,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ agent_id: agentId }),
-        }).catch(() => null);
+        localStorage.setItem(`koma_print_mobile_agent_id:${tenantId}`, agentId);
       }
       const restaurantName = printHeader || 'KOMA GOURMET';
       const deepLink = `koma-print://connect?backend=${encodeURIComponent(apiBaseUrl)}&tenant=${tenantId}&name=${encodeURIComponent(restaurantName)}&agent_id=${encodeURIComponent(agentId)}&token=${encodeURIComponent(agentToken)}`;
