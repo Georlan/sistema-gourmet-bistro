@@ -78,14 +78,14 @@ const CountField: React.FC<CountFieldProps> = ({
   return (
     <div className="closing-count-field min-w-0 rounded-2xl border border-koma-border bg-koma-panel p-4 transition-colors focus-within:border-koma-accent">
       <div className="closing-count-field__header flex min-w-0 items-start justify-between gap-3">
-        <label htmlFor={id} className="flex min-w-0 items-center gap-2 text-[10px] font-bold uppercase tracking-[0.12em] text-koma-secondary">
+        <label htmlFor={id} className="flex min-w-0 items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-koma-secondary">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
             <Icon size={15} />
           </span>
           <span className="min-w-0">{label}{required ? <span className="ml-1 text-emerald-800 dark:text-emerald-300">*</span> : null}</span>
         </label>
         {automatic && (
-          <span className="rounded-full border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1 text-[8px] font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
+          <span className="rounded-full border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 px-2 py-1 text-xs font-bold uppercase tracking-wider text-emerald-800 dark:text-emerald-300">
             Automático
           </span>
         )}
@@ -103,7 +103,7 @@ const CountField: React.FC<CountFieldProps> = ({
           className="min-w-0 flex-1 bg-transparent px-2 py-3 text-lg font-semibold tabular-nums text-koma-foreground outline-none placeholder:text-zinc-700"
         />
       </label>
-      <div className="mt-2 flex min-w-0 items-center justify-between gap-3 text-[10px]">
+      <div className="mt-2 flex min-w-0 items-center justify-between gap-3 text-xs">
         <span className="min-w-0 leading-relaxed text-koma-muted">{help}</span>
         <span className={clsx(
           'shrink-0 font-semibold tabular-nums',
@@ -291,7 +291,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
     ] as const;
 
     return (
-      <div className="cashier-fluid-view closing-workspace grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,.5fr)]">
+      <div className="cash-register cashier-fluid-view closing-workspace grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(280px,.5fr)]">
         <section className="cashier-fluid-panel overflow-hidden rounded-3xl border border-koma-border bg-koma-panel">
           <header className="flex flex-col gap-4 border-b border-koma-border p-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
@@ -299,20 +299,20 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
                 <CheckCircle2 size={22} />
               </span>
               <div>
-                <h2 className="text-base font-bold text-koma-foreground">Turno encerrado com segurança</h2>
-                <p className="mt-0.5 text-[11px] text-koma-muted">
+                <h2 className="text-base font-bold text-koma-foreground">Caixa fechado</h2>
+                <p className="mt-0.5 text-sm text-koma-muted">
                   Caixa #{fechamentoResult.turno_id} · {fechamentoResult.fechado_por_nome} · {formatBackendDateTime(fechamentoResult.fechado_em)}
                 </p>
               </div>
             </div>
-            <span className="w-fit rounded-full border border-koma-border-subtle bg-koma-panel px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-koma-secondary">
+            <span className="w-fit rounded-full border border-koma-border-subtle bg-koma-panel px-3 py-1 text-xs font-bold uppercase tracking-wider text-koma-secondary">
               Conferência concluída
             </span>
           </header>
 
           <div className="p-5">
             {errorMsg && (
-              <div className="mb-4 flex items-start gap-2 rounded-xl border border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 p-3 text-xs text-rose-800 dark:text-rose-300" role="alert">
+              <div className="mb-4 flex items-start gap-2 rounded-xl border border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 p-3 text-sm text-rose-800 dark:text-rose-300" role="alert">
                 <AlertCircle size={16} className="mt-0.5 shrink-0" />
                 <span>{errorMsg}</span>
               </div>
@@ -325,8 +325,8 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
                 <strong className={clsx('block text-sm', isExact ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300')}>
                   {isExact ? 'Caixa conferido sem divergência' : isSurplus ? 'Sobra identificada na conferência' : 'Falta identificada na conferência'}
                 </strong>
-                <span className="mt-1 block text-[10px] text-koma-subtle">
-                  {isExact ? 'Os valores contados conferem com os registros do sistema.' : 'A diferença ficou registrada no fechamento para auditoria.'}
+                <span className="mt-1 block text-xs text-koma-subtle">
+                  {isExact ? 'Os valores contados conferem com os registros do sistema.' : 'A diferença ficou registrada no fechamento no histórico.'}
                 </span>
               </div>
               <strong className={clsx('text-xl tabular-nums', isExact ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300')}>
@@ -335,8 +335,8 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
             </div>
 
             <div className="overflow-x-auto overscroll-x-contain rounded-2xl border border-koma-border">
-              <table className="w-full min-w-[620px] text-left text-xs">
-                <thead className="bg-koma-panel text-[9px] uppercase tracking-wider text-koma-muted">
+              <table className="w-full min-w-[360px] text-left text-sm">
+                <thead className="bg-koma-panel text-xs uppercase tracking-wider text-koma-muted">
                   <tr>
                     <th className="p-3">Meio</th>
                     <th className="p-3">Sistema</th>
@@ -371,18 +371,18 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
 
         <aside className="cashier-fluid-panel flex flex-col justify-between rounded-3xl border border-koma-border bg-koma-panel p-5">
           <div>
-            <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-emerald-800 dark:text-emerald-300">Próximo turno</p>
+            <p className="text-xs font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">Próximo turno</p>
             <h3 className="mt-2 text-lg font-bold text-koma-foreground">Caixa pronto para recomeçar</h3>
-            <p className="mt-2 text-xs leading-relaxed text-koma-muted">O fechamento foi gravado e os valores permanecerão disponíveis no histórico do caixa.</p>
+            <p className="mt-2 text-sm leading-relaxed text-koma-muted">Guarde ou compartilhe o comprovante deste turno.</p>
           </div>
           {onOpenNovoTurnoModal && (
-            <button type="button" onClick={onOpenNovoTurnoModal} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-600 hover:bg-emerald-500 px-4 py-3 text-xs font-bold text-white transition-colors hover:bg-emerald-600 hover:bg-emerald-500">
+            <button type="button" onClick={onOpenNovoTurnoModal} className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-600 hover:bg-emerald-500 px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-600 hover:bg-emerald-500">
               <DollarSign size={16} /> Abrir novo turno
             </button>
           )}
           
           {hasPrinting !== false && (
-            <button type="button" onClick={handlePrintComprovante} disabled={isPrinting} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-koma-border-subtle bg-koma-panel px-4 py-3 text-xs font-bold text-koma-secondary transition-colors hover:bg-koma-raised hover:text-koma-foreground disabled:cursor-not-allowed disabled:opacity-60">
+            <button type="button" onClick={handlePrintComprovante} disabled={isPrinting} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-koma-border-subtle bg-koma-panel px-4 py-3 text-sm font-bold text-koma-secondary transition-colors hover:bg-koma-raised hover:text-koma-foreground disabled:cursor-not-allowed disabled:opacity-60">
               <Printer size={16} /> {isPrinting ? 'Enviando para impressão...' : 'Imprimir comprovante'}
             </button>
           )}
@@ -390,9 +390,9 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
           <button
             type="button"
             onClick={handleShareComprovante}
-            className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-xs font-bold text-emerald-700 dark:text-emerald-300 transition-colors hover:bg-emerald-500/20 cursor-pointer"
+            className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-700 dark:text-emerald-300 transition-colors hover:bg-emerald-500/20 cursor-pointer"
           >
-            <Smartphone size={16} /> {shareSuccess ? 'Copiado / Compartilhado!' : 'Compartilhar fechamento (WhatsApp)'}
+            <Smartphone size={16} /> {shareSuccess ? 'Copiado / Compartilhado!' : 'Compartilhar comprovante'}
           </button>
         </aside>
       </div>
@@ -404,9 +404,9 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
       <section className="rounded-3xl border border-koma-border bg-koma-panel p-8 text-center">
         <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-koma-border-subtle bg-koma-panel text-koma-subtle"><Lock size={22} /></span>
         <h2 className="mt-4 text-base font-bold text-koma-foreground">Nenhum turno aberto</h2>
-        <p className="mx-auto mt-2 max-w-lg text-xs leading-relaxed text-koma-muted">Abra o caixa para registrar vendas, movimentações e realizar a conferência ao final do expediente.</p>
+        <p className="mx-auto mt-2 max-w-lg text-sm leading-relaxed text-koma-muted">Abra o caixa para registrar vendas, movimentações e realizar a conferência ao final do expediente.</p>
         {onOpenNovoTurnoModal && (
-          <button type="button" onClick={onOpenNovoTurnoModal} className="mt-5 inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-600 hover:bg-emerald-500 px-5 py-2.5 text-xs font-bold text-white hover:bg-emerald-600 hover:bg-emerald-500">
+          <button type="button" onClick={onOpenNovoTurnoModal} className="mt-5 inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-600 hover:bg-emerald-500 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-600 hover:bg-emerald-500">
             <DollarSign size={15} /> Abrir caixa
           </button>
         )}
@@ -415,10 +415,10 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
   }
 
   return (
-    <div className="cashier-fluid-view closing-workspace grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.55fr)]">
+    <div className="cash-register cashier-fluid-view closing-workspace grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(320px,.55fr)]">
       <section className="cashier-fluid-panel rounded-2xl sm:rounded-3xl border border-koma-border bg-koma-panel p-4 sm:p-6">
         <div className="border-b border-koma-border pb-4">
-          <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-emerald-800 dark:text-emerald-300">Como você quer conferir?</p>
+          <p className="text-xs font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">Conferir e fechar o caixa</p>
           <div className="mt-3 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Modo de conferência do caixa">
             <button
               type="button"
@@ -428,7 +428,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
               className={clsx('rounded-2xl border p-4 text-left transition-colors', closingMode === 'rapida' ? 'border-emerald-500/50 bg-emerald-50 dark:bg-emerald-950/30' : 'border-koma-border bg-koma-card hover:bg-koma-raised')}
             >
               <strong className="block text-sm text-koma-foreground">Conferência rápida</strong>
-              <span className="mt-1 block text-[10px] leading-relaxed text-koma-muted">Pix e cartões vêm dos pagamentos registrados. Você conta o dinheiro e pode corrigir qualquer valor.</span>
+              <span className="mt-1 block text-xs leading-relaxed text-koma-muted">Conte o dinheiro. Pix e cartões já vêm preenchidos para você conferir.</span>
             </button>
             <button
               type="button"
@@ -438,13 +438,13 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
               className={clsx('rounded-2xl border p-4 text-left transition-colors', closingMode === 'cega' ? 'border-emerald-500/50 bg-emerald-50 dark:bg-emerald-950/30' : 'border-koma-border bg-koma-card hover:bg-koma-raised')}
             >
               <strong className="block text-sm text-koma-foreground">Conferência cega</strong>
-              <span className="mt-1 block text-[10px] leading-relaxed text-koma-muted">Nenhum valor esperado aparece antes do fechamento. Informe dinheiro, cartões e Pix manualmente.</span>
+              <span className="mt-1 block text-xs leading-relaxed text-koma-muted">Informe os valores sem ver o total do sistema. A comparação aparece ao fechar.</span>
             </button>
           </div>
         </div>
 
         {errorMsg && (
-          <div className="mt-4 flex items-start gap-2 rounded-xl border border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 p-3 text-xs text-rose-800 dark:text-rose-300" role="alert">
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 p-3 text-sm text-rose-800 dark:text-rose-300" role="alert">
             <AlertCircle size={16} className="mt-0.5 shrink-0" />
             <span>{errorMsg}</span>
           </div>
@@ -492,7 +492,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
           </div>
 
           <label htmlFor="closing-note" className="mt-4 block">
-            <span className={clsx('text-[9px] font-bold uppercase tracking-[0.12em]', isDivergent ? 'text-rose-800 dark:text-rose-300' : 'text-koma-muted')}>
+            <span className={clsx('text-xs font-bold uppercase tracking-[0.12em]', isDivergent ? 'text-rose-800 dark:text-rose-300' : 'text-koma-muted')}>
               Observação {isDivergent ? <span className="normal-case tracking-normal ml-1">* explique a diferença</span> : <span className="normal-case tracking-normal">(opcional)</span>}
             </span>
             <textarea
@@ -503,16 +503,16 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
               value={observacao}
               onChange={(event) => setObservacao(event.target.value)}
               required={isDivergent}
-              className={clsx('mt-2 w-full resize-none rounded-xl border bg-koma-panel px-3 py-3 text-xs text-koma-foreground outline-none placeholder:text-zinc-700 focus:border-[#2a9f7d]', isDivergent && !observacao.trim() ? 'border-rose-300 dark:border-rose-900/50' : 'border-koma-border')}
+              className={clsx('mt-2 w-full resize-none rounded-xl border bg-koma-panel px-3 py-3 text-sm text-koma-foreground outline-none placeholder:text-zinc-700 focus:border-[#2a9f7d]', isDivergent && !observacao.trim() ? 'border-rose-300 dark:border-rose-900/50' : 'border-koma-border')}
             />
           </label>
 
           <div className="closing-toolbar-actions mt-4 flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:flex-row sm:items-center sm:justify-between">
             {closingMode === 'rapida' ? (
               <div className="grid grid-cols-3 gap-x-2 gap-y-1 sm:gap-x-5">
-                <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Vendas registradas</span>
-                <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Informado</span>
-                <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Diferença</span>
+                <span className="text-xs font-bold uppercase tracking-[0.12em] text-koma-muted">Vendas registradas</span>
+                <span className="text-xs font-bold uppercase tracking-[0.12em] text-koma-muted">Informado</span>
+                <span className="text-xs font-bold uppercase tracking-[0.12em] text-koma-muted">Diferença</span>
                 <strong className="text-sm tabular-nums text-koma-secondary sm:text-base">{formatMoney(expectedTotal)}</strong>
                 <strong className="text-sm tabular-nums text-koma-foreground sm:text-base">{hasMissingDeclarations ? '—' : formatMoney(declaredTotal)}</strong>
                 <strong className={clsx('text-sm tabular-nums sm:text-base', hasMissingDeclarations ? 'text-koma-muted' : Math.abs(liveDifference) < 0.01 ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300')}>
@@ -521,12 +521,12 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
               </div>
             ) : (
               <div>
-                <span className="block text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Total informado</span>
+                <span className="block text-xs font-bold uppercase tracking-[0.12em] text-koma-muted">Total informado</span>
                 <strong className="mt-1 block text-base tabular-nums text-koma-foreground">{hasMissingDeclarations ? '—' : formatMoney(declaredTotal)}</strong>
-                <span className="mt-1 block text-[10px] text-koma-muted">A comparação com o sistema só aparece depois de fechar.</span>
+                <span className="mt-1 block text-xs text-koma-muted">A comparação com o sistema só aparece depois de fechar.</span>
               </div>
             )}
-            <button type="submit" disabled={hasBlockingPending || hasMissingDeclarations || isSubmitting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-600 px-5 py-3 text-xs font-bold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:border-koma-border-subtle disabled:bg-koma-raised disabled:text-zinc-600">
+            <button type="submit" disabled={hasBlockingPending || hasMissingDeclarations || isSubmitting} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-600 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:border-koma-border-subtle disabled:bg-koma-raised disabled:text-zinc-600">
               <Lock size={15} /> Revisar fechamento <ArrowRight size={15} />
             </button>
           </div>
@@ -535,8 +535,8 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
 
       <aside className="cashier-fluid-panel rounded-3xl border border-koma-border bg-koma-panel p-5">
         <div className="border-b border-koma-border pb-4">
-          <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-emerald-800 dark:text-emerald-300">Antes de fechar</p>
-          <h2 className="mt-1 text-base font-bold text-koma-foreground">Resolva só o que está pendente</h2>
+          <p className="text-xs font-bold uppercase tracking-wide text-emerald-800 dark:text-emerald-300">Antes de fechar</p>
+          <h2 className="mt-1 text-base font-bold text-koma-foreground">Pendências do turno</h2>
         </div>
 
         <div className="mt-4 space-y-3">
@@ -545,10 +545,10 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
               <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-current/20 text-emerald-800 dark:text-emerald-300"><ReceiptText size={17} /></span>
               <strong className="text-xl tabular-nums text-koma-foreground">{pendingPaymentsCount}</strong>
             </div>
-            <h3 className="mt-3 text-xs font-bold text-koma-foreground">Pagamentos para confirmar</h3>
-            <p className="mt-1 text-[10px] text-koma-muted">{pendingPaymentsCount > 0 ? `${formatMoney(pendingPaymentsTotal)} ainda precisa de confirmação.` : 'Nenhum pagamento aguardando confirmação.'}</p>
+            <h3 className="mt-3 text-sm font-bold text-koma-foreground">Pagamentos para confirmar</h3>
+            <p className="mt-1 text-xs text-koma-muted">{pendingPaymentsCount > 0 ? `${formatMoney(pendingPaymentsTotal)} ainda precisa de confirmação.` : 'Nenhum pagamento aguardando confirmação.'}</p>
             {onNavigateToPendingPayments && (
-              <button type="button" onClick={onNavigateToPendingPayments} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 hover:text-koma-foreground">Ver pagamentos <ArrowRight size={13} /></button>
+              <button type="button" onClick={onNavigateToPendingPayments} className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 hover:text-koma-foreground">Ver pagamentos <ArrowRight size={13} /></button>
             )}
           </div>}
 
@@ -557,10 +557,10 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
               <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-current/20 text-emerald-800 dark:text-emerald-300"><ClipboardCheck size={17} /></span>
               <strong className="text-xl tabular-nums text-koma-foreground">{openAccountsCount}</strong>
             </div>
-            <h3 className="mt-3 text-xs font-bold text-koma-foreground">Contas ainda abertas</h3>
-            <p className="mt-1 text-[10px] text-koma-muted">{openAccountsCount > 0 ? 'Finalize essas contas antes de encerrar o turno.' : 'Todas as contas estão finalizadas.'}</p>
+            <h3 className="mt-3 text-sm font-bold text-koma-foreground">Contas ainda abertas</h3>
+            <p className="mt-1 text-xs text-koma-muted">{openAccountsCount > 0 ? 'Finalize essas contas antes de encerrar o turno.' : 'Todas as contas estão finalizadas.'}</p>
             {onNavigateToOpenComandas && (
-              <button type="button" onClick={onNavigateToOpenComandas} className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 hover:text-koma-foreground">Ver contas <ArrowRight size={13} /></button>
+              <button type="button" onClick={onNavigateToOpenComandas} className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 hover:text-koma-foreground">Ver contas <ArrowRight size={13} /></button>
             )}
           </div>}
         </div>
@@ -568,8 +568,8 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
         {!hasBlockingPending && <div className="mt-4 flex items-start gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/30">
           <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-800 dark:text-emerald-300" />
           <div>
-            <strong className="block text-xs text-emerald-800 dark:text-emerald-300">Pronto para conferir</strong>
-            <p className="mt-1 text-[10px] leading-relaxed text-koma-subtle">{closingMode === 'cega' ? 'Os valores do sistema ficarão ocultos até o fechamento.' : 'Cartões e Pix já estão preenchidos; conte o dinheiro para continuar.'}</p>
+            <strong className="block text-sm text-emerald-800 dark:text-emerald-300">Pronto para conferir</strong>
+            <p className="mt-1 text-xs leading-relaxed text-koma-subtle">{closingMode === 'cega' ? 'Os valores do sistema ficarão ocultos até o fechamento.' : 'Cartões e Pix já estão preenchidos; conte o dinheiro para continuar.'}</p>
           </div>
         </div>}
       </aside>
@@ -581,12 +581,12 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300"><Lock size={18} /></span>
               <div>
                 <h2 id="confirm-closing-title" className="text-base font-bold text-koma-foreground">Confirmar fechamento?</h2>
-                <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Depois de confirmar, este turno fica encerrado.</p>
+                <p className="mt-1 text-xs leading-relaxed text-koma-muted">Depois de confirmar, este turno fica encerrado.</p>
               </div>
             </div>
 
             {closingMode === 'rapida' ? (
-              <div className="mt-4 overflow-hidden rounded-2xl border border-koma-border bg-koma-panel text-[10px]">
+              <div className="mt-4 overflow-hidden rounded-2xl border border-koma-border bg-koma-panel text-xs">
                 <div className="grid grid-cols-[1fr_repeat(3,auto)] gap-x-3 border-b border-koma-border px-4 py-2 font-bold uppercase tracking-wider text-koma-muted">
                   <span>Meio</span><span>Registrado</span><span>Informado</span><span>Dif.</span>
                 </div>
@@ -608,9 +608,9 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
               </div>
             ) : (
               <div className="mt-4 rounded-2xl border border-koma-border bg-koma-card p-4">
-                <strong className="block text-xs text-koma-foreground">Conferência cega mantida</strong>
-                <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Os valores registrados pelo sistema continuam ocultos. A comparação aparece somente depois que o turno for encerrado.</p>
-                <dl className="mt-3 space-y-2 text-[10px] text-koma-secondary">
+                <strong className="block text-sm text-koma-foreground">Conferência cega mantida</strong>
+                <p className="mt-1 text-xs leading-relaxed text-koma-muted">Os valores registrados pelo sistema continuam ocultos. A comparação aparece somente depois que o turno for encerrado.</p>
+                <dl className="mt-3 space-y-2 text-xs text-koma-secondary">
                   <div className="flex justify-between"><dt>Dinheiro informado</dt><dd className="font-bold tabular-nums text-koma-foreground">{formatMoney(Number(declaradoDinheiro || 0))}</dd></div>
                   <div className="flex justify-between"><dt>Cartões informados</dt><dd className="font-bold tabular-nums text-koma-foreground">{formatMoney(Number(declaradoCartao || 0))}</dd></div>
                   <div className="flex justify-between"><dt>Pix informado</dt><dd className="font-bold tabular-nums text-koma-foreground">{formatMoney(Number(declaradoPix || 0))}</dd></div>
@@ -619,8 +619,8 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
             )}
 
             <div className="mt-4 flex gap-2">
-              <button type="button" onClick={() => setShowConfirmModal(false)} disabled={isSubmitting} className="flex-1 rounded-xl border border-koma-border-subtle bg-koma-panel px-3 py-3 text-xs font-bold text-koma-secondary hover:text-koma-foreground disabled:opacity-50">Voltar</button>
-              <button type="button" onClick={handleExecuteFechamento} disabled={isSubmitting} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-600 px-3 py-3 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50">
+              <button type="button" onClick={() => setShowConfirmModal(false)} disabled={isSubmitting} className="flex-1 rounded-xl border border-koma-border-subtle bg-koma-panel px-3 py-3 text-sm font-bold text-koma-secondary hover:text-koma-foreground disabled:opacity-50">Voltar</button>
+              <button type="button" onClick={handleExecuteFechamento} disabled={isSubmitting} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-600 px-3 py-3 text-sm font-bold text-white hover:bg-emerald-500 disabled:opacity-50">
                 <Check size={15} /> {isSubmitting ? 'Fechando...' : 'Fechar caixa'}
               </button>
             </div>

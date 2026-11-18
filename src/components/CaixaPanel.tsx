@@ -338,6 +338,7 @@ export function CaixaPanel({
     handleAdvanceDigitalOrder,
     handleAdvanceSelectedKanbanOrder,
     saveItemObservation,
+    removeOrderItem,
     handleReprintSelectedKanbanProduction,
     handlePrintSelectedKanbanTable,
     handlePrintSelectedKanbanValues,
@@ -1180,6 +1181,7 @@ export function CaixaPanel({
                   ]}
                 />
                 <CaixaTurnoAtualTab
+                  onRefundSuccess={async () => { await Promise.allSettled([onRefreshTurnoResumo(), onRefreshOrders()]); }}
                   turnoResumo={turnoResumo}
                   isLoading={!isTurnoResumoReady || isTurnoResumoLoading}
                   pendingPaymentsCount={pagamentosPendentes.length}
@@ -1334,6 +1336,7 @@ export function CaixaPanel({
           <KanbanOrderDetails
             order={selectedKanbanOrder}
             saveObservation={saveItemObservation}
+          removeItem={removeOrderItem}
             canChangeFulfillment={fulfillmentConversion.canChange}
             checkingFulfillment={fulfillmentConversion.checking}
             fulfillmentCheckFailed={fulfillmentConversion.checkFailed}

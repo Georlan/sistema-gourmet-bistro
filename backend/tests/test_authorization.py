@@ -1539,3 +1539,63 @@ def test_kitchen_http_role_cannot_dispatch_deliver_cancel_or_modify_fulfillment(
                 assert db.get(Item, "kds-second").status == "preparando"
     finally:
         app.dependency_overrides.pop(get_current_user, None)
+
+
+def _seed_cashier_item_correction(payment_status=None):
+    from app.models import Motoboy
+    with TestingSessionLocal() as db:
+        db.add(Categoria(id='cash-correction-cat', restaurante_id=1, nome='Pratos'))
+        db.add(Produto(id='cash-correction-product', restaurante_id=1, nome='Prato teste', preco=20, categoria_id='cash-correction-cat'))
+        db.add(Motoboy(id=71, restaurante_id=1, nome='Entregador teste', telefone='11900000000'))
+        db.add(Comanda(id='cash-correction', restaurante_id=1, garcom_id='u-caixa', tipo='Entrega', numero_pedido=170,
+            delivery_status='pronto', motoboy_id=71, fechada=False, valor_pago=0, online_payment_status=payment_status))
+        db.add(Lancamento(id='cash-correction-launch', restaurante_id=1, comanda_id='cash-correction', garcom_id='u-caixa', origem='caixa'))
+        db.add_all([Item(id=f'cash-correction-{i}', restaurante_id=1, comanda_id='cash-correction',
+            lancamento_id='cash-correction-launch', produto_id='cash-correction-product', preco_unit=20,
+            status='pronto', pago=False) for i in (1, 2)])
+        db.commit()
+
+
+@pytest.mark.parametrize('payment_status', ['pending', 'pending_released', 'approved'])
+def test_cashier_cannot_correct_items_with_an_online_charge(payment_status):
+    _seed_cashier_item_correction(payment_status)
+    client = TestClient(app)
+    response = client.put('/comandas/itens/cash-correction-1/cancelar', headers=get_auth_headers(client, 'caixa', '123'))
+    assert response.status_code == 409, response.text
+    with TestingSessionLocal() as db:
+        assert db.get(Item, 'cash-correction-1').status == 'pronto'
+        assert db.query(ActivityLog).filter_by(action='CANCEL_ITEM').count() == 0
+
+
+def test_cashier_item_correction_preserves_lifecycle_and_refreshes_affected_consumers_once():
+    from unittest.mock import patch
+    _seed_cashier_item_correction()
+    client = TestClient(app)
+    headers = get_auth_headers(client, 'caixa', '123')
+    with patch('app.services.courier_realtime.queue_courier_refresh') as courier, patch('app.services.order_chat_service.queue_order_tracking_refresh') as tracking:
+        response = client.put('/comandas/itens/cash-correction-1/cancelar', headers=headers)
+        assert response.status_code == 200, response.text
+        assert response.json()['status'] == 'cancelado'
+        assert courier.call_args.args[1:] == (1, 71)
+        assert tracking.call_args.args[1:] == (1, 'cash-correction')
+        repeated = client.put('/comandas/itens/cash-correction-1/cancelar', headers=headers)
+        assert repeated.status_code == 200
+        courier.assert_called_once()
+        tracking.assert_called_once()
+    with TestingSessionLocal() as db:
+        assert db.get(Comanda, 'cash-correction').delivery_status == 'pronto'
+        assert db.get(Item, 'cash-correction-2').status == 'pronto'
+        assert db.query(ActivityLog).filter_by(action='CANCEL_ITEM').count() == 1
+
+
+def test_cashier_item_correction_rolls_back_when_tracking_cannot_be_queued():
+    from unittest.mock import patch
+    _seed_cashier_item_correction()
+    client = TestClient(app)
+    headers = get_auth_headers(client, 'caixa', '123')
+    with patch('app.services.order_chat_service.queue_order_tracking_refresh', side_effect=RuntimeError('tracking unavailable')):
+        with pytest.raises(RuntimeError, match='tracking unavailable'):
+            client.put('/comandas/itens/cash-correction-1/cancelar', headers=headers)
+    with TestingSessionLocal() as db:
+        assert db.get(Item, 'cash-correction-1').status == 'pronto'
+        assert db.query(ActivityLog).filter_by(action='CANCEL_ITEM').count() == 0
