@@ -132,7 +132,7 @@ test('topbar acomoda títulos longos de outras áreas sem colisão nem overflow'
     { nav: 'Configurações', expectedHeading: /Configurações/i },
     { nav: 'Relatórios', expectedHeading: /Relatórios/i },
     { nav: 'Estoque & compras', expectedHeading: /Estoque/i },
-    { nav: 'Clientes', expectedHeading: /Clientes/i },
+    { nav: 'Relacionamento', expectedHeading: /Relacionamento/i },
     { nav: 'Equipe', expectedHeading: /Equipe/i },
   ];
 
