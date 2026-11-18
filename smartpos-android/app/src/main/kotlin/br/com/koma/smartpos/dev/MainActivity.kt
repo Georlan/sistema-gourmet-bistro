@@ -275,7 +275,7 @@ class MainActivity : Activity() {
         plugPagClient = AndroidPlugPagClient(this)
 
         terminalState = terminalStore.load(apiUrl)
-        pendingOrder = orderStore.load(apiUrl)
+        pendingOrder = runCatching { orderStore.read(apiUrl) }.getOrNull()
 
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -396,7 +396,7 @@ class MainActivity : Activity() {
                 session = null
                 usernameDraft = saved.username
                 screen = Screen.LOGIN
-                setError(err.message)
+                setError(messageFor(err))
                 render()
             } else {
                 // Keep operator selected with cached identity and allow explicit retry on network issues.
@@ -984,7 +984,7 @@ class MainActivity : Activity() {
             )
             row.addView(
                 buildActionButton("Descartar", KomaColors.DANGER_BG, KomaColors.DANGER_INK, enabled = !busy) {
-                    orderStore.save(apiUrl, null)
+                    runCatching { orderStore.write(apiUrl, null) }
                     pendingOrder = null
                     render()
                 }.apply {
@@ -2351,7 +2351,7 @@ class MainActivity : Activity() {
         render()
         runAsync {
             val displayNumber = api.submit(order, operator.id) { persisted ->
-                orderStore.save(apiUrl, persisted)
+                orderStore.write(apiUrl, persisted)
                 pendingOrder = persisted
             }
             val table = Table(order.tableId, order.tableName)
@@ -2379,7 +2379,7 @@ class MainActivity : Activity() {
             render()
         }.onFailure { err ->
             busy = false
-            pendingOrder = orderStore.load(apiUrl)
+            pendingOrder = runCatching { orderStore.read(apiUrl) }.getOrNull()
             handleAsyncError(err) { submitPendingOrder(pendingOrder ?: order, operator, clearDraftTableId) }
         }
     }
@@ -3197,7 +3197,7 @@ class MainActivity : Activity() {
             passwordDraft = ""
             loadingText = null
             screen = Screen.LOGIN
-            setError(err.message)
+            setError(messageFor(err))
             render()
             return
         }
