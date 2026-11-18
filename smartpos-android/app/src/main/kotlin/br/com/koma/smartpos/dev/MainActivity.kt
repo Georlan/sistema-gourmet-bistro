@@ -185,7 +185,7 @@ class MainActivity : Activity() {
                         body.addView(row)
                         pair.forEach { entry ->
                             val status = if (entry.id in occupied) "Em atendimento" else "Livre"
-                            val item = button("${entry.name}\n$status", false) { loadTable(entry) }.apply {
+                            val item = makeButton("${entry.name}\n$status", false) { loadTable(entry) }.apply {
                                 gravity = Gravity.CENTER_VERTICAL or Gravity.START
                                 minHeight = dp(68)
                             }
@@ -197,8 +197,8 @@ class MainActivity : Activity() {
             }
         }
         footer.addView(row().apply {
-            addView(button("Atualizar", false) { loadSalon() }, LinearLayout.LayoutParams(0, -2, 1f))
-            addView(button("Sair", false) { confirmLogout() }, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(makeButton("Atualizar", false) { loadSalon() }, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(makeButton("Sair", false) { confirmLogout() }, LinearLayout.LayoutParams(0, -2, 1f))
         })
     }
 
@@ -289,13 +289,13 @@ class MainActivity : Activity() {
                         setTextColor(ink)
                         textSize = 15f
                     }, LinearLayout.LayoutParams(0, -2, 1f))
-                    controls.addView(button("−", false) {
+                    controls.addView(makeButton("−", false) {
                         val next = ((selection[option] ?: 0) - 1).coerceAtLeast(0)
                         if (next == 0) selection.remove(option) else selection[option] = next
                         count.text = next.toString()
                     }.apply { contentDescription = "Diminuir ${option.name}" })
                     controls.addView(count, LinearLayout.LayoutParams(dp(30), -2))
-                    controls.addView(button("+", false) {
+                    controls.addView(makeButton("+", false) {
                         if (group.options.sumOf { selection[it] ?: 0 } < group.max) {
                             val next = (selection[option] ?: 0) + 1
                             selection[option] = next
@@ -365,13 +365,13 @@ class MainActivity : Activity() {
             val notes = (line.options.map { it.name } + listOf(line.note)).filter(String::isNotBlank)
             if (notes.isNotEmpty()) body.label(notes.joinToString(" · "), 14, muted)
             body.addView(row().apply {
-                addView(button("−", false) { changeQuantity(index, -1) }.apply {
+                addView(makeButton("−", false) { changeQuantity(index, -1) }.apply {
                     contentDescription = "Diminuir ${line.product.name}"
                 })
-                addView(button("+", false, enabled = totalUnits() < 200) { changeQuantity(index, 1) }.apply {
+                addView(makeButton("+", false, enabled = totalUnits() < 200) { changeQuantity(index, 1) }.apply {
                     contentDescription = "Aumentar ${line.product.name}"
                 })
-                addView(button("Observação", false) {
+                addView(makeButton("Observação", false) {
                     val note = noteField().apply { setText(line.note) }
                     AlertDialog.Builder(this@MainActivity).setTitle(line.product.name).setView(note)
                         .setNegativeButton("Voltar", null)
@@ -564,11 +564,11 @@ class MainActivity : Activity() {
         }
 
     private fun LinearLayout.button(label: String, primary: Boolean = false, enabled: Boolean = true, action: () -> Unit) {
-        addView(this@MainActivity.button(label, primary, enabled, action),
+        addView(makeButton(label, primary, enabled, action),
             LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) })
     }
 
-    private fun button(label: String, primary: Boolean, enabled: Boolean = true, action: () -> Unit): Button =
+    private fun makeButton(label: String, primary: Boolean, enabled: Boolean = true, action: () -> Unit): Button =
         Button(this).apply {
             text = label
             textSize = 15f
