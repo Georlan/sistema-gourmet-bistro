@@ -435,7 +435,7 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
   });
   await page.goto('/?view=caixa');
 
-  await page.locator('.orders-mobile-stages__button').filter({ hasText: 'Digitais' }).evaluate((element) => {
+  await page.locator('.orders-mobile-stages__button').filter({ hasText: 'Entregas' }).evaluate((element) => {
     (element as HTMLButtonElement).click();
   });
   const productionCard = page.locator('.orders-card--digital').filter({ hasText: 'Bruno Delivery' });
@@ -443,7 +443,7 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
 
   await expect(productionCard.getByRole('combobox', { name: /Entregador do pedido 5002/i })).toHaveCount(0);
   await productionCard.getByRole('button', { name: /Marcar como pronto/i }).click();
-  await showStage(page, 'Concluir');
+  await showStage(page, 'Entregas');
   const readyCard = page.locator('.orders-card--closing').filter({ hasText: 'Bruno Delivery' });
   await expect(readyCard).toBeVisible();
   await expect(readyCard).toContainText('Pronto para sair');
@@ -455,7 +455,7 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
   await expect(dispatch).toBeEnabled();
   await dispatch.click();
   await expect.poll(state.getDispatchCalls).toBe(1);
-  await page.locator('.orders-mobile-stages__button').filter({ hasText: 'Concluir' }).evaluate((element) => {
+  await page.locator('.orders-mobile-stages__button').filter({ hasText: 'Entregas' }).evaluate((element) => {
     (element as HTMLButtonElement).click();
   });
   const inRouteCard = page.locator('.orders-card--closing').filter({ hasText: 'Bruno Delivery' });
@@ -726,7 +726,7 @@ test('Pedidos, Cozinha e Entregas convergem entre três terminais sem refresh ma
     deliveriesPage.goto('/?view=caixa'),
   ]);
 
-  await ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Digitais' }).evaluate((element) => {
+  await ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Entregas' }).evaluate((element) => {
     (element as HTMLButtonElement).click();
   });
 
@@ -746,7 +746,7 @@ test('Pedidos, Cozinha e Entregas convergem entre três terminais sem refresh ma
   await expect(deliveries.getByRole('button', { name: 'Despachar pedido' })).toBeEnabled();
 
   await deliveries.getByRole('button', { name: 'Despachar pedido' }).click();
-  await ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Concluir' }).evaluate((element) => {
+  await ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Entregas' }).evaluate((element) => {
     (element as HTMLButtonElement).click();
   });
 
@@ -942,7 +942,7 @@ test('Pedidos e Retiradas convergem em tempo real para um pedido de retirada nor
   await pickups.getByRole('button', { name: 'Aceitar pedido' }).click();
   await expect(pickups).toContainText('Aceito · aguardando preparo');
 
-  const ordersBalcaoTab = ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Digitais' });
+  const ordersBalcaoTab = ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Retiradas' });
   await ordersBalcaoTab.waitFor({ state: 'attached' });
   await ordersBalcaoTab.evaluate((element) => { (element as HTMLButtonElement).click(); });
 
@@ -1010,7 +1010,7 @@ test('sessão recupera estado atualizado de pedidos após reconexão de WebSocke
   await seedCashierSession(page, 'pedidos');
   await page.goto('/?view=caixa');
 
-  const balcaoTab = page.locator('.orders-mobile-stages__button').filter({ hasText: 'Digitais' });
+  const balcaoTab = page.locator('.orders-mobile-stages__button').filter({ hasText: 'Entregas' });
   await balcaoTab.waitFor({ state: 'attached' });
   await balcaoTab.evaluate((element) => { (element as HTMLButtonElement).click(); });
 
@@ -1024,7 +1024,7 @@ test('sessão recupera estado atualizado de pedidos após reconexão de WebSocke
   // Ao reconectar, o evento koma_orders_updated disparado na reconexão refaz a busca autoritativa
   await page.evaluate(() => window.dispatchEvent(new Event('koma_orders_updated')));
 
-  await showStage(page, 'Concluir');
+  await showStage(page, 'Entregas');
   const readyCard = page.locator('.orders-card--closing').filter({ hasText: 'Cliente Reconexao' });
   await expect(readyCard).toBeVisible();
   await expect(readyCard).toContainText(/Pronto para sair/i);
@@ -1048,7 +1048,7 @@ test('cancelar retirada pronta usa lifecycle canônico e remove o pedido sem cob
       reason: request.postDataJSON()?.reason });
   });
   await page.goto('/?view=caixa');
-  await showStage(page, 'Concluir');
+  await showStage(page, 'Retiradas');
   const card = page.locator('.orders-card--closing').filter({ hasText: 'Ana Retirada' });
   await expect(card).toBeVisible();
   await card.click();

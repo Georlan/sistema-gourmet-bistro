@@ -16,7 +16,7 @@ for (const theme of ['dark', 'light']) {
     await expect(page.locator('.orders-card')).toHaveCount(0);
     await page.getByRole('button', { name: 'Limpar busca', exact: true }).click();
     await expect(page.locator('.orders-card').first()).toBeVisible();
-    const table = page.locator('.orders-column--closing .orders-card__number.is-table').first();
+    const table = page.locator('.orders-column--salon .orders-card__number.is-table').first();
     await expect(table.locator('.orders-card__table-label')).toHaveText('Mesa');
     await expect(table.locator('strong')).toHaveText('07');
     const pause = page.locator('#online-orders-emergency-trigger');

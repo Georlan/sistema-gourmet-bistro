@@ -24,6 +24,7 @@ test('payment summary deixa cobrança e troco explícitos no card operacional', 
   assert.match(pending, /A cobrar R\$\s*48,00/);
   assert.match(pending, /Dinheiro/);
   assert.match(pending, /Troco para R\$\s*100,00/);
+  assert.match(pending, /Levar R\$\s*52,00 de troco/);
   assert.doesNotMatch(getDigitalOrderPaymentSummary({ pago: false, amountDue: 48, paymentMethod: 'pix', changeFor: 100 }), /Troco/);
 
   assert.equal(

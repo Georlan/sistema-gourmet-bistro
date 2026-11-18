@@ -15,6 +15,7 @@ import {
 } from '../config/subscriptionPlans';
 import {
   formatCashierOldestAge as formatOldestAge,
+  getCashierHumanOrderNumber,
   getCashierTableOrderPresentation,
   getCashierOrderSlaData as getOrderSlaData,
   projectCashierDeliveryState,
@@ -580,7 +581,7 @@ export function CaixaPanel({
   ), [orders]);
   const matchesSearchQuery = useCallback((card: any, query: string) => {
     if (!query || !query.trim()) return true;
-    const q = query.toLowerCase().trim();
+    const q = query.toLowerCase().trim().replace(/^#/, '').replace(/^mesa\s*0*(\d+)$/, 'mesa $1');
 
     const cliente = (
       card.cliente ||
@@ -612,6 +613,7 @@ export function CaixaPanel({
 
     const garcom = (card.garcomNome || card.garcom || '').toLowerCase();
     const numeroPedido = String(card.numeroPedido || card.numero_pedido || card.id || '');
+    const numeroExibido = getCashierHumanOrderNumber(card).toLowerCase();
 
     return (
       cliente.includes(q) ||
@@ -622,6 +624,7 @@ export function CaixaPanel({
       telefone.includes(q) ||
       itensStr.includes(q) ||
       garcom.includes(q) ||
+      numeroExibido.includes(q) ||
       numeroPedido.includes(q)
     );
   }, []);
@@ -758,6 +761,9 @@ export function CaixaPanel({
     const pickup = bucketPickupOrders(deliveryOrders, nowTimestamp);
     const delivery = bucketCourierDeliveryOrders(deliveryOrders);
     return {
+      pronta: pickup.ready[0],
+      prontas: pickup.ready.length,
+      semEntregador: delivery.ready.filter(order => !order.motoboyId),
       retiradas: pickup.awaitingAcceptance.length + pickup.preparing.length + pickup.ready.length,
       entregadores: delivery.preparing.length + delivery.ready.length + delivery.inTransit.length + delivery.awaitingPayment.length,
     };
@@ -921,23 +927,40 @@ export function CaixaPanel({
           />
 
           {activeTab === 'operacao' && ['pedidos', 'retiradas', 'entregadores'].includes(activeSubTab) && (
-            <div role="group" aria-label="Filtrar pedidos por atendimento" className="flex shrink-0 gap-1 overflow-x-auto px-3 py-1 border-b border-koma-border bg-koma-panel">
+            <div role="group" aria-label="Filtrar pedidos por atendimento" className="orders-queue-tabs flex flex-wrap shrink-0 items-center gap-1 px-3 py-1 border-b border-koma-border">
               {[
-                { id: 'pedidos', label: 'Todos', count: undefined },
-                ...(showSalon ? [{ id: 'somente_mesas', label: 'Mesas', count: isLoading ? undefined : new Set([...tableOrdersInProduction, ...tableOrdersReady].map(order => order.mesaId)).size }] : []),
-                { id: 'retiradas', label: 'Retiradas', count: hasDeliverySnapshot ? queueCounts.retiradas : undefined },
-                { id: 'entregadores', label: 'Entregas', count: hasDeliverySnapshot ? queueCounts.entregadores : undefined },
-              ].map(filter => {
+                { id: 'pedidos', icon: 'pedido', label: 'Todos', count: undefined },
+                ...(showSalon ? [{ id: 'somente_mesas', icon: 'mesa', label: 'Mesas', count: isLoading ? undefined : new Set([...tableOrdersInProduction, ...tableOrdersReady].map(order => order.mesaId)).size }] : []),
+                { id: 'retiradas', icon: 'retirada', label: 'Retiradas', count: hasDeliverySnapshot ? queueCounts.retiradas : undefined },
+                { id: 'entregadores', icon: 'entrega', label: 'Entregas', count: hasDeliverySnapshot ? queueCounts.entregadores : undefined },
+              ].filter(filter => {
+                const modes = restauranteConfig?.tipos_pedido_ativos;
+                if (!Array.isArray(modes) || filter.count || filter.id === activeSubTab) return true;
+                if (filter.id === 'entregadores') return modes.includes('delivery');
+                if (filter.id === 'retiradas') return modes.includes('retirada');
+                return true;
+              }).map(filter => {
                 const selected = filter.id === (activeSubTab === 'pedidos' && tablesOnly && showSalon ? 'somente_mesas' : activeSubTab);
                 return <button key={filter.id} type="button" aria-pressed={selected}
-                  className={clsx('min-h-11 shrink-0 rounded-xl px-3 font-bold', selected ? 'bg-koma-raised text-koma-foreground ring-1 ring-inset ring-koma-border' : 'text-koma-muted')}
+                  className={clsx('cashier-subnav__button shrink-0', selected && 'is-active')}
                   onClick={() => {
                     setTablesOnly(filter.id === 'somente_mesas');
                     setActiveSubTab(filter.id === 'somente_mesas' ? 'pedidos' : filter.id);
                   }}>
+                  <svg aria-hidden="true" width="18" height="18" className="shrink-0">
+                    <use href={`/brand/cashier/queue-marks.svg#${filter.icon}`} />
+                  </svg>
                   {filter.label}{filter.count !== undefined && <span className="ml-1.5 tabular-nums">{filter.count}</span>}
                 </button>;
               })}
+              {queueCounts.pronta && <button type="button" className="orders-queue-notice"
+                onClick={() => openDeliveryOrderDetails(queueCounts.pronta)}>
+                {queueCounts.prontas} {queueCounts.prontas === 1 ? 'retirada pronta' : 'retiradas prontas'}
+              </button>}
+              {queueCounts.semEntregador.length > 0 && <button type="button" className="orders-queue-notice"
+                onClick={() => openDeliveryOrderDetails(queueCounts.semEntregador[0])}>
+                {queueCounts.semEntregador.length} sem entregador
+              </button>}
             </div>
           )}
 

@@ -10,7 +10,7 @@ for (const theme of ['dark', 'light']) {
   test(`detail separates reading, print and cancellation in ${theme}`, async ({ page }) => {
     await page.addInitScript(theme => localStorage.setItem('@koma:theme', theme), theme);
     const scenario = await openOperationalScenario(page);
-    await showStage(page, 'Salão');
+    await showStage(page, 'Mesas');
     await page.locator('.orders-card--salon').first().click();
     const dialog = page.locator('.orders-detail-modal');
     await expect(dialog.getByRole('heading', { name: 'Mesa 07', exact: true })).toBeVisible();

@@ -125,12 +125,12 @@ test('Caixa respeita scroll móvel e colunas simultâneas no desktop', async ({ 
   if (!viewport) throw new Error('Viewport não configurado.');
 
   const enabledColumns = page.locator('.orders-column:not(.is-channel-disabled)');
-  const stageTabs = page.getByRole('tablist', { name: 'Etapa dos pedidos' });
+  const stageTabs = page.getByRole('tablist', { name: 'Filas de atendimento' });
 
   if (await stageTabs.isVisible()) {
     await expect(stageTabs).toBeVisible();
-    await expect(page.getByRole('tab')).toHaveCount(3);
-    await expect(page.getByRole('tab', { name: /Salão/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab')).toHaveCount(4);
+    await expect(page.getByRole('tab', { name: /Mesas/ })).toHaveAttribute('aria-selected', 'true');
 
     if (viewport.width < DESKTOP_BREAKPOINT) {
     const internal = viewport.width <= 767;
@@ -142,12 +142,12 @@ test('Caixa respeita scroll móvel e colunas simultâneas no desktop', async ({ 
     await expect.poll(() => internal ? scrollOwner.evaluate(el => el.scrollTop) : page.evaluate(() => window.scrollY)).toBeGreaterThan(scrollBefore);
 
     }
-    await page.getByRole('tab', { name: /Digitais/ }).click();
-    await expect(page.getByRole('tab', { name: /Digitais/ })).toHaveAttribute('aria-selected', 'true');
-    await expect(enabledColumns.filter({ has: page.getByText('Balcão e online', { exact: true }) })).toBeVisible();
+    await page.getByRole('tab', { name: /Retiradas/ }).click();
+    await expect(page.getByRole('tab', { name: /Retiradas/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(enabledColumns.filter({ has: page.getByRole('heading', { name: 'Retiradas', exact: true }) })).toBeVisible();
   } else {
     await expect(stageTabs).toBeHidden();
-    await expect(enabledColumns).toHaveCount(3);
+    await expect(enabledColumns).toHaveCount(4);
     for (const column of await enabledColumns.all()) {
       await expect(column).toBeVisible();
     }

@@ -145,7 +145,7 @@ test('entrega concluída com saldo não oferece cancelamento incompatível', asy
   await page.route('**/comandas/delivery/pendentes', route => route.fulfill({ json: [] }));
   await page.route('**/comandas/detalhes/todos?*', route => route.fulfill({ json: [order] }));
   await page.goto('/?view=caixa');
-  const receivedTab = page.getByRole('tab', { name: /Concluir|recebimento/i });
+  const receivedTab = page.getByRole('tab', { name: /Entregas/i });
   if ((page.viewportSize()?.width || 1366) <= 768) await receivedTab.click();
   await page.getByRole('button', { name: /pedido 99, ver detalhes/i }).click();
   const detail = page.locator('.orders-detail-modal');

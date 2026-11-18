@@ -58,9 +58,9 @@ test('pedido que avança destaca a coluna de destino', async ({ page }) => {
   await page.getByRole('button', { name: /Novos pedidos/ }).click();
   await expect(page.locator('.orders-pending-card')).toContainText('Opções: Bisteca, Costela, Baião, Arroz, Salada verde');
   await page.getByRole('button', { name: 'Aceitar', exact: true }).click();
-  const digital = page.locator('.orders-column--digital');
-  const closing = page.locator('.orders-column--closing');
-  const digitalTab = page.getByRole('tab', { name: /^Digitais/ });
+  const digital = page.locator('.orders-column--delivery');
+  const closing = page.locator('.orders-column--delivery');
+  const digitalTab = page.getByRole('tab', { name: /^Entregas/ });
   if (await digitalTab.isVisible()) await digitalTab.click();
   await expect(digital.getByRole('button', { name: 'Marcar como pronto', exact: true })).toBeVisible();
   await expect(closing.locator('.orders-card--closing')).toHaveCount(0);
@@ -73,7 +73,7 @@ test('pedido que avança destaca a coluna de destino', async ({ page }) => {
   await digital.getByRole('button', { name: 'Marcar como pronto', exact: true }).click();
   await expect(digital.locator('.orders-card--digital')).toHaveCount(0);
   await expect(closing).toHaveClass(/orders-column--arrived/);
-  const closingTab = page.getByRole('tab', { name: /^Concluir/ });
+  const closingTab = page.getByRole('tab', { name: /^Entregas/ });
   if (await closingTab.isVisible()) await closingTab.click();
   await expect(closing.locator('.orders-card--arrived')).toHaveCount(1);
   await expect(closing).toContainText('Cliente entrega');
@@ -92,7 +92,7 @@ test('pedidos digitais mais recentes aparecem primeiro', async ({ page }) => {
   await page.route('**/comandas/delivery/ativos', route => route.fulfill({ json: orders }));
   await page.route('**/comandas/detalhes/todos?*', route => route.fulfill({ json: orders }));
   await page.goto('/?view=caixa');
-  const tab = page.getByRole('tab', { name: /^Digitais/ });
+  const tab = page.getByRole('tab', { name: /^Retiradas/ });
   if (await tab.isVisible()) await tab.click();
   const cards = page.locator('.orders-column--digital .orders-card--digital');
   await expect(cards).toHaveCount(2);

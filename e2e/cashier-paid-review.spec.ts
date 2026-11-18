@@ -18,8 +18,8 @@ test('paid, partially paid and unverified orders have distinct payment messages'
   await page.route('**/comandas/detalhes/todos?*', route => route.fulfill({ json: orders }));
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
-  const stages = page.getByRole('tablist', { name: 'Etapa dos pedidos' });
-  if (await stages.isVisible()) await stages.getByRole('tab', { name: /Digitais/ }).click();
+  const stages = page.getByRole('tablist', { name: 'Filas de atendimento' });
+  if (await stages.isVisible()) await stages.getByRole('tab', { name: /Entregas/ }).click();
   for (const theme of ['dark', 'light']) {
     if (theme === 'light') await page.locator('#btn-caixa-theme').click();
     for (const scenario of scenarios) {
@@ -49,8 +49,8 @@ test('open delivery detail updates when the courier list arrives', async ({ page
   await page.route('**/comandas/motoboys/lista', async route => { await gate; await route.fulfill({ json: [{ id: 7, nome: 'Lucas', ativo: true }] }); });
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
-  const stages = page.getByRole('tablist', { name: 'Etapa dos pedidos' });
-  if (await stages.isVisible()) await stages.getByRole('tab', { name: /Concluir/ }).click();
+  const stages = page.getByRole('tablist', { name: 'Filas de atendimento' });
+  if (await stages.isVisible()) await stages.getByRole('tab', { name: /Entregas/ }).click();
   await page.locator('.orders-card--closing').filter({ hasText: 'Entrega em rota' }).click();
   const detail = page.locator('.orders-detail-modal');
   await expect(detail).toContainText('Carregando entregador');

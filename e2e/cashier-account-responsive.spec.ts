@@ -30,7 +30,7 @@ for (const width of [320, 360, 390, 430, 768, 834, 1024, 1366, 1920]) {
         const id = number.locator('strong');
         if (await id.count()) expect(await id.evaluate(el => el.scrollHeight <= parseFloat(getComputedStyle(el).lineHeight) + 2)).toBe(true);
       }
-      const stages = page.getByRole('tablist', { name: 'Etapa dos pedidos' });
+      const stages = page.getByRole('tablist', { name: 'Filas de atendimento' });
       if (await stages.isVisible()) {
         for (const tab of await stages.getByRole('tab').all()) { await tab.click(); await expect(tab).toHaveAttribute('aria-selected', 'true'); }
       } else {

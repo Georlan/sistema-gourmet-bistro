@@ -1,5 +1,5 @@
 type Props = {
-  kind: 'salon' | 'digital' | 'closing';
+  kind: 'salon' | 'digital' | 'closing' | 'delivery';
   title: string;
   count: number;
 };
@@ -15,6 +15,7 @@ const marks = {
     <path d="M5 8h14l1 13H4L5 8ZM8 8V6a4 4 0 0 1 8 0v2" />
     <path d="M8 12h8v6l-2-1-2 1-2-1-2 1v-6Zm3 2h2" />
   </>,
+  delivery: <><circle cx="5" cy="18" r="3" /><circle cx="19" cy="18" r="3" /><path d="M5 18h8l3-7 3 7M14 6h3l1 4M3 8h7v5H3z" /></>,
   closing: <>
     <path d="M5 3h14v18l-3-1-4 1-4-1-3 1V3ZM9 7h6M9 10h4" />
     <path d="m9 15 2 2 4-4" />
