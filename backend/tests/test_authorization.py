@@ -1594,8 +1594,8 @@ def test_cashier_item_correction_rolls_back_when_tracking_cannot_be_queued():
     client = TestClient(app)
     headers = get_auth_headers(client, 'caixa', '123')
     with patch('app.services.order_chat_service.queue_order_tracking_refresh', side_effect=RuntimeError('tracking unavailable')):
-        with pytest.raises(RuntimeError, match='tracking unavailable'):
-            client.put('/comandas/itens/cash-correction-1/cancelar', headers=headers)
+        response = client.put('/comandas/itens/cash-correction-1/cancelar', headers=headers)
+        assert response.status_code == 500
     with TestingSessionLocal() as db:
         assert db.get(Item, 'cash-correction-1').status == 'pronto'
         assert db.query(ActivityLog).filter_by(action='CANCEL_ITEM').count() == 0
