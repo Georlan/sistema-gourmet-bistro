@@ -169,6 +169,15 @@ const renderCompactItemsList = (
 /** Maintains short-lived arrival feedback without coupling it to operational actions. */
 export function CaixaOrdersWorkspace(props: CaixaOrdersWorkspaceProps) {
   const { columns, isLoading, search } = props;
+  const [groupByChannel, setGroupByChannel] = useState(() => {
+    try { return localStorage.getItem('koma_orders_grouping') === 'channel'; }
+    catch { return false; }
+  });
+  const toggleGrouping = () => {
+    setGroupByChannel(!groupByChannel);
+    try { localStorage.setItem('koma_orders_grouping', groupByChannel ? 'stage' : 'channel'); }
+    catch { /* The board remains usable when browser storage is unavailable. */ }
+  };
   // Experimental: newest orders first within each existing operational group.
   const dateValue = (value: unknown): number => normalizeOperationalTimestamp(value) ?? 0;
   const tableTime = (card: CashierTableCard) => Math.max(0, ...card.order.itens.map(item => dateValue(item.timestamp)), dateValue(card.order.created_at));
@@ -204,15 +213,15 @@ export function CaixaOrdersWorkspace(props: CaixaOrdersWorkspaceProps) {
   return <CaixaOrdersWorkspaceView {...props} columns={{
     tableProduction: filteredCol1, digitalProduction: filteredDigitalProduction,
     tableClosing: filteredCol2Table, digitalFinalization: filteredDeliveryFinalization,
-  }} arrivals={arrivals} />;
+  }} arrivals={arrivals} groupByChannel={groupByChannel} onToggleGrouping={toggleGrouping} />;
 }
 
 /** Stateless rendering boundary; callbacks remain owned by CaixaPanel. */
 export function CaixaOrdersWorkspaceView({
   pixConferenceTrigger, columns, pendingCashPayments: pagamentosPendentes, insights: operationalOrderInsights,
   search, acceptance, navigation, couriers, actions, isLoading, now: nowTimestamp,
-  hasPrinting = true, hasLocalServiceWork, restaurantConfig, onToast, arrivals = new Set<string>(),
-}: CaixaOrdersWorkspaceProps & { arrivals?: ReadonlySet<string> }) {
+  hasPrinting = true, hasLocalServiceWork, restaurantConfig, onToast, arrivals = new Set<string>(), groupByChannel = false, onToggleGrouping,
+}: CaixaOrdersWorkspaceProps & { arrivals?: ReadonlySet<string>; groupByChannel?: boolean; onToggleGrouping?: () => void }) {
   const { tableProduction: filteredCol1, digitalProduction: filteredDigitalProduction,
     tableClosing: filteredCol2Table, digitalFinalization: filteredDeliveryFinalization } = columns;
   const { query: searchQuery, onChange: setSearchQuery } = search;
@@ -289,7 +298,6 @@ export function CaixaOrdersWorkspaceView({
   );
   const withoutSalon = !showSalon;
 
-  const [groupByChannel, setGroupByChannel] = useState(false);
   const byChannel = showSalon && groupByChannel;
   const channelLanes = byChannel ? [
     { id: 'salon' as const, title: 'Presencial e retiradas', delivery: false },
@@ -910,7 +918,7 @@ export function CaixaOrdersWorkspaceView({
         )}
         <div className="orders-toolbar__actions">
           {showSalon && <button type="button" className="orders-new-orders" aria-pressed={byChannel}
-            aria-label="Agrupar pedidos por atendimento" onClick={() => setGroupByChannel(value => !value)}>
+            aria-label="Agrupar pedidos por atendimento" onClick={onToggleGrouping}>
             <ClipboardList size={18} aria-hidden="true" />
             <span>{byChannel ? 'Por atendimento' : 'Por etapa'}</span>
           </button>}
