@@ -163,8 +163,8 @@ test('reconciliação ao retornar do background move card imediatamente', async 
   });
 
   if (isMobile) {
-    await expect(page.getByRole('tab', { name: /Concluir/ })).toContainText('1');
-    await page.getByRole('tab', { name: /Concluir/ }).click();
+    await expect(page.getByRole('tab', { name: /Retiradas/ })).toContainText('1');
+    await page.getByRole('tab', { name: /Retiradas/ }).click();
   }
 
   // O card deve reconciliar IMEDIATAMENTE sem esperar 12 segundos
@@ -285,8 +285,8 @@ test('retomada durante leitura lenta enfileira uma reconciliação sem duplicar 
   resolveHeldRequest!();
 
   if (isMobile) {
-    await expect(page.getByRole('tab', { name: /Concluir/ })).toContainText('1');
-    await page.getByRole('tab', { name: /Concluir/ }).click();
+    await expect(page.getByRole('tab', { name: /Retiradas/ })).toContainText('1');
+    await page.getByRole('tab', { name: /Retiradas/ }).click();
   }
 
   // A leitura de retomada deve atualizar para "PRONTO PARA RETIRADA"

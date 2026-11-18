@@ -70,7 +70,7 @@ test('delivery envia endereço simplificado e mostra erro legível preservando c
   } }));
   try {
     await page.locator('#pdv-submit-btn').click();
-    const digitalTab = page.getByRole('tab', { name: /Digitais|Preparo/ }).first();
+    const digitalTab = page.getByRole('tab', { name: /Entregas/ }).first();
     if (await digitalTab.isVisible()) await digitalTab.click();
     await expect(page.locator('.orders-card--digital').filter({ hasText: '9876' })).toContainText('42,00');
   } finally {
@@ -78,25 +78,17 @@ test('delivery envia endereço simplificado e mostra erro legível preservando c
   }
 });
 
-test('kanban alterna entre etapas e atendimento mantendo os cartões', async ({ page }) => {
+test('agrupamento por atendimento ignora preferências antigas', async ({ page }) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
+  await page.addInitScript(() => localStorage.setItem('koma_orders_grouping', 'stage'));
   await page.goto('/?view=caixa');
   const board = page.locator('.orders-board');
-  const toggle = page.getByRole('combobox', { name: 'Dividir painel de pedidos' });
-  const cards = board.locator('.orders-card');
-  await expect(cards.first()).toBeAttached();
-  const count = await cards.count();
-  await toggle.selectOption('channel');
-  await expect(board.locator('.orders-column')).toHaveCount(2);
-  await expect(board.getByRole('heading', { name: 'Presencial e retiradas', includeHidden: true })).toHaveCount(1);
-  await expect(cards).toHaveCount(count);
-  await toggle.selectOption('service');
-  await expect(board.locator('.orders-column')).toHaveCount(3);
-  await expect(board.getByRole('heading', { name: 'Balcão e retiradas', includeHidden: true })).toHaveCount(1);
-  await expect(cards).toHaveCount(count);
-  await toggle.selectOption('stage');
-  await expect(cards).toHaveCount(count);
+  await expect(board.locator('.orders-card').first()).toBeAttached();
+  for (const name of ['Mesas', 'Balcão', 'Retiradas', 'Entregas']) {
+    await expect(board.getByRole('heading', { name, exact: true, includeHidden: true })).toHaveCount(1);
+  }
+  await expect(page.getByRole('combobox', { name: 'Dividir painel de pedidos' })).toHaveCount(0);
 });
 test('consulta mesas e restaura a divisão sem escrita', async ({page}) => {
   await mockCashierBackend(page);
@@ -109,14 +101,13 @@ test('consulta mesas e restaura a divisão sem escrita', async ({page}) => {
   const board = page.locator('.orders-board');
   await expect(board.locator('.orders-card').first()).toBeAttached();
   const filters = page.getByRole('group',{name:'Filtrar pedidos por atendimento'});
-  await page.getByRole('combobox',{name:'Dividir painel de pedidos'}).selectOption('service');
   await filters.getByRole('button',{name:/^Mesas/}).click();
   await expect(board.locator('.orders-column')).toHaveCount(1);
   await expect(board.getByRole('heading',{name:'Mesas'})).toBeVisible();
   await expect(board.locator('.orders-column--digital')).toHaveCount(0);
   await filters.getByRole('button',{name:'Todos'}).click();
-  await expect(board.locator('.orders-column')).toHaveCount(3);
+  await expect(board.locator('.orders-column')).toHaveCount(4);
   await page.reload();
-  await expect(page.getByRole('combobox',{name:'Dividir painel de pedidos'})).toHaveValue('service');
+  await expect(page.getByRole('combobox',{name:'Dividir painel de pedidos'})).toHaveCount(0);
   expect(writes).toEqual([]);
 });

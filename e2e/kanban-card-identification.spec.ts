@@ -94,7 +94,7 @@ test('table cards distinguish table number from the persisted order and ready va
   await expect(preparing.locator('.orders-card__identity-title')).toHaveText('Pedido #24');
   await expect(preparing.locator('.orders-card__price')).toHaveText(/112,00/);
   await page.screenshot({path:test.info().outputPath('cards-mesa.png'),fullPage:true});
-  await showStage(page,'Concluir');
+  await showStage(page,'Mesas');
   const ready=page.locator('.orders-card--closing').first();
   await expect(ready.locator('.orders-card__number-label')).toHaveCount(0);
   await expect(ready.locator('.orders-card__number .orders-card__table-label')).toHaveText('Mesa');

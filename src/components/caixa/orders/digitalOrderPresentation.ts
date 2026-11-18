@@ -98,6 +98,7 @@ export function getDigitalOrderPaymentSummary(
   order: Pick<DeliveryOrderView, 'pago' | 'amountDue' | 'paymentMethod' | 'changeFor'>,
 ): string {
   const method = getDigitalOrderPaymentMethodLabel(order.paymentMethod);
+  if (!order.pago && (order.amountDue == null || !Number.isFinite(order.amountDue))) return 'Conferir saldo';
   const due = Math.max(0, Number(order.amountDue) || 0);
   if (order.pago || due <= 0.009) {
     return method ? `Pago · ${method}` : 'Pago';
@@ -105,6 +106,11 @@ export function getDigitalOrderPaymentSummary(
 
   const parts = [`A cobrar ${digitalMoney(due)}`];
   if (method) parts.push(method);
-  if (method === 'Dinheiro' && Number(order.changeFor || 0) > 0) parts.push(`Troco para ${digitalMoney(Number(order.changeFor))}`);
+  if (method === 'Dinheiro' && Number(order.changeFor) > 0) {
+    const tender = Number(order.changeFor);
+    parts.push(`Troco para ${digitalMoney(tender)}`);
+    const cents = Math.round(tender * 100) - Math.round(due * 100);
+    parts.push(cents >= 0 ? `Levar ${digitalMoney(cents / 100)} de troco` : 'Conferir valor em dinheiro');
+  }
   return parts.join(' · ');
 }

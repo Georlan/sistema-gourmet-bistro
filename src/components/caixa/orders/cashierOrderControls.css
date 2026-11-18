@@ -46,3 +46,29 @@
 .orders-workspace .orders-cash-pending__reject { min-height: 44px; border: 1px solid var(--koma-border-strong); color: var(--koma-text-secondary); background: var(--koma-surface-panel); }
 .orders-workspace .orders-cash-pending__reject:hover { background: var(--koma-surface-raised); }
 .orders-detail-modal .orders-detail-modal__item-status::before { background: #a6cddf; }
+
+.cashier-shell .orders-queue-notice {
+  color: var(--koma-accent-text);
+  border-inline-start: 1px solid var(--koma-border-strong);
+  padding: .3rem .55rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+@media (min-width: 768px) {
+  .orders-workspace .orders-column__header { min-height: 3rem; padding-block: .4rem; }
+  .orders-workspace .orders-toolbar { padding: .35rem .5rem; }
+  .orders-workspace .orders-new-orders:not(.orders-pix-conference),
+  .orders-workspace .orders-search__input, .orders-workspace .orders-auto-accept { min-height: 38px; }
+}
+
+.orders-queue-tabs .cashier-subnav__button {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+}
+@media (max-width: 600px) {
+  .cashier-shell .orders-queue-tabs { gap: 2px; padding-inline: .3rem; }
+  .cashier-shell .orders-queue-tabs .cashier-subnav__button { padding-inline: .45rem; }
+  .orders-queue-tabs .cashier-subnav__button svg { width: 15px; }
+  .orders-queue-tabs .orders-queue-notice { min-height: 36px; }
+}
