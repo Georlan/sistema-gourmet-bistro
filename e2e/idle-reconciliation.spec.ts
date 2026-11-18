@@ -16,6 +16,9 @@ test('real histories and monitor: idle savings, event bursts, offline and cleanu
   await page.route(/http:\/\/127\.0\.0\.1:176\d+\/.*/, route => route.abort());
   await page.clock.install();
   await page.goto('/e2e/fixtures/idle-reconciliation.html');
+  await expect.poll(() => calls).toEqual({pickup:0,courier:0,monitor:1});
+  await page.locator('#cashier-pickups-workspace summary').click();
+  await page.locator('#cashier-deliveries-workspace summary').filter({ hasText: 'Entregas concluídas hoje' }).click();
   await expect.poll(() => calls).toEqual({pickup:1,courier:1,monitor:1});
   // A request being issued is not the same as its React state having settled.
   // Advance the fake 60s only after the monitor rendered the first response,

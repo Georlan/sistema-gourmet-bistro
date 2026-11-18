@@ -1,3 +1,4 @@
+import type { OrdersStage } from '../orders/cashierWorkspaceTypes';
 import { useEffect, useRef, useState } from 'react';
 import { initAnalytics, trackOperationalAction, trackOperationalScreen } from '../../../analytics';
 import { ONBOARDING_SETUP_MODE_KEY } from '../../onboarding/FirstAccessOnboarding';
@@ -79,7 +80,7 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
   }, [activeTab, activeSubTab]);
 
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [mobileOrdersStage, setMobileOrdersStage] = useState<'salon' | 'digital' | 'closing'>('salon');
+  const [mobileOrdersStage, setMobileOrdersStage] = useState<OrdersStage>('salon');
 
   useEffect(() => {
     if (setupMode) document.documentElement.setAttribute('data-koma-setup-mode', 'true');

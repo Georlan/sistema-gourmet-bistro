@@ -3,7 +3,7 @@ import { openOperationalScenario, showStage } from './fixtures/operational';
 
 test('details use the shared typography, format time, keep focus and return without writes', async ({ page }) => {
   const scenario = await openOperationalScenario(page);
-  await showStage(page, 'Salão');
+  await showStage(page, 'Mesas');
   const card = page.locator('.orders-card--salon').first();
   await card.focus();
   await card.click();
@@ -107,12 +107,12 @@ test('mobile sidebar supports horizontal touch intent and preserves vertical scr
   expect(scenario.actions).toHaveLength(0);
 });
 
-test('all six operation destinations keep selection, show their screen, and fullscreen can return', async ({ page, isMobile }) => {
+test('all operation destinations keep selection, show their screen, and fullscreen can return', async ({ page, isMobile }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   const scenario = await openOperationalScenario(page);
   const nav = page.getByRole('navigation', { name: 'Telas desta área' });
-  for (const name of ['Novo pedido', 'Salão', 'Cozinha', 'Retiradas', 'Entregas', 'Pedidos']) {
+  for (const name of ['Novo pedido', 'Salão', 'Cozinha', 'Pedidos']) {
     await nav.getByRole('button', { name, exact: true }).click();
     await expect(nav.getByRole('button', { name, exact: true })).toHaveAttribute('aria-current', 'page');
     if (name === 'Novo pedido') await expect(page.getByPlaceholder('Buscar item, descrição ou código')).toBeVisible();
@@ -131,7 +131,7 @@ test('all six operation destinations keep selection, show their screen, and full
 
 test('observation editor can close without saving and order actions stay visible', async ({ page }) => {
   const scenario = await openOperationalScenario(page);
-  await showStage(page, 'Salão');
+  await showStage(page, 'Mesas');
   await page.locator('.orders-card--salon').first().click();
   const dialog = page.locator('.orders-detail-modal');
   await expect(dialog.getByText('Mais opções', { exact: true })).toHaveCount(0);
@@ -157,7 +157,7 @@ for (const fail of [false, true]) {
       writes += 1;
       await route.fulfill({ status: fail ? 409 : 200, json: fail ? { detail: 'Mesa alterada por outro operador.' } : { ok: true } });
     });
-    await showStage(page, 'Salão');
+    await showStage(page, 'Mesas');
     await page.locator('.orders-card--salon').first().click();
     const dialog = page.locator('.orders-detail-modal');
     await dialog.getByRole('button', { name: 'Mesclar mesas', exact: true }).click();
@@ -178,7 +178,7 @@ test('table conversion opens server-provided options and blocks ambiguous tables
   await page.route('**/comandas/check-phase7-24/modalidade/opcoes', route => route.fulfill({ json: blocked
     ? { options: [], blocked_reason: 'A mesa possui mais de um pedido.' }
     : { options: ['delivery', 'pickup'], blocked_reason: null, address_snapshot: null } }));
-  await showStage(page, 'Salão');
+  await showStage(page, 'Mesas');
   await page.locator('.orders-card--salon').first().click();
   const detail = page.locator('.orders-detail-modal');
   await expect(detail.getByRole('button', { name: 'Marcar pronto para servir' })).toHaveCount(0);

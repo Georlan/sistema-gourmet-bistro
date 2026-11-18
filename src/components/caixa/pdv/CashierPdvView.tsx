@@ -13,7 +13,7 @@ import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
 import DeliveryAddressFields from '../../shared/DeliveryAddressFields';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import { formatCurrency } from '../cashierPresentation';
-import { pdvCartItemUnitPrice, type PdvModifierSelection, type PdvOrderType, type useCashierPdv } from './useCashierPdv';
+import { type PdvModifierSelection, type PdvOrderType, type useCashierPdv } from './useCashierPdv';
 import { usePdvCategoryNavigation } from './usePdvCategoryNavigation';
 import { CashierPdvProductCard } from './CashierPdvProductCard';
 import { pdvProductNeedsRequiredChoices } from './pdvProductChoices';
@@ -79,6 +79,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     pdvOrderType,
     setPdvOrderType,
     allowedPdvOrderTypes,
+    cartTotal, changeFor, setChangeFor,
     pdvPaymentMethod,
     setPdvPaymentMethod,
     pdvDeliveryAddressDraft,
@@ -255,9 +256,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     closeConfig();
   };
 
-  const cartTotal = useMemo(() => pdvCart.reduce(
-    (sum, item) => sum + pdvCartItemUnitPrice(item) * item.quantity, 0,
-  ), [pdvCart]);
+
   const currentModalityLabel = pdvOrderType === 'pickup' ? 'Retirada'
     : pdvOrderType === 'delivery' ? 'Delivery' : 'Consumo local';
   // Each task owns its own scroll, so toggling never moves the entire application.
@@ -791,6 +790,15 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                             </button>
                           ))}
                         </div>
+                        {pdvPaymentMethod === 'dinheiro' && (
+                          <label className="mt-3 grid gap-1 text-sm font-bold">
+                            Troco para (opcional)
+                            <input type="number" inputMode="decimal" min={cartTotal} step="0.01"
+                              placeholder="Sem troco" value={changeFor} onChange={event => setChangeFor(event.target.value)}
+                              className="min-h-11 rounded-xl border border-koma-border bg-koma-panel px-3" />
+                            {Number(changeFor) > cartTotal && <span className="text-koma-secondary">Devolver {formatCurrency(Number(changeFor) - cartTotal)}</span>}
+                          </label>
+                        )}
                       </div>
                     </details>
                   )}

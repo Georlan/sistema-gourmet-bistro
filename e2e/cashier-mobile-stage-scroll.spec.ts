@@ -9,7 +9,7 @@ test('barra de etapas fixa e lista de pedidos em rolagem independente no celular
   const shell = page.locator('.cashier-shell--mobile-orders');
   const content = shell.locator('.cashier-content');
   const workspace = content.locator('.orders-workspace');
-  const stages = workspace.getByRole('tablist', { name: 'Etapa dos pedidos' });
+  const stages = workspace.getByRole('tablist', { name: 'Filas de atendimento' });
   const scroller = workspace.locator('.orders-workspace__scroll-region');
   await expect(stages).toBeVisible();
 
@@ -44,19 +44,19 @@ test('barra de etapas fixa e lista de pedidos em rolagem independente no celular
   });
   expect(gap).toBeGreaterThanOrEqual(-1);
 
-  const digital = stages.getByRole('tab', { name: /Digitais/ });
+  const digital = stages.getByRole('tab', { name: /Retiradas/ });
   await digital.click();
   await expect(digital).toHaveAttribute('aria-selected', 'true');
   const digitalColumn = workspace.locator('.orders-column--digital');
   await expect(digitalColumn).toHaveClass(/is-mobile-active/);
   await expect(digitalColumn).toHaveCSS('overflow-y', 'clip');
-  const salon = stages.getByRole('tab', { name: /Salão/ });
+  const salon = stages.getByRole('tab', { name: /Mesas/ });
   await salon.click();
   await expect(salon).toHaveAttribute('aria-selected', 'true');
 
   // O cabeçalho verde deve acompanhar o raio da coluna; com overflow visível
   // na rolagem interna, um cabeçalho sem raio produz pontas nos cantos.
-  for (const label of [/Salão/, /Digitais/, /Concluir/]) {
+  for (const label of [/Mesas/, /Retiradas/, /Entregas/]) {
     const tab = stages.getByRole('tab', { name: label });
     await tab.click();
     await expect(tab).toHaveAttribute('aria-selected', 'true');

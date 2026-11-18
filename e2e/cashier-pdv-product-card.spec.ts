@@ -325,7 +325,7 @@ test('PDV phone sales tabs are always visible, left-aligned and scrollbar-free',
     const nav = page.getByRole('navigation', { name: 'Telas desta área' });
     const strip = nav.locator('.cashier-subnav__scroll');
     await expect(nav).toBeVisible();
-    await expect(nav.locator('.cashier-subnav__button')).toHaveCount(6);
+    await expect(nav.locator('.cashier-subnav__button')).toHaveCount(4);
     await expect(page.getByRole('button', { name: /(?:Mostrar|Ocultar) telas de Vendas/ })).toHaveCount(0);
     await expect(nav.getByRole('button', { name: 'Novo pedido', exact: true })).toHaveAttribute('aria-current', 'page');
 
@@ -344,7 +344,7 @@ test('PDV phone sales tabs are always visible, left-aligned and scrollbar-free',
     expect(geometry.leadingGap).toBeGreaterThanOrEqual(-1);
     expect(geometry.leadingGap).toBeLessThanOrEqual(2);
     expect(geometry.track).toBe('none');
-    expect(geometry.overflow).toBeGreaterThan(0);
+
     await expect(nav.locator('.cashier-subnav__arrow').first()).toBeHidden();
     await expect(nav.locator('.cashier-subnav__arrow').last()).toBeHidden();
 
@@ -353,9 +353,9 @@ test('PDV phone sales tabs are always visible, left-aligned and scrollbar-free',
       el.scrollLeft = max;
       return max;
     });
-    await expect.poll(() => strip.evaluate(el => el.scrollLeft)).toBeGreaterThan(0);
+
     expect(Math.abs(await strip.evaluate(el => el.scrollLeft) - maxScroll)).toBeLessThanOrEqual(1);
-    await nav.getByRole('button', { name: 'Retiradas', exact: true }).click();
+    await nav.getByRole('button', { name: 'Cozinha', exact: true }).click();
     await nav.getByRole('button', { name: 'Novo pedido', exact: true }).click();
     await expect(nav).toBeVisible();
     await expect.poll(() => strip.evaluate(el => el.scrollLeft)).toBe(0);

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  projectApiComandaToDeliveryView,
   bucketCourierDeliveryOrders,
   bucketPickupOrders,
   projectDeliveryOrdersFromSharedSnapshot,
@@ -301,11 +302,11 @@ test('workspace de retiradas deriva pendentes, prontas e atrasadas do fluxo can�
 
   assert.deepEqual(buckets.awaitingAcceptance.map((order) => order.id), ['pickup-pending']);
   assert.deepEqual(buckets.preparing.map((order) => order.id), ['pickup-preparing-late']);
-  assert.deepEqual(buckets.ready.map((order) => order.id), ['pickup-ready']);
+  assert.deepEqual(buckets.ready.map((order) => order.id), ['pickup-ready', 'pickup-quick-sale']);
   assert.deepEqual(buckets.late.map((order) => order.id), ['pickup-preparing-late']);
   assert.equal(
     [...buckets.awaitingAcceptance, ...buckets.preparing, ...buckets.ready]
-      .some((order) => order.id === 'pickup-quick-sale' || order.id === 'delivery-ready'),
+      .some((order) => order.id === 'delivery-ready'),
     false,
   );
 });
@@ -315,6 +316,9 @@ test('entregue com saldo continua no Caixa e não é tratado como recebido', () 
   const [row] = projectDeliveryOrdersFromSharedSnapshot([baseOrder({deliveryStatus:'finalizado',valorPago:5})]);
   assert.equal(row.status, 'finalizado');
   assert.equal(row.amountDue, 8);
+  const buckets = bucketCourierDeliveryOrders([row]);
+  assert.deepEqual(buckets.awaitingPayment, [row]);
+  assert.deepEqual(buckets.inTransit, []);
   assert.equal(row.pago, false);
 });
 
@@ -330,4 +334,17 @@ test('resposta de status sem itens preserva total e calcula saldo com pagamento 
   assert.equal(missingPayment.amountDue, 11);
   const paid = reconcileDeliveryOrderAfterStatus(previous, { ...compact, amountPaid: 13 });
   assert.equal(paid.amountDue, 0);
+});
+
+
+test('Pix aprovado pelo servidor quita a cobrança mantendo a entrega em preparo', () => {
+  const input = { id: 'pix', tipo: 'Entrega', delivery_status: 'producao', delivery_forma_pagamento: 'pix',
+    delivery_taxa: 5, itens: [{ preco_unit: 20, pago: false }] };
+  const approved = projectApiComandaToDeliveryView({ ...input, online_payment_status: 'approved' });
+  assert.equal(approved?.pago, true);
+  assert.equal(approved?.amountDue, 0);
+  assert.equal(approved?.status, 'producao');
+  const partial = projectApiComandaToDeliveryView({ ...input, valor_pago: 20 });
+  assert.equal(partial?.pago, false);
+  assert.equal(partial?.amountDue, 5);
 });

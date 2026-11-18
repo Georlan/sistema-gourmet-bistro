@@ -103,6 +103,7 @@ export interface Order {
   payableTotal?: number;
   deliveryAddress?: string | null;
   paymentMethod?: string | null;
+  onlinePaymentStatus?: string | null;
   changeFor?: number | null;
   motoboyId?: number | null;
   mesaOrigemId?: number | null;

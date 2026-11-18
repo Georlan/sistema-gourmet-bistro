@@ -181,7 +181,7 @@ test('pedido do cardápio é aceito uma vez e surge no kanban com contexto útil
   const viewport = page.viewportSize();
   if (!viewport) throw new Error('Viewport não configurado.');
   if (viewport.width < DESKTOP_BREAKPOINT) {
-    const digitalStageTab = page.getByRole('tab', { name: /Digitais/ });
+    const digitalStageTab = page.getByRole('tab', { name: /Retiradas/ });
     await expect(digitalStageTab).toBeVisible();
     await digitalStageTab.tap();
     await expect(digitalStageTab).toHaveAttribute('aria-selected', 'true');
@@ -203,14 +203,14 @@ test('pedido do cardápio é aceito uma vez e surge no kanban com contexto útil
   await digitalColumn.getByRole('button', { name: /Pronto para retirada/i }).click();
 
   if (viewport.width < DESKTOP_BREAKPOINT) {
-    const closingStageTab = page.getByRole('tab', { name: /Concluir/ });
+    const closingStageTab = page.getByRole('tab', { name: /Retiradas/ });
     await expect(closingStageTab).toBeVisible();
     await closingStageTab.tap();
     await expect(closingStageTab).toHaveAttribute('aria-selected', 'true');
   }
 
   // Pedido agora reside na coluna 03 (FECHAMENTO) e NÃO desaparece
-  const closingColumn = page.locator('.orders-column--closing');
+  const closingColumn = page.locator('.orders-column--digital');
   await expect(closingColumn).toBeVisible();
   await expect(closingColumn).toContainText('Ana Teste');
   await expect(closingColumn).toContainText(/PRONTO PARA RETIRADA/i);

@@ -87,7 +87,7 @@ test('aceite reaproveita composição persistida e preserva personalizações di
   assert.doesNotMatch(html, /Não produzir|Cancelado/);
 });
 
-test('sem consumo local usa duas etapas para qualquer perfil e plano de impressão', () => {
+test('sem consumo local usa filas por atendimento para qualquer perfil e plano de impressão', () => {
   const base = workspace([]);
   for (const profile of ['marmitaria', 'generic', 'pizzaria', 'acai']) {
     for (const hasPrinting of [true, false]) {
@@ -98,7 +98,7 @@ test('sem consumo local usa duas etapas para qualquer perfil e plano de impress�
       assert.doesNotMatch(html, /orders-column--salon|Mesas em Atendimento/);
       assert.match(html, /orders-board--without-salon/);
       assert.match(html, /orders-column--digital[^"<]*is-mobile-active/);
-      assert.match(html, /Entrega e recebimento/);
+      assert.match(html, /Entregas/);
       assert.match(html, /grid-template-columns:repeat\(2, minmax\(0, 1fr\)\)/);
     }
   }
@@ -182,7 +182,7 @@ test('workspace consumes frozen projections: 112/48 remain separate; requested b
   const markup = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, props));
   assert.match(markup, /R\$\s*112,00/);
   assert.match(markup, /R\$\s*48,00/);
-  assert.match(markup, /Receber itens prontos/);
+  assert.match(markup, /Receber mesa/);
   assert.doesNotMatch(markup, /Conta pedida/);
   assert.deepEqual(props.columns.tableProduction[0].order.itens.map(entry => entry.status), ['preparando']);
 
@@ -220,9 +220,9 @@ test('workspace preserves card keyboard guards and stops action clicks before de
 
   let stopped = 0;
   const click = { stopPropagation: () => stopped++ };
-  invoke(button(view, 'Marcar item como pronto'), 'onClick', click);
+  invoke(button(cardElement, 'Receber mesa'), 'onClick', click);
   invoke(find(view, element => element.props['aria-label'] === 'Reimprimir Pedido #24'), 'onClick', click);
-  invoke(button(view, 'Receber itens prontos'), 'onClick', click);
+  invoke(button(find(view, element => element.props.role === 'button' && String(element.props.className).includes('orders-card--closing')), 'Receber mesa'), 'onClick', click);
   assert.equal(stopped, 3);
   assert.deepEqual(acted, [props.columns.tableProduction[0].order, props.columns.tableProduction[0].order,
     props.columns.tableClosing[0].order]);

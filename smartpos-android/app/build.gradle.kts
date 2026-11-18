@@ -7,16 +7,32 @@ repositories {
     mavenCentral()
 }
 
+val productionApi = "https://sistema-gourmet-bistro-production.up.railway.app"
+val debugApi = providers.gradleProperty("komaApiUrl").orElse(productionApi)
+    .map { url ->
+        require(url.startsWith("https://") || url.startsWith("http://"))
+        require(url.none { it.isWhitespace() || it == '"' || it == '\\' })
+        url.trimEnd('/')
+    }
+
 android {
     namespace = "br.com.koma.smartpos.dev"
     compileSdk = 36
+    buildFeatures.buildConfig = true
 
     defaultConfig {
         applicationId = "br.com.koma.smartpos.dev"
-        minSdk = 26
+        minSdk = 25
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.9.0-dev"
+        versionCode = 3
+        versionName = "0.1.0"
+        buildConfigField("String", "KOMA_API_URL", "\"$productionApi\"")
+    }
+
+    buildTypes {
+        debug {
+            buildConfigField("String", "KOMA_API_URL", "\"${debugApi.get()}\"")
+        }
     }
 
     compileOptions {
@@ -27,4 +43,6 @@ android {
 
 dependencies {
     implementation(project(":"))
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20250517")
 }

@@ -58,9 +58,9 @@ test('delivery pronto avança à última coluna, despacha e permanece até fecha
   await page.getByRole('button', { name: /Novos pedidos/ }).click();
   await expect(page.locator('.orders-pending-card')).toContainText('Opções: Bisteca, Costela, Baião, Arroz, Salada verde');
   await page.getByRole('button', { name: 'Aceitar', exact: true }).click();
-  const digital = page.locator('.orders-column--digital');
-  const closing = page.locator('.orders-column--closing');
-  const digitalTab = page.getByRole('tab', { name: /^Digitais/ });
+  const digital = page.locator('.orders-column--delivery');
+  const closing = page.locator('.orders-column--delivery');
+  const digitalTab = page.getByRole('tab', { name: /^Entregas/ });
   if (await digitalTab.isVisible()) await digitalTab.click();
   await expect(digital.getByRole('button', { name: 'Marcar como pronto', exact: true })).toBeVisible();
   await expect(closing.locator('.orders-card--closing')).toHaveCount(0);
@@ -72,7 +72,7 @@ test('delivery pronto avança à última coluna, despacha e permanece até fecha
   await page.locator('.orders-detail-modal').getByRole('button', { name: 'Fechar detalhes' }).click();
   await digital.getByRole('button', { name: 'Marcar como pronto', exact: true }).click();
   await expect(digital.locator('.orders-card--digital')).toHaveCount(0);
-  const closingTab = page.getByRole('tab', { name: /^Concluir/ });
+  const closingTab = page.getByRole('tab', { name: /^Entregas/ });
   if (await closingTab.isVisible()) await closingTab.click();
   await expect(closing.getByRole('button', { name: 'Despachar pedido', exact: true })).toBeDisabled();
   await closing.getByRole('combobox', { name: 'Entregador do pedido 87' }).selectOption('7');
@@ -112,14 +112,14 @@ test('marmitaria sem consumo local reaproveita duas etapas sem coluna de salão'
   const board = page.locator('.orders-board--without-salon');
   await expect(board).toBeVisible();
   await expect(page.locator('.orders-column--salon')).toHaveCount(0);
-  await expect(page.locator('.orders-column--digital')).toHaveClass(/is-mobile-active/);
+  await expect(page.locator('.orders-column--delivery')).toHaveClass(/is-mobile-active/);
   if ((page.viewportSize()?.width || 0) <= 768) {
     const boardBox = await board.boundingBox();
-    const columnBox = await page.locator('.orders-column--digital').boundingBox();
+    const columnBox = await page.locator('.orders-column--delivery').boundingBox();
     expect(columnBox!.width).toBeGreaterThan(boardBox!.width * 0.95);
   }
-  await expect(page.locator('.orders-column--digital')).toContainText('Em preparo');
-  await expect(page.locator('.orders-column--closing')).toContainText('Entrega e recebimento');
+  await expect(page.locator('.orders-column--delivery')).toContainText('Entregas');
+  await expect(board.locator('.orders-column')).toHaveCount(1);
 });
 
 test('restaurante genérico com impressão e sem consumo local não reserva coluna nem menu Salão', async ({ page }) => {

@@ -58,9 +58,9 @@ test('pedido que avança destaca a coluna de destino', async ({ page }) => {
   await page.getByRole('button', { name: /Novos pedidos/ }).click();
   await expect(page.locator('.orders-pending-card')).toContainText('Opções: Bisteca, Costela, Baião, Arroz, Salada verde');
   await page.getByRole('button', { name: 'Aceitar', exact: true }).click();
-  const digital = page.locator('.orders-column--digital');
-  const closing = page.locator('.orders-column--closing');
-  const digitalTab = page.getByRole('tab', { name: /^Digitais/ });
+  const digital = page.locator('.orders-column--delivery');
+  const closing = page.locator('.orders-column--delivery');
+  const digitalTab = page.getByRole('tab', { name: /^Entregas/ });
   if (await digitalTab.isVisible()) await digitalTab.click();
   await expect(digital.getByRole('button', { name: 'Marcar como pronto', exact: true })).toBeVisible();
   await expect(closing.locator('.orders-card--closing')).toHaveCount(0);
@@ -73,31 +73,43 @@ test('pedido que avança destaca a coluna de destino', async ({ page }) => {
   await digital.getByRole('button', { name: 'Marcar como pronto', exact: true }).click();
   await expect(digital.locator('.orders-card--digital')).toHaveCount(0);
   await expect(closing).toHaveClass(/orders-column--arrived/);
-  const closingTab = page.getByRole('tab', { name: /^Concluir/ });
+  const closingTab = page.getByRole('tab', { name: /^Entregas/ });
   if (await closingTab.isVisible()) await closingTab.click();
   await expect(closing.locator('.orders-card--arrived')).toHaveCount(1);
   await expect(closing).toContainText('Cliente entrega');
 });
 
-test('pedidos digitais mais recentes aparecem primeiro', async ({ page }) => {
+test('retiradas e entregas mostram o pedido mais recente primeiro, em qualquer etapa', async ({ page }) => {
   await mockCashierBackend(page);
   await seedCashierSession(page);
-  const check = (id: string, name: string, date: string) => ({
-    id, restaurante_id: 99001, numero_pedido: Number(id), tipo: 'Retirada', identificador: name,
-    fechada: false, valor_pago: 0, delivery_status: 'producao', criado_em: date,
-    lancamentos: [{ id: `l-${id}`, origem: 'cardapio', status: 'producao' }],
-    itens: [{ id: `i-${id}`, produto_id: '101', produto: { nome: 'Suco' }, preco_unit: 10, pago: false, status: 'preparando', lancamento_id: `l-${id}` }],
+  const check = (id: number, tipo: string, status: string, day: number, name: string) => ({
+    id: String(id), restaurante_id: 99001, numero_pedido: id, tipo, identificador: name,
+    fechada: false, valor_pago: 0, delivery_status: status, criado_em: `2026-01-0${day}T12:00:00Z`,
+    lancamentos: [{ id: `l-${id}`, origem: name === 'Balcão' ? 'caixa' : 'cardapio', status }],
+    itens: [{ id: `i-${id}`, produto_id: '101', produto: { nome: 'Suco' }, preco_unit: 10, pago: false,
+      status: status === 'pronto' ? 'pronto' : 'preparando', lancamento_id: `l-${id}` }],
   });
-  const orders = [check('1', 'Pedido antigo', '2026-01-01T12:00:00Z'), check('2', 'Pedido novo', '2026-01-02T12:00:00Z')];
+  const orders = [
+    check(101, 'Retirada', 'pronto', 1, 'Balcão'),
+    check(102, 'Retirada', 'producao', 3, 'Retirada nova'),
+    check(103, 'Retirada', 'producao', 2, 'Retirada anterior'),
+    check(201, 'Delivery', 'pronto', 1, 'Entrega antiga'),
+    check(202, 'Delivery', 'producao', 2, 'Entrega nova'),
+  ];
   await page.route('**/comandas/delivery/ativos', route => route.fulfill({ json: orders }));
   await page.route('**/comandas/detalhes/todos?*', route => route.fulfill({ json: orders }));
   await page.goto('/?view=caixa');
-  const tab = page.getByRole('tab', { name: /^Digitais/ });
-  if (await tab.isVisible()) await tab.click();
-  const cards = page.locator('.orders-column--digital .orders-card--digital');
-  await expect(cards).toHaveCount(2);
-  await expect(cards.nth(0)).toContainText('Pedido novo');
-  await expect(cards.nth(1)).toContainText('Pedido antigo');
+  const board = page.locator('.orders-board');
+  await expect(board.locator('.orders-column h3')).toHaveText(['Mesas', 'Retiradas', 'Entregas']);
+
+  for (const [label, ids] of [['Retiradas', ['#102', '#103', '#101']], ['Entregas', ['#202', '#201']]] as const) {
+    const tab = page.getByRole('tab', { name: new RegExp(`^${label}`) });
+    if (await tab.isVisible()) await tab.click();
+    const lane = board.getByRole('region', { name: label, exact: true });
+    await expect(lane.locator('.orders-card__number strong')).toHaveText([...ids]);
+  }
+  await expect(board.locator('[data-order-recency="latest"]')).toHaveCount(1);
+  await expect(board.locator('.orders-card').filter({ has: page.locator('[data-order-recency="latest"]') })).toContainText('#102');
 });
 
 test('novos pedidos mostram identificação e pagamento sem repetir modalidade e fecham com Escape', async ({ page }) => {

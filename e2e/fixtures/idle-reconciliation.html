@@ -12,7 +12,8 @@ const noop = async () => {};
 function Harness() {
   const [connected, setConnected] = React.useState(true);
   const [mounted, setMounted] = React.useState(true);
-  const common = {apiBaseUrl: '/mock', authHeaders: headers, isWsConnected: connected, deliveryOrders: [], deliveryOrdersLoadState: 'loaded', now: Date.now(),
+  const [query, setQuery] = React.useState('');
+  const common = {query, setQuery, apiBaseUrl: '/mock', authHeaders: headers, isWsConnected: connected, deliveryOrders: [], deliveryOrdersLoadState: 'loaded', now: Date.now(),
     handleAcceptPendingDeliveryOrder: noop, handleRejectPendingDeliveryOrder: noop, handleAdvanceDigitalOrder: noop, handleFinalizeDigitalOrder: noop, openDeliveryOrderDetails: noop};
   return React.createElement(React.Fragment, {},
     React.createElement('button', {onClick: () => setConnected(v => !v)}, 'Toggle realtime'),

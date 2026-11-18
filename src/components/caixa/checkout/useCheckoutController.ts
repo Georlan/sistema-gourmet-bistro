@@ -389,7 +389,13 @@ export function useCheckoutController({
 
   useEffect(() => {
     setIdempotencyKey('');
-    if (splitParts.length === 0) setPaymentMetodo('');
+    if (splitParts.length > 0) return;
+    const method = selectedOrder && !isTableCheckoutOrder(selectedOrder) ? selectedOrder.paymentMethod : null;
+    if (method === 'pix' || method === 'dinheiro' || method === 'cartao_credito' || method === 'cartao_debito') {
+      setPaymentMetodo(method);
+    } else {
+      setPaymentMetodo('');
+    }
   }, [selectedOrder]);
 
   useEffect(() => {
@@ -732,7 +738,7 @@ export function useCheckoutController({
     return selectedTotal;
   };
 
-  const handleOpenTablePayment = async (order: CashierTableCard['order']) => {
+  const handleOpenTablePayment = async (order: CashierTableCard['order'], fullBalance = false) => {
     if (isLoading || !ensureCashSettingsReady()) return;
 
     const tableComandas = orders.filter((o) => Number(o.mesaId) === Number(order.mesaId) && isTableCheckoutOrder(o));
@@ -746,7 +752,8 @@ export function useCheckoutController({
     setSelectedItemIds([]);
     setPaymentMetodo('');
     setSmartPosRecoveryError('');
-    setPaymentValor('');
+    if (fullBalance) setPaymentValor(getCheckoutBalance(checkoutOrder, true));
+    else setPaymentValor('');
   };
 
   const handleFinalizeDigitalOrder = async (order: DeliveryOrderView) => {
@@ -759,6 +766,7 @@ export function useCheckoutController({
     if (fullOrder) {
       const mappedOrder: Order = {
         ...fullOrder,
+        paymentMethod: order.paymentMethod ?? fullOrder.paymentMethod,
         deliveryStatus: (order.status === 'analise' ? 'pendente' : order.status) as Order['deliveryStatus'],
         itens: fullOrder.itens.map((item: any) => ({
           id: item.id,

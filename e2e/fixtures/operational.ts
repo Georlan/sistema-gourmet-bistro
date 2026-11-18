@@ -168,7 +168,7 @@ export async function openOperationalScenario(page: Page, scenario: Scenario = {
   return { writes, actions };
 }
 
-export async function showStage(page: Page, stage: 'Salão' | 'Concluir') {
+export async function showStage(page: Page, stage: 'Mesas' | 'Retiradas' | 'Entregas') {
   await expect(page.locator('.orders-board')).toBeVisible();
   const stageTab = page.getByRole('tab', { name: new RegExp(stage) });
   if (await stageTab.isVisible()) await stageTab.click();

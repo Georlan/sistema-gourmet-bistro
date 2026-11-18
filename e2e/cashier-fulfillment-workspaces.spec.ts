@@ -329,6 +329,75 @@ async function mockFulfillmentBackend(
   };
 }
 
+async function openFulfillmentWorkspace(page: Page, name: 'retiradas' | 'entregas') {
+  if ((page.viewportSize()?.width ?? 1366) < 1024) {
+    await page.locator('#btn-mobile-caixa-sidebar-open').click();
+  }
+  const search = page.getByRole('combobox', { name: 'Pesquisar funções do KÔMA' });
+  await search.fill(name);
+  await page.getByRole('option').filter({ hasText: new RegExp(name, 'i') }).first().click();
+}
+
+test('filtros atuam dentro de Pedidos e preservam a busca', async ({ page }) => {
+  await seedCashierSession(page, 'pedidos');
+  await mockFulfillmentBackend(page);
+  await page.goto('/?view=caixa');
+  const board = page.locator('.orders-board');
+  const top = page.locator('.cashier-subnav');
+  const search = page.getByRole('searchbox', { name: 'Buscar pedidos' });
+  const mobileFilters = page.getByRole('tablist', { name: 'Filas de atendimento' });
+  await expect(board).toBeVisible();
+  const toolbar = page.locator('.orders-toolbar');
+  const newOrders = toolbar.getByRole('button', { name: /Novos pedidos/ });
+  await expect(newOrders).toBeVisible();
+  const toolbarBounds = await toolbar.boundingBox();
+  const buttonBounds = await newOrders.boundingBox();
+  expect(toolbarBounds!.x + toolbarBounds!.width - buttonBounds!.x - buttonBounds!.width).toBeLessThan(22);
+  const actions = toolbar.locator('.orders-toolbar__actions');
+  await expect(actions.locator('.orders-auto-accept + .orders-new-orders')).toBeVisible();
+  await expect(toolbar.locator('summary[aria-label="Mais opções de pedidos"]')).toHaveCount(0);
+  await expect(toolbar.getByText(/retiradas? prontas?/i)).toHaveCount(0);
+  const filterMarks = toolbar.locator('.orders-filter-button:visible svg use');
+  if (await mobileFilters.isVisible()) {
+    await expect(filterMarks).toHaveCount(3);
+    await expect.poll(() => filterMarks.evaluateAll(marks => marks.every(mark => (mark as SVGUseElement).getBBox().width > 0))).toBe(true);
+    const boxes = await mobileFilters.getByRole('tab').evaluateAll(tabs => tabs.map(tab => {
+      const { width, height, top } = tab.getBoundingClientRect();
+      return { width, height, top };
+    }));
+    for (const box of boxes) {
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.width).toBeCloseTo(boxes[0].width, 0);
+      expect(box.top).toBeCloseTo(boxes[0].top, 0);
+    }
+    await expect(search).toBeVisible();
+    const searchBox = (await search.boundingBox())!;
+    const centerDifference = Math.abs(searchBox.y + searchBox.height / 2 - (boxes[0].top + boxes[0].height / 2));
+    expect(centerDifference).toBeLessThanOrEqual(2);
+    await search.click();
+    await expect(search).toBeFocused();
+  } else {
+    await expect(filterMarks).toHaveCount(4);
+    await expect.poll(() => filterMarks.evaluateAll(marks => marks.every(mark =>
+      (mark as SVGUseElement).getBBox().width > 0))).toBe(true);
+  }
+  await search.fill('Bruno');
+  const desktopFilters = page.getByRole('group', { name: 'Filtrar pedidos por atendimento' });
+  const filter = async (name: string) => {
+    if (await mobileFilters.isVisible()) await mobileFilters.getByRole('tab', { name: new RegExp(`^${name}`) }).click();
+    else await desktopFilters.getByRole('button', { name: new RegExp(`^${name}`) }).click();
+  };
+  await filter('Entregas');
+  await expect(board.getByRole('region', { name: 'Entregas', exact: true })).toBeVisible();
+  await expect(board.locator('.orders-column--digital')).toBeHidden();
+  await filter('Retiradas');
+  await expect(board.getByRole('region', { name: 'Retiradas', exact: true })).toBeVisible();
+  await expect(board.locator('.orders-column--delivery')).toBeHidden();
+  await expect(search).toHaveValue('Bruno');
+  await expect(top.getByRole('button', { name: 'Pedidos', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('#cashier-deliveries-workspace, #cashier-pickups-workspace')).toHaveCount(0);
+});
+
 test('Retiradas e Entregas permitem completar o trabalho normal sem voltar ao Kanban', async ({ page }) => {
   await seedCashierSession(page);
   const state = await mockFulfillmentBackend(page);
@@ -355,12 +424,12 @@ test('Retiradas e Entregas permitem completar o trabalho normal sem voltar ao Ka
   const pickupCheckout = pickups.getByRole('button', { name: 'Receber e concluir retirada' });
   await expect(pickupCheckout).toBeVisible();
   await pickupCheckout.click();
+  await expect(page.getByRole('button', { name: 'Dinheiro', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('dialog', { name: 'Receber pagamento' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   await page.reload();
-  const deliveriesTab = page.locator('.cashier-subnav__button', { hasText: 'Entregas' });
-  await deliveriesTab.click();
+  await openFulfillmentWorkspace(page, 'entregas');
 
   const deliveries = page.locator('#cashier-deliveries-workspace');
   await expect(deliveries).toBeVisible();
@@ -391,6 +460,7 @@ test('Retiradas e Entregas permitem completar o trabalho normal sem voltar ao Ka
   await expect.poll(state.getDispatchCalls).toBe(1);
   await expect(deliveries).toContainText('Em rota');
   await expect(deliveries).toContainText('Pedro Entregador');
+  await deliveries.locator('summary').filter({ hasText: 'Entregas concluídas hoje' }).click();
   await expect(deliveries).toContainText('Pedido #4999');
 
   state.setFailActiveReads(true);
@@ -415,7 +485,7 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
   });
   await page.goto('/?view=caixa');
 
-  await page.locator('.orders-mobile-stages__button').filter({ hasText: 'Digitais' }).evaluate((element) => {
+  await page.locator('.orders-mobile-stages__button').filter({ hasText: 'Entregas' }).evaluate((element) => {
     (element as HTMLButtonElement).click();
   });
   const productionCard = page.locator('.orders-card--digital').filter({ hasText: 'Bruno Delivery' });
@@ -423,7 +493,7 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
 
   await expect(productionCard.getByRole('combobox', { name: /Entregador do pedido 5002/i })).toHaveCount(0);
   await productionCard.getByRole('button', { name: /Marcar como pronto/i }).click();
-  await showStage(page, 'Concluir');
+  await showStage(page, 'Entregas');
   const readyCard = page.locator('.orders-card--closing').filter({ hasText: 'Bruno Delivery' });
   await expect(readyCard).toBeVisible();
   await expect(readyCard).toContainText('Pronto para sair');
@@ -435,7 +505,7 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
   await expect(dispatch).toBeEnabled();
   await dispatch.click();
   await expect.poll(state.getDispatchCalls).toBe(1);
-  await page.locator('.orders-mobile-stages__button').filter({ hasText: 'Concluir' }).evaluate((element) => {
+  await page.locator('.orders-mobile-stages__button').filter({ hasText: 'Entregas' }).evaluate((element) => {
     (element as HTMLButtonElement).click();
   });
   const inRouteCard = page.locator('.orders-card--closing').filter({ hasText: 'Bruno Delivery' });
@@ -444,7 +514,7 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
   await expect(inRouteCard.getByRole('combobox', { name: /Entregador do pedido 5002/i })).toHaveCount(0);
 
   await expect(inRouteCard.getByRole('button', { name: 'Trocar entregador' })).toHaveCount(0);
-  await page.locator('.cashier-subnav__button').filter({ hasText: 'Entregas' }).click();
+  await openFulfillmentWorkspace(page, 'entregas');
   const deliveryWorkspace = page.locator('#cashier-deliveries-workspace');
   await deliveryWorkspace.getByRole('button', { name: 'Trocar entregador' }).click();
   const reassignmentDialog = page.getByRole('dialog', { name: 'Trocar entregador' });
@@ -487,8 +557,7 @@ test('delivery alterado para retirada sai de Entregas e aparece em Retiradas sem
   await expect(dialog).toBeHidden();
   await expect(deliveries).not.toContainText('Bruno Delivery');
 
-  const pickupsTab = page.locator('.cashier-subnav__button', { hasText: 'Retiradas' });
-  await pickupsTab.click();
+  await openFulfillmentWorkspace(page, 'retiradas');
   const pickups = page.locator('#cashier-pickups-workspace');
   await expect(pickups).toBeVisible();
   await expect(pickups).toContainText('Bruno Delivery');
@@ -706,7 +775,7 @@ test('Pedidos, Cozinha e Entregas convergem entre três terminais sem refresh ma
     deliveriesPage.goto('/?view=caixa'),
   ]);
 
-  await ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Digitais' }).evaluate((element) => {
+  await ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Entregas' }).evaluate((element) => {
     (element as HTMLButtonElement).click();
   });
 
@@ -726,7 +795,7 @@ test('Pedidos, Cozinha e Entregas convergem entre três terminais sem refresh ma
   await expect(deliveries.getByRole('button', { name: 'Despachar pedido' })).toBeEnabled();
 
   await deliveries.getByRole('button', { name: 'Despachar pedido' }).click();
-  await ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Concluir' }).evaluate((element) => {
+  await ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Entregas' }).evaluate((element) => {
     (element as HTMLButtonElement).click();
   });
 
@@ -922,7 +991,7 @@ test('Pedidos e Retiradas convergem em tempo real para um pedido de retirada nor
   await pickups.getByRole('button', { name: 'Aceitar pedido' }).click();
   await expect(pickups).toContainText('Aceito · aguardando preparo');
 
-  const ordersBalcaoTab = ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Digitais' });
+  const ordersBalcaoTab = ordersPage.locator('.orders-mobile-stages__button').filter({ hasText: 'Retiradas' });
   await ordersBalcaoTab.waitFor({ state: 'attached' });
   await ordersBalcaoTab.evaluate((element) => { (element as HTMLButtonElement).click(); });
 
@@ -990,7 +1059,7 @@ test('sessão recupera estado atualizado de pedidos após reconexão de WebSocke
   await seedCashierSession(page, 'pedidos');
   await page.goto('/?view=caixa');
 
-  const balcaoTab = page.locator('.orders-mobile-stages__button').filter({ hasText: 'Digitais' });
+  const balcaoTab = page.locator('.orders-mobile-stages__button').filter({ hasText: 'Entregas' });
   await balcaoTab.waitFor({ state: 'attached' });
   await balcaoTab.evaluate((element) => { (element as HTMLButtonElement).click(); });
 
@@ -1004,7 +1073,7 @@ test('sessão recupera estado atualizado de pedidos após reconexão de WebSocke
   // Ao reconectar, o evento koma_orders_updated disparado na reconexão refaz a busca autoritativa
   await page.evaluate(() => window.dispatchEvent(new Event('koma_orders_updated')));
 
-  await showStage(page, 'Concluir');
+  await showStage(page, 'Entregas');
   const readyCard = page.locator('.orders-card--closing').filter({ hasText: 'Cliente Reconexao' });
   await expect(readyCard).toBeVisible();
   await expect(readyCard).toContainText(/Pronto para sair/i);
@@ -1028,7 +1097,7 @@ test('cancelar retirada pronta usa lifecycle canônico e remove o pedido sem cob
       reason: request.postDataJSON()?.reason });
   });
   await page.goto('/?view=caixa');
-  await showStage(page, 'Concluir');
+  await showStage(page, 'Retiradas');
   const card = page.locator('.orders-card--closing').filter({ hasText: 'Ana Retirada' });
   await expect(card).toBeVisible();
   await card.click();

@@ -1,5 +1,6 @@
+import { BoardLane, BoardSearch, BoardSync, FulfillmentTicket, matchesSearch } from './FulfillmentBoard';
 import { useIdleReconciliation } from '../realtime/useIdleReconciliation';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { localCalendarDate, parseBackendTimestamp } from '../../../utils/dateTime';
 import type { useCashierOrders } from './useCashierOrders';
@@ -28,7 +29,11 @@ type BoundaryProps = Pick<
   | 'handleAdvanceDigitalOrder'
   | 'openDeliveryOrderDetails'
 > & {
+  query: string;
+  setQuery: (value: string) => void;
   activeSubTab: string;
+  hasDeliverySnapshot?: boolean;
+  onRetry?: () => void;
   isWsConnected?: boolean;
   apiBaseUrl: string;
   authHeaders: Record<string, string>;
@@ -77,7 +82,7 @@ const completedTotal = (order: CompletedDeliveryApiOrder) => {
 
 /** Delivery workspace; state transitions remain owned by useCashierOrders/backend. */
 export function CashierCouriers({
-  activeSubTab,
+  query, setQuery, activeSubTab, hasDeliverySnapshot, onRetry,
   isWsConnected = false,
   deliveryOrders,
   deliveryOrdersLoadState,
@@ -112,6 +117,8 @@ export function CashierCouriers({
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
   const pendingIdsRef = useRef<Set<string>>(new Set());
   const [completedRecent, setCompletedRecent] = useState<CompletedDeliveryApiOrder[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyError, setHistoryError] = useState(false);
 
   const courierName = (motoboyId?: number | null) => {
@@ -126,7 +133,9 @@ export function CashierCouriers({
       });
       if (!response.ok) throw new Error('delivery-history');
       const payload = await response.json();
-      setCompletedRecent(Array.isArray(payload) ? payload : []);
+      if (!Array.isArray(payload)) throw new Error('invalid-history');
+      setCompletedRecent(payload);
+      setHistoryLoaded(true);
       setHistoryError(false);
     } catch {
       setHistoryError(true);
@@ -134,7 +143,7 @@ export function CashierCouriers({
   }, [apiBaseUrl, authHeaders]);
 
   useIdleReconciliation({
-    enabled: activeSubTab === 'entregadores',
+    enabled: historyOpen && activeSubTab === 'entregadores',
     isWsConnected,
     eventName: 'koma_orders_updated',
     refresh: refreshCompleted,
@@ -184,7 +193,7 @@ export function CashierCouriers({
           className="min-h-9 rounded-xl border border-koma-border bg-koma-card px-2 text-[10px] font-bold normal-case tracking-normal text-koma-foreground outline-none focus:border-emerald-500/60 disabled:opacity-60"
         >
           <option value="">
-            {motoboysLoadState === 'loaded' ? 'Selecionar entregador...' : 'Sincronizando entregadores...'}
+            {motoboysLoadState === 'error' ? 'Falha ao carregar entregadores' : motoboysLoadState === 'loaded' ? 'Selecionar entregador...' : 'Sincronizando entregadores...'}
           </option>
           {motoboys
             .filter((motoboy) => motoboy.ativo || String(motoboy.id) === selectedId)
@@ -198,284 +207,95 @@ export function CashierCouriers({
     );
   };
 
-  return (
-    <div className="space-y-4 text-left" id="cashier-deliveries-workspace">
-      <section className="rounded-3xl border border-koma-border bg-koma-card/60 p-4 sm:p-5">
-        <div className="flex flex-col gap-4 border-b border-koma-border pb-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <span className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-sky-500">Controle de entregas</span>
-            <h2 className="mt-1 font-serif text-base font-bold text-koma-foreground">Entregas próprias</h2>
-            <p className="mt-1 max-w-3xl text-[10px] leading-relaxed text-koma-muted">
-              Aceite, acompanhe, organize o entregador, despache, receba e conclua entregas sem trocar de tela.
-            </p>
-          </div>
-          <div className="grid min-w-0 grid-cols-3 gap-1.5 sm:gap-2">
-            <div className="min-w-0 rounded-xl border border-koma-border bg-koma-panel px-2 py-2 sm:px-3">
-              <strong className="block font-mono text-sm text-koma-foreground">{courierBuckets.preparing.length}</strong>
-              <span className="block break-words text-[7px] font-bold uppercase leading-tight text-koma-muted sm:text-[8px]">aguardando / preparo</span>
-            </div>
-            <div className="min-w-0 rounded-xl border border-emerald-500/25 bg-emerald-500/5 px-2 py-2 sm:px-3">
-              <strong className="block font-mono text-sm text-emerald-400">{courierBuckets.ready.length}</strong>
-              <span className="block text-[7px] font-bold uppercase leading-tight text-koma-muted sm:text-[8px]">prontas</span>
-            </div>
-            <div className="min-w-0 rounded-xl border border-sky-500/25 bg-sky-500/5 px-2 py-2 sm:px-3">
-              <strong className="block font-mono text-sm text-sky-400">{courierBuckets.inTransit.length}</strong>
-              <span className="block text-[7px] font-bold uppercase leading-tight text-koma-muted sm:text-[8px]">em rota</span>
-            </div>
-          </div>
-        </div>
-
-        {deliveryOrdersLoadState === 'loading' && deliveryOrders.length === 0 && (
-          <div className="mt-4 rounded-xl border border-koma-border bg-koma-panel px-3 py-2 text-[9px] text-koma-muted" role="status">
-            Sincronizando entregas…
-          </div>
-        )}
-        {deliveryOrdersLoadState === 'error' && (
-          <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-[9px] text-amber-400" role="status">
-            Não foi possível atualizar os pedidos agora. Mostrando o último estado conhecido.
-          </div>
-        )}
-      </section>
-
-      <div className="grid grid-cols-1 gap-4 2xl:grid-cols-3">
-        <section className="rounded-2xl border border-koma-border bg-koma-card/45 p-4">
-          <div className="mb-3">
-            <h3 className="text-xs font-extrabold text-koma-foreground">Aguardando e em preparo</h3>
-            <p className="mt-0.5 text-[9px] text-koma-muted">Aceite ou recuse novos pedidos; depois organize entregador e preparo.</p>
-          </div>
-          <div className="space-y-2">
-            {courierBuckets.preparing.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-koma-border py-9 text-center text-[10px] text-koma-muted">
-                Nenhuma entrega aguardando preparo.
-              </div>
-            ) : courierBuckets.preparing.map((order) => {
-              const awaitingAcceptance = order.status === 'analise' || order.status === 'pendente';
-              const pending = pendingIds.has(order.id);
-              return (
-                <article key={order.id} className="rounded-2xl border border-l-4 border-koma-border border-l-violet-500/70 bg-koma-panel/50 p-3.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <strong className="text-[11px] text-koma-foreground">Pedido {order.numeroPedido ? `#${order.numeroPedido}` : order.id}</strong>
-                    <span className="rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-extrabold uppercase text-amber-500">
-                      {awaitingAcceptance ? 'Aguardando aceite' : order.status === 'aceito' ? 'Aceito · aguardando preparo' : 'Em preparo'}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[10px] font-bold text-koma-secondary">{order.cliente}{order.telefone ? ` · ${order.telefone}` : ''}</p>
-                  <p className="mt-1 break-words text-[9px] text-koma-muted">{order.endereco || 'Endereço não informado'}</p>
-                  <p className="mt-1 truncate font-mono text-[9px] text-koma-muted">Itens: {order.itens}</p>
-                  <p className={`mt-2 text-[9px] font-bold ${order.pago ? 'text-emerald-500' : 'text-amber-500'}`}>
-                    {getDigitalOrderPaymentSummary(order)}
-                  </p>
-
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => openDeliveryOrderDetails(order)} className="rounded-xl border border-koma-border px-3 py-2 text-[9px] font-bold text-koma-secondary hover:bg-koma-card">
-                      Ver pedido
-                    </button>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => onRequestFulfillmentConversion(order)}
-                      className="rounded-xl border border-amber-500/30 px-3 py-2 text-[9px] font-extrabold text-amber-500 hover:bg-amber-500/10 disabled:opacity-50"
-                    >
-                      Alterar para retirada
-                    </button>
-                    {awaitingAcceptance ? (
-                      <>
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => void runOrderAction(order.id, () => handleAcceptPendingDeliveryOrder(order))}
-                          className="rounded-xl bg-emerald-600 px-3 py-2 text-[9px] font-extrabold text-white hover:bg-emerald-500 disabled:opacity-50"
-                        >
-                          {pending ? 'Aceitando…' : 'Aceitar pedido'}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={pending}
-                          onClick={() => handleRejectPendingDeliveryOrder(order)}
-                          className="rounded-xl border border-rose-500/35 px-3 py-2 text-[9px] font-extrabold text-rose-500 hover:bg-rose-500/10 disabled:opacity-50"
-                        >
-                          Recusar
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => void runOrderAction(order.id, () => handleAdvanceDigitalOrder(order))}
-                        className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-[9px] font-extrabold text-emerald-500 disabled:opacity-50"
-                      >
-                        {pending ? 'Atualizando…' : 'Marcar como pronto'}
-                      </button>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-emerald-500/20 bg-koma-card/45 p-4">
-          <div className="mb-3">
-            <h3 className="text-xs font-extrabold text-koma-foreground">Prontos para sair</h3>
-            <p className="mt-0.5 text-[9px] text-koma-muted">Confirme o entregador e a saída. O pedido só entra em rota depois desta ação.</p>
-          </div>
-          <div className="space-y-2">
-            {courierBuckets.ready.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-koma-border py-9 text-center text-[10px] text-koma-muted">
-                Nenhuma entrega pronta aguardando saída.
-              </div>
-            ) : courierBuckets.ready.map((order) => {
-              const motoboyId = selectedMotoboys[order.id] || (order.motoboyId ? String(order.motoboyId) : '');
-              const pending = pendingIds.has(order.id);
-              return (
-                <article key={order.id} className="rounded-2xl border border-l-4 border-emerald-500/25 border-l-violet-500/70 bg-koma-panel p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <strong className="text-[11px] text-koma-foreground">Pedido {order.numeroPedido ? `#${order.numeroPedido}` : order.id}</strong>
-                    <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[8px] font-extrabold uppercase text-emerald-500">Pronto</span>
-                  </div>
-                  <p className="mt-1 text-[10px] font-bold text-koma-secondary">{order.cliente}{order.telefone ? ` · ${order.telefone}` : ''}</p>
-                  <p className="mt-1 break-words text-[9px] text-koma-muted">{order.endereco || 'Endereço não informado'}</p>
-                  <p className="mt-1 truncate font-mono text-[9px] text-koma-muted">Itens: {order.itens}</p>
-                  <p className={`mt-2 text-[9px] font-bold ${order.pago ? 'text-emerald-500' : 'text-amber-500'}`}>
-                    {getDigitalOrderPaymentSummary(order)}
-                  </p>
-
-                  <div className="mt-3">{renderCourierSelect(order, 'Entregador')}</div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => openDeliveryOrderDetails(order)} className="rounded-xl border border-koma-border px-3 py-2 text-[9px] font-bold text-koma-secondary hover:bg-koma-card">
-                      Ver pedido
-                    </button>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => onRequestFulfillmentConversion(order)}
-                      className="rounded-xl border border-amber-500/30 px-3 py-2 text-[9px] font-extrabold text-amber-500 hover:bg-amber-500/10 disabled:opacity-50"
-                    >
-                      Alterar para retirada
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!motoboyId || motoboysLoadState !== 'loaded' || pending}
-                      onClick={() => void runOrderAction(order.id, () => handleDespacharKanban(order.id, motoboyId))}
-                      className="rounded-xl bg-emerald-600 px-3 py-2 text-[9px] font-extrabold text-white hover:bg-emerald-500 disabled:opacity-50"
-                    >
-                      {pending ? 'Despachando…' : 'Despachar pedido'}
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-sky-500/20 bg-koma-card/45 p-4">
-          <div className="mb-3">
-            <h3 className="text-xs font-extrabold text-koma-foreground">Em rota</h3>
-            <p className="mt-0.5 text-[9px] text-koma-muted">Confira cobrança e conclua quando o entregador confirmar a entrega.</p>
-          </div>
-          <div className="space-y-2">
-            {courierBuckets.inTransit.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-koma-border py-9 text-center text-[10px] text-koma-muted">
-                Nenhum pedido em rota no momento.
-              </div>
-            ) : courierBuckets.inTransit.map((order) => {
-              const pending = pendingIds.has(order.id);
-              return (
-                <article key={order.id} className="rounded-2xl border border-sky-500/20 bg-koma-panel/45 p-4">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <strong className="text-[11px] text-koma-foreground">Pedido {order.numeroPedido ? `#${order.numeroPedido}` : order.id}</strong>
-                    <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[8px] font-extrabold uppercase text-sky-500">Em rota</span>
-                  </div>
-                  <p className="mt-1 text-[10px] font-bold text-koma-secondary">{order.cliente}{order.telefone ? ` · ${order.telefone}` : ''}</p>
-                  <p className="mt-1 break-words text-[9px] text-koma-muted">{order.endereco || 'Endereço não informado'}</p>
-                  <p className="mt-1 text-[9px] font-bold text-sky-500">
-                    Entregador: {courierName(order.motoboyId) || (order.motoboyId ? `#${order.motoboyId}` : 'não identificado')}
-                  </p>
-                  <p className={`mt-2 text-[9px] font-bold ${order.pago ? 'text-emerald-500' : 'text-amber-500'}`}>
-                    {getDigitalOrderPaymentSummary(order)}
-                  </p>
-
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => openDeliveryOrderDetails(order)} className="rounded-xl border border-koma-border px-3 py-2 text-[9px] font-bold text-koma-secondary hover:bg-koma-card">
-                      Ver pedido
-                    </button>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => onRequestCourierReassignment(order)}
-                      className="rounded-xl border border-amber-500/30 px-3 py-2 text-[9px] font-extrabold text-amber-500 hover:bg-amber-500/10 disabled:opacity-50"
-                    >
-                      Trocar entregador
-                    </button>
-                    <button
-                      type="button"
-                      disabled={pending}
-                      onClick={() => void runOrderAction(order.id, () => handleFinalizarPedido(order.id))}
-                      className="rounded-xl bg-sky-600 px-3 py-2 text-[9px] font-extrabold text-white hover:bg-sky-500 disabled:opacity-50"
-                    >
-                      {pending
-                        ? order.pago ? 'Concluindo…' : 'Abrindo recebimento…'
-                        : order.pago ? 'Marcar entregue' : 'Receber e marcar entregue'}
-                    </button>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-      </div>
-
-      <section className="rounded-2xl border border-koma-border bg-koma-card/45 p-4">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-xs font-extrabold text-koma-foreground">Entregas concluídas hoje</h3>
-            <p className="mt-0.5 text-[9px] text-koma-muted">Consulta rápida das entregas já encerradas neste dia local.</p>
-          </div>
-          <span className="rounded-full bg-koma-panel px-2 py-1 font-mono text-[9px] font-bold text-koma-muted">{completedToday.length}</span>
-        </div>
-
+  const snapshot = hasDeliverySnapshot ?? (deliveryOrdersLoadState === 'loaded' || deliveryOrders.length > 0);
+  const visible = (orders: DeliveryOrderView[]) => orders.filter(order => matchesSearch(query, [
+    order.numeroPedido, order.id, order.cliente, order.telefone, order.itens, order.endereco, courierName(order.motoboyId),
+  ]));
+  const stages = [
+    { title: 'Aguardando e em preparo', kind: 'digital', rows: courierBuckets.preparing, empty: 'Nenhuma entrega aguardando preparo.' },
+    { title: 'Prontos para sair', kind: 'closing', rows: courierBuckets.ready, empty: 'Nenhuma entrega aguardando saída.' },
+    { title: 'Em rota', kind: 'salon', rows: courierBuckets.inTransit, empty: 'Nenhum pedido em rota.' },
+  ] as const;
+  const renderTicket = (order: DeliveryOrderView) => {
+    const pending = pendingIds.has(order.id);
+    const acceptance = order.status === 'analise' || order.status === 'pendente';
+    const transit = order.status === 'transito';
+    const delivered = order.status === 'finalizado';
+    const ready = order.status === 'pronto';
+    const motoboyId = selectedMotoboys[order.id] || (order.motoboyId ? String(order.motoboyId) : '');
+    const status = delivered ? 'Entregue · falta receber' : transit ? 'Em rota' : ready ? 'Pronto' : acceptance ? 'Aguardando aceite' : order.status === 'aceito' ? 'Aceito · aguardando preparo' : 'Em preparo';
+    return <FulfillmentTicket key={order.id} order={order} status={status} customer={order.cliente} payment={getDigitalOrderPaymentSummary(order)}
+      meta={(transit || delivered) && <p>Entregador: {courierName(order.motoboyId) || (order.motoboyId ? `#${order.motoboyId}` : 'não identificado')}</p>}>
+      {ready && renderCourierSelect(order, 'Entregador')}
+      <button onClick={() => openDeliveryOrderDetails(order)}>Ver pedido</button>
+      {!transit && !delivered && <button disabled={pending} onClick={() => onRequestFulfillmentConversion(order)}>Alterar para retirada</button>}
+      {transit && <button disabled={pending} onClick={() => onRequestCourierReassignment(order)}>Trocar entregador</button>}
+      {acceptance && <button disabled={pending} onClick={() => handleRejectPendingDeliveryOrder(order)}>Recusar</button>}
+      {transit || delivered ? <button className="primary" disabled={pending} onClick={() => void runOrderAction(order.id, () => handleFinalizarPedido(order.id))}>{delivered ? 'Receber saldo' : order.pago ? 'Marcar entregue' : 'Receber e marcar entregue'}</button>
+       : ready ? <button className="primary" disabled={pending || !motoboyId || motoboysLoadState !== 'loaded'} onClick={() => void runOrderAction(order.id, () => handleDespacharKanban(order.id, motoboyId))}>Despachar pedido</button>
+       : <button className="primary" disabled={pending} onClick={() => void runOrderAction(order.id, () => acceptance ? handleAcceptPendingDeliveryOrder(order) : handleAdvanceDigitalOrder(order))}>{acceptance ? 'Aceitar pedido' : 'Marcar como pronto'}</button>}
+    </FulfillmentTicket>;
+  };
+  const completedVisible = completedToday.filter(order => matchesSearch(query, [
+    order.identificador, order.numero_pedido, order.id, order.delivery_endereco, order.delivery_telefone,
+    courierName(order.motoboy_id), ...(order.itens || []).map(item => item.produto?.nome || item.nome),
+  ]));
+  const balances = visible(courierBuckets.awaitingPayment);
+  return <div className="fulfillment-board" id="cashier-deliveries-workspace">
+    <BoardSearch title="Entregas próprias" query={query} onChange={setQuery} placeholder="Buscar pedido, cliente, endereço ou entregador" />
+    <BoardSync snapshot={snapshot} state={deliveryOrdersLoadState} label="entregas" retry={onRetry} />
+    {snapshot && <>
+      <div className="fulfillment-lanes">{stages.map(stage => {
+        const rows = visible(stage.rows);
+        return <BoardLane key={stage.title} title={stage.title} kind={stage.kind} count={rows.length} empty={query ? 'Nenhum resultado nesta etapa.' : stage.empty}>{rows.map(renderTicket)}</BoardLane>;
+      })}</div>
+      {balances.length > 0 && <BoardLane title="Entregues a receber" kind="closing" count={balances.length} empty="">{balances.map(renderTicket)}</BoardLane>}
+    </>}
+    <details className="fulfillment-history" onToggle={event => setHistoryOpen(event.currentTarget.open)}>
+      <summary>Entregas concluídas hoje {historyOpen && historyLoaded && ` · ${completedVisible.length}`}</summary>
+      {!historyLoaded && !historyError && <p role="status">Buscando histórico…</p>}
         {historyError && (
-          <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[9px] text-amber-400">
+          <div className="mb-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-sm text-amber-400">
             Não foi possível atualizar o histórico agora. As entregas ativas continuam disponíveis normalmente.
           </div>
         )}
 
-        {completedToday.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-koma-border py-9 text-center text-[10px] text-koma-muted">
+        {historyLoaded && completedVisible.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-koma-border py-9 text-center text-sm text-koma-muted">
             Nenhuma entrega concluída hoje.
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
-            {completedToday.map((order) => (
+            {completedVisible.map((order) => (
               <article key={order.id} className="rounded-xl border border-koma-border bg-koma-panel/45 p-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <strong className="text-[11px] text-koma-foreground">Pedido {order.numero_pedido ? `#${order.numero_pedido}` : order.id}</strong>
-                    <p className="mt-1 text-[10px] font-bold text-koma-secondary">
+                    <strong className="text-sm text-koma-foreground">Pedido {order.numero_pedido ? `#${order.numero_pedido}` : order.id}</strong>
+                    <p className="mt-1 text-sm font-bold text-koma-secondary">
                       {order.identificador || 'Cliente sem nome'}{order.delivery_telefone ? ` · ${order.delivery_telefone}` : ''}
                     </p>
-                    <p className="mt-1 truncate text-[9px] text-koma-muted">{order.delivery_endereco || 'Endereço não informado'}</p>
+                    <p className="mt-1 truncate text-sm text-koma-muted">{order.delivery_endereco || 'Endereço não informado'}</p>
                     {order.motoboy_id && (
-                      <p className="mt-1 text-[9px] text-koma-muted">Entregador: {courierName(order.motoboy_id) || `#${order.motoboy_id}`}</p>
+                      <p className="mt-1 text-sm text-koma-muted">Entregador: {courierName(order.motoboy_id) || `#${order.motoboy_id}`}</p>
                     )}
                   </div>
                   <div className="shrink-0 text-right">
-                    <span className="block text-[8px] font-extrabold uppercase text-emerald-500">Entregue</span>
-                    <span className="mt-1 block font-mono text-[10px] text-koma-muted">{clock(order.fechado_em)}</span>
-                    <span className="mt-1 block text-[10px] font-bold text-koma-foreground">{money(completedTotal(order))}</span>
+                    <span className="block text-sm font-extrabold uppercase text-emerald-500">Entregue</span>
+                    <span className="mt-1 block font-mono text-sm text-koma-muted">{clock(order.fechado_em)}</span>
+                    <span className="mt-1 block text-sm font-bold text-koma-foreground">{money(completedTotal(order))}</span>
                   </div>
                 </div>
               </article>
             ))}
           </div>
         )}
-      </section>
+    </details>
 
       <details className="rounded-2xl border border-koma-border bg-koma-card/40 p-4">
-        <summary className="cursor-pointer text-[10px] font-extrabold uppercase tracking-wider text-koma-secondary">
+        <summary className="cursor-pointer text-sm font-extrabold uppercase tracking-wider text-koma-secondary">
           Gerenciar entregadores
         </summary>
-        <p className="mt-2 text-[9px] text-koma-muted">
+        <p className="mt-2 text-sm text-koma-muted">
           {hasCourierApp
             ? 'Cadastro e acesso ao App do Entregador ficam aqui como manutenção secundária; a atribuição diária permanece nos pedidos.'
             : 'Cadastre os entregadores da operação; atribuição e despacho continuam disponíveis sem o App do Entregador.'}
@@ -493,10 +313,10 @@ export function CashierCouriers({
               <div key={motoboy.id} className="flex items-center justify-between gap-2 rounded-xl border border-koma-border bg-koma-panel p-3">
                 <div className="min-w-0 text-xs">
                   <strong className="block truncate text-koma-foreground">{motoboy.nome}</strong>
-                  <span className="block font-mono text-[10px] text-koma-muted">{motoboy.telefone}</span>
+                  <span className="block font-mono text-sm text-koma-muted">{motoboy.telefone}</span>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <span className={`rounded px-1.5 py-0.5 text-[8px] font-bold uppercase ${motoboy.ativo ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                  <span className={`rounded px-1.5 py-0.5 text-sm font-bold uppercase ${motoboy.ativo ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
                     {motoboy.ativo ? 'Ativo' : 'Inativo'}
                   </span>
                   {hasCourierApp && motoboy.ativo && (
@@ -504,7 +324,7 @@ export function CashierCouriers({
                       <button
                         type="button"
                         onClick={() => handleGerarLinkMotoboy?.(String(motoboy.id))}
-                        className="rounded-lg border border-emerald-500/30 px-2 py-1 text-[8px] font-bold uppercase text-emerald-500 hover:bg-emerald-500/10"
+                        className="rounded-lg border border-emerald-500/30 px-2 py-1 text-sm font-bold uppercase text-emerald-500 hover:bg-emerald-500/10"
                         title="Copiar link de acesso ao PWA do entregador"
                       >
                         Copiar link
@@ -512,7 +332,7 @@ export function CashierCouriers({
                       <button
                         type="button"
                         onClick={() => handleRevogarAcessoMotoboy(String(motoboy.id))}
-                        className="rounded-lg border border-rose-500/30 px-2 py-1 text-[8px] font-bold uppercase text-rose-500 hover:bg-rose-500/10"
+                        className="rounded-lg border border-rose-500/30 px-2 py-1 text-sm font-bold uppercase text-rose-500 hover:bg-rose-500/10"
                       >
                         Revogar acesso
                       </button>
@@ -524,7 +344,7 @@ export function CashierCouriers({
           </div>
 
           <form onSubmit={(event) => handleAddMotoboy(event, novoMotoboyNome, novoMotoboyTelefone)} className="space-y-3">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-500">Novo entregador</span>
+            <span className="text-sm font-bold uppercase tracking-wider text-emerald-500">Novo entregador</span>
             <input
               type="text"
               required
@@ -541,12 +361,11 @@ export function CashierCouriers({
               onChange={(event) => setNewMotoboyTelefone(event.target.value)}
               className="w-full rounded-xl border border-koma-border bg-koma-page px-3 py-2 font-mono text-xs text-koma-foreground outline-none focus:border-emerald-500"
             />
-            <button type="submit" disabled={motoboysLoadState !== 'loaded'} className="w-full rounded-xl bg-emerald-600 py-2 text-[10px] font-bold uppercase tracking-wider text-white hover:bg-emerald-500 disabled:opacity-50">
+            <button type="submit" disabled={motoboysLoadState !== 'loaded'} className="w-full rounded-xl bg-emerald-600 py-2 text-sm font-bold uppercase tracking-wider text-white hover:bg-emerald-500 disabled:opacity-50">
               Adicionar entregador
             </button>
           </form>
         </div>
       </details>
-    </div>
-  );
+    </div>;
 }

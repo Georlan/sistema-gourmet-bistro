@@ -16,8 +16,8 @@ for (const type of ['Retirada', 'Delivery']) {
     await page.route('**/comandas/compact-check/imprimir-recibo', route => { prints++; return route.fulfill({ json: { ok: true } }); });
     await page.goto('/?view=caixa');
     await expect(page.locator('.orders-board')).toBeVisible();
-    const stages = page.getByRole('tablist', { name: 'Etapa dos pedidos' });
-    if (await stages.isVisible()) await stages.getByRole('tab', { name: /Digitais/ }).click();
+    const stages = page.getByRole('tablist', { name: 'Filas de atendimento' });
+    if (await stages.isVisible()) await stages.getByRole('tab', { name: type === 'Delivery' ? /Entregas/ : /Retiradas/ }).click();
     await page.locator('.orders-card--digital').filter({ hasText: 'Cliente compacto' }).click();
     const modal = page.locator('.orders-detail-modal');
     await expect(modal.locator('.orders-detail-modal__items')).not.toBeVisible();
@@ -36,7 +36,7 @@ for (const type of ['Retirada', 'Delivery']) {
 for (const width of [320, 390, 834, 1366]) {
   test(`table actions fit ${width}px and choose a destination with the keyboard`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
-    const state = await openOperationalScenario(page, { tableCount: 50 }); await showStage(page, 'Salão');
+    const state = await openOperationalScenario(page, { tableCount: 50 }); await showStage(page, 'Mesas');
     await page.locator('.orders-card--salon').first().click();
     const modal = page.locator('.orders-detail-modal');
     await expect(modal.getByRole('button', { name: 'Reimprimir Total' })).toBeVisible();

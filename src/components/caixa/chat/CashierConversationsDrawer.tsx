@@ -255,6 +255,7 @@ export function CashierConversationsDrawer({
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [showArchive, setShowArchive] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [listError, setListError] = useState('');
   const replyInputRef = useRef<HTMLTextAreaElement>(null);
@@ -285,9 +286,10 @@ export function CashierConversationsDrawer({
     pruneCashierDrafts(draftScope);
   }, [draftScope]);
 
-  const activeCount = conversations.filter((conversation) => !isTerminalConversation(conversation)).length;
+  const activeCount = conversations.filter((conversation) => !isArchivedConversation(conversation)).length;
 
   const sortedConversations = useMemo(() => conversations
+    .filter(conversation => isArchivedConversation(conversation) === showArchive)
     .filter((conversation) => matchesConversationSearch(conversation, searchQuery))
     .sort((a, b) => {
       const unreadPriority = Number(b.unread_count > 0) - Number(a.unread_count > 0);
@@ -295,7 +297,7 @@ export function CashierConversationsDrawer({
       const waitingPriority = Number(isWaitingForStaff(b)) - Number(isWaitingForStaff(a));
       if (waitingPriority !== 0) return waitingPriority;
       return conversationTimestamp(b) - conversationTimestamp(a);
-    }), [conversations, searchQuery]);
+    }), [conversations, searchQuery, showArchive]);
 
   const selectedConv = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedId) || null,
@@ -449,6 +451,7 @@ export function CashierConversationsDrawer({
         const parsed = await response.json() as Partial<CaixaFeedPage>;
         if (Array.isArray(parsed.items)) page = parsed as CaixaFeedPage;
       }
+      if (!response.ok && response.status !== 404 && response.status !== 405) throw new Error('Falha ao carregar conversa.');
       if (!response.ok || !page) {
         response = await fetch(`${API_BASE_URL}/api/caixa/conversas/${conversationId}/messages`, {
           headers: { Authorization: authorization }, cache: 'no-store', signal: controller.signal,
@@ -539,10 +542,10 @@ export function CashierConversationsDrawer({
   }, [draftScope, replyText, selectedId]);
 
   useEffect(() => {
-    if (isOpen && !selectedId && sortedConversations.length > 0 && window.innerWidth >= 640) {
+    if (isOpen && !showArchive && !selectedId && sortedConversations.length > 0 && window.innerWidth >= 640) {
       openConversation(sortedConversations[0].id);
     }
-  }, [isOpen, openConversation, selectedId, sortedConversations]);
+  }, [isOpen, openConversation, selectedId, sortedConversations, showArchive]);
 
   const appendRealtimeMessage = useCallback((data: Record<string, unknown> | null) => {
     const eventConversationId = typeof data?.conversation_id === 'string' ? data.conversation_id : null;
@@ -782,8 +785,8 @@ export function CashierConversationsDrawer({
           >
             <div className="shrink-0 border-b border-koma-border bg-koma-panel px-3 py-2 backdrop-blur space-y-2">
               <div className="flex items-center justify-between rounded-xl border border-koma-border bg-koma-panel px-3 py-2 text-[10px] font-bold text-koma-secondary">
-                <span>Pedidos ativos</span>
-                <span className="text-emerald-300">{activeCount}</span>
+                <button type="button" aria-pressed={!showArchive} onClick={() => setShowArchive(false)} className="cashier-pdv-payment-option">Pedidos ativos · {activeCount}</button>
+                <button type="button" aria-pressed={showArchive} onClick={() => setShowArchive(true)} className="cashier-pdv-payment-option">Arquivadas · {conversations.length - activeCount}</button>
               </div>
               <input
                 type="search"
@@ -801,8 +804,8 @@ export function CashierConversationsDrawer({
             >
               {sortedConversations.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center p-6 text-center text-koma-muted text-xs">
-                  <MessageSquare size={32} className="opacity-20 mb-3" />
-                  <p>{loadingList ? 'Carregando conversas…' : listError ? 'A fila não pôde ser atualizada.' : searchQuery ? 'Nenhuma conversa encontrada.' : 'Nenhuma conversa ativa no momento.'}</p>
+                  <img src="/brand/cashier/chat-pair-v1.svg" alt="" width="80" height="60" className="mb-3" />
+                  <p>{loadingList ? 'Carregando conversas…' : listError ? 'A fila não pôde ser atualizada.' : searchQuery ? 'Nenhuma conversa encontrada.' : showArchive ? 'Nenhuma conversa arquivada.' : 'Nenhuma conversa ativa no momento.'}</p>
                 </div>
               ) : (
                 <div className="divide-y divide-zinc-800/70">

@@ -115,6 +115,7 @@ export function mapBackendComandaToOperationalOrder({
     ),
     deliveryAddress: comanda.delivery_endereco || null,
     paymentMethod: comanda.delivery_forma_pagamento || null,
+    onlinePaymentStatus: comanda.online_payment_status || null,
     changeFor: comanda.delivery_troco_para == null ? null : Number(comanda.delivery_troco_para),
     motoboyId: comanda.motoboy_id ?? null,
     mesaOrigemId: comanda.mesa_origem_id || null,

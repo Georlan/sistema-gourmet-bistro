@@ -1,3 +1,4 @@
+import './caixa/orders/fulfillmentBoard.css';
 import { useCashierNotice } from './caixa/navigation/useCashierNotice';
 import { StaffPushNotifications } from './caixa/realtime/StaffPushNotifications';
 import { DirectPixPendingPanel } from './caixa/orders/DirectPixPendingPanel';
@@ -14,6 +15,7 @@ import {
 } from '../config/subscriptionPlans';
 import {
   formatCashierOldestAge as formatOldestAge,
+  getCashierHumanOrderNumber,
   getCashierTableOrderPresentation,
   getCashierOrderSlaData as getOrderSlaData,
   projectCashierDeliveryState,
@@ -41,6 +43,7 @@ import { CashierDesktopSidebar } from './caixa/navigation/CashierDesktopSidebar'
 import { CashierMobileBottomBar } from './caixa/navigation/CashierMobileBottomBar';
 import { CashierMobileSidebar } from './caixa/navigation/CashierMobileSidebar';
 import { CashierOperatorDrawer } from './caixa/navigation/CashierOperatorDrawer';
+import { bucketCourierDeliveryOrders } from './caixa/orders/deliveryOrderProjection';
 import { CashierSubNavigation } from './caixa/navigation/CashierSubNavigation';
 import { shouldShowSalon } from '../domain/cashierSalonVisibility';
 import { useCashierNavigation } from './caixa/navigation/useCashierNavigation';
@@ -315,6 +318,7 @@ export function CaixaPanel({
     isDrawerOpen,
     setIsDrawerOpen,
     handleQuickPrintOrder,
+    applyConfirmedPdvOrder,
     fetchDeliveryOrders,
     fetchMotoboys,
     openDeliveryOrderDetails,
@@ -398,6 +402,7 @@ export function CaixaPanel({
   });
   const { loyaltyUsers, customersStatus, hasCustomerSnapshot, refreshLoyaltyUsers, totalCustomers, hasMoreCustomers, loadingMoreCustomers, loadMoreCustomers } = customers;
 
+  const [orderLaneFilter, setOrderLaneFilter] = useState<'salon' | 'digital' | 'delivery' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const {
@@ -550,7 +555,7 @@ export function CaixaPanel({
     onRefreshOrders,
     onOptimisticAddOrder,
     activeWaiterNome,
-    fetchDeliveryOrders,
+    applyConfirmedPdvOrder,
     apiCategorias,
     dynamicMenu,
     pdvTableOptions,
@@ -576,7 +581,7 @@ export function CaixaPanel({
   ), [orders]);
   const matchesSearchQuery = useCallback((card: any, query: string) => {
     if (!query || !query.trim()) return true;
-    const q = query.toLowerCase().trim();
+    const q = query.toLowerCase().trim().replace(/^#/, '').replace(/^mesa\s*0*(\d+)$/, 'mesa $1');
 
     const cliente = (
       card.cliente ||
@@ -608,6 +613,7 @@ export function CaixaPanel({
 
     const garcom = (card.garcomNome || card.garcom || '').toLowerCase();
     const numeroPedido = String(card.numeroPedido || card.numero_pedido || card.id || '');
+    const numeroExibido = getCashierHumanOrderNumber(card).toLowerCase();
 
     return (
       cliente.includes(q) ||
@@ -618,6 +624,7 @@ export function CaixaPanel({
       telefone.includes(q) ||
       itensStr.includes(q) ||
       garcom.includes(q) ||
+      numeroExibido.includes(q) ||
       numeroPedido.includes(q)
     );
   }, []);
@@ -643,7 +650,7 @@ export function CaixaPanel({
   }, [deliveryOrders, searchQuery, matchesSearchQuery]);
 
   // CaixaOrdersWorkspace sorts its columns. Stable references avoid repeating
-  // the four sorts and arrival-stage comparisons on every unrelated parent
+  // lane sorting and arrival-stage comparisons on every unrelated parent
   // render (clock, theme, header and operator drawer updates).
   const cashierOrderColumns = useMemo(() => ({
     tableProduction: filteredCol1.map(buildCashierTableCard),
@@ -750,7 +757,12 @@ export function CaixaPanel({
     ? salonTableCards.find(card => card.table.id === Number(selectedKanbanOrder.mesaId) && !card.isMerged)
     : undefined;
 
-  const hasLocalServiceWork = tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0;
+  const deliveriesWithoutCourier = useMemo(
+    () => bucketCourierDeliveryOrders(deliveryOrders).ready.filter(order => !order.motoboyId),
+    [deliveryOrders],
+  );
+  const hasLocalServiceWork = tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0
+    || deliveryOrders.some(order => order.modalidade === 'dine_in');
   const hasLocalPendingPayment = pagamentosPendentes.some(payment => orders.some(order =>
     order.id === payment.comanda_id && Number(order.mesaId) > 0,
   ));
@@ -947,6 +959,12 @@ export function CaixaPanel({
               <CaixaOrdersWorkspace
                 pixConferenceTrigger={<DirectPixPendingPanel apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onRefreshOrders={onRefreshOrders} />}
                 hasLocalServiceWork={hasLocalServiceWork}
+                queueNotices={deliveriesWithoutCourier.length > 0 && (
+                  <button type="button" className="orders-queue-notice"
+                    onClick={() => openDeliveryOrderDetails(deliveriesWithoutCourier[0])}>
+                    {deliveriesWithoutCourier.length} sem entregador
+                  </button>
+                )}
                 columns={cashierOrderColumns}
                 pendingCashPayments={pagamentosPendentes.map((pag) => {
                   const comandaMesa = orders.find((order) => order.id === pag.comanda_id);
@@ -965,6 +983,8 @@ export function CaixaPanel({
                 navigation={{
                   stage: mobileOrdersStage,
                   onStageChange: setMobileOrdersStage,
+                  filter: orderLaneFilter,
+                  onFilterChange: setOrderLaneFilter,
                   expandedCardIds,
                   onToggleCard: toggleCardExpansion,
                 }}
@@ -1026,10 +1046,13 @@ export function CaixaPanel({
             <CashierKitchen mode={hasDedicatedKds ? 'kds' : 'queue'} activeSubTab={activeTab === 'operacao' ? activeSubTab : ''} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} handleConfirmTicketReady={handleConfirmTicketReady} onRefreshOrders={onRefreshOrders} />
 
             <CashierPickups
+              query={searchQuery} setQuery={setSearchQuery}
               isWsConnected={isWsConnected}
               activeSubTab={activeTab === 'operacao' ? activeSubTab : ''}
               deliveryOrders={deliveryOrders}
               deliveryOrdersLoadState={deliveryOrdersLoadState}
+              hasDeliverySnapshot={hasDeliverySnapshot}
+              onRetry={fetchDeliveryOrders}
               apiBaseUrl={apiBaseUrl}
               authHeaders={authHeaders}
               now={nowTimestamp}
@@ -1230,10 +1253,13 @@ export function CaixaPanel({
             )}
 
             <CashierCouriers
+              query={searchQuery} setQuery={setSearchQuery}
               isWsConnected={isWsConnected}
-              activeSubTab={activeSubTab}
+              activeSubTab={activeTab === 'operacao' ? activeSubTab : ''}
               deliveryOrders={deliveryOrders}
               deliveryOrdersLoadState={deliveryOrdersLoadState}
+              hasDeliverySnapshot={hasDeliverySnapshot}
+              onRetry={fetchDeliveryOrders}
               selectedMotoboys={selectedMotoboys}
               setSelectedMotoboys={setSelectedMotoboys}
               motoboys={motoboys}

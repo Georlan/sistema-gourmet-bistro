@@ -456,6 +456,13 @@ export function useCashierOrders({
     applySelectedMotoboysState(next);
   };
 
+  const applyConfirmedPdvOrder = (comanda: unknown) => {
+    const confirmed = projectApiComandaToDeliveryView(comanda);
+    if (!confirmed) return;
+    ++deliveryOrdersRequestRef.current;
+    setDeliveryOrders(current => [confirmed, ...current.filter(order => String(order.id) !== String(confirmed.id))]);
+  };
+
   const readDeliveryOrders = async () => {
     const requestId = ++deliveryOrdersRequestRef.current;
     setDeliveryOrdersLoadState((current) => current === 'loaded' ? current : 'loading');
@@ -1373,6 +1380,7 @@ export function useCashierOrders({
   };
 
   return {
+    applyConfirmedPdvOrder,
     selectedKanbanOrder,
     saveItemObservation,
     setSelectedKanbanOrder,

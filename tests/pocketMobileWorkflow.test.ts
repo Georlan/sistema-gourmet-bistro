@@ -226,8 +226,10 @@ test('mobile menu avoids duplicated owner shortcuts and keeps the compact touch-
 test('mobile order stage names match the columns they actually project', () => {
   const ordersWorkspace = readFileSync(new URL('../src/components/caixa/orders/CaixaOrdersWorkspace.tsx', import.meta.url), 'utf8');
 
-  assert.match(ordersWorkspace, /id: 'digital' as const, label: withoutSalon \? 'Preparo' : 'Digitais'/);
-  assert.doesNotMatch(ordersWorkspace, /id: 'digital' as const, label: 'Balcão'/);
+  assert.match(ordersWorkspace, /id: 'digital', title: 'Retiradas'/);
+  assert.match(ordersWorkspace, /id: 'delivery', title: 'Entregas'/);
+  assert.match(ordersWorkspace, /channelLanes.map\(lane => \(\{ id: lane.id, label: lane.title/);
+
 });
 
 test('mobile orders prioritize actionable controls above the fold', () => {

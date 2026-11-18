@@ -1,4 +1,4 @@
-name: Koma SmartPOS Android Bridge
+name: Koma SmartPOS Android
 
 on:
   # SmartPOS changes are validated before merge; main deploy must not wait for an Android rebuild.
@@ -27,10 +27,10 @@ jobs:
           gradle-version: '9.5.0'
       - name: Install Android SDK platform
         run: '${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0"'
-      - name: Test bridge core and build debug APK
-        run: gradle -p smartpos-android test :app:assembleDebug --no-daemon
+      - name: Test bridge and waiter app, then build debug APK
+        run: gradle -p smartpos-android test :app:testDebugUnitTest :app:assembleDebug --no-daemon
       - uses: actions/upload-artifact@v6
         with:
-          name: koma-smartpos-dev-apk
+          name: koma-garcom-smartpos-apk
           path: smartpos-android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
