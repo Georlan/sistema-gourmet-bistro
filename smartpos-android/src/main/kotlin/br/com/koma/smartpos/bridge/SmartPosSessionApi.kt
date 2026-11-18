@@ -1,6 +1,7 @@
 package br.com.koma.smartpos.bridge
 
 import java.math.BigDecimal
+import java.math.BigInteger
 import java.net.URLEncoder
 import java.security.MessageDigest
 
@@ -150,5 +151,13 @@ object StableOperationKey {
         val digest = MessageDigest.getInstance("SHA-256").digest(material)
         val hex = digest.joinToString("") { "%02x".format(it) }
         return "smartpos-${hex.take(48)}"
+    }
+
+    /**
+     * PlugPagPaymentData.userReference limits references to at most 10 alphanumeric ASCII characters.
+     */
+    fun userReference10(operationKey: String): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(operationKey.toByteArray(Charsets.UTF_8))
+        return BigInteger(1, digest).toString(36).uppercase().padStart(10, '0').take(10)
     }
 }
