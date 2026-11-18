@@ -47,28 +47,98 @@
 .orders-workspace .orders-cash-pending__reject:hover { background: var(--koma-surface-raised); }
 .orders-detail-modal .orders-detail-modal__item-status::before { background: #a6cddf; }
 
-.cashier-shell .orders-queue-notice {
+/* Atendimento filters and search share the Pedidos toolbar. */
+.orders-workspace .orders-queue-notice {
   color: var(--koma-accent-text);
-  border-inline-start: 1px solid var(--koma-border-strong);
-  padding: .3rem .55rem;
+  padding: .3rem .45rem;
+  font-size: .75rem;
   font-weight: 650;
   white-space: nowrap;
 }
-@media (min-width: 768px) {
+.orders-workspace .orders-search { flex: 1 1 12rem; max-width: 22rem; }
+.orders-lane-filters { gap: .2rem; }
+.orders-desktop-filters { display: flex; flex-wrap: wrap; }
+.orders-desktop-filters button {
+  border: 1px solid var(--koma-border-strong);
+  border-radius: .55rem;
+  padding: .3rem .6rem;
+  min-height: 36px;
+  color: var(--koma-text-secondary);
+  white-space: nowrap;
+}
+.orders-desktop-filters button[aria-pressed="true"] {
+  color: var(--koma-accent-text);
+  background: var(--koma-accent-soft);
+  border-color: var(--koma-accent-text);
+}
+.orders-lane-filters strong { margin-inline-start: .15rem; font-size: .75em; font-variant-numeric: tabular-nums; }
+.orders-mobile-result { display: none; }
+.orders-fulfillment-menu { position: relative; }
+.orders-fulfillment-menu > summary {
+  display: grid;
+  place-items: center;
+  min-width: 40px;
+  min-height: 40px;
+  border: 1px solid var(--koma-border-strong);
+  border-radius: .65rem;
+  list-style: none;
+  cursor: pointer;
+}
+.orders-fulfillment-menu > summary::-webkit-details-marker { display: none; }
+.orders-fulfillment-menu__options {
+  position: absolute;
+  z-index: 2;
+  inset-inline-end: 0;
+  top: calc(100% + .25rem);
+  min-width: max-content;
+  display: grid;
+  border: 1px solid var(--koma-border-strong);
+  border-radius: .6rem;
+  background: var(--koma-surface-raised);
+  box-shadow: 0 .5rem 1.5rem #0004;
+}
+.orders-fulfillment-menu__options button {
+  min-height: 44px;
+  padding: .4rem .75rem;
+  text-align: start;
+}
+.orders-fulfillment-menu__options button:hover { background: var(--koma-surface-panel); }
+
+@media (min-width: 769px) {
+  .orders-workspace .orders-column.is-desktop-filtered { display: none; }
   .orders-workspace .orders-column__header { min-height: 3rem; padding-block: .4rem; }
   .orders-workspace .orders-toolbar { padding: .35rem .5rem; }
   .orders-workspace .orders-new-orders:not(.orders-pix-conference),
   .orders-workspace .orders-search__input, .orders-workspace .orders-auto-accept { min-height: 38px; }
 }
-
-.orders-queue-tabs .cashier-subnav__button {
-  display: inline-flex;
-  align-items: center;
-  gap: .3rem;
-}
-@media (max-width: 600px) {
-  .cashier-shell .orders-queue-tabs { gap: 2px; padding-inline: .3rem; }
-  .cashier-shell .orders-queue-tabs .cashier-subnav__button { padding-inline: .45rem; }
-  .orders-queue-tabs .cashier-subnav__button svg { width: 15px; }
-  .orders-queue-tabs .orders-queue-notice { min-height: 36px; }
+@media (max-width: 768px) {
+  .orders-workspace .orders-desktop-filters, .orders-workspace .orders-desktop-result { display: none; }
+  .orders-workspace .orders-mobile-result { display: inline; }
+  .orders-workspace .orders-mobile-stages {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .orders-workspace .orders-mobile-stages__button {
+    gap: .15rem;
+    padding: .2rem .35rem;
+    justify-content: center;
+  }
+  .orders-workspace .orders-search {
+    flex: 0 0 44px;
+    max-width: none;
+  }
+  .orders-workspace .orders-search__input { min-height: 44px; }
+  .orders-workspace .orders-search:not(:focus-within):not(.has-query) .orders-search__input {
+    padding-inline: 0;
+    color: transparent;
+    cursor: text;
+  }
+  .orders-workspace .orders-search:not(:focus-within):not(.has-query) .orders-search__input::placeholder { color: transparent; }
+  .orders-workspace .orders-search:is(:focus-within,.has-query) { flex: 1 1 100%; }
+  .orders-workspace .orders-toolbar__actions { flex: 1 1 auto; justify-content: flex-end; }
+  .orders-fulfillment-menu > summary { min-width: 44px; min-height: 44px; }
 }

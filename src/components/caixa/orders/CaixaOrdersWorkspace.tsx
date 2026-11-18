@@ -10,7 +10,7 @@ import { OrderItemComposition } from '../../shared/OrderItemComposition';
 import { itemCompositionSignature, type CompositionSource } from '../../../domain/orderItemComposition';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { AlertTriangle, Search, MapPin, Check, Smartphone, Clock } from 'lucide-react';
+import { AlertTriangle, Search, Ellipsis, MapPin, Check, Smartphone, Clock } from 'lucide-react';
 import type { OrderItem } from '../../../types';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import { trapOverlayTab } from '../../shared/trapOverlayTab';
@@ -35,7 +35,7 @@ export interface CaixaOrdersWorkspaceProps {
     readonly tableClosing: readonly CashierTableCard[];
     readonly digitalFinalization: readonly DeliveryOrderView[];
   };
-  readonly tablesOnly?: boolean;
+  readonly queueNotices?: React.ReactNode;
   readonly pendingCashPayments: readonly PendingCashPaymentCard[];
   readonly insights: {
     readonly oldestOrder: string;
@@ -54,6 +54,9 @@ export interface CaixaOrdersWorkspaceProps {
   readonly navigation: {
     readonly stage: OrdersStage;
     readonly onStageChange: (stage: OrdersStage) => void;
+    readonly filter?: OrdersStage | null;
+    readonly onFilterChange?: (stage: OrdersStage | null) => void;
+    readonly onOpenFulfillment?: (workspace: 'retiradas' | 'entregadores') => void;
     readonly expandedCardIds: Readonly<Record<string, boolean>>;
     readonly onToggleCard: (cardId: string, event?: React.MouseEvent) => void;
   };
@@ -168,7 +171,6 @@ const renderCompactItemsList = (
 
 function buildOrderLanes(
   { tableProduction, tableClosing, digitalProduction, digitalFinalization }: CaixaOrdersWorkspaceProps['columns'],
-  tablesOnly: boolean,
   policy: NonNullable<CaixaOrdersWorkspaceProps['restaurantConfig']>['tipos_pedido_ativos'] | undefined,
   hasLocalServiceWork: boolean,
 ) {
@@ -209,7 +211,7 @@ function buildOrderLanes(
     const cards = sortNewestFirst(byLane[lane.id], entry => entry.time);
     const count = lane.id === 'salon' ? cards.length - tables.length + tableCount : cards.length;
     return { ...lane, cards, count };
-  }).filter(lane => (!tablesOnly || lane.id === 'salon') && (lane.enabled || lane.count > 0));
+  }).filter(lane => lane.enabled || lane.count > 0);
   const visibleCards = channelLanes.flatMap(lane => lane.cards);
   return {
     channelLanes,
@@ -222,12 +224,11 @@ function buildOrderLanes(
 /** Maintains short-lived arrival feedback without coupling it to operational actions. */
 export function CaixaOrdersWorkspace(props: CaixaOrdersWorkspaceProps) {
   const { columns, isLoading, search } = props;
-  const tablesOnly = props.tablesOnly ?? false;
   const orderTypes = props.restaurantConfig?.tipos_pedido_ativos;
   const hasLocalServiceWork = Boolean(props.hasLocalServiceWork)
     || props.pendingCashPayments.some(payment => Number(payment.mesaNum) > 0);
-  const orderLanes = useMemo(() => buildOrderLanes(columns, tablesOnly, orderTypes, hasLocalServiceWork),
-    [columns, tablesOnly, orderTypes, hasLocalServiceWork]);
+  const orderLanes = useMemo(() => buildOrderLanes(columns, orderTypes, hasLocalServiceWork),
+    [columns, orderTypes, hasLocalServiceWork]);
   const previousStages = useRef<{ digital: Set<string>; items: Set<string> } | null>(null);
   const [arrivals, setArrivals] = useState<Set<string>>(new Set());
   const arrivalTimer = useRef<number | undefined>(undefined);
@@ -259,12 +260,12 @@ export function CaixaOrdersWorkspace(props: CaixaOrdersWorkspaceProps) {
 export function CaixaOrdersWorkspaceView({
   pixConferenceTrigger, columns, pendingCashPayments: pagamentosPendentes, insights: operationalOrderInsights,
   search, acceptance, navigation, couriers, actions, isLoading, now: nowTimestamp,
-  tablesOnly = false, hasPrinting = true, hasLocalServiceWork, restaurantConfig, onToast, arrivals = new Set<string>(), orderLanes,
+  queueNotices, hasPrinting = true, hasLocalServiceWork, restaurantConfig, onToast, arrivals = new Set<string>(), orderLanes,
 }: CaixaOrdersWorkspaceProps & { arrivals?: ReadonlySet<string>; orderLanes?: ReturnType<typeof buildOrderLanes> }) {
   const { query: searchQuery, onChange: setSearchQuery } = search;
   const { orders: deliveryOrders, pendingOrderIds, automatic: autoAccept, drawerOpen: isDrawerOpen,
     onAutomaticChange: setAutoAccept, onDrawerChange: setIsDrawerOpen } = acceptance;
-  const { stage: mobileOrdersStage, onStageChange: setMobileOrdersStage,
+  const { stage: mobileOrdersStage, onStageChange: setMobileOrdersStage, filter, onFilterChange, onOpenFulfillment,
     expandedCardIds, onToggleCard: toggleCardExpansion } = navigation;
 
   const courierSelection = (order: DeliveryOrderView) =>
@@ -321,17 +322,18 @@ export function CaixaOrdersWorkspaceView({
   ) : null;
 
   const { channelLanes, latestCardKey, totalResultadosBusca, withoutSalon } = orderLanes ?? buildOrderLanes(
-    columns, tablesOnly, restaurantConfig?.tipos_pedido_ativos,
+    columns, restaurantConfig?.tipos_pedido_ativos,
     Boolean(hasLocalServiceWork) || pagamentosPendentes.some(payment => Number(payment.mesaNum) > 0),
   );
   const ordersStages = channelLanes.map(lane => ({ id: lane.id, label: lane.title, count: lane.count }));
   const effectiveMobileOrdersStage = ordersStages.some(stage => stage.id === mobileOrdersStage)
     ? mobileOrdersStage : ordersStages[0]?.id;
-  const ordersColumnCounts = ordersStages.map(stage => stage.count);
+  const desktopFilter = channelLanes.find(lane => lane.id === filter);
+  const ordersColumnCounts = (desktopFilter ? [desktopFilter] : channelLanes).map(lane => lane.count);
   const activeOrdersColumns = ordersColumnCounts.filter(count => count > 0).length;
   const ordersColumnWeight = activeOrdersColumns === 1 ? 1.7 : activeOrdersColumns === 2 ? 1.25 : 1;
   const ordersColumnsTemplate = activeOrdersColumns === 0
-    ? `repeat(${ordersStages.length}, minmax(0, 1fr))`
+    ? `repeat(${ordersColumnCounts.length}, minmax(0, 1fr))`
     : ordersColumnCounts
       .map(count => count === 0 ? 'minmax(0, 0.68fr)' : `minmax(0, ${ordersColumnWeight}fr)`)
       .join(' ');
@@ -809,27 +811,12 @@ export function CaixaOrdersWorkspaceView({
 
   return (
     <div className={"orders-workspace flex flex-col gap-4"}>
-      <div className="orders-mobile-stages" style={{ gridTemplateColumns: `repeat(${ordersStages.length}, minmax(0, 1fr))` }} role="tablist" aria-label="Filas de atendimento">
-        {ordersStages.map(stage => (
-          <button
-            key={stage.id}
-            type="button"
-            role="tab"
-            aria-selected={effectiveMobileOrdersStage === stage.id}
-            onClick={() => setMobileOrdersStage(stage.id)}
-            className={clsx('orders-mobile-stages__button', effectiveMobileOrdersStage === stage.id && 'is-active')}
-          >
-            <span>{stage.label}</span>
-            <strong>{stage.count}</strong>
-          </button>
-        ))}
-      </div>
       <div className="orders-workspace__scroll-region">
       <OperationalBanner
         id="orders-heading"
         eyebrow="OPERAÇÃO"
         title="Pedidos"
-        accent={tablesOnly ? 'mesas' : 'por atendimento'}
+        accent="por atendimento"
         description="Clique no card para ver o pedido e escolher a próxima ação."
         metrics={[
           { label: 'pedido mais antigo', value: operationalOrderInsights.oldestOrder },
@@ -882,9 +869,33 @@ export function CaixaOrdersWorkspaceView({
       )}
       {/* Controls bar with Search Input */}
       <div className={"orders-toolbar sticky top-0 z-20"}>
+        <div role="group" aria-label="Filtrar pedidos por atendimento" className="orders-desktop-filters orders-lane-filters">
+          <button type="button" aria-pressed={!desktopFilter} onClick={() => onFilterChange?.(null)}>Todos</button>
+          {ordersStages.map(stage => (
+            <button key={stage.id} type="button" aria-pressed={desktopFilter?.id === stage.id}
+              onClick={() => onFilterChange?.(desktopFilter?.id === stage.id ? null : stage.id)}>
+              {stage.label} <strong>{stage.count}</strong>
+            </button>
+          ))}
+        </div>
+      <div className="orders-mobile-stages orders-lane-filters" style={{ gridTemplateColumns: `repeat(${ordersStages.length}, minmax(0, 1fr))` }} role="tablist" aria-label="Filas de atendimento">
+        {ordersStages.map(stage => (
+          <button
+            key={stage.id}
+            type="button"
+            role="tab"
+            aria-selected={effectiveMobileOrdersStage === stage.id}
+            onClick={() => setMobileOrdersStage(stage.id)}
+            className={clsx('orders-mobile-stages__button', effectiveMobileOrdersStage === stage.id && 'is-active')}
+          >
+            <span>{stage.label}</span>
+            <strong>{stage.count}</strong>
+          </button>
+        ))}
+      </div>
         {/* Search Bar Component */}
-        <div className={"orders-search relative"}>
-          <Search className={"absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-koma-muted"} />
+        <div className={clsx("orders-search relative", searchQuery && "has-query")}>
+          <Search aria-hidden="true" className={"pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-koma-muted"} />
           <input
             type="search"
             aria-label="Buscar pedidos"
@@ -906,9 +917,15 @@ export function CaixaOrdersWorkspaceView({
         </div>
         {searchQuery.trim() !== '' && (
           <span className="orders-search__result" aria-live="polite">
-            {totalResultadosBusca} {totalResultadosBusca === 1 ? 'resultado' : 'resultados'}
+            <span className="orders-desktop-result">
+              {desktopFilter?.cards.length ?? totalResultadosBusca} {(desktopFilter?.cards.length ?? totalResultadosBusca) === 1 ? 'resultado' : 'resultados'}
+            </span>
+            <span className="orders-mobile-result">
+              {totalResultadosBusca} {totalResultadosBusca === 1 ? 'resultado' : 'resultados'}
+            </span>
           </span>
         )}
+        {queueNotices}
         <div className="orders-toolbar__actions">
           <label className="orders-auto-accept">
             <input
@@ -922,6 +939,19 @@ export function CaixaOrdersWorkspaceView({
             <span className="orders-auto-accept__label">Aceite automático<small>{autoAccept ? 'Ativo' : 'Manual'}</small></span>
           </label>
           {pixConferenceTrigger}
+          {onOpenFulfillment && ordersStages.some(stage => stage.id !== 'salon') && (
+            <details className="orders-fulfillment-menu">
+              <summary aria-label="Mais opções de pedidos" title="Mais opções de pedidos"><Ellipsis size={18} aria-hidden="true" /></summary>
+              <div className="orders-fulfillment-menu__options">
+                {ordersStages.some(stage => stage.id === 'digital') && (
+                  <button type="button" onClick={() => onOpenFulfillment('retiradas')}>Gerenciar retiradas</button>
+                )}
+                {ordersStages.some(stage => stage.id === 'delivery') && (
+                  <button type="button" onClick={() => onOpenFulfillment('entregadores')}>Gerenciar entregas</button>
+                )}
+              </div>
+            </details>
+          )}
           {/* Bell button — opens floating drawer */}
           <button
             type="button"
@@ -1041,7 +1071,7 @@ export function CaixaOrdersWorkspaceView({
       >
         {channelLanes.map(lane => (
           <section key={lane.id} aria-label={lane.title} className={clsx('orders-column flex flex-col overflow-hidden',
-            'orders-column--' + lane.id, lane.cards.some(entry => entry.kind === 'finalization' && arrivals.has(`digital:${entry.card.id}`)) && 'orders-column--arrived', effectiveMobileOrdersStage === lane.id && 'is-mobile-active')}>
+            'orders-column--' + lane.id, desktopFilter && lane.id !== desktopFilter.id && 'is-desktop-filtered', lane.cards.some(entry => entry.kind === 'finalization' && arrivals.has(`digital:${entry.card.id}`)) && 'orders-column--arrived', effectiveMobileOrdersStage === lane.id && 'is-mobile-active')}>
             <CashierColumnHeader kind={lane.id} title={lane.title} count={lane.count} />
             <div className="orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5">
               {lane.cards.map(entry => {

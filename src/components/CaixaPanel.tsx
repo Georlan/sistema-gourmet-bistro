@@ -402,7 +402,7 @@ export function CaixaPanel({
   });
   const { loyaltyUsers, customersStatus, hasCustomerSnapshot, refreshLoyaltyUsers, totalCustomers, hasMoreCustomers, loadingMoreCustomers, loadMoreCustomers } = customers;
 
-  const [tablesOnly, setTablesOnly] = useState(false);
+  const [orderLaneFilter, setOrderLaneFilter] = useState<'salon' | 'digital' | 'delivery' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   const {
@@ -764,8 +764,6 @@ export function CaixaPanel({
       pronta: pickup.ready[0],
       prontas: pickup.ready.length,
       semEntregador: delivery.ready.filter(order => !order.motoboyId),
-      retiradas: pickup.awaitingAcceptance.length + pickup.preparing.length + pickup.ready.length,
-      entregadores: delivery.preparing.length + delivery.ready.length + delivery.inTransit.length + delivery.awaitingPayment.length,
     };
   }, [deliveryOrders, nowTimestamp]);
   const hasLocalServiceWork = tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0
@@ -927,44 +925,6 @@ export function CaixaPanel({
             counts={{ cardapio_produtos: apiProdutos.length, cardapio_preparo: apiCategorias.length }}
           />
 
-          {activeTab === 'operacao' && ['pedidos', 'retiradas', 'entregadores'].includes(activeSubTab) && (
-            <div role="group" aria-label="Filtrar pedidos por atendimento" className="orders-queue-tabs flex flex-wrap shrink-0 items-center gap-1 px-3 py-1 border-b border-koma-border">
-              {[
-                { id: 'pedidos', icon: 'pedido', label: 'Todos', count: undefined },
-                ...(showSalon ? [{ id: 'somente_mesas', icon: 'mesa', label: 'Mesas', count: isLoading ? undefined : new Set([...tableOrdersInProduction, ...tableOrdersReady].map(order => order.mesaId)).size }] : []),
-                { id: 'retiradas', icon: 'retirada', label: 'Retiradas', count: hasDeliverySnapshot ? queueCounts.retiradas : undefined },
-                { id: 'entregadores', icon: 'entrega', label: 'Entregas', count: hasDeliverySnapshot ? queueCounts.entregadores : undefined },
-              ].filter(filter => {
-                const modes = restauranteConfig?.tipos_pedido_ativos;
-                if (!Array.isArray(modes) || filter.count || filter.id === activeSubTab) return true;
-                if (filter.id === 'entregadores') return modes.includes('delivery');
-                if (filter.id === 'retiradas') return modes.includes('retirada');
-                return true;
-              }).map(filter => {
-                const selected = filter.id === (activeSubTab === 'pedidos' && tablesOnly && showSalon ? 'somente_mesas' : activeSubTab);
-                return <button key={filter.id} type="button" aria-pressed={selected}
-                  className={clsx('cashier-subnav__button shrink-0', selected && 'is-active')}
-                  onClick={() => {
-                    setTablesOnly(filter.id === 'somente_mesas');
-                    setActiveSubTab(filter.id === 'somente_mesas' ? 'pedidos' : filter.id);
-                  }}>
-                  <svg aria-hidden="true" width="18" height="18" className="shrink-0">
-                    <use href={`/brand/cashier/queue-marks.svg#${filter.icon}`} />
-                  </svg>
-                  {filter.label}{filter.count !== undefined && <span className="ml-1.5 tabular-nums">{filter.count}</span>}
-                </button>;
-              })}
-              {queueCounts.pronta && <button type="button" className="orders-queue-notice"
-                onClick={() => openDeliveryOrderDetails(queueCounts.pronta)}>
-                {queueCounts.prontas} {queueCounts.prontas === 1 ? 'retirada pronta' : 'retiradas prontas'}
-              </button>}
-              {queueCounts.semEntregador.length > 0 && <button type="button" className="orders-queue-notice"
-                onClick={() => openDeliveryOrderDetails(queueCounts.semEntregador[0])}>
-                {queueCounts.semEntregador.length} sem entregador
-              </button>}
-            </div>
-          )}
-
           <div ref={cashierContentRef} className={"cashier-content min-w-0 min-h-0 flex-1 p-5 pb-20 lg:pb-5 relative"}>
             {activeTab === 'operacao' && cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
               <div data-testid="cashier-shift-blocker" className={"absolute inset-0 bg-black/90 backdrop-blur-xs z-50 flex flex-col items-center justify-center text-center p-6 space-y-4"}>
@@ -1004,7 +964,16 @@ export function CaixaPanel({
               <CaixaOrdersWorkspace
                 pixConferenceTrigger={<DirectPixPendingPanel apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onRefreshOrders={onRefreshOrders} />}
                 hasLocalServiceWork={hasLocalServiceWork}
-                tablesOnly={tablesOnly && showSalon}
+                queueNotices={<>
+                  {queueCounts.pronta && <button type="button" className="orders-queue-notice"
+                    onClick={() => openDeliveryOrderDetails(queueCounts.pronta)}>
+                    {queueCounts.prontas} {queueCounts.prontas === 1 ? 'retirada pronta' : 'retiradas prontas'}
+                  </button>}
+                  {queueCounts.semEntregador.length > 0 && <button type="button" className="orders-queue-notice"
+                    onClick={() => openDeliveryOrderDetails(queueCounts.semEntregador[0])}>
+                    {queueCounts.semEntregador.length} sem entregador
+                  </button>}
+                </>}
                 columns={cashierOrderColumns}
                 pendingCashPayments={pagamentosPendentes.map((pag) => {
                   const comandaMesa = orders.find((order) => order.id === pag.comanda_id);
@@ -1023,6 +992,9 @@ export function CaixaPanel({
                 navigation={{
                   stage: mobileOrdersStage,
                   onStageChange: setMobileOrdersStage,
+                  filter: orderLaneFilter,
+                  onFilterChange: setOrderLaneFilter,
+                  onOpenFulfillment: setActiveSubTab,
                   expandedCardIds,
                   onToggleCard: toggleCardExpansion,
                 }}
