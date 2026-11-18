@@ -129,7 +129,7 @@ test('Caixa respeita scroll móvel e colunas simultâneas no desktop', async ({ 
 
   if (await stageTabs.isVisible()) {
     await expect(stageTabs).toBeVisible();
-    await expect(page.getByRole('tab')).toHaveCount(4);
+    await expect(page.getByRole('tab')).toHaveCount(3);
     await expect(page.getByRole('tab', { name: /Mesas/ })).toHaveAttribute('aria-selected', 'true');
 
     if (viewport.width < DESKTOP_BREAKPOINT) {
@@ -147,7 +147,7 @@ test('Caixa respeita scroll móvel e colunas simultâneas no desktop', async ({ 
     await expect(enabledColumns.filter({ has: page.getByRole('heading', { name: 'Retiradas', exact: true }) })).toBeVisible();
   } else {
     await expect(stageTabs).toBeHidden();
-    await expect(enabledColumns).toHaveCount(4);
+    await expect(enabledColumns).toHaveCount(3);
     for (const column of await enabledColumns.all()) {
       await expect(column).toBeVisible();
     }

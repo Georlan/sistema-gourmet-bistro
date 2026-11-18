@@ -166,17 +166,68 @@ const renderCompactItemsList = (
 };
 
 
+function buildOrderLanes(
+  { tableProduction, tableClosing, digitalProduction, digitalFinalization }: CaixaOrdersWorkspaceProps['columns'],
+  tablesOnly: boolean,
+  policy: NonNullable<CaixaOrdersWorkspaceProps['restaurantConfig']>['tipos_pedido_ativos'] | undefined,
+  hasLocalServiceWork: boolean,
+) {
+  const showSalon = shouldShowSalon(policy, hasLocalServiceWork || tableProduction.length > 0 || tableClosing.length > 0);
+  const enabledPickup = !Array.isArray(policy) || policy.includes('retirada');
+  const enabledDelivery = !Array.isArray(policy) || policy.includes('delivery');
+  type TableCard = { kind: 'salon' | 'closing'; card: CashierTableCard; time: number; key: string };
+  type DigitalCard = { kind: 'digital' | 'finalization'; card: DeliveryOrderView; time: number; key: string };
+  const tableCards = (cards: readonly CashierTableCard[], kind: TableCard['kind']): TableCard[] =>
+    cards.map(card => ({
+      kind, card, key: `${kind}:${card.order.id}`,
+      time: Math.max(normalizeOperationalTimestamp(card.order.created_at) ?? 0,
+        ...card.order.itens.map(item => normalizeOperationalTimestamp(item.timestamp) ?? 0)),
+    }));
+  const digitalCards = (cards: readonly DeliveryOrderView[], kind: DigitalCard['kind']): DigitalCard[] =>
+    cards.map(card => ({
+      kind, card, key: `${kind}:${card.id}`,
+      time: normalizeOperationalTimestamp(card.created_at) ?? normalizeOperationalTimestamp(card.criadoEm) ?? 0,
+    }));
+
+  const tables = [...tableCards(tableProduction, 'salon'), ...tableCards(tableClosing, 'closing')];
+  const tableCount = new Set(tables.map(({ card }) => card.order.mesaId)).size;
+  const byLane: Record<OrdersStage, (TableCard | DigitalCard)[]> = {
+    salon: [...tables],
+    digital: [],
+    delivery: [],
+  };
+  for (const entry of [...digitalCards(digitalProduction, 'digital'), ...digitalCards(digitalFinalization, 'finalization')]) {
+    const { modalidade } = entry.card;
+    byLane[modalidade === 'delivery' ? 'delivery' : modalidade === 'dine_in' ? 'salon' : 'digital'].push(entry);
+  }
+
+  const channelLanes = ([
+    { id: 'salon', title: 'Mesas', enabled: showSalon },
+    { id: 'digital', title: 'Retiradas', enabled: enabledPickup },
+    { id: 'delivery', title: 'Entregas', enabled: enabledDelivery },
+  ] as const).map(lane => {
+    const cards = sortNewestFirst(byLane[lane.id], entry => entry.time);
+    const count = lane.id === 'salon' ? cards.length - tables.length + tableCount : cards.length;
+    return { ...lane, cards, count };
+  }).filter(lane => (!tablesOnly || lane.id === 'salon') && (lane.enabled || lane.count > 0));
+  const visibleCards = channelLanes.flatMap(lane => lane.cards);
+  return {
+    channelLanes,
+    withoutSalon: !showSalon,
+    latestCardKey: getLatestCashierCardKey(visibleCards.map(({ key, time }) => ({ key, timestamps: [time] }))),
+    totalResultadosBusca: visibleCards.length,
+  };
+}
+
 /** Maintains short-lived arrival feedback without coupling it to operational actions. */
 export function CaixaOrdersWorkspace(props: CaixaOrdersWorkspaceProps) {
   const { columns, isLoading, search } = props;
-  // Experimental: newest orders first within each existing operational group.
-  const dateValue = (value: unknown): number => normalizeOperationalTimestamp(value) ?? 0;
-  const tableTime = (card: CashierTableCard) => Math.max(0, ...card.order.itens.map(item => dateValue(item.timestamp)), dateValue(card.order.created_at));
-  const digitalTime = (order: DeliveryOrderView) => dateValue(order.created_at || order.criadoEm);
-  const filteredCol1 = useMemo(() => sortNewestFirst(columns.tableProduction, tableTime), [columns.tableProduction]);
-  const filteredDigitalProduction = useMemo(() => sortNewestFirst(columns.digitalProduction, digitalTime), [columns.digitalProduction]);
-  const filteredCol2Table = useMemo(() => sortNewestFirst(columns.tableClosing, tableTime), [columns.tableClosing]);
-  const filteredDeliveryFinalization = useMemo(() => sortNewestFirst(columns.digitalFinalization, digitalTime), [columns.digitalFinalization]);
+  const tablesOnly = props.tablesOnly ?? false;
+  const orderTypes = props.restaurantConfig?.tipos_pedido_ativos;
+  const hasLocalServiceWork = Boolean(props.hasLocalServiceWork)
+    || props.pendingCashPayments.some(payment => Number(payment.mesaNum) > 0);
+  const orderLanes = useMemo(() => buildOrderLanes(columns, tablesOnly, orderTypes, hasLocalServiceWork),
+    [columns, tablesOnly, orderTypes, hasLocalServiceWork]);
   const previousStages = useRef<{ digital: Set<string>; items: Set<string> } | null>(null);
   const [arrivals, setArrivals] = useState<Set<string>>(new Set());
   const arrivalTimer = useRef<number | undefined>(undefined);
@@ -201,20 +252,15 @@ export function CaixaOrdersWorkspace(props: CaixaOrdersWorkspaceProps) {
     setArrivals(moved);
 
   }, [columns.digitalProduction, columns.digitalFinalization, columns.tableProduction, columns.tableClosing, search.query, isLoading]);
-  return <CaixaOrdersWorkspaceView {...props} columns={{
-    tableProduction: filteredCol1, digitalProduction: filteredDigitalProduction,
-    tableClosing: filteredCol2Table, digitalFinalization: filteredDeliveryFinalization,
-  }} arrivals={arrivals} />;
+  return <CaixaOrdersWorkspaceView {...props} arrivals={arrivals} orderLanes={orderLanes} />;
 }
 
 /** Stateless rendering boundary; callbacks remain owned by CaixaPanel. */
 export function CaixaOrdersWorkspaceView({
   pixConferenceTrigger, columns, pendingCashPayments: pagamentosPendentes, insights: operationalOrderInsights,
   search, acceptance, navigation, couriers, actions, isLoading, now: nowTimestamp,
-  tablesOnly = false, hasPrinting = true, hasLocalServiceWork, restaurantConfig, onToast, arrivals = new Set<string>(),
-}: CaixaOrdersWorkspaceProps & { arrivals?: ReadonlySet<string> }) {
-  const { tableProduction: filteredCol1, digitalProduction: filteredDigitalProduction,
-    tableClosing: filteredCol2Table, digitalFinalization: filteredDeliveryFinalization } = columns;
+  tablesOnly = false, hasPrinting = true, hasLocalServiceWork, restaurantConfig, onToast, arrivals = new Set<string>(), orderLanes,
+}: CaixaOrdersWorkspaceProps & { arrivals?: ReadonlySet<string>; orderLanes?: ReturnType<typeof buildOrderLanes> }) {
   const { query: searchQuery, onChange: setSearchQuery } = search;
   const { orders: deliveryOrders, pendingOrderIds, automatic: autoAccept, drawerOpen: isDrawerOpen,
     onAutomaticChange: setAutoAccept, onDrawerChange: setIsDrawerOpen } = acceptance;
@@ -267,12 +313,6 @@ export function CaixaOrdersWorkspaceView({
     );
   };
 
-  const latestCardKey = getLatestCashierCardKey([
-    ...filteredCol1.map(({ order }) => ({ key: `salon:${order.id}`, timestamps: order.itens.map(item => item.timestamp) })),
-    ...filteredDigitalProduction.map(order => ({ key: `digital:${order.id}`, timestamps: [order.created_at] })),
-    ...filteredCol2Table.map(({ order }) => ({ key: `closing:${order.id}`, timestamps: order.itens.map(item => item.timestamp) })),
-    ...filteredDeliveryFinalization.map(order => ({ key: `finalization:${order.id}`, timestamps: [order.created_at] })),
-  ]);
   const renderLatestTag = (key: string) => latestCardKey === key ? (
     <span className="orders-card__recency" data-order-recency="latest">
       <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="m8 1 2.2 4.8L15 8l-4.8 2.2L8 15l-2.2-4.8L1 8l4.8-2.2L8 1Z" /></svg>
@@ -280,34 +320,10 @@ export function CaixaOrdersWorkspaceView({
     </span>
   ) : null;
 
-  const totalResultadosBusca = filteredCol1.length + filteredCol2Table.length + (tablesOnly ? 0 : filteredDigitalProduction.length + filteredDeliveryFinalization.length);
-
-  const showSalon = shouldShowSalon(
-    restaurantConfig?.tipos_pedido_ativos,
-    Boolean(hasLocalServiceWork) || filteredCol1.length > 0 || filteredCol2Table.length > 0
-      || pagamentosPendentes.some(payment => Number(payment.mesaNum) > 0),
+  const { channelLanes, latestCardKey, totalResultadosBusca, withoutSalon } = orderLanes ?? buildOrderLanes(
+    columns, tablesOnly, restaurantConfig?.tipos_pedido_ativos,
+    Boolean(hasLocalServiceWork) || pagamentosPendentes.some(payment => Number(payment.mesaNum) > 0),
   );
-  const withoutSalon = !showSalon;
-
-  const policy = restaurantConfig?.tipos_pedido_ativos;
-  const enabled = (mode: string) => !Array.isArray(policy) || policy.includes(mode);
-  const laneFor = (order: DeliveryOrderView): OrdersStage => {
-    if (order.modalidade === 'delivery') return 'delivery';
-    if (order.modalidade === 'retirada' && !order.isQuickSale) return 'digital';
-    return 'closing';
-  };
-  const channelLanes = ([
-    { id: 'salon', title: 'Mesas', enabled: showSalon },
-    { id: 'closing', title: 'Balcão', enabled: showSalon },
-    { id: 'digital', title: 'Retiradas', enabled: enabled('retirada') },
-    { id: 'delivery', title: 'Entregas', enabled: enabled('delivery') },
-  ] as const).map(lane => {
-    const tables = lane.id === 'salon';
-    const production = filteredDigitalProduction.filter(order => laneFor(order) === lane.id);
-    const closing = filteredDeliveryFinalization.filter(order => laneFor(order) === lane.id);
-    const tableCount = tables ? new Set([...filteredCol1, ...filteredCol2Table].map(card => card.order.mesaId)).size : 0;
-    return { ...lane, tables, production, closing, count: tableCount + production.length + closing.length };
-  }).filter(lane => (!tablesOnly || lane.tables) && (lane.enabled || lane.count > 0));
   const ordersStages = channelLanes.map(lane => ({ id: lane.id, label: lane.title, count: lane.count }));
   const effectiveMobileOrdersStage = ordersStages.some(stage => stage.id === mobileOrdersStage)
     ? mobileOrdersStage : ordersStages[0]?.id;
@@ -1025,13 +1041,17 @@ export function CaixaOrdersWorkspaceView({
       >
         {channelLanes.map(lane => (
           <section key={lane.id} aria-label={lane.title} className={clsx('orders-column flex flex-col overflow-hidden',
-            'orders-column--' + lane.id, lane.closing.some(order => arrivals.has(`digital:${order.id}`)) && 'orders-column--arrived', effectiveMobileOrdersStage === lane.id && 'is-mobile-active')}>
+            'orders-column--' + lane.id, lane.cards.some(entry => entry.kind === 'finalization' && arrivals.has(`digital:${entry.card.id}`)) && 'orders-column--arrived', effectiveMobileOrdersStage === lane.id && 'is-mobile-active')}>
             <CashierColumnHeader kind={lane.id} title={lane.title} count={lane.count} />
             <div className="orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5">
-              {lane.tables && filteredCol2Table.map(renderTableClosing)}
-              {lane.closing.map(renderDigitalClosing)}
-              {lane.tables && filteredCol1.map(renderTableProduction)}
-              {lane.production.map(renderDigitalProduction)}
+              {lane.cards.map(entry => {
+                switch (entry.kind) {
+                  case 'salon': return renderTableProduction(entry.card);
+                  case 'closing': return renderTableClosing(entry.card);
+                  case 'digital': return renderDigitalProduction(entry.card);
+                  case 'finalization': return renderDigitalClosing(entry.card);
+                }
+              })}
               {lane.count === 0 && <div className="orders-empty-state py-12 text-center">
                 <img width="96" height="72" alt="" className="orders-empty-state__art mx-auto"
                   src={lane.id === 'delivery' ? '/brand/cashier/detail-delivery-v2.svg' : '/brand/cashier/salon-empty-v1.svg'} />
