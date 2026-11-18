@@ -49,7 +49,12 @@ def blocked_reason(db: Session, order: Comanda) -> str | None:
     if normalize_to_fulfillment(order.tipo) == FulfillmentType.DINE_IN and not table_order:
         return 'Consumo sem mesa ainda não permite esta conversão.'
     if table_order:
-        active_orders = db.query(Comanda.id).filter(Comanda.restaurante_id == rid, Comanda.mesa_id == order.mesa_id, Comanda.fechada == False).all()
+        active_orders = db.query(Comanda.id).filter(
+            Comanda.restaurante_id == rid,
+            Comanda.mesa_id == order.mesa_id,
+            Comanda.tipo == 'Consumo no Local',
+            Comanda.fechada == False,
+        ).all()
         if len(active_orders) != 1:
             return 'A mesa possui mais de uma comanda aberta; não é possível converter apenas uma.'
         launches = [launch for launch in order.lancamentos if launch.status not in {'cancelado', 'recusado'}]

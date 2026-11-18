@@ -247,6 +247,7 @@ def cancelar_consumo_mesa(
         .filter(
             Comanda.restaurante_id == rest_id,
             Comanda.mesa_id == mesa_id,
+            Comanda.tipo == "Consumo no Local",
             Comanda.fechada == False,
         )
         .with_for_update()
@@ -502,6 +503,7 @@ def cancelar_itens_mesa(
     mesa_ainda_ocupada = db.query(Comanda.id).filter(
         Comanda.restaurante_id == rest_id,
         Comanda.mesa_id == mesa_id,
+        Comanda.tipo == "Consumo no Local",
         Comanda.fechada == False,
         ~Comanda.id.in_(comanda_ids),
     ).first() is not None or any(not comanda.fechada for comanda in comandas)

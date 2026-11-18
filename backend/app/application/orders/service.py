@@ -582,6 +582,9 @@ class OrderApplicationService:
                 )
 
         # 6. Resolução da Comanda
+        if cmd.fulfillment == FulfillmentType.DELIVERY and cmd.table_id is not None:
+            raise OrderValidationError("Pedidos de delivery não podem ser vinculados a uma mesa.")
+
         comanda = None
         if cmd.check_id:
             comanda = (

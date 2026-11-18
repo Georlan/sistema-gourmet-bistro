@@ -171,6 +171,7 @@ def _intent_open_comandas(
         .filter(
             Comanda.restaurante_id == restaurante_id,
             Comanda.mesa_id == intent.mesa_id,
+            Comanda.tipo == "Consumo no Local",
             Comanda.fechada == False,
         )
         .order_by(Comanda.criado_em.asc(), Comanda.id.asc())

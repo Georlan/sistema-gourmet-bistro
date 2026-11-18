@@ -192,6 +192,11 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
 
     # 1. Validar se a mesa existe (se mesa_id for informado)
     if comanda_in.mesa_id is not None:
+        if comanda_in.tipo in ("Delivery", "Entrega"):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Pedidos de delivery não podem ser vinculados a uma mesa.",
+            )
         mesa = db.query(Mesa).filter(
             Mesa.restaurante_id == rid,
             Mesa.id == comanda_in.mesa_id,
@@ -202,14 +207,16 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
                 detail=f"Mesa {comanda_in.mesa_id} não encontrada"
             )
 
-        # 2. A mesma mesa pode ter comandas separadas por cliente. Um clique
-        # repetido sem identificador reutiliza a comanda geral; um nome novo
-        # cria outra comanda compartilhando o mesmo número do pedido.
-        comandas_abertas = db.query(Comanda).filter(
-            Comanda.restaurante_id == rid,
-            Comanda.mesa_id == comanda_in.mesa_id,
-            Comanda.fechada == False
-        ).order_by(Comanda.criado_em.asc()).all()
+        # 2. A mesma mesa pode ter comandas separadas por cliente (apenas Consumo no Local).
+        if comanda_in.tipo == "Consumo no Local":
+            comandas_abertas = db.query(Comanda).filter(
+                Comanda.restaurante_id == rid,
+                Comanda.mesa_id == comanda_in.mesa_id,
+                Comanda.tipo == "Consumo no Local",
+                Comanda.fechada == False
+            ).order_by(Comanda.criado_em.asc()).all()
+        else:
+            comandas_abertas = []
         identificador = (comanda_in.identificador or "").strip()
         if comandas_abertas:
             if not identificador:
