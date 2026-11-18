@@ -38,9 +38,9 @@ test('mobile filter exposes delivery and retains order creation in the same stri
   const strip = nav.locator('.cashier-subnav__scroll');
   await expect(nav.locator('.cashier-subnav__arrow').first()).toBeHidden();
   await expect(nav.locator('.cashier-subnav__arrow').last()).toBeHidden();
-  const filter = page.getByRole('group', { name: 'Filtrar pedidos por atendimento' }).getByRole('button', { name: /^Entregas/ });
+  const filter = page.getByRole('tablist', { name: 'Filas de atendimento' }).getByRole('tab', { name: /^Entregas/ });
   await filter.click();
-  await expect(filter).toHaveAttribute('aria-pressed', 'true');
+  await expect(filter).toHaveAttribute('aria-selected', 'true');
   await expect(nav.getByRole('button', { name: 'Pedidos', exact: true })).toHaveAttribute('aria-current', 'page');
   await nav.getByRole('button', { name: 'Novo pedido', exact: true }).click();
   await expect(page.getByPlaceholder('Buscar item, descrição ou código')).toBeVisible();

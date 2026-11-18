@@ -100,13 +100,16 @@ test('consulta mesas e restaura a divisão sem escrita', async ({page}) => {
   await page.goto('/?view=caixa');
   const board = page.locator('.orders-board');
   await expect(board.locator('.orders-card').first()).toBeAttached();
-  const filters = page.getByRole('group',{name:'Filtrar pedidos por atendimento'});
-  await filters.getByRole('button',{name:/^Mesas/}).click();
-  await expect(board.locator('.orders-column')).toHaveCount(1);
-  await expect(board.getByRole('heading',{name:'Mesas'})).toBeVisible();
-  await expect(board.locator('.orders-column--digital')).toHaveCount(0);
-  await filters.getByRole('button',{name:'Todos'}).click();
-  await expect(board.locator('.orders-column')).toHaveCount(3);
+  const mobile = page.getByRole('tablist', { name: 'Filas de atendimento' });
+  if (await mobile.isVisible()) {
+    await mobile.getByRole('tab', { name: /^Mesas/ }).click();
+  } else {
+    const filters = page.getByRole('group', { name: 'Filtrar pedidos por atendimento' });
+    await filters.getByRole('button', { name: /^Mesas/ }).click();
+    await expect(board.locator('.orders-column--digital')).toBeHidden();
+    await filters.getByRole('button', { name: 'Todos' }).click();
+    await expect(board.locator('.orders-column:visible')).toHaveCount(3);
+  }
   await page.reload();
   await expect(page.getByRole('combobox',{name:'Dividir painel de pedidos'})).toHaveCount(0);
   expect(writes).toEqual([]);

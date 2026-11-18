@@ -329,22 +329,45 @@ async function mockFulfillmentBackend(
   };
 }
 
-test('filtros de Pedidos preservam a busca e a navegação principal', async ({ page }) => {
+async function openFulfillmentWorkspace(page: Page, name: 'retiradas' | 'entregas') {
+  const menu = page.locator('summary[aria-label="Mais opções de pedidos"]');
+  if (!(await menu.isVisible())) {
+    await page.getByRole('navigation', { name: 'Telas desta área' }).getByRole('button', { name: 'Pedidos', exact: true }).click();
+  }
+  await expect(menu).toBeVisible();
+  await menu.click();
+  await page.getByRole('button', { name: `Gerenciar ${name}`, exact: true }).click();
+}
+
+test('filtros atuam dentro de Pedidos e preservam a busca', async ({ page }) => {
   await seedCashierSession(page, 'pedidos');
   await mockFulfillmentBackend(page);
   await page.goto('/?view=caixa');
-  const filters = page.getByRole('group', { name: 'Filtrar pedidos por atendimento' });
+  const board = page.locator('.orders-board');
   const top = page.locator('.cashier-subnav');
-  await expect(top.getByRole('button', { name: /Entregas|Retiradas/ })).toHaveCount(0);
-  await filters.getByRole('button', { name: /^Entregas/ }).click();
-  const delivery = page.locator('#cashier-deliveries-workspace');
-  await delivery.getByRole('searchbox').fill('Bruno');
-  await expect(delivery).toContainText('Bruno Delivery');
-  await filters.getByRole('button', { name: /^Retiradas/ }).click();
-  await expect(page.locator('#cashier-pickups-workspace').getByRole('searchbox')).toHaveValue('Bruno');
+  const search = page.getByRole('searchbox', { name: 'Buscar pedidos' });
+  const mobileFilters = page.getByRole('tablist', { name: 'Filas de atendimento' });
+  await expect(board).toBeVisible();
+  if (await mobileFilters.isVisible()) {
+    await expect(search).toBeVisible();
+    await search.click();
+    await expect(search).toBeFocused();
+  }
+  await search.fill('Bruno');
+  const desktopFilters = page.getByRole('group', { name: 'Filtrar pedidos por atendimento' });
+  const filter = async (name: string) => {
+    if (await mobileFilters.isVisible()) await mobileFilters.getByRole('tab', { name: new RegExp(`^${name}`) }).click();
+    else await desktopFilters.getByRole('button', { name: new RegExp(`^${name}`) }).click();
+  };
+  await filter('Entregas');
+  await expect(board.getByRole('region', { name: 'Entregas', exact: true })).toBeVisible();
+  await expect(board.locator('.orders-column--digital')).toBeHidden();
+  await filter('Retiradas');
+  await expect(board.getByRole('region', { name: 'Retiradas', exact: true })).toBeVisible();
+  await expect(board.locator('.orders-column--delivery')).toBeHidden();
+  await expect(search).toHaveValue('Bruno');
   await expect(top.getByRole('button', { name: 'Pedidos', exact: true })).toHaveAttribute('aria-current', 'page');
-  await filters.getByRole('button', { name: 'Todos' }).click();
-  await expect(page.getByPlaceholder('Buscar mesa, cliente, telefone ou item')).toHaveValue('Bruno');
+  await expect(page.locator('#cashier-deliveries-workspace, #cashier-pickups-workspace')).toHaveCount(0);
 });
 
 test('Retiradas e Entregas permitem completar o trabalho normal sem voltar ao Kanban', async ({ page }) => {
@@ -378,8 +401,7 @@ test('Retiradas e Entregas permitem completar o trabalho normal sem voltar ao Ka
   await expectNoHorizontalOverflow(page);
 
   await page.reload();
-  const deliveriesTab = page.getByRole('group', { name: 'Filtrar pedidos por atendimento' }).getByRole('button', { name: /^Entregas/ });
-  await deliveriesTab.click();
+  await openFulfillmentWorkspace(page, 'entregas');
 
   const deliveries = page.locator('#cashier-deliveries-workspace');
   await expect(deliveries).toBeVisible();
@@ -464,7 +486,7 @@ test('Pedidos permite atribuir entregador no card e despachar sem abrir detalhes
   await expect(inRouteCard.getByRole('combobox', { name: /Entregador do pedido 5002/i })).toHaveCount(0);
 
   await expect(inRouteCard.getByRole('button', { name: 'Trocar entregador' })).toHaveCount(0);
-  await page.getByRole('group', { name: 'Filtrar pedidos por atendimento' }).getByRole('button', { name: /^Entregas/ }).click();
+  await openFulfillmentWorkspace(page, 'entregas');
   const deliveryWorkspace = page.locator('#cashier-deliveries-workspace');
   await deliveryWorkspace.getByRole('button', { name: 'Trocar entregador' }).click();
   const reassignmentDialog = page.getByRole('dialog', { name: 'Trocar entregador' });
@@ -507,8 +529,7 @@ test('delivery alterado para retirada sai de Entregas e aparece em Retiradas sem
   await expect(dialog).toBeHidden();
   await expect(deliveries).not.toContainText('Bruno Delivery');
 
-  const pickupsTab = page.getByRole('group', { name: 'Filtrar pedidos por atendimento' }).getByRole('button', { name: /^Retiradas/ });
-  await pickupsTab.click();
+  await openFulfillmentWorkspace(page, 'retiradas');
   const pickups = page.locator('#cashier-pickups-workspace');
   await expect(pickups).toBeVisible();
   await expect(pickups).toContainText('Bruno Delivery');
