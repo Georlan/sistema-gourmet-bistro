@@ -159,7 +159,7 @@ test('upload único valida arquivo e mantém logo e banner independentes', async
   });
   await open(page);
   await navigate(page, 'Cardápio online');
-  await page.getByRole('button', { name: /^Marca/ }).click();
+  await page.getByRole('button', { name: 'Editar marca da loja' }).click();
   const inputs = page.locator('input[type=file]');
   await expect(inputs).toHaveCount(2);
   await inputs.nth(0).setInputFiles({ name: 'invalido.txt', mimeType: 'text/plain', buffer: Buffer.from('teste') });

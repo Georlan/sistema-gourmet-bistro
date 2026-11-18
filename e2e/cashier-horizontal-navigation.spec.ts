@@ -138,3 +138,17 @@ test('native touch swipe in reports stays away from the selected tab until navig
   await page.screenshot({ path: testInfo.outputPath('reports-after-touch-swipe.png') });
   await client.detach();
 });
+
+test('recursos futuros permite consultar as duas áreas financeiras em planejamento', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.addInitScript(() => {
+    sessionStorage.setItem('koma_active_tab', 'impressao_salao');
+    sessionStorage.setItem('koma_active_subtab', 'planejamento');
+  });
+  await page.goto('/?view=caixa');
+  const section = page.getByRole('region', { name: 'Recursos futuros' });
+  await expect(section.getByRole('button', { name: 'Contas a pagar' })).toHaveAttribute('aria-pressed', 'true');
+  await section.getByRole('button', { name: 'Contas a receber' }).click();
+  await expect(section.getByText(/valores a receber/)).toBeVisible();
+});
