@@ -29,6 +29,8 @@ type BoundaryProps = Pick<
   | 'handleAdvanceDigitalOrder'
   | 'openDeliveryOrderDetails'
 > & {
+  query: string;
+  setQuery: (value: string) => void;
   activeSubTab: string;
   hasDeliverySnapshot?: boolean;
   onRetry?: () => void;
@@ -80,7 +82,7 @@ const completedTotal = (order: CompletedDeliveryApiOrder) => {
 
 /** Delivery workspace; state transitions remain owned by useCashierOrders/backend. */
 export function CashierCouriers({
-  activeSubTab, hasDeliverySnapshot, onRetry,
+  query, setQuery, activeSubTab, hasDeliverySnapshot, onRetry,
   isWsConnected = false,
   deliveryOrders,
   deliveryOrdersLoadState,
@@ -115,7 +117,6 @@ export function CashierCouriers({
   const [pendingIds, setPendingIds] = useState<Set<string>>(() => new Set());
   const pendingIdsRef = useRef<Set<string>>(new Set());
   const [completedRecent, setCompletedRecent] = useState<CompletedDeliveryApiOrder[]>([]);
-  const [query, setQuery] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyError, setHistoryError] = useState(false);

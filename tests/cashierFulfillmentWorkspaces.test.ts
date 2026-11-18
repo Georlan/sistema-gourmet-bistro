@@ -98,6 +98,7 @@ test('histórico de entregas é leitura curta, tenant-scoped e não redefine tra
 
 test('loading e erro mantêm feedback explícito sem exigir conhecimento do Kanban', () => {
   const pickupMarkup = renderToStaticMarkup(createElement(CashierPickups, {
+    query: '', setQuery: () => {},
     activeSubTab: 'retiradas',
     deliveryOrders: [],
     deliveryOrdersLoadState: 'loading',
@@ -114,6 +115,7 @@ test('loading e erro mantêm feedback explícito sem exigir conhecimento do Kanb
   assert.doesNotMatch(pickupMarkup, /Aceite no Kanban/);
 
   const courierMarkup = renderToStaticMarkup(createElement(CashierCouriers, {
+    query: '', setQuery: () => {},
     activeSubTab: 'entregadores',
     deliveryOrders: [],
     deliveryOrdersLoadState: 'error',
@@ -149,6 +151,7 @@ test('loading e erro mantêm feedback explícito sem exigir conhecimento do Kanb
 
 test('controles do PWA do entregador falham fechados fora de courier_app sem bloquear delivery operacional', () => {
   const baseProps = {
+    query: '', setQuery: () => {},
     activeSubTab: 'entregadores',
     deliveryOrders: [],
     deliveryOrdersLoadState: 'loaded',
