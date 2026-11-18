@@ -359,6 +359,8 @@ test('filtros atuam dentro de Pedidos e preservam a busca', async ({ page }) => 
   await expect(toolbar.getByText(/retiradas? prontas?/i)).toHaveCount(0);
   const filterMarks = toolbar.locator('.orders-filter-button:visible svg use');
   expect(await filterMarks.count()).toBeGreaterThanOrEqual(3);
+  await expect.poll(() => filterMarks.evaluateAll(marks => marks.every(mark =>
+    (mark as SVGUseElement).getBBox().width > 0))).toBe(true);
   if (await mobileFilters.isVisible()) {
     await expect(search).toBeVisible();
     await search.click();

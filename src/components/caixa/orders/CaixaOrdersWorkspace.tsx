@@ -174,7 +174,7 @@ function OrderFilterContent({ lane, label, count }: { lane: keyof typeof orderFi
   return <>
     <span className="orders-filter-mark" aria-hidden="true">
       <svg width="18" height="18" focusable="false">
-        <use href={`/brand/cashier/queue-marks.svg#${orderFilterIcons[lane]}`} />
+        <use href={`/brand/cashier/queue-marks.svg?v=2#${orderFilterIcons[lane]}`} />
       </svg>
     </span>
     <span>{label}</span>
