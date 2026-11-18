@@ -616,6 +616,12 @@ def cancelar_item(
             detail="Não é possível cancelar itens de uma comanda já fechada."
         )
 
+    if str(comanda.online_payment_status or '').lower() in ('pending', 'pending_released', 'approved'):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Há uma cobrança Pix online neste pedido. Cancele a cobrança ou devolva o pagamento antes de corrigir os itens.",
+        )
+
     if item.pago:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -658,6 +664,12 @@ def cancelar_item(
         details=f"Item ID {item_id} (Produto {item.produto_id}) cancelado na comanda {item.comanda_id}."
     )
     db.add(audit)
+    # Item correction changes the amount/items, never the fulfillment lifecycle.
+    # Both hints leave the transaction only after its successful commit.
+    from ..services.courier_realtime import queue_courier_refresh
+    from ..services.order_chat_service import queue_order_tracking_refresh
+    queue_courier_refresh(db, rest_id, comanda.motoboy_id)
+    queue_order_tracking_refresh(db, rest_id, comanda.id)
     db.commit()
     db.refresh(item)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)

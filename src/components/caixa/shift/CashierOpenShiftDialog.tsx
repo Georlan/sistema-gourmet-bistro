@@ -28,17 +28,19 @@ export function CashierOpenShiftDialog({
           className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 cursor-pointer"}
         >
           <form
+            role="dialog" aria-modal="true" aria-label="Abrir caixa"
             onSubmit={handleAbrirCaixa}
-            className={"bg-koma-panel border border-koma-border rounded-3xl w-full max-w-sm p-6 space-y-5 shadow-2xl animate-scale-in"}
+            className={"cash-register bg-koma-panel border border-koma-border rounded-3xl w-full max-w-sm p-6 space-y-5 shadow-2xl animate-scale-in"}
           >
             <div
               className={"flex justify-between items-center border-b border-koma-border pb-3"}
             >
-              <h3 className={"font-serif font-bold text-lg text-koma-foreground"}>
-                Abertura de Caixa
+              <h3 className={"font-display font-bold text-lg text-koma-foreground"}>
+                Abrir caixa
               </h3>
               <button
                 type="button"
+                aria-label="Fechar"
                 onClick={() => setShowAbrirModal(false)}
                 className={"p-1 hover:bg-koma-raised rounded-full text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer border border-transparent"}
               >
@@ -48,9 +50,9 @@ export function CashierOpenShiftDialog({
 
             <div className="space-y-1.5">
               <label
-                className={"text-[10px] font-bold text-koma-secondary uppercase tracking-wider block"}
+                className={"text-xs font-bold text-koma-secondary uppercase tracking-wider block"}
               >
-                Fundo de Troco Inicial (R$):
+                Dinheiro inicial para troco
               </label>
               <div className="relative">
                 <span className={"absolute left-3.5 top-3 text-koma-subtle font-mono"}>
@@ -58,6 +60,7 @@ export function CashierOpenShiftDialog({
                 </span>
                 <MoneyInput
                   required
+                  aria-label="Dinheiro inicial para troco"
                   value={saldoInicial}
                   onValueChange={setSaldoInicial}
                   className={"w-full pl-9 pr-4 py-2.5 bg-koma-card border border-koma-border rounded-xl focus:outline-none focus:ring-2 focus:ring-[#10b981]/20 focus:border-[#10b981] text-koma-foreground font-mono"}

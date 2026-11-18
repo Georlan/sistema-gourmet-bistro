@@ -10,7 +10,6 @@ import {
   Search,
 } from 'lucide-react';
 import { CaixaMovimentacao, CaixaTurnoResumo } from '../../types';
-import { OperationalBanner } from '../shared/OperationalBanner';
 import {
   formatBackendDateTime,
   formatBackendTime,
@@ -68,7 +67,7 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
       }
 
       return true;
-    });
+    }).sort((a, b) => (parseBackendTimestamp(b.criado_em)?.getTime() || 0) - (parseBackendTimestamp(a.criado_em)?.getTime() || 0));
   }, [filterDataFim, filterDataInicio, filterTipo, movimentacoes, searchTerm]);
 
   const totals = useMemo(() => filteredMovs.reduce(
@@ -136,26 +135,18 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
   }
 
   return (
-    <div className="orders-workspace space-y-4 text-left animate-fade-in" aria-busy={isLoading}>
-      <OperationalBanner
-        id="cash-movements-heading"
-        eyebrow="HISTÓRICO DO CAIXA"
-        title="Movimentações"
-        accent="do caixa"
-        description={`Entradas e retiradas de dinheiro do período${turnoResumo?.operador_nome ? ` · ${turnoResumo.operador_nome}` : ''}.`}
-        metrics={[
-          { label: 'dinheiro adicionado', value: formatCurrency(totals.suprimentos), valueClassName: 'text-emerald-800 dark:text-emerald-300' },
-          { label: 'dinheiro retirado', value: formatCurrency(totals.sangrias), valueClassName: 'text-rose-800 dark:text-rose-300' },
-          { label: 'última movimentação', value: latestMovementTime },
-        ]}
-      />
+    <div className="cash-register orders-workspace space-y-4 text-left animate-fade-in" aria-busy={isLoading}>
+      <header className="cash-register__heading">
+        <div><h2 className="cash-register__title">Entradas e retiradas</h2><p className="text-sm text-koma-muted">{turnoResumo?.operador_nome || 'Turno atual'} · Dinheiro movimentado fora das vendas</p></div>
+        <dl className="cash-register__totals"><div><dt>Adicionado</dt><dd>{formatCurrency(totals.suprimentos)}</dd></div><div><dt>Retirado</dt><dd>{formatCurrency(totals.sangrias)}</dd></div><div><dt>Última operação</dt><dd>{latestMovementTime}</dd></div></dl>
+      </header>
 
       <section className="rounded-[20px] border border-koma-border bg-koma-panel p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <span className="flex items-center gap-2 text-[9px] font-bold uppercase tracking-[0.14em] text-koma-muted"><Filter size={13} className="text-emerald-800 dark:text-emerald-300" /> Filtros</span>
+          <span className="flex items-center gap-2 text-xs font-semibold text-koma-muted"><Filter size={13} className="text-emerald-800 dark:text-emerald-300" /> Filtros</span>
           <div className="flex items-center gap-2">
-            {hasFilters && <button type="button" onClick={clearFilters} className="px-2 text-[10px] font-bold text-emerald-800 dark:text-emerald-300 hover:text-[#7becce]">Limpar filtros</button>}
-            <button type="button" onClick={exportCsv} disabled={filteredMovs.length === 0} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-koma-card px-3 py-2 text-[10px] font-bold text-koma-secondary transition-colors hover:border-emerald-300 dark:border-emerald-900/50 hover:text-emerald-800 dark:text-emerald-300 disabled:opacity-40">
+            {hasFilters && <button type="button" onClick={clearFilters} className="px-2 text-xs font-bold text-emerald-800 dark:text-emerald-300 hover:text-[#7becce]">Limpar filtros</button>}
+            <button type="button" onClick={exportCsv} disabled={filteredMovs.length === 0} className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#303532] bg-koma-card px-3 py-2 text-xs font-bold text-koma-secondary transition-colors hover:border-emerald-300 dark:border-emerald-900/50 hover:text-emerald-800 dark:text-emerald-300 disabled:opacity-40">
               <Download size={13} /> Exportar relatório
             </button>
           </div>
@@ -164,16 +155,16 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
           <label className="relative">
             <span className="sr-only">Buscar movimentação</span>
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
-            <input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Buscar motivo, observação ou operador" className="h-9 sm:h-10 w-full rounded-xl border border-koma-border bg-koma-card pl-9 pr-3 text-xs text-koma-foreground outline-none transition-colors placeholder:text-koma-muted focus:border-emerald-500" />
+            <input value={searchTerm} onChange={event => setSearchTerm(event.target.value)} placeholder="Buscar motivo, observação ou operador" className="h-9 sm:h-10 w-full rounded-xl border border-koma-border bg-koma-card pl-9 pr-3 text-sm text-koma-foreground outline-none transition-colors placeholder:text-koma-muted focus:border-emerald-500" />
           </label>
-          <select value={filterTipo} onChange={event => setFilterTipo(event.target.value)} className="h-9 sm:h-10 w-full rounded-xl border border-koma-border bg-koma-card px-3 text-xs text-koma-foreground outline-none focus:border-emerald-500">
+          <select aria-label="Tipo de movimentação" value={filterTipo} onChange={event => setFilterTipo(event.target.value)} className="h-9 sm:h-10 w-full rounded-xl border border-koma-border bg-koma-card px-3 text-sm text-koma-foreground outline-none focus:border-emerald-500">
             <option value="todos">Todas as operações</option>
             <option value="suprimento">Dinheiro adicionado</option>
             <option value="sangria">Dinheiro retirado</option>
           </select>
           <div className="grid grid-cols-2 gap-2 sm:col-span-2 xl:col-span-2">
-            <label className="relative"><span className="sr-only">Data inicial</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataInicio} onChange={event => setFilterDataInicio(event.target.value)} className="h-9 sm:h-10 w-full rounded-xl border border-koma-border bg-koma-card pl-9 pr-2 text-[11px] text-koma-foreground outline-none focus:border-emerald-500" /></label>
-            <label className="relative"><span className="sr-only">Data final</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataFim} onChange={event => setFilterDataFim(event.target.value)} className="h-9 sm:h-10 w-full rounded-xl border border-koma-border bg-koma-card pl-9 pr-2 text-[11px] text-koma-foreground outline-none focus:border-emerald-500" /></label>
+            <label className="relative"><span className="sr-only">Data inicial</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataInicio} onChange={event => setFilterDataInicio(event.target.value)} className="h-9 sm:h-10 w-full rounded-xl border border-koma-border bg-koma-card pl-9 pr-2 text-sm text-koma-foreground outline-none focus:border-emerald-500" /></label>
+            <label className="relative"><span className="sr-only">Data final</span><CalendarDays size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" /><input type="date" value={filterDataFim} onChange={event => setFilterDataFim(event.target.value)} className="h-9 sm:h-10 w-full rounded-xl border border-koma-border bg-koma-card pl-9 pr-2 text-sm text-koma-foreground outline-none focus:border-emerald-500" /></label>
           </div>
         </div>
       </section>
@@ -181,11 +172,11 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
       <section>
         <article className="overflow-hidden rounded-[20px] border border-koma-border bg-koma-panel">
           <header className="flex items-center justify-between gap-3 border-b border-koma-border px-4 py-3 sm:px-5">
-            <div><h3 className="text-xs font-bold text-koma-foreground">Resultados</h3><p className="mt-0.5 text-[10px] text-koma-muted">Do mais recente ao mais antigo</p></div>
-            <span className="rounded-full border border-koma-border bg-koma-card px-2.5 py-1 text-[9px] font-bold text-koma-muted">{filteredMovs.length} {filteredMovs.length === 1 ? 'movimentação' : 'movimentações'}</span>
+            <div><h3 className="text-sm font-bold text-koma-foreground">Resultados</h3><p className="mt-0.5 text-xs text-koma-muted">Do mais recente ao mais antigo</p></div>
+            <span className="rounded-full border border-koma-border bg-koma-card px-2.5 py-1 text-xs font-bold text-koma-muted">{filteredMovs.length} {filteredMovs.length === 1 ? 'movimentação' : 'movimentações'}</span>
           </header>
           {filteredMovs.length === 0 ? (
-            <div className="flex min-h-64 flex-col items-center justify-center px-5 text-center"><History size={24} className="text-koma-muted" /><strong className="mt-3 text-xs text-koma-subtle">Nenhuma movimentação encontrada</strong><span className="mt-1 max-w-sm text-[10px] leading-relaxed text-koma-muted">Revise os filtros ou use o Turno atual para adicionar ou retirar dinheiro.</span></div>
+            <div className="flex min-h-64 flex-col items-center justify-center px-5 text-center"><History size={24} className="text-koma-muted" /><strong className="mt-3 text-sm text-koma-subtle">Nenhuma movimentação encontrada</strong><span className="mt-1 max-w-sm text-xs leading-relaxed text-koma-muted">Revise os filtros ou use o Turno atual para adicionar ou retirar dinheiro.</span></div>
           ) : (
             <ul className="divide-y divide-koma-border">
               {filteredMovs.map(movimentacao => {
@@ -198,9 +189,9 @@ export const CaixaMovimentacoesTab: React.FC<CaixaMovimentacoesTabProps> = ({
                   minute: '2-digit',
                 });
                 return (
-                  <li key={movimentacao.id} className="grid gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.015] sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:px-5">
+                  <li key={movimentacao.id} className="grid gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.015] grid-cols-[auto_minmax(0,1fr)_auto] items-center sm:px-5">
                     <span className={clsx('flex h-9 w-9 items-center justify-center rounded-xl border', isSupply ? 'border-emerald-300 dark:border-emerald-900/50 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300' : 'border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300')}>{isSupply ? <ArrowDownRight size={15} /> : <ArrowUpRight size={15} />}</span>
-                    <span className="min-w-0"><span className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><strong className="truncate text-xs text-koma-foreground">{isSupply ? 'Dinheiro adicionado' : 'Dinheiro retirado'}</strong><span className="text-[9px] text-koma-muted">{dateLabel}</span></span><span className="mt-0.5 block truncate text-[10px] text-koma-muted">{movimentacao.usuario_nome || 'Operador'}{movimentacao.descricao ? ` · Motivo: ${movimentacao.descricao}` : ''}{movimentacao.observacao ? ` · ${movimentacao.observacao}` : ''}</span><span className="mt-1 block text-[9px] tabular-nums text-koma-muted">Saldo: {formatCurrency(Number(movimentacao.saldo_anterior || 0))} → {formatCurrency(Number(movimentacao.saldo_posterior || 0))}</span></span>
+                    <span className="min-w-0"><span className="flex flex-wrap items-center gap-x-2 gap-y-0.5"><strong className="truncate text-sm text-koma-foreground">{isSupply ? 'Dinheiro adicionado' : 'Dinheiro retirado'}</strong><span className="text-xs text-koma-muted">{dateLabel}</span></span><span className="mt-0.5 block truncate text-xs text-koma-muted">{movimentacao.usuario_nome || 'Operador'}{movimentacao.descricao ? ` · Motivo: ${movimentacao.descricao}` : ''}{movimentacao.observacao ? ` · ${movimentacao.observacao}` : ''}</span><span className="mt-1 block text-xs tabular-nums text-koma-muted">Saldo: {formatCurrency(Number(movimentacao.saldo_anterior || 0))} → {formatCurrency(Number(movimentacao.saldo_posterior || 0))}</span></span>
                     <strong className={clsx('whitespace-nowrap text-sm font-bold tabular-nums sm:text-right', isSupply ? 'text-emerald-800 dark:text-emerald-300' : 'text-rose-800 dark:text-rose-300')}>{isSupply ? '+' : '−'} {formatCurrency(Number(movimentacao.valor))}</strong>
                   </li>
                 );

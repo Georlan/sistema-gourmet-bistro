@@ -47,19 +47,19 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       className="fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto cursor-pointer"
     >
-      <div className="w-full max-w-md bg-koma-dialog border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
+      <div role="dialog" aria-modal="true" aria-label="Adicionar dinheiro ao caixa" className="cash-register w-full max-w-md bg-koma-dialog border border-koma-border rounded-3xl p-6 space-y-4 text-left shadow-2xl relative animate-scale-in my-8">
         <div className="flex justify-between items-center pb-2 border-b border-koma-border">
           <div>
-            <h3 className="font-serif text-sm font-bold text-koma-foreground">Adicionar dinheiro ao caixa</h3>
-            <p className="text-[9px] text-koma-subtle">Registre um valor extra colocado na gaveta, como reforço de troco.</p>
+            <h3 className="font-display text-sm font-bold text-koma-foreground">Adicionar dinheiro ao caixa</h3>
+            <p className="text-xs text-koma-subtle">Para reforço de troco ou outra entrada em dinheiro.</p>
           </div>
-          <button type="button" onClick={onClose} className="p-1 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer">
+          <button type="button" aria-label="Fechar" onClick={onClose} className="p-1 text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer">
             <X size={16} />
           </button>
         </div>
 
         {errorMsg && (
-          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs flex items-center gap-2">
+          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm flex items-center gap-2">
             <AlertTriangle size={16} className="shrink-0" />
             <span>{errorMsg}</span>
           </div>
@@ -67,7 +67,7 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">
+            <label className="text-xs font-bold text-koma-subtle uppercase tracking-wider block">
               Valor adicionado (R$) <span className="text-red-400">*</span>:
             </label>
             <MoneyInput
@@ -82,24 +82,24 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
           </div>
 
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Motivo (Opcional):</label>
+            <label className="text-xs font-bold text-koma-subtle uppercase tracking-wider block">Motivo (Opcional):</label>
             <input
               type="text"
               placeholder="Ex.: reforço de troco para o horário de pico"
               value={motivo}
               onChange={(e) => setMotivo(e.target.value)}
-              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500"
+              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-sm focus:outline-none focus:border-emerald-500"
             />
           </div>
 
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block">Observação (Opcional):</label>
+            <label className="text-xs font-bold text-koma-subtle uppercase tracking-wider block">Observação (Opcional):</label>
             <textarea
               rows={2}
               placeholder="Detalhes adicionais..."
               value={observacao}
               onChange={(e) => setObservacao(e.target.value)}
-              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-xs focus:outline-none focus:border-emerald-500 resize-none"
+              className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-koma-foreground text-sm focus:outline-none focus:border-emerald-500 resize-none"
             />
           </div>
 
@@ -107,14 +107,14 @@ export const SuprimentoModal: React.FC<SuprimentoModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 border border-koma-border hover:border-koma-border bg-koma-raised text-koma-subtle hover:text-koma-foreground rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+              className="flex-1 py-2 border border-koma-border hover:border-koma-border bg-koma-raised text-koma-subtle hover:text-koma-foreground rounded-xl text-xs font-semibold transition-colors cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer shadow-sm"
+              className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer shadow-sm"
             >
               {isSubmitting ? 'Salvando...' : 'Confirmar entrada'}
             </button>
