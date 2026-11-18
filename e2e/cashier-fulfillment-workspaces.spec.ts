@@ -358,13 +358,25 @@ test('filtros atuam dentro de Pedidos e preservam a busca', async ({ page }) => 
   await expect(toolbar.locator('summary[aria-label="Mais opções de pedidos"]')).toHaveCount(0);
   await expect(toolbar.getByText(/retiradas? prontas?/i)).toHaveCount(0);
   const filterMarks = toolbar.locator('.orders-filter-button:visible svg use');
-  expect(await filterMarks.count()).toBeGreaterThanOrEqual(3);
-  await expect.poll(() => filterMarks.evaluateAll(marks => marks.every(mark =>
-    (mark as SVGUseElement).getBBox().width > 0))).toBe(true);
   if (await mobileFilters.isVisible()) {
+    await expect(filterMarks).toHaveCount(0);
+    const boxes = await mobileFilters.getByRole('tab').evaluateAll(tabs => tabs.map(tab => {
+      const { width, height, top } = tab.getBoundingClientRect();
+      return { width, height, top };
+    }));
+    for (const box of boxes) {
+      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.width).toBeCloseTo(boxes[0].width, 0);
+      expect(box.top).toBeCloseTo(boxes[0].top, 0);
+    }
     await expect(search).toBeVisible();
+    expect((await search.boundingBox())!.y).toBeCloseTo(boxes[0].top, 0);
     await search.click();
     await expect(search).toBeFocused();
+  } else {
+    await expect(filterMarks).toHaveCount(4);
+    await expect.poll(() => filterMarks.evaluateAll(marks => marks.every(mark =>
+      (mark as SVGUseElement).getBBox().width > 0))).toBe(true);
   }
   await search.fill('Bruno');
   const desktopFilters = page.getByRole('group', { name: 'Filtrar pedidos por atendimento' });

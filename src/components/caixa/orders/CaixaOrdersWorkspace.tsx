@@ -903,7 +903,8 @@ export function CaixaOrdersWorkspaceView({
               onClick={() => setMobileOrdersStage(stage.id)}
               className="orders-mobile-stages__button orders-filter-button"
             >
-              <OrderFilterContent lane={stage.id} label={stage.label} count={stage.count} />
+              <span>{stage.label}</span>
+              <strong>{stage.count}</strong>
             </button>
           ))}
         </div>
