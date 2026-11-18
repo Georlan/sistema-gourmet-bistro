@@ -51,10 +51,11 @@ export function readDigitalOrderFulfillment(
 function digitalPaymentBalance(total: number, recorded: unknown, onlineStatus: unknown, finalized: boolean, itemsPaid: boolean) {
   const onlinePaid = onlineStatus === 'approved';
   const recordedAmount = Math.max(0, Number(recorded) || 0);
-  const amountPaid = onlinePaid ? Math.max(total, recordedAmount) : recordedAmount;
+  // Legacy item-by-item settlements can leave valor_pago at zero.
+  const settledByItems = !finalized && recordedAmount === 0 && itemsPaid;
+  const amountPaid = onlinePaid || settledByItems ? Math.max(total, recordedAmount) : recordedAmount;
   const amountDue = Math.max(0, Math.round((total - amountPaid) * 100) / 100);
-  // Old snapshots without a monetary balance sometimes carry only per-item flags.
-  const pago = onlinePaid || (recorded != null || finalized ? amountDue === 0 : itemsPaid);
+  const pago = onlinePaid || settledByItems || (amountDue === 0 && (finalized || recordedAmount > 0));
   return { amountPaid, amountDue, pago };
 }
 
