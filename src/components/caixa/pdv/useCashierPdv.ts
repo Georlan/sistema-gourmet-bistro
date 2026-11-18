@@ -63,7 +63,7 @@ type Props = {
   onRefreshOrders: CaixaPanelProps['onRefreshOrders'];
   onOptimisticAddOrder: CaixaPanelProps['onOptimisticAddOrder'];
   activeWaiterNome: string;
-  fetchDeliveryOrders: () => Promise<void>;
+  applyConfirmedPdvOrder?: (comanda: unknown) => void;
   apiCategorias: CatalogCategory[];
   dynamicMenu: Product[];
   pdvTableOptions: Array<ReturnType<typeof projectCashierSalonTables>[number] & { label: string }>;
@@ -84,7 +84,7 @@ export function useCashierPdv({
   onRefreshOrders,
   onOptimisticAddOrder,
   activeWaiterNome,
-  fetchDeliveryOrders,
+  applyConfirmedPdvOrder,
   apiCategorias,
   dynamicMenu,
   pdvTableOptions,
@@ -152,6 +152,7 @@ export function useCashierPdv({
     }
   }, [allowedPdvOrderTypes]);
 
+  const [changeFor, setChangeFor] = useState('');
   const [pdvPaymentMethod, setPdvPaymentMethod] = useState<PaymentMethod | null>(null);
 
   const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState<number>(0);
@@ -411,6 +412,12 @@ export function useCashierPdv({
       return;
     }
 
+    const cashTender = pdvOrderType !== 'dine_in' && pdvPaymentMethod === 'dinheiro' && changeFor.trim()
+      ? Number(changeFor.replace(',', '.')) : undefined;
+    if (cashTender !== undefined && (!Number.isFinite(cashTender) || cashTender <= 0 || Math.round(cashTender * 100) < Math.round(cartTotal * 100))) {
+      showToast('Informe um valor para troco igual ou maior que o total.', 'info');
+      return;
+    }
     isPdvSubmittingRef.current = true;
     setIsLoading(true);
 
@@ -521,6 +528,7 @@ export function useCashierPdv({
         address_snapshot: orderType === 'delivery' ? deliverySnapshot || undefined : undefined,
         delivery_taxa: orderType === 'delivery' ? Number(deliveryTaxa || 0) : 0.0,
         delivery_forma_pagamento: orderType === 'dine_in' ? undefined : paymentMethod || undefined,
+        delivery_troco_para: cashTender,
         onboarding_test: onboardingTest,
         itens: itemsList,
       };
@@ -552,6 +560,8 @@ export function useCashierPdv({
           }
         }
 
+        setChangeFor('');
+        if (confirmedComanda?.id && orderType !== 'dine_in') applyConfirmedPdvOrder?.(confirmedComanda);
         if (optimisticTempId && confirmedComanda?.id) {
           window.dispatchEvent(new CustomEvent('koma_optimistic_order_reconcile', {
             detail: { tempId: optimisticTempId, comanda: confirmedComanda },
@@ -559,12 +569,9 @@ export function useCashierPdv({
         }
 
         showToast('Pedido confirmado e enviado à cozinha.', 'success');
-        void Promise.allSettled([
-          Promise.resolve(onRefreshOrders()),
-          fetchDeliveryOrders(),
-        ]).then(() => {
+        window.dispatchEvent(new Event('koma_orders_updated'));
+        void Promise.allSettled([Promise.resolve(onRefreshOrders())]).then(() => {
           if (!confirmedComanda?.id) clearOptimisticOrder();
-          window.dispatchEvent(new Event('koma_orders_updated'));
         });
       } else {
         const err = await res.json().catch(() => null);
@@ -607,6 +614,8 @@ export function useCashierPdv({
     }
   };
 
+  const cartTotal = pdvCart.reduce((total, item) => total + pdvCartItemUnitPrice(item) * item.quantity,
+    pdvOrderType === 'delivery' ? pdvDeliveryTaxa : 0);
   const sellableProducts = useMemo(() => {
     return getSellableProducts(dynamicMenu, cardapioAtivoId, cardapiosAtivosIds);
   }, [dynamicMenu, cardapioAtivoId, cardapiosAtivosIds]);
@@ -713,6 +722,9 @@ export function useCashierPdv({
     pdvOrderType,
     setPdvOrderType,
     allowedPdvOrderTypes,
+    cartTotal,
+    changeFor,
+    setChangeFor,
     pdvPaymentMethod,
     setPdvPaymentMethod,
     pdvDeliveryAddress,

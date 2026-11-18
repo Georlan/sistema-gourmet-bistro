@@ -141,6 +141,9 @@ export default function CardapioOrderChatPanel({
             const parsed = await response.json() as Partial<TrackingFeedPage>;
             if (Array.isArray(parsed.items)) return parsed as TrackingFeedPage;
           }
+          if (!response.ok && response.status !== 404 && response.status !== 405) {
+            throw new Error("Não foi possível atualizar as mensagens.");
+          }
           const legacy = await fetch(`${apiRoot}/messages`, { cache: "no-store" });
           if (!legacy.ok) return null;
           const items = await legacy.json() as TrackingMessage[];

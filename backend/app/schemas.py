@@ -447,6 +447,7 @@ class LancamentoResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class ComandaDetail(ComandaResponse):
+    online_payment_status: Optional[str] = None
     scheduled_for: Optional[datetime] = None
     itens: List[ItemResponse] = []
     lancamentos: List[LancamentoResponse] = []

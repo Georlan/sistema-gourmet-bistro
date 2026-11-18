@@ -291,6 +291,7 @@ test('MesaConsumptionPanel preserves historical items and disables repeat for in
 });
 
 const createMockPdv = (overrides: Partial<ReturnType<typeof useCashierPdv>> = {}): ReturnType<typeof useCashierPdv> => ({
+  cartTotal: 0, changeFor: '', setChangeFor: () => {},
   openCounter: () => {},
   balcaoMobileView: 'carrinho',
   setBalcaoMobileView: () => {},

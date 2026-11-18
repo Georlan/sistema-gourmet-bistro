@@ -209,7 +209,10 @@ def test_orders_kanban_keeps_every_real_stage_side_by_side_on_desktop():
 
     # As três trilhas reais não dependem de feature flags locais sempre
     # verdadeiras e continuam sem mínimos rígidos capazes de ampliar a página.
-    assert "const ordersStages = [" in workspace
+    assert "const ordersStages = byChannel ? channelLanes.map(" in workspace
+    for stage in ("salon", "digital", "closing"):
+        assert f"id: '{stage}' as const" in workspace
+    assert "order.modalidade === 'delivery'" in workspace
     assert "import { CaixaOrdersWorkspace } from './caixa/orders/CaixaOrdersWorkspace';" in caixa
     assert "<CaixaOrdersWorkspace" in caixa
     assert "stage: mobileOrdersStage" in caixa
