@@ -86,8 +86,8 @@ export const CASHIER_SIDEBAR_GROUPS: readonly CashierNavigationGroup[] = [
           },
           { id: 'vendas_salao', label: 'Salão', target: { tab: 'operacao', subTab: 'mesas' } },
           { id: 'vendas_cozinha', label: 'Cozinha', target: { tab: 'operacao', subTab: 'kds' } },
-          { id: 'vendas_retiradas', label: 'Retiradas', target: { tab: 'operacao', subTab: 'retiradas' } },
-          { id: 'vendas_entregas', label: 'Entregas', target: { tab: 'operacao', subTab: 'entregadores' } },
+          { id: 'vendas_retiradas', navigationHidden: true, label: 'Retiradas', target: { tab: 'operacao', subTab: 'retiradas' } },
+          { id: 'vendas_entregas', navigationHidden: true, label: 'Entregas', target: { tab: 'operacao', subTab: 'entregadores' } },
         ],
       },
       {
@@ -561,6 +561,7 @@ export function isCashierNavigationActive(
   activeSubTab: string,
 ): boolean {
   const state = normalizeCashierNavigationState(activeTab, activeSubTab);
+  if (navigationId === 'vendas_pedidos' && state.tab === 'operacao' && ['retiradas', 'entregadores'].includes(state.subTab)) return true;
   const parentId = getCashierNavigationParentId(navigationId);
   const target = getCashierNavigationTarget(navigationId);
   if (!target) return false;

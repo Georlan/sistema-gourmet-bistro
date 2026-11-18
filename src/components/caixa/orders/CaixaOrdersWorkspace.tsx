@@ -36,6 +36,7 @@ export interface CaixaOrdersWorkspaceProps {
     readonly tableClosing: readonly CashierTableCard[];
     readonly digitalFinalization: readonly DeliveryOrderView[];
   };
+  readonly tablesOnly?: boolean;
   readonly pendingCashPayments: readonly PendingCashPaymentCard[];
   readonly insights: {
     readonly oldestOrder: string;
@@ -169,13 +170,15 @@ const renderCompactItemsList = (
 /** Maintains short-lived arrival feedback without coupling it to operational actions. */
 export function CaixaOrdersWorkspace(props: CaixaOrdersWorkspaceProps) {
   const { columns, isLoading, search } = props;
-  const [groupByChannel, setGroupByChannel] = useState(() => {
-    try { return localStorage.getItem('koma_orders_grouping') === 'channel'; }
-    catch { return false; }
+  const [grouping, setGrouping] = useState(() => {
+    try {
+      const saved = localStorage.getItem('koma_orders_grouping');
+      return saved === 'channel' || saved === 'service' ? saved : 'stage';
+    } catch { return 'stage'; }
   });
-  const toggleGrouping = () => {
-    setGroupByChannel(!groupByChannel);
-    try { localStorage.setItem('koma_orders_grouping', groupByChannel ? 'stage' : 'channel'); }
+  const changeGrouping = (next: string) => {
+    setGrouping(next);
+    try { localStorage.setItem('koma_orders_grouping', next); }
     catch { /* The board remains usable when browser storage is unavailable. */ }
   };
   // Experimental: newest orders first within each existing operational group.
@@ -213,15 +216,15 @@ export function CaixaOrdersWorkspace(props: CaixaOrdersWorkspaceProps) {
   return <CaixaOrdersWorkspaceView {...props} columns={{
     tableProduction: filteredCol1, digitalProduction: filteredDigitalProduction,
     tableClosing: filteredCol2Table, digitalFinalization: filteredDeliveryFinalization,
-  }} arrivals={arrivals} groupByChannel={groupByChannel} onToggleGrouping={toggleGrouping} />;
+  }} arrivals={arrivals} groupByChannel={grouping !== 'stage'} separateTables={grouping === 'service'} onGroupingChange={changeGrouping} />;
 }
 
 /** Stateless rendering boundary; callbacks remain owned by CaixaPanel. */
 export function CaixaOrdersWorkspaceView({
   pixConferenceTrigger, columns, pendingCashPayments: pagamentosPendentes, insights: operationalOrderInsights,
   search, acceptance, navigation, couriers, actions, isLoading, now: nowTimestamp,
-  hasPrinting = true, hasLocalServiceWork, restaurantConfig, onToast, arrivals = new Set<string>(), groupByChannel = false, onToggleGrouping,
-}: CaixaOrdersWorkspaceProps & { arrivals?: ReadonlySet<string>; groupByChannel?: boolean; onToggleGrouping?: () => void }) {
+  tablesOnly = false, hasPrinting = true, hasLocalServiceWork, restaurantConfig, onToast, arrivals = new Set<string>(), groupByChannel = false, separateTables = false, onGroupingChange,
+}: CaixaOrdersWorkspaceProps & { arrivals?: ReadonlySet<string>; groupByChannel?: boolean; separateTables?: boolean; onGroupingChange?: (value: string) => void }) {
   const { tableProduction: filteredCol1, digitalProduction: filteredDigitalProduction,
     tableClosing: filteredCol2Table, digitalFinalization: filteredDeliveryFinalization } = columns;
   const { query: searchQuery, onChange: setSearchQuery } = search;
@@ -289,7 +292,7 @@ export function CaixaOrdersWorkspaceView({
     </span>
   ) : null;
 
-  const totalResultadosBusca = filteredCol1.length + filteredDigitalProduction.length + filteredCol2Table.length + filteredDeliveryFinalization.length;
+  const totalResultadosBusca = filteredCol1.length + filteredCol2Table.length + (tablesOnly ? 0 : filteredDigitalProduction.length + filteredDeliveryFinalization.length);
 
   const showSalon = shouldShowSalon(
     restaurantConfig?.tipos_pedido_ativos,
@@ -298,14 +301,17 @@ export function CaixaOrdersWorkspaceView({
   );
   const withoutSalon = !showSalon;
 
-  const byChannel = showSalon && groupByChannel;
+  const byChannel = showSalon && (groupByChannel || tablesOnly);
+  const splitTables = separateTables || tablesOnly;
   const channelLanes = byChannel ? [
-    { id: 'salon' as const, title: 'Presencial e retiradas', delivery: false },
-    { id: 'digital' as const, title: 'Entregas', delivery: true },
+    { id: 'salon' as const, title: splitTables ? 'Mesas' : 'Presencial e retiradas', tables: true, counter: !splitTables, delivery: false },
+    ...(separateTables && !tablesOnly ? [{ id: 'closing' as const, title: 'Balcão e retiradas', tables: false, counter: true, delivery: false }] : []),
+    ...(!tablesOnly ? [{ id: 'digital' as const, title: 'Entregas', tables: false, counter: false, delivery: true }] : []),
   ].map(lane => {
-    const production = filteredDigitalProduction.filter(order => (order.modalidade === 'delivery') === lane.delivery);
-    const closing = filteredDeliveryFinalization.filter(order => (order.modalidade === 'delivery') === lane.delivery);
-    const tableCount = lane.delivery ? 0 : new Set([...filteredCol1, ...filteredCol2Table].map(card => card.order.mesaId)).size;
+    const matchesLane = (order: DeliveryOrderView) => order.modalidade === 'delivery' ? lane.delivery : lane.counter;
+    const production = filteredDigitalProduction.filter(matchesLane);
+    const closing = filteredDeliveryFinalization.filter(matchesLane);
+    const tableCount = lane.tables ? new Set([...filteredCol1, ...filteredCol2Table].map(card => card.order.mesaId)).size : 0;
     return { ...lane, production, closing, count: tableCount + production.length + closing.length };
   }) : [];
   const ordersStages = byChannel ? channelLanes.map(lane => ({ id: lane.id, label: lane.title, count: lane.count })) : [
@@ -313,7 +319,7 @@ export function CaixaOrdersWorkspaceView({
     { id: 'digital' as const, label: withoutSalon ? 'Preparo' : 'Digitais', count: filteredDigitalProduction.length },
     { id: 'closing' as const, label: withoutSalon ? 'Entrega e recebimento' : 'Concluir', count: filteredCol2Table.length + filteredDeliveryFinalization.length },
   ];
-  const effectiveMobileOrdersStage = byChannel && mobileOrdersStage === 'closing' ? 'salon' : withoutSalon && mobileOrdersStage === "salon" ? "digital" : mobileOrdersStage;
+  const effectiveMobileOrdersStage = tablesOnly ? 'salon' : byChannel && !separateTables && mobileOrdersStage === 'closing' ? 'salon' : withoutSalon && mobileOrdersStage === "salon" ? "digital" : mobileOrdersStage;
   const ordersColumnCounts = ordersStages.map(stage => stage.count);
   const activeOrdersColumns = ordersColumnCounts.filter(count => count > 0).length;
   const ordersColumnWeight = activeOrdersColumns === 1 ? 1.7 : activeOrdersColumns === 2 ? 1.25 : 1;
@@ -531,6 +537,7 @@ export function CaixaOrdersWorkspaceView({
         <div className="orders-card__identity-chips">
           <span className="orders-card__state" data-state={order.status}>{badgeText}</span>
           {!order.partner && <span className={"orders-card__chip is-muted"}>{getDigitalOrderSourceLabel(order)}</span>}
+          {(order.paymentMethod || order.pago) && <span className="orders-card__chip">{getDigitalOrderPaymentSummary(order)}</span>}
         </div>
         {order.scheduledFor && (
           <p className="text-sm font-bold orders-payment-note">
@@ -779,6 +786,7 @@ export function CaixaOrdersWorkspaceView({
         <div className="orders-card__identity-chips">
           <span className="orders-card__state" data-state={order.status}>{badgeText}</span>
           {!order.partner && <span className={"orders-card__chip is-muted"}>{getDigitalOrderSourceLabel(order)}</span>}
+          {(order.paymentMethod || order.pago) && <span className="orders-card__chip">{getDigitalOrderPaymentSummary(order)}</span>}
         </div>
         {order.scheduledFor && (
           <p className="text-sm font-bold orders-payment-note">
@@ -836,7 +844,7 @@ export function CaixaOrdersWorkspaceView({
         id="orders-heading"
         eyebrow="OPERAÇÃO"
         title="Pedidos"
-        accent="por etapa"
+        accent={tablesOnly ? 'mesas' : byChannel ? 'por atendimento' : 'por etapa'}
         description="Clique no card para ver o pedido e escolher a próxima ação."
         metrics={[
           { label: 'pedido mais antigo', value: operationalOrderInsights.oldestOrder },
@@ -917,11 +925,16 @@ export function CaixaOrdersWorkspaceView({
           </span>
         )}
         <div className="orders-toolbar__actions">
-          {showSalon && <button type="button" className="orders-new-orders" aria-pressed={byChannel}
-            aria-label="Agrupar pedidos por atendimento" onClick={onToggleGrouping}>
+          {showSalon && !tablesOnly && <label className="orders-new-orders">
             <ClipboardList size={18} aria-hidden="true" />
-            <span>{byChannel ? 'Por atendimento' : 'Por etapa'}</span>
-          </button>}
+            <select className="min-w-0 bg-koma-raised text-koma-foreground" aria-label="Dividir painel de pedidos"
+              value={separateTables ? 'service' : byChannel ? 'channel' : 'stage'}
+              onChange={event => onGroupingChange?.(event.target.value)}>
+              <option value="stage">Por etapa</option>
+              <option value="channel">Por atendimento</option>
+              <option value="service">Mesas separadas</option>
+            </select>
+          </label>}
           <label className="orders-auto-accept">
             <input
               type="checkbox"
@@ -1056,9 +1069,9 @@ export function CaixaOrdersWorkspaceView({
             'orders-column--' + lane.id, effectiveMobileOrdersStage === lane.id && 'is-mobile-active')}>
             <CashierColumnHeader kind={lane.id} title={lane.title} count={lane.count} />
             <div className="orders-column__body p-2.5 sm:p-3 flex-1 overflow-y-auto space-y-2.5">
-              {!lane.delivery && filteredCol2Table.map(renderTableClosing)}
+              {lane.tables && filteredCol2Table.map(renderTableClosing)}
               {lane.closing.map(renderDigitalClosing)}
-              {!lane.delivery && filteredCol1.map(renderTableProduction)}
+              {lane.tables && filteredCol1.map(renderTableProduction)}
               {lane.production.map(renderDigitalProduction)}
               {lane.count === 0 && <div className="orders-empty-state py-12 text-center">
                 <img width="96" height="72" alt="" className="orders-empty-state__art mx-auto"

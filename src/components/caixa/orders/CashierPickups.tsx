@@ -31,6 +31,8 @@ type CompletedPickupApiOrder = {
 };
 
 type Props = {
+  query: string;
+  setQuery: (value: string) => void;
   activeSubTab: string;
   hasDeliverySnapshot?: boolean;
   onRetry?: () => void;
@@ -75,7 +77,7 @@ const completedTotal = (order: CompletedPickupApiOrder) => {
 };
 
 export function CashierPickups({
-  activeSubTab, hasDeliverySnapshot, onRetry,
+  query, setQuery, activeSubTab, hasDeliverySnapshot, onRetry,
   isWsConnected = false,
   deliveryOrders,
   deliveryOrdersLoadState,
@@ -88,7 +90,6 @@ export function CashierPickups({
   handleFinalizeDigitalOrder,
   openDeliveryOrderDetails,
 }: Props) {
-  const [query, setQuery] = useState('');
   const [completedRecent, setCompletedRecent] = useState<CompletedPickupApiOrder[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);

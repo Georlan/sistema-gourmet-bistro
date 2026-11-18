@@ -42,6 +42,7 @@ import { CashierDesktopSidebar } from './caixa/navigation/CashierDesktopSidebar'
 import { CashierMobileBottomBar } from './caixa/navigation/CashierMobileBottomBar';
 import { CashierMobileSidebar } from './caixa/navigation/CashierMobileSidebar';
 import { CashierOperatorDrawer } from './caixa/navigation/CashierOperatorDrawer';
+import { bucketPickupOrders, bucketCourierDeliveryOrders } from './caixa/orders/deliveryOrderProjection';
 import { CashierSubNavigation } from './caixa/navigation/CashierSubNavigation';
 import { shouldShowSalon } from '../domain/cashierSalonVisibility';
 import { useCashierNavigation } from './caixa/navigation/useCashierNavigation';
@@ -400,6 +401,7 @@ export function CaixaPanel({
   });
   const { loyaltyUsers, customersStatus, hasCustomerSnapshot, refreshLoyaltyUsers, totalCustomers, hasMoreCustomers, loadingMoreCustomers, loadMoreCustomers } = customers;
 
+  const [tablesOnly, setTablesOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   const {
@@ -752,6 +754,14 @@ export function CaixaPanel({
     ? salonTableCards.find(card => card.table.id === Number(selectedKanbanOrder.mesaId) && !card.isMerged)
     : undefined;
 
+  const queueCounts = useMemo(() => {
+    const pickup = bucketPickupOrders(deliveryOrders, nowTimestamp);
+    const delivery = bucketCourierDeliveryOrders(deliveryOrders);
+    return {
+      retiradas: pickup.awaitingAcceptance.length + pickup.preparing.length + pickup.ready.length,
+      entregadores: delivery.preparing.length + delivery.ready.length + delivery.inTransit.length + delivery.awaitingPayment.length,
+    };
+  }, [deliveryOrders, nowTimestamp]);
   const hasLocalServiceWork = tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0;
   const hasLocalPendingPayment = pagamentosPendentes.some(payment => orders.some(order =>
     order.id === payment.comanda_id && Number(order.mesaId) > 0,
@@ -910,6 +920,27 @@ export function CaixaPanel({
             counts={{ cardapio_produtos: apiProdutos.length, cardapio_preparo: apiCategorias.length }}
           />
 
+          {activeTab === 'operacao' && ['pedidos', 'retiradas', 'entregadores'].includes(activeSubTab) && (
+            <div role="group" aria-label="Filtrar pedidos por atendimento" className="flex shrink-0 gap-1 overflow-x-auto px-3 py-1 border-b border-koma-border bg-koma-panel">
+              {[
+                { id: 'pedidos', label: 'Todos', count: undefined },
+                ...(showSalon ? [{ id: 'somente_mesas', label: 'Mesas', count: isLoading ? undefined : new Set([...tableOrdersInProduction, ...tableOrdersReady].map(order => order.mesaId)).size }] : []),
+                { id: 'retiradas', label: 'Retiradas', count: hasDeliverySnapshot ? queueCounts.retiradas : undefined },
+                { id: 'entregadores', label: 'Entregas', count: hasDeliverySnapshot ? queueCounts.entregadores : undefined },
+              ].map(filter => {
+                const selected = filter.id === (activeSubTab === 'pedidos' && tablesOnly && showSalon ? 'somente_mesas' : activeSubTab);
+                return <button key={filter.id} type="button" aria-pressed={selected}
+                  className={clsx('min-h-11 shrink-0 rounded-xl px-3 font-bold', selected ? 'bg-koma-raised text-koma-foreground ring-1 ring-inset ring-koma-border' : 'text-koma-muted')}
+                  onClick={() => {
+                    setTablesOnly(filter.id === 'somente_mesas');
+                    setActiveSubTab(filter.id === 'somente_mesas' ? 'pedidos' : filter.id);
+                  }}>
+                  {filter.label}{filter.count !== undefined && <span className="ml-1.5 tabular-nums">{filter.count}</span>}
+                </button>;
+              })}
+            </div>
+          )}
+
           <div ref={cashierContentRef} className={"cashier-content min-w-0 min-h-0 flex-1 p-5 pb-20 lg:pb-5 relative"}>
             {activeTab === 'operacao' && cashShiftUiState !== 'open' && ['pedidos', 'balcao', 'mesas', 'kds'].includes(activeSubTab) && (
               <div data-testid="cashier-shift-blocker" className={"absolute inset-0 bg-black/90 backdrop-blur-xs z-50 flex flex-col items-center justify-center text-center p-6 space-y-4"}>
@@ -949,6 +980,7 @@ export function CaixaPanel({
               <CaixaOrdersWorkspace
                 pixConferenceTrigger={<DirectPixPendingPanel apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onRefreshOrders={onRefreshOrders} />}
                 hasLocalServiceWork={hasLocalServiceWork}
+                tablesOnly={tablesOnly && showSalon}
                 columns={cashierOrderColumns}
                 pendingCashPayments={pagamentosPendentes.map((pag) => {
                   const comandaMesa = orders.find((order) => order.id === pag.comanda_id);
@@ -1028,6 +1060,7 @@ export function CaixaPanel({
             <CashierKitchen mode={hasDedicatedKds ? 'kds' : 'queue'} activeSubTab={activeTab === 'operacao' ? activeSubTab : ''} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} handleConfirmTicketReady={handleConfirmTicketReady} onRefreshOrders={onRefreshOrders} />
 
             <CashierPickups
+              query={searchQuery} setQuery={setSearchQuery}
               isWsConnected={isWsConnected}
               activeSubTab={activeTab === 'operacao' ? activeSubTab : ''}
               deliveryOrders={deliveryOrders}
@@ -1234,6 +1267,7 @@ export function CaixaPanel({
             )}
 
             <CashierCouriers
+              query={searchQuery} setQuery={setSearchQuery}
               isWsConnected={isWsConnected}
               activeSubTab={activeTab === 'operacao' ? activeSubTab : ''}
               deliveryOrders={deliveryOrders}

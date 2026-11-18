@@ -133,6 +133,6 @@ test('couriers load when opening Deliveries even before the first delivery arriv
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
   expect(reads).toBe(0);
-  await page.locator('.cashier-subnav').getByRole('button', { name: 'Entregas', exact: true }).click();
+  await page.getByRole('group', { name: 'Filtrar pedidos por atendimento' }).getByRole('button', { name: /^Entregas/ }).click();
   await expect.poll(() => reads).toBeGreaterThan(0);
 });

@@ -58,7 +58,7 @@ export const centralSections = [
 
 /** Stable IDs from the operational navigation tree; the browser gate clicks each one. */
 export const operatorNavigationIds = [
-  'vendas_pedidos', 'vendas_novo_pedido', 'vendas_salao', 'vendas_cozinha', 'vendas_retiradas', 'vendas_entregas',
+  'vendas_pedidos', 'vendas_novo_pedido', 'vendas_salao', 'vendas_cozinha',
   'caixa_turno_atual', 'caixa_movimentacoes', 'caixa_fechamento',
   'cardapio_produtos', 'cardapio_complementos', 'cardapio_preparo',
   'estoque_ingredientes', 'estoque_historico', 'estoque_inventario', 'estoque_fornecedores',
