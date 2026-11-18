@@ -903,7 +903,8 @@ export function CaixaOrdersWorkspaceView({
               onClick={() => setMobileOrdersStage(stage.id)}
               className="orders-mobile-stages__button orders-filter-button"
             >
-              <span>{stage.label}</span>
+              <span className="orders-mobile-filter-icon" aria-hidden="true"><svg width="20" height="20"><use href={`/brand/cashier/queue-marks.svg?v=2#${orderFilterIcons[stage.id]}`} /></svg></span>
+              <span className="sr-only">{stage.label} </span>
               <strong>{stage.count}</strong>
             </button>
           ))}
