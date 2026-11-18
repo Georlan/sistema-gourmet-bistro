@@ -77,3 +77,21 @@ test('delivery envia endereço simplificado e mostra erro legível preservando c
     releaseSnapshot();
   }
 });
+
+test('kanban alterna entre etapas e atendimento mantendo os cartões', async ({ page }) => {
+  await mockCashierBackend(page);
+  await seedCashierSession(page);
+  await page.goto('/?view=caixa');
+  const board = page.locator('.orders-board');
+  const toggle = page.getByRole('button', { name: 'Agrupar pedidos por atendimento' });
+  const cards = board.locator('.orders-card');
+  await expect(cards.first()).toBeAttached();
+  const count = await cards.count();
+  await toggle.click();
+  await expect(board.locator('.orders-column')).toHaveCount(2);
+  await expect(board.getByRole('heading', { name: 'Presencial e retiradas', includeHidden: true })).toHaveCount(1);
+  await expect(cards).toHaveCount(count);
+  await toggle.click();
+  await expect(board.locator('.orders-column')).toHaveCount(3);
+  await expect(cards).toHaveCount(count);
+});
