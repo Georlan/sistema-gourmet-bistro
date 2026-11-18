@@ -163,6 +163,9 @@ class MainActivity : Activity() {
         runRequest(action = {
             val active = context ?: api.session()
             active to if (active.enabled && active.open) api.salon() else Salon(emptyList(), emptyList())
+        }, onError = { failure ->
+            showSalon()
+            report(messageFor(failure))
         }) { (active, fresh) ->
             session = active
             salon = fresh
@@ -221,8 +224,11 @@ class MainActivity : Activity() {
                                 this.label(entry.name, 22, ink, bold = true)
                                 this.label(label, 13, muted)
                                 button(if (isOccupied) "Lançar" else "Novo pedido", primary = isOccupied) {
-                                    loadTable(entry, openMenuIfFree = !isOccupied)
+                                    loadTable(entry, openMenuAfterLoad = true)
                                 }
+                            }
+                            card.setOnClickListener {
+                                if (!busy) loadTable(entry)
                             }
                             tableRow.addView(card, LinearLayout.LayoutParams(0, -2, 1f).apply {
                                 marginEnd = dp(6)
@@ -240,7 +246,7 @@ class MainActivity : Activity() {
         })
     }
 
-    private fun loadTable(entry: Table, openMenuIfFree: Boolean = false) {
+    private fun loadTable(entry: Table, openMenuAfterLoad: Boolean = false) {
         val previousId = table?.id
         runRequest(action = { api.detail(entry) }) { fresh ->
             table = entry
@@ -250,7 +256,7 @@ class MainActivity : Activity() {
             }
             consumption = fresh.items
             showTable()
-            if (openMenuIfFree && fresh.checks.isEmpty()) openMenu()
+            if (openMenuAfterLoad) openMenu()
         }
     }
 
