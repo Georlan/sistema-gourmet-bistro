@@ -66,3 +66,12 @@ test('checkout da mesa exige itens e método explícitos', async ({ page }) => {
   // Nenhuma baixa foi efetivada
   expect(state.actions.filter((action) => /pagar/.test(action.path))).toEqual([]);
 });
+
+test('mesa em preparo abre pagamento com saldo integral e método explícito', async ({page}) => {
+  const state = await openOperationalScenario(page, { subtab:'pedidos', statuses:['preparando','preparando'] });
+  await page.getByRole('button',{name:'Receber mesa',exact:true}).first().click();
+  await expect(page.getByRole('heading',{name:'Pagamento',exact:true})).toBeVisible();
+  await expect(page.getByRole('textbox',{name:/valor/i})).toHaveValue('160,00');
+  await expect(page.getByRole('button',{name:'Dinheiro',exact:true})).toHaveAttribute('aria-pressed','false');
+  expect(state.actions.filter(action=>/pagar|pronto/.test(action.path))).toHaveLength(0);
+});
