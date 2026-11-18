@@ -355,6 +355,7 @@ test('Retiradas e Entregas permitem completar o trabalho normal sem voltar ao Ka
   const pickupCheckout = pickups.getByRole('button', { name: 'Receber e concluir retirada' });
   await expect(pickupCheckout).toBeVisible();
   await pickupCheckout.click();
+  await expect(page.getByRole('button', { name: 'Dinheiro', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('dialog', { name: 'Receber pagamento' })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 

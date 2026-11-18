@@ -378,6 +378,13 @@ def test_delivery_to_pickup_rejects_in_route_and_paid_delivery_fee(setup_db):
     finally:
         db.close()
 
+    for endpoint in ("/comandas/delivery/ativos", "/comandas/detalhes/todos"):
+        snapshot = client.get(endpoint, headers=headers)
+        assert snapshot.status_code == 200, snapshot.text
+        projected = next(row for row in snapshot.json() if row["id"] == paid_id)
+        assert projected["online_payment_status"] == "approved"
+        assert projected["delivery_status"] == "pronto"
+
     blocked_finance = client.post(
         f"/comandas/{paid_id}/delivery/converter-retirada",
         json={"motivo": "Cliente vem retirar"},

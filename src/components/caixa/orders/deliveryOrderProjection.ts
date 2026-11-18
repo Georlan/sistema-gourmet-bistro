@@ -48,6 +48,16 @@ export function readDigitalOrderFulfillment(
 }
 
 
+function digitalPaymentBalance(total: number, recorded: unknown, onlineStatus: unknown, finalized: boolean, itemsPaid: boolean) {
+  const onlinePaid = onlineStatus === 'approved';
+  const recordedAmount = Math.max(0, Number(recorded) || 0);
+  const amountPaid = onlinePaid ? Math.max(total, recordedAmount) : recordedAmount;
+  const amountDue = Math.max(0, Math.round((total - amountPaid) * 100) / 100);
+  // Old snapshots without a monetary balance sometimes carry only per-item flags.
+  const pago = onlinePaid || (recorded != null || finalized ? amountDue === 0 : itemsPaid);
+  return { amountPaid, amountDue, pago };
+}
+
 /**
  * Normaliza a comanda crua retornada pelas rotas operacionais no mesmo read model
  * usado por Pedidos, Retiradas e Entregas. Assim modalidade, saldo, origem,
@@ -76,9 +86,8 @@ export function projectApiComandaToDeliveryView(c: any): DeliveryOrderView | nul
     (Number(c?.valor_desconto_cupom) || 0) +
     (Number(c?.valor_desconto_cashback) || 0);
   const total = Math.max(0, subtotal + (Number(c?.delivery_taxa) || 0) - discounts);
-  const onlinePaid = c?.online_payment_status === 'approved';
-  const amountPaid = onlinePaid ? Math.max(total, Number(c?.valor_pago) || 0) : Math.max(0, Number(c?.valor_pago) || 0);
-  const amountDue = Math.max(0, total - amountPaid);
+  const { amountPaid, amountDue, pago } = digitalPaymentBalance(total, c?.valor_pago, c?.online_payment_status,
+    status === 'finalizado', activeItems.length > 0 && activeItems.every((item: any) => Boolean(item?.pago)));
 
   const origins = (Array.isArray(c?.lancamentos) ? c.lancamentos : []).map((launch: any) =>
     String(launch?.origem || '').toLowerCase()
@@ -128,7 +137,7 @@ export function projectApiComandaToDeliveryView(c: any): DeliveryOrderView | nul
     isQuickSale,
     quantidadeItens: activeItems.length,
     modalidade,
-    pago: onlinePaid || (amountPaid > 0 || status === 'finalizado' ? amountDue < 0.005 : activeItems.length > 0 && activeItems.every((item: any) => Boolean(item?.pago))),
+    pago,
     status,
     endereco: modalidade === 'delivery' ? rawAddress : '',
     paymentMethod: c?.delivery_forma_pagamento || null,
@@ -315,8 +324,8 @@ export function projectDeliveryOrdersFromSharedSnapshot(
         ? canonicalPayableTotal
         : subtotal + (Number(order.deliveryTax) || 0) - (Number(order.discountTotal) || 0),
     );
-    const amountPaid = Math.max(0, Number(order.valorPago) || 0);
-    const amountDue = Math.max(0, total - amountPaid);
+    const { amountPaid, amountDue, pago } = digitalPaymentBalance(total, order.valorPago, order.onlinePaymentStatus,
+      status === 'finalizado', activeItems.length > 0 && activeItems.every(item => Boolean(item.pago)));
     const rawAddress = String(order.deliveryAddress || '').trim();
     const modalidade = readDigitalOrderFulfillment(order.tipo, rawAddress);
     if (!modalidade) return [];
@@ -350,7 +359,8 @@ export function projectDeliveryOrdersFromSharedSnapshot(
       isQuickSale,
       quantidadeItens: activeItems.length,
       modalidade,
-      pago: amountPaid > 0 || status === 'finalizado' ? amountDue < 0.005 : activeItems.length > 0 && activeItems.every((item) => Boolean(item.pago)),
+      pago,
+      onlinePaymentStatus: order.onlinePaymentStatus,
       status,
       endereco: modalidade === 'delivery' ? rawAddress : '',
       paymentMethod: order.paymentMethod ?? null,

@@ -389,7 +389,13 @@ export function useCheckoutController({
 
   useEffect(() => {
     setIdempotencyKey('');
-    if (splitParts.length === 0) setPaymentMetodo('');
+    if (splitParts.length > 0) return;
+    const method = selectedOrder && !isTableCheckoutOrder(selectedOrder) ? selectedOrder.paymentMethod : null;
+    if (method === 'pix' || method === 'dinheiro' || method === 'cartao_credito' || method === 'cartao_debito') {
+      setPaymentMetodo(method);
+    } else {
+      setPaymentMetodo('');
+    }
   }, [selectedOrder]);
 
   useEffect(() => {
@@ -760,6 +766,7 @@ export function useCheckoutController({
     if (fullOrder) {
       const mappedOrder: Order = {
         ...fullOrder,
+        paymentMethod: order.paymentMethod ?? fullOrder.paymentMethod,
         deliveryStatus: (order.status === 'analise' ? 'pendente' : order.status) as Order['deliveryStatus'],
         itens: fullOrder.itens.map((item: any) => ({
           id: item.id,
@@ -787,8 +794,6 @@ export function useCheckoutController({
         0,
         getDigitalPayableTotal(mappedOrder) - Number(mappedOrder.valorPago || 0),
       );
-      const method = order.paymentMethod;
-      setPaymentMetodo(method === 'pix' || method === 'dinheiro' || method === 'cartao_credito' || method === 'cartao_debito' ? method : '');
       setPaymentValor(balance);
     } else {
       showToast(
