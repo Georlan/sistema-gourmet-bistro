@@ -131,12 +131,12 @@ test('reconciliação ao retornar do background move card imediatamente', async 
   });
 
   const viewport = page.viewportSize();
-  const isMobile = viewport ? viewport.width < 1024 : false;
+  const isMobile = viewport ? viewport.width <= 768 : false;
 
   await page.goto('/?view=caixa');
 
   if (isMobile) {
-    await page.getByRole('tab', { name: /^Digitais/ }).click();
+    await page.getByRole('tab', { name: /^Retiradas/ }).click();
   }
 
   // O card deve aparecer na coluna de Em Produção
@@ -248,12 +248,12 @@ test('retomada durante leitura lenta enfileira uma reconciliação sem duplicar 
   });
 
   const viewport = page.viewportSize();
-  const isMobile = viewport ? viewport.width < 1024 : false;
+  const isMobile = viewport ? viewport.width <= 768 : false;
 
   await page.goto('/?view=caixa');
 
   if (isMobile) {
-    await page.getByRole('tab', { name: /^Digitais/ }).click();
+    await page.getByRole('tab', { name: /^Retiradas/ }).click();
   }
 
   await expect(page.locator('text=Cliente Retomada').first()).toBeVisible();

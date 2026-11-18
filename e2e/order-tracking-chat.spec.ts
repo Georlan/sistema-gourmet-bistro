@@ -533,7 +533,7 @@ test('card do Caixa permite salvar a observação durante o preparo', async ({ p
   });
   await page.goto('/?view=caixa');
   await expect(page.getByRole('heading', { name: 'Vendas', exact: true })).toBeVisible();
-  if ((page.viewportSize()?.width || 0) < 768) await page.getByRole('tab', { name: 'Digitais' }).click();
+  if ((page.viewportSize()?.width || 1366) <= 768) await page.getByRole('tab', { name: /^Entregas/ }).click();
   await page.getByRole('button', { name: /delivery pedido 4321, ver detalhes/i }).click();
   const detailItems = page.locator('.orders-detail-modal .kd-items-disclosure');
   await expect(detailItems).not.toHaveAttribute('open', '');

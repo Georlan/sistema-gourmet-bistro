@@ -35,10 +35,10 @@ for (const failure of [false, true]) {
       else { type = 'Delivery'; fee = 7; await route.fulfill({ json: order() }); }
     });
     await page.goto('/?view=caixa');
-    const digitalTab = page.getByRole('tab', { name: /^Digitais/ });
+    const pickupTab = page.getByRole('tab', { name: /^Retiradas/ });
     if ((page.viewportSize()?.width || 1366) <= 768) {
-      await expect(digitalTab).toBeVisible();
-      await digitalTab.click();
+      await expect(pickupTab).toBeVisible();
+      await pickupTab.click();
     }
     const card = page.locator('.orders-card--digital').filter({ hasText: 'Cliente conversão' });
     await card.click();
@@ -72,6 +72,8 @@ for (const failure of [false, true]) {
       await expect(dialog.getByRole('button', { name: 'Calcular e revisar' })).toBeVisible();
     } else {
       await expect(dialog).toHaveCount(0);
+      const deliveriesTab = page.getByRole('tab', { name: /^Entregas/ });
+      if (await deliveriesTab.isVisible()) await deliveriesTab.click();
       await expect(card).toContainText('R$ 49,00');
       await card.click();
       await expect(detail.getByRole('button', { name: 'Marcar como pronto', exact: true })).toHaveCount(0);
@@ -115,7 +117,7 @@ test('mostra conferência e não reabre janela após resposta tardia', async ({ 
   });
   try {
     await page.goto('/?view=caixa');
-    if ((page.viewportSize()?.width || 1366) <= 768) await page.getByRole('tab', { name: /^Digitais/ }).click();
+    if ((page.viewportSize()?.width || 1366) <= 768) await page.getByRole('tab', { name: /^Retiradas/ }).click();
     await page.locator('.orders-card--digital').filter({ hasText: 'Cliente latência' }).click();
     const detail = page.locator('.orders-detail-modal');
     await expect(detail.getByRole('button', { name: 'Verificando alteração de tipo' })).toBeDisabled();
@@ -143,7 +145,7 @@ test('permite repetir a conferência quando a consulta inicial falha', async ({ 
     return calls === 1 ? route.fulfill({ status: 503, json: { detail: 'Indisponível' } }) : route.fulfill({ json: { options: ['delivery'], address_snapshot: null } });
   });
   await page.goto('/?view=caixa');
-  if ((page.viewportSize()?.width || 1366) <= 768) await page.getByRole('tab', { name: /^Digitais/ }).click();
+  if ((page.viewportSize()?.width || 1366) <= 768) await page.getByRole('tab', { name: /^Retiradas/ }).click();
   await page.locator('.orders-card--digital').filter({ hasText: 'Cliente nova consulta' }).click();
   await page.locator('.orders-detail-modal').getByRole('button', { name: 'Tentar verificar alteração de tipo' }).click();
   const dialog = page.getByRole('dialog', { name: 'Alterar tipo do pedido' });

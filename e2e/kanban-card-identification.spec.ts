@@ -28,12 +28,15 @@ for (const theme of ['dark','light']) for (const size of ['padrao','gigante']) {
       await route.fulfill({json:{ok:true}});
     });
     await page.goto('/?view=caixa');
-    const digitalTab=page.getByRole('tab',{name:/^Digitais/});
+    const pickupTab=page.getByRole('tab',{name:/^Retiradas/});
+    const deliveryTab=page.getByRole('tab',{name:/^Entregas/});
     const cards=page.locator('.orders-card--digital');
     await expect(cards).toHaveCount(8);
-    if(await digitalTab.isVisible()) await digitalTab.click();
-    await expect(cards.first()).toBeVisible();
-    for(const [index,card] of (await cards.all()).entries()) {
+    const mobile=await pickupTab.isVisible();
+    for(const [index,order] of orders.entries()) {
+      const card=cards.filter({hasText:order.identificador});
+      if(mobile) await (index%2?deliveryTab:pickupTab).click();
+      await expect(card).toBeVisible();
       await expect(card.locator('.orders-card__identity-title')).toHaveText(`Cliente ${index} com nome comprido`);
       const tag=card.getByRole('img',{name:`${index%2?'Entrega':'Retirada'}, pedido ${101+index}`,exact:true});
       await expect(tag).toBeVisible();
@@ -68,7 +71,9 @@ for (const theme of ['dark','light']) for (const size of ['padrao','gigante']) {
       if(cardBox!.width>380) expect(Math.abs(tagBox!.y-title!.y)).toBeLessThanOrEqual(2);
       expect(await card.locator('.orders-card__number strong').evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
     }
-    const first=await cards.nth(0).boundingBox(), next=await cards.nth(1).boundingBox();
+    if(mobile) await pickupTab.click();
+    const first=await cards.filter({hasText:orders[0].identificador}).boundingBox();
+    const next=await cards.filter({hasText:orders[2].identificador}).boundingBox();
     expect(next!.y-(first!.y+first!.height)).toBeGreaterThanOrEqual(8);
     expect(next!.y-(first!.y+first!.height)).toBeLessThanOrEqual(12);
     const relativeTop=await cards.first().evaluate(el=>el.querySelector('.orders-card__mark')!.getBoundingClientRect().top-el.getBoundingClientRect().top);
