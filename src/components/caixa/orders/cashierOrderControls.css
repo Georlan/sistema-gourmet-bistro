@@ -133,6 +133,7 @@
     padding: .2rem .3rem;
     font-size: .78rem;
   }
+  .orders-mobile-filter-icon { display: inline-flex; color: var(--koma-accent-text); }
   .orders-workspace .orders-mobile-stages .orders-filter-button strong {
     min-width: 1.125rem;
     height: 1.125rem;
