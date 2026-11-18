@@ -56,6 +56,7 @@ from ...models import (
     Item,
     ItemModificador,
     Lancamento,
+    Pagamento,
     Produto,
     Restaurante,
     Usuario,
@@ -1086,6 +1087,33 @@ class OrderApplicationService:
         return cls._to_order_dto(db=db, comanda=comanda, lancamento=lancamento)
 
     @classmethod
+    def _ensure_no_approved_payment_before_cancel_or_reject(
+        cls,
+        db: Session,
+        comanda: Comanda,
+        target_items: list[Item],
+    ) -> None:
+        from sqlalchemy import or_
+
+        has_paid_item = any(bool(getattr(it, "pago", False)) for it in target_items)
+        has_paid_amount = float(getattr(comanda, "valor_pago", 0.0) or 0.0) > 0.0
+        has_approved_online = (getattr(comanda, "online_payment_status", None) or "").strip().casefold() == "approved"
+        has_active_payment = (
+            db.query(Pagamento.id)
+            .filter(
+                Pagamento.restaurante_id == int(comanda.restaurante_id),
+                Pagamento.comanda_id == comanda.id,
+                or_(Pagamento.status.is_(None), Pagamento.status != "cancelado"),
+            )
+            .first()
+            is not None
+        )
+        if has_paid_item or has_paid_amount or has_approved_online or has_active_payment:
+            raise OrderValidationError(
+                "Há pagamento registrado ou aprovado neste pedido. Estorne o pagamento no Caixa antes de cancelar ou recusar."
+            )
+
+    @classmethod
     def cancel_order(
         cls,
         db: Session,
@@ -1109,10 +1137,11 @@ class OrderApplicationService:
             fulfillment=fulfillment,
         )
 
+        target_items = [it for it in comanda.itens if it.lancamento_id == lancamento.id] if lancamento else comanda.itens
+        cls._ensure_no_approved_payment_before_cancel_or_reject(db, comanda, target_items)
+
         if lancamento:
             lancamento.status = "cancelado"
-
-        target_items = [it for it in comanda.itens if it.lancamento_id == lancamento.id] if lancamento else comanda.itens
 
         itens_cancelados = []
         for it in target_items:
@@ -1183,6 +1212,9 @@ class OrderApplicationService:
             target_status=OrderStatus.REJECTED,
             fulfillment=fulfillment,
         )
+
+        target_items = [it for it in comanda.itens if it.lancamento_id == lancamento.id] if lancamento else comanda.itens
+        cls._ensure_no_approved_payment_before_cancel_or_reject(db, comanda, target_items)
 
         if lancamento:
             lancamento.status = "recusado"
