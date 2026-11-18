@@ -151,7 +151,7 @@ test('atalho do turno abre a conferência sem fechar o caixa', async ({ page }) 
   const sidebar = page.locator('.cashier-sidebar:visible');
   if (!await sidebar.isVisible()) await page.getByRole('button', { name: 'Abrir menu principal' }).click();
   await sidebar.getByRole('button', { name: 'Fechar caixa', exact: true }).click();
-  await expect(page.getByText('Como você quer conferir?', { exact: true })).toBeVisible();
+  await expect(page.getByText('Conferir e fechar o caixa', { exact: true })).toBeVisible();
   await expect(page.getByText('Conferência rápida', { exact: true })).toBeVisible();
   await expect(page.getByRole('dialog', { name: 'Menu principal' })).toHaveCount(0);
   expect(mutations).toEqual([]);

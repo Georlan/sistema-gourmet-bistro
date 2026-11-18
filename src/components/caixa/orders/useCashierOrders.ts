@@ -1366,6 +1366,32 @@ export function useCashierOrders({
       : openCancelOrderConfirmation(selectedKanbanOrder);
   const handleCancelSelectedKanbanOrder = () => openCancelOrderConfirmation(selectedKanbanOrder);
 
+  const removingItemIds = useRef(new Set<string>());
+  const removeOrderItem = async (itemId: string) => {
+    const source = selectedKanbanOrder?.itens?.find((item: any) => String(item.id) === itemId);
+    if (!source || source.pago || selectedKanbanOrder.amountPaid > 0 || ['approved', 'pending', 'pending_released'].includes(selectedKanbanOrder.onlinePaymentStatus || '')) {
+      throw new Error('Confira o pagamento antes de retirar este item.');
+    }
+    if (removingItemIds.current.has(itemId)) return;
+    const scope = authHeaders.Authorization;
+    const detailId = selectedKanbanOrder.id;
+    removingItemIds.current.add(itemId);
+    try {
+      const response = await fetch(`${apiBaseUrl}/comandas/itens/${encodeURIComponent(itemId)}/cancelar`, {
+        method: 'PUT', headers: authHeaders,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (kitchenAuthScopeRef.current !== scope) return;
+      if (!response.ok) throw new Error(response.status === 400 && typeof data.detail === 'string' && data.detail.includes('único item')
+        ? 'Este é o último item da conta. Use a ação de cancelar o pedido ou a mesa.'
+        : typeof data.detail === 'string' ? data.detail : 'Não foi possível retirar o item.');
+      // Re-read the canonical totals instead of subtracting a guessed unit price.
+      setSelectedKanbanOrder((current: any) => current?.id === detailId ? null : current);
+      showToast('Item retirado do pedido.', 'success');
+      await Promise.allSettled([onRefreshOrders(), fetchDeliveryOrders()]);
+    } finally { removingItemIds.current.delete(itemId); }
+  };
+
   const saveItemObservation = async (itemId: string, observation: string) => {
     const response = await fetch(`${apiBaseUrl}/comandas/itens/${encodeURIComponent(itemId)}`, {
       method: 'PUT',
@@ -1383,6 +1409,7 @@ export function useCashierOrders({
     applyConfirmedPdvOrder,
     selectedKanbanOrder,
     saveItemObservation,
+    removeOrderItem,
     setSelectedKanbanOrder,
     cancelConsumptionTarget,
     setCancelConsumptionTarget,

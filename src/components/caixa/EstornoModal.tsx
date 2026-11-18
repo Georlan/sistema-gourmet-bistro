@@ -191,7 +191,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-koma-overlay p-3 backdrop-blur-sm" onMouseDown={event => event.target === event.currentTarget && onClose()}>
-      <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-koma-border bg-koma-panel shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-label="Devolver um pagamento" className="cash-register flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-koma-border bg-koma-panel shadow-2xl">
         <header className="flex items-center justify-between gap-3 border-b border-koma-border px-5 py-4">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-2xl border border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300">
@@ -199,7 +199,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
             </span>
             <div>
               <h2 className="text-sm font-bold text-koma-foreground">Devolver um pagamento</h2>
-              <p className="mt-0.5 text-[10px] text-koma-muted">Escolha o pagamento, informe o valor e registre o motivo da devolução.</p>
+              <p className="mt-0.5 text-xs text-koma-muted">Escolha o pagamento, informe o valor e registre o motivo da devolução.</p>
             </div>
           </div>
           <button type="button" onClick={onClose} className="rounded-xl p-2 text-koma-muted hover:bg-koma-raised hover:text-koma-foreground" aria-label="Fechar">
@@ -213,19 +213,20 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
               <div className="relative flex-1">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
                 <input
+                  aria-label="Buscar pagamento para devolução"
                   value={search}
                   onChange={event => setSearch(event.target.value)}
                   placeholder="Mesa, conta, pedido ou forma..."
-                  className="w-full rounded-xl border border-koma-border bg-koma-input py-2.5 pl-9 pr-3 text-xs text-koma-foreground outline-none focus:border-emerald-500/50"
+                  className="w-full rounded-xl border border-koma-border bg-koma-input py-2.5 pl-9 pr-3 text-sm text-koma-foreground outline-none focus:border-emerald-500/50"
                 />
               </div>
             </div>
 
             <div className="mt-3 max-h-[58vh] space-y-2 overflow-y-auto pr-1">
               {loading ? (
-                <div className="flex items-center justify-center gap-2 py-10 text-xs text-koma-muted"><Loader2 size={16} className="animate-spin" /> Carregando recebimentos…</div>
+                <div className="flex items-center justify-center gap-2 py-10 text-sm text-koma-muted"><Loader2 size={16} className="animate-spin" /> Carregando recebimentos…</div>
               ) : filtered.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-koma-border px-4 py-8 text-center text-xs text-koma-muted">Nenhum pagamento disponível para devolução.</div>
+                <div className="rounded-2xl border border-dashed border-koma-border px-4 py-8 text-center text-sm text-koma-muted">Nenhum pagamento disponível para devolução.</div>
               ) : filtered.map(payment => {
                 const active = payment.id === selectedId;
                 return (
@@ -237,12 +238,12 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <strong className="block truncate text-xs text-koma-foreground">{payment.origem}</strong>
-                        <span className="mt-1 block text-[9px] text-koma-muted">{formatBackendDateTime(payment.criado_em)} · {methodLabel[payment.metodo_original] || payment.metodo_original}</span>
+                        <strong className="block truncate text-sm text-koma-foreground">{payment.origem}</strong>
+                        <span className="mt-1 block text-xs text-koma-muted">{formatBackendDateTime(payment.criado_em)} · {methodLabel[payment.metodo_original] || payment.metodo_original}</span>
                       </div>
-                      <strong className="shrink-0 text-xs tabular-nums text-rose-800 dark:text-rose-300">{currency.format(payment.saldo_estornavel)}</strong>
+                      <strong className="shrink-0 text-sm tabular-nums text-rose-800 dark:text-rose-300">{currency.format(payment.saldo_estornavel)}</strong>
                     </div>
-                    <span className="mt-2 block text-[9px] text-koma-muted">Original {currency.format(payment.valor_original)} · disponível para devolução</span>
+                    <span className="mt-2 block text-xs text-koma-muted">Original {currency.format(payment.valor_original)} · disponível para devolução</span>
                   </button>
                 );
               })}
@@ -254,24 +255,25 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
               <div className="flex min-h-72 flex-col items-center justify-center text-center">
                 <RotateCcw size={24} className="text-koma-muted" />
                 <strong className="mt-3 text-sm text-koma-foreground">Selecione um pagamento</strong>
-                <span className="mt-1 max-w-sm text-[11px] leading-relaxed text-koma-muted">A lista mostra pagamentos aprovados que ainda podem ser devolvidos.</span>
+                <span className="mt-1 max-w-sm text-sm leading-relaxed text-koma-muted">A lista mostra pagamentos aprovados que ainda podem ser devolvidos.</span>
               </div>
             ) : (
               <div className="space-y-4">
                 <div>
-                  <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-koma-muted">Pagamento escolhido</span>
+                  <span className="text-xs font-bold uppercase tracking-[0.12em] text-koma-muted">Pagamento escolhido</span>
                   <h3 className="mt-1 text-sm font-bold text-koma-foreground">Devolver de {selected.origem}</h3>
                 </div>
-                <div className="grid grid-cols-2 gap-2 rounded-2xl border border-koma-border bg-koma-card p-3 text-[10px]">
+                <div className="grid grid-cols-2 gap-2 rounded-2xl border border-koma-border bg-koma-card p-3 text-xs">
                   <div><span className="block text-koma-muted">Recebimento original</span><strong className="mt-1 block text-koma-foreground">{currency.format(selected.valor_original)}</strong></div>
                   <div><span className="block text-koma-muted">Disponível para devolução</span><strong className="mt-1 block text-rose-800 dark:text-rose-300">{currency.format(selected.saldo_estornavel)}</strong></div>
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Valor da devolução</label>
+                  <label className="mb-1.5 block text-xs font-semibold text-koma-muted" htmlFor="refund-value">Valor da devolução</label>
                   <div className="flex items-center rounded-xl border border-koma-border bg-koma-input px-3 focus-within:border-rose-500/50">
-                    <span className="text-xs text-koma-muted">R$</span>
+                    <span className="text-sm text-koma-muted">R$</span>
                     <MoneyInput
+                      id="refund-value"
                       value={value}
                       onValueChange={setValue}
                       selectOnFocus
@@ -281,8 +283,8 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Forma da devolução</label>
-                  <select value={payoutMethod} onChange={event => setPayoutMethod(event.target.value)} className="w-full rounded-xl border border-koma-border bg-koma-input px-3 py-3 text-xs text-koma-foreground outline-none focus:border-rose-500/50">
+                  <label className="mb-1.5 block text-xs font-semibold text-koma-muted" htmlFor="refund-method">Forma da devolução</label>
+                  <select id="refund-method" value={payoutMethod} onChange={event => setPayoutMethod(event.target.value)} className="w-full rounded-xl border border-koma-border bg-koma-input px-3 py-3 text-sm text-koma-foreground outline-none focus:border-rose-500/50">
                     <option value="dinheiro">Dinheiro</option>
                     <option value="pix">Pix</option>
                     <option value="cartao">Cartão</option>
@@ -290,7 +292,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
                     <option value="cartao_debito">Cartão de débito</option>
                   </select>
                   {payoutDiffers && (
-                    <div className="mt-2 flex gap-2 rounded-xl border border-amber-300 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 p-2.5 text-[10px] leading-relaxed text-amber-900 dark:text-amber-200">
+                    <div className="mt-2 flex gap-2 rounded-xl border border-amber-300 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 p-2.5 text-xs leading-relaxed text-amber-900 dark:text-amber-200">
                       <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                       A venda foi recebida por {methodLabel[selected.metodo_original] || selected.metodo_original}, mas a devolução sairá por {methodLabel[payoutMethod] || payoutMethod}. O relatório preserva o meio original; o caixa usa o meio real da devolução.
                     </div>
@@ -299,7 +301,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
 
                 {needsOriginAllocation && (
                   <div className="rounded-2xl border border-amber-300 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/20 p-3">
-                    <div className="flex gap-2 text-[10px] leading-relaxed text-amber-900 dark:text-amber-200">
+                    <div className="flex gap-2 text-xs leading-relaxed text-amber-900 dark:text-amber-200">
                       <AlertTriangle size={14} className="mt-0.5 shrink-0" />
                       <span>Este recebimento foi dividido entre mais de uma Conta. Como a devolução é parcial, informe de qual conta sai cada parte. O sistema não faz rateio automático.</span>
                     </div>
@@ -307,34 +309,34 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
                       {selected.origens_financeiras.filter(origin => origin.saldo_estornavel > 0).map((origin, index, origins) => (
                         <div key={origin.comanda_id} className="grid grid-cols-[minmax(0,1fr)_130px] items-center gap-3 rounded-xl border border-koma-border bg-koma-panel p-2.5">
                           <div className="min-w-0">
-                            <strong className="block truncate text-[10px] text-koma-foreground">
+                            <strong className="block truncate text-xs text-koma-foreground">
                               {origin.label}{origins.filter(candidate => candidate.label === origin.label).length > 1 ? ` · Parte ${index + 1}` : ''}
                             </strong>
-                            <span className="mt-0.5 block text-[9px] text-koma-muted">Disponível {currency.format(origin.saldo_estornavel)}</span>
+                            <span className="mt-0.5 block text-xs text-koma-muted">Disponível {currency.format(origin.saldo_estornavel)}</span>
                           </div>
                           <MoneyInput
                             value={originValues[origin.comanda_id] ?? ''}
                             onValueChange={next => setOriginValues(current => ({ ...current, [origin.comanda_id]: next }))}
                             placeholder="0,00"
-                            className="w-full rounded-lg border border-koma-border bg-koma-input px-2 py-2 text-right text-xs font-bold tabular-nums text-koma-foreground outline-none focus:border-rose-500/50"
+                            className="w-full rounded-lg border border-koma-border bg-koma-input px-2 py-2 text-right text-sm font-bold tabular-nums text-koma-foreground outline-none focus:border-rose-500/50"
                           />
                         </div>
                       ))}
-                      <div className="flex justify-between text-[10px] font-semibold text-koma-muted"><span>Distribuído</span><span className={Math.abs(explicitOriginTotal - refundValue) < 0.005 ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}>{currency.format(explicitOriginTotal)} / {currency.format(refundValue)}</span></div>
+                      <div className="flex justify-between text-xs font-semibold text-koma-muted"><span>Distribuído</span><span className={Math.abs(explicitOriginTotal - refundValue) < 0.005 ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}>{currency.format(explicitOriginTotal)} / {currency.format(refundValue)}</span></div>
                     </div>
                   </div>
                 )}
 
                 <div>
-                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Justificativa obrigatória</label>
-                  <textarea value={reason} onChange={event => setReason(event.target.value)} maxLength={500} rows={3} placeholder="Ex.: cobrança duplicada, item devolvido, erro operacional…" className="w-full resize-none rounded-xl border border-koma-border bg-koma-input px-3 py-2.5 text-xs text-koma-foreground outline-none focus:border-rose-500/50" />
+                  <label className="mb-1.5 block text-xs font-semibold text-koma-muted" htmlFor="refund-reason">Justificativa obrigatória</label>
+                  <textarea id="refund-reason" value={reason} onChange={event => setReason(event.target.value)} maxLength={500} rows={3} placeholder="Ex.: cobrança duplicada, item devolvido, erro operacional…" className="w-full resize-none rounded-xl border border-koma-border bg-koma-input px-3 py-2.5 text-sm text-koma-foreground outline-none focus:border-rose-500/50" />
                 </div>
 
-                {error && <div className="rounded-xl border border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 p-3 text-[11px] text-rose-800 dark:text-rose-300">{error}</div>}
+                {error && <div role="alert" className="rounded-xl border border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 p-3 text-sm text-rose-800 dark:text-rose-300">{error}</div>}
 
                 <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                  <button type="button" onClick={onClose} disabled={submitting} className="rounded-xl border border-koma-border bg-koma-card px-4 py-2.5 text-xs font-bold text-koma-secondary hover:text-koma-foreground disabled:opacity-50">Cancelar</button>
-                  <button type="button" onClick={() => void submit()} disabled={submitting} className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-500/40 bg-rose-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-rose-500 disabled:opacity-50">
+                  <button type="button" onClick={onClose} disabled={submitting} className="rounded-xl border border-koma-border bg-koma-card px-4 py-2.5 text-sm font-bold text-koma-secondary hover:text-koma-foreground disabled:opacity-50">Cancelar</button>
+                  <button type="button" onClick={() => void submit()} disabled={submitting} className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-500/40 bg-rose-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-500 disabled:opacity-50">
                     {submitting ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />} Confirmar devolução
                   </button>
                 </div>
