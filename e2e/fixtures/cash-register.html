@@ -1,0 +1,18 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="root"></div><script type="module">
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import '/src/index.css';
+import {CaixaTurnoAtualTab} from '/src/components/caixa/CaixaTurnoAtualTab.tsx';
+import {CaixaMovimentacoesTab} from '/src/components/caixa/CaixaMovimentacoesTab.tsx';
+import {CaixaFechamentoTab} from '/src/components/caixa/CaixaFechamentoTab.tsx';
+const params=new URLSearchParams(location.search);
+document.documentElement.dataset.komaTheme=params.get('theme')||'dark';
+document.documentElement.style.setProperty('--koma-text-scale',params.get('scale')||'1');
+window.cashCalls=[];
+const resumo={status:'aberto',operador_nome:'Ana Teste',aberto_em:'2026-11-18T20:00:00Z',tempo_aberto_minutos:30,saldo_inicial:100,total_vendas:450,total_dinheiro:150,total_pix:200,total_cartao:100,total_sangrias:50,total_suprimentos:20,saldo_esperado_dinheiro:220,total_pedidos_pagos:15,comandas_abertas_count:0,atividades_recentes:[{id:'pagamento:teste',tipo:'recebimento',criado_em:'2026-11-18T20:01:00Z',origem:'Mesa 4',metodo:'dinheiro',valor:45},{id:'mov:2',tipo:'sangria',criado_em:'2026-11-18T20:30:00Z',origem:'Fornecedor',valor:50}]};
+const movs=[{id:1,tipo:'suprimento',valor:20,saldo_anterior:100,saldo_posterior:120,descricao:'Reforço de troco',criado_em:'2026-11-18T20:01:00Z',usuario_nome:'Ana Teste'},{id:2,tipo:'sangria',valor:50,saldo_anterior:270,saldo_posterior:220,descricao:'Pagamento de fornecedor com motivo completo que deve continuar legível no celular',criado_em:'2026-11-18T20:30:00Z',usuario_nome:'Ana Teste'}];
+function App(){const [tab,setTab]=React.useState(params.get('tab')||'turno');return React.createElement('main',{style:{padding:16,maxWidth:1400,margin:'auto'}},
+ React.createElement('nav',{'aria-label':'Caixa de teste',style:{display:'flex',flexWrap:'wrap',gap:16,paddingBottom:20,color:'var(--koma-text-primary)'}},...['turno','movimentacoes','fechamento'].map(name=>React.createElement('button',{key:name,onClick:()=>setTab(name),style:{minHeight:44}},name))),
+ tab==='turno'?React.createElement(CaixaTurnoAtualTab,{turnoResumo:resumo,isLoading:false,pendingPaymentsCount:params.has('pending')?2:0,pendingPaymentsTotal:80,onNavigateToFechamento:()=>setTab('fechamento'),onNavigateToMovimentacoes:()=>setTab('movimentacoes'),onNavigateToPendingPayments:()=>window.cashCalls.push('pending'),onOpenSangriaModal:()=>window.cashCalls.push('withdraw'),onOpenSuprimentoModal:()=>window.cashCalls.push('add')}):tab==='movimentacoes'?React.createElement(CaixaMovimentacoesTab,{movimentacoes:movs,turnoResumo:resumo,isLoading:false}):React.createElement(CaixaFechamentoTab,{isTurnoAberto:true,fechamentoResult:null,turnoResumo:resumo,pendingPaymentsCount:0,pendingPaymentsTotal:0,onConfirmFechamento:async payload=>{window.cashCalls.push(payload);throw new Error('Falha controlada ao fechar');},restaurantName:'Restaurante de teste'}));}
+createRoot(document.getElementById('root')).render(React.createElement(App));
+</script></body></html>

@@ -3,7 +3,7 @@ import { OrderItemComposition } from '../../shared/OrderItemComposition';
 import { itemCompositionPresentation, itemCompositionSignature, type CompositionSource } from '../../../domain/orderItemComposition';
 import React from 'react';
 import clsx from 'clsx';
-import { X, Check } from 'lucide-react';
+import { X, Check, Trash2 } from 'lucide-react';
 import type { Table } from '../../../types';
 import type { TableOrderContext as Context } from '../../../domain/tableReadModel';
 import { TableOrderContext } from '../../shared/TableOrderContext';
@@ -76,6 +76,7 @@ export interface KanbanDetailOrder {
 
 export interface KanbanOrderDetailsProps {
   readonly order: KanbanDetailOrder;
+  readonly removeItem?: (itemId: string) => Promise<void>;
   readonly saveObservation?: (itemId: string, observation: string) => Promise<void>;
   readonly tableMovement?: CashierTableCard['tableMovement'];
   readonly salonActions?: {
@@ -152,6 +153,7 @@ export function KanbanOrderDetails({
   salonActions,
   tableMovement,
   saveObservation,
+  removeItem,
   hasPrinting = true,
   canChangeFulfillment = false,
   checkingFulfillment = false,
@@ -308,10 +310,10 @@ export function KanbanOrderDetails({
               </div>
             </div>
           )}
-          {(selectedKanbanOrder.paymentMethod || Number(selectedKanbanOrder.changeFor || 0) > 0 || Number(selectedKanbanOrder.amountPaid || 0) > 0 || selectedKanbanOrder.onlinePaymentStatus === 'approved') && (() => {
+          {(selectedKanbanOrder.paymentMethod || Number(selectedKanbanOrder.changeFor || 0) > 0 || Number(selectedKanbanOrder.amountPaid || 0) > 0 || ['approved', 'pending', 'pending_released'].includes(selectedKanbanOrder.onlinePaymentStatus || '')) && (() => {
             const paid = Math.max(0, Number(selectedKanbanOrder.amountPaid || 0));
             const due = Math.max(0, selectedKanbanOrder.amountDue ?? (selectedOrderTotal - paid));
-            const onlineApproved = selectedKanbanOrder.onlinePaymentStatus === 'approved';
+            const onlineApproved = ['approved', 'pending', 'pending_released'].includes(selectedKanbanOrder.onlinePaymentStatus || '');
             // Online approval is not proof of a settled balance when the values are missing or disagree.
             const fullyPaid = selectedOrderTotal > 0 && paid >= selectedOrderTotal && due < 0.01;
             const needsVerification = onlineApproved && !fullyPaid && paid <= 0;
@@ -340,6 +342,7 @@ export function KanbanOrderDetails({
           <details className="kd-items-disclosure">
             <summary><CashierDetailActionArt kind="items" /><span>Ver {selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0)} {selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0) === 1 ? 'item' : 'itens'}</span><span className="kd-items-chevron" aria-hidden="true">⌄</span></summary>
             {selectedKanbanOrder.tableContext && <TableOrderContext context={selectedKanbanOrder.tableContext} />}
+            {(Boolean(selectedKanbanOrder.amountPaid) || ['approved', 'pending', 'pending_released'].includes(selectedKanbanOrder.onlinePaymentStatus || '')) && <p className="text-sm text-koma-muted py-2">Resolva a cobrança ou devolva o pagamento no Caixa antes de corrigir os itens.</p>}
             <div className="orders-detail-modal__items">
               {selectedDetailItems.map((item, idx) => (
                 <div key={item.sourceItems[0]?.id || `${item.nome}-${idx}`} className="orders-detail-modal__item">
@@ -357,6 +360,9 @@ export function KanbanOrderDetails({
                           <ItemObservationEditor key={source.id} item={source} save={saveObservation} unit={item.quantidade > 1 ? item.sourceItems.indexOf(source) + 1 : undefined} />
                         ))}
                       </details>
+                    )}
+                    {removeItem && !selectedKanbanOrder.amountPaid && !['approved', 'pending', 'pending_released'].includes(selectedKanbanOrder.onlinePaymentStatus || '') && item.sourceItems.some(source => source.id && !source.pago) && (
+                      <ItemCorrection itemName={item.nome} sources={item.sourceItems} remove={removeItem} />
                     )}
                   </div>
                   <span className={clsx('orders-detail-modal__item-status', item.status === 'pronto' && 'is-ready')}>
@@ -494,5 +500,38 @@ function ItemObservationEditor({ item, save, unit }: { item: KanbanDetailSourceI
     }} className="text-xs font-bold text-emerald-500 disabled:opacity-50">{saving ? 'Salvando…' : 'Salvar observação'}</button>
     <button type="button" disabled={saving} onClick={event => closeEditor(event.currentTarget)} className="orders-detail-modal__observation-close">Fechar edição</button>
     {message && <p role="status" className="text-xs">{message}</p>}
+  </div>;
+}
+
+/** Unit identities stay explicit even when the presentation groups identical products. */
+function ItemCorrection({ itemName, sources, remove }: {
+  itemName: string; sources: readonly KanbanDetailSourceItem[]; remove: (id: string) => Promise<void>;
+}) {
+  const [target, setTarget] = React.useState('');
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const pending = React.useRef(false);
+  const candidates = sources.filter(source => source.id && !source.pago);
+  const confirm = async () => {
+    if (!target || pending.current) return;
+    pending.current = true;
+    setBusy(true); setError('');
+    try { await remove(target); setTarget(''); }
+    catch (failure) { setError(failure instanceof Error ? failure.message : 'Não foi possível retirar o item.'); }
+    finally { pending.current = false; setBusy(false); }
+  };
+  return <div className="cash-item-correction">
+    {!target ? <button type="button" className="cash-item-correction__open" onClick={() => setTarget(String(candidates[0]?.id || ''))}>
+      <Trash2 size={14} aria-hidden="true" /> Retirar item
+    </button> : <div className="cash-item-correction__confirm">
+      <strong>Retirar {sources.length > 1 ? 'uma unidade de ' : ''}{itemName}?</strong>
+      {sources.length > 1 && <label>Unidade<select aria-label={`Unidade a retirar — ${itemName}`} value={target} disabled={busy} onChange={event => setTarget(event.target.value)}>
+        {candidates.map(source => <option key={source.id} value={source.id}>Unidade {sources.indexOf(source) + 1}</option>)}
+      </select></label>}
+      <p>O item será cancelado no pedido. Itens pagos exigem devolução antes da correção.</p>
+      {error && <p role="alert">{error}</p>}
+      <div><button type="button" disabled={busy} onClick={() => { setTarget(''); setError(''); }}>Manter item</button>
+      <button type="button" disabled={busy} onClick={() => void confirm()}>{busy ? 'Retirando…' : 'Confirmar retirada'}</button></div>
+    </div>}
   </div>;
 }
