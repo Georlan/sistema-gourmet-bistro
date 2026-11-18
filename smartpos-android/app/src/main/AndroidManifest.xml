@@ -4,12 +4,16 @@
 
     <application
         android:allowBackup="false"
-        android:label="Kôma SmartPOS Dev"
+        android:label="KÔMA Garçom"
+        android:icon="@drawable/koma_launcher"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:screenOrientation="portrait"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
