@@ -35,8 +35,13 @@ test('delivery envia endereço simplificado e mostra erro legível preservando c
   await expect(page.locator('#pdv-delivery-address-logradouro')).toBeVisible();
   await page.locator('#pdv-delivery-address-logradouro').fill('Rua das Flores');
   await page.locator('#pdv-delivery-address-numero').fill('123');
+  await page.locator('summary').filter({ hasText: 'Pagamento' }).click();
+  await page.getByRole('button', { name: 'Dinheiro', exact: true }).click();
+  await page.getByLabel('Troco para (opcional)').fill('100');
   await page.locator('#pdv-submit-btn').click();
   await expect(page.getByText(/Erro ao registrar venda: Revise os dados do pedido: Logradouro: texto maior/)).toBeVisible();
+  expect(payload?.delivery_troco_para).toBe(100);
+  expect(payload?.delivery_forma_pagamento).toBe('dinheiro');
   expect(payload?.tipo).toBe('Entrega');
   expect(payload?.address_snapshot).toMatchObject({ logradouro: 'Rua das Flores', numero: '123', cidade: '', uf: '' });
   await expect(page.getByText(/\[object Object\]/)).toHaveCount(0);
@@ -50,4 +55,25 @@ test('delivery envia endereço simplificado e mostra erro legível preservando c
   }
   await expect(page.getByRole('button', { name: 'Remover Risoto da casa', exact: true })).toBeVisible();
   await expect(page.locator('#pdv-customer-name-input')).toHaveValue('Maria Delivery');
+  // The POST carries the persisted order. Hold the subsequent list read until
+  // the real card (including its public number) has appeared in the board.
+  let releaseSnapshot!: () => void;
+  const delayedSnapshot = new Promise<void>(resolve => { releaseSnapshot = resolve; });
+  await page.route('**/comandas/delivery/ativos', async route => {
+    await delayedSnapshot;
+    await route.fulfill({ json: [] });
+  });
+  await page.route('**/cardapio/modificadores/venda-direta', route => route.fulfill({ json: {
+    id: 'confirmed-delivery', numero_pedido: 9876, tipo: 'Entrega', identificador: 'Maria Delivery',
+    delivery_status: 'producao', delivery_forma_pagamento: 'dinheiro', delivery_troco_para: 100,
+    itens: [{ id: 'risoto', nome: 'Risoto da casa', preco_unit: 42, status: 'preparando' }],
+  } }));
+  try {
+    await page.locator('#pdv-submit-btn').click();
+    const digitalTab = page.getByRole('tab', { name: /Digitais|Preparo/ }).first();
+    if (await digitalTab.isVisible()) await digitalTab.click();
+    await expect(page.locator('.orders-card--digital').filter({ hasText: '9876' })).toContainText('42,00');
+  } finally {
+    releaseSnapshot();
+  }
 });

@@ -11,7 +11,7 @@ test('checkout da mesa exige itens e método explícitos', async ({ page }) => {
 
   const card = page.locator('article[data-table-status="occupied"]');
   await expect(card).toBeVisible();
-  await card.getByRole('button', { name: 'Ver comanda', exact: true }).click();
+  await card.getByRole('button', { name: /^Ver comanda/ }).click();
 
   const details = page.getByRole('dialog', { name: 'Mesa 07', exact: true });
   await details.getByRole('button', { name: 'Receber', exact: true }).click();

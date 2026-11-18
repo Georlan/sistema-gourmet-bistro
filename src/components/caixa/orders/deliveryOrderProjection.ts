@@ -76,7 +76,8 @@ export function projectApiComandaToDeliveryView(c: any): DeliveryOrderView | nul
     (Number(c?.valor_desconto_cupom) || 0) +
     (Number(c?.valor_desconto_cashback) || 0);
   const total = Math.max(0, subtotal + (Number(c?.delivery_taxa) || 0) - discounts);
-  const amountPaid = Math.max(0, Number(c?.valor_pago) || 0);
+  const onlinePaid = c?.online_payment_status === 'approved';
+  const amountPaid = onlinePaid ? Math.max(total, Number(c?.valor_pago) || 0) : Math.max(0, Number(c?.valor_pago) || 0);
   const amountDue = Math.max(0, total - amountPaid);
 
   const origins = (Array.isArray(c?.lancamentos) ? c.lancamentos : []).map((launch: any) =>
@@ -127,7 +128,7 @@ export function projectApiComandaToDeliveryView(c: any): DeliveryOrderView | nul
     isQuickSale,
     quantidadeItens: activeItems.length,
     modalidade,
-    pago: status === 'finalizado' ? amountDue <= 0 : activeItems.length > 0 && activeItems.every((item: any) => Boolean(item?.pago)),
+    pago: onlinePaid || (amountPaid > 0 || status === 'finalizado' ? amountDue < 0.005 : activeItems.length > 0 && activeItems.every((item: any) => Boolean(item?.pago))),
     status,
     endereco: modalidade === 'delivery' ? rawAddress : '',
     paymentMethod: c?.delivery_forma_pagamento || null,
@@ -349,7 +350,7 @@ export function projectDeliveryOrdersFromSharedSnapshot(
       isQuickSale,
       quantidadeItens: activeItems.length,
       modalidade,
-      pago: status === 'finalizado' ? amountDue <= 0 : activeItems.length > 0 && activeItems.every((item) => Boolean(item.pago)),
+      pago: amountPaid > 0 || status === 'finalizado' ? amountDue < 0.005 : activeItems.length > 0 && activeItems.every((item) => Boolean(item.pago)),
       status,
       endereco: modalidade === 'delivery' ? rawAddress : '',
       paymentMethod: order.paymentMethod ?? null,

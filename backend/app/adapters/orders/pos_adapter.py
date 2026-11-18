@@ -201,7 +201,7 @@ class PosAdapter:
 
         if (
             tipo_pedido in {"Entrega", "Retirada"}
-            and not is_counter_sale
+            and not (is_smartpos and is_counter_sale)
             and venda_in.delivery_troco_para is not None
             and venda_in.delivery_forma_pagamento != "dinheiro"
         ):
@@ -251,7 +251,7 @@ class PosAdapter:
                 or (tipo_pedido == "Entrega" and existing_address != requested_address)
                 or (
                     tipo_pedido in {"Entrega", "Retirada"}
-                    and not is_counter_sale
+                    and not (is_smartpos and is_counter_sale)
                     and existing_sale.delivery_forma_pagamento
                     != venda_in.delivery_forma_pagamento
                 )
@@ -336,7 +336,7 @@ class PosAdapter:
             delivery=delivery_input,
             payment_method=(
                 venda_in.delivery_forma_pagamento
-                if tipo_pedido in {"Entrega", "Retirada"} and not is_counter_sale
+                if tipo_pedido in {"Entrega", "Retirada"} and not (is_smartpos and is_counter_sale)
                 else None
             ),
             change_for=(

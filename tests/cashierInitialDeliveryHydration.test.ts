@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  projectApiComandaToDeliveryView,
   bucketCourierDeliveryOrders,
   bucketPickupOrders,
   projectDeliveryOrdersFromSharedSnapshot,
@@ -333,4 +334,17 @@ test('resposta de status sem itens preserva total e calcula saldo com pagamento 
   assert.equal(missingPayment.amountDue, 11);
   const paid = reconcileDeliveryOrderAfterStatus(previous, { ...compact, amountPaid: 13 });
   assert.equal(paid.amountDue, 0);
+});
+
+
+test('Pix aprovado pelo servidor quita a cobrança mantendo a entrega em preparo', () => {
+  const input = { id: 'pix', tipo: 'Entrega', delivery_status: 'producao', delivery_forma_pagamento: 'pix',
+    delivery_taxa: 5, itens: [{ preco_unit: 20, pago: false }] };
+  const approved = projectApiComandaToDeliveryView({ ...input, online_payment_status: 'approved' });
+  assert.equal(approved?.pago, true);
+  assert.equal(approved?.amountDue, 0);
+  assert.equal(approved?.status, 'producao');
+  const partial = projectApiComandaToDeliveryView({ ...input, valor_pago: 20 });
+  assert.equal(partial?.pago, false);
+  assert.equal(partial?.amountDue, 5);
 });

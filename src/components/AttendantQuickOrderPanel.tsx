@@ -58,7 +58,6 @@ export function AttendantQuickOrderPanel({
     onRefreshOrders,
     onOptimisticAddOrder,
     activeWaiterNome,
-    fetchDeliveryOrders: async () => {},
     apiCategorias: liveCategorias,
     dynamicMenu: liveProdutos,
     pdvTableOptions: [],

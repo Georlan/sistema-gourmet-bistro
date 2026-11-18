@@ -732,7 +732,7 @@ export function useCheckoutController({
     return selectedTotal;
   };
 
-  const handleOpenTablePayment = async (order: CashierTableCard['order']) => {
+  const handleOpenTablePayment = async (order: CashierTableCard['order'], fullBalance = false) => {
     if (isLoading || !ensureCashSettingsReady()) return;
 
     const tableComandas = orders.filter((o) => Number(o.mesaId) === Number(order.mesaId) && isTableCheckoutOrder(o));
@@ -746,7 +746,8 @@ export function useCheckoutController({
     setSelectedItemIds([]);
     setPaymentMetodo('');
     setSmartPosRecoveryError('');
-    setPaymentValor('');
+    if (fullBalance) setPaymentValor(getCheckoutBalance(checkoutOrder, true));
+    else setPaymentValor('');
   };
 
   const handleFinalizeDigitalOrder = async (order: DeliveryOrderView) => {
@@ -786,6 +787,8 @@ export function useCheckoutController({
         0,
         getDigitalPayableTotal(mappedOrder) - Number(mappedOrder.valorPago || 0),
       );
+      const method = order.paymentMethod;
+      setPaymentMetodo(method === 'pix' || method === 'dinheiro' || method === 'cartao_credito' || method === 'cartao_debito' ? method : '');
       setPaymentValor(balance);
     } else {
       showToast(

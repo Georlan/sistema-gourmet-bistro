@@ -79,7 +79,7 @@ export interface CaixaOrdersWorkspaceProps {
     readonly markTableItemsReady: (order: CashierTableCard['order']) => void;
     readonly advanceDigitalOrder: (order: DeliveryOrderView) => void;
     readonly dispatchDelivery: (orderId: string, courierId: string) => void;
-    readonly openTablePayment: (order: CashierTableCard['order']) => void;
+    readonly openTablePayment: (order: CashierTableCard['order'], fullBalance?: boolean) => void;
     readonly finalizeDigitalOrder: (order: DeliveryOrderView) => void;
   };
   readonly hasLocalServiceWork?: boolean;
@@ -658,6 +658,11 @@ export function CaixaOrdersWorkspaceView({
                               ? 'Marcar item como pronto'
                               : 'Marcar itens como prontos'}
                         </span>
+                      </button>
+                      <button type="button" disabled={isPendingConfirmation || isLoading}
+                        className="cashier-pdv-payment-option mt-1 w-full justify-center"
+                        onClick={event => { event.stopPropagation(); actions.openTablePayment(order, true); }}>
+                        {smartPosState?.blocksPayment ? smartPosState.ctaLabel : 'Receber mesa'}
                       </button>
                     </div>
                   );
