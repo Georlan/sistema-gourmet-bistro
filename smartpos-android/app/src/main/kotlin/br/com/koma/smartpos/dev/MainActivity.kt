@@ -41,7 +41,10 @@ class MainActivity : Activity() {
     private var consumption = emptyList<Consumption>()
     private var menu: Menu? = null
     private var category: Category? = null
-    private val lines = mutableListOf<Line>()
+    private var variants: List<Product>? = null
+    private var tableChecks = emptyList<Check>()
+    private val drafts = mutableMapOf<Int, MutableList<Line>>()
+    private val lines get() = drafts.getOrPut(requireNotNull(table).id) { mutableListOf() }
     private var pending: PendingOrder? = null
     private var busy = false
     private var notice = ""
@@ -130,7 +133,7 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this).setTitle("Sair do KÔMA?")
             .setMessage(when {
                 pending != null -> "O envio pendente ficará disponível quando você entrar novamente."
-                lines.isNotEmpty() -> "Os itens que ainda não foram enviados serão descartados."
+                drafts.values.any { it.isNotEmpty() } -> "Os itens que ainda não foram enviados serão descartados."
                 else -> "Você poderá entrar novamente com sua conta."
             })
             .setNegativeButton("Voltar", null)
@@ -143,9 +146,11 @@ class MainActivity : Activity() {
         pending = null
         table = null
         check = null
-        lines.clear()
+        drafts.clear()
         menu = null
         category = null
+        variants = null
+        tableChecks = emptyList()
         consumption = emptyList()
         salon = Salon(emptyList(), emptyList())
         notice = ""
@@ -185,7 +190,11 @@ class MainActivity : Activity() {
                         body.addView(row)
                         pair.forEach { entry ->
                             val status = if (entry.id in occupied) "Em atendimento" else "Livre"
-                            val item = makeButton("${entry.name}\n$status", false) { loadTable(entry) }.apply {
+                            val count = drafts[entry.id].orEmpty().sumOf(Line::quantity)
+                            val label = if (count > 0) "Rascunho · $count" else status
+                            val item = makeButton("${entry.name}\n$label", count > 0) {
+                                loadTable(entry, openMenuIfFree = entry.id !in occupied)
+                            }.apply {
                                 gravity = Gravity.CENTER_VERTICAL or Gravity.START
                                 minHeight = dp(68)
                             }
@@ -202,13 +211,26 @@ class MainActivity : Activity() {
         })
     }
 
-    private fun loadTable(entry: Table) {
-        runRequest(action = { api.consumption(entry) }) { fresh ->
+    private fun loadTable(entry: Table, openMenuIfFree: Boolean = false) {
+        val previousId = table?.id
+        runRequest(action = { api.detail(entry) }) { fresh ->
             table = entry
-            check = salon.checks.firstOrNull { it.tableId == entry.id && it.name.isBlank() }
-                ?: salon.checks.firstOrNull { it.tableId == entry.id }
-            consumption = fresh
+            tableChecks = fresh.checks
+            if (previousId != entry.id || tableChecks.none { it.id == check?.id }) {
+                check = tableChecks.firstOrNull { it.name.isBlank() } ?: tableChecks.firstOrNull()
+            }
+            consumption = fresh.items
             showTable()
+            if (openMenuIfFree && fresh.checks.isEmpty()) openMenu()
+        }
+    }
+
+    private fun openMenu() {
+        category = null
+        variants = null
+        runRequest(action = { api.menu() }) { fresh ->
+            menu = fresh
+            showMenu()
         }
     }
 
@@ -216,59 +238,116 @@ class MainActivity : Activity() {
         val current = requireNotNull(table)
         frame(Screen.TABLE, "Salão", current.name, back = { showSalon() })
         if (consumption.isEmpty()) body.label("Nenhum item lançado.", 15, muted)
-        consumption.forEach {
-            val subtitle = listOfNotNull(it.orderNumber.takeIf(String::isNotBlank)?.let { n -> "Pedido $n" },
-                it.status.takeIf(String::isNotBlank)).joinToString(" · ")
-            body.entry(it.name, subtitle)
-        }
-        footer.button("Novo pedido", primary = true) {
-            runRequest(action = { api.menu() }) { fresh ->
-                category = null
-                menu = fresh
-                showMenu()
+        consumption.forEach { item ->
+            val details = listOfNotNull(
+                item.orderNumber.takeIf(String::isNotBlank)?.let { n -> "Pedido $n" },
+                item.statusLabel.takeIf(String::isNotBlank),
+                "Pago".takeIf { item.paid && item.status != "cancelado" },
+                item.note.takeIf(String::isNotBlank),
+            ).joinToString(" · ")
+            body.entry(item.name, details)
+            if (item.ready) body.button("Marcar ${item.name} como servido") {
+                runRequest(action = { api.serve(item) }) {
+                    consumption = consumption.map { if (it.id == item.id) it.copy(status = "entregue") else it }
+                        .sortedByDescending { it.ready }
+                    showTable()
+                }
             }
         }
+        if (consumption.isNotEmpty()) body.button("Atualizar consumo") { loadTable(current) }
+        footer.button(if (totalUnits() == 0) "Novo pedido" else "Continuar rascunho · ${totalUnits()}",
+            primary = true, action = ::openMenu)
     }
 
     private fun showMenu() {
         val current = requireNotNull(table)
         val catalog = requireNotNull(menu)
         val selected = category
-        frame(Screen.MENU, current.name, selected?.name ?: "Cardápio", back = { backFromMenu() })
-        if (selected == null) {
-            if (catalog.categories.isEmpty()) body.label("Nenhum produto disponível.", 16, muted)
-            catalog.categories.forEach { entry ->
-                body.button(entry.name) { category = entry; showMenu() }
+        val family = variants
+        frame(Screen.MENU, current.name, family?.first()?.familyName ?: selected?.name ?: "Categorias",
+            back = { backFromMenu() })
+        val badges = mutableMapOf<Button, Pair<String, Set<String>>>()
+        fun choice(label: String, products: List<Product>, action: () -> Unit): Button =
+            makeButton(label, false, action = action).also { button ->
+                badges[button] = label to products.map { it.id }.toSet()
+                button.gravity = Gravity.CENTER_VERTICAL or Gravity.START
             }
-        } else {
-            catalog.products.filter { it.categoryId == selected.id }.forEach { product ->
-                body.button("${product.name}\n${money(product.price)}") {
-                    if (totalUnits() >= 200) report("O pedido atingiu o limite de 200 itens.")
-                    else if (product.groups.isEmpty()) {
-                        addLine(Line(product, emptyList(), "", 1))
-                        report("")
-                        updateMenuFooter()
-                    } else customize(product)
+        fun updateBadges() {
+            val quantities = lines.groupingBy { it.product.id }.fold(0) { count, line -> count + line.quantity }
+            badges.forEach { (button, entry) ->
+                val count = entry.second.sumOf { quantities[it] ?: 0 }
+                button.text = if (count > 0) "${entry.first} · $count no pedido" else entry.first
+            }
+        }
+        fun select(product: Product) {
+            when {
+                totalUnits() >= 200 -> report("O pedido atingiu o limite de 200 itens.")
+                product.groups.isNotEmpty() -> customize(product)
+                else -> {
+                    addLine(Line(product, emptyList(), "", 1))
+                    report("")
+                    updateBadges()
+                    updateMenuFooter()
                 }
             }
         }
+
+        when {
+            family != null -> {
+                body.label(family.first().familyAxis.ifBlank { "Escolha a variação" }, 15, muted)
+                family.forEach { product ->
+                    val label = product.variantLabel.ifBlank { product.name }
+                    body.addView(choice("$label\n${money(product.price)}", listOf(product)) { select(product) })
+                }
+            }
+            selected != null -> {
+                catalog.choices(selected).forEach { products ->
+                    val first = products.first()
+                    if (first.familyName.isNotBlank()) {
+                        val price = money(products.minOf { it.price })
+                        val label = if (products.size == 1) price else "A partir de $price"
+                        body.addView(choice("${first.familyName}\n$label", products) {
+                            variants = products
+                            showMenu()
+                        })
+                    } else {
+                        body.addView(choice("${first.name}\n${money(first.price)}", products) { select(first) })
+                    }
+                }
+            }
+            else -> {
+                if (catalog.categories.isEmpty()) body.label("Nenhum produto disponível.", 16, muted)
+                catalog.categories.chunked(2).forEach { pair ->
+                    val gridRow = row()
+                    body.addView(gridRow)
+                    pair.forEach { entry ->
+                        val button = choice(entry.name, catalog.products.filter { it.categoryId == entry.id }) {
+                            category = entry
+                            showMenu()
+                        }.apply { minHeight = dp(68) }
+                        gridRow.addView(button, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
+                    }
+                    if (pair.size == 1) gridRow.addView(View(this), LinearLayout.LayoutParams(0, 0, 1f))
+                }
+            }
+        }
+        updateBadges()
         updateMenuFooter()
     }
 
     private fun updateMenuFooter() {
         footer.removeAllViews()
-        footer.button("Revisar pedido · ${totalUnits()}", primary = true, enabled = lines.isNotEmpty()) {
-            showReview()
-        }
+        val units = totalUnits()
+        val total = lines.sumOf { it.unitPrice * it.quantity }
+        val label = if (units == 0) "Revisar pedido" else "Revisar · $units itens · ${money(total)}"
+        footer.button(label, primary = true, enabled = units > 0) { showReview() }
     }
 
     private fun backFromMenu() {
         when {
+            variants != null -> { variants = null; showMenu() }
             category != null -> { category = null; showMenu() }
-            lines.isEmpty() -> showTable()
-            else -> AlertDialog.Builder(this).setTitle("Descartar este pedido?")
-                .setNegativeButton("Continuar pedido", null)
-                .setPositiveButton("Descartar") { _, _ -> lines.clear(); showTable() }.show()
+            else -> showTable()
         }
     }
 
@@ -321,15 +400,14 @@ class MainActivity : Activity() {
                 }
             }
         }
-        val note = noteField()
-        body.addView(note)
+        val note = noteControls(body, product)
         footer.button("Adicionar ao pedido", primary = true) {
             val missingGroup = product.groups.firstOrNull { group -> group.options.sumOf { selection[it] ?: 0 } < group.min }
             if (missingGroup != null) report("Complete as escolhas em ${missingGroup.name}.")
             else {
                 hideKeyboard()
                 addLine(Line(product, selection.flatMap { (option, count) -> List(count) { option } },
-                    note.text.toString().trim(), 1))
+                    note(), 1))
                 showMenu()
             }
         }
@@ -352,7 +430,7 @@ class MainActivity : Activity() {
     private fun showReview() {
         val current = requireNotNull(table)
         frame(Screen.REVIEW, current.name, "Revisar pedido", back = { showMenu() })
-        val checks = salon.checks.filter { it.tableId == current.id }
+        val checks = tableChecks
         if (checks.size > 1) body.button("Comanda · ${check?.label.orEmpty()}") {
             AlertDialog.Builder(this).setTitle("Selecionar comanda")
                 .setItems(checks.map { it.label }.toTypedArray()) { _, index ->
@@ -372,11 +450,13 @@ class MainActivity : Activity() {
                     contentDescription = "Aumentar ${line.product.name}"
                 })
                 addView(makeButton("Observação", false) {
-                    val note = noteField().apply { setText(line.note) }
-                    AlertDialog.Builder(this@MainActivity).setTitle(line.product.name).setView(note)
+                    val content = column().apply { setPadding(dp(18), 0, dp(18), 0) }
+                    val note = noteControls(content, line.product, line.note)
+                    val scroller = ScrollView(this@MainActivity).apply { addView(content) }
+                    AlertDialog.Builder(this@MainActivity).setTitle(line.product.name).setView(scroller)
                         .setNegativeButton("Voltar", null)
                         .setPositiveButton("Salvar") { _, _ ->
-                            lines[index] = line.copy(note = note.text.toString().trim())
+                            lines[index] = line.copy(note = note())
                             showReview()
                         }.show()
                 }, LinearLayout.LayoutParams(0, -2, 1f))
@@ -434,9 +514,10 @@ class MainActivity : Activity() {
             } else report(messageFor(failure))
         }) { number ->
             pending = null
-            lines.clear()
+            drafts.remove(order.tableId)
             menu = null
             category = null
+            variants = null
             notice = if (number.isBlank()) "Pedido registrado." else "Pedido $number registrado."
             loadSalon()
         }
@@ -524,6 +605,39 @@ class MainActivity : Activity() {
         footer = column()
         root.addView(footer)
         report("")
+    }
+
+    private fun noteControls(container: LinearLayout, product: Product, previous: String = ""): () -> String {
+        val presets = menu?.notes(product).orEmpty()
+        val selected = linkedSetOf<String>()
+        val previousNotes = previous.split(", ").filter(String::isNotBlank)
+        val freeText = previousNotes.filterNot { it in presets }.joinToString(", ")
+        if (presets.isNotEmpty()) container.label("Ajustes rápidos", 16, ink, bold = true)
+        presets.forEach { label ->
+            container.addView(CheckBox(this).apply {
+                text = label
+                setTextColor(ink)
+                textSize = 15f
+                minHeight = dp(44)
+                buttonTintList = ColorStateList.valueOf(accentDark)
+                isChecked = label in previousNotes
+                if (isChecked) selected.add(label)
+                setOnCheckedChangeListener { _, checked ->
+                    if (checked) selected.add(label) else selected.remove(label)
+                }
+            })
+        }
+        val note = noteField().apply {
+            setText(freeText)
+            visibility = if (freeText.isBlank()) View.GONE else View.VISIBLE
+        }
+        container.button("Escrever observação") {
+            note.visibility = View.VISIBLE
+            note.requestFocus()
+            getSystemService(InputMethodManager::class.java).showSoftInput(note, InputMethodManager.SHOW_IMPLICIT)
+        }
+        container.addView(note)
+        return { (selected + note.text.toString().trim()).filter(String::isNotBlank).joinToString(", ") }
     }
 
     private fun noteField() = field("Observação (opcional)", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES)

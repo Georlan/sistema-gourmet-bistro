@@ -2,7 +2,7 @@
 
 App Android nativo para lançar pedidos no salão em telas pequenas. Usa o login do KÔMA e a habilitação SmartPOS do restaurante. Com o caixa aberto, o operador pode consultar mesas e consumo, selecionar produtos do cardápio ativo, configurar complementos, informar observações, revisar e enviar para a operação. O mesmo lançamento do garçom web segue para cozinha e impressão conforme a configuração do restaurante.
 
-A interface usa componentes do Android, sem WebView, imagens de catálogo ou dependências de UI externas. O catálogo carrega ao abrir um novo pedido. As mesas são atualizadas por solicitação e após confirmação de um pedido, sem consultas periódicas. O servidor mantém autoridade sobre disponibilidade, preços, permissões e identificação do pedido.
+A interface usa componentes do Android, sem WebView, imagens de catálogo ou dependências de UI externas. Uma mesa livre abre as categorias. Produtos simples entram por toque repetido e produtos com variações ou complementos seguem etapas de escolha. Observações configuradas podem ser selecionadas por toque. O teclado é opcional depois do login. Rascunhos ficam separados por mesa durante a sessão. Itens prontos aparecem no início do consumo e podem ser marcados como servidos. O catálogo carrega ao abrir um novo pedido. As mesas são atualizadas por solicitação e após confirmação de um pedido, sem consultas periódicas. O servidor mantém autoridade sobre disponibilidade, preços, permissões e identificação do pedido.
 
 ## Reenvio
 

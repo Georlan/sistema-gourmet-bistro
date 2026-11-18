@@ -38,6 +38,56 @@ class WaiterApiTest {
     }
 
     @Test
+    fun groupsOnlyDeclaredVariantsAndDeduplicatesQuickObservations() {
+        val api = WaiterApi(object : HttpTransport {
+            override fun post(path: String, body: String) = error("Unexpected post")
+            override fun get(path: String) = when (path) {
+                "/produtos/catalogo" -> HttpResponsePayload(200, """
+                    {"categorias":[{"id":"pastel","nome":"Pastéis"}],"produtos":[
+                      {"id":"p1","categoria_id":"pastel","nome":"Pastel médio", "descricao":"Com cebola e orégano",
+                       "familia_id":"family","familia_nome":"Pastel","familia_eixo":"Tamanho","variacao_rotulo":"Médio"},
+                      {"id":"p2","categoria_id":"pastel","nome":"Pastel grande",
+                       "familia_id":"family","familia_nome":"Pastel","familia_eixo":"Tamanho","variacao_rotulo":"Grande"},
+                      {"id":"p3","categoria_id":"pastel","nome":"Pastel da casa"}
+                    ]}
+                """.trimIndent())
+                "/produtos/observacoes" -> HttpResponsePayload(200, """
+                    [{"categoria_id":"pastel","texto":"Sem cebola"},{"categoria_id":"bebidas","texto":"Sem gelo"}]
+                """.trimIndent())
+                else -> error("Unexpected path $path")
+            }
+        })
+        val menu = api.menu()
+        val choices = menu.choices(menu.categories.single())
+        assertEquals(listOf(listOf("p1", "p2"), listOf("p3")), choices.map { it.map(Product::id) })
+        assertEquals(listOf("Médio", "Grande"), choices.first().map(Product::variantLabel))
+        assertEquals(listOf("Sem cebola", "Sem orégano"), menu.notes(choices.first().first()))
+    }
+
+    @Test
+    fun keepsPaidAndProductionStatesIndependentAndServesOnlyReadyItems() {
+        val api = WaiterApi(object : HttpTransport {
+            override fun post(path: String, body: String) = error("Unexpected post")
+            override fun get(path: String) = HttpResponsePayload(200, """
+                [{"id":"check-1","itens":[
+                  {"id":"prep","produto_id":"p2","status":"preparando"},
+                  {"id":"ready","produto_id":"p1","status":"pronto","pago":true}
+                ]}]
+            """.trimIndent())
+            override fun put(path: String): HttpResponsePayload {
+                assertEquals("/comandas/itens/ready/status?status=entregue", path)
+                return HttpResponsePayload(200, """{"id":"ready","status":"entregue"}""")
+            }
+        })
+        val detail = api.detail(Table(3, "Mesa 3"))
+        assertEquals(listOf("ready", "prep"), detail.items.map(Consumption::id))
+        assertEquals(true, detail.items.first().paid)
+        assertEquals("Pronto para servir", detail.items.first().statusLabel)
+        api.serve(detail.items.first())
+        assertThrows(IllegalArgumentException::class.java) { api.serve(detail.items.last()) }
+    }
+
+    @Test
     fun retriesTheSameLaunchAfterLosingTheResponse() {
         val operator = Operator("owner", "Garçom")
         val chicken = Option("frango", "Frango", 0)

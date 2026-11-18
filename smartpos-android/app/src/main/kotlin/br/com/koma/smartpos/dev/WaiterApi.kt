@@ -9,6 +9,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.net.URLEncoder
 import java.text.NumberFormat
+import java.text.Normalizer
 import java.util.Locale
 import java.util.UUID
 
@@ -25,7 +26,24 @@ internal data class Check(val id: String, val tableId: Int, val name: String) {
     val label get() = name.ifBlank { "Consumo geral" }
 }
 internal data class Salon(val tables: List<Table>, val checks: List<Check>)
-internal data class Consumption(val orderNumber: String, val name: String, val status: String)
+internal data class Consumption(
+    val id: String,
+    val orderNumber: String,
+    val name: String,
+    val status: String,
+    val note: String,
+    val paid: Boolean,
+) {
+    val ready get() = status == "pronto"
+    val statusLabel get() = when (status) {
+        "cancelado" -> "Cancelado"
+        "entregue" -> "Servido"
+        "pronto" -> "Pronto para servir"
+        "preparando" -> "Em preparo"
+        else -> status.replace('_', ' ').replaceFirstChar { it.uppercase() }
+    }
+}
+internal data class TableDetail(val checks: List<Check>, val items: List<Consumption>)
 internal data class Category(val id: String, val name: String)
 internal data class Option(val id: String, val name: String, val price: Long)
 internal data class Group(
@@ -41,8 +59,39 @@ internal data class Product(
     val name: String,
     val price: Long,
     val groups: List<Group>,
+    val description: String = "",
+    val familyId: String = "",
+    val familyName: String = "",
+    val familyAxis: String = "",
+    val variantLabel: String = "",
 )
-internal data class Menu(val categories: List<Category>, val products: List<Product>)
+internal data class Menu(
+    val categories: List<Category>,
+    val products: List<Product>,
+    val observations: Map<String, List<String>> = emptyMap(),
+) {
+    fun choices(category: Category): List<List<Product>> = products
+        .filter { it.categoryId == category.id }
+        .groupBy { product ->
+            if (product.familyId.isNotBlank() && product.familyName.isNotBlank()) {
+                "family:${product.familyId}"
+            } else "product:${product.id}"
+        }.values.toList()
+
+    fun notes(product: Product): List<String> {
+        val words = " ${normalized("${product.name} ${product.description}")} "
+        val ingredients = listOf(
+            "cebola", "bacon", "cheddar", "salada", "ovo", "queijo", "tomate",
+            "maionese", "molho", "milho", "presunto", "calabresa", "azeitona", "orégano",
+        )
+        val derived = ingredients.filter { words.contains(" ${normalized(it)} ") }.map { "Sem $it" }
+        return (observations[product.categoryId].orEmpty() + derived).distinctBy(::normalized)
+    }
+}
+
+private fun normalized(value: String): String = Normalizer.normalize(value, Normalizer.Form.NFD)
+    .replace(Regex("\\p{M}+"), "").lowercase(Locale.ROOT)
+    .replace(Regex("[^a-z0-9]+"), " ").trim()
 internal data class Line(
     val product: Product,
     val options: List<Option>,
@@ -133,28 +182,45 @@ internal class WaiterApi(private val transport: HttpTransport) {
         return Salon(tables, checks)
     }
 
-    fun consumption(table: Table): List<Consumption> =
-        (get("/comandas/detalhes/todos?fechada=false&mesa_id=${table.id}") as JSONArray)
-            .objects().flatMap { check ->
-                check.optJSONArray("itens").objects().map {
-                    val rawStatus = it.string("status")
-                    val status = when {
-                        rawStatus == "cancelado" -> "Cancelado"
-                        it.optBoolean("pago") -> "Pago"
-                        rawStatus == "entregue" -> "Entregue"
-                        rawStatus == "pronto" -> "Pronto"
-                        rawStatus == "preparando" -> "Em preparo"
-                        else -> rawStatus.replace('_', ' ').replaceFirstChar { c -> c.uppercase() }
-                    }
-                    Consumption(
-                        it.string("lancamento_display_number"),
-                        it.optJSONObject("produto")?.string("nome").orEmpty().ifBlank { it.string("produto_id") },
-                        status,
-                    )
-                }
+    fun detail(table: Table): TableDetail {
+        val checks = (get("/comandas/detalhes/todos?fechada=false&mesa_id=${table.id}") as JSONArray).objects()
+        val items = checks.flatMap { check ->
+            check.optJSONArray("itens").objects().map {
+                Consumption(
+                    it.getString("id"),
+                    it.string("lancamento_display_number"),
+                    it.optJSONObject("produto")?.string("nome").orEmpty().ifBlank { it.string("produto_id") },
+                    it.string("status"),
+                    it.string("observacao"),
+                    it.optBoolean("pago"),
+                )
             }
+        }
+        return TableDetail(
+            checks.map { Check(it.getString("id"), table.id, it.string("identificador")) },
+            items.sortedByDescending { it.ready },
+        )
+    }
 
-    fun menu(): Menu = parseMenu(get("/produtos/catalogo") as JSONObject)
+    fun serve(item: Consumption) {
+        require(item.ready)
+        val id = URLEncoder.encode(item.id, Charsets.UTF_8.name()).replace("+", "%20")
+        parse(transport.put("/comandas/itens/$id/status?status=entregue"))
+    }
+
+    fun menu(): Menu {
+        val menu = parseMenu(get("/produtos/catalogo") as JSONObject)
+        val presets = try {
+            (get("/produtos/observacoes") as JSONArray).objects().filter { it.string("texto").isNotBlank() }
+                .groupBy({ it.string("categoria_id") }, { it.getString("texto") })
+        } catch (failure: ApiFailure) {
+            if (failure.status == 401) throw failure
+            emptyMap()
+        } catch (_: java.io.IOException) {
+            emptyMap()
+        }
+        return menu.copy(observations = presets)
+    }
 
     fun open(tableId: Int, operatorId: String): String =
         post("/comandas/", JSONObject()
@@ -227,7 +293,13 @@ internal fun parseMenu(payload: JSONObject): Menu {
                         group.optJSONArray("opcoes").objects().filter { it.optBoolean("ativo", true) }.map {
                             Option(it.getString("id"), it.getString("nome"), it.money("preco_adicional"))
                         })
-                })
+                },
+                description = product.string("descricao"),
+                familyId = product.string("familia_id"),
+                familyName = product.string("familia_nome"),
+                familyAxis = product.string("familia_eixo"),
+                variantLabel = product.string("variacao_rotulo"),
+            )
         }
     val categoryIds = products.map { it.categoryId }.toSet()
     val categories = payload.optJSONArray("categorias").objects()
