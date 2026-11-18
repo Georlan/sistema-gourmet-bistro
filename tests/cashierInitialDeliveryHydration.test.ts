@@ -302,11 +302,11 @@ test('workspace de retiradas deriva pendentes, prontas e atrasadas do fluxo canÃ
 
   assert.deepEqual(buckets.awaitingAcceptance.map((order) => order.id), ['pickup-pending']);
   assert.deepEqual(buckets.preparing.map((order) => order.id), ['pickup-preparing-late']);
-  assert.deepEqual(buckets.ready.map((order) => order.id), ['pickup-ready']);
+  assert.deepEqual(buckets.ready.map((order) => order.id), ['pickup-ready', 'pickup-quick-sale']);
   assert.deepEqual(buckets.late.map((order) => order.id), ['pickup-preparing-late']);
   assert.equal(
     [...buckets.awaitingAcceptance, ...buckets.preparing, ...buckets.ready]
-      .some((order) => order.id === 'pickup-quick-sale' || order.id === 'delivery-ready'),
+      .some((order) => order.id === 'delivery-ready'),
     false,
   );
 });

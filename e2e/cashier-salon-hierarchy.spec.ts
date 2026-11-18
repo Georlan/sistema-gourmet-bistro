@@ -11,7 +11,7 @@ for (const theme of ['dark', 'light']) {
     const card = page.locator('.orders-card--salon').first();
     await expect(page.locator('.orders-column--salon h3')).toHaveText('Mesas');
     await expect(page.locator('.orders-column--digital h3')).toHaveText('Retiradas');
-    await expect(page.locator('.orders-column--closing h3')).toHaveText('Balcão');
+    await expect(page.locator('.orders-column--delivery h3')).toHaveText('Entregas');
     await expect(page.locator('.orders-column__number')).toHaveCount(0);
     await expect(page.locator('.orders-column--salon .orders-column__count')).toHaveText('1');
     for (const header of await page.locator('.orders-column__header').all()) {

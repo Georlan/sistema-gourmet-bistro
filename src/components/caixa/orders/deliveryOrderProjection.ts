@@ -238,7 +238,7 @@ export function bucketPickupOrders(
   };
 
   orders.forEach((order) => {
-    if (order.modalidade !== 'retirada' || order.isQuickSale) return;
+    if (order.modalidade !== 'retirada') return;
 
     if (getCashierOrderSlaData(order, now).minutes > 25) {
       buckets.late.push(order);

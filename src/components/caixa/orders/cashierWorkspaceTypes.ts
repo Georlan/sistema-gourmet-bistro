@@ -63,4 +63,4 @@ export interface PendingCashPaymentCard extends PendingCashPayment {
   readonly mesaNum: Order['mesaId'] | '?';
 }
 
-export type OrdersStage = 'salon' | 'digital' | 'closing' | 'delivery';
+export type OrdersStage = 'salon' | 'digital' | 'delivery';

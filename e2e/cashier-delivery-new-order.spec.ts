@@ -85,7 +85,7 @@ test('agrupamento por atendimento ignora preferências antigas', async ({ page }
   await page.goto('/?view=caixa');
   const board = page.locator('.orders-board');
   await expect(board.locator('.orders-card').first()).toBeAttached();
-  for (const name of ['Mesas', 'Balcão', 'Retiradas', 'Entregas']) {
+  for (const name of ['Mesas', 'Retiradas', 'Entregas']) {
     await expect(board.getByRole('heading', { name, exact: true, includeHidden: true })).toHaveCount(1);
   }
   await expect(page.getByRole('combobox', { name: 'Dividir painel de pedidos' })).toHaveCount(0);
@@ -106,7 +106,7 @@ test('consulta mesas e restaura a divisão sem escrita', async ({page}) => {
   await expect(board.getByRole('heading',{name:'Mesas'})).toBeVisible();
   await expect(board.locator('.orders-column--digital')).toHaveCount(0);
   await filters.getByRole('button',{name:'Todos'}).click();
-  await expect(board.locator('.orders-column')).toHaveCount(4);
+  await expect(board.locator('.orders-column')).toHaveCount(3);
   await page.reload();
   await expect(page.getByRole('combobox',{name:'Dividir painel de pedidos'})).toHaveCount(0);
   expect(writes).toEqual([]);

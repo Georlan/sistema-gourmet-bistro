@@ -650,7 +650,7 @@ export function CaixaPanel({
   }, [deliveryOrders, searchQuery, matchesSearchQuery]);
 
   // CaixaOrdersWorkspace sorts its columns. Stable references avoid repeating
-  // the four sorts and arrival-stage comparisons on every unrelated parent
+  // lane sorting and arrival-stage comparisons on every unrelated parent
   // render (clock, theme, header and operator drawer updates).
   const cashierOrderColumns = useMemo(() => ({
     tableProduction: filteredCol1.map(buildCashierTableCard),
@@ -768,7 +768,8 @@ export function CaixaPanel({
       entregadores: delivery.preparing.length + delivery.ready.length + delivery.inTransit.length + delivery.awaitingPayment.length,
     };
   }, [deliveryOrders, nowTimestamp]);
-  const hasLocalServiceWork = tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0;
+  const hasLocalServiceWork = tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0
+    || deliveryOrders.some(order => order.modalidade === 'dine_in');
   const hasLocalPendingPayment = pagamentosPendentes.some(payment => orders.some(order =>
     order.id === payment.comanda_id && Number(order.mesaId) > 0,
   ));
