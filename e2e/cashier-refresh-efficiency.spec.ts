@@ -133,7 +133,11 @@ test('couriers load when opening Deliveries even before the first delivery arriv
   await page.goto('/?view=caixa');
   await expect(page.locator('.orders-board')).toBeVisible();
   expect(reads).toBe(0);
-  await page.locator('summary[aria-label="Mais opções de pedidos"]').click();
-  await page.getByRole('button', { name: 'Gerenciar entregas' }).click();
+  if ((page.viewportSize()?.width ?? 1366) < 1024) {
+    await page.locator('#btn-mobile-caixa-sidebar-open').click();
+  }
+  const search = page.getByRole('combobox', { name: 'Pesquisar funções do KÔMA' });
+  await search.fill('entregas');
+  await page.getByRole('option').filter({ hasText: /Entregas/i }).first().click();
   await expect.poll(() => reads).toBeGreaterThan(0);
 });

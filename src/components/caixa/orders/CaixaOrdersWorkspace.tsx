@@ -10,7 +10,7 @@ import { OrderItemComposition } from '../../shared/OrderItemComposition';
 import { itemCompositionSignature, type CompositionSource } from '../../../domain/orderItemComposition';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { AlertTriangle, Search, Ellipsis, MapPin, Check, Smartphone, Clock } from 'lucide-react';
+import { AlertTriangle, Search, MapPin, Check, Smartphone, Clock } from 'lucide-react';
 import type { OrderItem } from '../../../types';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import { trapOverlayTab } from '../../shared/trapOverlayTab';
@@ -56,7 +56,6 @@ export interface CaixaOrdersWorkspaceProps {
     readonly onStageChange: (stage: OrdersStage) => void;
     readonly filter?: OrdersStage | null;
     readonly onFilterChange?: (stage: OrdersStage | null) => void;
-    readonly onOpenFulfillment?: (workspace: 'retiradas' | 'entregadores') => void;
     readonly expandedCardIds: Readonly<Record<string, boolean>>;
     readonly onToggleCard: (cardId: string, event?: React.MouseEvent) => void;
   };
@@ -169,6 +168,20 @@ const renderCompactItemsList = (
 };
 
 
+const orderFilterIcons = { salon: 'mesa', digital: 'retirada', delivery: 'entrega', all: 'todos' } as const;
+
+function OrderFilterContent({ lane, label, count }: { lane: keyof typeof orderFilterIcons; label: string; count?: number }) {
+  return <>
+    <span className="orders-filter-mark" aria-hidden="true">
+      <svg width="18" height="18" focusable="false">
+        <use href={`/brand/cashier/queue-marks.svg?v=2#${orderFilterIcons[lane]}`} />
+      </svg>
+    </span>
+    <span>{label}</span>
+    {count !== undefined && <strong>{count}</strong>}
+  </>;
+}
+
 function buildOrderLanes(
   { tableProduction, tableClosing, digitalProduction, digitalFinalization }: CaixaOrdersWorkspaceProps['columns'],
   policy: NonNullable<CaixaOrdersWorkspaceProps['restaurantConfig']>['tipos_pedido_ativos'] | undefined,
@@ -265,7 +278,7 @@ export function CaixaOrdersWorkspaceView({
   const { query: searchQuery, onChange: setSearchQuery } = search;
   const { orders: deliveryOrders, pendingOrderIds, automatic: autoAccept, drawerOpen: isDrawerOpen,
     onAutomaticChange: setAutoAccept, onDrawerChange: setIsDrawerOpen } = acceptance;
-  const { stage: mobileOrdersStage, onStageChange: setMobileOrdersStage, filter, onFilterChange, onOpenFulfillment,
+  const { stage: mobileOrdersStage, onStageChange: setMobileOrdersStage, filter, onFilterChange,
     expandedCardIds, onToggleCard: toggleCardExpansion } = navigation;
 
   const courierSelection = (order: DeliveryOrderView) =>
@@ -870,29 +883,30 @@ export function CaixaOrdersWorkspaceView({
       {/* Controls bar with Search Input */}
       <div className={"orders-toolbar sticky top-0 z-20"}>
         <div role="group" aria-label="Filtrar pedidos por atendimento" className="orders-desktop-filters orders-lane-filters">
-          <button type="button" aria-pressed={!desktopFilter} onClick={() => onFilterChange?.(null)}>Todos</button>
+          <button type="button" className="orders-filter-button" aria-pressed={!desktopFilter} onClick={() => onFilterChange?.(null)}>
+            <OrderFilterContent lane="all" label="Todos" />
+          </button>
           {ordersStages.map(stage => (
-            <button key={stage.id} type="button" aria-pressed={desktopFilter?.id === stage.id}
+            <button key={stage.id} type="button" className="orders-filter-button" aria-pressed={desktopFilter?.id === stage.id}
               onClick={() => onFilterChange?.(desktopFilter?.id === stage.id ? null : stage.id)}>
-              {stage.label} <strong>{stage.count}</strong>
+              <OrderFilterContent lane={stage.id} label={stage.label} count={stage.count} />
             </button>
           ))}
         </div>
-      <div className="orders-mobile-stages orders-lane-filters" style={{ gridTemplateColumns: `repeat(${ordersStages.length}, minmax(0, 1fr))` }} role="tablist" aria-label="Filas de atendimento">
-        {ordersStages.map(stage => (
-          <button
-            key={stage.id}
-            type="button"
-            role="tab"
-            aria-selected={effectiveMobileOrdersStage === stage.id}
-            onClick={() => setMobileOrdersStage(stage.id)}
-            className={clsx('orders-mobile-stages__button', effectiveMobileOrdersStage === stage.id && 'is-active')}
-          >
-            <span>{stage.label}</span>
-            <strong>{stage.count}</strong>
-          </button>
-        ))}
-      </div>
+        <div className="orders-mobile-stages orders-lane-filters" style={{ gridTemplateColumns: `repeat(${ordersStages.length}, minmax(0, 1fr))` }} role="tablist" aria-label="Filas de atendimento">
+          {ordersStages.map(stage => (
+            <button
+              key={stage.id}
+              type="button"
+              role="tab"
+              aria-selected={effectiveMobileOrdersStage === stage.id}
+              onClick={() => setMobileOrdersStage(stage.id)}
+              className="orders-mobile-stages__button orders-filter-button"
+            >
+              <OrderFilterContent lane={stage.id} label={stage.label} count={stage.count} />
+            </button>
+          ))}
+        </div>
         {/* Search Bar Component */}
         <div className={clsx("orders-search relative", searchQuery && "has-query")}>
           <Search aria-hidden="true" className={"pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-koma-muted"} />
@@ -927,6 +941,7 @@ export function CaixaOrdersWorkspaceView({
         )}
         {queueNotices}
         <div className="orders-toolbar__actions">
+          {pixConferenceTrigger}
           <label className="orders-auto-accept">
             <input
               type="checkbox"
@@ -938,20 +953,6 @@ export function CaixaOrdersWorkspaceView({
             <span className="orders-switch" aria-hidden="true"><span /></span>
             <span className="orders-auto-accept__label">Aceite automático<small>{autoAccept ? 'Ativo' : 'Manual'}</small></span>
           </label>
-          {pixConferenceTrigger}
-          {onOpenFulfillment && ordersStages.some(stage => stage.id !== 'salon') && (
-            <details className="orders-fulfillment-menu">
-              <summary aria-label="Mais opções de pedidos" title="Mais opções de pedidos"><Ellipsis size={18} aria-hidden="true" /></summary>
-              <div className="orders-fulfillment-menu__options">
-                {ordersStages.some(stage => stage.id === 'digital') && (
-                  <button type="button" onClick={() => onOpenFulfillment('retiradas')}>Gerenciar retiradas</button>
-                )}
-                {ordersStages.some(stage => stage.id === 'delivery') && (
-                  <button type="button" onClick={() => onOpenFulfillment('entregadores')}>Gerenciar entregas</button>
-                )}
-              </div>
-            </details>
-          )}
           {/* Bell button — opens floating drawer */}
           <button
             type="button"

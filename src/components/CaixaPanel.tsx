@@ -43,7 +43,7 @@ import { CashierDesktopSidebar } from './caixa/navigation/CashierDesktopSidebar'
 import { CashierMobileBottomBar } from './caixa/navigation/CashierMobileBottomBar';
 import { CashierMobileSidebar } from './caixa/navigation/CashierMobileSidebar';
 import { CashierOperatorDrawer } from './caixa/navigation/CashierOperatorDrawer';
-import { bucketPickupOrders, bucketCourierDeliveryOrders } from './caixa/orders/deliveryOrderProjection';
+import { bucketCourierDeliveryOrders } from './caixa/orders/deliveryOrderProjection';
 import { CashierSubNavigation } from './caixa/navigation/CashierSubNavigation';
 import { shouldShowSalon } from '../domain/cashierSalonVisibility';
 import { useCashierNavigation } from './caixa/navigation/useCashierNavigation';
@@ -757,15 +757,10 @@ export function CaixaPanel({
     ? salonTableCards.find(card => card.table.id === Number(selectedKanbanOrder.mesaId) && !card.isMerged)
     : undefined;
 
-  const queueCounts = useMemo(() => {
-    const pickup = bucketPickupOrders(deliveryOrders, nowTimestamp);
-    const delivery = bucketCourierDeliveryOrders(deliveryOrders);
-    return {
-      pronta: pickup.ready[0],
-      prontas: pickup.ready.length,
-      semEntregador: delivery.ready.filter(order => !order.motoboyId),
-    };
-  }, [deliveryOrders, nowTimestamp]);
+  const deliveriesWithoutCourier = useMemo(
+    () => bucketCourierDeliveryOrders(deliveryOrders).ready.filter(order => !order.motoboyId),
+    [deliveryOrders],
+  );
   const hasLocalServiceWork = tableOrdersInProduction.length > 0 || tableOrdersReady.length > 0
     || deliveryOrders.some(order => order.modalidade === 'dine_in');
   const hasLocalPendingPayment = pagamentosPendentes.some(payment => orders.some(order =>
@@ -964,16 +959,12 @@ export function CaixaPanel({
               <CaixaOrdersWorkspace
                 pixConferenceTrigger={<DirectPixPendingPanel apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onRefreshOrders={onRefreshOrders} />}
                 hasLocalServiceWork={hasLocalServiceWork}
-                queueNotices={<>
-                  {queueCounts.pronta && <button type="button" className="orders-queue-notice"
-                    onClick={() => openDeliveryOrderDetails(queueCounts.pronta)}>
-                    {queueCounts.prontas} {queueCounts.prontas === 1 ? 'retirada pronta' : 'retiradas prontas'}
-                  </button>}
-                  {queueCounts.semEntregador.length > 0 && <button type="button" className="orders-queue-notice"
-                    onClick={() => openDeliveryOrderDetails(queueCounts.semEntregador[0])}>
-                    {queueCounts.semEntregador.length} sem entregador
-                  </button>}
-                </>}
+                queueNotices={deliveriesWithoutCourier.length > 0 && (
+                  <button type="button" className="orders-queue-notice"
+                    onClick={() => openDeliveryOrderDetails(deliveriesWithoutCourier[0])}>
+                    {deliveriesWithoutCourier.length} sem entregador
+                  </button>
+                )}
                 columns={cashierOrderColumns}
                 pendingCashPayments={pagamentosPendentes.map((pag) => {
                   const comandaMesa = orders.find((order) => order.id === pag.comanda_id);
@@ -994,7 +985,6 @@ export function CaixaPanel({
                   onStageChange: setMobileOrdersStage,
                   filter: orderLaneFilter,
                   onFilterChange: setOrderLaneFilter,
-                  onOpenFulfillment: setActiveSubTab,
                   expandedCardIds,
                   onToggleCard: toggleCardExpansion,
                 }}

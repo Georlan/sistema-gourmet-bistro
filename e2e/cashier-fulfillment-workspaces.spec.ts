@@ -330,13 +330,12 @@ async function mockFulfillmentBackend(
 }
 
 async function openFulfillmentWorkspace(page: Page, name: 'retiradas' | 'entregas') {
-  const menu = page.locator('summary[aria-label="Mais opções de pedidos"]');
-  if (!(await menu.isVisible())) {
-    await page.getByRole('navigation', { name: 'Telas desta área' }).getByRole('button', { name: 'Pedidos', exact: true }).click();
+  if ((page.viewportSize()?.width ?? 1366) < 1024) {
+    await page.locator('#btn-mobile-caixa-sidebar-open').click();
   }
-  await expect(menu).toBeVisible();
-  await menu.click();
-  await page.getByRole('button', { name: `Gerenciar ${name}`, exact: true }).click();
+  const search = page.getByRole('combobox', { name: 'Pesquisar funções do KÔMA' });
+  await search.fill(name);
+  await page.getByRole('option').filter({ hasText: new RegExp(name, 'i') }).first().click();
 }
 
 test('filtros atuam dentro de Pedidos e preservam a busca', async ({ page }) => {
@@ -348,6 +347,20 @@ test('filtros atuam dentro de Pedidos e preservam a busca', async ({ page }) => 
   const search = page.getByRole('searchbox', { name: 'Buscar pedidos' });
   const mobileFilters = page.getByRole('tablist', { name: 'Filas de atendimento' });
   await expect(board).toBeVisible();
+  const toolbar = page.locator('.orders-toolbar');
+  const newOrders = toolbar.getByRole('button', { name: /Novos pedidos/ });
+  await expect(newOrders).toBeVisible();
+  const toolbarBounds = await toolbar.boundingBox();
+  const buttonBounds = await newOrders.boundingBox();
+  expect(toolbarBounds!.x + toolbarBounds!.width - buttonBounds!.x - buttonBounds!.width).toBeLessThan(22);
+  const actions = toolbar.locator('.orders-toolbar__actions');
+  await expect(actions.locator('.orders-auto-accept + .orders-new-orders')).toBeVisible();
+  await expect(toolbar.locator('summary[aria-label="Mais opções de pedidos"]')).toHaveCount(0);
+  await expect(toolbar.getByText(/retiradas? prontas?/i)).toHaveCount(0);
+  const filterMarks = toolbar.locator('.orders-filter-button:visible svg use');
+  expect(await filterMarks.count()).toBeGreaterThanOrEqual(3);
+  await expect.poll(() => filterMarks.evaluateAll(marks => marks.every(mark =>
+    (mark as SVGUseElement).getBBox().width > 0))).toBe(true);
   if (await mobileFilters.isVisible()) {
     await expect(search).toBeVisible();
     await search.click();
