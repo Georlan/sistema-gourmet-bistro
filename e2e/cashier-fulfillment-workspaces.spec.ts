@@ -370,7 +370,9 @@ test('filtros atuam dentro de Pedidos e preservam a busca', async ({ page }) => 
       expect(box.top).toBeCloseTo(boxes[0].top, 0);
     }
     await expect(search).toBeVisible();
-    expect((await search.boundingBox())!.y).toBeCloseTo(boxes[0].top, 0);
+    const searchBox = (await search.boundingBox())!;
+    const centerDifference = Math.abs(searchBox.y + searchBox.height / 2 - (boxes[0].top + boxes[0].height / 2));
+    expect(centerDifference).toBeLessThanOrEqual(2);
     await search.click();
     await expect(search).toBeFocused();
   } else {

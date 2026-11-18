@@ -120,6 +120,7 @@
   .orders-workspace .orders-toolbar .orders-mobile-stages {
     flex: 1 1 0;
     gap: .3rem;
+    margin: 0;
     min-width: 0;
     padding: 0;
     border: 0;
@@ -140,6 +141,7 @@
     background: var(--koma-surface-raised);
   }
   .orders-workspace .orders-search {
+    display: flex;
     flex: 0 0 44px;
     max-width: none;
   }
