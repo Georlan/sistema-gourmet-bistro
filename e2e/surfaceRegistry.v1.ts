@@ -39,7 +39,7 @@ export const contractRoutes = [
 ] as const;
 
 export const operatorSections = {
-  vendas: ['Pedidos', 'Novo pedido', 'Salão', 'Cozinha/Preparo', 'Retiradas', 'Entregas'],
+  vendas: ['Pedidos', 'Novo pedido', 'Salão', 'Cozinha/Preparo'],
   caixa: ['Turno atual', 'Movimentações', 'Fechamento'],
   cardapio: ['Produtos', 'Complementos', 'Preparo/impressão'],
   estoque: ['Estoque', 'Compras', 'Inventário', 'Fornecedores'],

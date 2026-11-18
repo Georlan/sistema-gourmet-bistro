@@ -111,7 +111,7 @@ for (const theme of ['dark', 'light'] as const) {
       }
 
       const subnavButtons = page.locator('.cashier-subnav__button');
-      await expect(subnavButtons).toHaveCount(6);
+      await expect(subnavButtons).toHaveCount(4);
       for (const button of await subnavButtons.all()) {
         const buttonBox = await button.boundingBox();
         expect(buttonBox?.height ?? 0).toBeGreaterThanOrEqual(44);
@@ -195,7 +195,7 @@ test('interação real mobile: abre e fecha menu principal e conversas sem quebr
   await expect(chatPanel).not.toBeVisible();
 
   // 3. Navegar nas subtabs de Vendas
-  for (const label of ['Novo pedido', 'Salão', 'Cozinha', 'Retiradas', 'Entregas', 'Pedidos']) {
+  for (const label of ['Novo pedido', 'Salão', 'Cozinha', 'Pedidos']) {
     const tabBtn = page.locator('.cashier-subnav__button', { hasText: label });
     await tabBtn.click();
     await expect(tabBtn).toHaveClass(/is-active/);

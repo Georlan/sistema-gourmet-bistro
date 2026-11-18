@@ -28,20 +28,20 @@ test('restored attendance is visible, keeps permissions collapsed and preserves 
   expect(selectedInside).toBe(true);
 });
 
-test('mobile scroll exposes delivery and retains order creation in the same strip', async ({ page }) => {
+test('mobile filter exposes delivery and retains order creation in the same strip', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.goto('/?view=caixa');
   const nav = page.getByRole('navigation', { name: 'Telas desta área' });
-  await expect(nav.locator('.cashier-subnav__button')).toHaveCount(6);
+  await expect(nav.locator('.cashier-subnav__button')).toHaveCount(4);
   const strip = nav.locator('.cashier-subnav__scroll');
   await expect(nav.locator('.cashier-subnav__arrow').first()).toBeHidden();
   await expect(nav.locator('.cashier-subnav__arrow').last()).toBeHidden();
-  await strip.evaluate(el => { el.scrollLeft = el.scrollWidth; });
-  await expect.poll(() => strip.evaluate(el => el.scrollLeft)).toBeGreaterThan(80);
-  await nav.getByRole('button', { name: 'Entregas', exact: true }).click();
-  await expect(nav.getByRole('button', { name: 'Entregas', exact: true })).toHaveAttribute('aria-current', 'page');
+  const filter = page.getByRole('group', { name: 'Filtrar pedidos por atendimento' }).getByRole('button', { name: /^Entregas/ });
+  await filter.click();
+  await expect(filter).toHaveAttribute('aria-pressed', 'true');
+  await expect(nav.getByRole('button', { name: 'Pedidos', exact: true })).toHaveAttribute('aria-current', 'page');
   await nav.getByRole('button', { name: 'Novo pedido', exact: true }).click();
   await expect(page.getByPlaceholder('Buscar item, descrição ou código')).toBeVisible();
   await expect(nav).toBeVisible();
@@ -70,7 +70,7 @@ for (const [tab, subTab] of [
     await expect(nav.locator('[aria-current="page"]')).toHaveCount(1);
     const selected = await nav.locator('[aria-current="page"]').getAttribute('data-navigation-id');
     // Wait for initial selection reveal/ResizeObserver before simulating the user.
-    await expect.poll(() => strip.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
+    if (tab !== 'operacao') await expect.poll(() => strip.evaluate(el => el.scrollWidth > el.clientWidth)).toBe(true);
     await page.waitForTimeout(250);
     const geometry = await strip.boundingBox();
     for (const edge of ['start', 'middle', 'end', 'middle', 'start'] as const) {

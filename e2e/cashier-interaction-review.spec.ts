@@ -107,12 +107,12 @@ test('mobile sidebar supports horizontal touch intent and preserves vertical scr
   expect(scenario.actions).toHaveLength(0);
 });
 
-test('all six operation destinations keep selection, show their screen, and fullscreen can return', async ({ page, isMobile }) => {
+test('all operation destinations keep selection, show their screen, and fullscreen can return', async ({ page, isMobile }) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   const scenario = await openOperationalScenario(page);
   const nav = page.getByRole('navigation', { name: 'Telas desta área' });
-  for (const name of ['Novo pedido', 'Salão', 'Cozinha', 'Retiradas', 'Entregas', 'Pedidos']) {
+  for (const name of ['Novo pedido', 'Salão', 'Cozinha', 'Pedidos']) {
     await nav.getByRole('button', { name, exact: true }).click();
     await expect(nav.getByRole('button', { name, exact: true })).toHaveAttribute('aria-current', 'page');
     if (name === 'Novo pedido') await expect(page.getByPlaceholder('Buscar item, descrição ou código')).toBeVisible();
