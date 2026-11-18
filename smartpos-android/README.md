@@ -1,31 +1,37 @@
-# KÔMA Garçom para SmartPOS
+# KÔMA Garçom & Pagamento para SmartPOS (`smartpos-android`)
 
-App Android nativo para lançar pedidos no salão em telas pequenas. Usa o login do KÔMA e a habilitação SmartPOS do restaurante. Com o caixa aberto, o operador pode consultar mesas e consumo, selecionar produtos do cardápio ativo, configurar complementos, informar observações, revisar e enviar para a operação. O mesmo lançamento do garçom web segue para cozinha e impressão conforme a configuração do restaurante.
+Aplicativo Android nativo para operação de garçom em salão e integração de pagamento SmartPOS (PagBank PlugPag / registro externo / dinheiro) com o backend KÔMA.
 
-A interface usa componentes do Android, sem WebView, imagens de catálogo ou dependências de UI externas. O catálogo carrega ao abrir um novo pedido. As mesas são atualizadas por solicitação e após confirmação de um pedido, sem consultas periódicas. O servidor mantém autoridade sobre disponibilidade, preços, permissões e identificação do pedido.
+Consulte a documentação completa da arquitetura, sessão, liquidação e homologação PagBank em [`../docs/payments/pagbank-smartpos-architecture.md`](../docs/payments/pagbank-smartpos-architecture.md).
 
-## Reenvio
+## Funcionalidades implementadas
 
-O app reserva a chave e o corpo do lançamento em armazenamento privado, cifrado com o Android Keystore, por restaurante e operador. Em caso de resposta perdida, **Confirmar envio** usa a mesma comanda e chave. A fila tem um envio pendente por operador e o app pede confirmação antes de voltar a lançar. A credencial e a sessão ficam apenas em memória. Se o app perder acesso ao envio guardado, confira o pedido pelo Caixa antes de relançar.
+- **Salão e projeções operacionais**: exibição de mesas livres, ocupadas, prontas para servir (respeitando `perm_garcom_status`), aguardando pagamento (`aguardando_pagamento`), juntas (`MERGED`), número do pedido persistido, saldo em aberto e tempo decorrido; filtros `Todas`, `Livres`, `Ocupadas` e `Prontas`; atalho direto `Lançar` / `Novo pedido` / `Rascunho`.
+- **Consumo e cozinha**: resumo financeiro (`Consumo`, `Pago`, `Em aberto`), filtro por comanda, bloco destacado de itens prontos com `Servir` / `Servir todos`, solicitação de conta (`PUT /comandas/{id}/pedir-conta`), atalho `+1` e botão `Cobrar`.
+- **Cardápio touch-first**: categorias, famílias/variações declaradas (`familia_id`), regras de grupos obrigatórios/opcionais/porções/escolha única, chips rápidos de observações (`VIAGEM`, `PRA MESA`, presets da categoria e ingredientes), revisão com edição/remoção + desfazer e envio idempotente (`PendingOrderStore`).
+- **Rascunhos persistentes (`DraftStore`)**: rascunhos salvos por restaurante e mesa com `AtomicFile`, exibidos claramente no Salão entre reinícios.
+- **Vínculo de terminal e sessão segura (`TerminalSessionStore`)**: vínculo persistente terminal -> restaurante com tokens cifrados via `AndroidKeyStore` (AES-256-GCM), troca rápida entre operadores autenticados no mesmo terminal, revogação imediata em `HTTP 401` e desvinculação explícita.
+- **Pagamentos e bridge PagBank (`PlugPagTerminalPaymentBridge` / `AndroidPlugPagClient`)**:
+  - Cobrança por valor (teclado numérico em centavos + atalhos `Total`, `1/2`, `1/3`, `1/4`) ou por seleção de itens (`escopo="itens"`).
+  - Formas `Crédito`, `Débito`, `Pix` e `Dinheiro` (cálculo automático de troco).
+  - Integração via `TerminalRuntime` + `TerminalCoordinator` + `PlugPagTerminalPaymentBridge` (`userReference10`, reconciliação via `getLastApprovedTransaction` e recuperação de estado `processando`). Quando o serviço `br.com.uol.pagseguro.plugpagservice` não está presente no aparelho, a cobrança física PagBank é marcada explicitamente como indisponível (com suporte separado apenas para simulador quando ativo no backend).
+- **Histórico recente**: consulta às 5 últimas operações (`/auth/smartpos/payment-intents/recentes`) com visualização e compartilhamento de comprovante textual.
 
-## Desenvolvimento
+## Desenvolvimento e build
 
-No Android SDK 36 e com Gradle 9.5.0:
+No Android SDK 36 com `minSdk = 25` (compatível com terminais PagBank Android 7+ como PAX A930):
 
 ```sh
 gradle -p smartpos-android test :app:testDebugUnitTest :app:assembleDebug
 ```
 
-O workflow SmartPOS publica o artefato `koma-garcom-smartpos-apk`. O APK debug é para Android 7.1 ou superior. Para um backend isolado em emulador, use `-PkomaApiUrl=http://10.0.2.2:8000`. Builds release usam a API de produção por HTTPS.
+O workflow `.github/workflows/smartpos-android-bridge.yml` executa os testes unitários dos módulos `:` (bridge) e `:app`, além de publicar o artefato `koma-garcom-smartpos-apk` (`versionCode = 5`, `versionName = "0.3.0"`).
 
-## Primeiro terminal
+Para apontar um build debug para backend local no emulador: `-PkomaApiUrl=http://10.0.2.2:8000`. Builds padrão apontam para a API HTTPS configurada no projeto.
 
-O PagBank é o primeiro candidato por já existir uma fronteira de pagamentos, testes do simulador e contratos de recuperação no KÔMA. A Stone oferece um deeplink direto para pagamentos e impressão, mas exigiria um adaptador adicional. Mercado Pago e Cielo também têm programas de apps embarcados. O binário atual tem o fluxo de pedidos. Os testes do bridge simulado continuam no módulo Kotlin e a cobrança física ainda depende de implementação e homologação.
+## Fontes oficiais PagBank consultadas (2026-11-18)
 
-Para o piloto, solicitar um terminal de desenvolvimento PagBank e validar o modelo e firmware com a parceria. A FAQ lista GPOS 780 e P2 para desenvolvimento. Validar o fluxo salão → cozinha em ambiente isolado, inclusive corte de rede e reenvio. A etapa de pagamento usa PlugPag, com confirmação e recuperação no backend, antes de enviar o APK release para homologação e vincular os terminais de produção.
-
-- [PagBank SmartPOS — integração](https://developer.pagbank.com.br/docs/integracao-smartpos-1)
+- [PagBank PlugPagServiceWrapper — GitHub (`v1.35.0`)](https://github.com/pagseguro/pagseguro-sdk-plugpagservicewrapper)
+- [PlugPag API Reference (Dokka)](https://pagseguro.github.io/pagseguro-sdk-plugpagservicewrapper/)
+- [PagBank SmartPOS — Integração](https://developer.pagbank.com.br/docs/integracao-smartpos-1)
 - [PagBank SmartPOS — FAQ](https://developer.pagbank.com.br/docs/faq-smartpos)
-- [Stone — Deeplink](https://sdkandroid.stone.com.br/reference/explicacao-deeplink)
-- [Mercado Pago — SmartApps](https://www.mercadopago.com.br/developers/pt/docs/smartapps/overview)
-- [Cielo — LIO Local](https://developercielo.github.io/manual/lio-local)

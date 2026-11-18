@@ -18,6 +18,7 @@ data class TerminalResultAck(
 interface HttpTransport {
     fun post(path: String, body: String): HttpResponsePayload
     fun get(path: String): HttpResponsePayload = error("GET não implementado por este transporte")
+    fun put(path: String): HttpResponsePayload = error("PUT não implementado por este transporte")
 }
 
 data class HttpResponsePayload(val statusCode: Int, val body: String)
@@ -31,6 +32,8 @@ class JdkHttpTransport(
     override fun post(path: String, body: String): HttpResponsePayload = request("POST", path, body)
 
     override fun get(path: String): HttpResponsePayload = request("GET", path, null)
+
+    override fun put(path: String): HttpResponsePayload = request("PUT", path, null)
 
     private fun request(method: String, path: String, body: String?): HttpResponsePayload {
         val connection = URL(baseUrl.trimEnd('/') + path).openConnection() as HttpURLConnection
