@@ -117,8 +117,10 @@
 @media (max-width: 768px) {
   .orders-workspace .orders-desktop-filters, .orders-workspace .orders-desktop-result { display: none; }
   .orders-workspace .orders-mobile-result { display: inline; }
-  .orders-workspace .orders-mobile-stages {
-    flex: 1 1 auto;
+  .orders-workspace .orders-toolbar .orders-mobile-stages {
+    flex: 1 1 0;
+    gap: .3rem;
+    margin: 0;
     min-width: 0;
     padding: 0;
     border: 0;
@@ -127,13 +129,19 @@
   }
   .orders-workspace .orders-lane-filters .orders-filter-button {
     min-height: 44px;
-    gap: .2rem;
-    padding: .15rem .25rem;
-    font-size: .72rem;
+    gap: .35rem;
+    padding: .2rem .3rem;
+    font-size: .78rem;
   }
-  .orders-filter-mark { width: 21px; height: 21px; }
-  .orders-filter-mark svg { width: 15px; height: 15px; }
+  .orders-workspace .orders-mobile-stages .orders-filter-button strong {
+    min-width: 1.125rem;
+    height: 1.125rem;
+    padding-inline: .2rem;
+    border-radius: .3rem;
+    background: var(--koma-surface-raised);
+  }
   .orders-workspace .orders-search {
+    display: flex;
     flex: 0 0 44px;
     max-width: none;
   }
@@ -145,5 +153,5 @@
   }
   .orders-workspace .orders-search:not(:focus-within):not(.has-query) .orders-search__input::placeholder { color: transparent; }
   .orders-workspace .orders-search:is(:focus-within,.has-query) { flex: 1 1 100%; }
-  .orders-workspace .orders-toolbar__actions { flex: 1 1 auto; justify-content: flex-end; }
+  .orders-workspace .orders-toolbar__actions { flex-basis: 100%; }
 }
