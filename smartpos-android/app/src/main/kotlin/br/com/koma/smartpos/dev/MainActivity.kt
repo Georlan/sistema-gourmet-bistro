@@ -48,6 +48,7 @@ class MainActivity : Activity() {
     private var pending: PendingOrder? = null
     private var busy = false
     private var notice = ""
+    private var salonFilter = "Todas"
     private lateinit var root: LinearLayout
     private lateinit var body: LinearLayout
     private lateinit var footer: LinearLayout
@@ -58,7 +59,7 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+        window.decorView.systemUiVisibility = 0
         @Suppress("DEPRECATION")
         window.statusBarColor = page
         @Suppress("DEPRECATION")
@@ -185,22 +186,50 @@ class MainActivity : Activity() {
                 salon.tables.isEmpty() -> body.label("Nenhuma mesa disponível.", 16)
                 else -> {
                     val occupied = salon.checks.mapTo(hashSetOf()) { it.tableId }
-                    salon.tables.chunked(2).forEach { pair ->
-                        val row = row()
-                        body.addView(row)
+                    val filters = listOf(
+                        "Todas" to salon.tables.size,
+                        "Livres" to salon.tables.count { it.id !in occupied },
+                        "Ocupadas" to salon.tables.count { it.id in occupied },
+                    )
+                    val filterRow = row()
+                    filters.forEach { (name, count) ->
+                        filterRow.addView(makeButton("$name\n$count", salonFilter == name) {
+                            salonFilter = name
+                            showSalon()
+                        }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(4) })
+                    }
+                    body.addView(filterRow)
+                    val visible = salon.tables.filter {
+                        salonFilter == "Todas" || (salonFilter == "Livres") == (it.id !in occupied)
+                    }
+                    if (visible.isEmpty()) body.label("Nenhuma mesa neste filtro.", 15, muted)
+                    visible.chunked(2).forEach { pair ->
+                        val tableRow = row().apply { gravity = Gravity.TOP }
+                        body.addView(tableRow)
                         pair.forEach { entry ->
-                            val status = if (entry.id in occupied) "Em atendimento" else "Livre"
+                            val isOccupied = entry.id in occupied
                             val count = drafts[entry.id].orEmpty().sumOf(Line::quantity)
-                            val label = if (count > 0) "Rascunho · $count" else status
-                            val item = makeButton("${entry.name}\n$label", count > 0) {
-                                loadTable(entry, openMenuIfFree = entry.id !in occupied)
-                            }.apply {
-                                gravity = Gravity.CENTER_VERTICAL or Gravity.START
-                                minHeight = dp(68)
+                            val label = when {
+                                count > 0 -> "$count no rascunho"
+                                isOccupied -> "Em atendimento"
+                                else -> "Livre"
                             }
-                            row.addView(item, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(6) })
+                            val card = column().apply {
+                                setPadding(dp(10), dp(10), dp(10), dp(8))
+                                background = shape(surface, border)
+                                contentDescription = "${entry.name}, $label"
+                                this.label(entry.name, 22, ink, bold = true)
+                                this.label(label, 13, muted)
+                                button(if (isOccupied) "Lançar" else "Novo pedido", primary = isOccupied) {
+                                    loadTable(entry, openMenuIfFree = !isOccupied)
+                                }
+                            }
+                            tableRow.addView(card, LinearLayout.LayoutParams(0, -2, 1f).apply {
+                                marginEnd = dp(6)
+                                bottomMargin = dp(6)
+                            })
                         }
-                        if (pair.size == 1) row.addView(View(this), LinearLayout.LayoutParams(0, 0, 1f))
+                        if (pair.size == 1) tableRow.addView(View(this), LinearLayout.LayoutParams(0, 0, 1f))
                     }
                 }
             }
@@ -653,14 +682,14 @@ class MainActivity : Activity() {
         textSize = 16f
         minHeight = dp(52)
         setPadding(dp(12), dp(8), dp(12), dp(8))
-        background = shape(Color.WHITE, border)
+        background = shape(surface, border)
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) }
     }
 
     private fun LinearLayout.entry(title: String, subtitle: String) {
         addView(column().apply {
             setPadding(dp(12), dp(4), dp(12), dp(4))
-            background = shape(Color.WHITE, border)
+            background = shape(surface, border)
             label(title, 16, ink, bold = true)
             if (subtitle.isNotBlank()) label(subtitle, 14, muted)
             layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(6) }
@@ -687,13 +716,13 @@ class MainActivity : Activity() {
             text = label
             textSize = 15f
             isAllCaps = false
-            setTextColor(if (enabled) ink else muted)
+            setTextColor(if (!enabled) muted else if (primary) Color.rgb(7, 28, 23) else ink)
             minHeight = dp(48)
             minWidth = dp(48)
             setPadding(dp(10), dp(6), dp(10), dp(6))
             background = android.graphics.drawable.RippleDrawable(
                 ColorStateList.valueOf(Color.argb(30, 0, 71, 52)),
-                shape(if (primary && enabled) mint else Color.WHITE, if (primary && enabled) mint else border), null,
+                shape(if (primary && enabled) mint else surface, if (primary && enabled) mint else border), null,
             )
             isEnabled = enabled
             setOnClickListener { if (!busy) action() }
@@ -716,11 +745,12 @@ class MainActivity : Activity() {
     private fun dp(value: Int) = (value * resources.displayMetrics.density + 0.5f).toInt()
 
     private companion object {
-        val page = Color.rgb(245, 249, 247)
+        val page = Color.rgb(8, 29, 23)
+        val surface = Color.rgb(30, 63, 51)
         val mint = Color.rgb(5, 196, 157)
-        val accentDark = Color.rgb(0, 104, 84)
-        val ink = Color.rgb(7, 28, 23)
-        val muted = Color.rgb(73, 92, 85)
-        val border = Color.rgb(210, 224, 216)
+        val accentDark = Color.rgb(94, 220, 186)
+        val ink = Color.rgb(241, 251, 246)
+        val muted = Color.rgb(184, 207, 195)
+        val border = Color.rgb(58, 95, 78)
     }
 }
