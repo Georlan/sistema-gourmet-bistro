@@ -541,3 +541,58 @@ def test_terminal_result_route_automatically_settles_approved_payment():
         assert db.query(Pagamento).filter(Pagamento.restaurante_id == RESTAURANTE_ID).count() == 1
     finally:
         db.close()
+
+
+@pytest.mark.parametrize("linked_account", [False, True])
+def test_smartpos_settlement_excludes_pickup_even_with_legacy_account_link(linked_account):
+    """A table approval never allocates payment to pickup, including legacy links."""
+    with SessionLocal(restaurante_id=RESTAURANTE_ID) as db:
+        table = db.get(Comanda, "cmd-settlement")
+        account = ensure_atendimento_for_comanda(db, table)
+        pickup, _, _ = _open_command_with_item(
+            db, suffix="pickup", mesa_id=82, numero_pedido=table.numero_pedido, price=25,
+        )
+        pickup.tipo = "Retirada"
+        db.flush()
+        if not linked_account:
+            db.query(AtendimentoComanda).filter_by(
+                restaurante_id=RESTAURANTE_ID, comanda_id=pickup.id,
+            ).delete()
+        db.commit()
+        intent = _approved_intent(
+            db, atendimento_id=account.id if linked_account else None,
+        )
+        result = settle_approved_smartpos_intent(
+            db, restaurante_id=RESTAURANTE_ID, intent_id=intent.id,
+        )
+        db.commit()
+        db.refresh(pickup)
+        assert float(pickup.valor_pago or 0) == 0
+        assert pickup.fechada is False
+        assert all(not item.pago for item in pickup.itens)
+        assert result.mesa_liberada is True
+        repeated = settle_approved_smartpos_intent(
+            db, restaurante_id=RESTAURANTE_ID, intent_id=intent.id,
+        )
+        assert repeated.pagamento.id == result.pagamento.id
+
+
+
+def test_table_transfer_does_not_move_pickup_with_legacy_attendance_link():
+    with SessionLocal(restaurante_id=RESTAURANTE_ID) as db:
+        table = db.get(Comanda, "cmd-settlement")
+        ensure_atendimento_for_comanda(db, table)
+        pickup, _, _ = _open_command_with_item(
+            db, suffix="pickup", mesa_id=82, numero_pedido=table.numero_pedido, price=25,
+        )
+        pickup.tipo = "Retirada"
+        if db.query(Mesa).filter_by(id=83, restaurante_id=RESTAURANTE_ID).first() is None:
+            db.add(Mesa(id=83, restaurante_id=RESTAURANTE_ID, capacidade=4))
+        db.commit()
+        transfer_group_by_comanda(db, RESTAURANTE_ID, table.id, 83, actor_id=USER_ID)
+        db.commit()
+        db.refresh(table)
+        db.refresh(pickup)
+        assert table.mesa_id == 83
+        assert pickup.mesa_id == 82
+        assert pickup.fechada is False and float(pickup.valor_pago or 0) == 0

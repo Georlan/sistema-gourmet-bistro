@@ -246,9 +246,12 @@ def _linked_command_ids(db: Session, restaurante_id: int, atendimento_id: str) -
     return [
         row[0]
         for row in db.query(AtendimentoComanda.comanda_id)
+        .join(Comanda, Comanda.id == AtendimentoComanda.comanda_id)
         .filter(
             AtendimentoComanda.restaurante_id == restaurante_id,
             AtendimentoComanda.atendimento_id == atendimento_id,
+            Comanda.restaurante_id == restaurante_id,
+            Comanda.tipo == "Consumo no Local",
         )
         .all()
     ]
@@ -624,6 +627,7 @@ def _ensure_related_open_comandas_linked(
         .filter(
             Comanda.restaurante_id == seed.restaurante_id,
             Comanda.mesa_id == account.mesa_id,
+            Comanda.tipo == "Consumo no Local",
             Comanda.fechada == False,
             Comanda.numero_pedido == account.numero_conta,
         )
