@@ -13,6 +13,7 @@ data class TerminalResultAck(
     val intentId: String,
     val status: String,
     val replayed: Boolean,
+    val tableReleased: Boolean = false,
 )
 
 interface HttpTransport {
@@ -109,6 +110,7 @@ class KomaTerminalBackendApi(private val transport: HttpTransport) : TerminalBac
             intentId = JsonField.string(response.body, "intent_id"),
             status = JsonField.string(response.body, "status"),
             replayed = JsonField.boolean(response.body, "replayed"),
+            tableReleased = runCatching { JsonField.boolean(response.body, "mesa_liberada") }.getOrDefault(false),
         )
     }
 
@@ -118,7 +120,7 @@ class KomaTerminalBackendApi(private val transport: HttpTransport) : TerminalBac
         }
     }
 
-    private fun encodePath(value: String): String = java.net.URLEncoder.encode(value, Charsets.UTF_8)
+    private fun encodePath(value: String): String = java.net.URLEncoder.encode(value, Charsets.UTF_8.name())
         .replace("+", "%20")
 
     private fun json(value: String): String = "\"" + value

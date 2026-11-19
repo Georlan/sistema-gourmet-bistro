@@ -150,4 +150,38 @@ class PlugPagTerminalPaymentBridgeTest {
         assertEquals(PaymentOutcome.ERROR, reconciled.outcome)
         assertEquals(0, client.doPaymentCalls)
     }
+    @Test
+    fun reconcileCannotApproveWithoutAmountAndAcquirerTransactionId() {
+        val cmd = command()
+        val client = FakePlugPagClient(lastApprovedResult = PlugPagRawResult(
+            result = 0,
+            userReference = StableOperationKey.userReference10(cmd.operationKey),
+            transactionCode = "TX-1",
+        ))
+        val bridge = PlugPagTerminalPaymentBridge(client)
+        assertEquals(PaymentOutcome.ERROR, bridge.reconcile(cmd).outcome)
+        client.lastApprovedResult = client.lastApprovedResult.copy(amountMinor = 4250L, transactionCode = null)
+        assertEquals(PaymentOutcome.ERROR, bridge.reconcile(cmd).outcome)
+        assertEquals(0, client.doPaymentCalls)
+    }
+
+    @Test
+    fun busyServiceCannotStartAnotherPayment() {
+        val client = FakePlugPagClient(busy = true)
+        assertEquals(PaymentOutcome.PENDING, PlugPagTerminalPaymentBridge(client).charge(command()).outcome)
+        assertEquals(0, client.doPaymentCalls)
+    }
+
+    @Test
+    fun successCodeCannotOverrideConflictingAcquirerErrorOrCorrelation() {
+        val client = FakePlugPagClient(paymentResult = PlugPagRawResult(
+            result = 0, errorCode = "DENIED", transactionCode = "TX-1"))
+        val bridge = PlugPagTerminalPaymentBridge(client)
+        assertEquals(PaymentOutcome.ERROR, bridge.charge(command()).outcome)
+        client.paymentResult = PlugPagRawResult(result = 0, transactionCode = "TX-1", amountMinor = 1L)
+        assertEquals(PaymentOutcome.ERROR, bridge.charge(command()).outcome)
+        client.paymentResult = PlugPagRawResult(result = 0, transactionCode = "TX-1", userReference = "OTHERREF12")
+        assertEquals(PaymentOutcome.ERROR, bridge.charge(command()).outcome)
+    }
+
 }
