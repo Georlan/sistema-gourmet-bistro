@@ -160,7 +160,12 @@ export function CardapioArtisticExperience({
   orderingMessage = '',
 }: CardapioArtisticExperienceProps) {
   const [shareToastVisible, setShareToastVisible] = useState(false);
+  const [bannerFailed, setBannerFailed] = useState(false);
   const categoryScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setBannerFailed(false);
+  }, [activeBrand.bannerImage]);
 
   // Compartilhar cardápio com feedback ao usuário
   const handleShare = async () => {
@@ -622,7 +627,7 @@ export function CardapioArtisticExperience({
       {/* ========================================================
           BANNER MULTITENANT CUSTOMIZADO (QUANDO HABILITADO)
           ======================================================== */}
-      {activeBrand.hasCustomBanner && activeBrand.bannerImage && (
+      {activeBrand.hasCustomBanner && activeBrand.bannerImage?.trim() && !bannerFailed && (
         <section id="brand-banner-hero" aria-label="Capa do restaurante" className="koma-art-brand-banner">
           <img
             src={activeBrand.bannerImage}
@@ -630,6 +635,7 @@ export function CardapioArtisticExperience({
             className="koma-art-banner-img"
             decoding="async"
             fetchPriority="high"
+            onError={() => setBannerFailed(true)}
           />
         </section>
       )}

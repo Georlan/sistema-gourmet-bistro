@@ -322,7 +322,8 @@ html[data-koma-theme="light"] .koma-art-canvas,
 @media (max-width: 767px) {
   .koma-art-mobile-contacts {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(85px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(85px, 168px));
+    justify-content: start;
     gap: 7px;
     width: 100%;
     min-width: 0;
@@ -460,6 +461,16 @@ html[data-theme="light"] .koma-art-category-bar {
   -ms-overflow-style: none;
   max-width: 1180px;
   margin: 0 auto;
+  /* Último chip sempre alcançável e com indício visual de rolagem horizontal. */
+  scroll-padding-inline: 18px;
+}
+
+@media (max-width: 767px) {
+  .koma-art-category-scroll {
+    padding-inline-end: 40px;
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
 }
 
 .koma-art-category-scroll::-webkit-scrollbar {
@@ -2706,7 +2717,52 @@ html[data-theme="light"] .koma-art-promo-footer,
   .koma-art-action-pill.lg\:inline-flex { display: inline-flex; }
 }
 
-/* Keep focused featured-product actions clear of the fixed navigation. */
-.koma-art-hero-stage button {
+/* Keep focused storefront actions clear of the fixed bottom dock. */
+.koma-art-hero-stage button,
+.koma-art-canvas :is(button, a, input, [tabindex]) {
   scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}
+
+@media (max-width: 767px) {
+  .koma-art-canopy {
+    padding-top: 8px;
+  }
+  .koma-art-canopy__shell {
+    gap: 8px;
+  }
+  .koma-art-brand-logo,
+  .koma-art-brand-logo--fallback {
+    width: 38px;
+    height: 38px;
+  }
+  .koma-art-hospitality-strip {
+    gap: 6px;
+    padding-bottom: 8px;
+  }
+  .koma-art-hospitality-btn {
+    white-space: nowrap;
+    min-height: 32px;
+  }
+  .koma-art-wave-svg {
+    height: 22px;
+  }
+  .koma-art-brand-banner {
+    margin-top: 10px;
+  }
+  .koma-art-banner-img {
+    max-height: 140px;
+  }
+  .koma-art-hero-stage {
+    margin: 8px auto 14px;
+  }
+  .koma-art-arch-window {
+    height: 155px;
+  }
+  .koma-art-stage-body {
+    padding: 10px 16px 14px;
+    gap: 8px;
+  }
+  .koma-art-stage-action-row {
+    padding-top: 10px;
+  }
 }
