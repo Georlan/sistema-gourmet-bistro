@@ -38,6 +38,7 @@ internal data class Session(
     val providerIntegratedAvailable: Boolean = false,
     val terminalMode: String = "registro_externo",
     val permissions: WaiterPermissions = WaiterPermissions(),
+    val smartposEnabled: Boolean = true,
 ) {
     val enabled get() = tablesAvailable
     val open get() = shiftOpen
@@ -434,16 +435,18 @@ internal class WaiterApi(
         val restaurant = context.getJSONObject("restaurante")
         val operator = context.getJSONObject("operador")
         val permissions = fetchPermissionsBestEffort()
+        val smartposEnabled = context.optBoolean("smartpos_enabled", true)
         return Session(
             restaurant = Restaurant(restaurant.getInt("id"), restaurant.getString("nome")),
             operator = Operator(operator.getString("id"), operator.getString("nome")),
-            tablesAvailable = context.optBoolean("mesas_disponiveis", context.optBoolean("smartpos_enabled", true)),
-            ordersAvailable = context.optBoolean("pedidos_disponiveis", context.optBoolean("smartpos_enabled", true)),
+            tablesAvailable = context.optBoolean("mesas_disponiveis", smartposEnabled),
+            ordersAvailable = context.optBoolean("pedidos_disponiveis", smartposEnabled),
             role = operator.string("role").ifBlank { "garcom" },
             shiftOpen = context.optBoolean("turno_aberto", false),
             providerIntegratedAvailable = context.optBoolean("provider_integrado_disponivel", false),
             terminalMode = context.string("terminal_mode").ifBlank { "registro_externo" },
             permissions = permissions,
+            smartposEnabled = smartposEnabled,
         )
     }
 

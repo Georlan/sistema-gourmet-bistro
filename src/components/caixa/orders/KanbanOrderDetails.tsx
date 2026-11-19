@@ -28,6 +28,7 @@ export interface KanbanDetailSourceItem extends CompositionSource {
   readonly observacao?: string;
   readonly cliente_nome?: string;
   readonly clienteNome?: string;
+  readonly origemOperacional?: string;
   readonly status?: string;
   readonly preco_unit?: number;
   readonly preco?: number;
@@ -256,7 +257,22 @@ export function KanbanOrderDetails({
             </h3>
             <div className="orders-detail-modal__status-line">
               {selectedKanbanOrder.mesaId > 0 && !selectedKanbanOrder.tableContext && <span>Pedido #{selectedOrderNumber}</span>}
-              <span>{operationalOriginLabel(selectedKanbanOrder.origemOperacional)}</span>
+              {(selectedKanbanOrder.origemOperacional === 'smartpos'
+                || selectedKanbanOrder.itens?.some((item) => item.origemOperacional === 'smartpos')) ? (
+                <span className="orders-card__chip orders-card__chip--smartpos" data-origin="smartpos">
+                  <img
+                    src="/brand/cashier/smartpos-tag-v1.svg"
+                    alt=""
+                    aria-hidden="true"
+                    className="orders-card__smartpos-icon"
+                    width={14}
+                    height={14}
+                  />
+                  <span>Maquininha · SmartPOS</span>
+                </span>
+              ) : (
+                <span>{operationalOriginLabel(selectedKanbanOrder.origemOperacional)}</span>
+              )}
               {restaurantConfig?.nome && <span>· {String(restaurantConfig.nome)}</span>}
               <span aria-hidden="true">•</span>
               <strong>{deliveryStatusLabel(selectedKanbanOrder.deliveryStatus, selectedKanbanOrder.modalidade)}</strong>
