@@ -32,8 +32,17 @@ def test_smartpos_quick_sale_and_table_launch_share_the_order_core(char_client, 
             "itens": [{"produto_id": "prod-char-refri", "cliente_nome": "Consumo Geral"}],
         })
         assert response.status_code == 201, response.text
+        assert response.json()["origem"] == "smartpos"
         core.assert_called_once()
         command = core.call_args.args[1]
         assert command.channel == OrderChannel.WAITER
         assert command.check_id == command_id
         assert command.table_id == "1"
+
+    mod_response = char_client.post(f"/cardapio/modificadores/lancamentos/{command_id}", headers=headers, json={
+        "garcom_id": "usr-char-admin", "origem": "smartpos",
+        "idempotency_key": "smartpos-core-mod-table",
+        "itens": [{"produto_id": "prod-char-simples", "modificador_ids": [], "cliente_nome": "Consumo Geral"}],
+    })
+    assert mod_response.status_code == 200, mod_response.text
+    assert mod_response.json()["origem"] == "smartpos"

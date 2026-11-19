@@ -66,7 +66,7 @@ def project_check_details(
         return details
     launch_context = {
         row.id: row for row in db.query(
-            Lancamento.id, Lancamento.timestamp, Lancamento.origem,
+            Lancamento.id, Lancamento.timestamp, Lancamento.origem, Lancamento.idempotency_key,
             Usuario.nome.label("responsavel_nome"),
             LancamentoIdentidade.sequencia, AtendimentoMesa.numero_conta,
         ).outerjoin(Usuario, and_(
@@ -91,11 +91,23 @@ def project_check_details(
     for detail in details:
         for launch in detail.lancamentos:
             launch.display_number = labels.get(launch.id)
+            context = launch_context.get(launch.id)
+            if context and (
+                context.origem == "smartpos"
+                or str(context.idempotency_key or "").startswith("smartpos-")
+            ):
+                launch.origem = "smartpos"
         for item in detail.itens:
             item.lancamento_display_number = labels.get(item.lancamento_id)
             context = launch_context.get(item.lancamento_id)
             if context:
+                effective_origin = (
+                    "smartpos"
+                    if context.origem == "smartpos"
+                    or str(context.idempotency_key or "").startswith("smartpos-")
+                    else context.origem
+                )
                 item.lancamento_timestamp = context.timestamp
-                item.lancamento_origem = context.origem
+                item.lancamento_origem = effective_origin
                 item.lancamento_responsavel_nome = context.responsavel_nome
     return details

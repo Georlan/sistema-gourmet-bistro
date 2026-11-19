@@ -157,24 +157,33 @@
   .orders-workspace .orders-toolbar__actions { flex-basis: 100%; }
 }
 
-/* Maquininha (SmartPOS) origin tag & quick production transition on table cards */
-.orders-workspace .orders-card__chip--smartpos,
-.orders-detail-modal .orders-card__chip--smartpos {
+/* Maquininha (SmartPOS) top indicator & quick production transition on table cards */
+.orders-workspace .orders-card__recency-group {
+  position: absolute;
+  z-index: 1;
+  top: -.5rem;
+  left: 1rem;
   display: inline-flex;
   align-items: center;
-  gap: .3rem;
-  padding: .15rem .48rem .15rem .32rem;
-  border: 1px solid var(--koma-accent-border);
-  border-radius: .45rem;
-  background: var(--koma-accent-soft);
-  color: var(--koma-accent-text);
-  font-weight: 700;
+  gap: .35rem;
 }
-.orders-card__smartpos-icon {
-  flex: 0 0 auto;
-  width: 14px;
-  height: 14px;
-  display: block;
+.orders-workspace .orders-card__recency-group .orders-card__recency {
+  position: static;
+}
+.orders-workspace .orders-card__recency--smartpos,
+.orders-detail-modal .orders-card__recency--smartpos {
+  display: inline-flex;
+  align-items: center;
+  gap: .28rem;
+  padding: .1rem .5rem;
+  border-radius: .35rem .35rem .35rem 0;
+  background: var(--koma-warning-bg, #a7cfe8);
+  color: var(--koma-warning-text, #15394f);
+  box-shadow: 0 2px 0 #0b3e323d;
+  font-family: var(--koma-font-body);
+  font-size: .65rem;
+  font-weight: 600;
+  line-height: 1.25;
 }
 .orders-workspace .orders-card__foot-actions {
   display: flex;

@@ -276,6 +276,9 @@ class WaiterAdapter:
                     detail="Erro ao recuperar lançamento criado.",
                 )
 
+            if getattr(lancamento_in, "origem", None) == "smartpos":
+                novo_lancamento.origem = "smartpos"
+
             # Identificador operacional canônico para consumo no local
             if comanda.tipo == "Consumo no Local" and comanda.mesa_id is not None:
                 ensure_atendimento_for_comanda(db, comanda, actor_id=current_user.id)
