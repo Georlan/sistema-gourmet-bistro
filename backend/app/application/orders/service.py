@@ -56,6 +56,7 @@ from ...models import (
     Item,
     ItemModificador,
     Lancamento,
+    Pagamento,
     Produto,
     Restaurante,
     Usuario,
@@ -1089,6 +1090,58 @@ class OrderApplicationService:
         return cls._to_order_dto(db=db, comanda=comanda, lancamento=lancamento)
 
     @classmethod
+    def _ensure_no_approved_payment_before_cancel_or_reject(
+        cls,
+        db: Session,
+        comanda: Comanda,
+        target_items: list[Item],
+    ) -> None:
+        from sqlalchemy import or_
+        from ...financial_models import PagamentoAlocacao
+        from ...services.cash_reconciliation import remaining_refund_allocations
+        from ...services.financeiro import money
+
+        # Pagamento.status is the cash ledger contract: pendente is an
+        # unconfirmed request, aprovado is received, cancelado is rejected.
+        # Refunds are immutable events; neither valor_pago nor item.pago is
+        # erased by a refund. Use the existing allocation ledger to prove it.
+        allocated_ids = db.query(PagamentoAlocacao.pagamento_id).filter(
+            PagamentoAlocacao.restaurante_id == int(comanda.restaurante_id),
+            PagamentoAlocacao.comanda_id == comanda.id,
+        )
+        payments = db.query(Pagamento).filter(
+            Pagamento.restaurante_id == int(comanda.restaurante_id),
+            or_(Pagamento.comanda_id == comanda.id, Pagamento.id.in_(allocated_ids)),
+            or_(Pagamento.status.is_(None), Pagamento.status.notin_(("pendente", "cancelado"))),
+        ).all()
+        refunded = Decimal("0.00")
+        unsettled = False
+        for payment in payments:
+            # Unknown legacy states cannot be mistaken for a proven refund.
+            if payment.status != "aprovado":
+                unsettled = True
+                continue
+            rows = [row for row in remaining_refund_allocations(
+                db, int(comanda.restaurante_id), payment,
+            ) if str(row["comanda_id"]) == str(comanda.id)]
+            # A table receipt reference is not an allocation. If its money
+            # belongs exclusively to another account, this command is unpaid.
+            if any(row.get("bloqueado") or money(row["disponivel"]) > 0 for row in rows):
+                unsettled = True
+            refunded += sum((money(row["estornado"]) for row in rows), Decimal("0.00"))
+        has_paid_item = any(bool(item.pago) for item in target_items)
+        paid_amount = money(comanda.valor_pago)
+        has_approved_online = str(comanda.online_payment_status or "").strip().lower() == "approved"
+        historical_payment_unresolved = (
+            (has_paid_item or paid_amount > 0 or has_approved_online)
+            and (refunded <= 0 or refunded < paid_amount)
+        )
+        if unsettled or historical_payment_unresolved:
+            raise OrderValidationError(
+                "Há pagamento registrado ou aprovado neste pedido. Estorne o pagamento no Caixa antes de cancelar ou recusar."
+            )
+
+    @classmethod
     def cancel_order(
         cls,
         db: Session,
@@ -1112,10 +1165,11 @@ class OrderApplicationService:
             fulfillment=fulfillment,
         )
 
+        target_items = [it for it in comanda.itens if it.lancamento_id == lancamento.id] if lancamento else comanda.itens
+        cls._ensure_no_approved_payment_before_cancel_or_reject(db, comanda, target_items)
+
         if lancamento:
             lancamento.status = "cancelado"
-
-        target_items = [it for it in comanda.itens if it.lancamento_id == lancamento.id] if lancamento else comanda.itens
 
         itens_cancelados = []
         for it in target_items:
@@ -1186,6 +1240,9 @@ class OrderApplicationService:
             target_status=OrderStatus.REJECTED,
             fulfillment=fulfillment,
         )
+
+        target_items = [it for it in comanda.itens if it.lancamento_id == lancamento.id] if lancamento else comanda.itens
+        cls._ensure_no_approved_payment_before_cancel_or_reject(db, comanda, target_items)
 
         if lancamento:
             lancamento.status = "recusado"
