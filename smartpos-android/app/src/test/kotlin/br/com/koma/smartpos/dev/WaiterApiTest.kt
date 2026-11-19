@@ -92,7 +92,7 @@ class WaiterApiTest {
                     path.startsWith("/comandas/detalhes/todos") -> HttpResponsePayload(
                         200,
                         """
-                        [{"id":"check-1","itens":[
+                        [{"id":"check-1","mesa_id":3,"tipo":"Consumo no Local","itens":[
                           {"id":"prep","produto_id":"p2","status":"preparando"},
                           {"id":"ready","produto_id":"p1","status":"pronto","pago":true}
                         ]}]
@@ -194,26 +194,26 @@ class WaiterApiTest {
                         """
                         [
                           {
-                            "id": "c-1", "mesa_id": 1, "numero_pedido": 12, "valor_pago": 10.00,
+                            "id": "c-1", "tipo": "Consumo no Local", "mesa_id": 1, "numero_pedido": 12, "valor_pago": 10.00,
                             "status_comanda": "aberta", "criado_em": "2026-11-18T12:15:00Z",
                             "itens": [
                               {"id": "i1", "produto_id": "p1", "preco_unit": 35.00, "status": "pronto"}
                             ]
                           },
                           {
-                            "id": "c-2", "mesa_id": 2, "numero_pedido": 13, "valor_pago": 0,
+                            "id": "c-2", "tipo": "Consumo no Local", "mesa_id": 2, "numero_pedido": 13, "valor_pago": 0,
                             "status_comanda": "aguardando_pagamento", "criado_em": "2026-11-18T12:00:00Z",
                             "itens": [
                               {"id": "i2", "produto_id": "p1", "preco_unit": 50.00, "status": "entregue"}
                             ]
                           },
                           {
-                            "id": "c-4a", "mesa_id": 4, "numero_pedido": 14, "valor_pago": 0,
+                            "id": "c-4a", "tipo": "Consumo no Local", "mesa_id": 4, "numero_pedido": 14, "valor_pago": 0,
                             "status_comanda": "aberta", "criado_em": "2026-11-18T12:20:00Z",
                             "itens": [{"id": "i4a", "produto_id": "p1", "preco_unit": 20.00, "status": "preparando"}]
                           },
                           {
-                            "id": "c-4b", "mesa_id": 4, "numero_pedido": 15, "valor_pago": 0,
+                            "id": "c-4b", "tipo": "Consumo no Local", "mesa_id": 4, "numero_pedido": 15, "valor_pago": 0,
                             "status_comanda": "aberta", "criado_em": "2026-11-18T12:22:00Z",
                             "itens": [{"id": "i4b", "produto_id": "p2", "preco_unit": 15.00, "status": "pronto"}]
                           }
@@ -576,6 +576,29 @@ class WaiterApiTest {
         file.writeText("corrupt")
         assertThrows(IllegalStateException::class.java) { store.load("api") }
         assertEquals("corrupt", file.readText())
+    }
+
+    @Test
+    fun pickupDeliveryUnknownAndOtherTablesCannotEnterTableConsumption() {
+        val payload = """[
+            {"id":"local","mesa_id":3,"tipo":"Consumo no Local","itens":[{"id":"meal","preco_unit":10.00}]},
+            {"id":"pickup","mesa_id":3,"tipo":"Retirada","itens":[{"id":"takeaway","preco_unit":50.00}]},
+            {"id":"delivery","mesa_id":3,"tipo":"Delivery","itens":[{"id":"del","preco_unit":60.00}]},
+            {"id":"unknown","mesa_id":3,"itens":[{"id":"unk","preco_unit":70.00}]},
+            {"id":"other","mesa_id":4,"tipo":"Consumo no Local","itens":[{"id":"other-meal","preco_unit":80.00}]}
+        ]"""
+        val api = WaiterApi(object : HttpTransport {
+            override fun post(path: String, body: String) = error("unexpected post")
+            override fun get(path: String) = when {
+                path == "/mesas/" -> HttpResponsePayload(200, """[{"id":3,"nome":"Mesa 3"}]""")
+                path.startsWith("/comandas/detalhes/todos") -> HttpResponsePayload(200, payload)
+                path.startsWith("/atendimentos/mesas/") -> HttpResponsePayload(404, "{}")
+                else -> error(path)
+            }
+        })
+        assertEquals(listOf("local"), api.salon().single().checks.map(Check::id))
+        assertEquals(listOf("local"), api.detail(Table(3, "Mesa 3")).checks.map(Check::id))
+        assertEquals(1000L, api.detail(Table(3, "Mesa 3")).total)
     }
 
 }

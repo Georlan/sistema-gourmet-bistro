@@ -4,8 +4,11 @@ class TerminalCoordinator(
     private val bridge: TerminalPaymentBridge,
     private val store: OperationStore,
 ) {
-    @Synchronized
-    fun handle(command: TerminalCommand): TerminalPaymentResult {
+    fun handle(command: TerminalCommand): TerminalPaymentResult = synchronized(terminalExecutionLock) {
+        handleExclusive(command)
+    }
+
+    private fun handleExclusive(command: TerminalCommand): TerminalPaymentResult {
         require(command.operationKey.length >= 8) { "operationKey inválida" }
         require(command.terminalId.isNotBlank()) { "terminalId obrigatório" }
 
@@ -61,4 +64,9 @@ class TerminalCoordinator(
         store.put(reserved.copy(lastResult = result))
         return result
     }
+    private companion object {
+        // A recreated Activity/runtime must not acquire a second independent SDK lock.
+        val terminalExecutionLock = Any()
+    }
+
 }

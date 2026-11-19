@@ -47,18 +47,19 @@ object PlugPagConstants {
     const val VOID_PAYMENT = 1
     const val VOID_QRCODE = 2
 
-    const val OPERATION_ABORTED = -1001
-    const val DOING_TRANSACTION = -1012
-    const val PINPAD_NOT_INITIALIZED = -1015
-    const val AUTHENTICATION_FAILED = -1020
-    const val TRANSACTION_DENIED = -1023
-    const val TIMEOUT_REACHED = -1024
-    const val COMMUNICATION_ERROR = -1026
-    const val INVALID_AMOUNT = -1033
-    const val INVALID_CARD = -1036
-    const val INVALID_CVV = -1037
-    const val INVALID_EXPIRATION_DATE = -1038
-    const val INVALID_PAN = -1040
+    // Verified against the official wrapper 1.35.0; PagBank variant tests exercise its real constants.
+    const val OPERATION_ABORTED = -1028
+    const val DOING_TRANSACTION = -1047
+    const val PINPAD_NOT_INITIALIZED = -1036
+    const val AUTHENTICATION_FAILED = -1033
+    const val TRANSACTION_DENIED = -1004
+    const val TIMEOUT_REACHED = -1064
+    const val COMMUNICATION_ERROR = -1019
+    const val INVALID_AMOUNT = -1031
+    const val INVALID_CARD = -1022
+    const val INVALID_CVV = -1060
+    const val INVALID_EXPIRATION_DATE = -1061
+    const val INVALID_PAN = -1059
     const val QR_CODE_EXPIRED = -1048
     const val MIN_AMOUNT_CENTS = 100L
 }

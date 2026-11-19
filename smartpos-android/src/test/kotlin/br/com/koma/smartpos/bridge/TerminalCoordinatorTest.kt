@@ -101,11 +101,11 @@ class TerminalCoordinatorTest {
             }
             override fun reconcile(command: TerminalCommand) = error("must use cached approval")
         }
-        val coordinator = TerminalCoordinator(bridge, InMemoryOperationStore())
+        val store = InMemoryOperationStore()
         val pool = java.util.concurrent.Executors.newFixedThreadPool(8)
         try {
             val start = java.util.concurrent.CountDownLatch(1)
-            val jobs = (1..8).map { pool.submit<TerminalPaymentResult> { start.await(); coordinator.handle(command()) } }
+            val jobs = (1..8).map { pool.submit<TerminalPaymentResult> { start.await(); TerminalCoordinator(bridge, store).handle(command()) } }
             start.countDown()
             jobs.forEach { assertEquals(PaymentOutcome.APPROVED, it.get(5, java.util.concurrent.TimeUnit.SECONDS).outcome) }
             assertEquals(1, calls.get())

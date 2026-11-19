@@ -120,7 +120,7 @@ class KomaTerminalBackendApi(private val transport: HttpTransport) : TerminalBac
         }
     }
 
-    private fun encodePath(value: String): String = java.net.URLEncoder.encode(value, Charsets.UTF_8)
+    private fun encodePath(value: String): String = java.net.URLEncoder.encode(value, Charsets.UTF_8.name())
         .replace("+", "%20")
 
     private fun json(value: String): String = "\"" + value

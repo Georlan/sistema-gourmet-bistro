@@ -127,7 +127,7 @@ private data class ActiveTerminalIntent(
 internal class AndroidOperationStore(private val directory: File) : OperationStore {
     override fun get(operationKey: String): LocalOperation? {
         val target = file(operationKey)
-        if (!target.exists()) return null
+        if (!target.exists() && !File(target.path + ".bak").exists()) return null
         return run {
             val bytes = runCatching { AtomicFile(target).readFully() }.getOrElse { target.readBytes() }
             val obj = JSONObject(bytes.toString(Charsets.UTF_8))
@@ -623,6 +623,13 @@ class MainActivity : Activity() {
             Triple(token, loadedSession, tables to menu)
         }.onSuccess { (token, loadedSession, data) ->
             busy = false
+            val pendingOperator = terminalState.pendingPayment?.operatorId
+            if (pendingOperator != null && pendingOperator != loadedSession.operator.id) {
+                activeToken = ""
+                setError("Entre com o operador responsável pelo pagamento pendente para conciliá-lo.")
+                render()
+                return@onSuccess
+            }
             val bound = terminalState.boundRestaurant
             if (bound != null && bound.id != loadedSession.restaurant.id) {
                 promptRestaurantSwitchOnLogin(bound, loadedSession, user, token, data.first, data.second)
@@ -2478,6 +2485,11 @@ class MainActivity : Activity() {
     // -------------------------------------------------------------------------
 
     private fun openPaymentScreen(table: Table, detail: TableDetail) {
+        if (terminalState.pendingPayment != null) {
+            setError("Há um pagamento pendente. Volte ao Salão e use Verificar pagamento antes de receber novamente.")
+            render()
+            return
+        }
         activeTable = table
         tableDetail = detail
         paymentScope = PaymentScope.VALUE
@@ -2731,7 +2743,8 @@ class MainActivity : Activity() {
             captureCard.addView(cashChips)
         } else {
             val plugPagHardware = plugPagClient.isServiceAvailable()
-            val canRunIntegrated = plugPagHardware || (BuildConfig.DEBUG && !BuildConfig.PAGBANK_TERMINAL && s.providerIntegratedAvailable)
+            val canRunIntegrated = s.providerIntegratedAvailable &&
+                (plugPagHardware || (BuildConfig.DEBUG && !BuildConfig.PAGBANK_TERMINAL))
             captureCard.addView(textView("3. Onde cobrar", 15f, bold = true))
 
             val externalSelected = paymentCapture == CaptureOption.EXTERNAL_POS
@@ -2798,8 +2811,8 @@ class MainActivity : Activity() {
         // Bottom confirm CTA
         val validAmount = paymentAmountCents in 1L..remaining
         val validCash = paymentMethod != PaymentMethod.CASH || (cashReceivedCents ?: paymentAmountCents) >= paymentAmountCents
-        val integratedAvailable = plugPagClient.isServiceAvailable() ||
-            (BuildConfig.DEBUG && !BuildConfig.PAGBANK_TERMINAL && s.providerIntegratedAvailable)
+        val integratedAvailable = s.providerIntegratedAvailable &&
+            (plugPagClient.isServiceAvailable() || (BuildConfig.DEBUG && !BuildConfig.PAGBANK_TERMINAL))
         val validPlugPag = paymentCapture != CaptureOption.INTEGRATED_PAGBANK ||
             (paymentAmountCents >= 100L && integratedAvailable)
         val canSubmit = !busy && validAmount && validCash && validPlugPag
@@ -2902,7 +2915,11 @@ class MainActivity : Activity() {
 
     private fun startPaymentExecution(table: Table, detail: TableDetail) {
         if (busy) return
-        terminalState.pendingPayment?.let { executeSavedPayment(it); return }
+        if (terminalState.pendingPayment != null) {
+            setError("Concilie o pagamento pendente pelo botão Verificar pagamento no Salão.")
+            render()
+            return
+        }
         val operator = session ?: return renderLogin()
         if (BuildConfig.PAGBANK_TERMINAL &&
             (paymentMethod == PaymentMethod.CASH || paymentCapture != CaptureOption.INTEGRATED_PAGBANK)) {
@@ -3050,27 +3067,6 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun cancelActiveIntent(active: ActiveTerminalIntent) {
-        if (busy) return
-        busy = true
-        clearBanner()
-        render()
-        runAsync {
-            api.cancelPaymentIntent(active.intent.id, "Cancelado no SmartPOS antes da liquidação")
-        }.onSuccess { status ->
-            busy = false
-            activeTerminalIntent = null
-            if (status in setOf("cancelada", "recusada", "expirada")) {
-                terminalState = terminalStore.savePayment(apiUrl, null)
-            }
-            setInfo("Intenção encerrada ($status).")
-            render()
-        }.onFailure { err ->
-            busy = false
-            handleAsyncError(err) { render() }
-        }
-    }
-
     private fun showPinpadActivationDialog() {
         val input = inputField("Código de ativação PagBank", "")
         AlertDialog.Builder(this)
@@ -3115,7 +3111,7 @@ class MainActivity : Activity() {
             .onSuccess { list ->
                 busy = false
                 loadingText = null
-                recentOps = list
+                recentOps = if (BuildConfig.PAGBANK_TERMINAL) list.filter { it.capture == "provider_integrado" } else list
                 render()
             }
             .onFailure { err ->

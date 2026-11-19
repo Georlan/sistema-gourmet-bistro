@@ -463,7 +463,7 @@ internal class WaiterApi(
         val allChecksPayload = (get("/comandas/detalhes/todos?fechada=false") as JSONArray).objects()
         val nowMs = nowMsProvider()
         val checksByTable = mutableMapOf<Int, MutableList<JSONObject>>()
-        allChecksPayload.forEach { raw ->
+        allChecksPayload.filter(::isDineInCheck).forEach { raw ->
             val mesaId = raw.optInt("mesa_id")
             if (mesaId > 0) {
                 checksByTable.getOrPut(mesaId) { mutableListOf() }.add(raw)
@@ -513,6 +513,7 @@ internal class WaiterApi(
 
     fun detail(table: Table): TableDetail {
         val rawChecks = (get("/comandas/detalhes/todos?fechada=false&mesa_id=${table.id}") as JSONArray).objects()
+            .filter { isDineInCheck(it) && it.optInt("mesa_id") == table.id }
         val (checks, items) = parseChecksAndItems(rawChecks)
         val mergedLabel = fetchMergedOrderLabelBestEffort(table.id)
         val total = checks.sumOf { it.total }
@@ -565,9 +566,7 @@ internal class WaiterApi(
     }
 
     fun open(tableId: Int, operatorId: String, identifier: String? = null): String {
-        require(idempotencyKey.trim().length in 8..128)
         val body = JSONObject()
-            .put("idempotency_key", idempotencyKey)
             .put("mesa_id", tableId)
             .put("garcom_id", operatorId)
             .put("tipo", "Consumo no Local")
@@ -728,6 +727,11 @@ internal class WaiterApi(
     } catch (_: Exception) {
         ""
     }
+
+    private fun isDineInCheck(raw: JSONObject): Boolean = !raw.optBoolean("fechada", false) &&
+        raw.string("tipo").trim().lowercase() in setOf(
+            "consumo no local", "dine_in", "mesa", "salao", "salão", "comanda", "local",
+        )
 
     private fun parseChecksAndItems(rawChecks: List<JSONObject>): Pair<List<Check>, List<Consumption>> {
         val checks = mutableListOf<Check>()

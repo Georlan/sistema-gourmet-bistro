@@ -157,3 +157,10 @@ Em toda alteração de dependências ou preparação de release:
 8. atualize este arquivo com o commit/data de referência e arquive as evidências da revisão.
 
 Uma tabela desatualizada não constitui comprovação de conformidade. Os textos originais das licenças e os termos dos fornecedores prevalecem sobre este resumo.
+
+
+## Android SmartPOS PagBank (19/11/2026)
+
+- `br.com.uol.pagseguro.plugpagservice.wrapper:wrapper:1.35.0`: biblioteca oficial distribuída no Maven GitHub do PagBank, apenas na variante `pagbank`. Fonte e instruções: https://github.com/pagseguro/pagseguro-sdk-plugpagservicewrapper, commit `db556419b2e9634a69d4a835de9c3cba892de069`. O repositório consultado não contém licença aberta explícita; não atribuir Apache/MIT ao SDK. Uso/distribuição sujeitos aos termos e autorização comercial PagBank, a confirmar antes da publicação. Nenhum código-fonte do exemplo foi copiado.
+- `androidx.core:core:1.13.1`: Apache-2.0, suporte ao FileProvider requerido pelo AAR oficial cujo POM não declara transitivas. Fonte: https://android.googlesource.com/platform/frameworks/support/.
+- SmartCoffee (`pagseguro/pagseguro-plugpagservicewrapper-smartcoffeedemo`, commit `2140b19e211bd5f7b35c05140456f819ce7a0088`): consulta de contratos/fluxos e unidade de valor, sem incorporação de código ou assets. Sem licença aberta explícita na raiz consultada; não copiar sua implementação.
