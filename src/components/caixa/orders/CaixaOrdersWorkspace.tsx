@@ -102,6 +102,40 @@ const digitalOrderMark = (order: DeliveryOrderView, number: string, associatedTa
 
 const digitalOrderEdge = (order: DeliveryOrderView) => <CashierCardEdge partner={order.partner} />;
 
+type SmartPosOriginCandidate = {
+  readonly origemOperacional?: string;
+  readonly itens?: readonly { readonly origemOperacional?: string }[] | string;
+  readonly detailItems?: readonly { readonly origemOperacional?: string }[];
+};
+
+const isSmartPosOrigin = (order: SmartPosOriginCandidate): boolean => {
+  if (order.origemOperacional === 'smartpos') return true;
+  if (Array.isArray(order.itens) && order.itens.some((item) => item.origemOperacional === 'smartpos')) return true;
+  if (Array.isArray(order.detailItems) && order.detailItems.some((item) => item.origemOperacional === 'smartpos')) return true;
+  return false;
+};
+
+const renderSmartPosTag = (order: SmartPosOriginCandidate) => {
+  if (!isSmartPosOrigin(order)) return null;
+  return (
+    <span
+      className="orders-card__chip orders-card__chip--smartpos"
+      data-origin="smartpos"
+      title="Pedido lançado pela maquininha SmartPOS"
+    >
+      <img
+        src="/brand/cashier/smartpos-tag-v1.svg"
+        alt=""
+        aria-hidden="true"
+        className="orders-card__smartpos-icon"
+        width={14}
+        height={14}
+      />
+      <span>Maquininha</span>
+    </span>
+  );
+};
+
 // Renderizador compacto de itens de alta densidade
 const renderCompactItemsList = (
   items: string | readonly (CompositionSource & { nome?: string; produto?: { nome?: string }; status?: string })[],
@@ -425,8 +459,9 @@ export function CaixaOrdersWorkspaceView({
             )}
           </div>
         </div>
-        {(smartPosState || tableMovement.transferredFromMesaIds.length > 0 || tableMovement.mergedMesaIds.length > 0) && (
+        {(isSmartPosOrigin(order) || smartPosState || tableMovement.transferredFromMesaIds.length > 0 || tableMovement.mergedMesaIds.length > 0) && (
         <div className="orders-card__identity-chips">
+          {renderSmartPosTag(order)}
           {smartPosState && (
             <span className={clsx('orders-card__chip', smartPosState.chipClass)}>{smartPosState.label}</span>
           )}
@@ -443,11 +478,54 @@ export function CaixaOrdersWorkspaceView({
         </div>
         )}
         {renderCompactItemsList(order.itens, cardId, isExpanded, toggleCardExpansion, hasPrinting === false)}
-        <button type="button" disabled={isPendingConfirmation || isLoading}
-          className="orders-card__action w-full"
-          onClick={event => { event.stopPropagation(); actions.openTablePayment(order, true); }}>
-          {isPendingConfirmation ? 'Aguardando confirmação…' : smartPosState?.blocksPayment ? smartPosState.ctaLabel : 'Receber mesa'}
-        </button>
+        {(() => {
+          const canMarkReady = !isPendingConfirmation && !smartPosState?.blocksPayment
+            && order.itens.some((item) => item.status === 'preparando');
+          const primaryLabel = isPendingConfirmation
+            ? 'Aguardando confirmação…'
+            : smartPosState?.blocksPayment
+              ? smartPosState.ctaLabel
+              : 'Receber mesa';
+          return canMarkReady ? (
+            <div className="orders-card__foot-actions">
+              <button
+                type="button"
+                disabled={isLoading}
+                className="orders-card__action orders-card__action--secondary"
+                title="Marcar lançamento como pronto para servir"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  actions.markTableItemsReady(order);
+                }}
+              >
+                Pronto
+              </button>
+              <button
+                type="button"
+                disabled={isLoading}
+                className="orders-card__action flex-1"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  actions.openTablePayment(order, true);
+                }}
+              >
+                {primaryLabel}
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={isPendingConfirmation || isLoading}
+              className="orders-card__action w-full"
+              onClick={(event) => {
+                event.stopPropagation();
+                actions.openTablePayment(order, true);
+              }}
+            >
+              {primaryLabel}
+            </button>
+          );
+        })()}
       </div>
     );
   };
@@ -538,7 +616,11 @@ export function CaixaOrdersWorkspaceView({
         </div>
         <div className="orders-card__identity-chips">
           <span className="orders-card__state" data-state={order.status}>{badgeText}</span>
-          {!order.partner && <span className={"orders-card__chip is-muted"}>{getDigitalOrderSourceLabel(order)}</span>}
+          {!order.partner && (
+            isSmartPosOrigin(order)
+              ? renderSmartPosTag(order)
+              : <span className={"orders-card__chip is-muted"}>{getDigitalOrderSourceLabel(order)}</span>
+          )}
           <span className="orders-card__chip">{getDigitalOrderPaymentSummary(order)}</span>
         </div>
         {order.scheduledFor && (
@@ -664,6 +746,7 @@ export function CaixaOrdersWorkspaceView({
         )}
         <div className="orders-card__identity-chips">
           <span className="orders-card__state" data-state={contaPedida ? "bill" : "ready"}>{badgeText}</span>
+          {renderSmartPosTag(order)}
           {smartPosState && (
             <span className={clsx('orders-card__chip', smartPosState.chipClass)}>{smartPosState.label}</span>
           )}
@@ -785,7 +868,11 @@ export function CaixaOrdersWorkspaceView({
         )}
         <div className="orders-card__identity-chips">
           <span className="orders-card__state" data-state={order.status}>{badgeText}</span>
-          {!order.partner && <span className={"orders-card__chip is-muted"}>{getDigitalOrderSourceLabel(order)}</span>}
+          {!order.partner && (
+            isSmartPosOrigin(order)
+              ? renderSmartPosTag(order)
+              : <span className={"orders-card__chip is-muted"}>{getDigitalOrderSourceLabel(order)}</span>
+          )}
           <span className="orders-card__chip">{getDigitalOrderPaymentSummary(order)}</span>
         </div>
         {order.scheduledFor && (

@@ -575,3 +575,55 @@ test('order details distinguish paid, online confirmation, and remaining balance
   assert.match(approvedUnknown, /Conferir pagamento/);
   assert.doesNotMatch(approvedUnknown, /Não cobrar/);
 });
+
+test('cards e detalhes exibem tag da Maquininha para origem smartpos e botão rápido Pronto acelera o Kanban', () => {
+  const smartPosLaunch = check({
+    id: 'check-smartpos',
+    numeroPedido: 88,
+    origemOperacional: 'smartpos',
+    itens: [
+      { ...item('sp-1', 'preparando', 29.9), origemOperacional: 'smartpos' },
+      { ...item('sp-2', 'pronto', 19.9), origemOperacional: 'smartpos' },
+    ],
+  });
+  const markedReady: unknown[] = [];
+  const props = workspace([smartPosLaunch]);
+  const viewProps: CaixaOrdersWorkspaceProps = {
+    ...props,
+    actions: {
+      ...props.actions,
+      markTableItemsReady: (order) => markedReady.push(order),
+    },
+  };
+  const html = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, viewProps));
+  assert.match(html, /data-origin="smartpos"/);
+  assert.match(html, /\/brand\/cashier\/smartpos-tag-v1\.svg/);
+  assert.match(html, />Maquininha</);
+
+  const view = CaixaOrdersWorkspace(viewProps);
+  let stopped = 0;
+  invoke(button(view, 'Pronto'), 'onClick', { stopPropagation: () => stopped++ });
+  assert.equal(stopped, 1);
+  assert.deepEqual(markedReady, [props.columns.tableProduction[0].order]);
+
+  const detailHtml = renderToStaticMarkup(createElement(KanbanOrderDetails, {
+    order: {
+      id: 'check-smartpos',
+      mesaId: 7,
+      numeroPedido: 88,
+      origemOperacional: 'smartpos',
+      modalidade: 'dine_in',
+      deliveryStatus: 'producao',
+      total: 49.8,
+      itens: [{ id: 'sp-1', nome: 'D8 Bacon', status: 'preparando', preco: 29.9, origemOperacional: 'smartpos' }],
+    },
+    transfer: { targetId: '', onTargetChange: noop, isTransferring: false, tables: [] },
+    actions: {
+      close: noop, advanceDigitalOrder: noop, reprintProduction: noop, printFullTable: noop,
+      printTableValues: noop, transferTable: noop, associateTable: noop, convertDeliveryToPickup: noop,
+      cancelConsumption: noop, cancelOrder: noop,
+    },
+  }));
+  assert.match(detailHtml, /data-origin="smartpos"/);
+  assert.match(detailHtml, /Maquininha · SmartPOS/);
+});
