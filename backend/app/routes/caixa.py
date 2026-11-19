@@ -965,6 +965,7 @@ def registrar_pagamento_mesa(
     comandas = db.query(Comanda).filter(
         Comanda.restaurante_id == rest_id,
         Comanda.mesa_id == mesa_id,
+        Comanda.tipo == "Consumo no Local",
         Comanda.fechada == False,
     ).order_by(
         Comanda.criado_em.asc(),
@@ -1176,6 +1177,7 @@ def registrar_pagamento_mesa(
             Pagamento.restaurante_id == rest_id,
             Comanda.restaurante_id == rest_id,
             Comanda.mesa_id == mesa_id,
+            Comanda.tipo == "Consumo no Local",
             Pagamento.cliente_id.isnot(None),
         ).order_by(Pagamento.criado_em.desc()).first()
         if pagamento_anterior and pagamento_anterior.cliente_id:
@@ -1224,6 +1226,7 @@ def registrar_pagamento_mesa(
         mesa_liberada = db.query(Comanda).filter(
             Comanda.restaurante_id == rest_id,
             Comanda.mesa_id == mesa_id,
+            Comanda.tipo == "Consumo no Local",
             Comanda.fechada == False,
         ).first() is None
         db.commit()
@@ -1487,10 +1490,11 @@ def registrar_pagamento_comanda(
         # concluir o fulfillment. Comandas tradicionais mantêm o fechamento
         # automático após quitação.
         quitada, fechada_agora = _apply_fully_paid_state(comanda)
-        if fechada_agora and comanda.mesa_id:
+        if fechada_agora and comanda.mesa_id and comanda.tipo == "Consumo no Local":
             other_open = db.query(Comanda).filter(
                 Comanda.restaurante_id == rest_id,
                 Comanda.mesa_id == comanda.mesa_id,
+                Comanda.tipo == "Consumo no Local",
                 Comanda.fechada == False,
                 Comanda.id != comanda.id
             ).first()
@@ -1671,10 +1675,11 @@ def aprovar_pagamento(
     # Aprovar dinheiro pendente também respeita a separação entre pagamento
     # e conclusão operacional.
     quitada, fechada_agora = _apply_fully_paid_state(comanda)
-    if fechada_agora and comanda.mesa_id:
+    if fechada_agora and comanda.mesa_id and comanda.tipo == "Consumo no Local":
         other_open = db.query(Comanda).filter(
             Comanda.restaurante_id == rest_id,
             Comanda.mesa_id == comanda.mesa_id,
+            Comanda.tipo == "Consumo no Local",
             Comanda.fechada == False,
             Comanda.id != comanda.id
         ).first()

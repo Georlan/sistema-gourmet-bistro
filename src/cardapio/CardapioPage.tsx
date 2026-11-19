@@ -100,6 +100,12 @@ import {
   updateStoredOrderStatus,
 } from "./orderTracking";
 import { rebuildOrderFromCurrentCatalog } from "./repeatOrder";
+import {
+  clearCartDraft,
+  loadCartDraft,
+  restoreCartDraftFromCatalog,
+  saveCartDraft,
+} from "./cartDraftStorage";
 import { trackAnalyticsEvent } from "../analytics";
 
 const KOMA_PRIMARY = "#00b894";
@@ -136,8 +142,14 @@ export default function CardapioPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [editingCartItem, setEditingCartItem] = useState<CartItem | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | GroupedDisplayProduct | null>(null);
+  const [productModalOrigin, setProductModalOrigin] = useState<{ surface: "catalog" | "cart"; restaurantId: string | number } | null>(null);
   const [selectedPromotion, setSelectedPromotion] = useState<CatalogPromotion | null>(null);
   const [editingPromotionItem, setEditingPromotionItem] = useState<CartItem | null>(null);
+  const [promotionModalOrigin, setPromotionModalOrigin] = useState<{ surface: "catalog" | "cart"; restaurantId: string | number } | null>(null);
+  const previousBrandIdRef = useRef<string | number | null>(null);
+  const [hydratedDraftBrandId, setHydratedDraftBrandId] = useState<string | null>(null);
+  const checkoutOrderCreatedRef = useRef(false);
+  const [draftRestoreIssues, setDraftRestoreIssues] = useState<string[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -199,11 +211,63 @@ export default function CardapioPage() {
     }, 1800);
   }, []);
 
+  const openProductModal = useCallback((
+    product: Product | GroupedDisplayProduct,
+    surface: "catalog" | "cart",
+    options?: { editingItem?: CartItem | null; closeCart?: boolean },
+  ) => {
+    setEditingCartItem(options?.editingItem ?? null);
+    setProductModalOrigin(activeBrand ? { surface, restaurantId: activeBrand.id } : null);
+    setSelectedProduct(product);
+    if (options?.closeCart) setIsCartOpen(false);
+  }, [activeBrand]);
+
+  const closeProductModal = useCallback(() => {
+    const shouldReturnToCart = Boolean(
+      productModalOrigin?.surface === "cart"
+      && activeBrand
+      && String(productModalOrigin.restaurantId) === String(activeBrand.id),
+    );
+    setSelectedProduct(null);
+    setEditingCartItem(null);
+    setProductModalOrigin(null);
+    if (shouldReturnToCart) setIsCartOpen(true);
+    return shouldReturnToCart;
+  }, [activeBrand, productModalOrigin]);
+
+  const openPromotionModal = useCallback((
+    offer: CatalogPromotion,
+    surface: "catalog" | "cart",
+    options?: { editingItem?: CartItem | null; closeCart?: boolean },
+  ) => {
+    setEditingPromotionItem(options?.editingItem ?? null);
+    setPromotionModalOrigin(activeBrand ? { surface, restaurantId: activeBrand.id } : null);
+    setSelectedPromotion(offer);
+    if (options?.closeCart) setIsCartOpen(false);
+  }, [activeBrand]);
+
+  const closePromotionModal = useCallback(() => {
+    const shouldReturnToCart = Boolean(
+      promotionModalOrigin?.surface === "cart"
+      && activeBrand
+      && String(promotionModalOrigin.restaurantId) === String(activeBrand.id),
+    );
+    setSelectedPromotion(null);
+    setEditingPromotionItem(null);
+    setPromotionModalOrigin(null);
+    if (shouldReturnToCart) setIsCartOpen(true);
+    return shouldReturnToCart;
+  }, [activeBrand, promotionModalOrigin]);
+
   const openCart = useCallback(() => {
     // Garante uma única superfície interativa ao abrir a sacola.
     // Em celulares reais, FABs sobrepostos podem disputar o mesmo toque.
     setSelectedProduct(null);
     setEditingCartItem(null);
+    setProductModalOrigin(null);
+    setSelectedPromotion(null);
+    setEditingPromotionItem(null);
+    setPromotionModalOrigin(null);
     setIsOrdersDrawerOpen(false);
     setIsBenefitsOpen(false);
     setIsStoreInfoOpen(false);
@@ -525,28 +589,95 @@ export default function CardapioPage() {
   }, [loadRestaurantData]);
 
   useEffect(() => {
+    const nextBrandId = activeBrand?.id ?? null;
+    if (nextBrandId === null) return;
+    if (
+      previousBrandIdRef.current !== null
+      && String(previousBrandIdRef.current) !== String(nextBrandId)
+    ) {
+      setSelectedProduct(null);
+      setEditingCartItem(null);
+      setProductModalOrigin(null);
+      setSelectedPromotion(null);
+      setEditingPromotionItem(null);
+      setPromotionModalOrigin(null);
+      setIsCartOpen(false);
+      setIsCheckoutOpen(false);
+      setCheckoutRequest(null);
+      checkoutOrderCreatedRef.current = false;
+      setHydratedDraftBrandId(null);
+      setFulfillmentChoice(null);
+      setDraftRestoreIssues([]);
+      setCart([]);
+    }
+    previousBrandIdRef.current = nextBrandId;
+  }, [activeBrand?.id]);
+
+  // Reidrata rascunho da sacola da aba atual com revalidação contra o catálogo vivo.
+  useEffect(() => {
+    if (!activeBrand?.id) return;
+    const brandKey = String(activeBrand.id);
+    if (hydratedDraftBrandId === brandKey) return;
+
+    const draft = loadCartDraft(activeBrand.id);
+    if (!draft) {
+      setHydratedDraftBrandId(brandKey);
+      return;
+    }
+
+    const restored = restoreCartDraftFromCatalog(draft, activeBrand);
+    if (restored.items.length > 0) {
+      setCart((current) => (current.length > 0 ? current : restored.items));
+      if (restored.fulfillment) {
+        setFulfillmentChoice((current) => (
+          current && String(current.restaurantId) === brandKey
+            ? current
+            : { restaurantId: activeBrand.id, method: restored.fulfillment! }
+        ));
+      }
+      if (restored.issues.length > 0) {
+        setDraftRestoreIssues(restored.issues);
+        showNotification("Sua sacola foi recuperada com ajustes do cardápio atual.");
+      }
+    } else {
+      clearCartDraft(activeBrand.id);
+      if (restored.issues.length > 0) {
+        setDraftRestoreIssues(restored.issues);
+        showNotification("Alguns itens da sacola anterior não estão mais disponíveis.");
+      }
+    }
+    setHydratedDraftBrandId(brandKey);
+  }, [activeBrand, hydratedDraftBrandId, showNotification]);
+
+  useEffect(() => {
+    if (!activeBrand?.id) return;
+    if (hydratedDraftBrandId !== String(activeBrand.id)) return;
+    const method = fulfillmentChoice?.restaurantId === activeBrand.id ? fulfillmentChoice.method : null;
+    saveCartDraft(activeBrand.id, cart, method);
+  }, [activeBrand?.id, hydratedDraftBrandId, cart, fulfillmentChoice]);
+
+  useEffect(() => {
     if (!activeBrand || !selectedProduct) return;
+    if (productModalOrigin && String(productModalOrigin.restaurantId) !== String(activeBrand.id)) return;
     if (isGroupedProduct(selectedProduct)) {
       const anyAvail = selectedProduct.variants.some((v) => {
         const prod = activeBrand.products.find((p) => String(p.id) === String(v.id) && p.isAvailable !== false);
         return Boolean(prod);
       });
       if (!anyAvail) {
-        setSelectedProduct(null);
-        setEditingCartItem(null);
+        closeProductModal();
         setNotice("Este produto não está mais disponível. Consulte o cardápio atualizado.");
       }
       return;
     }
     const current = activeBrand.products.find(product => String(product.id) === String(selectedProduct.id) && product.isAvailable !== false);
     if (!current) {
-      setSelectedProduct(null);
-      setEditingCartItem(null);
+      closeProductModal();
       setNotice("Este produto não está mais disponível. Consulte o cardápio atualizado.");
     } else if (current !== selectedProduct) {
       setSelectedProduct(current);
     }
-  }, [activeBrand, selectedProduct]);
+  }, [activeBrand, selectedProduct, productModalOrigin, closeProductModal]);
 
   useEffect(() => {
     if (!activeBrand?.id) return;
@@ -657,14 +788,20 @@ export default function CardapioPage() {
     } else if (isAuthOpen) {
       setIsAuthOpen(false);
     } else if (selectedProduct) {
-      setSelectedProduct(null);
-      setEditingCartItem(null);
+      const returnedToCart = closeProductModal();
+      return returnedToCart || overlayCount > 1;
     } else if (selectedPromotion) {
-      setSelectedPromotion(null);
-      setEditingPromotionItem(null);
+      const returnedToCart = closePromotionModal();
+      return returnedToCart || overlayCount > 1;
     } else if (isCheckoutOpen) {
+      const orderAlreadyCreated = checkoutOrderCreatedRef.current;
+      checkoutOrderCreatedRef.current = false;
       setIsCheckoutOpen(false);
       setCheckoutRequest(null);
+      if (orderAlreadyCreated) {
+        setIsCartOpen(false);
+        return false;
+      }
       setIsCartOpen(true);
       return true;
     } else if (isProfileOpen) {
@@ -910,6 +1047,7 @@ export default function CardapioPage() {
     }]);
     setSelectedPromotion(null);
     setEditingPromotionItem(null);
+    setPromotionModalOrigin(null);
     setIsCartOpen(true);
     showNotification("Promoção adicionada à sacola");
   };
@@ -919,7 +1057,7 @@ export default function CardapioPage() {
       (product.modifiers && product.modifiers.length > 0) ||
       (product.modifierGroups && product.modifierGroups.length > 0)
     );
-    if (hasModifiers) setSelectedProduct(product);
+    if (hasModifiers) openProductModal(product, "catalog");
     else handleAddToCart(product, 1, {}, "", false);
   };
 
@@ -1124,7 +1262,7 @@ export default function CardapioPage() {
             element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
             window.setTimeout(() => { isProgrammaticScroll.current = false; }, 700);
           }}
-          onSelectProduct={setSelectedProduct}
+          onSelectProduct={(product) => openProductModal(product, "catalog")}
           onFastAdd={handleFastAdd}
           onFastRemove={handleFastRemove}
           getProductCartQuantity={getProductCartQuantity}
@@ -1137,8 +1275,7 @@ export default function CardapioPage() {
           activeOrdersCount={activeOrders.length}
           hasOpenOverlay={hasOpenOverlay}
           onPromotionSelect={(offer) => {
-            setEditingPromotionItem(null);
-            setSelectedPromotion(offer);
+            openPromotionModal(offer, "catalog");
           }}
           user={user}
           onAuthClick={() => (user ? setIsProfileOpen(true) : setIsAuthOpen(true))}
@@ -1361,7 +1498,7 @@ export default function CardapioPage() {
           }}
         />
 
-        <CardapioConditionsSummary brand={activeBrand} onOpen={() => setIsStoreInfoOpen(true)} onPromotionSelect={offer => { setEditingPromotionItem(null); setSelectedPromotion(offer); }} />
+        <CardapioConditionsSummary brand={activeBrand} onOpen={() => setIsStoreInfoOpen(true)} onPromotionSelect={offer => openPromotionModal(offer, "catalog")} />
 
         <div className="flex flex-col gap-9" id="catalog-feed">
           {visibleCategories.length === 0 ? (
@@ -1416,7 +1553,7 @@ export default function CardapioPage() {
                       cartQuantity={isGroupedProduct(item)
                         ? item.variants.reduce((acc, v) => acc + getProductCartQuantity(v.id), 0)
                         : getProductCartQuantity(item.id)}
-                      onSelectProduct={setSelectedProduct}
+                      onSelectProduct={(product) => openProductModal(product, "catalog")}
                       onFastAdd={handleFastAdd}
                       onFastRemove={handleFastRemove}
                     />
@@ -1486,7 +1623,7 @@ export default function CardapioPage() {
               return product ? { product, label: product.name } : null;
             }).filter((step): step is { product: Product; label: string } => Boolean(step))}
             initialParts={editingPromotionItem?.promotionParts}
-            onClose={() => { setSelectedPromotion(null); setEditingPromotionItem(null); }}
+            onClose={closePromotionModal}
             onConfirm={handlePromotionConfirm}
           />
         </React.Suspense>
@@ -1497,12 +1634,12 @@ export default function CardapioPage() {
           product={selectedProduct}
           restaurantId={activeBrand.id}
           initialItem={editingCartItem || undefined}
-          onClose={() => { setSelectedProduct(null); setEditingCartItem(null); }}
+          onClose={closeProductModal}
           onAddToCart={handleAddToCart}
         />
       )}
 
-      {(isCartOpen || cart.length > 0) && (
+      {(isCartOpen || cart.length > 0 || productModalOrigin?.surface === "cart" || promotionModalOrigin?.surface === "cart") && (
         <div hidden={!isCartOpen}>
           <CardapioCartDrawer
             key={activeBrand.id}
@@ -1515,8 +1652,7 @@ export default function CardapioPage() {
             allProducts={activeBrand.products}
             onAddToCart={handleAddToCart}
             onSelectProduct={(product) => {
-              setSelectedProduct(product);
-              setIsCartOpen(false);
+              openProductModal(product, "cart", { closeCart: true });
             }}
             initialCouponCode={couponToApply}
             onClose={() => { setIsCartOpen(false); setCouponToApply(""); }}
@@ -1529,20 +1665,18 @@ export default function CardapioPage() {
             onEditItem={item => {
               if (item.promotionId) {
                 const promotion = activeBrand.promotions?.find(offer => offer.id === item.promotionId);
-                if (promotion) { setEditingPromotionItem(item); setSelectedPromotion(promotion); setIsCartOpen(false); }
+                if (promotion) { openPromotionModal(promotion, "cart", { editingItem: item, closeCart: true }); }
                 else showNotification("A promoção não está mais disponível. Remova-a da sacola.");
                 return;
               }
               const product = activeBrand.products.find(candidate => candidate.id === item.product.id);
               if (!product || product.isAvailable === false) { showNotification("Este produto não está mais disponível para edição."); return; }
-              setEditingCartItem(item);
-              setSelectedProduct(product);
+              openProductModal(product, "cart", { editingItem: item });
             }}
             onComposeAnother={item => {
               const product = activeBrand.products.find(candidate => candidate.id === item.product.id);
               if (!product || product.isAvailable === false) { showNotification("Este produto não está mais disponível para montagem."); return; }
-              setEditingCartItem(null);
-              setSelectedProduct(product);
+              openProductModal(product, "cart");
             }}
             onRemoveItem={(itemId) => setCart((current) => current.filter((item) => item.id !== itemId))}
             onPlaceOrder={(request) => {
@@ -1558,6 +1692,7 @@ export default function CardapioPage() {
                 cashback_discount: request.descontoCashback || 0,
                 payment_method: request.paymentMethodDetail || 'nao_definido',
               });
+              checkoutOrderCreatedRef.current = false;
               setCheckoutRequest(request);
               setIsCartOpen(false);
               setIsCheckoutOpen(true);
@@ -1568,6 +1703,8 @@ export default function CardapioPage() {
             onAuthClick={() => setIsAuthOpen(true)}
             orderingEnabled={orderingEnabled}
             orderingMessage={orderingMessage}
+            draftRestoreIssues={draftRestoreIssues}
+            onDismissDraftRestoreIssues={() => setDraftRestoreIssues([])}
           />
         </div>
       )}
@@ -1649,24 +1786,41 @@ export default function CardapioPage() {
             usarCashback={checkoutRequest.usarCashback}
             descontoCashback={checkoutRequest.descontoCashback}
             onClose={() => {
+              checkoutOrderCreatedRef.current = false;
               setIsCheckoutOpen(false);
               setCheckoutRequest(null);
             }}
             onEditCart={() => {
+              checkoutOrderCreatedRef.current = false;
               setIsCheckoutOpen(false);
               setCheckoutRequest(null);
               // Reopening the bag must use current products, not the old draft
               // snapshot that may contain a now-disabled daily-menu option.
               void loadRestaurantData(true).finally(() => setIsCartOpen(true));
             }}
-            onOrderSuccess={() => {
+            onOrderCreated={() => {
+              checkoutOrderCreatedRef.current = true;
               setCart([]);
               setFulfillmentChoice(null);
               setCouponToApply("");
+              setDraftRestoreIssues([]);
+              if (activeBrand?.id) {
+                clearCartDraft(activeBrand.id);
+                const rid = Number(activeBrand.id);
+                setStoredOrders(current => mergeLocalOrderSnapshots(loadStoredOrders(rid), current));
+              }
+            }}
+            onOrderSuccess={() => {
+              checkoutOrderCreatedRef.current = false;
+              setCart([]);
+              setFulfillmentChoice(null);
+              setCouponToApply("");
+              setDraftRestoreIssues([]);
               setIsCartOpen(false);
               setIsCheckoutOpen(false);
               setCheckoutRequest(null);
               if (activeBrand?.id) {
+                clearCartDraft(activeBrand.id);
                 const rid = Number(activeBrand.id);
                 setStoredOrders(current => mergeLocalOrderSnapshots(loadStoredOrders(rid), current));
               }

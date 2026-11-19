@@ -231,6 +231,9 @@ function projectTableProduction(orders: Order[], salonTables: Table[], now: numb
           comanda.timestamp ||
           (comanda as any).criadoEm;
 
+        const hasSmartPosItem = preparingItems.some((item) => item.origemOperacional === 'smartpos');
+        const firstPreparingOrigin = preparingItems.find((item) => item.origemOperacional)?.origemOperacional;
+
         list.push({
           id: lid,
           projectionScope: 'launch',
@@ -239,7 +242,7 @@ function projectTableProduction(orders: Order[], salonTables: Table[], now: numb
             || (comanda.lancamentoId === lid ? comanda.displayNumber : undefined),
           comandaId: comanda.id,
           numeroPedido: comanda.numeroPedido,
-          origemOperacional: comanda.origemOperacional,
+          origemOperacional: hasSmartPosItem ? 'smartpos' : (firstPreparingOrigin || comanda.origemOperacional),
           mesaId: comanda.mesaId,
           mesaOrigemId: comanda.mesaOrigemId,
           mesaTransferidaDe: comanda.mesaTransferidaDe,
@@ -336,6 +339,9 @@ function projectTableClosing(orders: Order[], salonTables: Table[], now: number)
       oldestComandaTime = (mesaEntity as any).aberta_em || (mesaEntity as any).data_abertura || (mesaEntity as any).created_at;
     }
 
+    const hasSmartPosOrigin = entries.some((entry) => entry.comanda.origemOperacional === 'smartpos')
+      || allItems.some((item) => item.origemOperacional === 'smartpos');
+
     list.push({
       projectionScope: 'table',
       id: firstComanda.id, // ID real da comanda principal para rotear requisições
@@ -346,7 +352,7 @@ function projectTableClosing(orders: Order[], salonTables: Table[], now: number)
           .map(entry => Number(entry.comanda.numeroPedido))
           .filter(number => Number.isFinite(number) && number > 0)
       )),
-      origemOperacional: firstComanda.origemOperacional,
+      origemOperacional: hasSmartPosOrigin ? 'smartpos' : firstComanda.origemOperacional,
       mesaId: mesaId,
       mesaOrigemId: firstComanda.mesaOrigemId,
       mesaTransferidaDe: firstComanda.mesaTransferidaDe,

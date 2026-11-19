@@ -207,12 +207,12 @@ def test_orders_kanban_keeps_every_real_stage_side_by_side_on_desktop():
     assert "display: flex;" in desktop_block
     assert "min-width: 0;" in desktop_block
 
-    # As três trilhas reais não dependem de feature flags locais sempre
+    # As três trilhas reais por modalidade não dependem de feature flags locais sempre
     # verdadeiras e continuam sem mínimos rígidos capazes de ampliar a página.
-    assert "const ordersStages = byChannel ? channelLanes.map(" in workspace
-    for stage in ("salon", "digital", "closing"):
-        assert f"id: '{stage}' as const" in workspace
-    assert "order.modalidade === 'delivery'" in workspace
+    assert "const ordersStages = channelLanes.map(" in workspace
+    for lane_id, title in (("salon", "Mesas"), ("digital", "Retiradas"), ("delivery", "Entregas")):
+        assert f"{{ id: '{lane_id}', title: '{title}'" in workspace
+    assert "modalidade === 'delivery'" in workspace
     assert "import { CaixaOrdersWorkspace } from './caixa/orders/CaixaOrdersWorkspace';" in caixa
     assert "<CaixaOrdersWorkspace" in caixa
     assert "stage: mobileOrdersStage" in caixa
@@ -225,10 +225,10 @@ def test_orders_kanban_keeps_every_real_stage_side_by_side_on_desktop():
         assert "minmax(20rem" not in rendered_source
     assert "is-channel-disabled" not in css
 
-    # A etapa de fechamento continua estruturalmente presente no Kanban.
-    assert "orders-column--closing" in workspace
-    assert 'kind="closing"' in workspace
-    assert "Prontos e recebimentos" in workspace
+    # O fechamento de mesa e a finalização digital continuam estruturalmente presentes no Kanban.
+    assert "channelLanes.map(lane => (" in workspace
+    assert "'orders-column--' + lane.id" in workspace
+    assert "case 'closing': return renderTableClosing(entry.card);" in workspace
 
 
 def test_cashier_mobile_uses_one_natural_scroll_owner():
