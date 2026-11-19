@@ -48,7 +48,7 @@ internal class AndroidPlugPagClient(context: Context) : PlugPagClient {
     }
 
     private fun raw(result: PlugPagTransactionResult) = PlugPagRawResult(
-        result = result.result,
+        result = result.result ?: -1,
         errorCode = result.errorCode,
         message = result.message,
         transactionCode = result.transactionCode,

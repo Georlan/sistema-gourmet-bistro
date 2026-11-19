@@ -36,7 +36,7 @@ internal data class TerminalState(
 ) {
     val activeOperator: SavedOperatorSession?
         get() = operators.firstOrNull { it.operator.id == activeOperatorId }
-            ?: operators.firstOrNull { it.hasActiveToken() }
+
 }
 
 internal interface TerminalKeyCipher {
@@ -126,15 +126,25 @@ internal class TerminalSessionStore(
         val current = load(scope)
         val restaurant = session.restaurant
         val sameRestaurant = current.boundRestaurant == null || current.boundRestaurant.id == restaurant.id
-        val baseOperators = if (sameRestaurant) current.operators else emptyList()
+        require(sameRestaurant) { "O terminal pertence a outro restaurante. Novo vínculo autorizado necessário." }
+        require(ttlMs > 0) { "Prazo de sessão inválido." }
+        val normalizedToken = token.trim()
+        val jwtExpiry = jwtExpiryMillis(normalizedToken)
+        require(jwtExpiry > now) { "Sessão expirada. Entre novamente." }
+        val previous = current.operators.firstOrNull {
+            it.operator.id == session.operator.id && it.token == normalizedToken
+        }
+        val deadline = minOf(jwtExpiry, Math.addExact(now, ttlMs), previous?.expiresAtMs ?: Long.MAX_VALUE)
+        require(deadline > now) { "Sessão expirada. Entre novamente." }
+        val baseOperators = current.operators
         val entry = SavedOperatorSession(
             operator = session.operator,
             role = session.role,
             restaurant = restaurant,
             username = username.trim(),
-            token = token.trim(),
-            savedAtMs = now,
-            expiresAtMs = now + ttlMs,
+            token = normalizedToken,
+            savedAtMs = previous?.savedAtMs ?: now,
+            expiresAtMs = deadline,
         )
         val updated = baseOperators.filterNot { it.operator.id == entry.operator.id } + entry
         val next = TerminalState(
@@ -149,6 +159,9 @@ internal class TerminalSessionStore(
 
     fun switchOperator(scope: String, operatorId: String): TerminalState {
         val current = load(scope)
+        require(current.operators.any { it.operator.id == operatorId && it.hasActiveToken(nowProvider()) }) {
+            "Operador sem sessão válida. Entre novamente."
+        }
         val next = current.copy(activeOperatorId = operatorId)
         persist(scope, next)
         return next
@@ -172,7 +185,7 @@ internal class TerminalSessionStore(
         val current = load(scope)
         val nextOperators = current.operators.filterNot { it.operator.id == operatorId }
         val nextActive = if (current.activeOperatorId == operatorId) {
-            nextOperators.firstOrNull { it.hasActiveToken(nowProvider()) }?.operator?.id
+            null
         } else {
             current.activeOperatorId
         }
@@ -270,7 +283,24 @@ internal class TerminalSessionStore(
                 expiresAtMs = item.optLong("expiresAtMs"),
             )
         }
-        return TerminalState(terminalId, boundRestaurant, activeOperatorId, operators)
+        val validated = operators.filter { it.restaurant.id == boundRestaurant?.id }.map { op ->
+            val expiry = runCatching { jwtExpiryMillis(op.token) }.getOrDefault(0L)
+            op.copy(expiresAtMs = minOf(op.expiresAtMs, expiry))
+        }
+        return TerminalState(terminalId, boundRestaurant, activeOperatorId, validated)
+    }
+
+    private fun jwtExpiryMillis(token: String): Long = try {
+        val parts = token.split('.')
+        require(parts.size == 3 && parts.all { it.isNotBlank() })
+        val encoded = parts[1]
+        val padded = encoded + "=".repeat((4 - encoded.length % 4) % 4)
+        val payload = kotlin.io.encoding.Base64.UrlSafe.decode(padded).toString(Charsets.UTF_8)
+        val expiry = JSONObject(payload).get("exp")
+        require(expiry is Number && expiry !is Double && expiry !is Float)
+        Math.multiplyExact(expiry.toLong(), 1000L)
+    } catch (exc: Exception) {
+        throw IllegalArgumentException("Token sem expiração válida. Entre novamente.", exc)
     }
 
     private fun file(scope: String): File {

@@ -172,4 +172,16 @@ class PlugPagTerminalPaymentBridgeTest {
         assertEquals(0, client.doPaymentCalls)
     }
 
+    @Test
+    fun successCodeCannotOverrideConflictingAcquirerErrorOrCorrelation() {
+        val client = FakePlugPagClient(paymentResult = PlugPagRawResult(
+            result = 0, errorCode = "DENIED", transactionCode = "TX-1"))
+        val bridge = PlugPagTerminalPaymentBridge(client)
+        assertEquals(PaymentOutcome.ERROR, bridge.charge(command()).outcome)
+        client.paymentResult = PlugPagRawResult(result = 0, transactionCode = "TX-1", amountMinor = 1L)
+        assertEquals(PaymentOutcome.ERROR, bridge.charge(command()).outcome)
+        client.paymentResult = PlugPagRawResult(result = 0, transactionCode = "TX-1", userReference = "OTHERREF12")
+        assertEquals(PaymentOutcome.ERROR, bridge.charge(command()).outcome)
+    }
+
 }

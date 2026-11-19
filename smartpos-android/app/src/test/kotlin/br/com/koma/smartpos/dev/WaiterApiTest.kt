@@ -322,12 +322,12 @@ class WaiterApiTest {
         val op1 = Session(rest, Operator("u1", "Ana"), tablesAvailable = true, ordersAvailable = true, role = "garcom")
         val op2 = Session(rest, Operator("u2", "Beto"), tablesAvailable = true, ordersAvailable = true, role = "caixa")
 
-        val state1 = store.saveLogin(scope, op1, "ana", "tok-ana", ttlMs = 60_000L)
+        val state1 = store.saveLogin(scope, op1, "ana", sessionToken(1200), ttlMs = 60_000L)
         val terminalId = state1.terminalId
         assertEquals(rest, state1.boundRestaurant)
         assertEquals("u1", state1.activeOperator?.operator?.id)
 
-        val state2 = store.saveLogin(scope, op2, "beto", "tok-beto", ttlMs = 60_000L)
+        val state2 = store.saveLogin(scope, op2, "beto", sessionToken(1201), ttlMs = 60_000L)
         assertEquals(terminalId, state2.terminalId)
         assertEquals(2, state2.operators.size)
         assertEquals("u2", state2.activeOperator?.operator?.id)
@@ -386,10 +386,10 @@ class WaiterApiTest {
 
     @Test
     fun invalidatingActiveOperatorDoesNotSilentlyChooseAnotherPerson() {
-        val store = sessionStore { 1_000_000L }
+        val store = sessionStore { System.currentTimeMillis() }
         val restaurant = Restaurant(8, "Teste")
-        store.saveLogin("api", Session(restaurant, Operator("u1", "Ana"), true, true), "ana", sessionToken(1200))
-        store.saveLogin("api", Session(restaurant, Operator("u2", "Beto"), true, true), "beto", sessionToken(1201))
+        store.saveLogin("api", Session(restaurant, Operator("u1", "Ana"), true, true), "ana", sessionToken(System.currentTimeMillis() / 1000 + 600))
+        store.saveLogin("api", Session(restaurant, Operator("u2", "Beto"), true, true), "beto", sessionToken(System.currentTimeMillis() / 1000 + 601))
         assertNull(store.invalidateOperatorToken("api", "u2").activeOperator)
     }
 
@@ -502,4 +502,14 @@ class WaiterApiTest {
         assertFalse(session.permissions.canClose)
         assertEquals("garcom", session.role)
     }
+    @Test
+    fun corruptPaymentJournalCannotBeReadAsANeverStartedCharge() {
+        val directory = tempFolder.newFolder("operations")
+        val store = AndroidOperationStore(directory)
+        val op = br.com.koma.smartpos.bridge.LocalOperation("pi-1", "pagbank", "operation-123", "POS-1")
+        store.put(op)
+        directory.listFiles()!!.single().writeText("corrupt journal")
+        assertThrows(Exception::class.java) { store.get("operation-123") }
+    }
+
 }

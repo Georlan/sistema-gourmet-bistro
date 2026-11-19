@@ -109,6 +109,12 @@ class PlugPagTerminalPaymentBridge(
             userReference = userRef,
             printReceipt = printReceipt,
         )
+        if (raw.result == PlugPagConstants.RET_OK &&
+            ((!raw.userReference.isNullOrBlank() && raw.userReference != userRef) ||
+             (raw.amountMinor != null && raw.amountMinor != command.amountMinor))) {
+            return TerminalPaymentResult(PaymentOutcome.ERROR,
+                message = "Resultado divergente da cobrança. Conciliação necessária; não cobrar novamente.")
+        }
         return mapRawResult(raw, fallbackRef = userRef)
     }
 
@@ -161,7 +167,9 @@ class PlugPagTerminalPaymentBridge(
 
     private fun mapRawResult(raw: PlugPagRawResult, fallbackRef: String): TerminalPaymentResult {
         val ref = extractReference(raw, fallback = null)
-        if (raw.result == PlugPagConstants.RET_OK && (raw.errorCode == "0000" || !ref.isNullOrBlank())) {
+        if (raw.result == PlugPagConstants.RET_OK &&
+            (raw.errorCode.isNullOrBlank() || raw.errorCode == "0000") &&
+            (!raw.transactionCode.isNullOrBlank() || !raw.transactionId.isNullOrBlank())) {
             return TerminalPaymentResult(
                 outcome = PaymentOutcome.APPROVED,
                 reference = ref ?: fallbackRef,
