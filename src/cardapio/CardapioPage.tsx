@@ -581,9 +581,9 @@ export default function CardapioPage() {
 
   useEffect(() => {
     const nextBrandId = activeBrand?.id ?? null;
+    if (nextBrandId === null) return;
     if (
       previousBrandIdRef.current !== null
-      && nextBrandId !== null
       && String(previousBrandIdRef.current) !== String(nextBrandId)
     ) {
       setSelectedProduct(null);
@@ -602,6 +602,7 @@ export default function CardapioPage() {
 
   useEffect(() => {
     if (!activeBrand || !selectedProduct) return;
+    if (productModalOrigin && String(productModalOrigin.restaurantId) !== String(activeBrand.id)) return;
     if (isGroupedProduct(selectedProduct)) {
       const anyAvail = selectedProduct.variants.some((v) => {
         const prod = activeBrand.products.find((p) => String(p.id) === String(v.id) && p.isAvailable !== false);
@@ -620,7 +621,7 @@ export default function CardapioPage() {
     } else if (current !== selectedProduct) {
       setSelectedProduct(current);
     }
-  }, [activeBrand, selectedProduct, closeProductModal]);
+  }, [activeBrand, selectedProduct, productModalOrigin, closeProductModal]);
 
   useEffect(() => {
     if (!activeBrand?.id) return;
