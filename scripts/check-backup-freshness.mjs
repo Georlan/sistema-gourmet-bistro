@@ -7,6 +7,7 @@ const ENVIRONMENT_ID = '3399896f-98b3-47c8-aec4-bfa0f3afa755';
 const SERVICE_ID = '11fb4931-73f2-45b1-ac43-07be08f40c26';
 export const MAX_AGE_HOURS = 36;
 export const MAX_RUN_MINUTES = 30;
+export const LOG_FLUSH_JITTER_MS = 5_000;
 export const BACKUP_ISSUE_TITLE = '[KÔMA] Falha no monitor de backup';
 
 export function evaluateBackupLogs(stdout, nowMs = Date.now()) {
@@ -37,12 +38,27 @@ export function evaluateBackupLogs(stdout, nowMs = Date.now()) {
     };
   }
 
+  const runFloor = completed.timestamp - MAX_RUN_MINUTES * 60_000;
+  const runStartsBefore = entries.filter(
+    entry => entry.message === 'Starting Container' && entry.timestamp <= completed.timestamp && entry.timestamp >= runFloor,
+  );
+  const runStart = runStartsBefore.length ? runStartsBefore.at(-1).timestamp : runFloor;
+  const nextContainerStart = entries.find(
+    entry => entry.message === 'Starting Container' && entry.timestamp > completed.timestamp,
+  );
+  const runEnd = Math.min(
+    completed.timestamp + LOG_FLUSH_JITTER_MS,
+    nextContainerStart ? nextContainerStart.timestamp - 1 : Infinity,
+  );
+
   const run = entries.filter(entry =>
-    entry.timestamp <= completed.timestamp &&
-    entry.timestamp >= completed.timestamp - MAX_RUN_MINUTES * 60_000,
+    entry.timestamp >= runStart &&
+    entry.timestamp <= runEnd,
   );
   const has = message => run.some(entry => entry.message === message);
-  const sizeEntry = run.find(entry => /^Backup filesize: [0-9]+(?:\.[0-9]+)? (?:B|kB|MB|GB)$/.test(entry.message));
+  const sizeEntry = run
+    .filter(entry => /^Backup filesize: [0-9]+(?:\.[0-9]+)? (?:B|kB|MB|GB)$/.test(entry.message))
+    .at(-1);
   const size = sizeEntry && Number(sizeEntry.message.match(/^Backup filesize: ([0-9]+(?:\.[0-9]+)?)/)[1]);
 
   if (!has('Backup archive file is valid')) {
