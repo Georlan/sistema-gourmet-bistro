@@ -168,6 +168,8 @@ jobs:
           e2e/cardapio-chat-viewports.spec.ts
           e2e/cardapio-payment-polling.spec.ts
           e2e/cardapio-checkout-rejection.spec.ts
+          e2e/cardapio-draft-and-checkout.spec.ts
+          e2e/cardapio-suggestion-return-origin.spec.ts
           --project=mobile-390
           --project=desktop-1366
           --workers=2
