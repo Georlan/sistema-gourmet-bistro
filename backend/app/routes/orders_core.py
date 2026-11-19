@@ -391,11 +391,25 @@ def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: s
     """
     Divide itens de uma comanda aberta criando uma comanda separada (com mesmo número de pedido).
     """
+    from ..models import Pagamento
+
     require_waiter_permission(
         db,
         current_user,
         "perm_garcom_transferir_item",
     )
+    cleaned_ids = [str(item_id).strip() for item_id in (itens_ids or []) if str(item_id).strip()]
+    if not cleaned_ids or len(set(cleaned_ids)) != len(itens_ids or []):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Informe ao menos um item válido e sem duplicidades para dividir a comanda.",
+        )
+    identificador_limpo = (novo_identificador or "").strip()
+    if not identificador_limpo:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Informe um identificador válido para a nova comanda.",
+        )
     rest_id = require_tenant_id()
 
     # 1. Validar comanda original
@@ -413,15 +427,35 @@ def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: s
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Não é possível dividir uma comanda que já está fechada"
         )
+    if (comanda_origem.tipo or "").strip() != "Consumo no Local":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Somente comandas de Consumo no Local podem ser divididas.",
+        )
+    if str(comanda_origem.online_payment_status or "").lower() in ("pending", "pending_released", "approved"):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Há uma cobrança Pix online neste pedido. Estorne ou cancele a cobrança antes de dividir.",
+        )
+    pagamento_ativo = db.query(Pagamento.id).filter(
+        Pagamento.restaurante_id == rest_id,
+        Pagamento.comanda_id == comanda_origem.id,
+        or_(Pagamento.status.is_(None), Pagamento.status != "cancelado"),
+    ).first()
+    if pagamento_ativo or float(comanda_origem.valor_pago or 0) > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Há pagamento registrado nesta comanda. Estorne ou conclua o recebimento antes de dividir.",
+        )
 
     # 2. Validar se os itens pertencem à comanda
     itens = db.query(Item).filter(
         Item.restaurante_id == rest_id,
-        Item.id.in_(itens_ids),
+        Item.id.in_(cleaned_ids),
         Item.comanda_id == comanda_id,
     ).with_for_update().all()
 
-    if len(itens) != len(itens_ids):
+    if len(itens) != len(cleaned_ids):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Alguns dos itens selecionados não pertencem a esta comanda ou são inválidos"
@@ -433,6 +467,22 @@ def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: s
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Não é possível mover o item '{item.id}' porque ele está cancelado"
             )
+        if item.pago:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Não é possível dividir itens já pagos.",
+            )
+
+    active_items_count = db.query(Item).filter(
+        Item.restaurante_id == rest_id,
+        Item.comanda_id == comanda_id,
+        Item.status != "cancelado",
+    ).count()
+    if len(itens) >= active_items_count:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A comanda original precisa manter ao menos um item ativo após a divisão.",
+        )
 
     try:
         # 3. Criar a nova comanda compartilhando o mesmo numero_pedido e mesa
@@ -442,7 +492,7 @@ def dividir_comanda(comanda_id: str, itens_ids: List[str], novo_identificador: s
             mesa_id=comanda_origem.mesa_id,
             garcom_id=comanda_origem.garcom_id,
             tipo=comanda_origem.tipo,
-            identificador=novo_identificador,
+            identificador=identificador_limpo,
             numero_pedido=comanda_origem.numero_pedido,
             fechada=False,
             criado_em=datetime.datetime.now(datetime.timezone.utc)
@@ -492,7 +542,7 @@ def fechar_comanda(
     comanda = db.query(Comanda).filter(
         Comanda.restaurante_id == rest_id,
         Comanda.id == comanda_id,
-    ).first()
+    ).with_for_update().first()
     if not comanda:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -722,17 +772,45 @@ def update_item_details(
     ).with_for_update().populate_existing().first()
     if item is None:
         raise HTTPException(status_code=404, detail="Item não encontrado")
-    if comanda and comanda.fechada:
+    if comanda is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Comanda associada ao item não encontrada",
+        )
+    if comanda.fechada:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Não é possível editar itens de uma comanda já fechada"
         )
+    if item.status == "cancelado":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Não é possível editar ou duplicar um item já cancelado.",
+        )
 
     if update_data.observacao is not None:
-        if not comanda or item.status != "preparando" or item.pago:
+        if item.status != "preparando" or item.pago:
             raise HTTPException(status_code=409, detail="A observação só pode ser alterada durante o preparo de um item não pago.")
         if len(update_data.observacao) > 1000:
             raise HTTPException(status_code=422, detail="A observação deve ter no máximo 1000 caracteres.")
+
+    if update_data.quantidade_adicional is not None:
+        if update_data.quantidade_adicional < 1 or update_data.quantidade_adicional > 50:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="A quantidade adicional deve estar entre 1 e 50.",
+            )
+        if update_data.quantidade_adicional > 1:
+            if item.pago:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Não é possível adicionar quantidade a partir de um item já pago.",
+                )
+            if str(comanda.online_payment_status or "").lower() in ("pending", "pending_released", "approved"):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Há uma cobrança Pix online neste pedido. Não é possível alterar a quantidade de itens.",
+                )
 
     try:
         if update_data.observacao is not None:
@@ -920,35 +998,56 @@ def update_item_status(
             detail="A equipe da cozinha pode apenas confirmar itens prontos.",
         )
 
+    if status == "cancelado":
+        raise HTTPException(
+            status_code=409,
+            detail="O cancelamento de item deve usar o fluxo auditado (/comandas/itens/{item_id}/cancelar).",
+        )
+    if status not in ["preparando", "pronto", "entregue"]:
+        raise HTTPException(
+            status_code=400,
+            detail="Status inválido",
+        )
+
     rest_id = require_tenant_id()
-    # Serialize KDS updates by order first, so concurrent last-item updates
-    # observe one committed order state before deciding to advance it.
-    if status == "pronto" and (avancar_pedido or user_role == "cozinha"):
-        item_owner = db.query(Item.comanda_id).filter(
-            Item.restaurante_id == rest_id, Item.id == item_id,
-        ).first()
-        if item_owner:
-            locked_check = db.query(Comanda).filter(
-                Comanda.restaurante_id == rest_id, Comanda.id == item_owner.comanda_id,
-            ).with_for_update().first()
-            if user_role == "cozinha" and (
-                not locked_check or locked_check.fechada
-                or locked_check.delivery_status in {"pendente", "analise", "recusado", "transito", "finalizado"}
-            ):
-                raise HTTPException(status_code=409, detail="Pedido indisponível para preparo.")
+    # Serialize item status mutations by parent check first to avoid races with
+    # closing, cancellation or concurrent KDS last-item order advancement.
+    item_owner = db.query(Item.comanda_id).filter(
+        Item.restaurante_id == rest_id, Item.id == item_id,
+    ).first()
+    if not item_owner:
+        raise HTTPException(
+            status_code=404,
+            detail="Item não encontrado",
+        )
+    locked_check = db.query(Comanda).filter(
+        Comanda.restaurante_id == rest_id, Comanda.id == item_owner.comanda_id,
+    ).with_for_update().first()
+    if not locked_check or locked_check.fechada:
+        raise HTTPException(status_code=409, detail="Pedido indisponível: comanda encerrada.")
+    if locked_check.delivery_status in {"recusado", "finalizado"}:
+        raise HTTPException(status_code=409, detail="Pedido encerrado ou recusado não permite alteração de item.")
+    if user_role == "cozinha" and locked_check.delivery_status in {"pendente", "analise", "transito"}:
+        raise HTTPException(status_code=409, detail="Pedido indisponível para preparo.")
+
     item = db.query(Item).filter(
         Item.restaurante_id == rest_id,
         Item.id == item_id,
-    ).with_for_update().first()
+    ).with_for_update().populate_existing().first()
     if not item:
         raise HTTPException(
             status_code=404,
             detail="Item não encontrado"
         )
-    if status not in ["preparando", "pronto", "entregue", "cancelado"]:
+    if item.comanda_id != locked_check.id:
         raise HTTPException(
-            status_code=400,
-            detail="Status inválido"
+            status_code=409,
+            detail="O item mudou de comanda durante a operação. Atualize e tente novamente.",
+        )
+    if item.status == "cancelado":
+        raise HTTPException(
+            status_code=409,
+            detail="Não é possível alterar o status de um item já cancelado.",
         )
     if user_role == "garcom" and item.status not in ("pronto", "entregue"):
         raise HTTPException(
@@ -962,11 +1061,7 @@ def update_item_status(
     item.status = status
     db.flush()
     if avancar_pedido and status == "pronto":
-        comanda = db.query(Comanda).filter(
-            Comanda.restaurante_id == rest_id, Comanda.id == item.comanda_id,
-        ).first()
-        if comanda:
-            _advance_kds_check_if_all_ready(db, comanda, rest_id, current_garcom.id)
+        _advance_kds_check_if_all_ready(db, locked_check, rest_id, current_garcom.id)
     db.commit()
     db.refresh(item)
 
