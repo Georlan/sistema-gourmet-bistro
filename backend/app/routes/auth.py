@@ -515,6 +515,7 @@ def update_usuario_access(
 
     before_role = target_role
     before_status = str(usuario.status or "pendente_ativacao").lower().strip()
+    sessions_revoked = False
     if payload.cargo is not None:
         usuario.cargo = payload.cargo
     if payload.status is not None:
@@ -528,11 +529,19 @@ def update_usuario_access(
                     user_id=usuario.id,
                     restaurante_id=current_user.restaurante_id,
                 )
+                sessions_revoked = True
 
     after_role = (usuario.role or usuario.cargo or "").lower().strip()
     after_status = str(usuario.status or "").lower().strip()
     if before_role == after_role and before_status == after_status:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Nenhuma alteração efetiva foi informada.")
+
+    if before_role != after_role and before_status == "ativo" and not sessions_revoked:
+        revoke_user_sessions(
+            db,
+            user_id=usuario.id,
+            restaurante_id=current_user.restaurante_id,
+        )
 
     # Sincronização canônica do perfil operacional de entregador
     if after_role == "motoboy":
