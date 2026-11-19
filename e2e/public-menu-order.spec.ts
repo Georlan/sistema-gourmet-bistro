@@ -409,7 +409,7 @@ test('visitante conclui retirada sem depender do WhatsApp em todos os tamanhos d
 
   await expect(page.getByText('Pedido recebido', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pedido #4321', exact: true })).toBeVisible();
-  await expect(page.getByText(/aguardando aceite/i)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Aguardando aceite', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Acompanhar pedido', exact: true }).click();
   await expect(page.getByText('Aguardando aceite', { exact: true })).toBeVisible();
 
