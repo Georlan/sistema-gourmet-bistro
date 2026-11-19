@@ -47,18 +47,19 @@ object PlugPagConstants {
     const val VOID_PAYMENT = 1
     const val VOID_QRCODE = 2
 
-    const val OPERATION_ABORTED = -1001
-    const val DOING_TRANSACTION = -1012
-    const val PINPAD_NOT_INITIALIZED = -1015
-    const val AUTHENTICATION_FAILED = -1020
-    const val TRANSACTION_DENIED = -1023
-    const val TIMEOUT_REACHED = -1024
-    const val COMMUNICATION_ERROR = -1026
-    const val INVALID_AMOUNT = -1033
-    const val INVALID_CARD = -1036
-    const val INVALID_CVV = -1037
-    const val INVALID_EXPIRATION_DATE = -1038
-    const val INVALID_PAN = -1040
+    // Verified against the official wrapper 1.35.0; PagBank variant tests exercise its real constants.
+    const val OPERATION_ABORTED = -1028
+    const val DOING_TRANSACTION = -1047
+    const val PINPAD_NOT_INITIALIZED = -1036
+    const val AUTHENTICATION_FAILED = -1033
+    const val TRANSACTION_DENIED = -1004
+    const val TIMEOUT_REACHED = -1064
+    const val COMMUNICATION_ERROR = -1019
+    const val INVALID_AMOUNT = -1031
+    const val INVALID_CARD = -1022
+    const val INVALID_CVV = -1060
+    const val INVALID_EXPIRATION_DATE = -1061
+    const val INVALID_PAN = -1059
     const val QR_CODE_EXPIRED = -1048
     const val MIN_AMOUNT_CENTS = 100L
 }
@@ -80,6 +81,9 @@ class PlugPagTerminalPaymentBridge(
                 outcome = PaymentOutcome.ERROR,
                 message = "Terminal PagBank ainda não ativado neste aparelho.",
             )
+        }
+        if (client.isServiceBusy()) {
+            return TerminalPaymentResult(PaymentOutcome.PENDING, message = "O terminal PagBank está ocupado.")
         }
         if (command.amountMinor < PlugPagConstants.MIN_AMOUNT_CENTS) {
             return TerminalPaymentResult(
@@ -106,6 +110,12 @@ class PlugPagTerminalPaymentBridge(
             userReference = userRef,
             printReceipt = printReceipt,
         )
+        if (raw.result == PlugPagConstants.RET_OK &&
+            ((!raw.userReference.isNullOrBlank() && raw.userReference != userRef) ||
+             (raw.amountMinor != null && raw.amountMinor != command.amountMinor))) {
+            return TerminalPaymentResult(PaymentOutcome.ERROR,
+                message = "Resultado divergente da cobrança. Conciliação necessária; não cobrar novamente.")
+        }
         return mapRawResult(raw, fallbackRef = userRef)
     }
 
@@ -126,13 +136,15 @@ class PlugPagTerminalPaymentBridge(
         val expectedRef = StableOperationKey.userReference10(command.operationKey)
         val last = client.getLastApprovedTransaction()
         if (last.result == PlugPagConstants.RET_OK && last.userReference == expectedRef) {
-            if (last.amountMinor != null && last.amountMinor != command.amountMinor) {
+            if (last.amountMinor != command.amountMinor) {
                 return TerminalPaymentResult(
                     outcome = PaymentOutcome.ERROR,
                     message = "Divergência de valor ao reconciliar última transação aprovada ($expectedRef).",
                 )
             }
-            val ref = extractReference(last, fallback = expectedRef)
+            val ref = listOfNotNull(last.transactionCode, last.transactionId).firstOrNull { it.isNotBlank() }
+                ?: return TerminalPaymentResult(PaymentOutcome.ERROR,
+                    message = "Última transação sem identificador da adquirente; conciliação necessária.")
             return TerminalPaymentResult(
                 outcome = PaymentOutcome.APPROVED,
                 reference = ref,
@@ -156,7 +168,9 @@ class PlugPagTerminalPaymentBridge(
 
     private fun mapRawResult(raw: PlugPagRawResult, fallbackRef: String): TerminalPaymentResult {
         val ref = extractReference(raw, fallback = null)
-        if (raw.result == PlugPagConstants.RET_OK && (raw.errorCode == "0000" || !ref.isNullOrBlank())) {
+        if (raw.result == PlugPagConstants.RET_OK &&
+            (raw.errorCode.isNullOrBlank() || raw.errorCode == "0000") &&
+            (!raw.transactionCode.isNullOrBlank() || !raw.transactionId.isNullOrBlank())) {
             return TerminalPaymentResult(
                 outcome = PaymentOutcome.APPROVED,
                 reference = ref ?: fallbackRef,

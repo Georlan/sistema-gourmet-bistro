@@ -127,8 +127,8 @@ private data class ActiveTerminalIntent(
 internal class AndroidOperationStore(private val directory: File) : OperationStore {
     override fun get(operationKey: String): LocalOperation? {
         val target = file(operationKey)
-        if (!target.exists()) return null
-        return runCatching {
+        if (!target.exists() && !File(target.path + ".bak").exists()) return null
+        return run {
             val bytes = runCatching { AtomicFile(target).readFully() }.getOrElse { target.readBytes() }
             val obj = JSONObject(bytes.toString(Charsets.UTF_8))
             val lastOutcome = if (obj.isNull("lastOutcome")) null else obj.optString("lastOutcome").ifBlank { null }
@@ -147,7 +147,7 @@ internal class AndroidOperationStore(private val directory: File) : OperationSto
                 started = obj.optBoolean("started", true),
                 lastResult = lastResult,
             )
-        }.getOrNull()
+        }
     }
 
     override fun put(operation: LocalOperation) {
@@ -274,7 +274,16 @@ class MainActivity : Activity() {
         operationStore = AndroidOperationStore(File(filesDir, "terminal-ops"))
         plugPagClient = AndroidPlugPagClient(this)
 
-        terminalState = terminalStore.load(apiUrl)
+        terminalState = try {
+            terminalStore.load(apiUrl)
+        } catch (_: Exception) {
+            setContentView(TextView(this).apply {
+                text = "Não foi possível ler os dados protegidos do terminal. Preserve os dados do aplicativo e procure o suporte para conciliar operações pendentes."
+                textSize = 18f
+                setPadding(24, 48, 24, 24)
+            })
+            return
+        }
         pendingOrder = runCatching { orderStore.read(apiUrl) }.getOrNull()
 
         root = LinearLayout(this).apply {
@@ -614,6 +623,13 @@ class MainActivity : Activity() {
             Triple(token, loadedSession, tables to menu)
         }.onSuccess { (token, loadedSession, data) ->
             busy = false
+            val pendingOperator = terminalState.pendingPayment?.operatorId
+            if (pendingOperator != null && pendingOperator != loadedSession.operator.id) {
+                activeToken = ""
+                setError("Entre com o operador responsável pelo pagamento pendente para conciliá-lo.")
+                render()
+                return@onSuccess
+            }
             val bound = terminalState.boundRestaurant
             if (bound != null && bound.id != loadedSession.restaurant.id) {
                 promptRestaurantSwitchOnLogin(bound, loadedSession, user, token, data.first, data.second)
@@ -683,6 +699,11 @@ class MainActivity : Activity() {
     }
 
     private fun confirmUnbindTerminal() {
+        if (busy || terminalState.pendingPayment != null || activeTerminalIntent != null || pendingOrder != null) {
+            setError("Conclua ou reconcilie as operações pendentes antes de desvincular.")
+            render()
+            return
+        }
         val boundName = terminalState.boundRestaurant?.name ?: "restaurante atual"
         AlertDialog.Builder(this)
             .setTitle("Desvincular terminal?")
@@ -767,6 +788,15 @@ class MainActivity : Activity() {
 
         bannerMessage?.let { msg ->
             content.addView(bannerView(msg, bannerError, bannerRetryAction).apply { bottomMargin(10) })
+        }
+
+        terminalState.pendingPayment?.let { payment ->
+            content.addView(cardLayout(KomaColors.WARN_BG, KomaColors.WARN_INK, pad = 12).apply {
+                addView(textView("Pagamento pendente em ${payment.tableName}", 15f, bold = true))
+                addView(textView("${money(payment.amountCents)} · Verifique antes de receber novamente.", 13f).apply { topMargin(6) })
+                addView(buildActionButton("Verificar pagamento", KomaColors.ACCENT, KomaColors.ACCENT_INK,
+                    enabled = !busy) { executeSavedPayment(payment) }.apply { topMargin(10) })
+            }.apply { bottomMargin(12) })
         }
 
         pendingOrder?.let { pending ->
@@ -2455,11 +2485,16 @@ class MainActivity : Activity() {
     // -------------------------------------------------------------------------
 
     private fun openPaymentScreen(table: Table, detail: TableDetail) {
+        if (terminalState.pendingPayment != null) {
+            setError("Há um pagamento pendente. Volte ao Salão e use Verificar pagamento antes de receber novamente.")
+            render()
+            return
+        }
         activeTable = table
         tableDetail = detail
         paymentScope = PaymentScope.VALUE
         paymentMethod = PaymentMethod.CREDIT
-        paymentCapture = CaptureOption.EXTERNAL_POS
+        paymentCapture = if (BuildConfig.PAGBANK_TERMINAL) CaptureOption.INTEGRATED_PAGBANK else CaptureOption.EXTERNAL_POS
         paymentAmountCents = detail.remainingTotal
         paymentSelectedItemIds.clear()
         cashReceivedCents = null
@@ -2651,7 +2686,7 @@ class MainActivity : Activity() {
         val methodCard = cardLayout(KomaColors.SURFACE, KomaColors.CARD_BORDER, pad = 14).apply { bottomMargin(12) }
         methodCard.addView(textView("2. Forma de pagamento", 15f, bold = true))
         val methodRow = scrollChips {
-            PaymentMethod.values().forEach { method ->
+            PaymentMethod.values().filter { !BuildConfig.PAGBANK_TERMINAL || it != PaymentMethod.CASH }.forEach { method ->
                 addView(
                     pillButton(method.label, paymentMethod == method, enabled = !busy) {
                         paymentMethod = method
@@ -2708,11 +2743,12 @@ class MainActivity : Activity() {
             captureCard.addView(cashChips)
         } else {
             val plugPagHardware = plugPagClient.isServiceAvailable()
-            val canRunIntegrated = plugPagHardware || s.providerIntegratedAvailable
+            val canRunIntegrated = s.providerIntegratedAvailable &&
+                (plugPagHardware || (BuildConfig.DEBUG && !BuildConfig.PAGBANK_TERMINAL))
             captureCard.addView(textView("3. Onde cobrar", 15f, bold = true))
 
             val externalSelected = paymentCapture == CaptureOption.EXTERNAL_POS
-            captureCard.addView(
+            if (!BuildConfig.PAGBANK_TERMINAL) captureCard.addView(
                 selectableOptionCard(
                     title = "Outra maquininha (registrar pagamento)",
                     subtitle = "Você passa na maquininha avulsa e registra a confirmação no KÔMA.",
@@ -2730,7 +2766,7 @@ class MainActivity : Activity() {
                     "Terminal PagBank PlugPag pronto neste dispositivo."
                 plugPagHardware ->
                     "Serviço PlugPag detectado, aguardando ativação do terminal."
-                s.providerIntegratedAvailable ->
+                BuildConfig.DEBUG && !BuildConfig.PAGBANK_TERMINAL && s.providerIntegratedAvailable ->
                     "PlugPag ausente neste celular — modo simulado ativo no backend."
                 else ->
                     "${plugPagClient.statusDescription()} (Disponível apenas em terminal PagBank homologado.)"
@@ -2739,7 +2775,7 @@ class MainActivity : Activity() {
                 selectableOptionCard(
                     title = if (plugPagHardware) {
                         "Nesta maquininha (PagBank PlugPag)"
-                    } else if (s.providerIntegratedAvailable) {
+                    } else if (BuildConfig.DEBUG && !BuildConfig.PAGBANK_TERMINAL && s.providerIntegratedAvailable) {
                         "Nesta maquininha (Simulador integrado)"
                     } else {
                         "Nesta maquininha (PagBank indisponível)"
@@ -2775,7 +2811,10 @@ class MainActivity : Activity() {
         // Bottom confirm CTA
         val validAmount = paymentAmountCents in 1L..remaining
         val validCash = paymentMethod != PaymentMethod.CASH || (cashReceivedCents ?: paymentAmountCents) >= paymentAmountCents
-        val validPlugPag = paymentCapture != CaptureOption.INTEGRATED_PAGBANK || paymentAmountCents >= 100L
+        val integratedAvailable = s.providerIntegratedAvailable &&
+            (plugPagClient.isServiceAvailable() || (BuildConfig.DEBUG && !BuildConfig.PAGBANK_TERMINAL))
+        val validPlugPag = paymentCapture != CaptureOption.INTEGRATED_PAGBANK ||
+            (paymentAmountCents >= 100L && integratedAvailable)
         val canSubmit = !busy && validAmount && validCash && validPlugPag
 
         val actionLabel = when {
@@ -2872,88 +2911,103 @@ class MainActivity : Activity() {
                     runIntegratedTerminalStep(active)
                 }.apply { topMargin(14) },
             )
-            addView(
-                buildActionButton(
-                    title = "Cancelar intenção",
-                    bgColor = KomaColors.DANGER_BG,
-                    textColor = KomaColors.DANGER_INK,
-                    enabled = !busy,
-                ) {
-                    cancelActiveIntent(active)
-                }.apply { topMargin(10) },
-            )
         }
 
     private fun startPaymentExecution(table: Table, detail: TableDetail) {
         if (busy) return
-        val amount = paymentAmountCents
-        val itemIds = if (paymentScope == PaymentScope.ITEMS) paymentSelectedItemIds.toList() else emptyList()
-
-        if (paymentMethod == PaymentMethod.CASH || paymentCapture == CaptureOption.EXTERNAL_POS) {
-            val captureParam = if (paymentMethod == PaymentMethod.CASH) null else "registro_externo"
-            val received = if (paymentMethod == PaymentMethod.CASH) (cashReceivedCents ?: amount) else null
-            busy = true
-            clearBanner()
+        if (terminalState.pendingPayment != null) {
+            setError("Concilie o pagamento pendente pelo botão Verificar pagamento no Salão.")
             render()
-            runAsync {
-                val created = api.createPaymentIntent(
-                    tableId = table.id,
-                    amountCents = amount,
-                    method = paymentMethod.apiValue,
-                    capture = captureParam,
-                    scope = paymentScope.apiValue,
-                    itemIds = itemIds,
-                )
-                val outcome = api.confirmManualPayment(created.id, received)
-                val updatedTables = runCatching { api.salon() }.getOrNull()
-                val updatedDetail = if (outcome.tableReleased) null else runCatching { api.detail(table) }.getOrNull()
-                Triple(outcome, updatedDetail, updatedTables)
-            }.onSuccess { (outcome, updatedDetail, updatedTables) ->
-                busy = false
-                if (updatedTables != null) salonSummaries = updatedTables
-                if (outcome.tableReleased) {
-                    tableDetail = null
-                    activeTable = null
-                    screen = Screen.SALON
-                    val trocoNote = if (outcome.trocoCents > 0L) " Troco: ${money(outcome.trocoCents)}." else ""
-                    setInfo("Pagamento confirmado! ${table.name} liberada.$trocoNote")
-                } else {
-                    tableDetail = updatedDetail
-                    screen = Screen.TABLE
-                    val trocoNote = if (outcome.trocoCents > 0L) " · Troco: ${money(outcome.trocoCents)}" else ""
-                    setInfo("Pagamento parcial de ${money(outcome.paidCents)} confirmado$trocoNote.")
-                }
-                render()
-            }.onFailure { err ->
-                busy = false
-                handleAsyncError(err) { render() }
-            }
             return
         }
+        val operator = session ?: return renderLogin()
+        if (BuildConfig.PAGBANK_TERMINAL &&
+            (paymentMethod == PaymentMethod.CASH || paymentCapture != CaptureOption.INTEGRATED_PAGBANK)) {
+            setError("Neste terminal, receba exclusivamente pelo SDK PagBank.")
+            render()
+            return
+        }
+        val capture = when {
+            paymentMethod == PaymentMethod.CASH -> null
+            paymentCapture == CaptureOption.EXTERNAL_POS -> "registro_externo"
+            else -> "provider_integrado"
+        }
+        val saved = SavedPendingPayment(
+            restaurantId = operator.restaurant.id,
+            operatorId = operator.operator.id,
+            tableId = table.id, tableName = table.name,
+            amountCents = paymentAmountCents, method = paymentMethod.apiValue,
+            capture = capture, scope = paymentScope.apiValue,
+            itemIds = if (paymentScope == PaymentScope.ITEMS) paymentSelectedItemIds.toList() else emptyList(),
+            receivedCents = if (paymentMethod == PaymentMethod.CASH) cashReceivedCents ?: paymentAmountCents else null,
+            idempotencyKey = "smartpos-create-${java.util.UUID.randomUUID()}",
+            simulated = capture == "provider_integrado" && !plugPagClient.isServiceAvailable(),
+        )
+        // Persist the request/key BEFORE its first HTTP call, not just before the SDK.
+        terminalState = terminalStore.savePayment(apiUrl, saved)
+        executeSavedPayment(saved)
+    }
 
-        // Integrated PagBank (or simulator in dev backend)
+    private fun executeSavedPayment(saved: SavedPendingPayment) {
+        if (busy) return
+        val current = session ?: return renderLogin()
+        if (saved.restaurantId != current.restaurant.id || saved.operatorId != current.operator.id) {
+            setError("Entre com o operador responsável por este pagamento antes de conciliá-lo.")
+            render()
+            return
+        }
         busy = true
         clearBanner()
         render()
-        val plugPagHardware = plugPagClient.isServiceAvailable()
         runAsync {
-            val created = api.createPaymentIntent(
-                tableId = table.id,
-                amountCents = amount,
-                method = paymentMethod.apiValue,
-                capture = "provider_integrado",
-                scope = paymentScope.apiValue,
-                itemIds = itemIds,
-            )
-            val opKey = StableOperationKey.forIntent(created.id, terminalState.terminalId, "pagbank")
-            ActiveTerminalIntent(created, opKey, table, simulatedBackend = !plugPagHardware)
-        }.onSuccess { active ->
+            api.createPaymentIntent(saved.tableId, saved.amountCents, saved.method, saved.capture,
+                saved.scope, saved.itemIds, saved.idempotencyKey)
+        }.onSuccess { created ->
             busy = false
-            activeTerminalIntent = active
-            runIntegratedTerminalStep(active)
+            val persisted = saved.copy(intentId = created.id)
+            terminalState = terminalStore.savePayment(apiUrl, persisted)
+            val table = Table(saved.tableId, saved.tableName)
+            if (saved.capture == "provider_integrado") {
+                val active = ActiveTerminalIntent(created,
+                    StableOperationKey.forIntent(created.id, terminalState.terminalId, "pagbank"),
+                    table, saved.simulated)
+                activeTerminalIntent = active
+                activeTable = table
+                runIntegratedTerminalStep(active)
+            } else {
+                confirmSavedManualPayment(persisted, created)
+            }
         }.onFailure { err ->
             busy = false
-            handleAsyncError(err) { render() }
+            // Keep the exact request through an uncertain response or process restart.
+            handleAsyncError(err) { executeSavedPayment(saved) }
+        }
+    }
+
+    private fun confirmSavedManualPayment(saved: SavedPendingPayment, created: PaymentIntentPreview) {
+        busy = true
+        render()
+        val table = Table(saved.tableId, saved.tableName)
+        runAsync {
+            val outcome = api.confirmManualPayment(created.id, saved.receivedCents,
+                "manual-${saved.idempotencyKey}")
+            val tables = runCatching { api.salon() }.getOrNull()
+            val detail = if (outcome.tableReleased) null else runCatching { api.detail(table) }.getOrNull()
+            Triple(outcome, detail, tables)
+        }.onSuccess { (outcome, detail, tables) ->
+            busy = false
+            terminalState = terminalStore.savePayment(apiUrl, null)
+            if (tables != null) salonSummaries = tables
+            tableDetail = detail
+            activeTable = if (outcome.tableReleased) null else table
+            screen = if (outcome.tableReleased || detail == null) Screen.SALON else Screen.TABLE
+            val change = if (outcome.trocoCents > 0L) " Troco: ${money(outcome.trocoCents)}." else ""
+            setInfo(if (outcome.tableReleased) "Pagamento confirmado. ${table.name} liberada.$change"
+                else "Pagamento de ${money(outcome.paidCents)} confirmado. Saldo mantido.$change")
+            render()
+        }.onFailure { err ->
+            busy = false
+            handleAsyncError(err) { executeSavedPayment(saved) }
         }
     }
 
@@ -2964,6 +3018,8 @@ class MainActivity : Activity() {
         render()
         runAsync {
             val bridge = if (active.simulatedBackend) {
+                check(BuildConfig.DEBUG && !BuildConfig.PAGBANK_TERMINAL) { "Simulação proibida neste APK." }
+                check(session?.providerIntegratedAvailable == true) { "Simulador indisponível neste ambiente." }
                 FakeTerminalPaymentBridge()
             } else {
                 PlugPagTerminalPaymentBridge(plugPagClient)
@@ -2982,19 +3038,21 @@ class MainActivity : Activity() {
             busy = false
             if (tables != null) salonSummaries = tables
             if (ack.status == "liquidada") {
+                terminalState = terminalStore.savePayment(apiUrl, null)
                 activeTerminalIntent = null
-                val stillOccupied = detail?.checks?.isNotEmpty() == true
-                if (!stillOccupied) {
+                val released = ack.tableReleased
+                if (released) {
                     tableDetail = null
                     activeTable = null
                     screen = Screen.SALON
                     setInfo("Pagamento aprovado e confirmado! ${active.table.name} liberada.")
                 } else {
                     tableDetail = detail
-                    screen = Screen.TABLE
-                    setInfo("Pagamento aprovado (${money(active.intent.amountCents)}).")
+                    screen = if (detail == null) Screen.SALON else Screen.TABLE
+                    setInfo("Pagamento aprovado (${money(active.intent.amountCents)}). Consulte o saldo atualizado.")
                 }
-            } else if (ack.status in setOf("recusada", "cancelada", "falha", "expirada")) {
+            } else if (ack.status in setOf("recusada", "cancelada", "expirada")) {
+                terminalState = terminalStore.savePayment(apiUrl, null)
                 activeTerminalIntent = null
                 setError("Pagamento não aprovado (${ack.status}). Tente novamente ou escolha outra forma.")
             } else {
@@ -3006,24 +3064,6 @@ class MainActivity : Activity() {
             busy = false
             setError(messageFor(err))
             render()
-        }
-    }
-
-    private fun cancelActiveIntent(active: ActiveTerminalIntent) {
-        if (busy) return
-        busy = true
-        clearBanner()
-        render()
-        runAsync {
-            api.cancelPaymentIntent(active.intent.id, "Cancelado no SmartPOS antes da liquidação")
-        }.onSuccess { status ->
-            busy = false
-            activeTerminalIntent = null
-            setInfo("Intenção encerrada ($status).")
-            render()
-        }.onFailure { err ->
-            busy = false
-            handleAsyncError(err) { render() }
         }
     }
 
@@ -3071,7 +3111,7 @@ class MainActivity : Activity() {
             .onSuccess { list ->
                 busy = false
                 loadingText = null
-                recentOps = list
+                recentOps = if (BuildConfig.PAGBANK_TERMINAL) list.filter { it.capture == "provider_integrado" } else list
                 render()
             }
             .onFailure { err ->
@@ -3205,6 +3245,11 @@ class MainActivity : Activity() {
     // -------------------------------------------------------------------------
 
     private fun showOperatorSwitcher() {
+        if (busy || terminalState.pendingPayment != null || activeTerminalIntent != null || pendingOrder != null) {
+            setError("Conclua ou reconcilie a operação pendente antes de trocar de operador.")
+            render()
+            return
+        }
         val items = mutableListOf<String>()
         val actions = mutableListOf<() -> Unit>()
         val activeId = terminalState.activeOperatorId
