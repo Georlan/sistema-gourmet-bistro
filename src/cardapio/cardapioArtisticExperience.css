@@ -1401,19 +1401,12 @@ html[data-theme="light"] .koma-art-footer {
 @media (max-width: 375px) {
   .koma-art-canopy__shell {
     padding: 0 14px;
-    gap: 12px;
   }
   .koma-art-canopy__title {
     font-size: 20px;
   }
-  .koma-art-arch-window {
-    height: 190px;
-  }
   .koma-art-stage-title {
     font-size: 20px;
-  }
-  .koma-art-stage-body {
-    padding: 14px 16px 18px;
   }
   .koma-art-stage-price-val {
     font-size: 20px;
@@ -2741,7 +2734,7 @@ html[data-theme="light"] .koma-art-promo-footer,
   }
   .koma-art-hospitality-btn {
     white-space: nowrap;
-    min-height: 32px;
+    min-height: 44px;
   }
   .koma-art-wave-svg {
     height: 22px;

@@ -883,7 +883,7 @@ export default function CardapioPage() {
     );
     if (hasTopperOverlay) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.defaultPrevented || event.key !== "Escape") return;
       event.preventDefault();
       setIsCartOpen(false);
       setCouponToApply("");

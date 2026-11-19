@@ -160,12 +160,10 @@ export function CardapioArtisticExperience({
   orderingMessage = '',
 }: CardapioArtisticExperienceProps) {
   const [shareToastVisible, setShareToastVisible] = useState(false);
-  const [bannerFailed, setBannerFailed] = useState(false);
+  const [failedBannerKey, setFailedBannerKey] = useState<string | null>(null);
   const categoryScrollRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setBannerFailed(false);
-  }, [activeBrand.bannerImage]);
+  const bannerKey = `${activeBrand.id}:${activeBrand.bannerImage ?? ''}`;
+  const bannerFailed = failedBannerKey === bannerKey;
 
   // Compartilhar cardápio com feedback ao usuário
   const handleShare = async () => {
@@ -635,7 +633,7 @@ export function CardapioArtisticExperience({
             className="koma-art-banner-img"
             decoding="async"
             fetchPriority="high"
-            onError={() => setBannerFailed(true)}
+            onError={() => setFailedBannerKey(bannerKey)}
           />
         </section>
       )}
