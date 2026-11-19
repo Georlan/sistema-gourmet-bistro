@@ -95,6 +95,25 @@ def _load_local_refund(
     return refund
 
 
+def _payment_is_fully_refunded(
+    db: Session,
+    *,
+    restaurante_id: int,
+    payment: Pagamento,
+) -> bool:
+    """Retorna True somente quando os estornos confirmados cobrem 100% do pagamento."""
+    refunded_total = money(
+        db.query(func.coalesce(func.sum(PagamentoEstorno.valor), 0))
+        .filter(
+            PagamentoEstorno.restaurante_id == restaurante_id,
+            PagamentoEstorno.pagamento_id == payment.id,
+        )
+        .scalar()
+        or 0
+    )
+    return refunded_total >= money(payment.valor)
+
+
 def _close_refunded_order_in_session(
     db: Session,
     *,
@@ -434,13 +453,14 @@ def create_mercado_pago_refund(
 
     local = _load_local_refund(db, restaurante_id=restaurante_id, row=row)
     if local is not None:
-        _close_refunded_order_in_session(
-            db,
-            restaurante_id=restaurante_id,
-            comanda_id=intent.comanda_id,
-            intent=intent,
-            usuario_id=usuario_id,
-        )
+        if _payment_is_fully_refunded(db, restaurante_id=restaurante_id, payment=payment):
+            _close_refunded_order_in_session(
+                db,
+                restaurante_id=restaurante_id,
+                comanda_id=intent.comanda_id,
+                intent=intent,
+                usuario_id=usuario_id,
+            )
         return local
 
     # Use a chave da reserva original mesmo quando a UI trouxe uma nova chave na
@@ -461,13 +481,15 @@ def create_mercado_pago_refund(
         )
         row.estorno_id = refund.id
         row.error_message = None
-        _close_refunded_order_in_session(
-            db,
-            restaurante_id=restaurante_id,
-            comanda_id=intent.comanda_id,
-            intent=intent,
-            usuario_id=usuario_id,
-        )
+        db.flush()
+        if _payment_is_fully_refunded(db, restaurante_id=restaurante_id, payment=payment):
+            _close_refunded_order_in_session(
+                db,
+                restaurante_id=restaurante_id,
+                comanda_id=intent.comanda_id,
+                intent=intent,
+                usuario_id=usuario_id,
+            )
         db.flush()
         return refund
     except RefundDomainError as exc:
