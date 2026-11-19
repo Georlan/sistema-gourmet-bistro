@@ -27,6 +27,27 @@ jobs:
           gradle-version: '9.5.0'
       - name: Install Android SDK platform
         run: '${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0"'
+      - name: Cache persistent Android debug keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: smartpos-android-debug-keystore-v1
+          restore-keys: |
+            smartpos-android-debug-keystore-
+      - name: Ensure debug keystore exists
+        run: |
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkeypair -v \
+              -keystore ~/.android/debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
       - name: Test bridge and waiter app, then build debug APK
         run: gradle -p smartpos-android test :app:testDebugUnitTest :app:assembleDebug --no-daemon
       - uses: actions/upload-artifact@v6
