@@ -87,6 +87,7 @@ jobs:
           e2e/cardapio-promotion-expiry.spec.ts
           e2e/cardapio-promotion-mixed-cart.spec.ts
           e2e/cardapio-artistic-parity.spec.ts
+          e2e/cardapio-discovery-feedback.spec.ts
           e2e/cardapio-foundation-accessibility.spec.ts
           e2e/cardapio-live-modifier-sync.spec.ts
           e2e/cardapio-canonical-modal-entrypoints.spec.ts

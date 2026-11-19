@@ -665,14 +665,16 @@ export default function CardapioPage() {
         return Boolean(prod);
       });
       if (!anyAvail) {
-        closeProductModal();
+        const returned = closeProductModal();
+        if (returned) setDraftRestoreIssues((prev) => [...new Set([...prev, "Este produto não está mais disponível no cardápio."])]);
         setNotice("Este produto não está mais disponível. Consulte o cardápio atualizado.");
       }
       return;
     }
     const current = activeBrand.products.find(product => String(product.id) === String(selectedProduct.id) && product.isAvailable !== false);
     if (!current) {
-      closeProductModal();
+      const returned = closeProductModal();
+      if (returned) setDraftRestoreIssues((prev) => [...new Set([...prev, "Este produto não está mais disponível no cardápio."])]);
       setNotice("Este produto não está mais disponível. Consulte o cardápio atualizado.");
     } else if (current !== selectedProduct) {
       setSelectedProduct(current);
@@ -865,6 +867,41 @@ export default function CardapioPage() {
       document.body.style.overflow = previousOverflow;
     };
   }, [hasOpenOverlay]);
+
+  useEffect(() => {
+    if (!isCartOpen) return;
+    const hasTopperOverlay = Boolean(
+      selectedProduct
+      || selectedPromotion
+      || pixModalOrder
+      || isAuthOpen
+      || isCheckoutOpen
+      || isStoreInfoOpen
+      || isProfileOpen
+      || isOrdersDrawerOpen
+      || isBenefitsOpen,
+    );
+    if (hasTopperOverlay) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.key !== "Escape") return;
+      event.preventDefault();
+      setIsCartOpen(false);
+      setCouponToApply("");
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    isCartOpen,
+    selectedProduct,
+    selectedPromotion,
+    pixModalOrder,
+    isAuthOpen,
+    isCheckoutOpen,
+    isStoreInfoOpen,
+    isProfileOpen,
+    isOrdersDrawerOpen,
+    isBenefitsOpen,
+  ]);
 
   useEffect(() => {
     if (!activeBrand?.id) return;
