@@ -36,10 +36,10 @@ for (const mode of ['native', 'reduced', 'unsupported', 'long-list']) {
 test('mobile reveal avoids card transitions while keeping the full-screen animation', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openOperationalScenario(page);
-  await expect(page.locator('.cashier-shell .orders-card__action').first()).toBeAttached();
+  await expect(page.locator('.cashier-shell .orders-card__action.transition-all').first()).toBeAttached();
   const result = await page.evaluate(() => {
     const root = document.documentElement;
-    const card = document.querySelector<HTMLElement>('.cashier-shell .orders-card__action');
+    const card = document.querySelector<HTMLElement>('.cashier-shell .orders-card__action.transition-all');
     if (!card) throw new Error('Order action missing');
     const before = getComputedStyle(card).transitionDuration;
     root.setAttribute('data-courier-theme-wipe', 'test');

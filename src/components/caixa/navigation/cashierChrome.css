@@ -24,6 +24,9 @@
     overflow: hidden;
     gap: 0;
   }
+  .cashier-shell--mobile-orders .orders-toolbar {
+    flex: 0 0 auto;
+  }
   .cashier-shell--mobile-orders .orders-mobile-stages {
     position: static;
     z-index: auto;

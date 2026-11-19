@@ -401,7 +401,7 @@ test('visitante conclui retirada sem depender do WhatsApp em todos os tamanhos d
   await expect(page.locator('#checkout-whatsapp-status-opt-in')).toHaveCount(0);
   const paymentSummary = page.getByRole('heading', { name: 'Pagamento escolhido', exact: true }).locator('..');
   await expect(paymentSummary.getByText('Você paga diretamente ao restaurante. Não há cobrança online nesta etapa.', { exact: true })).toBeVisible();
-  await expect(paymentSummary.getByText(/^Dinheiro\s*· na retirada$/)).toBeVisible();
+  await expect(paymentSummary.getByText(/^Dinheiro\s*· presencial na retirada$/)).toBeVisible();
   await expect(page.getByText('Ana Teste', { exact: true })).toBeVisible();
   await expect(page.getByText(/R\$\s*48,00/).last()).toBeVisible();
 
@@ -409,7 +409,7 @@ test('visitante conclui retirada sem depender do WhatsApp em todos os tamanhos d
 
   await expect(page.getByText('Pedido recebido', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pedido #4321', exact: true })).toBeVisible();
-  await expect(page.getByText(/aguardando aceite/i)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Aguardando aceite', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Acompanhar pedido', exact: true }).click();
   await expect(page.getByText('Aguardando aceite', { exact: true })).toBeVisible();
 
@@ -563,7 +563,7 @@ test('delivery pausado mantém retirada abaixo do mínimo e cartão presencial',
   await page.getByRole('button', { name: 'Cartão de crédito', exact: true }).click();
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
-  await expect(page.getByText(/^Cartão de crédito\s*· na retirada$/)).toBeVisible();
+  await expect(page.getByText(/^Cartão de crédito\s*· presencial na retirada$/)).toBeVisible();
   await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
 
   await expect(page.getByText('Pedido recebido', { exact: true })).toBeVisible();
