@@ -124,6 +124,8 @@ interface CardapioCartDrawerProps {
   onAuthClick?: () => void;
   orderingEnabled?: boolean;
   orderingMessage?: string;
+  draftRestoreIssues?: string[];
+  onDismissDraftRestoreIssues?: () => void;
 }
 
 const formatPrice = (value: number) => new Intl.NumberFormat("pt-BR", {
@@ -157,6 +159,8 @@ export default function CardapioCartDrawer({
   onAuthClick,
   orderingEnabled = true,
   orderingMessage = "Pedidos temporariamente pausados.",
+  draftRestoreIssues = [],
+  onDismissDraftRestoreIssues,
 }: CardapioCartDrawerProps) {
   const [selectedFulfillment, setSelectedFulfillment] = useState<CardapioFulfillment | null>(initialFulfillment ?? null);
   const deliveryMethod = resolveFulfillmentSelection(brandConfig, selectedFulfillment);
@@ -813,6 +817,32 @@ export default function CardapioCartDrawer({
           </div>
         )}
 
+        {draftRestoreIssues.length > 0 && (
+          <div className="mx-4 mt-3 flex shrink-0 items-start justify-between gap-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-200 sm:mx-5" role="status" id="cart-draft-restore-notice">
+            <div className="flex items-start gap-2 min-w-0">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
+              <div className="min-w-0 space-y-1">
+                <p className="font-bold text-koma-foreground">Sua sacola foi atualizada com o cardápio atual</p>
+                <ul className="list-disc pl-4 space-y-0.5 text-[11px] leading-relaxed text-koma-muted">
+                  {draftRestoreIssues.slice(0, 3).map((issue) => (
+                    <li key={issue}>{issue}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            {onDismissDraftRestoreIssues && (
+              <button
+                type="button"
+                onClick={onDismissDraftRestoreIssues}
+                aria-label="Dispensar aviso de atualização da sacola"
+                className="min-h-9 min-w-9 grid place-items-center rounded-lg text-koma-muted hover:text-koma-foreground shrink-0 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
+
         {cart.length === 0 ? (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-start p-6 text-center overflow-y-auto no-scrollbar">
             {/* Cloche Illustration */}
@@ -1183,10 +1213,6 @@ export default function CardapioCartDrawer({
                     </p>
                   </div>
                 )}
-
-                  <button type="button" onClick={() => nextSection && continueToSection(nextSection)} className="mt-4 min-h-12 w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-4 text-xs font-black uppercase tracking-wider text-emerald-400 transition-all cursor-pointer">
-                    {nextStep ? `Continuar para ${nextStep.label.toLowerCase()}` : "Continuar"}
-                  </button>
                 </div>
               </section>
 
@@ -1276,14 +1302,6 @@ export default function CardapioCartDrawer({
                     </label>
                   </div>
                 )}
-
-                  <button
-                    type="button"
-                    onClick={() => nextSection && continueToSection(nextSection)}
-                    className="mt-4 min-h-12 w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-4 text-xs font-black uppercase tracking-wider text-emerald-400 transition-all cursor-pointer"
-                  >
-                    {nextStep ? `Continuar para ${nextStep.label.toLowerCase()}` : "Continuar"}
-                  </button>
                 </div>
               </section>}
 
@@ -1375,14 +1393,6 @@ export default function CardapioCartDrawer({
                     )}
                   </div>
                 )}
-
-                  <button
-                    type="button"
-                    onClick={() => nextSection && continueToSection(nextSection)}
-                    className="mt-4 min-h-12 w-full rounded-full border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-4 text-xs font-black uppercase tracking-wider text-emerald-400 transition-all cursor-pointer"
-                  >
-                    {nextStep ? `Continuar para ${nextStep.label.toLowerCase()}` : "Continuar"}
-                  </button>
                 </div>
               </section>
 
@@ -1508,11 +1518,11 @@ export default function CardapioCartDrawer({
                 type="button"
                 onClick={() => nextSection ? continueToSection(nextSection) : handleCheckout()}
                 disabled={!orderingEnabled || availablePayments.length === 0}
-                aria-label={!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : nextSection ? "Continuar" : "Revisar pedido"}
+                aria-label={!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : nextStep ? `Continuar para ${nextStep.label.toLowerCase()}` : "Revisar pedido"}
                 className="mt-4 koma-action-primary flex h-13 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-6 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-950/40 transition hover:from-emerald-400 hover:to-teal-400 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-stone-500 cursor-pointer"
                 id="btn-confirm-order"
               >
-                <span>{!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : nextSection ? "Continuar" : "Revisar pedido"}</span>
+                <span>{!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : nextStep ? `Continuar para ${nextStep.label.toLowerCase()}` : "Revisar pedido"}</span>
                 {orderingEnabled && <ArrowRight className="h-4 w-4" />}
               </button>
             </div>
