@@ -5,10 +5,22 @@ import { parseBackendTimestamp } from '../../../utils/dateTime';
 const parseBackendDateTime = (dateStr: any): number =>
   parseBackendTimestamp(dateStr)?.getTime() ?? Date.now();
 
+const normalizeOriginToken = (raw: unknown): NonNullable<Order['origemOperacional']> | null => {
+  const token = String(raw || '').trim().toLowerCase();
+  if (token === 'smartpos' || token === 'cardapio' || token === 'caixa' || token === 'garcom') {
+    return token;
+  }
+  return null;
+};
+
 const readOperationalOrigin = (comanda: any): NonNullable<Order['origemOperacional']> => {
-  const origins = (Array.isArray(comanda?.lancamentos) ? comanda.lancamentos : []).map((launch: any) =>
-    String(launch?.origem || '').toLowerCase(),
-  );
+  const launchOrigins = (Array.isArray(comanda?.lancamentos) ? comanda.lancamentos : [])
+    .map((launch: any) => normalizeOriginToken(launch?.origem))
+    .filter((origin): origin is NonNullable<Order['origemOperacional']> => origin !== null);
+  const itemOrigins = (Array.isArray(comanda?.itens) ? comanda.itens : [])
+    .map((item: any) => normalizeOriginToken(item?.lancamento_origem ?? item?.origemOperacional))
+    .filter((origin): origin is NonNullable<Order['origemOperacional']> => origin !== null);
+  const origins = [...launchOrigins, ...itemOrigins];
   if (origins.includes('smartpos')) return 'smartpos';
   if (origins.includes('cardapio')) return 'cardapio';
   if (origins.includes('caixa')) return 'caixa';
@@ -147,7 +159,7 @@ export function mapBackendComandaToOperationalOrder({
             ? parseBackendDateTime(item.lancamento_timestamp)
             : undefined,
           responsavelNome: item.lancamento_responsavel_nome || undefined,
-          origemOperacional: item.lancamento_origem || origemOperacional,
+          origemOperacional: normalizeOriginToken(item.lancamento_origem) || origemOperacional,
           identificador,
         };
       }),

@@ -333,7 +333,11 @@ class MainActivity : Activity() {
                 screen = if (cachedMenu != null) Screen.MENU else Screen.TABLE
             }
             Screen.MENU -> {
-                screen = if (tableDetail != null) Screen.TABLE else Screen.SALON
+                if (activeCategory != null) {
+                    activeCategory = null
+                } else {
+                    screen = if (tableDetail != null) Screen.TABLE else Screen.SALON
+                }
             }
             Screen.PAYMENT -> {
                 if (activeTerminalIntent != null) return
@@ -1217,10 +1221,17 @@ class MainActivity : Activity() {
         // Sticky footer bar
         val draftCount = drafts[table.id].orEmpty().sumOf { it.quantity }
         val remaining = detail?.remainingTotal ?: 0L
+        val canCharge = s.smartposEnabled || s.permissions.canClose || s.role != "garcom"
+        val hasChargeButton = remaining > 0L && canCharge && detail != null
+        val compactFooter = draftCount > 0 && hasChargeButton
         val footerActions = mutableListOf<FooterAction>()
         footerActions.add(
             FooterAction(
-                label = if (draftCount > 0) "Lançar (+$draftCount)" else "Lançar",
+                label = when {
+                    compactFooter -> "+ Itens"
+                    draftCount > 0 -> "Lançar (+$draftCount)"
+                    else -> "Lançar"
+                },
                 bgColor = KomaColors.ACCENT,
                 fgColor = KomaColors.ACCENT_INK,
                 enabled = !busy && s.ordersAvailable,
@@ -1240,15 +1251,15 @@ class MainActivity : Activity() {
                 },
             )
         }
-        if (remaining > 0L && s.permissions.canClose && detail != null) {
+        if (hasChargeButton) {
             footerActions.add(
                 FooterAction(
-                    label = "Cobrar · ${money(remaining)}",
+                    label = if (compactFooter) "Cobrar ${money(remaining)}" else "Cobrar · ${money(remaining)}",
                     bgColor = KomaColors.PAYMENT_CAP,
                     fgColor = KomaColors.PAYMENT_INK,
                     enabled = !busy,
                 ) {
-                    openPaymentScreen(table, detail)
+                    openPaymentScreen(table, detail!!)
                 },
             )
         }
@@ -1705,17 +1716,24 @@ class MainActivity : Activity() {
                 )
             } else {
                 controls.addView(
-                    buildActionButton("+ Adicionar", KomaColors.ACCENT, KomaColors.ACCENT_INK, minHeightDp = 44) {
+                    buildActionButton("+ Adicionar", KomaColors.ACCENT, KomaColors.ACCENT_INK, minHeightDp = 44, minWidthDp = 112) {
                         adjustSimpleDraftQty(table, primary, +1)
                     },
                 )
             }
+            controls.addView(
+                View(this@MainActivity).apply {
+                    layoutParams = LinearLayout.LayoutParams(0, 1, 1f)
+                },
+            )
             controls.addView(
                 buildActionButton(
                     title = if (primary.hasOptionalCustomization) "Personalizar" else "Obs.",
                     bgColor = KomaColors.RAISED,
                     textColor = KomaColors.INK,
                     minHeightDp = 44,
+                    minWidthDp = 64,
+                    singleLine = true,
                 ) {
                     startCustomization(primary, variants, editIndex = null)
                 }.apply { leftMargin(8) },
@@ -2255,47 +2273,95 @@ class MainActivity : Activity() {
                     addView(textView("Pessoa: ${line.clientName}", 12f, color = KomaColors.INK_MUTED).apply { topMargin(2) })
                 }
 
-                val row = LinearLayout(this@MainActivity).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    topMargin(10)
-                }
-                row.addView(
-                    stepperControl(
-                        qty = line.quantity,
-                        onMinus = {
-                            if (line.quantity > 1) {
-                                drafts[table.id]?.set(index, line.copy(quantity = line.quantity - 1))
-                            } else {
-                                removeDraftLine(table.id, index)
-                            }
-                            saveDrafts()
-                            render()
-                        },
-                        onPlus = {
-                            drafts[table.id]?.set(index, line.copy(quantity = line.quantity + 1))
-                            saveDrafts()
-                            render()
-                        },
-                    ),
-                )
                 val fullProduct = cachedMenu?.products?.firstOrNull { it.id == line.product.id } ?: line.product
-                row.addView(
-                    buildActionButton("Editar", KomaColors.RAISED, KomaColors.INK, minHeightDp = 44) {
-                        val variants = cachedMenu?.products?.filter {
-                            fullProduct.familyId.isNotBlank() && it.familyId == fullProduct.familyId
-                        }.orEmpty().ifEmpty { listOf(fullProduct) }
-                        startCustomization(fullProduct, variants, editIndex = index)
-                    }.apply { leftMargin(8) },
-                )
-                row.addView(
-                    buildActionButton("Remover", KomaColors.DANGER_BG, KomaColors.DANGER_INK, minHeightDp = 44) {
-                        removeDraftLine(table.id, index)
+                val compactScreen = resources.configuration.screenWidthDp < 360
+                val stepper = stepperControl(
+                    qty = line.quantity,
+                    onMinus = {
+                        if (line.quantity > 1) {
+                            drafts[table.id]?.set(index, line.copy(quantity = line.quantity - 1))
+                        } else {
+                            removeDraftLine(table.id, index)
+                        }
                         saveDrafts()
                         render()
-                    }.apply { leftMargin(8) },
+                    },
+                    onPlus = {
+                        drafts[table.id]?.set(index, line.copy(quantity = line.quantity + 1))
+                        saveDrafts()
+                        render()
+                    },
                 )
-                addView(row)
+                val editBtn = buildActionButton(
+                    title = "Editar",
+                    bgColor = KomaColors.RAISED,
+                    textColor = KomaColors.INK,
+                    minHeightDp = 44,
+                    minWidthDp = 78,
+                    singleLine = true,
+                ) {
+                    val variants = cachedMenu?.products?.filter {
+                        fullProduct.familyId.isNotBlank() && it.familyId == fullProduct.familyId
+                    }.orEmpty().ifEmpty { listOf(fullProduct) }
+                    startCustomization(fullProduct, variants, editIndex = index)
+                }
+                val removeBtn = buildActionButton(
+                    title = "Remover",
+                    bgColor = KomaColors.DANGER_BG,
+                    textColor = KomaColors.DANGER_INK,
+                    borderColor = KomaColors.DANGER_BORDER,
+                    minHeightDp = 44,
+                    minWidthDp = 88,
+                    singleLine = true,
+                ) {
+                    removeDraftLine(table.id, index)
+                    saveDrafts()
+                    render()
+                }
+                if (compactScreen) {
+                    val qtyRow = LinearLayout(this@MainActivity).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        topMargin(10)
+                    }
+                    qtyRow.addView(
+                        textView("Quantidade", 12f, color = KomaColors.INK_MUTED).apply {
+                            layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                        },
+                    )
+                    qtyRow.addView(stepper)
+                    addView(qtyRow)
+
+                    val actionsRow = LinearLayout(this@MainActivity).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        topMargin(8)
+                    }
+                    editBtn.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        rightMargin = dp(4)
+                    }
+                    removeBtn.layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        leftMargin = dp(4)
+                    }
+                    actionsRow.addView(editBtn)
+                    actionsRow.addView(removeBtn)
+                    addView(actionsRow)
+                } else {
+                    val row = LinearLayout(this@MainActivity).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        topMargin(10)
+                    }
+                    row.addView(stepper)
+                    row.addView(
+                        View(this@MainActivity).apply {
+                            layoutParams = LinearLayout.LayoutParams(0, 1, 1f)
+                        },
+                    )
+                    row.addView(editBtn.apply { leftMargin(8) })
+                    row.addView(removeBtn.apply { leftMargin(8) })
+                    addView(row)
+                }
             }
             content.addView(card)
         }
@@ -2435,7 +2501,8 @@ class MainActivity : Activity() {
             setPadding(dp(14), dp(12), dp(14), dp(24))
         }
 
-        if (!s.permissions.canClose) {
+        val canCharge = s.smartposEnabled || s.permissions.canClose || s.role != "garcom"
+        if (!canCharge) {
             content.addView(
                 cardLayout(KomaColors.DANGER_BG, KomaColors.DANGER_BORDER, pad = 16).apply {
                     addView(textView("Sem permissão de fechamento", 15f, bold = true, color = KomaColors.DANGER_INK))
@@ -3242,11 +3309,12 @@ class MainActivity : Activity() {
         }
         if (onBack != null) {
             row1.addView(
-                buildActionButton("<", KomaColors.RAISED, KomaColors.INK, minHeightDp = 44, minWidthDp = 48) {
+                buildActionButton("<", KomaColors.RAISED, KomaColors.INK, minHeightDp = 44, minWidthDp = 46, singleLine = true) {
                     onBack()
                 }.apply { rightMargin(10) },
             )
         }
+        val inlineSingleAction = rightActions.size == 1 && statusChip == null
         val titleCol = LinearLayout(this@MainActivity).apply {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
@@ -3266,10 +3334,21 @@ class MainActivity : Activity() {
         row1.addView(titleCol)
         if (statusChip != null) {
             row1.addView(badgePill(statusChip.first, statusChip.second.first, statusChip.second.second))
+        } else if (inlineSingleAction) {
+            val (label, onClick) = rightActions.first()
+            row1.addView(
+                pillButton(
+                    label = label,
+                    selected = false,
+                    bgOverride = KomaColors.RAISED,
+                    fgOverride = KomaColors.INK,
+                    enabled = !busy,
+                ) { onClick() }.apply { leftMargin(8) },
+            )
         }
         addView(row1)
 
-        if (rightActions.isNotEmpty()) {
+        if (rightActions.isNotEmpty() && !inlineSingleAction) {
             val actionRow = scrollChips {
                 rightActions.forEach { (label, onClick) ->
                     addView(
@@ -3394,6 +3473,7 @@ class MainActivity : Activity() {
         minHeightDp: Int = 48,
         minWidthDp: Int = 48,
         enabled: Boolean = true,
+        singleLine: Boolean = false,
         onClick: () -> Unit,
     ): Button = Button(this).apply {
         text = title
@@ -3405,7 +3485,14 @@ class MainActivity : Activity() {
         minimumHeight = dp(minHeightDp)
         minHeight = dp(minHeightDp)
         minimumWidth = dp(minWidthDp)
-        setPadding(dp(14), dp(8), dp(14), dp(8))
+        minWidth = dp(minWidthDp)
+        if (singleLine) {
+            maxLines = 1
+            isSingleLine = true
+            ellipsize = TextUtils.TruncateAt.END
+        }
+        val padH = if (minWidthDp <= 56) dp(8) else dp(14)
+        setPadding(padH, dp(8), padH, dp(8))
         background = roundedDrawable(
             fill = if (enabled) bgColor else KomaColors.DISABLED_BG,
             stroke = borderColor,
@@ -3441,6 +3528,11 @@ class MainActivity : Activity() {
         setTextColor(fg)
         minimumHeight = dp(44)
         minHeight = dp(44)
+        minimumWidth = dp(48)
+        minWidth = dp(48)
+        maxLines = 1
+        isSingleLine = true
+        ellipsize = TextUtils.TruncateAt.END
         setPadding(dp(14), dp(6), dp(14), dp(6))
         background = roundedDrawable(
             fill = bg,
@@ -3460,19 +3552,19 @@ class MainActivity : Activity() {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         addView(
-            buildActionButton("-", KomaColors.RAISED, KomaColors.INK, minHeightDp = 44, minWidthDp = 46, enabled = qty > 0) {
+            buildActionButton("-", KomaColors.RAISED, KomaColors.INK, minHeightDp = 44, minWidthDp = 44, singleLine = true, enabled = qty > 0) {
                 onMinus()
             },
         )
         addView(
             textView(qty.toString(), 15f, bold = true, tabular = true).apply {
                 gravity = Gravity.CENTER
-                minWidth = dp(34)
-                setPadding(dp(6), 0, dp(6), 0)
+                minWidth = dp(28)
+                setPadding(dp(4), 0, dp(4), 0)
             },
         )
         addView(
-            buildActionButton("+", KomaColors.RAISED, KomaColors.ACCENT, minHeightDp = 44, minWidthDp = 46, enabled = plusEnabled) {
+            buildActionButton("+", KomaColors.RAISED, KomaColors.ACCENT, minHeightDp = 44, minWidthDp = 44, singleLine = true, enabled = plusEnabled) {
                 onPlus()
             },
         )

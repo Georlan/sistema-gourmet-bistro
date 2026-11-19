@@ -409,4 +409,40 @@ class WaiterApiTest {
         assertEquals(750L, outcome.trocoCents)
         assertEquals("pag-77", outcome.paymentId)
     }
+
+    @Test
+    fun parsesSmartPosEnabledCapabilityFromSessionContext() {
+        val api = WaiterApi(
+            object : HttpTransport {
+                override fun post(path: String, body: String) = error("Unexpected post")
+                override fun get(path: String) = when (path) {
+                    "/auth/smartpos/contexto" -> HttpResponsePayload(
+                        200,
+                        """
+                        {
+                          "smartpos_enabled": true,
+                          "turno_aberto": true,
+                          "mesas_disponiveis": true,
+                          "pedidos_disponiveis": true,
+                          "provider_integrado_disponivel": false,
+                          "terminal_mode": "registro_externo",
+                          "restaurante": {"id": 8, "nome": "Kôma"},
+                          "operador": {"id": "op-1", "nome": "Georlan", "role": "garcom"}
+                        }
+                        """.trimIndent(),
+                    )
+                    "/caixa/configuracoes" -> HttpResponsePayload(
+                        200,
+                        """{"perm_garcom_fechar": false}""",
+                    )
+                    else -> error("Unexpected get $path")
+                }
+            },
+        )
+
+        val session = api.session()
+        assertTrue(session.smartposEnabled)
+        assertFalse(session.permissions.canClose)
+        assertEquals("garcom", session.role)
+    }
 }
