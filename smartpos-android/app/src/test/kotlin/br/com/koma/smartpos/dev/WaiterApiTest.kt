@@ -458,6 +458,7 @@ class WaiterApiTest {
         assertEquals(4250L, intent.amountCents)
         val createPayload = JSONObject(requests[0].second)
         assertEquals("42.50", createPayload.getString("valor"))
+        assertTrue(createPayload.optString("idempotency_key").length >= 8)
         assertTrue(createPayload.isNull("captura"))
 
         val outcome = api.confirmManualPayment(intent.id, receivedCents = 5000L, idempotencyKey = "idem-1")
