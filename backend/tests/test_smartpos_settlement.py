@@ -575,3 +575,24 @@ def test_smartpos_settlement_excludes_pickup_even_with_legacy_account_link(linke
             db, restaurante_id=RESTAURANTE_ID, intent_id=intent.id,
         )
         assert repeated.pagamento.id == result.pagamento.id
+
+
+
+def test_table_transfer_does_not_move_pickup_with_legacy_attendance_link():
+    with SessionLocal(restaurante_id=RESTAURANTE_ID) as db:
+        table = db.get(Comanda, "cmd-settlement")
+        ensure_atendimento_for_comanda(db, table)
+        pickup, _, _ = _open_command_with_item(
+            db, suffix="pickup", mesa_id=82, numero_pedido=table.numero_pedido, price=25,
+        )
+        pickup.tipo = "Retirada"
+        if db.query(Mesa).filter_by(id=83, restaurante_id=RESTAURANTE_ID).first() is None:
+            db.add(Mesa(id=83, restaurante_id=RESTAURANTE_ID, capacidade=4))
+        db.commit()
+        transfer_group_by_comanda(db, RESTAURANTE_ID, table.id, 83, actor_id=USER_ID)
+        db.commit()
+        db.refresh(table)
+        db.refresh(pickup)
+        assert table.mesa_id == 83
+        assert pickup.mesa_id == 82
+        assert pickup.fechada is False and float(pickup.valor_pago or 0) == 0
