@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { nextMonitorState, previousRunState, reconcileMonitor } from "../scripts/ops-monitor.mjs";
 import { parseTraceLines } from "../scripts/ops-trace.mjs";
-import { diagnose } from "../scripts/ops-doctor.mjs";
+import { diagnose, extractBackupSummaryLine } from "../scripts/ops-doctor.mjs";
 import {
   BACKUP_ISSUE_TITLE,
   checkBackupFreshness,
@@ -159,4 +159,87 @@ test("backup issue reconciliation deduplicates and closes on recovery", async ()
   });
   assert.equal(issue, null);
   assert.deepEqual(calls, ["create", "update", "close"]);
+});
+
+test("backup freshness tolerates out-of-order Railway exit log flush across millisecond boundary", () => {
+  const nowMs = Date.parse("2026-11-19T14:24:27.000Z");
+  const stdout = [
+    { timestamp: "2026-11-19T03:04:48.860Z", message: "Starting Container" },
+    { timestamp: "2026-11-19T03:05:09.999Z", message: "Database backup complete." },
+    { timestamp: "2026-11-19T03:05:10.002Z", message: "Backup archive file is valid" },
+    { timestamp: "2026-11-19T03:05:10.004Z", message: "Backup filesize: 2.48 MB" },
+    { timestamp: "2026-11-19T03:05:10.008Z", message: "Backup uploaded to S3..." },
+  ].map(entry => JSON.stringify(entry)).join("\n");
+
+  const result = evaluateBackupLogs(stdout, nowMs);
+  assert.equal(result.ok, true);
+  assert.equal(result.reason, "ok");
+  assert.match(result.message, /Backup filesize: 2\.48 MB/);
+});
+
+test("backup freshness isolates container runs and preserves post-completion error detection", () => {
+  const nowMs = Date.parse("2026-11-19T14:24:27.000Z");
+
+  // Run 1 lacks S3 upload; Run 2 starts 2s later and logs upload without completing.
+  const crossContainerStdout = [
+    { timestamp: "2026-11-19T03:04:48.000Z", message: "Starting Container" },
+    { timestamp: "2026-11-19T03:05:08.000Z", message: "Backup archive file is valid" },
+    { timestamp: "2026-11-19T03:05:08.500Z", message: "Backup filesize: 2.48 MB" },
+    { timestamp: "2026-11-19T03:05:09.000Z", message: "Database backup complete." },
+    { timestamp: "2026-11-19T03:05:11.000Z", message: "Starting Container" },
+    { timestamp: "2026-11-19T03:05:12.000Z", message: "Backup uploaded to S3..." },
+  ].map(entry => JSON.stringify(entry)).join("\n");
+  const crossResult = evaluateBackupLogs(crossContainerStdout, nowMs);
+  assert.equal(crossResult.ok, false);
+  assert.equal(crossResult.reason, "upload_missing");
+
+  // Earlier attempt within 30 min cannot satisfy markers for a later incomplete run.
+  const earlierRunStdout = [
+    { timestamp: "2026-11-19T03:00:00.000Z", message: "Starting Container" },
+    { timestamp: "2026-11-19T03:00:10.000Z", message: "Backup archive file is valid" },
+    { timestamp: "2026-11-19T03:00:11.000Z", message: "Backup filesize: 9.99 MB" },
+    { timestamp: "2026-11-19T03:00:12.000Z", message: "Backup uploaded to S3..." },
+    { timestamp: "2026-11-19T03:05:00.000Z", message: "Starting Container" },
+    { timestamp: "2026-11-19T03:05:09.000Z", message: "Database backup complete." },
+  ].map(entry => JSON.stringify(entry)).join("\n");
+  const earlierResult = evaluateBackupLogs(earlierRunStdout, nowMs);
+  assert.equal(earlierResult.ok, false);
+  assert.equal(earlierResult.reason, "invalid_archive");
+
+  // Error logged 1s after completion still fails with post_completion_error.
+  const postErrorStdout = buildBackupLogLines("2026-11-19T03:05:09.000Z", [
+    JSON.stringify({ timestamp: "2026-11-19T03:05:10.000Z", message: "Error: S3 cleanup failed" }),
+  ]);
+  const postErrorResult = evaluateBackupLogs(postErrorStdout, nowMs);
+  assert.equal(postErrorResult.ok, false);
+  assert.equal(postErrorResult.reason, "post_completion_error");
+});
+
+test("doctor backup summary selects status line instead of disclaimer and survives null spawn output", () => {
+  const okLine = extractBackupSummaryLine({
+    status: 0,
+    stdout: [
+      "✓ Backup do banco KÔMA (Supabase) válido e enviado ao S3 em 2026-11-19T03:05:09.143Z; Backup filesize: 2.48 MB; idade 11.8h",
+      "Escopo: este serviço não comprova backup do Postgres Railway/Evolution, Redis, arquivos Storage ou configuração do agente.",
+      "Integridade do arquivo e upload não comprovam restauração; conferir o registro do último ensaio isolado.",
+    ].join("\n"),
+    stderr: "",
+  });
+  assert.match(okLine, /^✓ Backup do banco KÔMA/);
+  assert.match(okLine, /2\.48 MB/);
+
+  const errLine = extractBackupSummaryLine({
+    status: 1,
+    stdout: "",
+    stderr: "✗ Backup freshness: último backup tem 40.0 horas\n",
+  });
+  assert.equal(errLine, "✗ Backup freshness: último backup tem 40.0 horas");
+
+  const spawnErrorLine = extractBackupSummaryLine({
+    status: null,
+    stdout: null,
+    stderr: null,
+    error: new Error("ETIMEDOUT"),
+  });
+  assert.equal(spawnErrorLine, "ETIMEDOUT");
 });
