@@ -503,6 +503,7 @@ def criar_payment_intent(
     comandas = db.query(Comanda).filter(
         Comanda.restaurante_id == restaurante_id,
         Comanda.mesa_id == payload.mesa_id,
+        Comanda.tipo == "Consumo no Local",
         Comanda.fechada == False,
     ).all()
     if not comandas:

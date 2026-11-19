@@ -142,6 +142,7 @@ def _open_atendimento_comandas(
         .filter(
             Comanda.restaurante_id == restaurante_id,
             Comanda.id.in_(linked_ids),
+            Comanda.tipo == "Consumo no Local",
             Comanda.fechada == False,
         )
         .order_by(Comanda.criado_em.asc(), Comanda.id.asc())

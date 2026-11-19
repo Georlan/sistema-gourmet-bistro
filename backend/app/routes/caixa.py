@@ -1177,6 +1177,7 @@ def registrar_pagamento_mesa(
             Pagamento.restaurante_id == rest_id,
             Comanda.restaurante_id == rest_id,
             Comanda.mesa_id == mesa_id,
+            Comanda.tipo == "Consumo no Local",
             Pagamento.cliente_id.isnot(None),
         ).order_by(Pagamento.criado_em.desc()).first()
         if pagamento_anterior and pagamento_anterior.cliente_id:

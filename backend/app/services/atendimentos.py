@@ -624,6 +624,7 @@ def _ensure_related_open_comandas_linked(
         .filter(
             Comanda.restaurante_id == seed.restaurante_id,
             Comanda.mesa_id == account.mesa_id,
+            Comanda.tipo == "Consumo no Local",
             Comanda.fechada == False,
             Comanda.numero_pedido == account.numero_conta,
         )

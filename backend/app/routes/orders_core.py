@@ -545,10 +545,11 @@ def fechar_comanda(
     db.commit()
     db.refresh(comanda)
     background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
-    if comanda.mesa_id:
+    if comanda.mesa_id and comanda.tipo == "Consumo no Local":
         other_open = db.query(Comanda).filter(
             Comanda.restaurante_id == rest_id,
             Comanda.mesa_id == comanda.mesa_id,
+            Comanda.tipo == "Consumo no Local",
             Comanda.fechada == False,
             Comanda.id != comanda.id
         ).first()

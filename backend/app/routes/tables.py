@@ -440,6 +440,7 @@ def cancelar_itens_mesa(
             Item.id.in_(item_ids),
             Comanda.restaurante_id == rest_id,
             Comanda.mesa_id == mesa_id,
+            Comanda.tipo == "Consumo no Local",
             Comanda.fechada == False,
         )
         .with_for_update()
