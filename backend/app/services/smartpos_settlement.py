@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ..models import CaixaTurno, Comanda, Item, Pagamento
 from ..operational_models import AtendimentoComanda, AtendimentoMesa
 from ..smartpos_models import SmartPosPaymentIntent
+from .atendimentos import AtendimentoError, reconcile_table_principal
 
 
 _CENTAVO = Decimal("0.01")
@@ -347,28 +348,67 @@ def settle_approved_smartpos_intent(
                 "O valor aprovado diverge do total dos itens vinculados ao PaymentIntent."
             )
 
-    remaining = valor
     now = datetime.datetime.now(datetime.timezone.utc)
-    reference_comanda = next((row[0] for row in debitos if row[2] > 0), comandas[0])
 
-    for comanda, total, saldo in debitos:
-        if remaining <= 0:
-            break
-        if saldo <= 0:
-            continue
-        applied = min(remaining, saldo)
-        comanda.valor_pago = float(_money(_money(comanda.valor_pago) + applied))
-        remaining -= applied
-        if _money(comanda.valor_pago) >= total:
-            for item in comanda.itens:
-                if item.status != "cancelado":
-                    item.pago = True
-            comanda.fechada = True
-            comanda.fechado_em = now
-            comanda.status_comanda = None
+    if intent.escopo == "itens":
+        selected_allocations: dict[str, Decimal] = {}
+        for item in selected_items:
+            selected_allocations[item.comanda_id] = _money(
+                selected_allocations.get(item.comanda_id, Decimal("0.00"))
+                + _money(item.preco_unit)
+            )
 
-    for item in selected_items:
-        item.pago = True
+        debitos_by_comanda = {
+            comanda.id: (comanda, total, saldo)
+            for comanda, total, saldo in debitos
+        }
+        reference_comanda = next(
+            (
+                comanda
+                for comanda, _, _ in debitos
+                if comanda.id in selected_allocations
+            ),
+            comandas[0],
+        )
+        for comanda_id, allocated in selected_allocations.items():
+            row = debitos_by_comanda.get(comanda_id)
+            if row is None or allocated <= 0:
+                continue
+            comanda, total, saldo = row
+            if allocated > saldo:
+                raise SmartPosSettlementError(
+                    "O saldo de uma das comandas selecionadas foi alterado; requer reconciliação pelo Caixa."
+                )
+            comanda.valor_pago = float(_money(_money(comanda.valor_pago) + allocated))
+            if _money(comanda.valor_pago) >= total:
+                for item in comanda.itens:
+                    if item.status != "cancelado":
+                        item.pago = True
+                comanda.fechada = True
+                comanda.fechado_em = now
+                comanda.status_comanda = None
+
+        for item in selected_items:
+            item.pago = True
+    else:
+        remaining = valor
+        reference_comanda = next((row[0] for row in debitos if row[2] > 0), comandas[0])
+
+        for comanda, total, saldo in debitos:
+            if remaining <= 0:
+                break
+            if saldo <= 0:
+                continue
+            applied = min(remaining, saldo)
+            comanda.valor_pago = float(_money(_money(comanda.valor_pago) + applied))
+            remaining -= applied
+            if _money(comanda.valor_pago) >= total:
+                for item in comanda.itens:
+                    if item.status != "cancelado":
+                        item.pago = True
+                comanda.fechada = True
+                comanda.fechado_em = now
+                comanda.status_comanda = None
 
     pagamento = Pagamento(
         id=f"p-{uuid.uuid4().hex[:8]}",
@@ -391,6 +431,18 @@ def settle_approved_smartpos_intent(
 
     intent.pagamento_id = pagamento.id
     intent.liquidado_em = now
+
+    try:
+        reconcile_table_principal(
+            db,
+            restaurante_id,
+            intent.mesa_id,
+            actor_id=intent.operador_id,
+        )
+    except AtendimentoError:
+        # Legado com duas raízes independentes na mesma mesa não deve bloquear
+        # liquidação financeira já aprovada no terminal.
+        pass
 
     try:
         db.commit()

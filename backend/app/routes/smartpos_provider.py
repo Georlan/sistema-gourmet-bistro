@@ -106,6 +106,7 @@ class SmartPosTerminalResultResponse(BaseModel):
     settled: bool = False
     replayed: bool = False
     financial_effect: bool = False
+    mesa_liberada: bool = False
 
 
 def _load_intent(db: Session, restaurante_id: int, intent_id: str) -> SmartPosPaymentIntent:
@@ -369,6 +370,19 @@ def registrar_resultado_terminal(
                 },
                 restaurante_id,
             )
+        if settlement.mesa_liberada:
+            background_tasks.add_task(
+                manager.broadcast,
+                {
+                    "event": "MESA_ATUALIZADA",
+                    "data": {
+                        "mesa_id": applied.intent.mesa_id,
+                        "status": "livre",
+                        "comanda_id": None,
+                    },
+                },
+                restaurante_id,
+            )
 
     return {
         "intent_id": applied.intent.id,
@@ -380,6 +394,7 @@ def registrar_resultado_terminal(
         "settled": settlement is not None or applied.intent.pagamento_id is not None,
         "replayed": applied.replayed or (settlement.replayed if settlement else False),
         "financial_effect": settlement is not None or applied.intent.pagamento_id is not None,
+        "mesa_liberada": settlement.mesa_liberada if settlement else False,
     }
 
 
