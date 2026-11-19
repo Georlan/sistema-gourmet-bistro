@@ -451,6 +451,8 @@ class CardapioWebAdapter:
             configuracao = db.query(ConfiguracaoRestaurante).filter(
                 ConfiguracaoRestaurante.restaurante_id == rest_id,
             ).first()
+            if isinstance(getattr(db, "info", None), dict):
+                db.info.setdefault("_koma_config_by_rid", {})[rest_id] = configuracao
             if not mode_is_allowed(configuracao, modalidade):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
