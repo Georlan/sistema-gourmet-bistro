@@ -9,8 +9,9 @@ from app.routes.auth import (
     _lookup_users_before_tenant,
     _select_login_identity,
     ativar_conta,
+    update_usuario_access,
 )
-from app.schemas import AtivarContaRequest, LoginRequest
+from app.schemas import AtivarContaRequest, LoginRequest, UsuarioAccessUpdate
 from app.security import (
     _authenticated_user_from_token,
     create_access_token,
@@ -253,3 +254,52 @@ def test_activation_allows_same_email_in_different_restaurants():
     finally:
         db.close()
         engine.dispose()
+
+
+def test_role_change_revokes_previous_active_tokens_immediately(auth_db):
+    context = current_restaurante_id.set(1)
+    auth_db.restaurante_id = 1
+    try:
+        admin = Usuario(
+            id="admin-tenant-1",
+            restaurante_id=1,
+            nome="Admin Um",
+            email="admin@koma.test",
+            senha_hash=get_password_hash("admin-123"),
+            cargo="admin",
+            status="ativo",
+        )
+        auth_db.add(admin)
+        auth_db.commit()
+
+        old_token = create_access_token(
+            subject="user-tenant-1",
+            restaurante_id=1,
+            token_version=1,
+        )
+        assert _authenticated_user_from_token(old_token, auth_db).cargo == "caixa"
+
+        updated = update_usuario_access(
+            user_id="user-tenant-1",
+            payload=UsuarioAccessUpdate(cargo="cozinha"),
+            background_tasks=BackgroundTasks(),
+            db=auth_db,
+            current_user=admin,
+        )
+        assert updated.cargo == "cozinha"
+        assert get_user_token_version(auth_db, user_id="user-tenant-1", restaurante_id=1) == 2
+
+        with pytest.raises(HTTPException) as exc:
+            _authenticated_user_from_token(old_token, auth_db)
+        assert exc.value.status_code == 401
+
+        new_token = create_access_token(
+            subject="user-tenant-1",
+            restaurante_id=1,
+            token_version=2,
+        )
+        authed = _authenticated_user_from_token(new_token, auth_db)
+        assert authed.id == "user-tenant-1"
+        assert authed.cargo == "cozinha"
+    finally:
+        current_restaurante_id.reset(context)
