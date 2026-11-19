@@ -603,12 +603,15 @@ def health_check():
         db_status = f"unhealthy: {exc}" if is_dev else "unhealthy"
 
     ready = db_status == "healthy"
+    from .database_diagnostics import get_pool_metrics_snapshot
+
     payload = {
         "status": "ok" if ready else "unavailable",
         "version": settings.PROJECT_VERSION,
         "commit": _deployment_commit(),
         "database": db_status,
         "database_latency_ms": round((perf_counter() - started_at) * 1_000, 2),
+        "db_pool": get_pool_metrics_snapshot(engine),
         "print_queue": {"backend": "postgres", "consumer": "koma-print"},
         "websocket": {
             "active_connections": _websocket_connections_count(),
