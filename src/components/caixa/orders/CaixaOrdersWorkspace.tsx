@@ -911,7 +911,6 @@ export function CaixaOrdersWorkspaceView({
 
   return (
     <div className={"orders-workspace flex flex-col gap-4"}>
-      <div className="orders-workspace__scroll-region">
       <OperationalBanner
         id="orders-heading"
         eyebrow="OPERAÇÃO"
@@ -1061,6 +1060,7 @@ export function CaixaOrdersWorkspaceView({
           </button>
         </div>
       </div>
+      <div className="orders-workspace__scroll-region">
       {/* ── FLOATING DRAWER: Pedidos Pendentes ─────────────────────────────── */}
       {isDrawerOpen && (
         <div

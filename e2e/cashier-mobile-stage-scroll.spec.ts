@@ -36,11 +36,15 @@ test('barra de etapas fixa e lista de pedidos em rolagem independente no celular
   expect(Math.abs(after!.y - before!.y)).toBeLessThan(2);
   expect(await content.evaluate(el => el.scrollTop)).toBe(0);
 
-  // O conteúdo começa abaixo da barra, em vez de passar por trás dela.
-  const gap = await stages.evaluate(element => {
-    const scroller = element.nextElementSibling as HTMLElement | null;
-    if (!scroller?.classList.contains('orders-workspace__scroll-region')) throw Error('scroller isolado ausente');
-    return scroller.getBoundingClientRect().top - element.getBoundingClientRect().bottom;
+  await expect(workspace.getByRole('searchbox', { name: 'Buscar pedidos' })).toBeInViewport();
+  await expect(workspace.getByRole('button', { name: 'Novos pedidos', exact: true })).toBeInViewport();
+  await expect(workspace.locator('.orders-auto-accept')).toBeInViewport();
+
+  // O conteúdo começa abaixo de todos os controles fixos, sem sobreposição.
+  const gap = await workspace.evaluate(element => {
+    const toolbar = element.querySelector('.orders-toolbar') as HTMLElement;
+    const scroller = element.querySelector('.orders-workspace__scroll-region') as HTMLElement;
+    return scroller.getBoundingClientRect().top - toolbar.getBoundingClientRect().bottom;
   });
   expect(gap).toBeGreaterThanOrEqual(-1);
 
