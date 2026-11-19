@@ -101,6 +101,7 @@ class SmartPosManualConfirmationResponse(SmartPosPaymentIntentResponse):
     settled: bool = False
     financial_effect: bool = False
     troco: Decimal = Decimal("0.00")
+    mesa_liberada: bool = False
 
 
 class SmartPosIntentCancellation(BaseModel):
@@ -921,6 +922,19 @@ def confirmar_payment_intent_manual(
             },
             restaurante_id,
         )
+    if settlement.mesa_liberada:
+        background_tasks.add_task(
+            manager.broadcast,
+            {
+                "event": "MESA_ATUALIZADA",
+                "data": {
+                    "mesa_id": settlement.intent.mesa_id,
+                    "status": "livre",
+                    "comanda_id": None,
+                },
+            },
+            restaurante_id,
+        )
 
     db.refresh(settlement.intent)
     return {
@@ -930,6 +944,7 @@ def confirmar_payment_intent_manual(
         "settled": True,
         "financial_effect": True,
         "troco": troco,
+        "mesa_liberada": settlement.mesa_liberada,
     }
 
 
@@ -987,6 +1002,19 @@ def reconciliar_liquidacao_payment_intent(
                     "valor": float(settlement.pagamento.valor),
                     "mesa_liberada": settlement.mesa_liberada,
                     "operador_id": current_user.id,
+                },
+            },
+            restaurante_id,
+        )
+    if settlement.mesa_liberada:
+        background_tasks.add_task(
+            manager.broadcast,
+            {
+                "event": "MESA_ATUALIZADA",
+                "data": {
+                    "mesa_id": settlement.intent.mesa_id,
+                    "status": "livre",
+                    "comanda_id": None,
                 },
             },
             restaurante_id,
