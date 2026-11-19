@@ -49,9 +49,9 @@ jobs:
               -dname "CN=Android Debug,O=Android,C=US"
           fi
       - name: Test bridge and waiter app, then build debug APK
-        run: gradle -p smartpos-android test :app:testDebugUnitTest :app:assembleDebug --no-daemon
+        run: gradle -p smartpos-android test :app:testPhoneDebugUnitTest :app:testPagbankDebugUnitTest :app:assemblePhoneDebug :app:assemblePagbankDebug :app:assemblePhoneRelease :app:assemblePagbankRelease --no-daemon --continue
       - uses: actions/upload-artifact@v6
         with:
-          name: koma-garcom-smartpos-apk
-          path: smartpos-android/app/build/outputs/apk/debug/app-debug.apk
+          name: koma-garcom-smartpos-apks
+          path: smartpos-android/app/build/outputs/apk/**/*.apk
           if-no-files-found: error

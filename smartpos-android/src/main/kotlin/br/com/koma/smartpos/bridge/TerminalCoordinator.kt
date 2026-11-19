@@ -4,6 +4,7 @@ class TerminalCoordinator(
     private val bridge: TerminalPaymentBridge,
     private val store: OperationStore,
 ) {
+    @Synchronized
     fun handle(command: TerminalCommand): TerminalPaymentResult {
         require(command.operationKey.length >= 8) { "operationKey inválida" }
         require(command.terminalId.isNotBlank()) { "terminalId obrigatório" }

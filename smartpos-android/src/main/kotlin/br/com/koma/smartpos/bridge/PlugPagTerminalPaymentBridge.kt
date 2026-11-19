@@ -81,6 +81,9 @@ class PlugPagTerminalPaymentBridge(
                 message = "Terminal PagBank ainda não ativado neste aparelho.",
             )
         }
+        if (client.isServiceBusy()) {
+            return TerminalPaymentResult(PaymentOutcome.PENDING, message = "O terminal PagBank está ocupado.")
+        }
         if (command.amountMinor < PlugPagConstants.MIN_AMOUNT_CENTS) {
             return TerminalPaymentResult(
                 outcome = PaymentOutcome.DECLINED,
@@ -126,13 +129,15 @@ class PlugPagTerminalPaymentBridge(
         val expectedRef = StableOperationKey.userReference10(command.operationKey)
         val last = client.getLastApprovedTransaction()
         if (last.result == PlugPagConstants.RET_OK && last.userReference == expectedRef) {
-            if (last.amountMinor != null && last.amountMinor != command.amountMinor) {
+            if (last.amountMinor != command.amountMinor) {
                 return TerminalPaymentResult(
                     outcome = PaymentOutcome.ERROR,
                     message = "Divergência de valor ao reconciliar última transação aprovada ($expectedRef).",
                 )
             }
-            val ref = extractReference(last, fallback = expectedRef)
+            val ref = listOfNotNull(last.transactionCode, last.transactionId).firstOrNull { it.isNotBlank() }
+                ?: return TerminalPaymentResult(PaymentOutcome.ERROR,
+                    message = "Última transação sem identificador da adquirente; conciliação necessária.")
             return TerminalPaymentResult(
                 outcome = PaymentOutcome.APPROVED,
                 reference = ref,
