@@ -346,6 +346,63 @@ class WaiterApiTest {
         assertTrue(unbound.operators.isEmpty())
     }
 
+    private fun sessionToken(expSeconds: Long): String {
+        val payload = java.util.Base64.getUrlEncoder().withoutPadding()
+            .encodeToString("{\"exp\":$expSeconds}".toByteArray())
+        return "e30.$payload.signature"
+    }
+
+    private fun sessionStore(now: () -> Long): TerminalSessionStore = TerminalSessionStore(
+        tempFolder.newFolder(),
+        cipher = object : TerminalKeyCipher {
+            override fun encrypt(aad: ByteArray, plain: ByteArray) = plain
+            override fun decrypt(aad: ByteArray, cipherText: ByteArray) = cipherText
+        },
+        nowProvider = now,
+    )
+
+    @Test
+    fun restoringSameTokenCannotExtendItsOriginalDeadline() {
+        var now = 1_000_000L
+        val store = sessionStore { now }
+        val s = Session(Restaurant(8, "Teste"), Operator("u1", "Ana"), true, true)
+        val token = sessionToken(1200)
+        val original = store.saveLogin("api", s, "ana", token, ttlMs = 60_000L)
+        now += 30_000L
+        val restored = store.saveLogin("api", s, "ana", token, ttlMs = 60_000L)
+        assertEquals(original.activeOperator!!.expiresAtMs, restored.activeOperator!!.expiresAtMs)
+        assertEquals(original.activeOperator!!.savedAtMs, restored.activeOperator!!.savedAtMs)
+    }
+
+    @Test
+    fun localSessionNeverOutlivesJwtAndRejectsMissingOrExpiredClaims() {
+        val store = sessionStore { 1_000_000L }
+        val s = Session(Restaurant(8, "Teste"), Operator("u1", "Ana"), true, true)
+        val state = store.saveLogin("api", s, "ana", sessionToken(1010))
+        assertEquals(1_010_000L, state.activeOperator!!.expiresAtMs)
+        assertThrows(IllegalArgumentException::class.java) { store.saveLogin("api", s, "ana", "opaque") }
+        assertThrows(IllegalArgumentException::class.java) { store.saveLogin("api", s, "ana", sessionToken(999)) }
+    }
+
+    @Test
+    fun invalidatingActiveOperatorDoesNotSilentlyChooseAnotherPerson() {
+        val store = sessionStore { 1_000_000L }
+        val restaurant = Restaurant(8, "Teste")
+        store.saveLogin("api", Session(restaurant, Operator("u1", "Ana"), true, true), "ana", sessionToken(1200))
+        store.saveLogin("api", Session(restaurant, Operator("u2", "Beto"), true, true), "beto", sessionToken(1201))
+        assertNull(store.invalidateOperatorToken("api", "u2").activeOperator)
+    }
+
+    @Test
+    fun boundRestaurantCannotBeChangedBySavingAnotherLogin() {
+        val store = sessionStore { 1_000_000L }
+        store.saveLogin("api", Session(Restaurant(8, "A"), Operator("u1", "Ana"), true, true), "ana", sessionToken(1200))
+        assertThrows(IllegalArgumentException::class.java) {
+            store.saveLogin("api", Session(Restaurant(9, "B"), Operator("u2", "Beto"), true, true), "beto", sessionToken(1201))
+        }
+        assertEquals(8, store.load("api").boundRestaurant!!.id)
+    }
+
     @Test
     fun createsAndConfirmsManualPaymentIntentWithChangeAndTableRelease() {
         val requests = mutableListOf<Pair<String, String>>()

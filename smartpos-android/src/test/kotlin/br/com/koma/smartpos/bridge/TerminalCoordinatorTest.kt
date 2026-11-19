@@ -90,4 +90,26 @@ class TerminalCoordinatorTest {
         assertEquals(0, bridge.chargeCalls)
         assertEquals(0, bridge.reconcileCalls)
     }
+    @Test
+    fun concurrentDuplicateRequestsChargeOnlyOnce() {
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        val bridge = object : TerminalPaymentBridge {
+            override fun charge(command: TerminalCommand): TerminalPaymentResult {
+                calls.incrementAndGet()
+                Thread.sleep(100)
+                return TerminalPaymentResult(PaymentOutcome.APPROVED, "TX-1")
+            }
+            override fun reconcile(command: TerminalCommand) = error("must use cached approval")
+        }
+        val coordinator = TerminalCoordinator(bridge, InMemoryOperationStore())
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(8)
+        try {
+            val start = java.util.concurrent.CountDownLatch(1)
+            val jobs = (1..8).map { pool.submit<TerminalPaymentResult> { start.await(); coordinator.handle(command()) } }
+            start.countDown()
+            jobs.forEach { assertEquals(PaymentOutcome.APPROVED, it.get(5, java.util.concurrent.TimeUnit.SECONDS).outcome) }
+            assertEquals(1, calls.get())
+        } finally { pool.shutdownNow() }
+    }
+
 }
