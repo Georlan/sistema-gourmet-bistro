@@ -67,8 +67,7 @@ def waiter_permission_enabled(
         return True
 
     restaurante_id = require_tenant_id()
-    user_rest_id = getattr(user, "restaurante_id", None)
-    if user_rest_id is not None and user_rest_id != restaurante_id:
+    if user.restaurante_id != restaurante_id:
         return False
 
     if role in UNRESTRICTED_OPERATIONAL_ROLES:
@@ -136,6 +135,11 @@ def require_salon_order_operator(
             detail="Conta de usuário pendente, inativa ou bloqueada.",
         )
     role = _normalized_role(user)
+    if role != "superadmin" and getattr(user, "restaurante_id", None) != require_tenant_id():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso negado: operador fora do restaurante atual.",
+        )
     if role in SALON_OPERATOR_ROLES:
         return
     raise HTTPException(
@@ -152,6 +156,11 @@ def require_order_reader(user: Usuario) -> None:
             detail="Conta de usuário pendente, inativa ou bloqueada.",
         )
     role = _normalized_role(user)
+    if role != "superadmin" and getattr(user, "restaurante_id", None) != require_tenant_id():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso negado: operador fora do restaurante atual.",
+        )
     if role in ORDER_READER_ROLES:
         return
     raise HTTPException(

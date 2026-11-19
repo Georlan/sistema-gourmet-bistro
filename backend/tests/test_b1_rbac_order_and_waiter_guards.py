@@ -282,7 +282,7 @@ def test_waiter_permission_enabled_enforces_role_allowlist_and_tenant_scope(char
             ):
                 assert waiter_permission_enabled(db, attendant, restricted_perm) is False
 
-            # Cross-tenant admin nunca pode passar na checagem do tenant atual
+            # Cross-tenant admin ou usuário sem restaurante_id nunca pode passar (fail-closed)
             foreign_admin = SimpleNamespace(
                 id="u-other-admin",
                 restaurante_id=rid + 999,
@@ -291,6 +291,15 @@ def test_waiter_permission_enabled_enforces_role_allowlist_and_tenant_scope(char
                 status="ativo",
             )
             assert waiter_permission_enabled(db, foreign_admin, "perm_garcom_cancelar") is False
+
+            tenantless_admin = SimpleNamespace(
+                id="u-none-admin",
+                restaurante_id=None,
+                role="admin",
+                cargo="admin",
+                status="ativo",
+            )
+            assert waiter_permission_enabled(db, tenantless_admin, "perm_garcom_cancelar") is False
 
             # Usuário inativo nunca pode passar
             inactive_admin = SimpleNamespace(
