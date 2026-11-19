@@ -302,7 +302,7 @@ test('recomendação manual da sacola usa SKU escolhido em vez do motor automát
   await expect(cart).toBeVisible();
   await cart.getByRole('button',{name:'Aumentar Vinho Tinto Sangiovese (Taça)',exact:true}).first().evaluate(button=>{for(let i=0;i<10;i++)(button as HTMLButtonElement).click();});
   await expect(cart.locator('#cart-items')).toContainText('20× Vinho');
-  await expect(cart.locator('#btn-confirm-order')).toHaveAccessibleName('Continuar');
+  await expect(cart.locator('#btn-confirm-order')).toHaveAccessibleName('Continuar para receber');
   await expect(page.locator('#koma-art-dock')).toHaveCount(0);
   await page.goBack();
   await expect(cart).not.toBeVisible();
