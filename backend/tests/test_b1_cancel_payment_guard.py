@@ -171,3 +171,38 @@ def test_online_approval_is_authoritative_but_pending_pix_is_not_received(char_c
         else:
             OrderApplicationService.reject_order(db, request)
             assert db.get(Comanda, cid).fechada is True
+
+
+def test_payment_reference_does_not_block_an_unpaid_command_when_allocation_belongs_to_another(char_client, char_setup):
+    from app.financial_models import PagamentoAlocacao
+
+    rid = char_setup["restaurant_id"]
+    unpaid_id = _create_unpaid_order(rid)
+    received_id = _create_unpaid_order(rid)
+    with SessionLocal(restaurante_id=rid) as db:
+        turno = db.query(CaixaTurno).filter_by(restaurante_id=rid, status="aberto").one()
+        payment = Pagamento(
+            id=f"table-reference-{uuid.uuid4().hex}", restaurante_id=rid,
+            comanda_id=unpaid_id, turno_id=turno.id, valor=1, metodo="dinheiro", status="aprovado",
+        )
+        received = db.get(Comanda, received_id)
+        received.valor_pago = 1
+        # A mesa pode escolher a primeira comanda como referência do recibo,
+        # enquanto os itens selecionados pertencem integralmente à outra conta.
+        db.add(PagamentoAlocacao(
+            restaurante_id=rid, pagamento_id=payment.id, pagamento=payment,
+            comanda_id=received_id, valor=1,
+        ))
+        db.commit()
+        with pytest.raises(OrderValidationError, match="Estorne"):
+            OrderApplicationService.cancel_order(db, CancelOrderCommand(
+                restaurant_id=rid, order_id=received_id, reason="Conta com recebimento",
+            ))
+        OrderApplicationService.cancel_order(db, CancelOrderCommand(
+            restaurant_id=rid, order_id=unpaid_id, reason="Conta sem recebimento",
+        ))
+        assert db.get(Comanda, unpaid_id).fechada is True
+        assert float(db.get(Comanda, unpaid_id).valor_pago) == 0
+        assert db.get(Comanda, received_id).fechada is False
+        assert float(db.get(Comanda, received_id).valor_pago) == 1
+        assert payment.status == "aprovado"

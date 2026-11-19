@@ -1124,7 +1124,9 @@ class OrderApplicationService:
             rows = [row for row in remaining_refund_allocations(
                 db, int(comanda.restaurante_id), payment,
             ) if str(row["comanda_id"]) == str(comanda.id)]
-            if not rows or any(row.get("bloqueado") or money(row["disponivel"]) > 0 for row in rows):
+            # A table receipt reference is not an allocation. If its money
+            # belongs exclusively to another account, this command is unpaid.
+            if any(row.get("bloqueado") or money(row["disponivel"]) > 0 for row in rows):
                 unsettled = True
             refunded += sum((money(row["estornado"]) for row in rows), Decimal("0.00"))
         has_paid_item = any(bool(item.pago) for item in target_items)
