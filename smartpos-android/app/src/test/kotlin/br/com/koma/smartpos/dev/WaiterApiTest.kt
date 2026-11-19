@@ -92,7 +92,7 @@ class WaiterApiTest {
                     path.startsWith("/comandas/detalhes/todos") -> HttpResponsePayload(
                         200,
                         """
-                        [{"id":"check-1","itens":[
+                        [{"id":"check-1","mesa_id":3,"tipo":"Consumo no Local","itens":[
                           {"id":"prep","produto_id":"p2","status":"preparando"},
                           {"id":"ready","produto_id":"p1","status":"pronto","pago":true}
                         ]}]
@@ -194,26 +194,26 @@ class WaiterApiTest {
                         """
                         [
                           {
-                            "id": "c-1", "mesa_id": 1, "numero_pedido": 12, "valor_pago": 10.00,
+                            "id": "c-1", "tipo": "Consumo no Local", "mesa_id": 1, "numero_pedido": 12, "valor_pago": 10.00,
                             "status_comanda": "aberta", "criado_em": "2026-11-18T12:15:00Z",
                             "itens": [
                               {"id": "i1", "produto_id": "p1", "preco_unit": 35.00, "status": "pronto"}
                             ]
                           },
                           {
-                            "id": "c-2", "mesa_id": 2, "numero_pedido": 13, "valor_pago": 0,
+                            "id": "c-2", "tipo": "Consumo no Local", "mesa_id": 2, "numero_pedido": 13, "valor_pago": 0,
                             "status_comanda": "aguardando_pagamento", "criado_em": "2026-11-18T12:00:00Z",
                             "itens": [
                               {"id": "i2", "produto_id": "p1", "preco_unit": 50.00, "status": "entregue"}
                             ]
                           },
                           {
-                            "id": "c-4a", "mesa_id": 4, "numero_pedido": 14, "valor_pago": 0,
+                            "id": "c-4a", "tipo": "Consumo no Local", "mesa_id": 4, "numero_pedido": 14, "valor_pago": 0,
                             "status_comanda": "aberta", "criado_em": "2026-11-18T12:20:00Z",
                             "itens": [{"id": "i4a", "produto_id": "p1", "preco_unit": 20.00, "status": "preparando"}]
                           },
                           {
-                            "id": "c-4b", "mesa_id": 4, "numero_pedido": 15, "valor_pago": 0,
+                            "id": "c-4b", "tipo": "Consumo no Local", "mesa_id": 4, "numero_pedido": 15, "valor_pago": 0,
                             "status_comanda": "aberta", "criado_em": "2026-11-18T12:22:00Z",
                             "itens": [{"id": "i4b", "produto_id": "p2", "preco_unit": 15.00, "status": "pronto"}]
                           }
@@ -322,12 +322,12 @@ class WaiterApiTest {
         val op1 = Session(rest, Operator("u1", "Ana"), tablesAvailable = true, ordersAvailable = true, role = "garcom")
         val op2 = Session(rest, Operator("u2", "Beto"), tablesAvailable = true, ordersAvailable = true, role = "caixa")
 
-        val state1 = store.saveLogin(scope, op1, "ana", "tok-ana", ttlMs = 60_000L)
+        val state1 = store.saveLogin(scope, op1, "ana", sessionToken(1200), ttlMs = 60_000L)
         val terminalId = state1.terminalId
         assertEquals(rest, state1.boundRestaurant)
         assertEquals("u1", state1.activeOperator?.operator?.id)
 
-        val state2 = store.saveLogin(scope, op2, "beto", "tok-beto", ttlMs = 60_000L)
+        val state2 = store.saveLogin(scope, op2, "beto", sessionToken(1201), ttlMs = 60_000L)
         assertEquals(terminalId, state2.terminalId)
         assertEquals(2, state2.operators.size)
         assertEquals("u2", state2.activeOperator?.operator?.id)
@@ -344,6 +344,63 @@ class WaiterApiTest {
         assertNull(unbound.boundRestaurant)
         assertNull(unbound.activeOperator)
         assertTrue(unbound.operators.isEmpty())
+    }
+
+    private fun sessionToken(expSeconds: Long): String {
+        val payload = java.util.Base64.getUrlEncoder().withoutPadding()
+            .encodeToString("{\"exp\":$expSeconds}".toByteArray())
+        return "e30.$payload.signature"
+    }
+
+    private fun sessionStore(now: () -> Long): TerminalSessionStore = TerminalSessionStore(
+        tempFolder.newFolder(),
+        cipher = object : TerminalKeyCipher {
+            override fun encrypt(aad: ByteArray, plain: ByteArray) = plain
+            override fun decrypt(aad: ByteArray, cipherText: ByteArray) = cipherText
+        },
+        nowProvider = now,
+    )
+
+    @Test
+    fun restoringSameTokenCannotExtendItsOriginalDeadline() {
+        var now = 1_000_000L
+        val store = sessionStore { now }
+        val s = Session(Restaurant(8, "Teste"), Operator("u1", "Ana"), true, true)
+        val token = sessionToken(1200)
+        val original = store.saveLogin("api", s, "ana", token, ttlMs = 60_000L)
+        now += 30_000L
+        val restored = store.saveLogin("api", s, "ana", token, ttlMs = 60_000L)
+        assertEquals(original.activeOperator!!.expiresAtMs, restored.activeOperator!!.expiresAtMs)
+        assertEquals(original.activeOperator!!.savedAtMs, restored.activeOperator!!.savedAtMs)
+    }
+
+    @Test
+    fun localSessionNeverOutlivesJwtAndRejectsMissingOrExpiredClaims() {
+        val store = sessionStore { 1_000_000L }
+        val s = Session(Restaurant(8, "Teste"), Operator("u1", "Ana"), true, true)
+        val state = store.saveLogin("api", s, "ana", sessionToken(1010))
+        assertEquals(1_010_000L, state.activeOperator!!.expiresAtMs)
+        assertThrows(IllegalArgumentException::class.java) { store.saveLogin("api", s, "ana", "opaque") }
+        assertThrows(IllegalArgumentException::class.java) { store.saveLogin("api", s, "ana", sessionToken(999)) }
+    }
+
+    @Test
+    fun invalidatingActiveOperatorDoesNotSilentlyChooseAnotherPerson() {
+        val store = sessionStore { System.currentTimeMillis() }
+        val restaurant = Restaurant(8, "Teste")
+        store.saveLogin("api", Session(restaurant, Operator("u1", "Ana"), true, true), "ana", sessionToken(System.currentTimeMillis() / 1000 + 600))
+        store.saveLogin("api", Session(restaurant, Operator("u2", "Beto"), true, true), "beto", sessionToken(System.currentTimeMillis() / 1000 + 601))
+        assertNull(store.invalidateOperatorToken("api", "u2").activeOperator)
+    }
+
+    @Test
+    fun boundRestaurantCannotBeChangedBySavingAnotherLogin() {
+        val store = sessionStore { 1_000_000L }
+        store.saveLogin("api", Session(Restaurant(8, "A"), Operator("u1", "Ana"), true, true), "ana", sessionToken(1200))
+        assertThrows(IllegalArgumentException::class.java) {
+            store.saveLogin("api", Session(Restaurant(9, "B"), Operator("u2", "Beto"), true, true), "beto", sessionToken(1201))
+        }
+        assertEquals(8, store.load("api").boundRestaurant!!.id)
     }
 
     @Test
@@ -401,6 +458,7 @@ class WaiterApiTest {
         assertEquals(4250L, intent.amountCents)
         val createPayload = JSONObject(requests[0].second)
         assertEquals("42.50", createPayload.getString("valor"))
+        assertTrue(createPayload.optString("idempotency_key").length >= 8)
         assertTrue(createPayload.isNull("captura"))
 
         val outcome = api.confirmManualPayment(intent.id, receivedCents = 5000L, idempotencyKey = "idem-1")
@@ -445,4 +503,102 @@ class WaiterApiTest {
         assertFalse(session.permissions.canClose)
         assertEquals("garcom", session.role)
     }
+    @Test
+    fun corruptPaymentJournalCannotBeReadAsANeverStartedCharge() {
+        val directory = tempFolder.newFolder("operations")
+        val store = AndroidOperationStore(directory)
+        val op = br.com.koma.smartpos.bridge.LocalOperation("pi-1", "pagbank", "operation-123", "POS-1")
+        store.put(op)
+        directory.listFiles()!!.single().writeText("corrupt journal")
+        assertThrows(Exception::class.java) { store.get("operation-123") }
+    }
+
+    @Test
+    fun paymentCreationRetriesWithTheSameProvidedKeyAfterLostResponse() {
+        val requests = mutableListOf<String>()
+        val api = WaiterApi(object : HttpTransport {
+            override fun post(path: String, body: String): HttpResponsePayload {
+                requests.add(body)
+                if (requests.size == 1) throw IOException("response lost")
+                return HttpResponsePayload(201, """{"id":"pi-1","mesa_id":4,"valor":"42.50"}""")
+            }
+        })
+        assertThrows(IOException::class.java) {
+            api.createPaymentIntent(4, 4250L, "credito", "provider_integrado", "valor", idempotencyKey = "stable-payment-123")
+        }
+        api.createPaymentIntent(4, 4250L, "credito", "provider_integrado", "valor", idempotencyKey = "stable-payment-123")
+        assertEquals(requests.first(), requests.last())
+        assertEquals("stable-payment-123", JSONObject(requests.last()).getString("idempotency_key"))
+    }
+
+    @Test
+    fun pendingPaymentSurvivesLoginAndRestartAndBlocksIdentityChanges() {
+        val directory = tempFolder.newFolder("payment-session")
+        val cipher = object : TerminalKeyCipher {
+            override fun encrypt(aad: ByteArray, plain: ByteArray) = plain
+            override fun decrypt(aad: ByteArray, cipherText: ByteArray) = cipherText
+        }
+        fun store() = TerminalSessionStore(directory, cipher, nowProvider = { 1_000_000L })
+        val session = Session(Restaurant(8, "A"), Operator("u1", "Ana"), true, true)
+        store().saveLogin("api", session, "ana", sessionToken(1200))
+        val payment = SavedPendingPayment(8, "u1", 4, "Mesa 4", 4250L, "credito",
+            "provider_integrado", "valor", emptyList(), null, "stable-payment-123", false)
+        store().savePayment("api", payment)
+        assertEquals(payment, store().load("api").pendingPayment)
+        assertNull(store().load("other-api").pendingPayment)
+        assertEquals(payment, store().saveLogin("api", session, "ana", sessionToken(1200)).pendingPayment)
+        assertThrows(IllegalArgumentException::class.java) { store().unbindTerminal("api") }
+        assertThrows(IllegalArgumentException::class.java) { store().switchOperator("api", "u2") }
+        assertThrows(IllegalArgumentException::class.java) {
+            store().savePayment("api", payment.copy(restaurantId = 9))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            store().savePayment("api", payment.copy(idempotencyKey = "another-operation"))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            store().saveLogin("api", session.copy(operator = Operator("u2", "Beto")), "beto", sessionToken(1201))
+        }
+        assertEquals(payment.copy(intentId = "pi-1"), store().savePayment("api", payment.copy(intentId = "pi-1")).pendingPayment)
+        store().savePayment("api", null)
+        assertNull(store().load("api").pendingPayment)
+    }
+
+    @Test
+    fun corruptTerminalSessionIsPreservedAndNeverBecomesANewInstallation() {
+        val directory = tempFolder.newFolder("corrupt-session")
+        val cipher = object : TerminalKeyCipher {
+            override fun encrypt(aad: ByteArray, plain: ByteArray) = plain
+            override fun decrypt(aad: ByteArray, cipherText: ByteArray) = cipherText
+        }
+        val store = TerminalSessionStore(directory, cipher)
+        store.load("api")
+        val file = directory.listFiles()!!.single()
+        file.writeText("corrupt")
+        assertThrows(IllegalStateException::class.java) { store.load("api") }
+        assertEquals("corrupt", file.readText())
+    }
+
+    @Test
+    fun pickupDeliveryUnknownAndOtherTablesCannotEnterTableConsumption() {
+        val payload = """[
+            {"id":"local","mesa_id":3,"tipo":"Consumo no Local","itens":[{"id":"meal","preco_unit":10.00}]},
+            {"id":"pickup","mesa_id":3,"tipo":"Retirada","itens":[{"id":"takeaway","preco_unit":50.00}]},
+            {"id":"delivery","mesa_id":3,"tipo":"Delivery","itens":[{"id":"del","preco_unit":60.00}]},
+            {"id":"unknown","mesa_id":3,"itens":[{"id":"unk","preco_unit":70.00}]},
+            {"id":"other","mesa_id":4,"tipo":"Consumo no Local","itens":[{"id":"other-meal","preco_unit":80.00}]}
+        ]"""
+        val api = WaiterApi(object : HttpTransport {
+            override fun post(path: String, body: String) = error("unexpected post")
+            override fun get(path: String) = when {
+                path == "/mesas/" -> HttpResponsePayload(200, """[{"id":3,"nome":"Mesa 3"}]""")
+                path.startsWith("/comandas/detalhes/todos") -> HttpResponsePayload(200, payload)
+                path.startsWith("/atendimentos/mesas/") -> HttpResponsePayload(404, "{}")
+                else -> error(path)
+            }
+        })
+        assertEquals(listOf("local"), api.salon().single().checks.map(Check::id))
+        assertEquals(listOf("local"), api.detail(Table(3, "Mesa 3")).checks.map(Check::id))
+        assertEquals(1000L, api.detail(Table(3, "Mesa 3")).total)
+    }
+
 }

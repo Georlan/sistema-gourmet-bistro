@@ -1,84 +1,97 @@
-# Arquitetura KÔMA SmartPOS — Garçom, Sessão e PagBank PlugPag
+# KÔMA Garçom Android e SmartPOS PagBank
 
-Documento técnico de referência para o aplicativo Android nativo (`smartpos-android/`) e integração de liquidação SmartPOS com o backend KÔMA.
+Revalidação: 19/11/2026. Base inicial: `0f1c65eb` (PRs #1400 e #1402 integrados).
+Este documento descreve implementação e limites; não atesta homologação ou teste físico.
 
----
+## Separação de responsabilidades
 
-## 1. Fontes Oficiais Consultadas (data: 2026-11-18)
+- `app/src/main`: interface Android nativa, sessão de operador, salão, cardápio, rascunhos e recuperação de pagamento.
+- `app/src/phone`: adaptador sem SDK/serviço PagBank. Não executa cobrança física. Simulador somente em debug, com backend isolado explicitamente configurado para teste.
+- `app/src/pagbank`: adaptador tipado de `PlugPagServiceWrapper:1.35.0`. O AAR oficial é dependência obrigatória desta variante; nenhuma reflexão.
+- Bridge JVM: comando, reserva local antes do SDK, coordenação, correlação e resultado.
+- Backend: permissões, identidade de tenant, intenção, idempotência, saldo, liquidação, caixa, liberação de atendimento e notificações.
+- Provisionamento de identidade de dispositivo no servidor: **pendente**. O identificador `POS-*` atual é identificador local da instalação, não autenticação do hardware nem número de série.
 
-| Fonte | Versão / Escopo | Observações críticas extraídas |
-|---|---|---|
-| Repositório oficial `pagseguro/pagseguro-sdk-plugpagservicewrapper` (`github.com/pagseguro/pagseguro-sdk-plugpagservicewrapper`) | Wrapper `v1.35.0` (AAR `br.com.uol.pagseguro.plugpagservice.wrapper:wrapper:1.35.0`) | Repositório Maven `github.com/pagseguro/PlugPagServiceWrapper/raw/master`; exemplos Android, `PlugPag`, `PlugPagPaymentData`, `PlugPagActivationData`, `PlugPagVoidData`, `PlugPagPrinterData`, `PlugPagTransactionResult`. |
-| Documentação Dokka do PlugPag (`pagseguro.github.io/pagseguro-sdk-plugpagservicewrapper/`) | Referência da API `PlugPag` | Métodos síncronos/bloqueantes (exigem thread dedicada fora da UI), `initializeAndActivatePinpad`, `initPagBankActivation`, `doPayment`, `getLastApprovedTransaction`, `voidPayment`, `abort`, `isAuthenticated`, `isServiceBusy`, `printFromFile`, `reprintCustomerReceipt`. |
-| Portal PagBank Developers — SmartPOS & FAQ (`developer.pagbank.com.br/docs/integracao-smartpos-1`, `developer.pagbank.com.br/docs/faq-smartpos`) | Integração presencial SmartPOS e homologação | Modelos, processo de homologação via chamado com APK release assinado V1+V2, vídeo demonstrativo, credenciamento comercial e prazo operacional. |
+WebView/WebApps continuam proibidos pela FAQ PagBank consultada. A aplicação é nativa.
 
----
+## Builds e dependências
 
-## 2. Compatibilidade de Hardware e Android
+| Variante | Application ID | SDK PagBank | Simulação | Recebimento externo/dinheiro |
+| --- | --- | --- | --- | --- |
+| phoneDebug | br.com.koma.smartpos.dev | ausente | somente com backend development/test | disponível, sujeito a permissão do servidor |
+| phoneRelease | br.com.koma.smartpos.dev | ausente | bloqueada | disponível, sujeito a permissão do servidor |
+| pagbankDebug / pagbankRelease | br.com.koma.smartpos.pagbank | 1.35.0 obrigatório | bloqueada | opções removidas e execução bloqueada no cliente |
 
-Os terminais PagBank rodam Android personalizado pelo fabricante sem Google Play Services padrão:
+Versão: 0.4.0, código 7. O ID PagBank é candidato, ainda sem homologação comprovada; confirmar antes da primeira publicação. Alterar ID ou assinatura após publicação exige nova homologação. Release compilado não significa release assinado/apto à distribuição.
 
-- **PAX A930 / Moderninha Smart e P2-B**: Android 7.x (**API 25**). Por esse motivo, `smartpos-android/app/build.gradle.kts` preserva **`minSdk = 25`** e evita APIs exclusivas da API 26+ sem fallback (`java.nio.file.Files` e `java.time.*` não são usados na camada Android `app`).
-- **PAX A50**: Android 8.x (API 26–27).
-- **Sunmi P2 (lotes mais recentes) / GPOS 780**: Android 11+ (conforme FAQ oficial).
-- **SK800 Totem**: Android 6.x (API 23 — legado fora de `minSdk = 25`).
+Repositório Maven exclusivo do grupo do SDK: `https://raw.githubusercontent.com/pagseguro/PlugPagServiceWrapper/master`. O POM oficial não declara dependências transitivas; AndroidX Core 1.13.1 é necessário ao FileProvider do AAR. Não foram copiados projetos ou assets do SmartCoffee. Consultar `THIRD_PARTY_NOTICES.md` para fontes e limites de licença.
 
-Requisitos de Manifesto (`smartpos-android/app/src/main/AndroidManifest.xml`):
-- Permissão `<uses-permission android:name="br.com.uol.pagseguro.permission.MANAGE_PAYMENTS" />`
-- Visibilidade de pacotes Android 11+ (`<queries><package android:name="br.com.uol.pagseguro.plugpagservice" /></queries>`)
-- `intent-filter` de pagamento (`br.com.uol.pagseguro.PAYMENT` / `DEFAULT`) para descoberta no launcher SmartPOS quando distribuído em terminal físico.
+## Compatibilidade declarada e alvo
 
----
+| Modelo | Android segundo FAQ | APK minSdk 25 | Validação física neste trabalho |
+| --- | --- | --- | --- |
+| GPOS780 | 11 | elegível; alvo inicial preferido | não realizada |
+| P2 | 11 | elegível; alvo inicial alternativo | não realizada |
+| A930 / P2-B | 7 | elegível, exige regressão no firmware concreto | não realizada |
+| A50 | 8 | elegível, exige regressão no firmware concreto | não realizada |
+| SK800 | 6 | fora do suporte deste APK | não realizada |
 
-## 3. Contrato do SDK PlugPag e Limites Reais
+`compileSdk=36` e `targetSdk=36` são parâmetros de compilação/comportamento; não comprovam compatibilidade operacional. A FAQ informa que os modelos debug fornecidos normalmente são GPOS780/P2 Android 11. Nenhum terminal disponível foi identificado. Serviços PagBank e ativação são necessários; um celular e sandbox de API online não os substituem.
 
-1. **Valor mínimo e unidade**: `PlugPagPaymentData.amount` é inteiro em **centavos**; valor mínimo presencial = **R$ 1,00 (`100` centavos)**.
-2. **Limite de `userReference`**: `PlugPagPaymentData.userReference` aceita no máximo **10 caracteres ASCII alfanuméricos**.
-   - Solução no KÔMA: `StableOperationKey.forIntent(intentId, terminalId, "pagbank")` gera a chave longa determinística do backend (`smartpos-<sha256[:48]>`), enquanto `StableOperationKey.userReference10(operationKey)` deriva exatamente **10 caracteres base-36 `[A-Z0-9]`** usados no pinpad e validados na reconciliação.
-3. **Execução fora da UI thread**: `AndroidPlugPagClient` e `PlugPagTerminalPaymentBridge` executam no pool assíncrono (`ExecutorService`), nunca na main thread.
-4. **Build sem AAR obrigatório no CI/celular padrão**: `AndroidPlugPagClient` detecta `br.com.uol.pagseguro.plugpagservice` e instancia `PlugPag` por reflexão quando o `.aar` oficial da PagBank estiver empacotado num terminal físico. Em celulares Android comuns (ou builds sem AAR proprietário), `isServiceAvailable()` retorna `false` sem `NoClassDefFoundError` e a opção integrada permanece claramente marcada como indisponível (ou usa explicitamente o simulador de backend quando configurado em desenvolvimento).
+## Sessão, vínculo e limites de segurança
 
----
+AES-256-GCM no AndroidKeyStore protege tokens e solicitações financeiras locais; a URL base faz parte do AAD. A senha não é persistida. A restauração conserva a data original e limita a validade ao `exp` do JWT; não renova credencial no servidor. Tokens malformados/expirados exigem login. Revogação de operador é verificada pelo backend. Invalidar/remover um operador não seleciona silenciosamente outra pessoa.
 
-## 4. Fluxo Financeiro, Idempotência e Recuperação Após Interrupção
+O vínculo atual ainda depende do login do funcionário. Não existe código temporário emitido no painel, credencial própria do aparelho, rotação de refresh token, PIN individual protegido no servidor ou revogação independente da maquininha. A troca local de restaurante não atende ao provisionamento autorizado solicitado. Não liberar como solução final de dispositivos até concluir esse contrato.
 
-Caminho canônico backend (`backend/app/routes/smartpos.py`, `smartpos_provider.py`, `backend/app/services/smartpos_settlement.py`):
+Pagamento pendente mantém restaurante, operador, mesa, valor, itens e chave estáveis. Troca de operador e desvinculação ficam bloqueadas até conciliação. Falha de leitura dos dados protegidos preserva o arquivo e bloqueia a operação; não vira instalação nova.
 
-1. **Prévia / Intenção**: `POST /auth/smartpos/payment-intents` cria `SmartPosPaymentIntent` (`valor` validado no servidor contra o saldo aberto real da mesa/itens selecionados).
-2. **Reserva local antes da maquininha**: `TerminalCoordinator` grava `LocalOperation` em `AndroidOperationStore` (`AtomicFile`) antes de chamar `bridge.charge(command)`.
-3. **Cobrança e retorno**:
-   - **Aprovado (`RET_OK` = `0`)**: registra `outcome = "approved"` com `transactionCode` / `reference` no `/resultado-terminal`.
-   - **Recusado / Cancelado pelo cliente**: `outcome = "declined"`.
-   - **Timeout (`TIMEOUT_REACHED`) ou queda de rede**: `SmartPosPaymentIntent` permanece em `processando`; o próximo passo (`TerminalCoordinator` -> `bridge.reconcile`) **não chama `doPayment` novamente**.
-4. **Recuperação por última transação aprovada**: `PlugPagTerminalPaymentBridge.reconcile()` consulta `client.getLastApprovedTransaction()` e só converte em `APPROVED` se `result == RET_OK`, `userReference == StableOperationKey.userReference10(operationKey)` e `amountMinor == command.amountMinor`. Caso contrário retorna `ERROR` seguro sem duplicar cobrança.
-5. **Liquidação por itens, multi-comanda e liberação de mesa**:
-   - Quando `escopo == "itens"`, `smartpos_settlement.py` aloca `valor_pago` especificamente nas comandas donas dos `item_ids` selecionados (evitando quitar uma segunda comanda diferente da mesa antes da dona do item) e fecha apenas as comandas quitadas.
-   - Antes do `commit`, `reconcile_table_principal()` recalcula o atendimento (`AtendimentoMesa.status = "fechado"` ou promove comanda sobrevivente) e as rotas retornam `mesa_liberada: true` além de emitir WebSocket `MESA_ATUALIZADA` (`status: "livre"`).
-6. **Pagamentos manuais / externos / dinheiro**:
-   - `capture = null` (`dinheiro_pendente`) ou `"registro_externo"` seguem para `POST /auth/smartpos/payment-intents/{id}/confirmar-manual` com `idempotency_key` estável e cálculo de troco no backend.
+## Pedido e pagamento
 
----
+Rascunhos são separados por API/restaurante/mesa; pedido pendente usa o envio idempotente existente. A projeção Android exige modalidade de consumo no local e mesa correspondente; retirada/delivery/modalidade ausente não entram no consumo, mesmo com mesa_id. Não validar produção por pedidos sintéticos, especialmente tenant 6.
 
-## 5. Vínculo de Terminal, Operadores e Segurança de Sessão
+A solicitação financeira completa e sua chave são persistidas antes do primeiro POST. Criação e confirmação manual reutilizam as mesmas chaves após interrupção. Para cobrança integrada, a reserva do `TerminalCoordinator` antecede o SDK. Resultado aprovado fica no journal se a sincronização falhar; retomada consulta/reenvia resultado, sem outro `doPayment`.
 
-Implementado em `TerminalSessionStore.kt`:
+`getLastApprovedTransaction` só recupera aprovação com referência de operação, valor inteiro em centavos e identificador da adquirente. Ausência/divergência mantém erro/pendência de conciliação. A última transação não é histórico completo: não prova operações antigas quando outra transação a substituiu. Resultados diretos conflitantes também não são aprovados. Os códigos de recusa, cancelamento, timeout e erro foram revalidados no AAR 1.35.0; um teste da variante PagBank usa as constantes reais para evitar divergência entre o fake JVM e o SDK.
 
-- **Vínculo terminal -> restaurante**: o aparelho gera um `terminalId` persistente (`POS-<12 hex>`) no primeiro uso e vincula ao `restaurante` retornado por `/auth/smartpos/contexto`. Trocar de restaurante exige confirmação explícita (`Desvincular terminal`) que limpa sessões e rascunhos locais do restaurante anterior.
-- **Multi-operador e troca rápida**: cada operador autenticado no mesmo restaurante tem sua entrada criptografada via **AndroidKeyStore AES-256-GCM** (`AndroidKeyStoreCipher`, AAD = URL base da API). Outros garçons no turno podem alternar em 1 toque no seletor de operadores.
-- **Revogação e perda do aparelho**:
-  - O JWT do KÔMA carrega `tv` (`user_session_versions.token_version`) validado no backend a cada requisição além de checagem de usuário ativo.
-  - Ao receber `HTTP 401`, o app invalida imediatamente apenas o token do operador revogado (`invalidateOperatorToken`), preservando o `username` para reautenticação rápida ou troca para outro operador válido.
-  - Em caso de perda/roubo do terminal, o administrador revoga os tokens dos operadores afetados no KÔMA (incrementando `token_version` / inativando usuário) e ninguém consegue reabrir sessão sem senha nova.
-- **Rascunhos locais**: `DraftStore.kt` persiste rascunhos por restaurante e mesa usando `AtomicFile`, exibindo claramente no Salão quais mesas têm rascunhos não enviados e restaurando após fechamento do app.
+A liberação usa `mesa_liberada` do backend; falha ao consultar o detalhe não significa mesa livre. O servidor mantém pagamento parcial e alocação por itens como fonte de verdade.
 
----
+**Limite atual do backend:** `integrated_provider_available()` habilita apenas `pagbank_simulator` em development/test. Preparação e resultado do terminal estão desabilitados em produção. Não remover esse bloqueio para fazer o APK cobrar: faltam autenticação independente do dispositivo, verificação do resultado realmente suportada pelo produto PagBank e validação física. Um `outcome`/reference do cliente não é prova autônoma de pagamento.
 
-## 6. Matriz Honesta de Verificação e Pendências PagBank
+## Verificação do recebedor
 
-| Camada | Estado Atual | Evidência / Condição |
-|---|---|---|
-| **App Android Garçom (Salão, Consumo, Cardápio, Modificadores, Rascunho, Caixa/Externo/Dinheiro, Histórico, Troca de Operador)** | Implementado e compilado via CI (`assembleDebug`) | Testes unitários JUnit + validação em celular Android real conectado via USB |
-| **Correções de Liquidação Backend (`escopo="itens"`, reconciliação de `AtendimentoMesa` e `mesa_liberada`)** | Implementado e integrado | Suíte `pytest` (`test_smartpos*.py`) verde |
-| **Bridge PagBank PlugPag (`PlugPagTerminalPaymentBridge`, `userReference10`, `reconcile` por `getLastApprovedTransaction`)** | Implementado + coberto em testes unitários com fake client | Testado apenas com cliente fake em JVM (`PlugPagTerminalPaymentBridgeTest`); `AndroidPlugPagClient` usa reflexão segura |
-| **Execução física em maquininha PagBank (Moderninha Smart / PAX A930 / P2)** | **Pendente de hardware, AAR comercial e credenciais PagBank** | Requer: (1) incorporar `br.com.uol.pagseguro.plugpagservice.wrapper:wrapper:1.35.0` num flavor/release após obtenção de terminal de desenvolvimento, (2) código de ativação sandbox PagBank, (3) execução de cobrança/cancelamento/impressão presencial |
-| **Homologação oficial PagBank e publicação na loja PagBank** | **Pendente** | Requer abertura de chamado "Homologação de App" com APK release assinado V1+V2, vídeo demonstrativo do fluxo de UI + cobrança PlugPag, aprovação técnica (~7 dias úteis) e vinculação via Painel do Revendedor |
+A FAQ informa terminal vinculado a uma única loja/CNPJ. Não foi comprovada API do wrapper que forneça atestado de CNPJ recebedor verificável pelo backend. Confirmar no cadastro comercial/PagBank o terminal, série e recebedor correto; registrar vínculo operacional autorizado. `terminal_id` local não resolve isso. Consultar PagBank sobre mecanismos reais de comprovação/reconciliação antes do rollout financeiro.
+
+## Testes e evidências
+
+A suíte inclui expiração/restauração de sessão, preservação da identidade, criação idempotente, journal corrompido, recuperação persistida, concorrência e correlação do pagamento. O workflow `.github/workflows/smartpos-android-bridge.yml` testa bridge e variantes, compila debug/release e publica APKs, SHA de origem e XMLs de teste. Conferir a execução do SHA final do PR; existência deste documento não significa checks verdes.
+
+| Etapa | Estado observado |
+| --- | --- |
+| Repositório e referências oficiais | inspecionados |
+| Testes automáticos / build do SHA final | consultar execução anexada ao PR |
+| Celular USB | não detectado por ADB nem inventário USB em 19/11; não instalado/testado |
+| Terminal PagBank | não identificado/testado |
+| Homologação | não realizada |
+
+## Uso e próximos passos
+
+1. No celular, instalar `phoneDebug` preservando os dados/assinatura do APK anterior. Login autorizado restaura o restaurante retornado pelo servidor; isso ainda não é provisionamento de dispositivo.
+2. Testar exclusivamente com fixtures/ambiente local e usuários autorizados: login/reabertura, rede, mesas, modificadores, rascunho, envio e recuperação financeira. Não apontar simulador para produção.
+3. Implementar código de vínculo de uso único, expiração/consumo atômico/limites de tentativas, dispositivo revogável, autenticação limitada e PIN individual. Validar A/B tenants e operador/dispositivo em todas as rotas.
+4. Obter/confirmar parceria e terminal debug GPOS780 ou P2. Identificar Android, série, PlugPagService e TerminalService; ativar segundo instruções comerciais.
+5. Com backend financeiro seguro e ambiente autorizado, instalar `pagbankDebug` e validar cobrança, recusa, interrupção, cancelamento/estorno e impressão físicos. O adaptador oferece ativação, doPayment, consulta, void e abort; a experiência completa de estorno/impressão/eventos ainda precisa validação/conclusão.
+6. Confirmar application ID/keystore definitivo, assinar release, preparar vídeo e guia, listar endpoints/IPs e enviar homologação. Não gerar assinatura de produção descartável.
+
+No estado atual há pendências internas além do hardware: provisionamento/PIN/revogação do dispositivo, confiança do resultado físico no backend, validação de isolamento e modalidades no app/servidor e conclusão de capacidades/eventos/comprovantes/estorno. Não resumir tudo a uma única credencial externa.
+
+## Fontes oficiais consultadas em 19/11/2026
+
+- https://developer.pagbank.com.br/docs/integracao-smartpos-1
+- https://developer.pagbank.com.br/docs/faq-smartpos
+- https://developer.pagbank.com.br/docs/desenvolvimento-smartpos
+- https://developer.pagbank.com.br/docs/homologacao-smartpos
+- https://developer.pagbank.com.br/docs/producao-smartpos
+- https://pagseguro.github.io/pagseguro-sdk-plugpagservicewrapper/
+- SDK: https://github.com/pagseguro/pagseguro-sdk-plugpagservicewrapper (db556419b2e9634a69d4a835de9c3cba892de069)
+- Exemplo: https://github.com/pagseguro/pagseguro-plugpagservicewrapper-smartcoffeedemo (2140b19e211bd5f7b35c05140456f819ce7a0088)
