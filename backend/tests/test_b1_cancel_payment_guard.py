@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import uuid
+from decimal import Decimal
+
+import pytest
 
 from app.database import SessionLocal
 from app.models import Comanda, Pagamento
@@ -76,3 +79,76 @@ def test_cannot_cancel_or_reject_order_with_approved_payment(char_client, char_s
         assert comanda.delivery_status == "producao"
         assert float(comanda.valor_pago or 0.0) > 0.0
         assert pag is not None and pag.status == "aprovado"
+
+
+from app.application.orders.commands import CancelOrderCommand, RejectOrderCommand
+from app.application.orders.service import OrderApplicationService, OrderValidationError
+from app.models import CaixaTurno
+from app.services.cash_reconciliation import create_refund
+
+
+@pytest.mark.parametrize("method", ["dinheiro", "pix", "cartao_credito"])
+@pytest.mark.parametrize("operation", ["cancel", "reject"])
+@pytest.mark.parametrize("payment_status,blocked", [("pendente", False), ("cancelado", False), ("aprovado", True)])
+def test_payment_guard_uses_canonical_payment_state(char_client, char_setup, operation, payment_status, blocked, method):
+    rid = char_setup["restaurant_id"]
+    created = char_client.post("/cardapio/pedidos", json={
+        "restaurante_id": rid, "tipo_pedido": "retirada", "cliente_nome": "Estado financeiro",
+        "cliente_telefone": "81999994444", "forma_pagamento": "na_entrega",
+        "forma_pagamento_detalhe": "dinheiro", "idempotency_key": f"state-{uuid.uuid4().hex}",
+        "itens": [{"produto_id": "prod-char-simples", "quantidade": 1}],
+    })
+    assert created.status_code == 201, created.text
+    cid = created.json()["comanda_id"]
+    with SessionLocal(restaurante_id=rid) as db:
+        turno = db.query(CaixaTurno).filter_by(restaurante_id=rid, status="aberto").one()
+        db.add(Pagamento(id=f"guard-{uuid.uuid4().hex}", restaurante_id=rid, comanda_id=cid,
+                         turno_id=turno.id, valor=1, metodo=method, status=payment_status))
+        db.commit()
+        # Partial approved payment is sufficient even if a legacy projection is stale.
+        command = (CancelOrderCommand if operation == "cancel" else RejectOrderCommand)(
+            restaurant_id=rid, order_id=cid, operator_user_id="usr-char-admin", reason="Teste financeiro",
+        )
+        execute = OrderApplicationService.cancel_order if operation == "cancel" else OrderApplicationService.reject_order
+        if blocked:
+            with pytest.raises(OrderValidationError, match="Estorne"):
+                execute(db, command)
+            db.rollback()
+            assert db.get(Comanda, cid).fechada is False
+        else:
+            execute(db, command)
+            assert db.get(Comanda, cid).fechada is True
+
+
+@pytest.mark.parametrize("refund_value,blocked", [(Decimal("0.50"), True), (Decimal("1.00"), False)])
+def test_refund_ledger_controls_cancellation_without_erasing_payment_history(char_client, char_setup, refund_value, blocked):
+    rid = char_setup["restaurant_id"]
+    created = char_client.post("/cardapio/pedidos", json={
+        "restaurante_id": rid, "tipo_pedido": "retirada", "cliente_nome": "Estorno auditável",
+        "cliente_telefone": "81999994444", "forma_pagamento": "na_entrega",
+        "forma_pagamento_detalhe": "dinheiro", "idempotency_key": f"refund-{uuid.uuid4().hex}",
+        "itens": [{"produto_id": "prod-char-simples", "quantidade": 1}],
+    })
+    assert created.status_code == 201, created.text
+    cid = created.json()["comanda_id"]
+    paid = char_client.post(f"/caixa/comandas/{cid}/pagar", headers=char_setup["headers"], json={
+        "valor": 1, "metodo": "dinheiro", "idempotency_key": f"partial-{uuid.uuid4().hex}",
+    })
+    assert paid.status_code in (200, 201), paid.text
+    with SessionLocal(restaurante_id=rid) as db:
+        payment = db.query(Pagamento).filter_by(restaurante_id=rid, comanda_id=cid).one()
+        key = f"refund-cancel-{uuid.uuid4().hex}"
+        args = dict(restaurante_id=rid, payment_id=payment.id, turno_id=payment.turno_id,
+                    usuario_id="usr-char-admin", valor=refund_value, motivo="Teste de estorno", idempotency_key=key)
+        first = create_refund(db, **args)
+        db.commit()
+        assert create_refund(db, **args).id == first.id
+        command = CancelOrderCommand(restaurant_id=rid, order_id=cid, reason="Após estorno")
+        if blocked:
+            with pytest.raises(OrderValidationError, match="Estorne"):
+                OrderApplicationService.cancel_order(db, command)
+        else:
+            OrderApplicationService.cancel_order(db, command)
+            assert db.get(Comanda, cid).fechada is True
+        assert payment.status == "aprovado"
+        assert float(db.get(Comanda, cid).valor_pago) == 1

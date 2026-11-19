@@ -618,3 +618,53 @@ def test_simultaneous_identical_table_retry_returns_same_payment() -> None:
             assert items[item_b].pago is False
     finally:
         current_restaurante_id.reset(token)
+
+
+def test_payment_racing_operational_cancellation_never_leaves_paid_cancelled_items():
+    from app.application.orders.commands import CancelOrderCommand
+    from app.application.orders.service import OrderApplicationService, OrderValidationError
+
+    rid = 9791
+    uid = "paid-cancel-race-user"
+    cid = "paid-cancel-race-command"
+    _seed_scenario(rid=rid, user_id=uid, commands=[(cid, None, [("paid-cancel-race-item", 42)])])
+    barrier = threading.Barrier(2)
+
+    def execute(payment):
+        token = current_restaurante_id.set(rid)
+        try:
+            with SessionLocal(restaurante_id=rid) as db:
+                user = db.query(Usuario).filter_by(id=uid).one()
+                barrier.wait(timeout=10)
+                try:
+                    if payment:
+                        registrar_pagamento_comanda(cid, PagamentoRequest(
+                            valor=42, metodo="pix", idempotency_key="paid-cancel-race-key",
+                        ), BackgroundTasks(), db=db, current_user=user)
+                    else:
+                        OrderApplicationService.cancel_order(db, CancelOrderCommand(
+                            restaurant_id=rid, order_id=cid, operator_user_id=uid, reason="Corrida de cancelamento",
+                        ))
+                    return True
+                except (HTTPException, OrderValidationError):
+                    db.rollback()
+                    return False
+        finally:
+            current_restaurante_id.reset(token)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        paid = pool.submit(execute, True)
+        cancelled = pool.submit(execute, False)
+        results = [paid.result(timeout=20), cancelled.result(timeout=20)]
+    assert sum(results) == 1, results
+    with SessionLocal(restaurante_id=rid) as db:
+        command = db.query(Comanda).filter_by(id=cid).one()
+        item = db.query(Item).filter_by(id="paid-cancel-race-item").one()
+        payments = db.query(Pagamento).filter_by(restaurante_id=rid, comanda_id=cid).all()
+        if payments:
+            assert len(payments) == 1 and payments[0].status == "aprovado"
+            assert float(command.valor_pago) == 42
+            assert item.status != "cancelado"
+        else:
+            assert command.fechada is True and item.status == "cancelado"
+            assert float(command.valor_pago) == 0
