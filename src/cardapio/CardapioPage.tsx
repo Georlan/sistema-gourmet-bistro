@@ -100,6 +100,12 @@ import {
   updateStoredOrderStatus,
 } from "./orderTracking";
 import { rebuildOrderFromCurrentCatalog } from "./repeatOrder";
+import {
+  clearCartDraft,
+  loadCartDraft,
+  restoreCartDraftFromCatalog,
+  saveCartDraft,
+} from "./cartDraftStorage";
 import { trackAnalyticsEvent } from "../analytics";
 
 const KOMA_PRIMARY = "#00b894";
@@ -141,6 +147,9 @@ export default function CardapioPage() {
   const [editingPromotionItem, setEditingPromotionItem] = useState<CartItem | null>(null);
   const [promotionModalOrigin, setPromotionModalOrigin] = useState<{ surface: "catalog" | "cart"; restaurantId: string | number } | null>(null);
   const previousBrandIdRef = useRef<string | number | null>(null);
+  const [hydratedDraftBrandId, setHydratedDraftBrandId] = useState<string | null>(null);
+  const checkoutOrderCreatedRef = useRef(false);
+  const [draftRestoreIssues, setDraftRestoreIssues] = useState<string[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
@@ -595,10 +604,57 @@ export default function CardapioPage() {
       setIsCartOpen(false);
       setIsCheckoutOpen(false);
       setCheckoutRequest(null);
+      checkoutOrderCreatedRef.current = false;
+      setHydratedDraftBrandId(null);
+      setFulfillmentChoice(null);
+      setDraftRestoreIssues([]);
       setCart([]);
     }
     previousBrandIdRef.current = nextBrandId;
   }, [activeBrand?.id]);
+
+  // Reidrata rascunho da sacola da aba atual com revalidação contra o catálogo vivo.
+  useEffect(() => {
+    if (!activeBrand?.id) return;
+    const brandKey = String(activeBrand.id);
+    if (hydratedDraftBrandId === brandKey) return;
+
+    const draft = loadCartDraft(activeBrand.id);
+    if (!draft) {
+      setHydratedDraftBrandId(brandKey);
+      return;
+    }
+
+    const restored = restoreCartDraftFromCatalog(draft, activeBrand);
+    if (restored.items.length > 0) {
+      setCart((current) => (current.length > 0 ? current : restored.items));
+      if (restored.fulfillment) {
+        setFulfillmentChoice((current) => (
+          current && String(current.restaurantId) === brandKey
+            ? current
+            : { restaurantId: activeBrand.id, method: restored.fulfillment! }
+        ));
+      }
+      if (restored.issues.length > 0) {
+        setDraftRestoreIssues(restored.issues);
+        showNotification("Sua sacola foi recuperada com ajustes do cardápio atual.");
+      }
+    } else {
+      clearCartDraft(activeBrand.id);
+      if (restored.issues.length > 0) {
+        setDraftRestoreIssues(restored.issues);
+        showNotification("Alguns itens da sacola anterior não estão mais disponíveis.");
+      }
+    }
+    setHydratedDraftBrandId(brandKey);
+  }, [activeBrand, hydratedDraftBrandId, showNotification]);
+
+  useEffect(() => {
+    if (!activeBrand?.id) return;
+    if (hydratedDraftBrandId !== String(activeBrand.id)) return;
+    const method = fulfillmentChoice?.restaurantId === activeBrand.id ? fulfillmentChoice.method : null;
+    saveCartDraft(activeBrand.id, cart, method);
+  }, [activeBrand?.id, hydratedDraftBrandId, cart, fulfillmentChoice]);
 
   useEffect(() => {
     if (!activeBrand || !selectedProduct) return;
@@ -738,8 +794,14 @@ export default function CardapioPage() {
       const returnedToCart = closePromotionModal();
       return returnedToCart || overlayCount > 1;
     } else if (isCheckoutOpen) {
+      const orderAlreadyCreated = checkoutOrderCreatedRef.current;
+      checkoutOrderCreatedRef.current = false;
       setIsCheckoutOpen(false);
       setCheckoutRequest(null);
+      if (orderAlreadyCreated) {
+        setIsCartOpen(false);
+        return false;
+      }
       setIsCartOpen(true);
       return true;
     } else if (isProfileOpen) {
@@ -1630,6 +1692,7 @@ export default function CardapioPage() {
                 cashback_discount: request.descontoCashback || 0,
                 payment_method: request.paymentMethodDetail || 'nao_definido',
               });
+              checkoutOrderCreatedRef.current = false;
               setCheckoutRequest(request);
               setIsCartOpen(false);
               setIsCheckoutOpen(true);
@@ -1640,6 +1703,8 @@ export default function CardapioPage() {
             onAuthClick={() => setIsAuthOpen(true)}
             orderingEnabled={orderingEnabled}
             orderingMessage={orderingMessage}
+            draftRestoreIssues={draftRestoreIssues}
+            onDismissDraftRestoreIssues={() => setDraftRestoreIssues([])}
           />
         </div>
       )}
@@ -1721,24 +1786,41 @@ export default function CardapioPage() {
             usarCashback={checkoutRequest.usarCashback}
             descontoCashback={checkoutRequest.descontoCashback}
             onClose={() => {
+              checkoutOrderCreatedRef.current = false;
               setIsCheckoutOpen(false);
               setCheckoutRequest(null);
             }}
             onEditCart={() => {
+              checkoutOrderCreatedRef.current = false;
               setIsCheckoutOpen(false);
               setCheckoutRequest(null);
               // Reopening the bag must use current products, not the old draft
               // snapshot that may contain a now-disabled daily-menu option.
               void loadRestaurantData(true).finally(() => setIsCartOpen(true));
             }}
-            onOrderSuccess={() => {
+            onOrderCreated={() => {
+              checkoutOrderCreatedRef.current = true;
               setCart([]);
               setFulfillmentChoice(null);
               setCouponToApply("");
+              setDraftRestoreIssues([]);
+              if (activeBrand?.id) {
+                clearCartDraft(activeBrand.id);
+                const rid = Number(activeBrand.id);
+                setStoredOrders(current => mergeLocalOrderSnapshots(loadStoredOrders(rid), current));
+              }
+            }}
+            onOrderSuccess={() => {
+              checkoutOrderCreatedRef.current = false;
+              setCart([]);
+              setFulfillmentChoice(null);
+              setCouponToApply("");
+              setDraftRestoreIssues([]);
               setIsCartOpen(false);
               setIsCheckoutOpen(false);
               setCheckoutRequest(null);
               if (activeBrand?.id) {
+                clearCartDraft(activeBrand.id);
                 const rid = Number(activeBrand.id);
                 setStoredOrders(current => mergeLocalOrderSnapshots(loadStoredOrders(rid), current));
               }

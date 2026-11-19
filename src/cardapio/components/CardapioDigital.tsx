@@ -99,6 +99,7 @@ interface CardapioDigitalProps {
   descontoCashback?: number;
   onClose: () => void;
   onEditCart?: () => void;
+  onOrderCreated?: (order: CreatedOrder) => void;
   onOrderSuccess: (order: CreatedOrder) => void;
   onSessionExpired?: () => void;
 }
@@ -174,6 +175,7 @@ export default function CardapioDigital({
   descontoCashback = 0,
   onClose,
   onEditCart,
+  onOrderCreated,
   onOrderSuccess,
   onSessionExpired,
 }: CardapioDigitalProps) {
@@ -567,7 +569,7 @@ export default function CardapioDigital({
         has_coupon: Boolean(cupomCodigo),
         has_cashback: Boolean(usarCashback),
       });
-      setCreatedOrder({
+      const createdPayload: CreatedOrder = {
         comanda_id: comandaId,
         numero_pedido: numeroPedido,
         total: orderTotal,
@@ -577,7 +579,9 @@ export default function CardapioDigital({
         scheduled_for: confirmedSchedule,
         tracking_token: data.tracking_token,
         tracking_url: data.tracking_url,
-      });
+      };
+      setCreatedOrder(createdPayload);
+      onOrderCreated?.(createdPayload);
     } catch (error) {
       setSupportCode(diagnostic.finish(diagnosticOutcome || diagnostic.failure(error)));
       setErrorMessage(
@@ -818,13 +822,30 @@ export default function CardapioDigital({
               </section>
 
               <section className="rounded-2xl border border-koma-border bg-koma-card p-4">
-                {!paymentError && paymentMethodDetail ? <CardapioPaymentSummary method={paymentMethodDetail} fulfillment={deliveryMethod} changeFor={trocoPara} /> : <p role="alert" className="text-sm leading-relaxed text-amber-500">{paymentError} Volte à sacola para conferir.</p>}
+                {!paymentError && paymentMethodDetail ? <CardapioPaymentSummary method={paymentMethodDetail} fulfillment={deliveryMethod} changeFor={trocoPara} isDirectPix={activeBrand.pixDirect === true} /> : <p role="alert" className="text-sm leading-relaxed text-amber-500">{paymentError} Volte à sacola para conferir.</p>}
                 {availablePayments.length > 0 ? <div className="mt-3 border-t border-koma-border pt-3"><p className="text-xs text-koma-muted">Formas disponíveis neste pedido</p><div className="mt-2 flex flex-wrap gap-1.5">{availablePayments.map((method) => <span key={method} className="rounded-lg border border-koma-border px-2.5 py-1.5 text-xs text-koma-secondary">{PAYMENT_LABELS[method]}</span>)}</div></div> : <p className="mt-3 text-xs leading-relaxed text-amber-500">O restaurante ainda não informou as formas aceitas no cardápio.</p>}
               </section>
 
               <section className="space-y-1.5 border-t border-koma-border pt-4 text-xs">
                 <div className="flex justify-between text-koma-muted"><span>Subtotal</span><span>{formatPrice(subtotal)}</span></div>
-                {deliveryMethod === "delivery" && <div className="flex justify-between text-koma-muted"><span>Taxa de entrega estimada</span><span>{formatPrice(deliveryFee)}</span></div>}
+                {deliveryMethod === "delivery" && (
+                  <div className="flex justify-between text-koma-muted">
+                    <span>Taxa de entrega estimada</span>
+                    <span className={deliveryFee === 0 ? "font-bold text-emerald-500" : undefined}>{deliveryFee === 0 ? "Grátis" : formatPrice(deliveryFee)}</span>
+                  </div>
+                )}
+                {descontoCupom > 0 && (
+                  <div className="flex justify-between font-bold text-emerald-500">
+                    <span>Cupom{cupomCodigo ? ` (${cupomCodigo.trim().toUpperCase()})` : ""}</span>
+                    <span>- {formatPrice(descontoCupom)}</span>
+                  </div>
+                )}
+                {descontoCashback > 0 && (
+                  <div className="flex justify-between font-bold text-amber-500">
+                    <span>Cashback resgatado</span>
+                    <span>- {formatPrice(descontoCashback)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between border-t border-koma-border pt-2 text-sm font-black text-koma-foreground"><span>Total estimado</span><span className="text-base text-emerald-500">{formatPrice(estimatedTotal)}</span></div>
                 <p className="pt-1 text-[9px] leading-relaxed text-koma-subtle">O valor definitivo é confirmado pelo sistema do restaurante ao registrar o pedido.</p>
               </section>
@@ -846,7 +867,7 @@ export default function CardapioDigital({
               {canCorrectSubmission && !requiresCartReview && <button type="button" onClick={onEditCart || onClose} className="mt-2 min-h-11 w-full rounded-lg border border-rose-500/30 px-3 font-bold">Voltar à sacola e corrigir</button>}
             </div>}
             <button type="button" onClick={requiresCartReview ? (onEditCart || onClose) : handlePlaceOrder} disabled={isSubmitting || cart.length === 0 || (!requiresCartReview && Boolean(paymentError || schedulePaymentError))} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-55" id="btn-place-order-final"><Send className="h-4 w-4" /><span>{isSubmitting ? "Enviando pedido…" : requiresCartReview ? "Revisar sacola" : paymentError || schedulePaymentError ? "Confira o pagamento" : errorMessage ? "Tentar novamente" : scheduleMode === "scheduled" ? "Agendar pedido" : "Fazer pedido"}</span></button>
-            <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">{scheduleMode === "scheduled" ? "Agendados são enviados agora ao restaurante com a data e o horário escolhidos." : "Pix só entra no painel após o pagamento. Dinheiro e cartão entram direto e são cobrados pessoalmente."}</p>
+            <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">{scheduleMode === "scheduled" ? "Agendados são enviados agora ao restaurante com a data e o horário escolhidos." : activeBrand.pixDirect === true ? "Pix próprio entra aguardando conferência do pagamento. Dinheiro e cartão entram direto e são cobrados pessoalmente." : "Pix só entra no painel após o pagamento. Dinheiro e cartão entram direto e são cobrados pessoalmente."}</p>
           </footer>
         )}
       </div>
