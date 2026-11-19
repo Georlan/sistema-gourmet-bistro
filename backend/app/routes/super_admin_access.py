@@ -259,7 +259,10 @@ def list_access_center(admin: dict[str, Any] = Depends(get_current_admin)):
                     continue
                 users = (
                     db.query(Usuario)
-                    .filter(Usuario.restaurante_id == tenant_id)
+                    .filter(
+                        Usuario.restaurante_id == tenant_id,
+                        Usuario.removed_at.is_(None),
+                    )
                     .order_by(Usuario.created_at.asc(), Usuario.nome.asc())
                     .all()
                 )
@@ -305,7 +308,10 @@ def get_tenant_access(
                 )
             users = (
                 db.query(Usuario)
-                .filter(Usuario.restaurante_id == tenant_id_int)
+                .filter(
+                    Usuario.restaurante_id == tenant_id_int,
+                    Usuario.removed_at.is_(None),
+                )
                 .order_by(Usuario.created_at.asc(), Usuario.nome.asc())
                 .all()
             )
@@ -364,6 +370,7 @@ def update_user_access(
                 .filter(
                     Usuario.id == user_id,
                     Usuario.restaurante_id == tenant_id_int,
+                    Usuario.removed_at.is_(None),
                 )
                 .with_for_update()
                 .one_or_none()
@@ -398,6 +405,7 @@ def update_user_access(
                 db.query(Usuario.id, Usuario.status, Usuario.cargo)
                 .filter(
                     Usuario.restaurante_id == tenant_id_int,
+                    Usuario.removed_at.is_(None),
                     Usuario.cargo.in_(tuple(ADMIN_ROLES)),
                 )
                 .with_for_update()
@@ -433,7 +441,11 @@ def update_user_access(
             if payload.role is not None:
                 user.role = payload.role
 
-            sessions_revoked = before_status != "inativo" and next_status == "inativo"
+            role_changed = next_role != before_role
+            sessions_revoked = (
+                (before_status != "inativo" and next_status == "inativo")
+                or (role_changed and before_status != "pendente_ativacao")
+            )
             if sessions_revoked:
                 revoke_user_sessions(
                     db,
@@ -468,7 +480,10 @@ def update_user_access(
 
             users = (
                 db.query(Usuario)
-                .filter(Usuario.restaurante_id == tenant_id_int)
+                .filter(
+                    Usuario.restaurante_id == tenant_id_int,
+                    Usuario.removed_at.is_(None),
+                )
                 .order_by(Usuario.created_at.asc(), Usuario.nome.asc())
                 .all()
             )
@@ -545,6 +560,7 @@ def revoke_user_access_sessions(
                 .filter(
                     Usuario.id == user_id,
                     Usuario.restaurante_id == tenant_id_int,
+                    Usuario.removed_at.is_(None),
                 )
                 .with_for_update()
                 .one_or_none()
