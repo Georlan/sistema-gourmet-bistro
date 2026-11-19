@@ -154,3 +154,20 @@ def test_refund_ledger_controls_cancellation_without_erasing_payment_history(cha
             assert db.get(Comanda, cid).fechada is True
         assert payment.status == "aprovado"
         assert float(db.get(Comanda, cid).valor_pago) == 1
+
+
+@pytest.mark.parametrize("online_status,blocked", [("approved", True), ("pending", False), ("pending_released", False)])
+def test_online_approval_is_authoritative_but_pending_pix_is_not_received(char_client, char_setup, online_status, blocked):
+    rid = char_setup["restaurant_id"]
+    cid = _create_unpaid_order(rid)
+    with SessionLocal(restaurante_id=rid) as db:
+        command = db.get(Comanda, cid)
+        command.online_payment_status = online_status
+        db.commit()
+        request = RejectOrderCommand(restaurant_id=rid, order_id=cid, reason="Conferência financeira")
+        if blocked:
+            with pytest.raises(OrderValidationError, match="Estorne"):
+                OrderApplicationService.reject_order(db, request)
+        else:
+            OrderApplicationService.reject_order(db, request)
+            assert db.get(Comanda, cid).fechada is True

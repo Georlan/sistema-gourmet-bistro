@@ -1,9 +1,12 @@
 name: Payment Item Concurrency Targeted
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [main]
     paths:
+      - 'backend/app/application/orders/service.py'
+      - 'backend/tests/test_b1_cancel_payment_guard.py'
       - '.github/workflows/payment-item-concurrency-targeted.yml'
       - 'backend/alembic/versions/*payment_item_scope.py'
       - 'backend/app/models.py'

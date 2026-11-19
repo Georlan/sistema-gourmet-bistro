@@ -1,9 +1,12 @@
 name: Inventory Integrity Targeted
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [main]
     paths:
+      - 'backend/app/application/orders/service.py'
+      - 'backend/tests/test_b1_cancel_payment_guard.py'
       - '.github/workflows/inventory-integrity-targeted.yml'
       - 'backend/app/routes/estoque.py'
       - 'backend/app/routes/orders.py'
