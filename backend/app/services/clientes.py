@@ -405,18 +405,33 @@ def _insert_guest_cliente_if_needed(
 
     dialect = connection.dialect.name
     if dialect == "postgresql":
-        statement = pg_insert(clientes).values(**values).on_conflict_do_nothing(
-            index_elements=["restaurante_id", "telefone_hash"],
+        statement = (
+            pg_insert(clientes)
+            .values(**values)
+            .on_conflict_do_nothing(
+                index_elements=["restaurante_id", "telefone_hash"],
+            )
+            .returning(clientes.c.id)
         )
-        connection.execute(statement)
+        inserted_id = connection.execute(statement).scalar_one_or_none()
+        if inserted_id is not None:
+            return str(inserted_id), nome
     elif dialect == "sqlite":
-        statement = sqlite_insert(clientes).values(**values).on_conflict_do_nothing(
-            index_elements=["restaurante_id", "telefone_hash"],
+        statement = (
+            sqlite_insert(clientes)
+            .values(**values)
+            .on_conflict_do_nothing(
+                index_elements=["restaurante_id", "telefone_hash"],
+            )
+            .returning(clientes.c.id)
         )
-        connection.execute(statement)
+        inserted_id = connection.execute(statement).scalar_one_or_none()
+        if inserted_id is not None:
+            return str(inserted_id), nome
     else:
         try:
             connection.execute(clientes.insert().values(**values))
+            return cliente_id, nome
         except IntegrityError:
             # Em dialetos sem UPSERT explícito, a constraint composta ainda é a
             # última defesa. O SELECT seguinte recupera o vencedor da corrida.
