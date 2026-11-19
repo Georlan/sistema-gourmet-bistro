@@ -46,12 +46,20 @@ def get_or_create_control(
     *,
     for_update: bool = False,
 ) -> OnlineOrderControl:
-    query = db.query(OnlineOrderControl).filter(
-        OnlineOrderControl.restaurante_id == restaurante_id,
-    )
-    if for_update:
-        query = query.with_for_update()
-    control = query.first()
+    control = None
+    if not for_update:
+        get_fn = getattr(db, "get", None)
+        if callable(get_fn):
+            candidate = get_fn(OnlineOrderControl, restaurante_id)
+            if candidate is not None and int(candidate.restaurante_id) == int(restaurante_id):
+                control = candidate
+    if control is None:
+        query = db.query(OnlineOrderControl).filter(
+            OnlineOrderControl.restaurante_id == restaurante_id,
+        )
+        if for_update:
+            query = query.with_for_update()
+        control = query.first()
     if control is None:
         try:
             with db.begin_nested():

@@ -59,21 +59,26 @@ class ValidationDataLoader:
         min_delivery_subtotal = Decimal("0.00")
         enforce_minimum_pickup = False
         active_cardapio_id: str | None = None
-        config = (
-            db.query(ConfiguracaoRestaurante)
-            .options(
-                load_only(
-                    ConfiguracaoRestaurante.pedido_minimo,
-                    ConfiguracaoRestaurante.pedido_minimo_retirada,
-                    ConfiguracaoRestaurante.cardapio_ativo_id,
-                    ConfiguracaoRestaurante.cardapios_adicionais_ids,
-                    raiseload=True,
-                ),
-                raiseload(ConfiguracaoRestaurante.restaurante),
+        db_info = getattr(db, "info", None)
+        cached_configs = db_info.get("_koma_config_by_rid") if isinstance(db_info, dict) else None
+        if isinstance(cached_configs, dict) and restaurante_id in cached_configs:
+            config = cached_configs[restaurante_id]
+        else:
+            config = (
+                db.query(ConfiguracaoRestaurante)
+                .options(
+                    load_only(
+                        ConfiguracaoRestaurante.pedido_minimo,
+                        ConfiguracaoRestaurante.pedido_minimo_retirada,
+                        ConfiguracaoRestaurante.cardapio_ativo_id,
+                        ConfiguracaoRestaurante.cardapios_adicionais_ids,
+                        raiseload=True,
+                    ),
+                    raiseload(ConfiguracaoRestaurante.restaurante),
+                )
+                .filter(ConfiguracaoRestaurante.restaurante_id == restaurante_id)
+                .first()
             )
-            .filter(ConfiguracaoRestaurante.restaurante_id == restaurante_id)
-            .first()
-        )
         if config:
             if config.pedido_minimo:
                 min_delivery_subtotal = to_money_decimal(config.pedido_minimo)
