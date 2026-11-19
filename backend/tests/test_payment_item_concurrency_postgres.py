@@ -624,7 +624,7 @@ def test_payment_racing_operational_cancellation_never_leaves_paid_cancelled_ite
     from app.application.orders.commands import CancelOrderCommand
     from app.application.orders.service import OrderApplicationService, OrderValidationError
 
-    rid = 9791
+    rid = 98761
     uid = "paid-cancel-race-user"
     cid = "paid-cancel-race-command"
     _seed_scenario(rid=rid, user_id=uid, commands=[(cid, None, [("paid-cancel-race-item", 42)])])

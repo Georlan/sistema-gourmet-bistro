@@ -7,6 +7,10 @@ from decimal import Decimal
 
 import pytest
 
+from app.application.orders.commands import CancelOrderCommand, RejectOrderCommand
+from app.application.orders.service import OrderApplicationService, OrderValidationError
+from app.models import CaixaTurno
+from app.services.cash_reconciliation import create_refund
 from app.database import SessionLocal
 from app.models import Comanda, Pagamento
 from tests.characterization.orders.fixtures import char_client, char_setup
@@ -81,10 +85,6 @@ def test_cannot_cancel_or_reject_order_with_approved_payment(char_client, char_s
         assert pag is not None and pag.status == "aprovado"
 
 
-from app.application.orders.commands import CancelOrderCommand, RejectOrderCommand
-from app.application.orders.service import OrderApplicationService, OrderValidationError
-from app.models import CaixaTurno
-from app.services.cash_reconciliation import create_refund
 
 
 def _create_unpaid_order(rid):
