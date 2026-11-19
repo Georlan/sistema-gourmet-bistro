@@ -38,7 +38,7 @@ class KomaTerminalBackendApiTest {
     fun postsNormalizedTerminalResult() {
         val transport = FakeTransport(
             ArrayDeque(
-                listOf(HttpResponsePayload(200, """{"intent_id":"intent-1","status":"aprovada","replayed":false}"""))
+                listOf(HttpResponsePayload(200, """{"intent_id":"intent-1","status":"aprovada","replayed":false,"mesa_liberada":true}"""))
             )
         )
         val api = KomaTerminalBackendApi(transport)
@@ -59,6 +59,7 @@ class KomaTerminalBackendApiTest {
             TerminalPaymentResult(PaymentOutcome.APPROVED, reference = "pb-123", message = "ok"),
         )
         assertEquals("aprovada", ack.status)
+        assertTrue(ack.tableReleased)
         val body = transport.requests.single().second
         assertTrue(body.contains("\"outcome\":\"approved\""))
         assertTrue(body.contains("\"reference\":\"pb-123\""))
