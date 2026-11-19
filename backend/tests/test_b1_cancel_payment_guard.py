@@ -87,19 +87,28 @@ from app.models import CaixaTurno
 from app.services.cash_reconciliation import create_refund
 
 
+def _create_unpaid_order(rid):
+    from app.application.orders.commands import (
+        CreateOrderCommand, CustomerInput, FulfillmentType, OrderChannel, OrderItemInput,
+    )
+    # The matrix characterizes the financial service, independently of public
+    # per-phone/IP quotas. The HTTP paid-order regression above covers the edge.
+    with SessionLocal(restaurante_id=rid) as db:
+        return OrderApplicationService.create_order(db, CreateOrderCommand(
+            restaurant_id=rid, channel=OrderChannel.WEB_CARDAPIO,
+            fulfillment=FulfillmentType.PICKUP,
+            customer=CustomerInput(name="Estado financeiro", phone="81999994444"),
+            payment_method="dinheiro", idempotency_key=f"guard-{uuid.uuid4().hex}",
+            items=(OrderItemInput(product_id="prod-char-simples", quantity=Decimal("1")),),
+        )).comanda_id
+
+
 @pytest.mark.parametrize("method", ["dinheiro", "pix", "cartao_credito"])
 @pytest.mark.parametrize("operation", ["cancel", "reject"])
 @pytest.mark.parametrize("payment_status,blocked", [("pendente", False), ("cancelado", False), ("aprovado", True)])
 def test_payment_guard_uses_canonical_payment_state(char_client, char_setup, operation, payment_status, blocked, method):
     rid = char_setup["restaurant_id"]
-    created = char_client.post("/cardapio/pedidos", json={
-        "restaurante_id": rid, "tipo_pedido": "retirada", "cliente_nome": "Estado financeiro",
-        "cliente_telefone": "81999994444", "forma_pagamento": "na_entrega",
-        "forma_pagamento_detalhe": "dinheiro", "idempotency_key": f"state-{uuid.uuid4().hex}",
-        "itens": [{"produto_id": "prod-char-simples", "quantidade": 1}],
-    })
-    assert created.status_code == 201, created.text
-    cid = created.json()["comanda_id"]
+    cid = _create_unpaid_order(rid)
     with SessionLocal(restaurante_id=rid) as db:
         turno = db.query(CaixaTurno).filter_by(restaurante_id=rid, status="aberto").one()
         db.add(Pagamento(id=f"guard-{uuid.uuid4().hex}", restaurante_id=rid, comanda_id=cid,
@@ -123,14 +132,7 @@ def test_payment_guard_uses_canonical_payment_state(char_client, char_setup, ope
 @pytest.mark.parametrize("refund_value,blocked", [(Decimal("0.50"), True), (Decimal("1.00"), False)])
 def test_refund_ledger_controls_cancellation_without_erasing_payment_history(char_client, char_setup, refund_value, blocked):
     rid = char_setup["restaurant_id"]
-    created = char_client.post("/cardapio/pedidos", json={
-        "restaurante_id": rid, "tipo_pedido": "retirada", "cliente_nome": "Estorno auditável",
-        "cliente_telefone": "81999994444", "forma_pagamento": "na_entrega",
-        "forma_pagamento_detalhe": "dinheiro", "idempotency_key": f"refund-{uuid.uuid4().hex}",
-        "itens": [{"produto_id": "prod-char-simples", "quantidade": 1}],
-    })
-    assert created.status_code == 201, created.text
-    cid = created.json()["comanda_id"]
+    cid = _create_unpaid_order(rid)
     paid = char_client.post(f"/caixa/comandas/{cid}/pagar", headers=char_setup["headers"], json={
         "valor": 1, "metodo": "dinheiro", "idempotency_key": f"partial-{uuid.uuid4().hex}",
     })
