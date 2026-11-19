@@ -565,7 +565,9 @@ internal class WaiterApi(
     }
 
     fun open(tableId: Int, operatorId: String, identifier: String? = null): String {
+        require(idempotencyKey.trim().length in 8..128)
         val body = JSONObject()
+            .put("idempotency_key", idempotencyKey)
             .put("mesa_id", tableId)
             .put("garcom_id", operatorId)
             .put("tipo", "Consumo no Local")
@@ -610,8 +612,11 @@ internal class WaiterApi(
         capture: String?,
         scope: String,
         itemIds: List<String> = emptyList(),
+        idempotencyKey: String = "smartpos-create-${UUID.randomUUID()}",
     ): PaymentIntentPreview {
+        require(idempotencyKey.trim().length in 8..128)
         val body = JSONObject()
+            .put("idempotency_key", idempotencyKey)
             .put("mesa_id", tableId)
             .put("valor", BigDecimal.valueOf(amountCents, 2).toPlainString())
             .put("metodo", method)

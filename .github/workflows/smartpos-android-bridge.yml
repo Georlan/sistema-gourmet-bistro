@@ -49,9 +49,22 @@ jobs:
               -dname "CN=Android Debug,O=Android,C=US"
           fi
       - name: Test bridge and waiter app, then build debug APK
-        run: gradle -p smartpos-android test :app:testPhoneDebugUnitTest :app:testPagbankDebugUnitTest :app:assemblePhoneDebug :app:assemblePagbankDebug :app:assemblePhoneRelease :app:assemblePagbankRelease --no-daemon --continue
+        run: gradle -p smartpos-android :test :app:testPhoneDebugUnitTest :app:testPagbankDebugUnitTest :app:assemblePhoneDebug :app:assemblePagbankDebug :app:assemblePhoneRelease :app:assemblePagbankRelease --no-daemon --continue
+      - name: Record source revision
+        if: success()
+        run: git rev-parse HEAD > smartpos-android/app/build/outputs/apk/SOURCE_COMMIT.txt
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: smartpos-test-reports
+          path: |
+            smartpos-android/build/test-results/
+            smartpos-android/app/build/test-results/
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v6
         with:
           name: koma-garcom-smartpos-apks
-          path: smartpos-android/app/build/outputs/apk/**/*.apk
+          path: |
+            smartpos-android/app/build/outputs/apk/**/*.apk
+            smartpos-android/app/build/outputs/apk/SOURCE_COMMIT.txt
           if-no-files-found: error

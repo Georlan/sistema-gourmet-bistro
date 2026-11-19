@@ -28,11 +28,50 @@ internal data class SavedOperatorSession(
         token.isNotBlank() && expiresAtMs > nowMs
 }
 
+internal data class SavedPendingPayment(
+    val restaurantId: Int,
+    val operatorId: String,
+    val tableId: Int,
+    val tableName: String,
+    val amountCents: Long,
+    val method: String,
+    val capture: String?,
+    val scope: String,
+    val itemIds: List<String>,
+    val receivedCents: Long?,
+    val idempotencyKey: String,
+    val simulated: Boolean,
+    val intentId: String? = null,
+) {
+    fun encode(): JSONObject = JSONObject()
+        .put("restaurantId", restaurantId).put("operatorId", operatorId)
+        .put("tableId", tableId).put("tableName", tableName).put("amountCents", amountCents)
+        .put("method", method).put("capture", capture ?: JSONObject.NULL).put("scope", scope)
+        .put("itemIds", JSONArray(itemIds)).put("receivedCents", receivedCents ?: JSONObject.NULL)
+        .put("idempotencyKey", idempotencyKey).put("simulated", simulated)
+        .put("intentId", intentId ?: JSONObject.NULL)
+
+    companion object {
+        fun decode(obj: JSONObject) = SavedPendingPayment(
+            restaurantId = obj.getInt("restaurantId"), operatorId = obj.getString("operatorId"),
+            tableId = obj.getInt("tableId"), tableName = obj.getString("tableName"),
+            amountCents = obj.getLong("amountCents"), method = obj.getString("method"),
+            capture = if (obj.isNull("capture")) null else obj.getString("capture"),
+            scope = obj.getString("scope"),
+            itemIds = obj.getJSONArray("itemIds").let { arr -> List(arr.length()) { arr.getString(it) } },
+            receivedCents = if (obj.isNull("receivedCents")) null else obj.getLong("receivedCents"),
+            idempotencyKey = obj.getString("idempotencyKey"), simulated = obj.getBoolean("simulated"),
+            intentId = if (obj.isNull("intentId")) null else obj.getString("intentId"),
+        )
+    }
+}
+
 internal data class TerminalState(
     val terminalId: String,
     val boundRestaurant: Restaurant?,
     val activeOperatorId: String?,
     val operators: List<SavedOperatorSession>,
+    val pendingPayment: SavedPendingPayment? = null,
 ) {
     val activeOperator: SavedOperatorSession?
         get() = operators.firstOrNull { it.operator.id == activeOperatorId }
@@ -100,16 +139,14 @@ internal class TerminalSessionStore(
             readFile(target)
         } catch (_: FileNotFoundException) {
             return initial(scope)
-        } catch (_: Exception) {
-            return initial(scope)
         }
         if (payload == null) return initial(scope)
         return runCatching {
             val plain = cipher.decrypt(scope.toByteArray(Charsets.UTF_8), payload)
                 .toString(Charsets.UTF_8)
             decodeState(plain)
-        }.getOrElse {
-            initial(scope)
+        }.getOrElse { exc ->
+            throw IllegalStateException("Dados protegidos do terminal indisponíveis; preservar para conciliação.", exc)
         }
     }
 
@@ -125,6 +162,9 @@ internal class TerminalSessionStore(
         val now = nowProvider()
         val current = load(scope)
         val restaurant = session.restaurant
+        require(current.pendingPayment == null || current.pendingPayment.operatorId == session.operator.id) {
+            "Reautentique o operador responsável pelo pagamento pendente."
+        }
         val sameRestaurant = current.boundRestaurant == null || current.boundRestaurant.id == restaurant.id
         require(sameRestaurant) { "O terminal pertence a outro restaurante. Novo vínculo autorizado necessário." }
         require(ttlMs > 0) { "Prazo de sessão inválido." }
@@ -152,6 +192,7 @@ internal class TerminalSessionStore(
             boundRestaurant = restaurant,
             activeOperatorId = entry.operator.id,
             operators = updated.sortedBy { it.operator.name.lowercase() },
+            pendingPayment = current.pendingPayment,
         )
         persist(scope, next)
         return next
@@ -159,6 +200,7 @@ internal class TerminalSessionStore(
 
     fun switchOperator(scope: String, operatorId: String): TerminalState {
         val current = load(scope)
+        require(current.pendingPayment == null) { "Pagamento pendente impede troca de operador." }
         require(current.operators.any { it.operator.id == operatorId && it.hasActiveToken(nowProvider()) }) {
             "Operador sem sessão válida. Entre novamente."
         }
@@ -199,12 +241,28 @@ internal class TerminalSessionStore(
 
     fun unbindTerminal(scope: String): TerminalState {
         val current = load(scope)
+        require(current.pendingPayment == null) { "Pagamento pendente impede desvinculação." }
         val next = TerminalState(
             terminalId = current.terminalId,
             boundRestaurant = null,
             activeOperatorId = null,
             operators = emptyList(),
         )
+        persist(scope, next)
+        return next
+    }
+
+    @Synchronized
+    fun savePayment(scope: String, payment: SavedPendingPayment?): TerminalState {
+        val current = load(scope)
+        if (payment != null) {
+            require(payment.restaurantId == current.boundRestaurant?.id) { "Restaurante do pagamento divergente." }
+            require(payment.operatorId == current.activeOperatorId) { "Operador do pagamento divergente." }
+            require(current.pendingPayment == null || current.pendingPayment.idempotencyKey == payment.idempotencyKey) {
+                "Concilie o pagamento anterior antes de iniciar outro."
+            }
+        }
+        val next = current.copy(pendingPayment = payment)
         persist(scope, next)
         return next
     }
@@ -253,6 +311,7 @@ internal class TerminalSessionStore(
                     .put("expiresAtMs", op.expiresAtMs),
             )
         }
+        obj.put("pendingPayment", state.pendingPayment?.encode() ?: JSONObject.NULL)
         obj.put("operators", arr)
         return obj.toString()
     }
@@ -287,7 +346,9 @@ internal class TerminalSessionStore(
             val expiry = runCatching { jwtExpiryMillis(op.token) }.getOrDefault(0L)
             op.copy(expiresAtMs = minOf(op.expiresAtMs, expiry))
         }
-        return TerminalState(terminalId, boundRestaurant, activeOperatorId, validated)
+        val pending = obj.optJSONObject("pendingPayment")?.let(SavedPendingPayment::decode)
+        require(pending == null || pending.restaurantId == boundRestaurant?.id)
+        return TerminalState(terminalId, boundRestaurant, activeOperatorId, validated, pending)
     }
 
     private fun jwtExpiryMillis(token: String): Long = try {
@@ -310,7 +371,7 @@ internal class TerminalSessionStore(
     }
 
     private fun readFile(target: File): ByteArray? {
-        if (!target.exists()) return null
+        if (!target.exists() && !File(target.path + ".bak").exists()) return null
         return runCatching {
             AtomicFile(target).readFully()
         }.getOrElse {

@@ -513,4 +513,69 @@ class WaiterApiTest {
         assertThrows(Exception::class.java) { store.get("operation-123") }
     }
 
+    @Test
+    fun paymentCreationRetriesWithTheSameProvidedKeyAfterLostResponse() {
+        val requests = mutableListOf<String>()
+        val api = WaiterApi(object : HttpTransport {
+            override fun post(path: String, body: String): HttpResponsePayload {
+                requests.add(body)
+                if (requests.size == 1) throw IOException("response lost")
+                return HttpResponsePayload(201, """{"id":"pi-1","mesa_id":4,"valor":"42.50"}""")
+            }
+        })
+        assertThrows(IOException::class.java) {
+            api.createPaymentIntent(4, 4250L, "credito", "provider_integrado", "valor", idempotencyKey = "stable-payment-123")
+        }
+        api.createPaymentIntent(4, 4250L, "credito", "provider_integrado", "valor", idempotencyKey = "stable-payment-123")
+        assertEquals(requests.first(), requests.last())
+        assertEquals("stable-payment-123", JSONObject(requests.last()).getString("idempotency_key"))
+    }
+
+    @Test
+    fun pendingPaymentSurvivesLoginAndRestartAndBlocksIdentityChanges() {
+        val directory = tempFolder.newFolder("payment-session")
+        val cipher = object : TerminalKeyCipher {
+            override fun encrypt(aad: ByteArray, plain: ByteArray) = plain
+            override fun decrypt(aad: ByteArray, cipherText: ByteArray) = cipherText
+        }
+        fun store() = TerminalSessionStore(directory, cipher, nowProvider = { 1_000_000L })
+        val session = Session(Restaurant(8, "A"), Operator("u1", "Ana"), true, true)
+        store().saveLogin("api", session, "ana", sessionToken(1200))
+        val payment = SavedPendingPayment(8, "u1", 4, "Mesa 4", 4250L, "credito",
+            "provider_integrado", "valor", emptyList(), null, "stable-payment-123", false)
+        store().savePayment("api", payment)
+        assertEquals(payment, store().load("api").pendingPayment)
+        assertNull(store().load("other-api").pendingPayment)
+        assertEquals(payment, store().saveLogin("api", session, "ana", sessionToken(1200)).pendingPayment)
+        assertThrows(IllegalArgumentException::class.java) { store().unbindTerminal("api") }
+        assertThrows(IllegalArgumentException::class.java) { store().switchOperator("api", "u2") }
+        assertThrows(IllegalArgumentException::class.java) {
+            store().savePayment("api", payment.copy(restaurantId = 9))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            store().savePayment("api", payment.copy(idempotencyKey = "another-operation"))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            store().saveLogin("api", session.copy(operator = Operator("u2", "Beto")), "beto", sessionToken(1201))
+        }
+        assertEquals(payment.copy(intentId = "pi-1"), store().savePayment("api", payment.copy(intentId = "pi-1")).pendingPayment)
+        store().savePayment("api", null)
+        assertNull(store().load("api").pendingPayment)
+    }
+
+    @Test
+    fun corruptTerminalSessionIsPreservedAndNeverBecomesANewInstallation() {
+        val directory = tempFolder.newFolder("corrupt-session")
+        val cipher = object : TerminalKeyCipher {
+            override fun encrypt(aad: ByteArray, plain: ByteArray) = plain
+            override fun decrypt(aad: ByteArray, cipherText: ByteArray) = cipherText
+        }
+        val store = TerminalSessionStore(directory, cipher)
+        store.load("api")
+        val file = directory.listFiles()!!.single()
+        file.writeText("corrupt")
+        assertThrows(IllegalStateException::class.java) { store.load("api") }
+        assertEquals("corrupt", file.readText())
+    }
+
 }
