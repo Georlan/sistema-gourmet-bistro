@@ -143,14 +143,14 @@ def test_refund_ledger_controls_cancellation_without_erasing_payment_history(cha
         args = dict(restaurante_id=rid, payment_id=payment.id, turno_id=payment.turno_id,
                     usuario_id="usr-char-admin", valor=refund_value, motivo="Teste de estorno", idempotency_key=key)
         first = create_refund(db, **args)
-        db.commit()
+        db.flush()
         assert create_refund(db, **args).id == first.id
         command = CancelOrderCommand(restaurant_id=rid, order_id=cid, reason="Após estorno")
         if blocked:
             with pytest.raises(OrderValidationError, match="Estorne"):
-                OrderApplicationService.cancel_order(db, command)
+                OrderApplicationService.cancel_order(db, command, commit=False)
         else:
-            OrderApplicationService.cancel_order(db, command)
+            OrderApplicationService.cancel_order(db, command, commit=False)
             assert db.get(Comanda, cid).fechada is True
         assert payment.status == "aprovado"
         assert float(db.get(Comanda, cid).valor_pago) == 1
