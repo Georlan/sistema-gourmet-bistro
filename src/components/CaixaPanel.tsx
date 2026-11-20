@@ -844,7 +844,7 @@ export function CaixaPanel({
               >
                 <Menu size={16} />
               </button>
-              <h2 className={"font-serif font-bold text-xs sm:text-sm tracking-tight text-koma-foreground truncate"}>
+              <h2 className={"font-display font-bold text-xs sm:text-sm tracking-tight text-koma-foreground truncate"}>
                 {(activeTab === 'relatorios' || activeTab === 'dashboard') && 'Relatórios'}
                 {activeTab === 'operacao' && 'Vendas'}
                 {activeTab === 'cardapio' && 'Cardápio'}

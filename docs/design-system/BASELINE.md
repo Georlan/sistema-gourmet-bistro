@@ -1,6 +1,10 @@
-# Fundação visual KÔMA — levantamento inicial
+# Fundação visual KÔMA — baseline da Fase 0
 
-Estado: **inventário parcial, não homologado**. Base de código: `214cdc1005fe6063f6bca166d9d97e27164dac58` (main, 02/11/2026). Este documento não certifica consistência visual nem substitui os contratos das telas. Para decisões já registradas, consulte [fundação CSS](../../src/styles/komaFoundation.css), [cores operacionais](../engineering/operational-brand-colors.md) e [direção do Caixa](../design/cashier-visual-direction.md). O documento do Entregador em `docs/design/courier-local-refinement.md` descreve fases históricas: confira a implementação atual antes de extrapolar suas afirmações.
+Estado: **fundação visual compartilhada validada nas superfícies de referência; módulos pendentes mapeados para fases futuras**. Base de código reconciliada: `8eeb1e15` (`main`, 16/11/2026).
+
+> **Escopo desta validação:** este documento registra a **validação da fundação visual compartilhada** (tokens, contraste claro/escuro, tipografia, integridade de rotas/assets e componentes base), o que **não** equivale à homologação operacional completa de cada aplicação em produção. Homologação funcional/operacional depende das suítes E2E de domínio, testes de backend e verificação física em dispositivo/impressora quando aplicável.
+
+Para decisões registradas, consulte [DESIGN_SYSTEM.md](DESIGN_SYSTEM.md), [UI_IDENTITY_CONTRACT.md](UI_IDENTITY_CONTRACT.md), [fundação CSS](../../src/styles/komaFoundation.css), [cores operacionais](../engineering/operational-brand-colors.md) e [direção do Caixa](../design/cashier-visual-direction.md).
 
 ## Perfis
 
@@ -38,15 +42,22 @@ Inventário ainda incompleto: botões, campos, navegação, overlays e duplicaç
 - Cardápio tem WebSocket e canais SSE com contingências; `paymentStatusPolling.ts` trata um fluxo financeiro. Não eliminar polling somente por existir outro canal: confirmar consumidores, freshness, falhas e isolamento.
 - Preferir compartilhar leitura no owner existente, evitar consulta por card, interromper trabalho dispensável fora de vista, carregar imagens fora da área visível sob demanda e reservar suas dimensões. Preservar imagem crítica e reconciliação operacional. Essas são orientações, não melhorias medidas nesta rodada.
 
-## Cobertura e pendências
+## Cobertura das superfícies na Fase 0 (16/11/2026)
 
-[Comparação visual inicial e capturas](VISUAL-2026-11-02.md), com limites e resultados dos testes.
+A tabela abaixo relaciona a validação da **fundação visual compartilhada** desta rodada (`audit:light` 27/27 pares AA, `surface-integrity`, `brand-hierarchy`, `cashier-header-art`) com as suítes dedicadas e PRs anteriores de cada superfície. Ela **não** substitui a homologação operacional completa de produção.
 
-| Superfície | Código identificado | Validação visual atual |
+| Superfície | Código principal | Evidências reais por superfície (fundação visual + histórico) |
 | --- | --- | --- |
-| Cardápio | `src/cardapio/CardapioPage.tsx` | Captura local em 390 e 1366; ver comparação |
-| Garçom | `src/components/mesas/` e `src/components/MenuPanel.tsx` | Captura local em 390 e 1366; ver comparação |
-| Caixa/Pedidos | `src/components/caixa/orders/CaixaOrdersWorkspace.tsx` | Captura local em 390 e 1366; PR #1232 incorporado à main |
-| Entregador | `src/components/MotoboyPwaPage.tsx`, `src/components/courier/` | Captura local em 390 e 1366; dispositivo físico não validado |
+| Cardápio Digital | `src/cardapio/CardapioPage.tsx` | E2E `cardapio-foundation-accessibility.spec.ts`, `cardapio-mobile-layout.spec.ts`, `cardapio-artistic-parity.spec.ts`; PRs `#1289`, `#1342`, `#1348`; `surface-integrity` (`mobile-390` e `desktop-1366`). |
+| App do Garçom | `src/components/mesas/`, `src/components/MenuPanel.tsx` | E2E `waiter-modal-keyboard.spec.ts`, `waiter-salon-wave1.spec.ts`, `waiter-config-layout.spec.ts`; PR `#1348`; unit `waiter*.test.ts`. |
+| App do Entregador | `src/components/MotoboyPwaPage.tsx`, `src/components/courier/` | E2E `courier-refinement.spec.ts`, `courier-theme-transition.spec.ts`, `courier-realtime-cache.spec.ts`; PR `#1374`; inspeção somente leitura em `app.komafood.com.br/entregador`. |
+| Caixa — Pedidos/Kanban | `src/components/caixa/orders/CaixaOrdersWorkspace.tsx` | E2E `brand-hierarchy.spec.ts`, `cashier-header-art.spec.ts`, `cashier-detail-design.spec.ts`, `surface-integrity.spec.ts`; PRs `#1350`–`#1354`, `#1357`; inspeção somente leitura em `app.komafood.com.br`. |
+| Caixa — PDV/Balcão | `src/components/caixa/pdv/CashierPdvView.tsx` | E2E `cashier-pdv-tone.spec.ts`, `cashier-pdv-product-card.spec.ts`, `cashier-pdv-mobile-viewport.spec.ts`, `surface-integrity.spec.ts`; PRs `#1302`–`#1316`. |
+| Caixa — Salão | `src/components/caixa/salao/CaixaSalonTab.tsx` | E2E `cashier-salon-hierarchy.spec.ts`, `surface-integrity.spec.ts`; PRs `#1310`–`#1313`, `#1319`/`#1320`; unit `sharedTableCard.test.ts`. |
+| Caixa — Cozinha/KDS | `src/components/caixa/kitchen/` | E2E `kds-visual-hierarchy.spec.ts`, `kds-workspace-refactor.spec.ts`, `kds-start-ready.spec.ts`, `surface-integrity.spec.ts`; PRs `#1317`–`#1324`. |
+| Login unificado | `src/components/auth/UnifiedOperationalEntry.tsx`, `OperationalLogin.tsx` | E2E `login-refinement.spec.ts`, `auth-persistence.spec.ts`, `installed-pwa-auth-persistence.spec.ts`; PR `#1366`; unit `unifiedOperationalEntry.test.ts`; inspeção em `app.komafood.com.br`. |
+| Relacionamento/CRM | `src/components/caixa/customers/` | E2E `relationship-navigation.spec.ts`, `customer-crm.spec.ts`, `surface-integrity.spec.ts`; PR `#1340`; reutiliza `KomaEmptyState` e `KomaMetricGroup`. |
 
-Faltam capturas de estados adicionais e temas, matriz completa de contraste e interações, escala tipográfica e espaçamento acordados, inventário completo de assets e componentes, medições de rede e testes de regressão. Nenhuma das três tarefas da Fase 0 está encerrada por este levantamento.
+### Módulos pendentes para fases futuras (não homologados como modernizados)
+- **Estoque, Relatórios, Configurações:** compatíveis com tokens `--koma-*`, pendentes de modernização visual dedicada.
+- **Super Admin (`src/super-admin/`):** usa parcialmente `koma-*`, mas mantém cores hardcoded (`zinc-*`, `violet-*`, etc.) e tipografia/densidade pré-fundação; redesenho planejado para fase própria.

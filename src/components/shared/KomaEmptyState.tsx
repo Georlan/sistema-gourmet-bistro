@@ -103,7 +103,7 @@ export const KomaEmptyState: React.FC<KomaEmptyStateProps> = ({
       )}
     >
       {renderIcon()}
-      <h4 className="font-serif font-bold text-sm sm:text-base text-koma-foreground leading-snug">
+      <h4 className="font-display font-bold text-sm sm:text-base text-koma-foreground leading-snug">
         {title}
       </h4>
       {description && (
