@@ -105,3 +105,52 @@ test('guest checkout never restores a previous delivery address', async () => {
   const loaded = loadGuestCheckoutContact(12);
   assert.equal(loaded?.address, '');
 });
+
+
+test('remembering contact requires opt-in, survives a new tab and isolates restaurant IDs', async () => {
+  const { localStorage, sessionStorage } = installStorage();
+  const { rememberGuestContact, loadGuestCheckoutContact, clearGuestCheckoutContact } = await import('../src/cardapio/guestCheckoutSession');
+  const contact = { name: 'Ana', phone: '85999991111', email: 'private@example.com', address: 'Private address' };
+  assert.equal(rememberGuestContact(7, contact, true), true);
+  sessionStorage.clear();
+  assert.deepEqual(loadGuestCheckoutContact(7), { ...contact, email: '', address: '' });
+  assert.equal(loadGuestCheckoutContact(8), null);
+  const raw = localStorage.getItem('koma_remembered_contact:7')!;
+  assert.ok(!raw.includes('private@example.com'));
+  assert.ok(!raw.includes('Private address'));
+  assert.ok(!raw.includes('token'));
+  clearGuestCheckoutContact(7);
+  assert.equal(loadGuestCheckoutContact(7), null);
+});
+
+test('unchecking remember removes durable data but preserves the current checkout', async () => {
+  const { sessionStorage } = installStorage();
+  const { rememberGuestContact, saveGuestCheckoutContact, loadGuestCheckoutContact, loadRememberedGuestContact } = await import('../src/cardapio/guestCheckoutSession');
+  const contact = { name: 'Ana', phone: '85999991111', email: '', address: '' };
+  saveGuestCheckoutContact(7, contact);
+  rememberGuestContact(7, contact, true);
+  rememberGuestContact(7, contact, false);
+  assert.equal(loadRememberedGuestContact(7), null);
+  assert.deepEqual(loadGuestCheckoutContact(7), contact);
+  sessionStorage.clear();
+  assert.equal(loadGuestCheckoutContact(7), null);
+});
+
+test('remembered contacts expire and reject malformed or incomplete records', async () => {
+  const { localStorage } = installStorage();
+  const { loadRememberedGuestContact, rememberGuestContact } = await import('../src/cardapio/guestCheckoutSession');
+  for (const raw of ['broken', JSON.stringify({ version: 1, expiresAt: Date.now() - 1, contact: { phone: '85999991111' } }), JSON.stringify({ version: 1, expiresAt: Date.now() + 10000, contact: { phone: '123' } })]) {
+    localStorage.setItem('koma_remembered_contact:7', raw);
+    assert.equal(loadRememberedGuestContact(7), null);
+  }
+  assert.equal(rememberGuestContact(7, { name: '', phone: '', email: '', address: '' }, true), false);
+});
+
+test('blocked browser storage never crashes auth prefill', async () => {
+  const blocked = { getItem() { throw new Error('blocked'); }, removeItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: blocked });
+  Object.defineProperty(globalThis, 'sessionStorage', { configurable: true, value: blocked });
+  const { loadGuestCheckoutContact, rememberGuestContact } = await import('../src/cardapio/guestCheckoutSession');
+  assert.equal(loadGuestCheckoutContact(7), null);
+  assert.equal(rememberGuestContact(7, { name: 'Ana', phone: '85999991111', email: '', address: '' }, true), false);
+});
