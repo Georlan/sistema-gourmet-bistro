@@ -2,6 +2,7 @@ import React from 'react';
 import { API_BASE_URL } from '../../config/api';
 import { authFetch, authRequestErrorMessage } from '../../utils/authRequest';
 import { mapCustomerProfile, saveCustomerSession } from '../../cardapio/customerSession';
+import { allowCustomerBrowserRestore } from '../../cardapio/customerBrowserSession';
 import { takeCustomerRegistrationToken } from './customerRegistrationToken';
 
 type ConfirmationState = 'confirming' | 'phone_required' | 'done' | 'error';
@@ -35,6 +36,9 @@ export default function CustomerRegistrationConfirmPage() {
       token: payload.access_token,
       profile,
     });
+    // Registration-confirmation responses also establish an HttpOnly browser cookie.
+    // Clear a previous explicit logout marker only after verified account confirmation.
+    allowCustomerBrowserRestore(payload.restaurante_id);
     setRestaurantId(payload.restaurante_id);
     setState('done');
     setMessage('Conta confirmada. Você já pode continuar no cardápio.');
@@ -51,6 +55,7 @@ export default function CustomerRegistrationConfirmPage() {
     try {
       const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/cadastro/confirmar`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),
       });
@@ -129,6 +134,7 @@ export default function CustomerRegistrationConfirmPage() {
     try {
       const response = await authFetch(`${API_BASE_URL}/cardapio/clientes/cadastro/telefone/confirmar`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: phoneClaimToken, codigo: code }),
       });

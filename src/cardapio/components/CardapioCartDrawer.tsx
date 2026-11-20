@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 import { formatBrazilianPhone, normalizeBrazilianPhone } from "../customerSession";
 import { isValidCpf, isValidCnpj } from "../../legal/taxId";
-import { loadGuestCheckoutContact, saveGuestCheckoutContact, loadRememberedGuestContact, rememberGuestContact } from "../guestCheckoutSession";
+import { loadGuestCheckoutContact, saveGuestCheckoutContact } from "../guestCheckoutSession";
 import {
   type CustomerRecognitionStatus,
   isCompleteBrazilianPhone,
@@ -204,8 +204,6 @@ export default function CardapioCartDrawer({
   const [hydratedGuestRestaurantId, setHydratedGuestRestaurantId] = useState<string | null>(() => (
     user ? null : String(restaurantId)
   ));
-  const [rememberContact, setRememberContact] = useState(() => Boolean(loadRememberedGuestContact(restaurantId)));
-  const [rememberError, setRememberError] = useState("");
   const [guestDocument, setGuestDocument] = useState("");
   const [customerRecognition, setCustomerRecognition] = useState<CustomerRecognitionStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -318,8 +316,6 @@ export default function CardapioCartDrawer({
       return;
     }
 
-    setRememberContact(Boolean(loadRememberedGuestContact(restaurantId)));
-    setRememberError("");
     let parsed = null;
     try {
       parsed = loadGuestCheckoutContact(restaurantId);
@@ -379,16 +375,10 @@ export default function CardapioCartDrawer({
         address: address.trim(),
       };
       saveGuestCheckoutContact(restaurantId, contact);
-      if (isCompleteBrazilianPhone(guestPhone)) {
-        const saved = rememberGuestContact(restaurantId, contact, rememberContact);
-        setRememberError(saved ? "" : "Não foi possível lembrar os dados neste navegador.");
-      } else {
-        rememberGuestContact(restaurantId, contact, false);
-      }
     } catch {
       // Storage can be unavailable in hardened/private browser contexts.
     }
-  }, [address, guestEmail, guestName, guestPhone, hydratedGuestRestaurantId, restaurantId, user, rememberContact]);
+  }, [address, guestEmail, guestName, guestPhone, hydratedGuestRestaurantId, restaurantId, user]);
 
   // Subtotal calculation
   const subtotal = useMemo(() => cart.reduce((acc, item) => {
@@ -612,7 +602,11 @@ export default function CardapioCartDrawer({
       // O cliente pode ter tocado em um campo antes deste frame. Não tomar
       // o foco durante a digitação nem redirecionar texto para outro elemento.
       if (!target || target.contains(document.activeElement)) return;
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      // A navegação entre etapas não deve impor rolagem animada a quem pediu menos movimento.
+      target.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "start",
+      });
       target.focus({ preventScroll: true });
     });
   };
@@ -1546,14 +1540,6 @@ export default function CardapioCartDrawer({
                         <span className="relative block"><UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="text" autoComplete="name" maxLength={100} placeholder="Como devemos chamar você?" value={guestName} onChange={(event) => { setGuestName(event.target.value); clearValidation("input-guest-name"); }} aria-invalid={invalidField === "input-guest-name"} aria-describedby={invalidField === "input-guest-name" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-2xl border bg-white/[0.03] pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-stone-500 focus:border-emerald-500 ${invalidField === "input-guest-name" ? "border-rose-500" : "border-white/10"}`} id="input-guest-name" /></span>
                       </label>
                     )}
-                    <label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm text-koma-foreground">
-                      <input type="checkbox" className="mt-1 h-4 w-4 shrink-0" checked={rememberContact}
-                        onChange={event => setRememberContact(event.target.checked)} />
-                      <span>Lembrar meu nome e celular neste aparelho
-                        <span className="mt-1 block text-xs leading-relaxed text-koma-muted">Por até 90 dias, somente neste restaurante. Evite em aparelhos compartilhados.</span>
-                      </span>
-                    </label>
-                    {rememberError && <p role="status" className="text-xs text-koma-muted">{rememberError}</p>}
                     {onAuthClick && <button type="button" onClick={onAuthClick} className="text-left text-xs font-semibold leading-relaxed text-koma-muted transition hover:text-emerald-400">{brandConfig?.benefits?.loyalty ? "Quer acompanhar seus benefícios? " : "Já tem cadastro? "}<strong className="text-emerald-400">Entrar na conta.</strong></button>}
                     {couponsEnabled && pendingCouponAfterPhone && couponCode.trim() && !appliedCoupon && (
                       <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3.5 text-xs" role="status" id="pending-coupon-phone-banner">
