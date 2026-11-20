@@ -28,30 +28,28 @@ test('restored attendance is visible, keeps permissions collapsed and preserves 
   expect(selectedInside).toBe(true);
 });
 
-test('mobile filter exposes delivery and retains order creation in the same strip', async ({ page }) => {
+test('mobile orders filter keeps creation available through the bottom navigation', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockCashierBackend(page);
   await seedCashierSession(page);
   await page.goto('/?view=caixa');
   const nav = page.getByRole('navigation', { name: 'Telas desta área' });
-  await expect(nav.locator('.cashier-subnav__button')).toHaveCount(4);
-  const strip = nav.locator('.cashier-subnav__scroll');
-  await expect(nav.locator('.cashier-subnav__arrow').first()).toBeHidden();
-  await expect(nav.locator('.cashier-subnav__arrow').last()).toBeHidden();
+  await expect(nav).toBeHidden();
+  const dock = page.getByRole('navigation', { name: 'Navegação móvel principal' });
   const filter = page.getByRole('tablist', { name: 'Filas de atendimento' }).getByRole('tab', { name: /^Entregas/ });
   await filter.click();
   await expect(filter).toHaveAttribute('aria-selected', 'true');
-  await expect(nav.getByRole('button', { name: 'Pedidos', exact: true })).toHaveAttribute('aria-current', 'page');
-  await nav.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+  await expect(dock.getByRole('button', { name: 'Pedidos', exact: true })).toHaveAttribute('aria-current', 'page');
+  await dock.getByRole('button', { name: '+ Pedido', exact: true }).click();
   await expect(page.getByPlaceholder('Buscar item, descrição ou código')).toBeVisible();
   await expect(nav).toBeVisible();
-  await expect.poll(() => strip.evaluate(el => el.scrollLeft)).toBe(0);
+  await expect.poll(() => nav.locator('.cashier-subnav__scroll').evaluate(el => el.scrollLeft)).toBe(0);
   await expect(nav.getByRole('button', { name: 'Novo pedido', exact: true })).toHaveAttribute('aria-current', 'page');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
 });
 
 for (const [tab, subTab] of [
-  ['operacao', 'pedidos'],
+  ['operacao', 'balcao'],
   ['relatorios', 'produtos'],
   ['impressao_salao', 'mesas'],
   ['cardapio_digital', 'cardapio_perfil'],

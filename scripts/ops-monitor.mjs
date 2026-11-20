@@ -61,6 +61,7 @@ async function main() {
     const response = await fetch(`${root}${path}`, {
       method, headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
       body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(12_000),
     });
     if (response.status === 404) return null;
     if (!response.ok) throw new Error(`GitHub API ${method} ${path}: HTTP ${response.status}`);
