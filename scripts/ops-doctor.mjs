@@ -45,6 +45,27 @@ export async function diagnose(fetcher = fetch) {
   return { lines, healthy };
 }
 
+export function extractBackupSummaryLine(backup) {
+  const stdoutLines = String(backup?.stdout || '')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+  const stderrLines = String(backup?.stderr || '')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  if (backup?.status === 0) {
+    return stdoutLines.find(line => line.startsWith('✓')) || stdoutLines[0] || 'sem resultado';
+  }
+  return (
+    stderrLines.at(-1)
+    || stdoutLines.at(-1)
+    || backup?.error?.message
+    || 'sem resultado'
+  );
+}
+
 function railway(args) {
   return spawnSync(RAILWAY, args, { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, timeout: 30000 });
 }
@@ -64,20 +85,29 @@ async function main() {
     const backup = spawnSync(process.execPath, ['scripts/check-backup-freshness.mjs'], {
       encoding: 'utf8', timeout: 45000, env: { ...process.env, RAILWAY_BIN: RAILWAY },
     });
-    const backupLine = (backup.status === 0 ? backup.stdout : backup.stderr).trim().split('\n').at(-1);
-    console.log(`Backup: ${backup.status === 0 ? 'OK' : 'STALE/ERRO'} — ${backupLine || 'sem resultado'}`);
+    const backupLine = extractBackupSummaryLine(backup);
+    console.log(`Backup: ${backup.status === 0 ? 'OK' : 'STALE/ERRO'} — ${backupLine}`);
     if (backup.status !== 0) result.healthy = false;
     if (process.argv.includes('--deep')) {
       const services = railway(['service', 'list', '--project', PROJECT, '--environment', ENVIRONMENT, '--json']);
       if (services.status === 0) {
-        const api = JSON.parse(services.stdout).find(item => item.id === SERVICE);
-        console.log(`Railway deploy: ${api?.deploymentId || 'indisponível'}; status ${api?.status || 'indisponível'}; réplicas ${api?.replicas?.running ?? '?'} / ${api?.replicas?.configured ?? '?'}; crashes ${api?.replicas?.crashed ?? '?'}`);
-        if (api?.status !== 'SUCCESS' || api?.replicas?.running !== api?.replicas?.configured) result.healthy = false;
+        try {
+          const api = JSON.parse(services.stdout).find(item => item.id === SERVICE);
+          console.log(`Railway deploy: ${api?.deploymentId || 'indisponível'}; status ${api?.status || 'indisponível'}; réplicas ${api?.replicas?.running ?? '?'} / ${api?.replicas?.configured ?? '?'}; crashes ${api?.replicas?.crashed ?? '?'}`);
+          if (api?.status !== 'SUCCESS' || api?.replicas?.running !== api?.replicas?.configured) result.healthy = false;
+        } catch {
+          console.log('Railway deploy: resposta inválida');
+          result.healthy = false;
+        }
       } else { console.log('Railway deploy: indisponível'); result.healthy = false; }
       const metrics = railway(['metrics', '--project', PROJECT, '--environment', ENVIRONMENT, '--service', SERVICE, '--since', '1h', '--json']);
       if (metrics.status === 0) {
-        const data = JSON.parse(metrics.stdout);
-        console.log(`Railway 1h: CPU ${data.cpu?.current ?? '?'} vCPU; RAM ${data.memory?.current_mb ?? '?'} MB; HTTP ${data.http?.total ?? '?'} requests; 5xx ${data.http?.['5xx'] ?? '?'}`);
+        try {
+          const data = JSON.parse(metrics.stdout);
+          console.log(`Railway 1h: CPU ${data.cpu?.current ?? '?'} vCPU; RAM ${data.memory?.current_mb ?? '?'} MB; HTTP ${data.http?.total ?? '?'} requests; 5xx ${data.http?.['5xx'] ?? '?'}`);
+        } catch {
+          console.log('Railway métricas: resposta inválida');
+        }
       } else console.log('Railway métricas: indisponível');
       const http = railway(['logs', '--project', PROJECT, '--environment', ENVIRONMENT, '--service', SERVICE, '--since', '1h', '--lines', '1000', '--json']);
       if (http.status === 0) {

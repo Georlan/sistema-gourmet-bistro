@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Loader2, RotateCcw, Search, X } from 'lucide-react';
 import { MoneyInput } from '../MoneyInput';
 import {
@@ -44,10 +44,29 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submittingRef = useRef(false);
+  const pendingIdempotencyRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   const selected = payments.find(payment => payment.id === selectedId) || null;
 
+  const requestClose = () => {
+    if (!submittingRef.current) onClose();
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !submittingRef.current) {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   const selectPayment = (payment: RefundablePayment | null) => {
+    if (submittingRef.current) return;
+    pendingIdempotencyRef.current = null;
     if (!payment) {
       setSelectedId('');
       setValue('');
@@ -78,18 +97,20 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
     });
   };
 
-  const load = async (background = false) => {
+  const load = async (options?: boolean | { background?: boolean; preserveError?: boolean }) => {
+    const background = typeof options === 'boolean' ? options : Boolean(options?.background);
+    const preserveError = typeof options === 'boolean' ? false : Boolean(options?.preserveError);
     if (!background) setLoading(true);
-    if (!background) setError(null);
+    if (!background && !preserveError) setError(null);
     try {
       const data = await listarPagamentosEstornaveis(25);
       if (background) mergePayments(data);
       else setPayments(data);
-      if (!initialPaymentId && selectedId && !data.some(payment => payment.id === selectedId)) {
+      if (!initialPaymentId && !preserveError && selectedId && !data.some(payment => payment.id === selectedId)) {
         selectPayment(null);
       }
     } catch (err) {
-      if (!background) setError(err instanceof Error ? err.message : 'Falha ao carregar pagamentos.');
+      if (!background && !preserveError) setError(err instanceof Error ? err.message : 'Falha ao carregar pagamentos.');
     } finally {
       if (!background) setLoading(false);
     }
@@ -145,7 +166,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
   const payoutDiffers = !!selected && normalizeCardMethod(payoutMethod) !== normalizeCardMethod(selected.metodo_original);
 
   const submit = async () => {
-    if (!selected || submitting) return;
+    if (!selected || submittingRef.current) return;
     setError(null);
     if (refundValue <= 0 || refundValue > selected.saldo_estornavel + 0.005) {
       setError(`Informe um valor entre R$ 0,01 e ${currency.format(selected.saldo_estornavel)}.`);
@@ -169,28 +190,42 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
           .filter(origin => origin.valor > 0)
       : [];
 
+    const refundPayload = {
+      valor: refundValue,
+      motivo: reason.trim(),
+      metodo_devolucao: payoutMethod || selected.metodo_original,
+      alocacoes: allocations,
+    };
+    const fingerprint = JSON.stringify({ paymentId: selected.id, ...refundPayload });
+    if (pendingIdempotencyRef.current?.fingerprint !== fingerprint) {
+      pendingIdempotencyRef.current = {
+        fingerprint,
+        key: createSecureIdempotencyKey('refund'),
+      };
+    }
+    const idempotencyKey = pendingIdempotencyRef.current.key;
+
+    submittingRef.current = true;
+    setSubmitting(true);
     try {
-      setSubmitting(true);
-      const idempotencyKey = createSecureIdempotencyKey('refund');
       await estornarPagamento(selected.id, {
-        valor: refundValue,
-        motivo: reason.trim(),
+        ...refundPayload,
         idempotency_key: idempotencyKey,
-        metodo_devolucao: payoutMethod || selected.metodo_original,
-        alocacoes: allocations,
       });
+      pendingIdempotencyRef.current = null;
       await onSuccess();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível registrar a devolução.');
-      await load();
+      await load({ background: true, preserveError: true });
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-koma-overlay p-3 backdrop-blur-sm" onMouseDown={event => event.target === event.currentTarget && onClose()}>
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-koma-overlay p-3" onMouseDown={event => event.target === event.currentTarget && requestClose()}>
       <div role="dialog" aria-modal="true" aria-label="Devolver um pagamento" className="cash-register flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-koma-border bg-koma-panel shadow-2xl">
         <header className="flex items-center justify-between gap-3 border-b border-koma-border px-5 py-4">
           <div className="flex items-center gap-3">
@@ -202,7 +237,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
               <p className="mt-0.5 text-xs text-koma-muted">Escolha o pagamento, informe o valor e registre o motivo da devolução.</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="rounded-xl p-2 text-koma-muted hover:bg-koma-raised hover:text-koma-foreground" aria-label="Fechar">
+          <button type="button" onClick={requestClose} disabled={submitting} className="rounded-xl p-2 text-koma-muted hover:bg-koma-raised hover:text-koma-foreground disabled:opacity-50" aria-label="Fechar">
             <X size={18} />
           </button>
         </header>
@@ -233,8 +268,9 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
                   <button
                     key={payment.id}
                     type="button"
+                    disabled={submitting}
                     onClick={() => selectPayment(payment)}
-                    className={`w-full rounded-2xl border p-3 text-left transition-colors ${active ? 'border-rose-500/50 bg-rose-500/10' : 'border-koma-border bg-koma-card hover:bg-koma-raised'}`}
+                    className={`w-full rounded-2xl border p-3 text-left transition-colors disabled:opacity-60 ${active ? 'border-rose-500/50 bg-rose-500/10' : 'border-koma-border bg-koma-card hover:bg-koma-raised'}`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -335,7 +371,7 @@ export const EstornoModal: React.FC<EstornoModalProps> = ({ onClose, onSuccess, 
                 {error && <div role="alert" className="rounded-xl border border-rose-300 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/30 p-3 text-sm text-rose-800 dark:text-rose-300">{error}</div>}
 
                 <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                  <button type="button" onClick={onClose} disabled={submitting} className="rounded-xl border border-koma-border bg-koma-card px-4 py-2.5 text-sm font-bold text-koma-secondary hover:text-koma-foreground disabled:opacity-50">Cancelar</button>
+                  <button type="button" onClick={requestClose} disabled={submitting} className="rounded-xl border border-koma-border bg-koma-card px-4 py-2.5 text-sm font-bold text-koma-secondary hover:text-koma-foreground disabled:opacity-50">Cancelar</button>
                   <button type="button" onClick={() => void submit()} disabled={submitting} className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-500/40 bg-rose-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-rose-500 disabled:opacity-50">
                     {submitting ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />} Confirmar devolução
                   </button>
