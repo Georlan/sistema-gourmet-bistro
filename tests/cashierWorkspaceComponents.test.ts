@@ -596,8 +596,10 @@ test('cards e detalhes exibem tag da Maquininha para origem smartpos e botÃ£o rÃ
     },
   };
   const html = renderToStaticMarkup(createElement(CaixaOrdersWorkspace, viewProps));
+  assert.match(html, /orders-card__recency--smartpos/);
   assert.match(html, /data-origin="smartpos"/);
-  assert.match(html, /\/brand\/cashier\/smartpos-tag-v1\.svg/);
+  assert.match(html, /data-order-recency="latest"/);
+  assert.doesNotMatch(html, /smartpos-tag-v1\.svg/);
   assert.match(html, />Maquininha</);
 
   const view = CaixaOrdersWorkspace(viewProps);
@@ -624,6 +626,7 @@ test('cards e detalhes exibem tag da Maquininha para origem smartpos e botÃ£o rÃ
       cancelConsumption: noop, cancelOrder: noop,
     },
   }));
+  assert.match(detailHtml, /orders-card__recency--smartpos/);
   assert.match(detailHtml, /data-origin="smartpos"/);
-  assert.match(detailHtml, /Maquininha Â· SmartPOS/);
+  assert.match(detailHtml, />Maquininha</);
 });
