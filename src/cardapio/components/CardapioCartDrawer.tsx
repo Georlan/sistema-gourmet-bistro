@@ -601,7 +601,11 @@ export default function CardapioCartDrawer({
       // O cliente pode ter tocado em um campo antes deste frame. Não tomar
       // o foco durante a digitação nem redirecionar texto para outro elemento.
       if (!target || target.contains(document.activeElement)) return;
-      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      // A navegação entre etapas não deve impor rolagem animada a quem pediu menos movimento.
+      target.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "start",
+      });
       target.focus({ preventScroll: true });
     });
   };
