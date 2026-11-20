@@ -28,7 +28,9 @@ from ..models import (
 from ..schemas import CupomCreate, CupomResponse, CupomValidateRequest, CupomValidateResponse
 from ..security import get_current_user, require_permission
 from ..services.billing_service import tenant_marketplace_rate
+from ..services.clientes import buscar_cliente_por_telefone
 from ..services.coupon_eligibility import customer_matches_targeted_coupon
+from ..crypt import decrypt_field
 from ..services.plan_entitlements import (
     ENTITLEMENT_COUPONS,
     ENTITLEMENT_LOYALTY,
@@ -272,14 +274,57 @@ def _validar_regras_cupom(cupom: Cupom, subtotal: float, telefone: Optional[str]
     if subtotal < minimo:
         return False, f"O valor mínimo para usar este cupom é de R$ {minimo:.2f}.", 0.0
 
-    if cupom.apenas_primeira_compra and telefone:
-        tel_digits = "".join(filter(str.isdigit, telefone))
-        pedidos_anteriores = db.query(Comanda).filter(
+    if cupom.apenas_primeira_compra:
+        tel_digits = "".join(filter(str.isdigit, telefone or ""))
+        if tel_digits.startswith("55") and len(tel_digits) in {12, 13}:
+            tel_digits = tel_digits[2:]
+        if len(tel_digits) not in {10, 11}:
+            return False, "Informe seu telefone com DDD para validar este cupom de primeira compra.", 0.0
+
+        prior_order_filters = (
             Comanda.restaurante_id == cupom.restaurante_id,
-            Comanda.delivery_telefone == tel_digits,
-            Comanda.delivery_status != "recusado",
-        ).count()
-        if pedidos_anteriores > 0:
+            or_(Comanda.delivery_status.is_(None), Comanda.delivery_status != "recusado"),
+            or_(Comanda.online_payment_status.is_(None), Comanda.online_payment_status == "approved"),
+        )
+        has_prior_order = False
+        try:
+            cliente = buscar_cliente_por_telefone(
+                db,
+                restaurante_id=cupom.restaurante_id,
+                telefone=tel_digits,
+            )
+        except ValueError:
+            cliente = None
+
+        if cliente is not None:
+            has_prior_order = (
+                db.query(Comanda.id)
+                .filter(*prior_order_filters, Comanda.cliente_id == cliente.id)
+                .first()
+                is not None
+            )
+
+        if not has_prior_order:
+            # Comandas legadas/guest podem armazenar telefone criptografado sem cliente_id vinculado.
+            guest_phones = (
+                db.query(Comanda._delivery_telefone)
+                .filter(
+                    *prior_order_filters,
+                    Comanda.cliente_id.is_(None),
+                    Comanda._delivery_telefone.isnot(None),
+                )
+                .all()
+            )
+            for (encrypted_phone,) in guest_phones:
+                decrypted = decrypt_field(encrypted_phone) or ""
+                guest_digits = "".join(filter(str.isdigit, decrypted))
+                if guest_digits.startswith("55") and len(guest_digits) in {12, 13}:
+                    guest_digits = guest_digits[2:]
+                if guest_digits == tel_digits:
+                    has_prior_order = True
+                    break
+
+        if has_prior_order:
             return False, "Este cupom é válido apenas para o primeiro pedido.", 0.0
 
     if cupom.tipo_desconto == "porcentagem":
