@@ -474,28 +474,42 @@ def record_probe(session: Session, probe: OfficialReferenceProbe) -> OfficialRef
         state.last_error = None
         state.metadata_json = probe.metadata
 
-        changed = _differs_from_active(state, probe)
-        if state.active_snapshot_id is None:
-            active_identity = None
-            if state.active_version or state.active_sha256:
-                active_identity = _reference_identity(
-                    state.active_version,
-                    state.active_sha256,
-                )
-            if active_identity == snapshot.identity_sha256:
-                state.active_snapshot_id = snapshot.id
-            else:
-                legacy_snapshot = _ensure_legacy_active_snapshot(session, state, now=now)
-                if legacy_snapshot is not None:
-                    state.active_snapshot_id = legacy_snapshot.id
-
-        if changed:
-            state.status = "changed"
-            if state.changed_at is None:
-                state.changed_at = now
-        else:
+        has_active_baseline = bool(
+            state.active_snapshot_id or state.active_version or state.active_sha256
+        )
+        if not has_active_baseline:
+            # First successful observation after an initial probe error establishes
+            # the initial baseline instead of leaving active_* permanently NULL.
+            state.active_version = probe.source_version
+            state.active_sha256 = probe.content_sha256
+            state.active_snapshot_id = snapshot.id
+            state.promoted_at = now
             state.status = "current"
             state.changed_at = None
+            changed = False
+        else:
+            changed = _differs_from_active(state, probe)
+            if state.active_snapshot_id is None:
+                active_identity = None
+                if state.active_version or state.active_sha256:
+                    active_identity = _reference_identity(
+                        state.active_version,
+                        state.active_sha256,
+                    )
+                if active_identity == snapshot.identity_sha256:
+                    state.active_snapshot_id = snapshot.id
+                else:
+                    legacy_snapshot = _ensure_legacy_active_snapshot(session, state, now=now)
+                    if legacy_snapshot is not None:
+                        state.active_snapshot_id = legacy_snapshot.id
+
+            if changed:
+                state.status = "changed"
+                if state.changed_at is None:
+                    state.changed_at = now
+            else:
+                state.status = "current"
+                state.changed_at = None
 
     session.flush()
     return OfficialReferenceSyncResult(
