@@ -985,8 +985,6 @@ export function useCashierOrders({
             `Pedido aceito. Estoque indica ${resumo}${restantes} zerado/negativo; confira o estoque físico.`,
             'info',
           );
-        } else {
-          showToast('Status atualizado.');
         }
         return true;
       }
@@ -1029,7 +1027,6 @@ export function useCashierOrders({
           };
           applySelectedMotoboysState(confirmedSelection);
         }
-        showToast('Pedido despachado.');
         setSelectedKanbanOrder(null);
         void fetchDeliveryOrders();
         void onRefreshOrders();
@@ -1110,7 +1107,6 @@ export function useCashierOrders({
     try {
       const res = await fetch(`${apiBaseUrl}/comandas/${orderId}/fechar`, { method: 'PUT', headers: authHeaders });
       if (res.ok) {
-        showToast('Pedido encerrado com sucesso!');
         setSelectedKanbanOrder(null);
         setDeliveryOrders((current) => current.filter((order) => String(order.id) !== String(orderId)));
         void Promise.all([fetchDeliveryOrders(), onRefreshOrders()]);
