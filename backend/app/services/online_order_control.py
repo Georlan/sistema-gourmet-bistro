@@ -291,12 +291,16 @@ def update_auto_accept(
     return control
 
 
+_UNSET_CONTROL = object()
+
+
 def auto_accept_online_order_if_enabled(
     db: Session,
     *,
     restaurante_id: int,
     comanda: Comanda,
     operator_user_id: str | int | None = None,
+    control: OnlineOrderControl | None | object = _UNSET_CONTROL,
 ) -> bool:
     """Aceita no servidor um pedido online elegível quando a política está ativa.
 
@@ -304,10 +308,17 @@ def auto_accept_online_order_if_enabled(
     na chegada, preservando o horário. A função não faz commit: o chamador mantém a atomicidade do
     fluxo que publicou o pedido.
     """
-    control = db.query(OnlineOrderControl).filter(
-        OnlineOrderControl.restaurante_id == restaurante_id,
-    ).first()
-    if control is None or not bool(control.auto_accept):
+    if control is _UNSET_CONTROL:
+        resolved_control = db.query(OnlineOrderControl).filter(
+            OnlineOrderControl.restaurante_id == restaurante_id,
+        ).first()
+    else:
+        resolved_control = control
+        if resolved_control is not None and int(resolved_control.restaurante_id) != int(restaurante_id):
+            resolved_control = db.query(OnlineOrderControl).filter(
+                OnlineOrderControl.restaurante_id == restaurante_id,
+            ).first()
+    if resolved_control is None or not bool(resolved_control.auto_accept):
         return False
     if comanda.fechada or str(comanda.delivery_status or "").strip().lower() not in {
         "pendente",
@@ -447,6 +458,8 @@ class CapacityGateResult:
     blocked: bool
     state_changed: bool = False
     reason: str | None = None
+    control: OnlineOrderControl | None = None
+    control_loaded: bool = False
 
 
 def capacity_gate_before_order(
@@ -466,11 +479,11 @@ def capacity_gate_before_order(
         OnlineOrderControl.restaurante_id == restaurante_id,
     ).first()
     if snapshot is None:
-        return CapacityGateResult(blocked=False)
+        return CapacityGateResult(blocked=False, control=None, control_loaded=True)
     if is_effectively_paused(snapshot):
-        return CapacityGateResult(blocked=True, reason="paused")
+        return CapacityGateResult(blocked=True, reason="paused", control=snapshot, control_loaded=True)
     if not snapshot.auto_pause or not snapshot.max_active_orders:
-        return CapacityGateResult(blocked=False)
+        return CapacityGateResult(blocked=False, control=snapshot, control_loaded=True)
 
     control = (
         db.query(OnlineOrderControl)
@@ -479,12 +492,12 @@ def capacity_gate_before_order(
         .one()
     )
     if is_effectively_paused(control):
-        return CapacityGateResult(blocked=True, reason="paused")
+        return CapacityGateResult(blocked=True, reason="paused", control=control, control_loaded=True)
 
     counts = operational_counts(db, restaurante_id)
     if counts["active"] < int(control.max_active_orders):
         # Não commit aqui: o lock precisa sobreviver até o commit da criação.
-        return CapacityGateResult(blocked=False)
+        return CapacityGateResult(blocked=False, control=control, control_loaded=True)
 
     before = operational_status(db, restaurante_id)
     control.paused = True

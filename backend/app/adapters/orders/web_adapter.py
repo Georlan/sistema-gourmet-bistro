@@ -13,9 +13,10 @@ from decimal import Decimal
 import logging
 import json
 import unicodedata
+from types import SimpleNamespace
 from typing import Any, Optional
 from fastapi import BackgroundTasks, HTTPException, Request, status
-from sqlalchemy import or_
+from sqlalchemy import event, inspect as sa_inspect, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -203,17 +204,51 @@ def _enforce_public_order_rate_limits(
     request: Request,
     restaurante_id: int,
     telefone: str,
-) -> None:
+) -> Any:
     """Persiste limites antes da transação do pedido para resistir a payloads inválidos.
 
     Ownership transacional delegada ao serviço — não fazer commit aqui.
     """
-    enforce_public_order_rate_limits(
+    return enforce_public_order_rate_limits(
         db,
         request=request,
         restaurante_id=restaurante_id,
         telefone=telefone,
     )
+
+
+def _find_comanda_in_session(
+    db: Session,
+    *,
+    rest_id: int,
+    comanda_id: str,
+    captured: dict[str, Comanda] | None = None,
+) -> Comanda | None:
+    """Recupera a Comanda recém-criada da sessão sem disparar SELECT redundante."""
+    cached = captured.get(str(comanda_id)) if captured else None
+    if cached is None:
+        identity_map = getattr(db, "identity_map", None)
+        if identity_map is not None:
+            cached = identity_map.get((Comanda, (comanda_id,), None))
+    if cached is not None:
+        state = sa_inspect(cached)
+        if (
+            not state.expired
+            and not state.deleted
+            and int(cached.restaurante_id) == rest_id
+        ):
+            return cached
+    comanda = db.get(Comanda, comanda_id)
+    if comanda is None or int(comanda.restaurante_id) != rest_id:
+        comanda = (
+            db.query(Comanda)
+            .filter(
+                Comanda.restaurante_id == rest_id,
+                Comanda.id == comanda_id,
+            )
+            .first()
+        )
+    return comanda
 
 
 def _configured_payment_methods(raw_methods: Any) -> set[str]:
@@ -373,6 +408,8 @@ class CardapioWebAdapter:
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Restaurante em fase de preparação. Operação comercial não liberada.",
                 )
+            if isinstance(getattr(db, "info", None), dict):
+                db.info.setdefault("_koma_provisional_by_rid", {})[rest_id] = False
 
             if settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS and not customer_token:
                 raise HTTPException(
@@ -452,7 +489,18 @@ class CardapioWebAdapter:
                 ConfiguracaoRestaurante.restaurante_id == rest_id,
             ).first()
             if isinstance(getattr(db, "info", None), dict):
-                db.info.setdefault("_koma_config_by_rid", {})[rest_id] = configuracao
+                # Snapshot plain imune ao expire_on_commit do rate limiter, evitando
+                # lazy-reload completo de configuracoes_restaurante no ValidationDataLoader.
+                db.info.setdefault("_koma_config_by_rid", {})[rest_id] = (
+                    SimpleNamespace(
+                        pedido_minimo=configuracao.pedido_minimo,
+                        pedido_minimo_retirada=bool(getattr(configuracao, "pedido_minimo_retirada", False)),
+                        cardapio_ativo_id=configuracao.cardapio_ativo_id,
+                        cardapios_adicionais_ids=tuple(configuracao.cardapios_adicionais_ids or ()),
+                    )
+                    if configuracao is not None
+                    else None
+                )
             if not mode_is_allowed(configuracao, modalidade):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
@@ -467,6 +515,7 @@ class CardapioWebAdapter:
                 configuracao,
                 modalidade=modalidade,
                 now=policy_now,
+                is_provisional=False,
             )
             if not policy.accepting_orders:
                 raise HTTPException(
@@ -474,7 +523,7 @@ class CardapioWebAdapter:
                     detail=policy.reason or "O restaurante não está aceitando pedidos online no momento.",
                 )
 
-            _enforce_public_order_rate_limits(
+            capacity_gate = _enforce_public_order_rate_limits(
                 db,
                 request=request,
                 restaurante_id=rest_id,
@@ -590,22 +639,40 @@ class CardapioWebAdapter:
                 ),
             )
 
-            order_dto = OrderApplicationService.create_order(
-                db,
-                cmd,
-                commit=False,
-            )
+            created_comandas: dict[str, Comanda] = {}
 
-            comanda = db.get(Comanda, order_dto.comanda_id)
-            if comanda is None or int(comanda.restaurante_id) != rest_id:
-                comanda = (
-                    db.query(Comanda)
-                    .filter(
-                        Comanda.restaurante_id == rest_id,
-                        Comanda.id == order_dto.comanda_id,
-                    )
-                    .first()
+            def _capture_new_comandas(session, _flush_context, _instances):
+                for obj in session.new:
+                    if (
+                        isinstance(obj, Comanda)
+                        and obj.id
+                        and int(getattr(obj, "restaurante_id", 0) or 0) == rest_id
+                    ):
+                        created_comandas[str(obj.id)] = obj
+
+            listener_attached = False
+            try:
+                event.listen(db, "before_flush", _capture_new_comandas)
+                listener_attached = True
+            except Exception:
+                listener_attached = False
+            try:
+                order_dto = OrderApplicationService.create_order(
+                    db,
+                    cmd,
+                    commit=False,
                 )
+            finally:
+                if listener_attached:
+                    event.remove(db, "before_flush", _capture_new_comandas)
+
+            is_newly_created_comanda = str(order_dto.comanda_id) in created_comandas
+            comanda = _find_comanda_in_session(
+                db,
+                rest_id=rest_id,
+                comanda_id=order_dto.comanda_id,
+                captured=created_comandas,
+            )
             numero_pedido = comanda.numero_pedido if comanda else int(order_dto.sequence)
             cliente_id = comanda.cliente_id if comanda else (order_dto.customer.customer_id if order_dto.customer else None)
             payment_intent = None
@@ -617,6 +684,7 @@ class CardapioWebAdapter:
                     db,
                     restaurante_id=rest_id,
                     pedido_id=order_dto.comanda_id,
+                    assume_new_order=is_newly_created_comanda,
                 )
             except Exception:
                 logger.exception("Falha ao criar conversa para o pedido %s", order_dto.comanda_id)
@@ -624,12 +692,17 @@ class CardapioWebAdapter:
             if not online_payment and not is_scheduled and comanda is not None:
                 from ...services.online_order_control import auto_accept_online_order_if_enabled
 
-                auto_accept_online_order_if_enabled(
-                    db,
-                    restaurante_id=rest_id,
-                    comanda=comanda,
-                    operator_user_id=garcom.id,
-                )
+                auto_accept_kwargs: dict[str, Any] = {
+                    "restaurante_id": rest_id,
+                    "comanda": comanda,
+                    "operator_user_id": garcom.id,
+                }
+                if getattr(capacity_gate, "control_loaded", False):
+                    loaded_control = getattr(capacity_gate, "control", None)
+                    if loaded_control is None or not sa_inspect(loaded_control).expired:
+                        auto_accept_kwargs["control"] = loaded_control
+
+                auto_accept_online_order_if_enabled(db, **auto_accept_kwargs)
 
             if not (online_payment or is_scheduled):
                 db.commit()
@@ -785,6 +858,14 @@ class CardapioWebAdapter:
                 detail="Não foi possível processar o pedido. Tente novamente.",
             )
         finally:
+            db_info = getattr(db, "info", None)
+            if isinstance(db_info, dict):
+                cached_configs = db_info.get("_koma_config_by_rid")
+                if isinstance(cached_configs, dict):
+                    cached_configs.pop(rest_id, None)
+                cached_provisional = db_info.get("_koma_provisional_by_rid")
+                if isinstance(cached_provisional, dict):
+                    cached_provisional.pop(rest_id, None)
             current_restaurante_id.reset(token_context)
 
         if not online_payment or (

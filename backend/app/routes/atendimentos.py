@@ -44,7 +44,11 @@ from ..services.atendimentos import (
     transfer_items_batch,
     unmerge_by_comanda,
 )
-from ..waiter_permissions import require_waiter_permission
+from ..waiter_permissions import (
+    require_order_reader,
+    require_salon_order_operator,
+    require_waiter_permission,
+)
 from ..websocket_manager import manager
 
 
@@ -85,6 +89,7 @@ def listar_familias_mesa(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
 ):
+    require_order_reader(current_user)
     rid = require_tenant_id()
     try:
         data = build_table_family_view(db, rid, mesa_id)
@@ -162,6 +167,7 @@ def lancar_itens_na_familia_principal(
     current_user: Usuario = Depends(get_current_user),
 ):
     """Depois de mesclar, novos lançamentos pertencem à família da mesa destino."""
+    require_salon_order_operator(current_user, "lançar itens em comandas")
     rid = require_tenant_id()
     supplied = db.query(Comanda).filter(
         Comanda.restaurante_id == rid,
