@@ -504,22 +504,39 @@ class OnlinePaymentService:
         # Aprovação financeira é monotônica contra snapshots pendentes ou rejeitados transitórios.
         # No entanto, se o provedor informar que o pagamento foi estornado/reembolsado ou cancelado,
         # o ciclo operacional deve ser imediatamente baixado.
-        if locked_intent.status == "approved" and mapped != "approved":
-            provider_status = (payment.status or "").strip().lower()
-            if provider_status in {"refunded", "cancelled", "charged_back"}:
-                # Reembolso/cancelamento vindo diretamente do Mercado Pago deve
-                # usar exatamente o mesmo fechamento transacional do fluxo de
-                # reembolso manual: cancelar itens, estornar estoque e notificar
-                # o Caixa, sem duplicar a política em dois lugares.
-                from .refunds import _close_refunded_order_in_session
+        if locked_intent.status == "approved":
+            if mapped != "approved":
+                provider_status = (payment.status or "").strip().lower()
+                if provider_status in {"refunded", "cancelled", "charged_back"}:
+                    # Reembolso/cancelamento vindo diretamente do Mercado Pago deve
+                    # usar exatamente o mesmo fechamento transacional do fluxo de
+                    # reembolso manual: cancelar itens, estornar estoque e notificar
+                    # o Caixa, sem duplicar a política em dois lugares.
+                    from .refunds import _close_refunded_order_in_session
 
-                _close_refunded_order_in_session(
-                    db,
-                    restaurante_id=account.restaurante_id,
-                    comanda_id=locked_intent.comanda_id,
-                    intent=locked_intent,
-                )
-            return locked_intent, False
+                    _close_refunded_order_in_session(
+                        db,
+                        restaurante_id=account.restaurante_id,
+                        comanda_id=locked_intent.comanda_id,
+                        intent=locked_intent,
+                    )
+                return locked_intent, False
+            if locked_intent.pagamento_id:
+                existing_payment = db.query(Pagamento).filter(
+                    Pagamento.restaurante_id == account.restaurante_id,
+                    Pagamento.id == locked_intent.pagamento_id,
+                ).first()
+                if (
+                    existing_payment is None
+                    or existing_payment.status != "aprovado"
+                    or _money(existing_payment.valor) != _money(locked_intent.amount)
+                ):
+                    raise OnlinePaymentValidationError(
+                        "Pagamento já registrado diverge da aprovação recebida do provedor."
+                    )
+                # Replay idempotente de uma aprovação já conciliada nunca pode
+                # sobrescrever o estado posterior da comanda (ex: pedido já estornado).
+                return locked_intent, False
         if locked_intent.status in UNPAID_TERMINAL_STATUSES:
             if mapped == "approved":
                 raise OnlinePaymentValidationError(
@@ -585,6 +602,12 @@ class OnlinePaymentService:
                 cliente_id=comanda.cliente_id,
                 nome_cliente=comanda.identificador,
             )
+            # Atualiza valor_pago antes do flush para que o listener de ledger
+            # materialize PagamentoAlocacao na mesma unidade de trabalho e preserve
+            # eventual pagamento parcial anterior em pedidos liberados sem confirmação.
+            comanda.valor_pago = float(
+                _money(_money(comanda.valor_pago or 0) + _money(locked_intent.amount))
+            )
             db.add(pagamento)
             db.flush()
         else:
@@ -592,11 +615,12 @@ class OnlinePaymentService:
                 raise OnlinePaymentValidationError(
                     "Pagamento já registrado diverge da aprovação recebida do provedor."
                 )
+            if _money(comanda.valor_pago or 0) < _money(locked_intent.amount):
+                comanda.valor_pago = float(_money(locked_intent.amount))
 
         locked_intent.pagamento_id = pagamento.id
         if locked_intent.approved_at is None:
             locked_intent.approved_at = datetime.datetime.now(datetime.timezone.utc)
-        comanda.valor_pago = float(_money(locked_intent.amount))
         for item in comanda.itens:
             if item.status != "cancelado":
                 item.pago = True
