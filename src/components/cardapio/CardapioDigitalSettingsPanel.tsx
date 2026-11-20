@@ -336,7 +336,7 @@ function PhonePreview({
     .join('') || 'KM';
 
   return (
-    <aside aria-label="Prévia ao vivo do cardápio online" className={clsx('xl:sticky xl:top-4', compact && 'order-first xl:order-last')}>
+    <aside aria-label="Prévia da identidade do cardápio" className={clsx('xl:sticky xl:top-4', compact && 'order-first xl:order-last')}>
       <div
         className={clsx(
           'mx-auto w-full border border-koma-border bg-koma-panel',
@@ -473,7 +473,9 @@ function PhonePreview({
             </a>
           )}
           <p className="text-center text-[11px] text-koma-muted">
-            Prévia ao vivo · alterações de texto exigem salvar
+            {compact
+              ? 'Prévia da identidade · não publica nem libera pedidos'
+              : 'Prévia ao vivo · alterações de texto exigem salvar'}
           </p>
         </div>
       </div>
@@ -826,6 +828,7 @@ export function CardapioDigitalSettingsPanel({
               {!onSetupComplete && (
                 <section
                   id="online-menu-brand-section"
+                  title="Logo e capa"
                   ref={brandSectionRef}
                   className="scroll-mt-4 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5"
                 >

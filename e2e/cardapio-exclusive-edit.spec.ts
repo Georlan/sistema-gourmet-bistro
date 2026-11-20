@@ -231,7 +231,7 @@ test('dono escolhe manualmente as sugestões da sacola sem alterar cadastro do p
     return route.fulfill({ json: { modo: 'automatico', produto_ids: [] } });
   });
   await page.goto('/?view=caixa');
-  await page.getByRole('button', { name: 'Recomendações', exact: true }).click();
+  await page.locator('.cashier-subnav').getByRole('button', { name: 'Promoções e vitrine', exact: true }).click();
   const settings = page.getByRole('region', { name: 'Configurar recomendações da sacola' });
   await expect(settings).toBeVisible();
   await expect(settings.getByRole('radio', { name: /Automático/ })).toBeChecked();
@@ -259,7 +259,7 @@ test('dono escolhe ou remove destaque no Caixa', async ({ page }) => {
     return route.fulfill({ json: { produto_id: null } });
   });
   await page.goto('/?view=caixa');
-  await page.getByRole('button', { name: 'Recomendações', exact: true }).click();
+  await page.locator('.cashier-subnav').getByRole('button', { name: 'Promoções e vitrine', exact: true }).click();
   const settings = page.getByRole('region', { name: 'Configurar destaque do cardápio' });
   await settings.getByLabel('Produto em destaque').selectOption('101');
   await settings.getByRole('button', { name: 'Salvar destaque' }).click();
