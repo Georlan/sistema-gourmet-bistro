@@ -208,7 +208,7 @@
     margin-bottom: 6px;
   }
   .cashier-shell--mobile-orders .orders-toolbar .orders-mobile-stages { width: 100%; }
-  .cashier-shell--mobile-orders .orders-workspace .orders-search { width: 44px; }
+  .cashier-shell--mobile-orders .orders-workspace .orders-search { grid-column: auto; width: 44px; }
   .cashier-shell--mobile-orders .orders-workspace .orders-search:is(:focus-within,.has-query) {
     grid-column: 1 / -1;
     width: 100%;
