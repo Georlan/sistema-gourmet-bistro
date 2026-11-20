@@ -172,7 +172,7 @@ export default function CardapioPage() {
   const [customerToken, setCustomerToken] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const recentAddedCountRef = useRef(0);
+  const [cartAnnouncement, setCartAnnouncement] = useState("");
   const isProgrammaticScroll = useRef(false);
   const lastReportedMenuIdRef = useRef<string | number | null>(null);
 
@@ -210,7 +210,6 @@ export default function CardapioPage() {
     if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
     noticeTimerRef.current = setTimeout(() => {
       setNotice("");
-      recentAddedCountRef.current = 0;
     }, 1800);
   }, []);
 
@@ -1034,7 +1033,7 @@ export default function CardapioPage() {
           : [...remaining, { id: itemId, product, quantity, selectedOptions, notes }];
       });
       setEditingCartItem(null);
-      showNotification("Montagem atualizada na sacola");
+      setCartAnnouncement("Montagem atualizada na sacola");
       return;
     }
     setCart((current) => {
@@ -1044,12 +1043,7 @@ export default function CardapioPage() {
       }
       return [...current, { id: itemId, product, quantity, selectedOptions, notes }];
     });
-    recentAddedCountRef.current += quantity;
-    if (recentAddedCountRef.current > 1) {
-      showNotification(`${recentAddedCountRef.current} itens adicionados à sacola`);
-    } else {
-      showNotification(`${product.name} adicionado à sacola`);
-    }
+    setCartAnnouncement(`${quantity} ${quantity === 1 ? "unidade incluída" : "unidades incluídas"}: ${product.name}`);
 
     const optionsCount = Object.values(selectedOptions).reduce((acc, list) => acc + list.length, 0);
     let unitPrice = product.price;
@@ -1097,7 +1091,7 @@ export default function CardapioPage() {
     setEditingPromotionItem(null);
     setPromotionModalOrigin(null);
     setIsCartOpen(true);
-    showNotification("Promoção adicionada à sacola");
+    setCartAnnouncement("Promoção incluída na sacola");
   };
 
   const handleFastAdd = (product: Product) => {
@@ -1307,15 +1301,16 @@ export default function CardapioPage() {
 
   return (
     <div className="min-h-screen overflow-x-clip bg-bg-app font-sans text-text-app" id="app-root-container">
+      {/* A quantidade/sacola oferecem feedback visual; leitores de tela recebem anúncio sem sobreposição. */}
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {cartAnnouncement}
+      </span>
       {notice && !isCartOpen && !isCheckoutOpen && (
         <div
           className="fixed top-16 sm:top-20 left-1/2 z-[60] -translate-x-1/2 max-w-[calc(100vw-2rem)] rounded-full border border-emerald-500/30 bg-[#0d1612]/95 backdrop-blur-md px-4 py-2 text-center text-xs font-bold text-emerald-300 shadow-2xl animate-fade-in flex items-center gap-2 pointer-events-auto cursor-pointer"
           role="status"
           aria-live="polite"
-          onClick={() => {
-            setNotice("");
-            recentAddedCountRef.current = 0;
-          }}
+          onClick={() => setNotice("")}
         >
           <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
           <span>{notice}</span>
