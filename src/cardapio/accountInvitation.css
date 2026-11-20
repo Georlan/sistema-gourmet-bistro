@@ -1,0 +1,67 @@
+/* Post-purchase invitation: scoped to the optional customer account offer. */
+.k-account-invitation {
+  width: 100%;
+  max-width: 448px;
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid var(--koma-accent-border);
+  border-radius: 24px;
+  background: var(--koma-accent-soft);
+  color: var(--koma-text-primary);
+  text-align: left;
+  font-family: var(--koma-font-body);
+}
+.k-account-invitation__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.k-account-invitation h4 {
+  margin: 0;
+  font-family: var(--koma-font-display);
+  font-size: clamp(24px, 6.5vw, 30px);
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -.035em;
+}
+.k-account-invitation h4 span { color: var(--koma-accent-text); }
+.k-account-invitation__art { width: 72px; height: auto; flex: 0 0 72px; }
+.k-account-invitation__benefit {
+  margin: 10px 0 16px;
+  color: var(--koma-text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.k-account-invitation__action {
+  display: flex;
+  min-height: 48px;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--koma-action-bg);
+  color: var(--koma-action-text);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+.k-account-invitation__action:hover { background: var(--koma-action-hover); }
+.k-account-invitation__action:focus-visible {
+  outline: 3px solid var(--koma-accent-text);
+  outline-offset: 3px;
+}
+.k-account-invitation__optional {
+  margin: 10px 0 0;
+  color: var(--koma-text-muted);
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.4;
+}
+@media (prefers-reduced-motion: reduce) {
+  .k-account-invitation__action { transition: none; }
+}
