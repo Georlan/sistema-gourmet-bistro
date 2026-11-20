@@ -1,4 +1,5 @@
 import { clearGuestCheckoutContact } from "./guestCheckoutSession";
+import { allowCustomerBrowserRestore, blockCustomerBrowserRestore, closeCustomerBrowserSession, customerSignedOutKey, restoreCustomerBrowserSession } from "./customerBrowserSession";
 import { DeliveryReceiptCode } from "./components/DeliveryReceiptCode";
 import PixCopyCode from "./components/PixCopyCode";
 /**
@@ -689,7 +690,15 @@ export default function CardapioPage() {
     if (!session) {
       setUser(null);
       setCustomerToken(null);
-      return;
+      void restoreCustomerBrowserSession(activeBrand.id).then(restored => {
+        if (cancelled || !restored || loadCustomerSession(activeBrand.id)) return;
+        saveCustomerSession(activeBrand.id, restored);
+        setUser(restored.profile);
+        setCustomerToken(restored.token);
+      }).catch(() => {
+        // Cookie may be blocked by the browser; guest checkout remains available.
+      });
+      return () => { cancelled = true; };
     }
 
     setUser(session.profile);
@@ -1124,8 +1133,26 @@ export default function CardapioPage() {
   const handleLoginSuccess = (profile: CustomerProfile, token: string) => {
     setUser(profile);
     setCustomerToken(token);
-    if (activeBrand?.id) saveCustomerSession(activeBrand.id, { token, profile });
+    if (activeBrand?.id) {
+      allowCustomerBrowserRestore(activeBrand.id);
+      saveCustomerSession(activeBrand.id, { token, profile });
+    }
   };
+
+  // Propagate account sign-out across tabs within this restaurant.
+  useEffect(() => {
+    if (!activeBrand?.id) return;
+    const restaurantId = activeBrand.id;
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== customerSignedOutKey(restaurantId) || event.newValue !== "1") return;
+      clearCustomerSession(restaurantId);
+      setUser(null);
+      setCustomerToken(null);
+      setIsProfileOpen(false);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [activeBrand?.id]);
 
   const handleRepeatOrder = (order: CustomerHistoryOrder) => {
     if (!activeBrand) return;
@@ -1159,8 +1186,14 @@ export default function CardapioPage() {
   };
 
   const handleLogout = () => {
-    if (activeBrand?.id) clearGuestCheckoutContact(activeBrand.id);
-    if (activeBrand?.id) clearCustomerSession(activeBrand.id);
+    if (activeBrand?.id) {
+      blockCustomerBrowserRestore(activeBrand.id);
+      void closeCustomerBrowserSession(activeBrand.id).catch(() => {
+        // The local sign-out marker blocks silent reauthentication if offline.
+      });
+      clearGuestCheckoutContact(activeBrand.id);
+      clearCustomerSession(activeBrand.id);
+    }
     setUser(null);
     setCustomerToken(null);
     setIsProfileOpen(false);

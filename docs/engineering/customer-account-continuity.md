@@ -1,26 +1,22 @@
-# Continuidade do cliente no cardápio
+# Continuidade de clientes no cardápio
 
-Escopo aprovado em 20/11/2026: reduzir redigitação de telefone e incentivar conta após compra. Base: `38ff84ae`.
+Atualização em 20/11/2026 — sucessora dos PRs #1428 e #1429.
 
-## Contrato e comportamento
+## Contrato
 
-- `restaurante.id` retornado pelo cardápio é a chave de armazenamento, tanto na entrada por `/c/:slug` quanto por `restaurante_id`. Slugs não viram identidades de clientes.
-- Visitantes continuam comprando pelo contato. Reconhecimento público retorna somente existência, nunca perfil, endereço, saldos ou autenticação.
-- Nome e celular podem ser lembrados com opção explícita por até 90 dias desde o último uso. A opção existe no checkout e na autenticação. Apenas esses dois campos são duráveis; endereço, e-mail, senha e token não entram nesse armazenamento.
-- Sem opção marcada, permanece a memória da aba. Desmarcar remove a lembrança durável. Sair da conta limpa também o contato do visitante neste restaurante. Nome e telefone permanecem editáveis em qualquer ordem, sem apagar um campo ao preencher o outro.
-- O sucesso da compra mantém acompanhamento como ação principal e oferece cadastro opcional com nome e telefone preenchidos. Abrir cadastro finaliza somente a apresentação do checkout; não cria outro pedido.
-- Conta usa os endpoints canônicos existentes de cadastro por e-mail e confirmação de telefone quando já há ficha. `Cliente.id`, histórico e saldos são preservados pelo backend após verificação. Nenhuma fusão entre restaurantes e nenhuma associação de histórico baseada apenas em telefone digitado foram introduzidas.
-- Tokens de conta continuam limitados à aba; a lembrança de contato é conveniência, não sessão autenticada persistente. O envio de e-mail/WhatsApp depende das integrações existentes. Não foram enviados testes a clientes reais.
+- Restaurante identificado exclusivamente por seu ID canônico. Tanto slug quanto ID apontam para o mesmo tenant.
+- Visitantes continuam comprando com nome e celular sem conta. Reconhecimento público por telefone retorna somente existência, nunca perfil, saldos, endereço ou histórico.
+- Nome e celular do visitante ficam apenas na aba atual, sem opção de lembrar contato por 90 dias. Registros anteriores de lembrança de 90 dias são descartados no acesso ao checkout. Nunca persistir endereço entre compras.
+- Após pedido, criar conta continua opcional e pré-preenchido; abrir cadastro não cria outro pedido.
+- O cookie usa identificador derivado da origem da vitrine e do restaurante: scripts em outra origem de loja não podem recuperar a sessão só por conhecer o ID.
+- Após login ou confirmação de cadastro, o backend emite um cookie Secure, HttpOnly, SameSite=None, Partitioned e específico por ID de restaurante, com caminho /cardapio/clientes. Prazo do cookie = CUSTOMER_TOKEN_EXPIRE_MINUTES (padrão de 30 dias). Não persiste senha ou credencial em localStorage.
+- Ao abrir outra aba ou voltar ao cardápio, GET /cardapio/clientes/sessao?restaurante_id=... valida JWT, prazo, cliente e tenant no banco antes de restaurar a conta. O token de compatibilidade com endpoints existentes permanece apenas em sessionStorage da aba.
+- A restauração devolve dados com Cache-Control: no-store, private; desconexão em uma aba é propagada para as demais sem compartilhar credenciais.
+- POST /cardapio/clientes/sessao/sair limpa o cookie. Logout também apaga sessão local e marca ID do restaurante como explicitamente desconectado, evitando reentrada automática quando o dispositivo está offline. O logout não revoga JWT já emitido; o risco residual segue o prazo atual do token.
+- Histórico, pontos, cashback e identidade continuam só vinculados ao cadastro mediante confirmação pelo fluxo canônico. Digitar um telefone, sozinho, não autentica nem faz merge de histórico.
+- CORS aceita credenciais apenas de origens confiáveis explícitas; o header de logout é autorizado. Navegadores que bloqueiam cookies de terceiros podem não permitir restauração entre abas quando o frontend e a API são cross-site; o login manual permanece disponível.
+- Sem migration, sem alteração de pagamentos, pedidos ou dados de produção.
 
-## Evidência e reversão
+## Validação e reversão
 
-- Regressões unitárias: opt-in, nova aba, isolamento, expiração, exclusão, ausência de endereço/e-mail/token duráveis e armazenamento bloqueado.
-- Browser com API simulada em 390 e 1366 px: fechar/reabrir aba, retorno por slug após entrada por ID, outro restaurante, remoção da opção, convite pós-compra, cadastro preenchido, envio ao tenant correto e pedido único.
-- Suíte backend existente `test_customer_email_registration.py`: sete testes, incluindo confirmação de telefone, preservação de ID/saldos e isolamento entre restaurantes.
-- Sem migrations, mudanças no backend ou configurações de produção. Reverter o commit do PR restaura o fluxo anterior. A chave `koma_remembered_contact:<id>` deixa de ser lida ao reverter e possui expiração validada na leitura quando esta versão é usada.
-
-## Compatibilidade da validação
-
-O CI encontrou o preenchimento de nome antes de telefone; ambos permanecem preservados, inclusive ao digitar até o décimo e décimo primeiro dígito. A suíte focal de paridade, promoções e continuidade passou em 74 casos após a correção.
-
-O teste `cashier-sale-recovery` também falhava na base `38ff84ae`, reproduzido em checkout separado: procurava exclusivamente a aba superior no celular. O teste passou a acionar o botão móvel existente `+ Pedido`; mantém as verificações de carrinho, destino, mensagens e idempotência. Nenhum comportamento do caixa foi alterado. O mesmo seletor antigo foi corrigido no cenário sintético de quatro caixas com 240 produtos, mantendo suas verificações. A suíte nova de continuidade integra o workflow existente de cardápio.
+Regressões focalizam cookie, sessão, isolamento e logout, além de remoção da caixa e preservação do pedido único. Reversão por revert do PR; os cookies da versão revertida ficam inertes sem a rota de restauração.
