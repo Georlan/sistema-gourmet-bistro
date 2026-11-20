@@ -394,7 +394,9 @@ test('filtros atuam dentro de Pedidos e preservam a busca', async ({ page }) => 
   await expect(board.getByRole('region', { name: 'Retiradas', exact: true })).toBeVisible();
   await expect(board.locator('.orders-column--delivery')).toBeHidden();
   await expect(search).toHaveValue('Bruno');
-  await expect(top.getByRole('button', { name: 'Pedidos', exact: true })).toHaveAttribute('aria-current', 'page');
+  const navigation = await mobileFilters.isVisible()
+    ? page.getByRole('navigation', { name: 'Navegação móvel principal' }) : top;
+  await expect(navigation.getByRole('button', { name: 'Pedidos', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('#cashier-deliveries-workspace, #cashier-pickups-workspace')).toHaveCount(0);
 });
 
