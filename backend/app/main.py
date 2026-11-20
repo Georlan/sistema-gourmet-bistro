@@ -470,7 +470,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.get_cors_allowed_origins(),
     allow_origin_regex=r"^https://[a-z0-9-]+(?:\.komafood\.com\.br)$",
-    allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
+    # Per-tenant HttpOnly browser session; only explicit trusted origins are allowed.
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=[
         "Authorization",
@@ -479,6 +480,7 @@ app.add_middleware(
         "Origin",
         "X-Requested-With",
         "X-Koma-Customer-Token",
+        "X-Koma-Session-Action",
         "X-Koma-Delivery-Token",
         "X-Idempotency-Key",
         "X-Tenant-ID",

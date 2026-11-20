@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
+import hmac
 import logging
 from contextlib import contextmanager
 
@@ -12,6 +14,7 @@ from fastapi import (
     Header,
     HTTPException,
     Request,
+    Response,
     status,
 )
 from sqlalchemy.exc import IntegrityError
@@ -78,6 +81,33 @@ router = APIRouter(
 
 _GENERIC_OTP_ERROR = "Código inválido ou expirado. Solicite um novo código."
 
+# Browser sessions are HttpOnly, Secure, partitioned and tenant-specific.
+_CUSTOMER_COOKIE_PATH = "/cardapio/clientes"
+
+def _customer_cookie_name(restaurante_id: int, origin: str = "") -> str:
+    # Each storefront origin has its own cookie even if tenant subdomains share a site.
+    origin_tag = hmac.new(
+        settings.SECRET_KEY.encode("utf-8"), origin.encode("utf-8"), hashlib.sha256
+    ).hexdigest()[:20]
+    return f"koma_customer_browser_{restaurante_id}_{origin_tag}"
+
+def _customer_origin(request: Request) -> str:
+    return (request.headers.get("origin") or str(request.base_url)).rstrip("/").lower()
+
+def _set_customer_browser_cookie(request: Request, response: Response, restaurante_id: int, token: str) -> None:
+    response.set_cookie(
+        key=_customer_cookie_name(restaurante_id, _customer_origin(request)), value=token,
+        max_age=max(300, int(settings.CUSTOMER_TOKEN_EXPIRE_MINUTES) * 60),
+        path=_CUSTOMER_COOKIE_PATH, secure=True, httponly=True, samesite="none",
+    )
+    response.headers["set-cookie"] += "; Partitioned"
+
+def _clear_customer_browser_cookie(request: Request, response: Response, restaurante_id: int) -> None:
+    response.delete_cookie(
+        key=_customer_cookie_name(restaurante_id, _customer_origin(request)), path=_CUSTOMER_COOKIE_PATH,
+        secure=True, httponly=True, samesite="none",
+    )
+    response.headers["set-cookie"] += "; Partitioned"
 
 
 def _utcnow() -> datetime.datetime:
@@ -544,7 +574,9 @@ def request_customer_registration(
 @router.post("/cadastro/confirmar")
 def confirm_customer_registration(
     payload: CustomerRegistrationConfirm,
+    request: Request,
     background_tasks: BackgroundTasks,
+    response: Response,
     db: Session = Depends(get_db),
 ):
     restaurante_id = _registration_restaurante_id(payload.token)
@@ -588,6 +620,7 @@ def confirm_customer_registration(
                 cliente_id=existing_email.id,
                 restaurante_id=restaurante_id,
             )
+            _set_customer_browser_cookie(request, response, restaurante_id, access_token)
             background_tasks.add_task(
                 manager.broadcast,
                 {
@@ -663,6 +696,7 @@ def confirm_customer_registration(
             cliente_id=cliente.id,
             restaurante_id=restaurante_id,
         )
+        _set_customer_browser_cookie(request, response, restaurante_id, access_token)
         background_tasks.add_task(
             manager.broadcast,
             {
@@ -807,6 +841,7 @@ def confirm_registration_phone(
     payload: CustomerRegistrationPhoneConfirm,
     request: Request,
     background_tasks: BackgroundTasks,
+    response: Response,
     db: Session = Depends(get_db),
 ):
     restaurante_id = _registration_restaurante_id(payload.token)
@@ -860,6 +895,7 @@ def confirm_registration_phone(
             cliente_id=cliente.id,
             restaurante_id=restaurante_id,
         )
+        _set_customer_browser_cookie(request, response, restaurante_id, access_token)
         background_tasks.add_task(
             manager.broadcast,
             {
@@ -886,6 +922,7 @@ def register_customer(
     payload: CustomerRegisterRequest,
     request: Request,
     background_tasks: BackgroundTasks,
+    response: Response,
     db: Session = Depends(get_db),
 ):
     with public_tenant_scope(str(payload.restaurante_id), None, db) as restaurante_id:
@@ -993,6 +1030,7 @@ def register_customer(
             cliente_id=cliente.id,
             restaurante_id=restaurante_id,
         )
+        _set_customer_browser_cookie(request, response, restaurante_id, access_token)
         background_tasks.add_task(
             manager.broadcast,
             {
@@ -1018,6 +1056,7 @@ def register_customer(
 def login_customer(
     payload: CustomerLoginRequest,
     request: Request,
+    response: Response,
     db: Session = Depends(get_db),
 ):
     with public_tenant_scope(str(payload.restaurante_id), None, db) as restaurante_id:
@@ -1088,6 +1127,7 @@ def login_customer(
             cliente_id=cliente.id,
             restaurante_id=restaurante_id,
         )
+        _set_customer_browser_cookie(request, response, restaurante_id, access_token)
         return CustomerSessionResponse(
             access_token=access_token,
             cliente=_profile(cliente),
@@ -1223,6 +1263,7 @@ def verify_customer_otp(
     payload: CustomerOtpVerify,
     request: Request,
     background_tasks: BackgroundTasks,
+    response: Response,
     db: Session = Depends(get_db),
 ):
     with public_tenant_scope(str(payload.restaurante_id), None, db) as restaurante_id:
@@ -1265,6 +1306,7 @@ def verify_customer_otp(
             cliente_id=cliente.id,
             restaurante_id=restaurante_id,
         )
+        _set_customer_browser_cookie(request, response, restaurante_id, access_token)
         background_tasks.add_task(
             manager.broadcast,
             {
@@ -1281,6 +1323,50 @@ def verify_customer_otp(
             access_token=access_token,
             cliente=_profile(cliente),
         )
+
+
+@router.get("/sessao", response_model=CustomerSessionResponse)
+def restore_customer_browser_session(
+    restaurante_id: int,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    response.headers["Cache-Control"] = "no-store, private"
+    if restaurante_id <= 0:
+        raise HTTPException(status_code=400, detail="Restaurante inválido.")
+    raw_token = request.cookies.get(_customer_cookie_name(restaurante_id, _customer_origin(request)))
+    if not raw_token:
+        return Response(status_code=204, headers={"Cache-Control": "no-store, private"})
+    try:
+        claims = decode_customer_access_token(raw_token)
+        if claims.restaurante_id != restaurante_id:
+            raise ValueError("Tenant incorreto.")
+        with customer_token_scope(db, raw_token):
+            cliente = buscar_cliente_por_id(
+                db, restaurante_id=restaurante_id, cliente_id=claims.cliente_id
+            )
+            if cliente is None:
+                raise ValueError("Cliente inexistente.")
+            profile = _profile(cliente)
+    except (ValueError, HTTPException):
+        expired = Response(status_code=204, headers={"Cache-Control": "no-store, private"})
+        _clear_customer_browser_cookie(request, expired, restaurante_id)
+        return expired
+    return CustomerSessionResponse(access_token=raw_token, cliente=profile)
+
+
+@router.post("/sessao/sair", status_code=204)
+def logout_customer_browser_session(
+    restaurante_id: int,
+    request: Request,
+    response: Response,
+    action: str = Header(alias="X-Koma-Session-Action"),
+):
+    if restaurante_id <= 0 or action != "logout":
+        raise HTTPException(status_code=400, detail="Solicitação inválida.")
+    _clear_customer_browser_cookie(request, response, restaurante_id)
+    response.status_code = 204
 
 
 @router.get("/me", response_model=CustomerProfileResponse)
