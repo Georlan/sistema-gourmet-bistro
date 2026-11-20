@@ -101,6 +101,7 @@ interface CardapioDigitalProps {
   onEditCart?: () => void;
   onOrderCreated?: (order: CreatedOrder) => void;
   onOrderSuccess: (order: CreatedOrder) => void;
+  onCreateAccount?: () => void;
   onSessionExpired?: () => void;
 }
 
@@ -178,6 +179,7 @@ export default function CardapioDigital({
   onOrderCreated,
   onOrderSuccess,
   onSessionExpired,
+  onCreateAccount,
 }: CardapioDigitalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -741,6 +743,15 @@ export default function CardapioDigital({
                   </button>
                 )}
               </div>
+              {!customerToken && onCreateAccount && (
+                <section className="mt-5 w-full max-w-md border-t border-koma-border pt-5 text-left" aria-labelledby="post-purchase-account-title">
+                  <h4 id="post-purchase-account-title" className="font-display text-base font-semibold text-koma-foreground">Na próxima, peça mais rápido</h4>
+                  <p className="mt-2 text-sm leading-relaxed text-koma-muted">Crie sua conta com os dados que você já informou. Consulte seus pedidos e repita seus favoritos neste restaurante.</p>
+                  <button type="button" onClick={() => { handleFinish(); onCreateAccount(); }}
+                    className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-koma-border px-4 text-sm font-semibold text-koma-foreground hover:bg-koma-raised">Criar conta com meus dados</button>
+                  <p className="mt-2 text-xs leading-relaxed text-koma-muted">É opcional. Seu pedido já foi enviado e pode ser acompanhado sem conta.</p>
+                </section>
+              )}
             </div>
           ) : orderingBlocked ? (
             <div className="mx-auto flex min-h-[360px] w-full max-w-md flex-col items-center justify-center py-8 text-center animate-scale-up">

@@ -25,8 +25,10 @@ for (const status of [503, 422, 502]) {
       });
       await page.goto('/?view=caixa');
       await expect(page.locator('.orders-board')).toBeVisible();
-      // Both upper and bottom shortcuts are visible now; exercise the upper destination explicitly.
-      const newOrder = () => page.locator('.cashier-subnav').getByRole('button', { name: 'Novo pedido', exact: true });
+      // The compact sales header uses the bottom navigation on phones.
+      const newOrder = () => (page.viewportSize()?.width ?? 1366) < 1024
+        ? page.locator('.cashier-mobile-bottom-bar').getByRole('button', { name: '+ Pedido', exact: true })
+        : page.locator('.cashier-subnav').getByRole('button', { name: 'Novo pedido', exact: true });
       const showCart = async () => {
         const cart = page.getByRole('button', { name: /^Carrinho \(/ });
         if (await cart.isVisible()) await cart.click();

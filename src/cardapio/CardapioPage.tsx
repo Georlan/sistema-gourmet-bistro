@@ -1,3 +1,4 @@
+import { clearGuestCheckoutContact } from "./guestCheckoutSession";
 import { DeliveryReceiptCode } from "./components/DeliveryReceiptCode";
 import PixCopyCode from "./components/PixCopyCode";
 /**
@@ -152,6 +153,7 @@ export default function CardapioPage() {
   const [draftRestoreIssues, setDraftRestoreIssues] = useState<string[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [checkoutRequest, setCheckoutRequest] = useState<CardapioCheckoutRequest | null>(null);
   const [isStoreInfoOpen, setIsStoreInfoOpen] = useState(false);
@@ -1163,6 +1165,7 @@ export default function CardapioPage() {
   };
 
   const handleLogout = () => {
+    if (activeBrand?.id) clearGuestCheckoutContact(activeBrand.id);
     if (activeBrand?.id) clearCustomerSession(activeBrand.id);
     setUser(null);
     setCustomerToken(null);
@@ -1749,11 +1752,13 @@ export default function CardapioPage() {
       {isAuthOpen && (
         <React.Suspense fallback={null}>
           <CardapioAuthModal
+            key={String(activeBrand.id)}
+            initialMode={authMode}
             restaurantId={activeBrand.id}
             accountRequired={activeBrand.customerAccountRequired === true}
             hasBenefits={Boolean(activeBrand.benefits?.coupons || activeBrand.benefits?.loyalty)}
             restaurantName={activeBrand.name}
-            onClose={() => setIsAuthOpen(false)}
+            onClose={() => { setIsAuthOpen(false); setAuthMode("login"); }}
             onLoginSuccess={handleLoginSuccess}
           />
         </React.Suspense>
@@ -1862,6 +1867,7 @@ export default function CardapioPage() {
                 setStoredOrders(current => mergeLocalOrderSnapshots(loadStoredOrders(rid), current));
               }
             }}
+            onCreateAccount={() => { setAuthMode("register"); setIsAuthOpen(true); }}
             onSessionExpired={handleSessionExpired}
           />
         </React.Suspense>
