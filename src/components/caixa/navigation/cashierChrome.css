@@ -648,7 +648,8 @@
 @media (max-width: 767px) {
   .cashier-shell--mobile-orders .cashier-subnav--sales { display: none; }
   .cashier-shell--mobile-orders .cashier-topbar {
-    height: 48px;
-    min-height: 48px;
+    /* Override the legacy mobile density rule, which also uses !important. */
+    height: 48px !important;
+    min-height: 48px !important;
   }
 }
