@@ -8,6 +8,46 @@ export interface GuestCheckoutContact {
 const guestCheckoutKey = (restaurantId: string | number) =>
   `koma_guest_checkout:${String(restaurantId)}`;
 
+const rememberedKey = (restaurantId: string | number) =>
+  `koma_remembered_contact:${String(restaurantId)}`;
+const REMEMBER_CONTACT_TTL = 90 * 24 * 60 * 60 * 1000;
+
+/** Explicit convenience opt-in; never an authenticated identity or delivery address. */
+export function loadRememberedGuestContact(restaurantId: string | number): GuestCheckoutContact | null {
+  try {
+    const key = rememberedKey(restaurantId);
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const stored = JSON.parse(raw);
+    if (stored.version !== 1 || !Number.isFinite(stored.expiresAt) || stored.expiresAt <= Date.now()) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    const contact = normalizeContact(stored.contact);
+    if (!contact || contact.phone.length < 10) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return { ...contact, email: "" };
+  } catch { return null; }
+}
+
+export function rememberGuestContact(
+  restaurantId: string | number, contact: GuestCheckoutContact, remember: boolean,
+): boolean {
+  try {
+    const key = rememberedKey(restaurantId);
+    if (!remember) { localStorage.removeItem(key); return true; }
+    const normalized = normalizeContact(contact);
+    if (!normalized || normalized.phone.length < 10) return false;
+    localStorage.setItem(key, JSON.stringify({
+      version: 1, expiresAt: Date.now() + REMEMBER_CONTACT_TTL,
+      contact: { name: normalized.name, phone: normalized.phone },
+    }));
+    return true;
+  } catch { return false; }
+}
+
 const normalizeContact = (value: unknown): GuestCheckoutContact | null => {
   if (!value || typeof value !== "object") return null;
   const raw = value as Partial<GuestCheckoutContact>;
@@ -35,13 +75,13 @@ export function loadGuestCheckoutContact(
       sessionStorage.removeItem(key);
     }
   } catch {
-    sessionStorage.removeItem(key);
+    try { sessionStorage.removeItem(key); } catch { /* Storage may be disabled. */ }
   }
 
   // One-time migration for clients that still have PII in durable storage.
   try {
     const legacyRaw = localStorage.getItem(key);
-    if (!legacyRaw) return null;
+    if (!legacyRaw) return loadRememberedGuestContact(restaurantId);
 
     localStorage.removeItem(key);
     const parsed = normalizeContact(JSON.parse(legacyRaw));
@@ -50,8 +90,8 @@ export function loadGuestCheckoutContact(
     sessionStorage.setItem(key, JSON.stringify(parsed));
     return parsed;
   } catch {
-    localStorage.removeItem(key);
-    return null;
+    try { localStorage.removeItem(key); } catch { /* Storage may be disabled. */ }
+    return loadRememberedGuestContact(restaurantId);
   }
 }
 
@@ -73,4 +113,5 @@ export function clearGuestCheckoutContact(restaurantId: string | number): void {
   const key = guestCheckoutKey(restaurantId);
   sessionStorage.removeItem(key);
   localStorage.removeItem(key);
+  localStorage.removeItem(rememberedKey(restaurantId));
 }

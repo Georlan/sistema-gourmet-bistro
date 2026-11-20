@@ -468,8 +468,8 @@ test('four fixture-only cashiers stay responsive with 240 products and repeated 
   try {
     const durations = await Promise.all(sessions.map(async ({ page }) => {
       await page.goto('/?view=caixa');
-      const salesNav = page.getByRole('navigation', { name: 'Telas desta área' });
-      await salesNav.getByRole('button', { name: 'Novo pedido', exact: true }).click();
+      const salesNav = page.getByRole('navigation', { name: 'Navegação móvel principal' });
+      await salesNav.getByRole('button', { name: '+ Pedido', exact: true }).click();
       const search = page.getByRole('searchbox', { name: 'Buscar produtos do cardápio' });
       await expect(search).toBeVisible();
       const card = page.getByTestId('cashier-pdv-product-card').filter({ hasText: /^Produto 0/ }).first();

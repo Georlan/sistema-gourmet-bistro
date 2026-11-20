@@ -9,6 +9,7 @@ import { createPortal } from "react-dom";
 import { containModalFocus } from "../../utils/modalFocus";
 import { PasswordInput } from "../../components/auth/PasswordInput";
 import "../../components/auth/authPresentation.css";
+import { loadGuestCheckoutContact, loadRememberedGuestContact, rememberGuestContact } from "../guestCheckoutSession";
 import { X } from "lucide-react";
 import { API_BASE_URL } from "../../config/api";
 import { authFetch, authRequestErrorMessage } from "../../utils/authRequest";
@@ -22,6 +23,7 @@ import {
 interface CardapioAuthModalProps {
   restaurantId: string | number;
   accountRequired?: boolean;
+  initialMode?: "login" | "register";
   hasBenefits?: boolean;
   restaurantName?: string;
   onClose: () => void;
@@ -33,16 +35,19 @@ export const PASSWORD_RECOVERY = "ATIVO";
 export default function CardapioAuthModal({
   restaurantId,
   accountRequired = false,
+  initialMode = "login",
   hasBenefits = false,
   restaurantName,
   onClose,
   onLoginSuccess,
 }: CardapioAuthModalProps) {
-  const [tab, setTab] = useState<"login" | "register">("login");
-  const [email, setEmail] = useState("");
+  const [tab, setTab] = useState<"login" | "register">(initialMode);
+  const [contact] = useState(() => loadGuestCheckoutContact(restaurantId));
+  const [email, setEmail] = useState(contact?.email || "");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [name, setName] = useState(contact?.name || "");
+  const [phone, setPhone] = useState(formatBrazilianPhone(contact?.phone || ""));
+  const [rememberContact, setRememberContact] = useState(() => Boolean(loadRememberedGuestContact(restaurantId)));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [registerStep, setRegisterStep] = useState<"details" | "email_sent">("details");
@@ -106,6 +111,7 @@ export default function CardapioAuthModal({
       if (accountRequired && profile.emailVerified !== true) {
         throw new Error("Confirme seu e-mail antes de fazer pedidos por este cardápio.");
       }
+      rememberGuestContact(restaurantId, { name: profile.name, phone: profile.phone, email: "", address: "" }, rememberContact);
       onLoginSuccess(profile, String(data.access_token));
       onClose();
     } catch (error) {
@@ -168,6 +174,7 @@ export default function CardapioAuthModal({
       if (!response.ok) {
         throw new Error(data?.detail || "Não foi possível enviar o e-mail de confirmação.");
       }
+      rememberGuestContact(restaurantId, { name: cleanName, phone: cleanPhone, email: "", address: "" }, rememberContact);
       setRegisterStep("email_sent");
     } catch (error) {
       if (signal.aborted) return;
@@ -197,7 +204,7 @@ export default function CardapioAuthModal({
           <h2 className="k-customer-auth__title" id="auth-modal-title">{tab === 'login' ? 'Entrar na sua conta' : 'Criar sua conta'}</h2>
         </header>
         {accountRequired ? <p className="k-auth-intro">Para pedir, entre e confirme o e-mail da sua conta.</p>
-          : hasBenefits ? <p className="k-auth-intro">Entre para acompanhar seus pedidos e benefícios.</p> : null}
+          : <p className="k-auth-intro">Acompanhe e repita seus pedidos{hasBenefits ? " e consulte seus benefícios" : ""} neste restaurante.</p>}
         <div className="k-customer-auth__modes" role="group" aria-label="Acesso do cliente">
           <button type="button" disabled={isSubmitting} aria-pressed={tab === 'login'}
             onClick={() => { setTab('login'); setErrorMessage(''); }}>Entrar</button>
@@ -247,10 +254,19 @@ export default function CardapioAuthModal({
           </> : <div className="k-customer-auth__success" role="status">
             <strong>Confira seu e-mail</strong>
             <p>Enviamos um link de confirmação para <b>{email.trim().toLowerCase()}</b>.</p>
+            <p>Se o celular já tiver pedidos, também será necessário confirmá-lo para proteger seu histórico.</p>
             <button type="submit" disabled={isSubmitting} className="k-auth-action">{isSubmitting ? 'Reenviando...' : 'Reenviar e-mail'}</button>
             <button type="button" className="k-customer-auth__guest" onClick={() => { setRegisterStep('details'); setErrorMessage(''); }}>Alterar dados</button>
           </div>}
         </form>}
+        <label className="k-auth-intro" style={{ display: 'flex', gap: 12, alignItems: 'flex-start', minHeight: 44 }}>
+          <input type="checkbox" checked={rememberContact} disabled={isSubmitting}
+            onChange={event => {
+              setRememberContact(event.target.checked);
+              if (!event.target.checked) rememberGuestContact(restaurantId, { name, phone, email: "", address: "" }, false);
+            }} />
+          <span>Lembrar meu nome e celular neste aparelho por até 90 dias. Evite em aparelhos compartilhados.</span>
+        </label>
         <button type="button" onClick={onClose} className="k-customer-auth__guest">
           {accountRequired ? 'Voltar ao cardápio' : 'Continuar como visitante'}
         </button>
