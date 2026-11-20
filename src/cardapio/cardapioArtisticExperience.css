@@ -1355,9 +1355,12 @@ html[data-theme="light"] .koma-art-footer {
   justify-content: space-around;
   padding: 4px 10px;
   z-index: 50;
+  /* O fundo da barra não deve roubar toques dos produtos logo atrás. */
+  pointer-events: none;
 }
 
 .koma-art-dock-btn {
+  pointer-events: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2758,7 +2761,7 @@ html[data-theme="light"] .koma-art-promo-footer,
 
 /* Keep focused storefront actions clear of the fixed bottom dock. */
 .koma-art-hero-stage button,
-.koma-art-canvas :is(button, a, input, [tabindex]) {
+.koma-art-canvas :is(.koma-art-catalog-card, .koma-art-pebble-card, button, a, input, [tabindex]) {
   scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
 }
 

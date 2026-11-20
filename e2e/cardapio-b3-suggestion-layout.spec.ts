@@ -113,3 +113,36 @@ test('B3: navegação por etapas respeita movimento reduzido sem perder modalida
   await expect(page.locator('#cart-receive-methods-content')).toBeVisible();
   await expect.poll(() => page.evaluate(() => (window as Window & { b3ScrollModes?: string[] }).b3ScrollModes?.at(-1))).toBe('auto');
 });
+
+test('B3: a barra inferior conserva botões clicáveis sem interceptar toque em produto', async ({page}) => {
+  const payload: any = structuredClone(publicMenuPayload);
+  payload.produtos.push({ id: 301, nome: 'Pizza de batata', preco: 40, categoria_id: 10, grupos_modificadores: [
+    { id: 'ponto', nome: 'Ponto da carne', min_selecoes: 1, max_selecoes: 1, tipo: 'obrigatorio',
+      opcoes: [{ id: 'ao-ponto', nome: 'Ao ponto', preco_adicional: 0, ativo: true }] },
+  ]});
+  await page.routeWebSocket('**/ws/**', () => {});
+  await page.route('http://127.0.0.1:8000/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/public')) return route.fulfill({ json: payload });
+    if (path.endsWith('/populares')) return route.fulfill({ json: { produtos: [] } });
+    return route.fulfill({ json: {} });
+  });
+  for (const width of [320, 390]) {
+    await page.setViewportSize({width, height: 720});
+    await page.goto('/cardapio?restaurante_id=2&vitrine=artistic-total');
+    const card = page.locator('#product-card-301');
+    await expect(card).toBeVisible();
+    const nav = page.locator('.koma-art-dock');
+    await expect(nav).toHaveCSS('pointer-events', 'none');
+    await expect(page.locator('#mobile-nav-cart')).toHaveCSS('pointer-events', 'auto');
+    await card.click();
+    await expect(page.locator('#product-details-modal')).toBeVisible();
+    await expect(page.getByRole('checkbox', {name: 'Selecionar Ao ponto'})).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#product-details-modal')).toBeHidden();
+    await page.locator('#mobile-nav-cart').click();
+    await expect(page.locator('#cart-drawer-container')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#cart-drawer-container')).toBeHidden();
+  }
+});
