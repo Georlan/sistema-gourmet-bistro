@@ -18,3 +18,9 @@ Escopo aprovado em 20/11/2026: reduzir redigitação de telefone e incentivar co
 - Browser com API simulada em 390 e 1366 px: fechar/reabrir aba, retorno por slug após entrada por ID, outro restaurante, remoção da opção, convite pós-compra, cadastro preenchido, envio ao tenant correto e pedido único.
 - Suíte backend existente `test_customer_email_registration.py`: sete testes, incluindo confirmação de telefone, preservação de ID/saldos e isolamento entre restaurantes.
 - Sem migrations, mudanças no backend ou configurações de produção. Reverter o commit do PR restaura o fluxo anterior. A chave `koma_remembered_contact:<id>` deixa de ser lida ao reverter e possui expiração validada na leitura quando esta versão é usada.
+
+## Compatibilidade da validação
+
+O CI encontrou o preenchimento de nome antes de telefone; ambos permanecem preservados, inclusive ao digitar até o décimo e décimo primeiro dígito. A suíte focal de paridade, promoções e continuidade passou em 74 casos após a correção.
+
+O teste `cashier-sale-recovery` também falhava na base `38ff84ae`, reproduzido em checkout separado: procurava exclusivamente a aba superior no celular. O teste passou a acionar o botão móvel existente `+ Pedido`; mantém as verificações de carrinho, destino, mensagens e idempotência. Nenhum comportamento do caixa foi alterado. A suíte nova de continuidade integra o workflow existente de cardápio.
