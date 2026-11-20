@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import type { ProductBadge } from './domain/productMerchandising';
+
+export type { ProductBadge };
+
 export interface Product {
   id: string;
   nome: string;
@@ -10,6 +14,9 @@ export interface Product {
   categoria_id?: string;
   marmitaria_tamanho?: string | null;
   somente_promocao?: boolean;
+  destaque?: boolean;
+  selo?: ProductBadge | null;
+  preco_promocional?: number | null;
   preco: number;
   descricao: string;
   imagem?: string;

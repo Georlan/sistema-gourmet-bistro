@@ -1,4 +1,5 @@
 import type { Product } from '../types';
+import { normalizeProductBadge } from '../domain/productMerchandising';
 
 export interface CatalogCategory {
   id: string;
@@ -111,9 +112,17 @@ export function normalizeCatalogSnapshot(payload: unknown): CatalogSnapshot {
         destino_impressao: String(nestedCategory.destino_impressao ?? 'COZINHA'),
       } : null);
 
+      const rawPromoPrice = item.preco_promocional == null ? null : Number(item.preco_promocional);
+      const promoPrice = rawPromoPrice != null && Number.isFinite(rawPromoPrice) && rawPromoPrice > 0
+        ? rawPromoPrice
+        : null;
+
       return {
         id: String(item.id ?? ''),
         somente_promocao: item.somente_promocao === true,
+        destaque: item.destaque === true,
+        selo: normalizeProductBadge(item.selo),
+        preco_promocional: promoPrice,
         marmitaria_tamanho: typeof item.marmitaria_tamanho === 'string' ? item.marmitaria_tamanho : null,
         nome: String(item.nome ?? ''),
         categoria_id: categoriaId,

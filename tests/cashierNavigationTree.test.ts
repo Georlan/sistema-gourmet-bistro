@@ -103,7 +103,7 @@ test('cadastros keep sidebar compact while preserving existing workspace owners'
   const clientes = parents().find((item) => item.id === 'clientes');
 
   assert.deepEqual(cardapio?.children?.map((child) => child.label), [
-    'Produtos', 'Complementos', 'Preparo e impressão',
+    'Produtos', 'Complementos', 'Promoções e vitrine', 'Preparo e impressão',
   ]);
   assert.deepEqual(estoque?.children?.map((child) => child.label), [
     'Ingredientes', 'Compras', 'Inventário', 'Fornecedores',
@@ -343,11 +343,12 @@ test('child aliases select the canonical visible shortcut only inside their pare
   assert.equal(isCashierNavigationActive('estoque_inventario', 'estoque', 'contagem'), true);
 });
 
-test('online-menu detail sections stay open under exactly one sidebar child', () => {
+test('online-menu detail sections stay open under exactly one visible sidebar child', () => {
   const cases = [
-    ['cardapio_marca', 'online_marca'],
+    ['cardapio_perfil', 'online_perfil'],
+    ['cardapio_marca', 'online_perfil'],
     ['cardapio_pedidos', 'online_pedidos'],
-    ['cardapio_bloqueios', 'online_bloqueios'],
+    ['cardapio_bloqueios', 'online_pedidos'],
     ['cardapio_entrega', 'online_entrega'],
     ['cardapio_pagamentos', 'online_pagamentos'],
     ['cardapio_qr_links', 'online_divulgacao'],
@@ -358,9 +359,9 @@ test('online-menu detail sections stay open under exactly one sidebar child', ()
     assert.deepEqual(normalizeCashierNavigationState('cardapio_digital', subTab), {
       tab: 'cardapio_digital', subTab,
     });
-    const activeChildren = online?.children?.filter((child) =>
-      isCashierNavigationActive(child.id, 'cardapio_digital', subTab)) ?? [];
-    assert.deepEqual(activeChildren.map((child) => child.id), [expectedChild]);
+    const activeVisibleChildren = online?.children?.filter((child) =>
+      !child.navigationHidden && isCashierNavigationActive(child.id, 'cardapio_digital', subTab)) ?? [];
+    assert.deepEqual(activeVisibleChildren.map((child) => child.id), [expectedChild]);
   }
 });
 
@@ -404,15 +405,24 @@ test('CaixaPanel delegates operation subnav clicks and active state to the share
 
 test('online menu mirrors canonical destinations across responsive section navigation', () => {
   const online = parents().find((item) => item.id === 'cardapio_digital');
-  assert.deepEqual(online?.children?.map((child) => child.id), [
-    'online_perfil',
-    'online_marca',
-    'online_pedidos',
-    'online_bloqueios',
-    'online_entrega',
-    'online_pagamentos',
-    'online_divulgacao',
-  ]);
+  assert.deepEqual(
+    online?.children?.filter((child) => !child.navigationHidden).map((child) => child.id),
+    [
+      'online_perfil',
+      'online_pedidos',
+      'online_entrega',
+      'online_pagamentos',
+      'online_divulgacao',
+    ],
+  );
+  assert.deepEqual(
+    online?.children?.filter((child) => child.navigationHidden).map((child) => child.id),
+    ['online_marca', 'online_bloqueios'],
+  );
+  assert.deepEqual(
+    getCashierHorizontalItems('cardapio_digital', 'premium', premiumEntitlements).map((child) => child.id),
+    ['online_perfil', 'online_pedidos', 'online_entrega', 'online_pagamentos', 'online_divulgacao'],
+  );
 
   const caixa = readFileSync(
     new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8',
@@ -472,14 +482,18 @@ test('implantação expõe somente cadastros e configurações práticas do prim
   assert.equal(setupItems.some((item) => item.id === 'relatorios'), false);
 
   const online = setupItems.find((item) => item.id === 'cardapio_digital');
-  assert.deepEqual(online?.children?.map((child) => child.id), [
-    'online_perfil',
-    'online_marca',
-    'online_pedidos',
-    'online_entrega',
-    'online_pagamentos',
-    'online_divulgacao',
-  ]);
+  assert.deepEqual(
+    online?.children?.filter((child) => !child.navigationHidden).map((child) => child.id),
+    [
+      'online_perfil',
+      'online_pedidos',
+      'online_entrega',
+      'online_pagamentos',
+      'online_divulgacao',
+    ],
+  );
+  assert.equal(online?.children?.some((child) => child.id === 'online_marca' && child.navigationHidden), true);
+  assert.equal(online?.children?.some((child) => child.id === 'online_bloqueios'), false);
 
   const settings = setupItems.find((item) => item.id === 'impressao_salao');
   assert.deepEqual(settings?.children?.map((child) => child.id), [

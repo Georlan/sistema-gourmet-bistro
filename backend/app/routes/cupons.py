@@ -3,7 +3,7 @@ import math
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
@@ -37,6 +37,7 @@ from ..services.plan_entitlements import (
     has_plan_entitlement,
     require_plan_entitlement,
 )
+from .cardapio_digital import notify_cardapio_config_update
 
 router = APIRouter(
     prefix="/caixa/cupons",
@@ -411,6 +412,7 @@ def recomendar_incentivos(
 @router.post("", response_model=CupomResponse, status_code=status.HTTP_201_CREATED)
 def criar_cupom(
     payload: CupomCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("fidelidade:administrar")),
 ):
@@ -453,6 +455,7 @@ def criar_cupom(
     db.add(novo_cupom)
     db.commit()
     db.refresh(novo_cupom)
+    notify_cardapio_config_update(background_tasks, rest_id)
     return novo_cupom
 
 
@@ -460,6 +463,7 @@ def criar_cupom(
 def atualizar_cupom(
     cupom_id: str,
     payload: CupomCreate,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("fidelidade:administrar")),
 ):
@@ -503,12 +507,14 @@ def atualizar_cupom(
 
     db.commit()
     db.refresh(cupom)
+    notify_cardapio_config_update(background_tasks, rest_id)
     return cupom
 
 
 @router.delete("/{cupom_id}", status_code=status.HTTP_204_NO_CONTENT)
 def deletar_cupom(
     cupom_id: str,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("fidelidade:administrar")),
 ):
@@ -539,6 +545,7 @@ def deletar_cupom(
             ),
         ))
         db.commit()
+        notify_cardapio_config_update(background_tasks, rest_id)
     return None
 
 

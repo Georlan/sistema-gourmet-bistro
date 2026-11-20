@@ -8,6 +8,7 @@ import { useActivePromotions } from '../useActivePromotions';
 import { fetchPopularProducts } from '../popularProductsClient';
 import { getFulfillmentAvailability } from '../fulfillment';
 import { smartSearchMatch } from '../../domain';
+import { getEffectiveProductPrice, getProductBadgeLabel } from '../../domain/productMerchandising';
 import { API_BASE_URL } from '../../config/api';
 import { buildWhatsAppContactUrl } from '../../config/whatsappUtils';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -893,7 +894,7 @@ export function CardapioArtisticExperience({
               </span>
               <h2 className="koma-art-promo-title">Promoções da Casa</h2>
               <p className="koma-art-promo-subtitle">
-                Monte cada item por etapas e aproveite o preço especial de combo.
+                Aproveite ofertas Compre e Ganhe, combos e descontos especiais da casa.
               </p>
             </div>
           </div>
@@ -908,6 +909,19 @@ export function CardapioArtisticExperience({
                   )?.image
                 )
                 .find((img) => img && img !== LOCAL_PRODUCT_PLACEHOLDER);
+              const offerType = offer.tipo
+                || (offer.brinde_nome ? 'compre_ganhe' : offer.componentes.length === 1 ? 'desconto_item' : 'combo');
+              const tagLabel = offerType === 'compre_ganhe'
+                ? 'COMPRE E GANHE'
+                : offerType === 'desconto_item'
+                  ? 'OFERTA ESPECIAL'
+                  : 'COMBO PROMOCIONAL';
+              const priceLabel = offerType === 'compre_ganhe'
+                ? 'Preço da oferta'
+                : offerType === 'desconto_item'
+                  ? 'Preço promocional'
+                  : 'Preço do combo';
+              const ctaLabel = offer.componentes.length === 1 ? 'Aproveitar' : 'Montar';
 
               return (
                 <div
@@ -925,13 +939,19 @@ export function CardapioArtisticExperience({
                     ) : (
                       <ArtisticClocheIllustration />
                     )}
-                    <span className="koma-art-promo-tag">COMBO PROMOCIONAL</span>
+                    <span className="koma-art-promo-tag">{tagLabel}</span>
                   </div>
 
                   <div className="koma-art-promo-content">
                     <div className="koma-art-promo-copy">
                       <span className="koma-art-promo-eyebrow">Oferta da casa</span>
                       <h3 className="koma-art-promo-name">{offer.nome}</h3>
+                      {offer.brinde_nome && (
+                        <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-koma-secondary">
+                          <Gift className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          <span>Brinde incluso: {offer.brinde_nome}</span>
+                        </p>
+                      )}
                       {offer.descricao && (
                         <p className="koma-art-promo-desc">{offer.descricao}</p>
                       )}
@@ -939,8 +959,8 @@ export function CardapioArtisticExperience({
 
                     <div className="koma-art-promo-footer">
                       <div className="koma-art-promo-price-box">
-                        <span className="koma-art-promo-price-label">Preço do combo</span>
-                        <strong className="koma-art-promo-price-val">
+                        <span className="koma-art-promo-price-label">{priceLabel}</span>
+                        <strong className="koma-art-promo-price-val tabular-nums">
                           {formatPrice(offer.preco)}
                         </strong>
                       </div>
@@ -954,8 +974,8 @@ export function CardapioArtisticExperience({
                         className="koma-art-promo-cta"
                         aria-label={`Montar promoção ${offer.nome} por ${formatPrice(offer.preco)}`}
                       >
-                        <span>Montar</span>
-                        <ArrowRight className="w-4 h-4 ml-1" />
+                        <span>{ctaLabel}</span>
+                        <ArrowRight className="w-4 h-4 ml-1" aria-hidden="true" />
                       </button>
                     </div>
                   </div>
@@ -1254,7 +1274,12 @@ export function CardapioArtisticExperience({
                     (item.modifierGroups && item.modifierGroups.length > 0) ||
                     (item.modifiers && item.modifiers.length > 0)
                   );
-                  const rawFormattedPrice = formatPrice(item.price);
+                  const priceInfo = getEffectiveProductPrice(item.price, item.promotionalPrice);
+                  const badgeLabel = getProductBadgeLabel(item.selo);
+                  const rawFormattedPrice = formatPrice(priceInfo.effectivePrice);
+                  const originalFormattedPrice = !isGrouped && priceInfo.hasDiscount && priceInfo.originalPrice != null
+                    ? formatPrice(priceInfo.originalPrice)
+                    : null;
                   const formattedPrice = isGrouped && item.hasVariablePrice
                     ? `A partir de ${rawFormattedPrice}`
                     : rawFormattedPrice;
@@ -1269,7 +1294,7 @@ export function CardapioArtisticExperience({
                       }}
                     >
                       <div className="koma-art-card-left">
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <h4 className="koma-art-card-title">
                             <button
                               type="button"
@@ -1285,8 +1310,39 @@ export function CardapioArtisticExperience({
                             </button>
                           </h4>
                           {!isAvail && (
-                            <span className="rounded-md bg-rose-500/15 border border-rose-500/30 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-rose-400">
+                            <span
+                              className="rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                              style={{
+                                background: 'var(--koma-danger-bg)',
+                                borderColor: 'var(--koma-danger-border)',
+                                color: 'var(--koma-danger-text)',
+                              }}
+                            >
                               Esgotado
+                            </span>
+                          )}
+                          {isAvail && item.destaque && (
+                            <span
+                              className="rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                              style={{
+                                background: 'var(--koma-info-bg)',
+                                borderColor: 'var(--koma-info-border)',
+                                color: 'var(--koma-info-text)',
+                              }}
+                            >
+                              Destaque
+                            </span>
+                          )}
+                          {isAvail && badgeLabel && (
+                            <span
+                              className="rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                              style={{
+                                background: 'var(--koma-warning-bg)',
+                                borderColor: 'var(--koma-warning-border)',
+                                color: 'var(--koma-warning-text)',
+                              }}
+                            >
+                              {badgeLabel}
                             </span>
                           )}
                         </div>
@@ -1294,7 +1350,16 @@ export function CardapioArtisticExperience({
                           <p className="koma-art-card-desc">{item.description}</p>
                         )}
                         <div className="koma-art-card-pricing-row">
-                          <strong className="koma-art-card-price">{formattedPrice}</strong>
+                          <div className="flex flex-wrap items-baseline gap-1.5 tabular-nums">
+                            {originalFormattedPrice && (
+                              <span className="text-xs text-koma-muted line-through">
+                                De {originalFormattedPrice}
+                              </span>
+                            )}
+                            <strong className="koma-art-card-price">
+                              {originalFormattedPrice ? `Por ${formattedPrice}` : formattedPrice}
+                            </strong>
+                          </div>
                           {isAvail && (
                             isGrouped ? (
                               <button

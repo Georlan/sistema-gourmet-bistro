@@ -6,13 +6,18 @@ import { getCashierNavigationItem, getCashierNavigationTarget } from '../src/com
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
-test('Cardápio online espelha as mesmas funções na navegação responsiva', () => {
+test('Cardápio online espelha as 5 funções canônicas na navegação responsiva e preserva rotas de compatibilidade', () => {
   const online = getCashierNavigationItem('cardapio_digital');
   assert.deepEqual(
-    online?.children?.map((child) => child.label),
-    ['Dados da loja', 'Marca', 'Horários e pedidos', 'Bloqueios', 'Entrega', 'Pagamentos', 'Divulgação'],
+    online?.children?.filter((child) => !child.navigationHidden).map((child) => child.label),
+    ['Loja e aparência', 'Horários e pedidos', 'Entrega', 'Pagamentos', 'Divulgação'],
+  );
+  assert.deepEqual(
+    online?.children?.filter((child) => child.navigationHidden).map((child) => child.id),
+    ['online_marca', 'online_bloqueios'],
   );
   assert.deepEqual(getCashierNavigationTarget('online_perfil'), { tab: 'cardapio_digital', subTab: 'cardapio_perfil' });
+  assert.deepEqual(getCashierNavigationTarget('online_marca'), { tab: 'cardapio_digital', subTab: 'cardapio_marca' });
   assert.deepEqual(getCashierNavigationTarget('online_bloqueios'), { tab: 'cardapio_digital', subTab: 'cardapio_bloqueios' });
   assert.deepEqual(getCashierNavigationTarget('online_entrega'), { tab: 'cardapio_digital', subTab: 'cardapio_entrega' });
   assert.deepEqual(getCashierNavigationTarget('online_pagamentos'), { tab: 'cardapio_digital', subTab: 'cardapio_pagamentos' });
@@ -125,5 +130,16 @@ test('CardapioDigitalSettingsPanel remains caller-controlled for profile and bra
   const panel = source('../src/components/cardapio/CardapioDigitalSettingsPanel.tsx');
   assert.match(panel, /activeSection/);
   assert.match(panel, /onSectionChange/);
+  assert.match(panel, /Loja e aparência/);
+  assert.match(panel, /online-menu-brand-section/);
   assert.doesNotMatch(panel, /useState<SettingsTab>\('perfil'\)/);
+  assert.doesNotMatch(panel, /bg-\[#090a0f\]|text-white|bg-white|backdrop-blur/);
+});
+
+test('CardapioProdutosTab and CashierCatalog adhere to KÔMA semantic tokens without hardcoded slate/white/blur', () => {
+  const produtosTab = source('../src/components/cardapio/CardapioProdutosTab.tsx');
+  assert.doesNotMatch(produtosTab, /\bbg-white\b|\bbg-slate-|\btext-slate-|\bborder-slate-|dark:bg-\[#|backdrop-blur/);
+
+  const catalog = source('../src/components/caixa/catalog/CashierCatalog.tsx');
+  assert.doesNotMatch(catalog, /backdrop-blur/);
 });

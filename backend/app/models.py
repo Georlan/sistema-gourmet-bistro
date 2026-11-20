@@ -346,6 +346,9 @@ class Produto(Base):
     imagens_galeria = Column(JSON, default=list)  # Up to 3 product gallery URLs
     ativo = Column(Boolean, default=True)  # Toggle product availability
     somente_promocao = Column(Boolean, nullable=False, default=False, server_default='false')
+    destaque = Column(Boolean, nullable=False, default=False, server_default='false')
+    selo = Column(String(32), nullable=True, default=None)
+    preco_promocional = Column(Numeric(14, 2, asdecimal=False), nullable=True, default=None)
     ordem_exibicao = Column(Integer, nullable=True, default=None)
     familia_id = Column(String(36), nullable=True)
     variacao_rotulo = Column(String(100), nullable=True)

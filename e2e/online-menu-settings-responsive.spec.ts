@@ -114,24 +114,22 @@ for (const theme of ['dark', 'light'] as const) {
 
       const subnav = page.locator('.cashier-subnav');
       await expect(subnav).toBeVisible();
-      await expect(subnav.locator('.cashier-subnav__button')).toHaveCount(7);
-      await expect(subnav.getByRole('button', { name: 'Dados da loja', exact: true })).toHaveClass(/is-active/);
-      await expect(page.getByRole('heading', { name: 'Perfil do cardápio', exact: true })).toBeVisible();
+      await expect(subnav.locator('.cashier-subnav__button')).toHaveCount(5);
+      await expect(subnav.getByRole('button', { name: 'Loja e aparência', exact: true })).toHaveClass(/is-active/);
+      await expect(page.getByRole('heading', { name: 'Loja e aparência', exact: true })).toBeVisible();
       await expect(page.getByText('Informações principais', { exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Marca e aparência', exact: true })).toBeVisible();
       const additional = page.locator('details').filter({ hasText: 'Informações adicionais' });
       await expect(additional).toBeVisible();
       await expect(additional).not.toHaveAttribute('open', '');
-
-      await navigateHorizontal(page, 'Marca');
-      await expect(page.getByRole('heading', { name: 'Marca', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
 
       await navigateHorizontal(page, 'Horários e pedidos');
       await expect(page.getByRole('heading', { name: 'Pedidos online', exact: true })).toBeVisible();
       await expect(page.getByText('Horário do estabelecimento', { exact: true })).toBeVisible();
-      await expectNoHorizontalOverflow(page);
-
-      await navigateHorizontal(page, 'Bloqueios');
+      const blocksDetails = page.locator('details').filter({ hasText: 'Bloqueios de clientes' });
+      await expect(blocksDetails).toBeVisible();
+      await blocksDetails.locator('summary').click();
       await expect(page.getByRole('heading', { name: 'Clientes bloqueados', exact: true })).toBeVisible();
       await expect(page.getByText('Histórico de bloqueios', { exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
@@ -172,7 +170,7 @@ test('cardápio online mantém abas verticais e horizontais no notebook', async 
   const subnav = page.locator('.cashier-subnav');
   await expect(subnav).toBeVisible();
 
-  for (const label of ['Dados da loja', 'Marca', 'Horários e pedidos', 'Bloqueios', 'Entrega', 'Pagamentos', 'Divulgação']) {
+  for (const label of ['Loja e aparência', 'Horários e pedidos', 'Entrega', 'Pagamentos', 'Divulgação']) {
     await expect(sidebar.getByRole('button', { name: label, exact: true })).toBeVisible();
     await expect(subnav.getByRole('button', { name: label, exact: true })).toBeVisible();
   }
@@ -199,15 +197,15 @@ test('implantação usa o slug salvo no link, na abertura e no QR de divulgaçã
   await expect(page.locator('code')).toHaveText(/\/c\/quentinha-caseira$/);
   await expect(page.getByRole('link', { name: 'Abrir cardápio' })).toHaveAttribute('href', /\/c\/quentinha-caseira$/);
   const svgBefore = await page.locator('svg').filter({ has: page.locator('title', { hasText: 'QR Code do cardápio Kôma' }) }).innerHTML();
-  await navigateHorizontal(page, 'Dados da loja');
+  await navigateHorizontal(page, 'Loja e aparência');
   await page.route('**/api/cardapio-digital/config?restaurante_id=*', route => route.fulfill({ json: profile }));
   await page.reload();
   await expect(page.locator('.cashier-topbar')).toBeVisible();
   await navigate(page, 'Cardápio online');
   await navigateHorizontal(page, 'Divulgação');
-  await expect(page.locator('code')).toHaveText(/cardapio\?restaurante_id=2$/);
-  const svgAfter = await page.locator('svg').filter({ has: page.locator('title', { hasText: 'QR Code do cardápio Kôma' }) }).innerHTML();
-  expect(svgBefore).not.toEqual(svgAfter);
+  await expect(page.locator('code')).toHaveCount(0);
+  await expect(page.getByText(/Não foi possível resolver a URL pública deste restaurante/)).toBeVisible();
+  expect(svgBefore).toBeTruthy();
 });
 
 test('setup salva identidade na API canônica e retorna apenas após sucesso', async ({ page }) => {

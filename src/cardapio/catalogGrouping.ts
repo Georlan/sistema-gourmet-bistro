@@ -4,6 +4,7 @@
  */
 
 import type { Product } from './CardapioTypes';
+import { getEffectiveProductPrice } from '../domain/productMerchandising';
 
 export interface DisplayVariant {
   id: string;
@@ -36,7 +37,7 @@ export function isGroupedProduct(item: CatalogDisplayItem): item is GroupedDispl
  * menor custo possível de seleções obrigatórias (minSelection > 0 ou tipo 'obrigatorio').
  */
 export function calculateProductMinStartingPrice(product: Product): number {
-  let minCost = Number(product.price) || 0;
+  let minCost = getEffectiveProductPrice(product.price, product.promotionalPrice).effectivePrice;
 
   if (product.modifierGroups && product.modifierGroups.length > 0) {
     for (const group of product.modifierGroups) {

@@ -1,13 +1,11 @@
 import { isInitialSetup, returnToInitialSetup, useUnsavedSetupChanges } from '../onboarding/setupNavigation';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
   ChevronDown,
   Clock3,
-  CreditCard,
   ExternalLink,
-  Image as ImageIcon,
   Instagram,
   Loader2,
   MapPin,
@@ -16,6 +14,7 @@ import {
   RefreshCw,
   Save,
   ShoppingBag,
+  Store,
   Trash2,
 } from 'lucide-react';
 import clsx from 'clsx';
@@ -40,7 +39,7 @@ type BairroTaxaRow = {
   taxa: number;
 };
 
-type RestaurantConfig = {
+export type RestaurantConfigSnapshot = {
   id?: number;
   nome: string;
   subtitulo: string;
@@ -59,6 +58,8 @@ type RestaurantConfig = {
   tipo_taxa_entrega: 'fixa' | 'bairro';
   tabela_taxas_bairros: BairroTaxaRow[];
 };
+
+type RestaurantConfig = RestaurantConfigSnapshot;
 
 interface CardapioDigitalSettingsPanelProps {
   apiBaseUrl: string;
@@ -232,14 +233,34 @@ const emptyConfig: RestaurantConfig = {
   tabela_taxas_bairros: [],
 };
 
-function buildPersistedPayload(config: RestaurantConfig) {
+/**
+ * Isola o payload enviado no PUT /api/cardapio-digital/config por seção ativa,
+ * evitando que salvar Perfil ou Marca sobrescreva silenciosamente horários,
+ * entrega ou formas de pagamento editados em outras abas.
+ */
+export function buildSectionPersistedPayload(
+  config: RestaurantConfigSnapshot,
+  section: CardapioDigitalSettingsSection,
+): Record<string, unknown> {
+  if (section === 'perfil') {
+    return {
+      nome: config.nome.trim(),
+      subtitulo: config.subtitulo.trim(),
+      sobre_nos: config.sobre_nos.trim(),
+      endereco: config.endereco.trim(),
+      google_maps_url: config.google_maps_url.trim(),
+      socials: config.socials,
+    };
+  }
+
+  if (section === 'marca') {
+    return {
+      logo_url: config.logo_url.trim(),
+      banner_url: config.banner_url.trim(),
+    };
+  }
+
   return {
-    nome: config.nome.trim(),
-    subtitulo: config.subtitulo.trim(),
-    sobre_nos: config.sobre_nos.trim(),
-    endereco: config.endereco.trim(),
-    google_maps_url: config.google_maps_url.trim(),
-    socials: config.socials,
     horarios_funcionamento: config.horarios_funcionamento
       .map(({ days, hours }) => ({ days: days.trim(), hours: hours.trim() }))
       .filter((row) => row.days && row.hours),
@@ -249,10 +270,12 @@ function buildPersistedPayload(config: RestaurantConfig) {
     pedido_minimo_retirada: config.pedido_minimo_retirada,
     frete_gratis_valor: config.frete_gratis_valor,
     tipo_taxa_entrega: config.tipo_taxa_entrega,
-    tabela_taxas_bairros: config.tabela_taxas_bairros.map(({ bairro, taxa }) => ({
-      bairro: bairro.trim(),
-      taxa: Number(taxa) || 0,
-    })).filter(b => b.bairro),
+    tabela_taxas_bairros: config.tabela_taxas_bairros
+      .map(({ bairro, taxa }) => ({
+        bairro: bairro.trim(),
+        taxa: Number(taxa) || 0,
+      }))
+      .filter((b) => b.bairro),
     cor_primaria: KOMA_MENU_PRIMARY,
     cor_fundo: KOMA_MENU_BACKGROUND,
   };
@@ -288,74 +311,171 @@ function SettingsSection({
   );
 }
 
-function PhonePreview({ config, compact = false }: { config: RestaurantConfig; compact?: boolean }) {
-  const statusText = config.status_override === 'Forçado Fechado'
+function PhonePreview({
+  config,
+  publicMenuUrl,
+  compact = false,
+}: {
+  config: RestaurantConfig;
+  publicMenuUrl: string | null;
+  compact?: boolean;
+}) {
+  const isPaused = config.status_override === 'Forçado Fechado';
+  const statusText = isPaused
     ? 'Pausado'
     : config.status_override === 'Forçado Aberto'
-      ? 'Aberto'
+      ? 'Aberto agora'
       : 'Horário automático';
   const firstHours = config.horarios_funcionamento[0];
+  const storeName = config.nome.trim() || 'Seu restaurante';
+  const initials = storeName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || 'KM';
 
   return (
-    <aside aria-label="Prévia da identidade do cardápio" className={clsx('xl:sticky xl:top-4', compact && 'order-first xl:order-last')}>
-      <div className={clsx('mx-auto w-full border border-koma-border bg-koma-panel shadow-sm', compact ? 'overflow-hidden rounded-2xl' : 'max-w-[330px] rounded-[2.35rem] p-3')}>
-        {!compact && <div className="mb-2 flex items-center justify-center gap-2 py-1">
-          <span className="h-1 w-10 rounded-full bg-koma-border" />
-          <span className="h-2 w-2 rounded-full bg-koma-border" />
-        </div>}
-        <div className={clsx('overflow-hidden bg-[#090a0f] text-white', !compact && 'rounded-[1.65rem] border border-white/10')}>
-          <div className={clsx('relative overflow-hidden p-4', compact ? 'min-h-24' : 'min-h-36')}>
-            {config.banner_url ? (
-              <img src={config.banner_url} alt="Capa" className="absolute inset-0 h-full w-full object-cover" />
-            ) : (
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(0,184,148,0.35),transparent_45%),linear-gradient(145deg,#101b17,#090a0f)]" />
-            )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/15" />
-            <div className={clsx('relative flex items-end gap-2.5', compact ? 'min-h-16' : 'min-h-28')}>
-              <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/20 bg-white text-[9px] font-black text-slate-900">
-                {config.logo_url ? <img src={config.logo_url} alt="Logo" className="h-full w-full object-contain p-1" /> : 'Kôma'}
-              </div>
-              <div className="min-w-0 flex-1">
-                <strong className="block truncate text-xs">{config.nome || 'Seu restaurante'}</strong>
-                <span className="mt-0.5 block truncate text-[8px] text-white/70">{config.subtitulo || 'Seu slogan aparece aqui'}</span>
-                <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/35 px-2 py-1 text-[7px] font-bold text-white/80">
-                  <i className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> {statusText}
-                </span>
-              </div>
+    <aside aria-label="Prévia ao vivo do cardápio online" className={clsx('xl:sticky xl:top-4', compact && 'order-first xl:order-last')}>
+      <div
+        className={clsx(
+          'mx-auto w-full border border-koma-border bg-koma-panel',
+          compact ? 'overflow-hidden rounded-2xl' : 'max-w-[330px] rounded-[2rem] p-3',
+        )}
+      >
+        {!compact && (
+          <div className="mb-2.5 flex items-center justify-between px-2 py-0.5">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-koma-muted">
+              Prévia mobile
+            </span>
+            <div className="flex items-center gap-1.5" aria-hidden="true">
+              <span className="h-1 w-8 rounded-full bg-koma-border" />
+              <span className="h-1.5 w-1.5 rounded-full bg-koma-border" />
             </div>
           </div>
-
-          {!compact && <div className="p-3">
-            <div className="flex gap-1.5 overflow-hidden border-b border-white/10 pb-2.5">
-              {['Seu cardápio'].map((label, index) => (
-                <span
-                  key={label}
-                  className={clsx(
-                    'rounded-lg px-2 py-1 text-[7px] font-black',
-                    index === 0 ? 'bg-emerald-500 text-white' : 'bg-white/5 text-white/55',
-                  )}
-                >
-                  {label}
-                </span>
-              ))}
-            </div>
-            <div className="mt-3 rounded-xl border border-dashed border-white/15 p-4 text-center">
-              <ShoppingBag size={22} className="mx-auto mb-2 text-white/50" />
-              <p className="text-xs text-white/70">Produtos e preços são definidos no seu cadastro.</p>
-            </div>
-            {(config.endereco || firstHours) && (
-              <div className="mt-3 space-y-1 rounded-xl border border-white/10 bg-white/[0.035] p-2.5 text-[7px] text-white/55">
-                {config.endereco && (
-                  <div className="flex items-center gap-1"><MapPin size={9} /> <span className="truncate">{config.endereco}</span></div>
-                )}
-                {firstHours && (
-                  <div className="flex items-center gap-1"><Clock3 size={9} /> <span className="truncate">{firstHours.days}: {firstHours.hours}</span></div>
-                )}
+        )}
+        <div
+          className={clsx(
+            'overflow-hidden bg-koma-canvas text-koma-foreground',
+            !compact && 'rounded-[1.35rem] border border-koma-border',
+          )}
+        >
+          <div className={clsx('relative overflow-hidden border-b border-koma-border bg-koma-raised', compact ? 'h-20' : 'h-28')}>
+            {config.banner_url ? (
+              <img src={config.banner_url} alt="Capa do restaurante" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-koma-muted">
+                <Store size={20} aria-hidden="true" />
+                <span className="text-[10px] font-medium">Sem capa configurada</span>
               </div>
             )}
-          </div>}
+          </div>
+
+          <div className="p-3.5">
+            <div className="flex items-start gap-3">
+              <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl border border-koma-border bg-koma-card text-xs font-bold text-koma-foreground">
+                {config.logo_url ? (
+                  <img src={config.logo_url} alt="Logo do restaurante" className="h-full w-full object-contain p-1" />
+                ) : (
+                  <span style={{ fontFamily: 'var(--koma-font-display)' }}>{initials}</span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <strong
+                  className="block truncate text-sm font-bold text-koma-foreground"
+                  style={{ fontFamily: 'var(--koma-font-display)' }}
+                >
+                  {storeName}
+                </strong>
+                <span className="mt-0.5 block truncate text-[11px] text-koma-muted">
+                  {config.subtitulo.trim() || 'Seu slogan aparece aqui'}
+                </span>
+                <span
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                  style={
+                    isPaused
+                      ? {
+                          background: 'var(--koma-danger-bg)',
+                          borderColor: 'var(--koma-danger-border)',
+                          color: 'var(--koma-danger-text)',
+                        }
+                      : {
+                          background: 'var(--koma-success-bg)',
+                          borderColor: 'var(--koma-success-border)',
+                          color: 'var(--koma-success-text)',
+                        }
+                  }
+                >
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ background: isPaused ? 'var(--koma-danger-text)' : 'var(--koma-success-text)' }}
+                  />
+                  {statusText}
+                </span>
+              </div>
+            </div>
+
+            {!compact && (
+              <>
+                <div className="mt-3.5 flex gap-1.5 overflow-hidden border-t border-koma-border pt-3">
+                  <span
+                    className="rounded-lg px-2.5 py-1 text-[10px] font-semibold"
+                    style={{
+                      background: 'var(--kc-chrome-selected, var(--koma-action-bg))',
+                      color: 'var(--kc-chrome-on-selected, var(--koma-action-text))',
+                    }}
+                  >
+                    Destaques
+                  </span>
+                  <span className="rounded-lg border border-koma-border bg-koma-card px-2.5 py-1 text-[10px] font-medium text-koma-muted">
+                    Cardápio
+                  </span>
+                </div>
+
+                <div className="mt-3 rounded-xl border border-dashed border-koma-border bg-koma-card p-3.5 text-center">
+                  <ShoppingBag size={18} className="mx-auto mb-1.5 text-koma-muted" aria-hidden="true" />
+                  <p className="text-[11px] leading-relaxed text-koma-muted">
+                    Produtos, fotos e preços são gerenciados em Cardápio → Produtos.
+                  </p>
+                </div>
+
+                {(config.endereco.trim() || firstHours) && (
+                  <div className="mt-3 space-y-1.5 rounded-xl border border-koma-border bg-koma-card p-2.5 text-[11px] text-koma-secondary">
+                    {config.endereco.trim() && (
+                      <div className="flex items-center gap-1.5">
+                        <MapPin size={12} className="shrink-0 text-koma-muted" aria-hidden="true" />
+                        <span className="truncate">{config.endereco.trim()}</span>
+                      </div>
+                    )}
+                    {firstHours && (
+                      <div className="flex items-center gap-1.5 tabular-nums">
+                        <Clock3 size={12} className="shrink-0 text-koma-muted" aria-hidden="true" />
+                        <span className="truncate">{firstHours.days}: {firstHours.hours}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
-        <p className="p-2 text-center text-xs text-koma-muted">Prévia da identidade · não publica nem libera pedidos</p>
+
+        <div className="mt-2.5 space-y-2 px-1">
+          {publicMenuUrl && !compact && (
+            <a
+              href={publicMenuUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 text-xs font-semibold text-koma-foreground transition hover:bg-koma-raised"
+            >
+              <ExternalLink size={14} aria-hidden="true" />
+              <span>Abrir cardápio público</span>
+            </a>
+          )}
+          <p className="text-center text-[11px] text-koma-muted">
+            Prévia ao vivo · alterações de texto exigem salvar
+          </p>
+        </div>
       </div>
     </aside>
   );
@@ -372,15 +492,23 @@ export function CardapioDigitalSettingsPanel({
   onSetupSavingChange,
 }: CardapioDigitalSettingsPanelProps) {
   const activeTab = activeSection;
+  const isUnifiedStoreAppearance = activeTab === 'perfil' || activeTab === 'marca';
+  const payloadSection: CardapioDigitalSettingsSection = activeTab === 'marca' ? 'perfil' : activeTab;
+  const brandSectionRef = useRef<HTMLElement | null>(null);
   const setupMode = Boolean(onSetupComplete) || isInitialSetup();
   const [config, setConfig] = useState<RestaurantConfig>(emptyConfig);
-  const [savedSnapshot, setSavedSnapshot] = useState('');
+  const [savedConfig, setSavedConfig] = useState<RestaurantConfig | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadedConfig, setHasLoadedConfig] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   useEffect(() => { onSetupSavingChange?.(isSaving); }, [isSaving, onSetupSavingChange]);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => {
+    if (activeTab !== 'marca' || isLoading) return;
+    brandSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [activeTab, isLoading]);
 
   const loadConfig = useCallback(async () => {
     setIsLoading(true);
@@ -394,7 +522,7 @@ export function CardapioDigitalSettingsPanel({
       if (!response.ok) throw new Error(data.detail || 'Não foi possível carregar as configurações.');
       const next = normalizeConfig(data);
       setConfig(next);
-      setSavedSnapshot(JSON.stringify(buildPersistedPayload(next)));
+      setSavedConfig(next);
       setHasLoadedConfig(true);
     } catch (error) {
       console.error('Falha ao carregar configurações do cardápio online:', error);
@@ -425,8 +553,20 @@ export function CardapioDigitalSettingsPanel({
     }));
   };
 
-  const currentPayload = useMemo(() => buildPersistedPayload(config), [config]);
-  const hasUnsavedChanges = hasLoadedConfig && JSON.stringify(currentPayload) !== savedSnapshot;
+  const updateAssetUrl = (key: 'logo_url' | 'banner_url', url: string) => {
+    setConfig((current) => ({ ...current, [key]: url }));
+    setSavedConfig((current) => (current ? { ...current, [key]: url } : current));
+  };
+
+  const currentPayload = useMemo(
+    () => buildSectionPersistedPayload(config, payloadSection),
+    [config, payloadSection],
+  );
+  const savedSectionSnapshot = useMemo(
+    () => (savedConfig ? JSON.stringify(buildSectionPersistedPayload(savedConfig, payloadSection)) : ''),
+    [savedConfig, payloadSection],
+  );
+  const hasUnsavedChanges = hasLoadedConfig && JSON.stringify(currentPayload) !== savedSectionSnapshot;
 
   const markSaved = useUnsavedSetupChanges(setupMode && hasUnsavedChanges);
   useEffect(() => { onSetupDirtyChange?.(hasLoadedConfig && hasUnsavedChanges); }, [hasLoadedConfig, hasUnsavedChanges, onSetupDirtyChange]);
@@ -459,7 +599,7 @@ export function CardapioDigitalSettingsPanel({
       setFeedback({ type: 'error', text: 'Recarregue as configurações antes de publicar alterações.' });
       return;
     }
-    if (!config.nome.trim()) {
+    if (isUnifiedStoreAppearance && !config.nome.trim()) {
       setFeedback({ type: 'error', text: 'Informe o nome público do restaurante.' });
       onSectionChange('perfil');
       return;
@@ -476,7 +616,7 @@ export function CardapioDigitalSettingsPanel({
       if (!response.ok) throw new Error(data.detail || 'Não foi possível salvar as configurações.');
       const next = normalizeConfig(data);
       setConfig(next);
-      setSavedSnapshot(JSON.stringify(buildPersistedPayload(next)));
+      setSavedConfig(next);
       setFeedback({ type: 'success', text: 'Cardápio atualizado e publicado.' });
       if (setupMode) {
         if (onSetupComplete) {
@@ -508,12 +648,6 @@ export function CardapioDigitalSettingsPanel({
     }
   };
 
-  const statusLabel = config.status_override === 'Forçado Aberto'
-    ? 'Aberto'
-    : config.status_override === 'Forçado Fechado'
-      ? 'Pausado'
-      : 'Automático';
-
   if (isLoading) {
     return (
       <div className="grid min-h-[360px] place-items-center rounded-2xl border border-koma-border bg-koma-panel">
@@ -526,15 +660,24 @@ export function CardapioDigitalSettingsPanel({
 
   if (loadError && !hasLoadedConfig) {
     return (
-      <div className="grid min-h-[360px] place-items-center rounded-2xl border border-rose-500/25 bg-koma-panel p-6 text-center">
+      <div className="grid min-h-[360px] place-items-center rounded-2xl border border-koma-border bg-koma-panel p-6 text-center">
         <div className="max-w-md">
-          <AlertCircle size={32} className="mx-auto text-rose-500" />
-          <h2 className="mt-4 text-base font-black text-koma-foreground">Não conseguimos carregar o cardápio online</h2>
+          <AlertCircle size={32} className="mx-auto" style={{ color: 'var(--koma-danger-text)' }} />
+          <h2
+            className="mt-4 text-base font-bold text-koma-foreground"
+            style={{ fontFamily: 'var(--koma-font-display)' }}
+          >
+            Não conseguimos carregar o cardápio online
+          </h2>
           <p className="mt-2 text-xs leading-relaxed text-koma-muted">{loadError}</p>
           <button
             type="button"
             onClick={() => void loadConfig()}
-            className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-5 text-xs font-black text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300"
+            className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-5 text-xs font-semibold transition"
+            style={{
+              background: 'var(--koma-action-bg)',
+              color: 'var(--koma-action-text)',
+            }}
           >
             <RefreshCw size={14} /> Tentar novamente
           </button>
@@ -547,13 +690,16 @@ export function CardapioDigitalSettingsPanel({
     <div className="online-menu-editor space-y-4 text-left animate-fade-in" style={onSetupComplete ? { paddingBottom: 0 } : undefined}>
       {!onSetupComplete && <header className="online-menu-editor__header flex flex-col gap-3 rounded-2xl border border-koma-border bg-koma-panel px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
         <div className="min-w-0">
-          <h2 className="text-base font-black text-koma-foreground">
-            {activeTab === 'marca' ? 'Marca' : setupMode ? 'Dados do restaurante' : 'Perfil do cardápio'}
+          <h2
+            className="text-base font-bold text-koma-foreground"
+            style={{ fontFamily: 'var(--koma-font-display)' }}
+          >
+            {setupMode ? 'Dados do restaurante' : 'Loja e aparência'}
           </h2>
-          <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
-            {activeTab === 'marca'
-              ? 'Logo e capa usadas no cardápio público.'
-              : setupMode ? 'Informe nome público, WhatsApp e endereço. Essas informações também serão exibidas no cardápio online.' : 'Informações que o cliente vê para reconhecer e encontrar o restaurante.'}
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-koma-muted">
+            {setupMode
+              ? 'Informe nome público, WhatsApp e endereço. Essas informações também serão exibidas no cardápio online.'
+              : 'Configure nome, contato, endereço, logotipo e capa exibidos no cardápio público.'}
           </p>
         </div>
         {publicMenuUrl && (
@@ -561,18 +707,31 @@ export function CardapioDigitalSettingsPanel({
             href={publicMenuUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-3 text-[10px] font-black text-koma-secondary transition hover:border-emerald-500/40 hover:text-emerald-600"
+            className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-3.5 text-xs font-semibold text-koma-foreground transition hover:bg-koma-card"
           >
-            <ExternalLink size={13} /> Ver como cliente
+            <ExternalLink size={14} aria-hidden="true" /> Ver como cliente
           </a>
         )}
       </header>}
 
       {loadError && (
-        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-rose-500/25 bg-rose-500/[0.08] px-4 py-3 text-xs text-rose-700 dark:text-rose-300" role="alert">
+        <div
+          className="flex flex-wrap items-center gap-3 rounded-2xl border px-4 py-3 text-xs"
+          style={{
+            background: 'var(--koma-danger-bg)',
+            borderColor: 'var(--koma-danger-border)',
+            color: 'var(--koma-danger-text)',
+          }}
+          role="alert"
+        >
           <AlertCircle size={16} className="shrink-0" />
           <span className="min-w-0 flex-1">{loadError} Os dados já carregados foram preservados.</span>
-          <button type="button" onClick={() => void loadConfig()} className="inline-flex h-9 items-center gap-2 rounded-lg border border-rose-500/25 px-3 text-[10px] font-black uppercase tracking-wider">
+          <button
+            type="button"
+            onClick={() => void loadConfig()}
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-xs font-semibold"
+            style={{ borderColor: 'var(--koma-danger-border)' }}
+          >
             <RefreshCw size={13} /> Tentar novamente
           </button>
         </div>
@@ -580,21 +739,33 @@ export function CardapioDigitalSettingsPanel({
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px] xl:items-start">
         <div className="min-w-0 space-y-4">
-          {activeTab === 'perfil' && !readiness.ready && (
-            <div className="flex items-start gap-2.5 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] p-3 text-[10px] text-amber-700 dark:text-amber-300">
-              <AlertCircle size={14} className="mt-0.5 shrink-0" />
+          {isUnifiedStoreAppearance && !readiness.ready && (
+            <div
+              className="flex items-start gap-2.5 rounded-xl border p-3 text-xs"
+              style={{
+                background: 'var(--koma-warning-bg)',
+                borderColor: 'var(--koma-warning-border)',
+                color: 'var(--koma-warning-text)',
+              }}
+            >
+              <AlertCircle size={15} className="mt-0.5 shrink-0" />
               <div>
                 <strong>Recomendado preencher:</strong> complete {readiness.missing.join(', ')} para que seus clientes identifiquem a loja.
               </div>
             </div>
           )}
 
-          {activeTab === 'perfil' && (
+          {isUnifiedStoreAppearance && (
             <>
               <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
                 <div className="mb-4">
-                  <h3 className="text-sm font-black text-koma-foreground">Informações principais</h3>
-                  <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
+                  <h3
+                    className="text-sm font-bold text-koma-foreground"
+                    style={{ fontFamily: 'var(--koma-font-display)' }}
+                  >
+                    Informações principais
+                  </h3>
+                  <p className="mt-1 text-xs leading-relaxed text-koma-muted">
                     Dados essenciais para os clientes reconhecerem e encontrarem seu restaurante.
                   </p>
                 </div>
@@ -652,11 +823,54 @@ export function CardapioDigitalSettingsPanel({
                 </div>
               </section>
 
+              {!onSetupComplete && (
+                <section
+                  id="online-menu-brand-section"
+                  ref={brandSectionRef}
+                  className="scroll-mt-4 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5"
+                >
+                  <div className="mb-4">
+                    <h3
+                      className="text-sm font-bold text-koma-foreground"
+                      style={{ fontFamily: 'var(--koma-font-display)' }}
+                    >
+                      Marca e aparência
+                    </h3>
+                    <p className="mt-1 text-xs leading-relaxed text-koma-muted">
+                      Logo e capa exibidos no topo do cardápio público. Imagens enviadas entram no ar imediatamente.
+                    </p>
+                  </div>
+                  <div className="space-y-4">
+                    <CardapioAssetUploader
+                      type="logo"
+                      label="Logotipo do restaurante"
+                      currentUrl={config.logo_url}
+                      apiBaseUrl={apiBaseUrl}
+                      authHeaders={authHeaders}
+                      onChange={(url) => updateAssetUrl('logo_url', url)}
+                    />
+                    <CardapioAssetUploader
+                      type="banner"
+                      label="Banner / capa"
+                      currentUrl={config.banner_url}
+                      apiBaseUrl={apiBaseUrl}
+                      authHeaders={authHeaders}
+                      onChange={(url) => updateAssetUrl('banner_url', url)}
+                    />
+                  </div>
+                </section>
+              )}
+
               <details className="group rounded-2xl border border-koma-border bg-koma-panel">
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-5">
+                <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-5">
                   <div>
-                    <strong className="block text-sm font-black text-koma-foreground">Informações adicionais</strong>
-                    <span className="mt-1 block text-[10px] leading-relaxed text-koma-muted">
+                    <strong
+                      className="block text-sm font-bold text-koma-foreground"
+                      style={{ fontFamily: 'var(--koma-font-display)' }}
+                    >
+                      Informações adicionais
+                    </strong>
+                    <span className="mt-1 block text-xs leading-relaxed text-koma-muted">
                       Sobre o restaurante, Instagram e link do Google Maps.
                     </span>
                   </div>
@@ -936,43 +1150,17 @@ export function CardapioDigitalSettingsPanel({
             </main>
           )}
 
-          {activeTab === 'marca' && (
-            <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
-              <div className="mb-4">
-                <h3 className="text-sm font-black text-koma-foreground">Imagens do restaurante</h3>
-                <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
-                  Logo e capa usadas no cardápio público.
-                </p>
-              </div>
-              <div className="space-y-4">
-                <CardapioAssetUploader
-                  type="logo"
-                  label="Logotipo do restaurante"
-                  currentUrl={config.logo_url}
-                  apiBaseUrl={apiBaseUrl}
-                  authHeaders={authHeaders}
-                  onChange={(url) => updateConfig('logo_url', url)}
-                />
-                <CardapioAssetUploader
-                  type="banner"
-                  label="Banner / capa"
-                  currentUrl={config.banner_url}
-                  apiBaseUrl={apiBaseUrl}
-                  authHeaders={authHeaders}
-                  onChange={(url) => updateConfig('banner_url', url)}
-                />
-              </div>
-            </section>
-          )}
-
           {(feedback || hasUnsavedChanges || onSetupComplete) && (
             <div style={onSetupComplete ? { position: 'static' } : undefined} className="online-menu-editor__publish flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-end">
               {feedback ? (
-                <span className={clsx('mr-auto inline-flex items-center gap-1.5 text-[10px] font-bold', feedback.type === 'success' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300')}>
-                  {feedback.type === 'success' ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}{feedback.text}
+                <span
+                  className="mr-auto inline-flex items-center gap-1.5 text-xs font-semibold"
+                  style={{ color: feedback.type === 'success' ? 'var(--koma-success-text)' : 'var(--koma-danger-text)' }}
+                >
+                  {feedback.type === 'success' ? <CheckCircle2 size={14} /> : <AlertCircle size={14} />}{feedback.text}
                 </span>
               ) : (
-                <span className="mr-auto text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+                <span className="mr-auto text-xs font-semibold" style={{ color: 'var(--koma-warning-text)' }}>
                   {hasUnsavedChanges ? 'Alterações ainda não publicadas.' : 'Confira os dados e continue.'}
                 </span>
               )}
@@ -981,9 +1169,13 @@ export function CardapioDigitalSettingsPanel({
                   type="button"
                   disabled={isSaving || !hasLoadedConfig || Boolean(loadError)}
                   onClick={() => void saveConfig()}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-4 text-[10px] font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:cursor-wait disabled:opacity-70"
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-70"
+                  style={{
+                    background: 'var(--koma-action-bg)',
+                    color: 'var(--koma-action-text)',
+                  }}
                 >
-                  {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                  {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                   {isSaving ? 'Salvando…' : onSetupComplete ? 'Salvar e continuar' : setupMode ? 'Salvar e voltar para implantação' : 'Salvar e publicar'}
                 </button>
               )}
@@ -991,7 +1183,7 @@ export function CardapioDigitalSettingsPanel({
           )}
         </div>
 
-        <PhonePreview config={config} compact={Boolean(onSetupComplete)} />
+        <PhonePreview config={config} publicMenuUrl={publicMenuUrl} compact={Boolean(onSetupComplete)} />
       </div>
     </div>
   );

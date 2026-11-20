@@ -13,10 +13,13 @@ import {
   MoreHorizontal,
   PackageOpen,
   PauseCircle,
+  Percent,
   PlayCircle,
   Plus,
   Search,
   SlidersHorizontal,
+  Star,
+  Tag,
   Trash2,
   X,
 } from 'lucide-react';
@@ -24,9 +27,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { clsx } from 'clsx';
 import type { Product } from '../../types';
 import type { CatalogCategory } from '../../catalog/catalog';
-import PromotionsSettings from './PromotionsSettings';
-import CartRecommendationsSettings from './CartRecommendationsSettings';
-import MenuHighlightSettings from './MenuHighlightSettings';
+import { getEffectiveProductPrice, getProductBadgeLabel } from '../../domain/productMerchandising';
 import { smartSearchMatch } from '../../domain';
 
 interface CardapioProdutosTabProps {
@@ -46,16 +47,13 @@ interface CardapioProdutosTabProps {
   ) => Promise<boolean>;
   focusCategoryId?: string | null;
   onFocusCategoryHandled?: () => void;
-  promotionsConfig?: { apiBaseUrl: string; authHeaders: Record<string, string> };
+  onOpenPromotions?: () => void;
   /** Names returned by the existing /produto-familias API. No SKU name parsing. */
   familyLabels?: Record<string, string>;
-  recommendationProducts?: Product[];
 }
 
-const PROMOTIONS_VIRTUAL_CATEGORY = '__KOMA_PROMOTIONS__';
-const RECOMMENDATIONS_VIRTUAL_CATEGORY = '__KOMA_CART_RECOMMENDATIONS__';
-
 type AvailabilityFilter = 'TODOS' | 'DISPONIVEIS' | 'PAUSADOS';
+type ShowcaseFilter = 'TODOS' | 'DESTAQUES' | 'EM_PROMOCAO';
 type MediaFilter = 'TODAS' | 'SEM_FOTO' | 'UMA_FOTO' | 'GALERIA';
 
 const availabilityOptions: { value: AvailabilityFilter; label: string }[] = [
@@ -98,16 +96,13 @@ export function CardapioProdutosTab({
   onBatchEdit,
   focusCategoryId,
   onFocusCategoryHandled,
-  promotionsConfig,
+  onOpenPromotions,
   familyLabels = {},
-  recommendationProducts,
 }: CardapioProdutosTabProps) {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('TODAS');
-  const [promotionCount, setPromotionCount] = useState<number | null>(null);
-  const isPromotionsView = Boolean(promotionsConfig && categoryFilter === PROMOTIONS_VIRTUAL_CATEGORY);
-  const isRecommendationsView = Boolean(promotionsConfig && categoryFilter === RECOMMENDATIONS_VIRTUAL_CATEGORY);
   const [availabilityFilter, setAvailabilityFilter] = useState<AvailabilityFilter>('TODOS');
+  const [showcaseFilter, setShowcaseFilter] = useState<ShowcaseFilter>('TODOS');
   const [mediaFilter, setMediaFilter] = useState<MediaFilter>('TODAS');
   const [showPhotoFilters, setShowPhotoFilters] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -176,12 +171,16 @@ export function CardapioProdutosTab({
         const matchesAvailability = availabilityFilter === 'TODOS'
           || (availabilityFilter === 'DISPONIVEIS' && isAvailable)
           || (availabilityFilter === 'PAUSADOS' && !isAvailable);
+        const hasPromoPrice = getEffectiveProductPrice(product.preco, product.preco_promocional).hasDiscount;
+        const matchesShowcase = showcaseFilter === 'TODOS'
+          || (showcaseFilter === 'DESTAQUES' && product.destaque === true)
+          || (showcaseFilter === 'EM_PROMOCAO' && hasPromoPrice);
         const mediaCount = productMediaCount(product);
         const matchesMedia = mediaFilter === 'TODAS'
           || (mediaFilter === 'SEM_FOTO' && mediaCount === 0)
           || (mediaFilter === 'UMA_FOTO' && mediaCount === 1)
           || (mediaFilter === 'GALERIA' && mediaCount >= 2);
-        return matchesSearch && matchesCategory && matchesAvailability && matchesMedia;
+        return matchesSearch && matchesCategory && matchesAvailability && matchesShowcase && matchesMedia;
       })
       .sort((a, b) => {
         const orderA = a.ordem_exibicao;
@@ -195,7 +194,7 @@ export function CardapioProdutosTab({
         }
         return a.nome.localeCompare(b.nome, 'pt-BR');
       });
-  }, [availabilityFilter, categorias, categoryFilter, familyLabels, mediaFilter, produtos, search]);
+  }, [availabilityFilter, categorias, categoryFilter, familyLabels, mediaFilter, produtos, search, showcaseFilter]);
 
   // In normal editing mode, one family is one commercial card.
   // Selection/batch mode deliberately exposes real SKUs for individual operations.
@@ -235,6 +234,10 @@ export function CardapioProdutosTab({
   const selectedCount = selectedProductIds.size;
   const activeCount = produtos.filter((product) => product.ativo !== false).length;
   const pausedCount = produtos.length - activeCount;
+  const highlightedCount = produtos.filter((product) => product.destaque === true).length;
+  const discountedCount = produtos.filter(
+    (product) => getEffectiveProductPrice(product.preco, product.preco_promocional).hasDiscount,
+  ).length;
   const productsWithMedia = mediaStats.single + mediaStats.gallery;
   const mediaCoverage = produtos.length > 0 ? Math.round((productsWithMedia / produtos.length) * 100) : 100;
   const parsedBatchPriceAdjustment = Number(batchPriceAdjustment.replace(',', '.'));
@@ -327,7 +330,7 @@ export function CardapioProdutosTab({
 
   if (!catalogReady && produtos.length === 0) {
     return (
-      <div className="grid min-h-64 place-items-center rounded-2xl border border-slate-200 bg-white text-xs font-black uppercase tracking-widest text-slate-500 dark:border-white/10 dark:bg-[#111713]">
+      <div className="grid min-h-64 place-items-center rounded-2xl border border-koma-border bg-koma-panel text-xs font-bold uppercase tracking-widest text-koma-muted">
         Carregando catálogo...
       </div>
     );
@@ -335,63 +338,31 @@ export function CardapioProdutosTab({
 
   return (
     <div className="cardapio-products-mobile space-y-3">
-      <section className="cardapio-products-categories rounded-2xl border border-slate-200 bg-white p-2 shadow-sm dark:border-white/10 dark:bg-[#111713]">
+      <section className="cardapio-products-categories rounded-2xl border border-koma-border bg-koma-panel p-2">
         <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:thin]" aria-label="Categorias do cardápio">
           <button
             type="button"
             onClick={() => setCategoryFilter('TODAS')}
             aria-pressed={categoryFilter === 'TODAS'}
             className={clsx(
-              'flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-left transition-colors',
+              'flex min-h-11 shrink-0 items-center gap-2 rounded-xl border px-4 py-2 text-left text-xs transition-colors',
               categoryFilter === 'TODAS'
-                ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm dark:border-emerald-500/70 dark:bg-emerald-500/20 dark:text-emerald-200'
-                : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-emerald-300 dark:border-white/10 dark:bg-black/10 dark:text-slate-300 dark:hover:border-emerald-500/40',
+                ? 'border-transparent font-bold'
+                : 'border-koma-border bg-koma-card text-koma-secondary hover:bg-koma-raised hover:text-koma-foreground',
             )}
+            style={
+              categoryFilter === 'TODAS'
+                ? {
+                    background: 'var(--kc-chrome-selected, var(--koma-action-bg))',
+                    color: 'var(--kc-chrome-on-selected, var(--koma-action-text))',
+                  }
+                : undefined
+            }
           >
-            <PackageOpen size={16} />
-            <span className="font-black">Todos</span>
-            <span className="text-xs font-bold opacity-70">{produtos.length}</span>
+            <PackageOpen size={16} aria-hidden="true" />
+            <span className="font-bold">Todos</span>
+            <span className="text-xs font-semibold opacity-75 tabular-nums">{produtos.length}</span>
           </button>
-          {promotionsConfig && (
-            <button
-              type="button"
-              onClick={() => {
-                if (selectionMode) leaveSelectionMode();
-                setSearch('');
-                setCategoryFilter(PROMOTIONS_VIRTUAL_CATEGORY);
-              }}
-              aria-pressed={isPromotionsView}
-              className={clsx(
-                'flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-left transition-colors',
-                isPromotionsView
-                  ? 'border-emerald-500 bg-emerald-50 text-emerald-900 shadow-sm dark:border-emerald-500/60 dark:bg-emerald-500/15 dark:text-emerald-100'
-                  : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-500/5',
-              )}
-            >
-              <Gift size={16} aria-hidden="true" />
-              <span className="font-black">Promoções</span>
-              {promotionCount !== null && <span className="text-xs font-bold opacity-60">{promotionCount}</span>}
-            </button>
-          )}
-          {promotionsConfig && (
-            <button type="button"
-              onClick={() => {
-                if (selectionMode) leaveSelectionMode();
-                setSearch('');
-                setCategoryFilter(RECOMMENDATIONS_VIRTUAL_CATEGORY);
-              }}
-              aria-pressed={isRecommendationsView}
-              className={clsx(
-                'flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-left transition-colors',
-                isRecommendationsView
-                  ? 'border-emerald-500 bg-emerald-50 text-emerald-900 dark:border-emerald-500/60 dark:bg-emerald-500/15 dark:text-emerald-100'
-                  : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-300 dark:border-white/10 dark:bg-transparent dark:text-slate-300',
-              )}
-            >
-              <Gift size={16} aria-hidden="true" />
-              <span className="font-black">Recomendações</span>
-            </button>
-          )}
           {categorias.map((category) => {
             const stats = categoryStats.get(category.id) ?? { total: 0, available: 0, paused: 0 };
             const active = categoryFilter === String(category.id);
@@ -402,16 +373,31 @@ export function CardapioProdutosTab({
                 onClick={() => setCategoryFilter(String(category.id))}
                 aria-pressed={active}
                 className={clsx(
-                  'flex shrink-0 items-center gap-2 rounded-xl border px-4 py-2.5 text-left transition-colors',
+                  'flex min-h-11 shrink-0 items-center gap-2 rounded-xl border px-4 py-2 text-left text-xs transition-colors',
                   active
-                    ? 'border-emerald-500 bg-emerald-50 text-emerald-900 shadow-sm dark:border-emerald-500/60 dark:bg-emerald-500/15 dark:text-emerald-100'
-                    : 'border-slate-200 bg-white text-slate-700 hover:border-emerald-300 hover:bg-emerald-50/50 dark:border-white/10 dark:bg-transparent dark:text-slate-300 dark:hover:border-emerald-500/40 dark:hover:bg-emerald-500/5',
+                    ? 'border-transparent font-bold'
+                    : 'border-koma-border bg-koma-card text-koma-secondary hover:bg-koma-raised hover:text-koma-foreground',
                 )}
+                style={
+                  active
+                    ? {
+                        background: 'var(--kc-chrome-selected, var(--koma-action-bg))',
+                        color: 'var(--kc-chrome-on-selected, var(--koma-action-text))',
+                      }
+                    : undefined
+                }
               >
-                <span className="max-w-48 truncate font-black">{category.nome}</span>
-                <span className="text-xs font-bold opacity-60">{stats.total}</span>
+                <span className="max-w-48 truncate font-bold">{category.nome}</span>
+                <span className="text-xs font-semibold opacity-70 tabular-nums">{stats.total}</span>
                 {stats.paused > 0 && (
-                  <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-black text-rose-700 dark:bg-rose-500/15 dark:text-rose-300">
+                  <span
+                    className="rounded-full border px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
+                    style={{
+                      background: 'var(--koma-danger-bg)',
+                      borderColor: 'var(--koma-danger-border)',
+                      color: 'var(--koma-danger-text)',
+                    }}
+                  >
                     {stats.paused} pausado{stats.paused === 1 ? '' : 's'}
                   </span>
                 )}
@@ -421,45 +407,24 @@ export function CardapioProdutosTab({
         </div>
       </section>
 
-      {isRecommendationsView && promotionsConfig ? (
-        <>
-        <MenuHighlightSettings
-          apiBaseUrl={promotionsConfig.apiBaseUrl}
-          authHeaders={promotionsConfig.authHeaders}
-          products={recommendationProducts || produtos}
-        />
-        <CartRecommendationsSettings
-          apiBaseUrl={promotionsConfig.apiBaseUrl}
-          authHeaders={promotionsConfig.authHeaders}
-          products={recommendationProducts || produtos}
-        />
-        </>
-      ) : isPromotionsView && promotionsConfig ? (
-        <PromotionsSettings
-          apiBaseUrl={promotionsConfig.apiBaseUrl}
-          authHeaders={promotionsConfig.authHeaders}
-          onPromotionsLoaded={setPromotionCount}
-        />
-      ) : (
-        <>
-      <section className="cardapio-products-toolbar rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-[#111713]">
+      <section className="cardapio-products-toolbar rounded-2xl border border-koma-border bg-koma-panel p-3">
         <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
           <label className="relative min-w-0 flex-1">
-            <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
             <input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Buscar produto..."
               aria-label="Buscar produtos"
-              className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-10 text-sm text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-white/15 dark:bg-black/20 dark:text-white"
+              className="h-11 w-full rounded-xl border border-koma-border bg-koma-input pl-10 pr-10 text-sm text-koma-foreground placeholder:text-koma-muted outline-none transition focus:border-koma-border-strong"
             />
             {search && (
               <button
                 type="button"
                 onClick={() => setSearch('')}
                 aria-label="Limpar busca"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-koma-muted hover:text-koma-foreground"
               >
                 <X size={16} />
               </button>
@@ -473,12 +438,20 @@ export function CardapioProdutosTab({
                 if (selectionMode) leaveSelectionMode();
                 else setSelectionMode(true);
               }}
-              className={clsx(
-                'cardapio-products-select inline-flex h-11 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-black transition',
+              className="cardapio-products-select inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-semibold transition"
+              style={
                 selectionMode
-                  ? 'border-slate-300 bg-slate-100 text-slate-700 dark:border-white/15 dark:bg-white/5 dark:text-slate-200'
-                  : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-800 hover:bg-emerald-500/15 dark:text-emerald-300',
-              )}
+                  ? {
+                      background: 'var(--koma-surface-raised)',
+                      borderColor: 'var(--koma-border-strong)',
+                      color: 'var(--koma-text-primary)',
+                    }
+                  : {
+                      background: 'var(--koma-surface-card)',
+                      borderColor: 'var(--koma-border-default)',
+                      color: 'var(--koma-text-primary)',
+                    }
+              }
             >
               {selectionMode ? <X size={16} /> : <ListChecks size={16} />}
               {selectionMode ? 'Cancelar seleção' : 'Selecionar produtos'}
@@ -488,7 +461,7 @@ export function CardapioProdutosTab({
                 href={previewUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="cardapio-products-preview inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-slate-300 px-4 text-xs font-black text-slate-800 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-white/15 dark:text-white dark:hover:border-emerald-500/50 dark:hover:text-emerald-300"
+                className="cardapio-products-preview inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-4 text-xs font-semibold text-koma-foreground transition hover:bg-koma-raised"
               >
                 <Eye size={16} /> Ver cardápio
               </a>
@@ -496,35 +469,48 @@ export function CardapioProdutosTab({
             <button
               type="button"
               onClick={onCreateProduct}
-              className="cardapio-products-create inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500 bg-emerald-500 px-4 text-xs font-black text-emerald-950 transition hover:bg-emerald-400"
+              className="cardapio-products-create inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-xs font-semibold transition"
+              style={{
+                background: 'var(--koma-action-bg)',
+                color: 'var(--koma-action-text)',
+              }}
             >
               <Plus size={17} /> Novo produto
             </button>
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-200 pt-3 dark:border-white/10">
-          <div className="inline-flex rounded-xl border border-slate-300 bg-slate-100 p-1 dark:border-white/15 dark:bg-black/20" aria-label="Filtrar por disponibilidade">
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-koma-border pt-3">
+          <div className="inline-flex rounded-xl border border-koma-border bg-koma-canvas p-1" aria-label="Filtrar por disponibilidade">
             {availabilityOptions.map((option) => {
               const count = option.value === 'TODOS'
                 ? produtos.length
                 : option.value === 'DISPONIVEIS'
                   ? activeCount
                   : pausedCount;
+              const isActive = availabilityFilter === option.value;
               return (
                 <button
                   key={option.value}
                   type="button"
                   onClick={() => setAvailabilityFilter(option.value)}
-                  aria-pressed={availabilityFilter === option.value}
+                  aria-pressed={isActive}
                   className={clsx(
-                    'rounded-lg px-3 py-2 text-xs font-black transition-colors',
-                    availabilityFilter === option.value
-                      ? 'bg-white text-emerald-700 shadow-sm dark:bg-emerald-500/15 dark:text-emerald-200'
-                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
+                    'min-h-9 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
+                    isActive
+                      ? 'font-bold'
+                      : 'text-koma-secondary hover:text-koma-foreground',
                   )}
+                  style={
+                    isActive
+                      ? {
+                          background: 'var(--kc-chrome-selected, var(--koma-surface-card))',
+                          color: 'var(--kc-chrome-on-selected, var(--koma-text-primary))',
+                        }
+                      : undefined
+                  }
                 >
-                  {option.label} <span className="ml-1 font-mono opacity-60">{count}</span>
+                  {option.label} <span className="ml-1 opacity-70 tabular-nums">{count}</span>
                 </button>
               );
             })}
@@ -532,23 +518,92 @@ export function CardapioProdutosTab({
 
           <button
             type="button"
+            onClick={() => setShowcaseFilter((current) => (current === 'DESTAQUES' ? 'TODOS' : 'DESTAQUES'))}
+            aria-pressed={showcaseFilter === 'DESTAQUES'}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition"
+            style={
+              showcaseFilter === 'DESTAQUES'
+                ? {
+                    background: 'var(--koma-info-bg)',
+                    borderColor: 'var(--koma-info-border)',
+                    color: 'var(--koma-info-text)',
+                  }
+                : {
+                    background: 'var(--koma-surface-card)',
+                    borderColor: 'var(--koma-border-default)',
+                    color: 'var(--koma-text-secondary)',
+                  }
+            }
+          >
+            <Star size={14} aria-hidden="true" />
+            <span>Destaques</span>
+            <span className="text-[11px] opacity-75 tabular-nums">{highlightedCount}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowcaseFilter((current) => (current === 'EM_PROMOCAO' ? 'TODOS' : 'EM_PROMOCAO'))}
+            aria-pressed={showcaseFilter === 'EM_PROMOCAO'}
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border px-3 text-xs font-semibold transition"
+            style={
+              showcaseFilter === 'EM_PROMOCAO'
+                ? {
+                    background: 'var(--koma-success-bg)',
+                    borderColor: 'var(--koma-success-border)',
+                    color: 'var(--koma-success-text)',
+                  }
+                : {
+                    background: 'var(--koma-surface-card)',
+                    borderColor: 'var(--koma-border-default)',
+                    color: 'var(--koma-text-secondary)',
+                  }
+            }
+          >
+            <Percent size={14} aria-hidden="true" />
+            <span>Em promoção</span>
+            <span className="text-[11px] opacity-75 tabular-nums">{discountedCount}</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setShowPhotoFilters((current) => !current)}
             title={`${mediaCoverage}% dos produtos têm foto`}
-            className={clsx(
-              'inline-flex h-10 items-center gap-2 rounded-xl border px-3 text-xs font-black transition',
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition"
+            style={
               showPhotoFilters || mediaFilter !== 'TODAS'
-                ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200'
-                : 'border-slate-300 text-slate-600 hover:border-slate-400 dark:border-white/15 dark:text-slate-400',
-            )}
+                ? {
+                    background: 'var(--koma-warning-bg)',
+                    borderColor: 'var(--koma-warning-border)',
+                    color: 'var(--koma-warning-text)',
+                  }
+                : {
+                    background: 'var(--koma-surface-card)',
+                    borderColor: 'var(--koma-border-default)',
+                    color: 'var(--koma-text-secondary)',
+                  }
+            }
           >
-            <SlidersHorizontal size={14} /> Fotos
-            {mediaFilter !== 'TODAS' && <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />}
+            <SlidersHorizontal size={14} aria-hidden="true" /> Fotos
+            {mediaFilter !== 'TODAS' && (
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: 'var(--koma-warning-text)' }} />
+            )}
           </button>
+
+          {onOpenPromotions && (
+            <button
+              type="button"
+              onClick={onOpenPromotions}
+              className="ml-auto inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 text-xs font-semibold text-koma-foreground transition hover:bg-koma-raised"
+            >
+              <Gift size={14} aria-hidden="true" />
+              <span>Promoções e vitrine</span>
+            </button>
+          )}
         </div>
 
         {showPhotoFilters && (
-          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-2 dark:border-white/10 dark:bg-black/10" aria-label="Filtrar por fotos do produto">
-            <span className="px-1 text-[10px] font-black uppercase tracking-wider text-slate-500">Fotos</span>
+          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-koma-border bg-koma-canvas p-2" aria-label="Filtrar por fotos do produto">
+            <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-koma-muted">Fotos</span>
             {mediaOptions.map((option) => {
               const count = option.value === 'TODAS'
                 ? produtos.length
@@ -557,20 +612,27 @@ export function CardapioProdutosTab({
                   : option.value === 'UMA_FOTO'
                     ? mediaStats.single
                     : mediaStats.gallery;
+              const isActive = mediaFilter === option.value;
               return (
                 <button
                   key={option.value}
                   type="button"
                   onClick={() => setMediaFilter(option.value)}
-                  aria-pressed={mediaFilter === option.value}
+                  aria-pressed={isActive}
                   className={clsx(
-                    'rounded-lg px-3 py-2 text-xs font-black transition-colors',
-                    mediaFilter === option.value
-                      ? 'bg-white text-emerald-700 shadow-sm dark:bg-emerald-500/15 dark:text-emerald-200'
-                      : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white',
+                    'min-h-9 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors',
+                    isActive ? 'font-bold' : 'text-koma-secondary hover:text-koma-foreground',
                   )}
+                  style={
+                    isActive
+                      ? {
+                          background: 'var(--kc-chrome-selected, var(--koma-surface-card))',
+                          color: 'var(--kc-chrome-on-selected, var(--koma-text-primary))',
+                        }
+                      : undefined
+                  }
                 >
-                  {option.label} <span className="ml-1 font-mono opacity-60">{count}</span>
+                  {option.label} <span className="ml-1 opacity-70 tabular-nums">{count}</span>
                 </button>
               );
             })}
@@ -579,11 +641,11 @@ export function CardapioProdutosTab({
       </section>
 
       {selectedCategory && selectedCategoryStats && selectedRoute && SelectedRouteIcon && (
-        <section className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm dark:border-white/10 dark:bg-[#111713]">
-          <div className="flex min-w-0 items-center gap-2 text-xs text-slate-600 dark:text-slate-400">
-            <SelectedRouteIcon size={14} className="text-emerald-600 dark:text-emerald-300" />
-            <strong className="truncate text-slate-900 dark:text-white">{selectedCategory.nome}</strong>
-            <span>· {selectedCategoryStats.available} de {selectedCategoryStats.total} à venda · {selectedRoute.label}</span>
+        <section className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-koma-border bg-koma-panel px-3 py-2">
+          <div className="flex min-w-0 items-center gap-2 text-xs text-koma-muted">
+            <SelectedRouteIcon size={14} className="shrink-0" style={{ color: 'var(--koma-success-text)' }} />
+            <strong className="truncate text-koma-foreground">{selectedCategory.nome}</strong>
+            <span className="tabular-nums">· {selectedCategoryStats.available} de {selectedCategoryStats.total} à venda · {selectedRoute.label}</span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {selectedCategoryStats.paused > 0 && (
@@ -591,7 +653,12 @@ export function CardapioProdutosTab({
                 type="button"
                 onClick={() => void applyCategoryAvailability(true)}
                 disabled={pendingCategoryAction}
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-500/40 px-3 text-[10px] font-black text-emerald-700 disabled:opacity-50 dark:text-emerald-300"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold disabled:opacity-50"
+                style={{
+                  background: 'var(--koma-success-bg)',
+                  borderColor: 'var(--koma-success-border)',
+                  color: 'var(--koma-success-text)',
+                }}
               >
                 <PlayCircle size={13} /> Voltar todos
               </button>
@@ -601,7 +668,12 @@ export function CardapioProdutosTab({
                 type="button"
                 onClick={() => void applyCategoryAvailability(false)}
                 disabled={pendingCategoryAction}
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-rose-300 px-3 text-[10px] font-black text-rose-700 disabled:opacity-50 dark:border-rose-500/35 dark:text-rose-300"
+                className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold disabled:opacity-50"
+                style={{
+                  background: 'var(--koma-danger-bg)',
+                  borderColor: 'var(--koma-danger-border)',
+                  color: 'var(--koma-danger-text)',
+                }}
               >
                 <PauseCircle size={13} /> Pausar categoria
               </button>
@@ -611,29 +683,38 @@ export function CardapioProdutosTab({
       )}
 
       {selectionMode && (
-        <section className="rounded-2xl border border-emerald-300 bg-emerald-50 p-3 shadow-sm dark:border-emerald-500/30 dark:bg-emerald-500/[0.08]">
+        <section
+          className="rounded-2xl border p-3"
+          style={{
+            background: 'var(--koma-success-bg)',
+            borderColor: 'var(--koma-success-border)',
+          }}
+        >
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="font-black text-slate-950 dark:text-white">
+              <p
+                className="font-bold text-koma-foreground tabular-nums"
+                style={{ fontFamily: 'var(--koma-font-display)' }}
+              >
                 {selectedCount > 0
                   ? `${selectedCount} produto${selectedCount === 1 ? '' : 's'} selecionado${selectedCount === 1 ? '' : 's'}`
                   : 'Selecione os produtos que deseja alterar'}
               </p>
-              <p className="text-xs text-slate-600 dark:text-slate-400">Marque os cards abaixo. As ações aparecem aqui, sem abrir produto por produto.</p>
+              <p className="text-xs text-koma-secondary">Marque os cards abaixo. As ações aparecem aqui, sem abrir produto por produto.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={toggleAllVisible}
                 disabled={visibleIds.length === 0}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 disabled:opacity-40 dark:border-white/15 dark:bg-black/15 dark:text-slate-200"
+                className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 text-xs font-semibold text-koma-foreground disabled:opacity-40"
               >
                 <ListChecks size={14} /> {allVisibleSelected ? 'Desmarcar todos' : `Selecionar todos os ${filteredProducts.length}`}
               </button>
               <button
                 type="button"
                 onClick={leaveSelectionMode}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 px-3 text-xs font-black text-slate-700 dark:border-white/15 dark:text-slate-300"
+                className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 text-xs font-semibold text-koma-secondary hover:text-koma-foreground"
               >
                 <X size={14} /> Cancelar
               </button>
@@ -641,12 +722,17 @@ export function CardapioProdutosTab({
           </div>
 
           {selectedCount > 0 && (
-            <div className="mt-3 grid gap-2 border-t border-emerald-200 pt-3 dark:border-emerald-500/20 xl:grid-cols-[auto_auto_minmax(15rem,1fr)_minmax(15rem,1fr)]">
+            <div className="mt-3 grid gap-2 border-t border-koma-border pt-3 xl:grid-cols-[auto_auto_minmax(15rem,1fr)_minmax(15rem,1fr)]">
               <button
                 type="button"
                 onClick={() => void applyBatchAvailability(false)}
                 disabled={pendingBatchAction}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-rose-300 bg-white px-4 text-xs font-black text-rose-700 disabled:opacity-50 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-300"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-semibold disabled:opacity-50"
+                style={{
+                  background: 'var(--koma-danger-bg)',
+                  borderColor: 'var(--koma-danger-border)',
+                  color: 'var(--koma-danger-text)',
+                }}
               >
                 <PauseCircle size={15} /> Pausar
               </button>
@@ -654,12 +740,16 @@ export function CardapioProdutosTab({
                 type="button"
                 onClick={() => void applyBatchAvailability(true)}
                 disabled={pendingBatchAction}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500 bg-emerald-500 px-4 text-xs font-black text-emerald-950 disabled:opacity-50"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-xs font-semibold disabled:opacity-50"
+                style={{
+                  background: 'var(--koma-action-bg)',
+                  color: 'var(--koma-action-text)',
+                }}
               >
                 <PlayCircle size={15} /> Voltar a vender
               </button>
 
-              <div className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 dark:border-white/10 dark:bg-black/15">
+              <div className="flex min-w-0 items-center gap-2 rounded-xl border border-koma-border bg-koma-card p-1.5">
                 <input
                   type="number"
                   min={-90}
@@ -669,24 +759,28 @@ export function CardapioProdutosTab({
                   onChange={(event) => setBatchPriceAdjustment(event.target.value)}
                   placeholder="Reajuste em %"
                   aria-label="Reajuste percentual dos produtos selecionados"
-                  className="h-8 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-slate-900 outline-none focus:border-emerald-500 dark:border-white/15 dark:bg-black/20 dark:text-white"
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-semibold text-koma-foreground tabular-nums outline-none focus:border-koma-border-strong"
                 />
                 <button
                   type="button"
                   onClick={() => void applyBatchEdit({ reajuste_percentual: parsedBatchPriceAdjustment })}
                   disabled={pendingBatchAction || !batchPriceAdjustmentValid}
-                  className="h-8 rounded-lg bg-slate-900 px-3 text-[10px] font-black text-white disabled:opacity-40 dark:bg-white dark:text-slate-950"
+                  className="h-9 rounded-lg px-3 text-xs font-semibold disabled:opacity-40"
+                  style={{
+                    background: 'var(--koma-action-bg)',
+                    color: 'var(--koma-action-text)',
+                  }}
                 >
                   Ajustar preço
                 </button>
               </div>
 
-              <div className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white p-1.5 dark:border-white/10 dark:bg-black/15">
+              <div className="flex min-w-0 items-center gap-2 rounded-xl border border-koma-border bg-koma-card p-1.5">
                 <select
                   value={batchCategoryId}
                   onChange={(event) => setBatchCategoryId(event.target.value)}
                   aria-label="Nova categoria dos produtos selecionados"
-                  className="h-8 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 text-xs font-bold text-slate-900 outline-none focus:border-emerald-500 dark:border-white/15 dark:bg-black/20 dark:text-white"
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-semibold text-koma-foreground outline-none focus:border-koma-border-strong"
                 >
                   <option value="">Mover para categoria...</option>
                   {categorias.map((category) => (
@@ -697,7 +791,11 @@ export function CardapioProdutosTab({
                   type="button"
                   onClick={() => void applyBatchEdit({ categoria_id: batchCategoryId })}
                   disabled={pendingBatchAction || !batchCategoryId}
-                  className="h-8 rounded-lg bg-slate-900 px-3 text-[10px] font-black text-white disabled:opacity-40 dark:bg-white dark:text-slate-950"
+                  className="h-9 rounded-lg px-3 text-xs font-semibold disabled:opacity-40"
+                  style={{
+                    background: 'var(--koma-action-bg)',
+                    color: 'var(--koma-action-text)',
+                  }}
                 >
                   Mover
                 </button>
@@ -708,13 +806,18 @@ export function CardapioProdutosTab({
       )}
 
       {filteredProducts.length === 0 ? (
-        <section className="grid min-h-72 place-items-center rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-white/10 dark:bg-[#111713]">
+        <section className="grid min-h-72 place-items-center rounded-2xl border border-koma-border bg-koma-panel p-8 text-center">
           <div className="max-w-md">
-            <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl border border-slate-200 bg-slate-100 text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
+            <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-2xl border border-koma-border bg-koma-raised text-koma-muted">
               <PackageOpen size={24} />
             </div>
-            <h3 className="text-lg font-black text-slate-950 dark:text-white">Nenhum produto encontrado</h3>
-            <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">Ajuste a busca ou os filtros.</p>
+            <h3
+              className="text-lg font-bold text-koma-foreground"
+              style={{ fontFamily: 'var(--koma-font-display)' }}
+            >
+              Nenhum produto encontrado
+            </h3>
+            <p className="mt-2 text-sm text-koma-muted">Ajuste a busca ou os filtros.</p>
           </div>
         </section>
       ) : (
@@ -733,40 +836,54 @@ export function CardapioProdutosTab({
                 return (
                   <article key={`family-${product.familia_id}`}
                     data-family-id={product.familia_id}
-                    className="flex min-h-40 flex-col gap-3 rounded-2xl border border-emerald-500/30 bg-white p-3 shadow-sm dark:bg-[#141b16]">
+                    className="flex min-h-40 flex-col gap-3 rounded-2xl border border-koma-border bg-koma-card p-3">
                     <div className="flex items-start gap-3">
-                      <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/5">
+                      <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-koma-border bg-koma-raised text-koma-muted">
                         {product.imagem ? <img src={product.imagem} alt="" width={44} height={44} className="h-full w-full object-cover" /> : <Images size={18} />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-sm font-black text-slate-950 dark:text-white">{familyName}</h3>
-                        <p className="mt-1 text-[11px] text-slate-600 dark:text-slate-400">
+                        <h3
+                          className="text-sm font-bold text-koma-foreground"
+                          style={{ fontFamily: 'var(--koma-font-display)' }}
+                        >
+                          {familyName}
+                        </h3>
+                        <p className="mt-1 text-[11px] text-koma-muted tabular-nums">
                           {members.length} {members.length === 1 ? 'opção' : 'opções'} · {availableMembers.length} à venda
                         </p>
                       </div>
-                      <span className="shrink-0 rounded-lg bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">Variações</span>
+                      <span
+                        className="shrink-0 rounded-lg border px-2 py-1 text-[10px] font-semibold"
+                        style={{
+                          background: 'var(--koma-success-bg)',
+                          borderColor: 'var(--koma-success-border)',
+                          color: 'var(--koma-success-text)',
+                        }}
+                      >
+                        Variações
+                      </span>
                     </div>
-                    <div className="space-y-1 rounded-xl bg-slate-50 p-2 dark:bg-black/20">
+                    <div className="space-y-1 rounded-xl border border-koma-border bg-koma-panel p-2">
                       {members.map((item) => (
                         <div key={item.id} className="flex items-center justify-between gap-2 text-xs">
-                          <span className={`min-w-0 truncate ${item.ativo === false ? 'text-slate-400 line-through' : 'text-slate-700 dark:text-slate-200'}`}>
+                          <span className={clsx('min-w-0 truncate', item.ativo === false ? 'text-koma-muted line-through' : 'text-koma-secondary')}>
                             {item.variacao_rotulo || item.nome}
                             {item.ativo === false ? ' · Pausado' : ''}
                           </span>
-                          <span className="shrink-0 font-mono font-bold text-slate-900 dark:text-white">
+                          <span className="shrink-0 font-bold text-koma-foreground tabular-nums">
                             {Number(item.preco).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                           </span>
                         </div>
                       ))}
                     </div>
-                    <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 pt-3 dark:border-white/10">
-                      <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                    <div className="mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-koma-border pt-3">
+                      <span className="text-xs font-bold tabular-nums" style={{ color: 'var(--koma-success-text)' }}>
                         {highestPrice > lowestPrice ? 'A partir de ' : ''}
                         {lowestPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                       </span>
                       <button type="button" onClick={() => onEditProduct(product)}
                         aria-label={`Editar variações de ${familyName}`}
-                        className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-emerald-500/50 px-3 text-xs font-bold text-emerald-800 hover:bg-emerald-500/10 dark:text-emerald-300">
+                        className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-3 text-xs font-semibold text-koma-foreground transition hover:bg-koma-panel">
                         <Edit3 size={14} /> Editar variações
                       </button>
                     </div>
@@ -778,16 +895,26 @@ export function CardapioProdutosTab({
               const mediaCount = productMediaCount(product);
               const detailKey = String(product.id);
               const detailOpen = productDetailId === detailKey;
+              const badgeLabel = getProductBadgeLabel(product.selo);
+              const priceInfo = getEffectiveProductPrice(product.preco, product.preco_promocional);
               return (
                 <article
                   key={product.id}
                   className={clsx(
-                    'relative flex min-h-40 flex-col rounded-2xl border p-3 shadow-sm transition',
+                    'relative flex min-h-40 flex-col rounded-2xl border p-3 transition',
                     isAvailable
-                      ? 'border-slate-200 bg-white hover:border-emerald-400 dark:border-white/10 dark:bg-[#141b16] dark:hover:border-emerald-500/35'
-                      : 'border-rose-200 bg-rose-50/60 hover:border-rose-400 dark:border-rose-500/25 dark:bg-rose-950/15',
-                    isSelected && 'ring-2 ring-emerald-500 ring-offset-2 ring-offset-slate-100 dark:ring-offset-[#090e0b]',
+                      ? 'border-koma-border bg-koma-card hover:border-koma-border-strong'
+                      : 'bg-koma-card',
+                    isSelected && 'ring-2 ring-[color:var(--koma-focus-ring)]',
                   )}
+                  style={
+                    !isAvailable
+                      ? {
+                          background: 'var(--koma-danger-bg)',
+                          borderColor: 'var(--koma-danger-border)',
+                        }
+                      : undefined
+                  }
                 >
                   <div className="flex items-start gap-3">
                     {selectionMode && (
@@ -796,10 +923,10 @@ export function CardapioProdutosTab({
                         checked={isSelected}
                         onChange={() => toggleProductSelection(product.id)}
                         aria-label={`Selecionar ${product.nome}`}
-                        className="mt-1 h-4 w-4 shrink-0 rounded border-slate-400 accent-emerald-500"
+                        className="mt-1 h-4 w-4 shrink-0 rounded border-koma-border accent-emerald-500"
                       />
                     )}
-                    <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50 text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
+                    <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl border border-koma-border bg-koma-raised text-koma-muted">
                       {product.imagem ? (
                         <img src={product.imagem} alt="" loading="lazy" decoding="async" width={44} height={44} className="h-full w-full object-cover" />
                       ) : (
@@ -807,22 +934,64 @@ export function CardapioProdutosTab({
                       )}
                     </div>
                     <div className="min-w-0 flex-1 pr-16">
-                      <h3 className="line-clamp-2 text-sm font-black text-slate-950 dark:text-white">{product.nome}</h3>
+                      <h3
+                        className="line-clamp-2 text-sm font-bold text-koma-foreground"
+                        style={{ fontFamily: 'var(--koma-font-display)' }}
+                      >
+                        {product.nome}
+                      </h3>
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         {product.categoria && (
-                          <span className="max-w-full truncate rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[9px] font-black text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-400">
+                          <span className="max-w-full truncate rounded-full border border-koma-border bg-koma-raised px-2 py-0.5 text-[10px] font-semibold text-koma-secondary">
                             {product.categoria}
                           </span>
                         )}
-                        <span className={clsx(
-                          'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-black uppercase tracking-wide',
-                          isAvailable
-                            ? 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-500/35 dark:bg-emerald-500/10 dark:text-emerald-300'
-                            : 'border-rose-300 bg-rose-50 text-rose-800 dark:border-rose-500/35 dark:bg-rose-500/10 dark:text-rose-300',
-                        )}>
-                          <span className={clsx('h-1.5 w-1.5 rounded-full', isAvailable ? 'bg-emerald-500' : 'bg-rose-500')} />
+                        <span
+                          className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                          style={
+                            isAvailable
+                              ? {
+                                  background: 'var(--koma-success-bg)',
+                                  borderColor: 'var(--koma-success-border)',
+                                  color: 'var(--koma-success-text)',
+                                }
+                              : {
+                                  background: 'var(--koma-danger-bg)',
+                                  borderColor: 'var(--koma-danger-border)',
+                                  color: 'var(--koma-danger-text)',
+                                }
+                          }
+                        >
+                          <span
+                            className="h-1.5 w-1.5 rounded-full"
+                            style={{ background: isAvailable ? 'var(--koma-success-text)' : 'var(--koma-danger-text)' }}
+                          />
                           {isAvailable ? (product.somente_promocao ? 'Só em promoções' : 'À venda') : 'Pausado'}
                         </span>
+                        {product.destaque && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                            style={{
+                              background: 'var(--koma-info-bg)',
+                              borderColor: 'var(--koma-info-border)',
+                              color: 'var(--koma-info-text)',
+                            }}
+                          >
+                            <Star size={10} aria-hidden="true" /> Destaque
+                          </span>
+                        )}
+                        {badgeLabel && (
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                            style={{
+                              background: 'var(--koma-warning-bg)',
+                              borderColor: 'var(--koma-warning-border)',
+                              color: 'var(--koma-warning-text)',
+                            }}
+                          >
+                            <Tag size={10} aria-hidden="true" /> {badgeLabel}
+                          </span>
+                        )}
                       </div>
                     </div>
 
@@ -835,19 +1004,24 @@ export function CardapioProdutosTab({
                           aria-controls={`catalog-product-details-${detailKey}`}
                           aria-label={`${detailOpen ? 'Ocultar' : 'Ver'} detalhes de ${product.nome}`}
                           title={detailOpen ? 'Ocultar detalhes' : 'Ver detalhes'}
-                          className="absolute right-11 top-3 z-20 grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white/95 text-slate-500 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-white/10 dark:bg-[#141b16]/95 dark:hover:text-emerald-300"
+                          className="absolute right-11 top-3 z-20 grid h-8 w-8 place-items-center rounded-lg border border-koma-border bg-koma-raised text-koma-muted transition hover:text-koma-foreground"
                         >
                           <Info size={14} />
                         </button>
                         <details className="absolute right-3 top-3 z-30">
-                          <summary className="grid h-8 w-8 cursor-pointer list-none place-items-center rounded-lg border border-slate-200 bg-white/95 text-slate-500 transition hover:border-slate-400 hover:text-slate-900 dark:border-white/10 dark:bg-[#141b16]/95 dark:hover:text-white" aria-label={`Mais ações para ${product.nome}`}>
+                          <summary className="grid h-8 w-8 cursor-pointer list-none place-items-center rounded-lg border border-koma-border bg-koma-raised text-koma-muted transition hover:text-koma-foreground" aria-label={`Mais ações para ${product.nome}`}>
                             <MoreHorizontal size={16} />
                           </summary>
-                          <div className="absolute right-0 mt-2 w-40 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#17201a]">
-                            <button type="button" onClick={() => onDuplicateProduct(product)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/5">
+                          <div className="absolute right-0 mt-2 w-40 rounded-xl border border-koma-border bg-koma-dialog p-1.5 shadow-xl">
+                            <button type="button" onClick={() => onDuplicateProduct(product)} className="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-koma-foreground hover:bg-koma-raised">
                               <Copy size={14} /> Duplicar
                             </button>
-                            <button type="button" onClick={() => void onRemoveProduct(product)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10">
+                            <button
+                              type="button"
+                              onClick={() => void onRemoveProduct(product)}
+                              className="flex min-h-9 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold hover:bg-koma-raised"
+                              style={{ color: 'var(--koma-danger-text)' }}
+                            >
                               <Trash2 size={14} /> Excluir
                             </button>
                           </div>
@@ -857,7 +1031,7 @@ export function CardapioProdutosTab({
                   </div>
 
                   {product.descricao && !detailOpen && (
-                    <p className="mt-2 line-clamp-1 text-[10px] leading-4 text-slate-500 dark:text-slate-400">
+                    <p className="mt-2 line-clamp-1 text-xs leading-4 text-koma-muted">
                       {product.descricao}
                     </p>
                   )}
@@ -866,24 +1040,43 @@ export function CardapioProdutosTab({
                     <div
                       id={`catalog-product-details-${detailKey}`}
                       role="note"
-                      className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-left dark:border-white/10 dark:bg-black/15"
+                      className="mt-3 rounded-xl border border-koma-border bg-koma-panel p-2.5 text-left"
                     >
-                      <span className="block text-[8px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300">Detalhes do produto</span>
-                      <p className="mt-1 text-[10px] leading-relaxed text-slate-600 dark:text-slate-300">
+                      <span
+                        className="block text-[10px] font-bold uppercase tracking-wider"
+                        style={{ color: 'var(--koma-success-text)' }}
+                      >
+                        Detalhes do produto
+                      </span>
+                      <p className="mt-1 text-xs leading-relaxed text-koma-secondary">
                         {product.descricao || 'Sem descrição cadastrada.'}
                       </p>
-                      <span className="mt-1.5 block font-mono text-[8px] text-slate-500">
+                      <span className="mt-1.5 block font-mono text-[10px] text-koma-muted">
                         Cód. {product.id} · {mediaCount === 0 ? 'Sem foto' : `${mediaCount} foto${mediaCount === 1 ? '' : 's'}`}
                       </span>
                     </div>
                   )}
 
-                  <div className="mt-auto flex flex-wrap items-end justify-between gap-3 border-t border-slate-200 pt-3 dark:border-white/10">
+                  <div className="mt-auto flex flex-wrap items-end justify-between gap-3 border-t border-koma-border pt-3">
                     <div>
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Preço</p>
-                      <p className="font-mono text-base font-black text-emerald-700 dark:text-emerald-300">
-                        {Number(product.preco || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                      </p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-koma-muted">Preço</p>
+                      {priceInfo.hasDiscount && priceInfo.originalPrice != null ? (
+                        <div className="flex flex-wrap items-baseline gap-1.5 tabular-nums">
+                          <span className="text-xs text-koma-muted line-through">
+                            De {priceInfo.originalPrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </span>
+                          <span
+                            className="text-base font-bold"
+                            style={{ color: 'var(--koma-success-text)' }}
+                          >
+                            Por {priceInfo.effectivePrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </span>
+                        </div>
+                      ) : (
+                        <p className="text-base font-bold text-koma-foreground tabular-nums">
+                          {priceInfo.effectivePrice.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </p>
+                      )}
                     </div>
                     {!selectionMode && (
                       <div className="flex items-center gap-2">
@@ -891,7 +1084,7 @@ export function CardapioProdutosTab({
                           type="button"
                           onClick={() => onEditProduct(product)}
                           title={mediaCount === 0 ? 'Editar fotos deste produto' : 'Editar produto'}
-                          className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-xs font-black text-slate-700 transition hover:border-emerald-400 hover:text-emerald-700 dark:border-white/15 dark:bg-white/5 dark:text-slate-200 dark:hover:border-emerald-500/50 dark:hover:text-emerald-300"
+                          className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-3 text-xs font-semibold text-koma-foreground transition hover:bg-koma-panel"
                         >
                           <Edit3 size={14} /> Editar
                         </button>
@@ -899,12 +1092,20 @@ export function CardapioProdutosTab({
                           type="button"
                           onClick={() => void handleProductAvailability(product)}
                           disabled={pendingProductId === product.id || pendingBatchAction || pendingCategoryAction}
-                          className={clsx(
-                            'inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-xs font-black transition disabled:opacity-60',
+                          className="inline-flex min-h-10 items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition disabled:opacity-60"
+                          style={
                             isAvailable
-                              ? 'border-rose-300 text-rose-700 hover:bg-rose-50 dark:border-rose-500/35 dark:text-rose-300 dark:hover:bg-rose-500/10'
-                              : 'border-emerald-500 bg-emerald-500 text-emerald-950 hover:bg-emerald-400',
-                          )}
+                              ? {
+                                  background: 'var(--koma-danger-bg)',
+                                  borderColor: 'var(--koma-danger-border)',
+                                  color: 'var(--koma-danger-text)',
+                                }
+                              : {
+                                  background: 'var(--koma-action-bg)',
+                                  borderColor: 'transparent',
+                                  color: 'var(--koma-action-text)',
+                                }
+                          }
                         >
                           {isAvailable ? <PauseCircle size={14} /> : <PlayCircle size={14} />}
                           {pendingProductId === product.id ? 'Salvando...' : isAvailable ? 'Pausar venda' : 'Voltar a vender'}
@@ -917,8 +1118,6 @@ export function CardapioProdutosTab({
             })}
           </div>
         </section>
-      )}
-        </>
       )}
     </div>
   );

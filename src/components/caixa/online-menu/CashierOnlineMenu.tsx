@@ -1,8 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { usePublicMenuSlug } from './usePublicMenuSlug';
-import { ChevronDown, Gift, Lock } from 'lucide-react';
+import { ArrowRight, ChevronDown, Gift, Lock } from 'lucide-react';
 import { CardapioDigitalSettingsPanel } from '../../cardapio/CardapioDigitalSettingsPanel';
-import PromotionsSettings from '../../cardapio/PromotionsSettings';
 import type { CashierTab } from '../cashierContracts';
 import { getTenantPublicMenuUrl, resolveKomaHost } from '../../../domain/komaHost';
 import { OnlineMenuDeliverySettings } from './OnlineMenuDeliverySettings';
@@ -62,19 +61,34 @@ export default function CashierOnlineMenu({
   const configuredSlug = usePublicMenuSlug(apiBaseUrl, authorization, restaurantId, hasOnlineMenu);
 
   const activeSection = sectionBySubTab[activeSubTab as keyof typeof sectionBySubTab] ?? 'perfil';
-  const activeKey = activeSection === 'marca' ? 'perfil' : activeSection;
+  const activeKey: OnlineMenuSection = activeSection === 'marca'
+    ? 'perfil'
+    : activeSection === 'bloqueios'
+      ? 'pedidos'
+      : activeSection;
+  const blocksDetailsRef = useRef<HTMLDetailsElement | null>(null);
   const [visitedSections, setVisitedSections] = useState<OnlineMenuSection[]>([activeKey]);
   useEffect(() => {
     setVisitedSections(previous => previous.includes(activeKey) ? previous : [...previous, activeKey]);
   }, [activeKey]);
 
+  useEffect(() => {
+    if (activeSection !== 'bloqueios') return;
+    const node = blocksDetailsRef.current;
+    if (!node) return;
+    node.open = true;
+    node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [activeSection]);
+
   if (!hasOnlineMenu) return (
         <div
-          className={"bg-koma-card border border-amber-500/20 rounded-3xl p-8 text-center max-w-xl mx-auto space-y-3"}
+          className="bg-koma-card border border-koma-border rounded-3xl p-8 text-center max-w-xl mx-auto space-y-3"
         >
-          <Lock size={24} className={"text-amber-400 mx-auto"} />
-          <h3 className={"text-koma-foreground font-bold"}>Confira a ativação do cardápio digital</h3>
-          <p className={"text-[10px] text-koma-subtle"}>
+          <Lock size={24} className="mx-auto" style={{ color: 'var(--koma-warning-text)' }} />
+          <h3 className="text-koma-foreground font-bold" style={{ fontFamily: 'var(--koma-font-display)' }}>
+            Confira a ativação do cardápio digital
+          </h3>
+          <p className="text-xs text-koma-subtle">
             Link, QR Code e aceite de pedidos já estão incluídos em todos os planos. Fale com o suporte para conferir a
             ativação.
           </p>
@@ -84,7 +98,11 @@ export default function CashierOnlineMenu({
               setActiveTab('assinatura_pix');
               setActiveSubTab('planos_upgrade');
             }}
-            className={"px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold uppercase cursor-pointer"}
+            className="inline-flex min-h-11 items-center justify-center px-5 rounded-xl text-xs font-semibold transition cursor-pointer"
+            style={{
+              background: 'var(--koma-action-bg)',
+              color: 'var(--koma-action-text)',
+            }}
           >
             Ver opções
           </button>
@@ -108,10 +126,15 @@ export default function CashierOnlineMenu({
         />
 
         <details className="group rounded-2xl border border-koma-border bg-koma-panel">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-5">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-5">
             <div>
-              <strong className="block text-sm text-koma-foreground">Limite de segurança</strong>
-              <span className="mt-1 block text-[10px] leading-relaxed text-koma-muted">
+              <strong
+                className="block text-sm text-koma-foreground"
+                style={{ fontFamily: 'var(--koma-font-display)' }}
+              >
+                Limite de segurança
+              </strong>
+              <span className="mt-1 block text-xs leading-relaxed text-koma-muted">
                 Use somente se quiser limitar a quantidade de pedidos online ativos ao mesmo tempo.
               </span>
             </div>
@@ -124,8 +147,36 @@ export default function CashierOnlineMenu({
             <OnlineOrderCapacitySettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
           </div>
         </details>
+
+        <details
+          ref={blocksDetailsRef}
+          open={activeSection === 'bloqueios'}
+          className="group rounded-2xl border border-koma-border bg-koma-panel"
+        >
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-5">
+            <div>
+              <strong
+                className="block text-sm text-koma-foreground"
+                style={{ fontFamily: 'var(--koma-font-display)' }}
+              >
+                Bloqueios de clientes
+              </strong>
+              <span className="mt-1 block text-xs leading-relaxed text-koma-muted">
+                Veja quem está impedido de pedir online, libere quando necessário e acompanhe o histórico.
+              </span>
+            </div>
+            <ChevronDown
+              size={16}
+              className="shrink-0 text-koma-muted transition-transform duration-200 group-open:rotate-180"
+            />
+          </summary>
+          <div className="border-t border-koma-border px-4 py-4 sm:px-5">
+            <OnlineOrderCustomerBlocks apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+          </div>
+        </details>
       </div>
   );
+  // Compatibility map entry preserved for legacy route checks; rendered inline inside `pedidos`.
   contents.bloqueios = <OnlineOrderCustomerBlocks apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />;
 
   contents.entrega = <OnlineMenuDeliverySettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} publicMenuUrl={publicMenuUrl} />;
@@ -161,19 +212,71 @@ export default function CashierOnlineMenu({
             );
           }}
         />
-        {activeSection === 'perfil' && <PromotionsSettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />}
-        {activeSection === 'perfil' && (hasLoyalty || hasCoupons) && (
-          <section className="mt-4 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5" aria-labelledby="online-menu-benefits-settings-title">
+        {activeKey === 'perfil' && (
+          <section
+            className="mt-4 rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5"
+            aria-labelledby="online-menu-promotions-shortcut-title"
+          >
             <div className="flex items-start gap-3">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-500/10 text-emerald-500"><Gift size={18} aria-hidden="true" /></span>
-              <div>
-                <h2 id="online-menu-benefits-settings-title" className="text-sm font-black text-koma-foreground">Promoções e fidelidade</h2>
-                <p className="mt-1 text-xs leading-relaxed text-koma-muted">Os cupons públicos e a regra de pontos ou cashback configurados em Clientes aparecem em Benefícios no cardápio. O saldo pessoal aparece quando o cliente entra na conta.</p>
+              <span
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-koma-border bg-koma-card text-koma-foreground"
+                aria-hidden="true"
+              >
+                <Gift size={18} />
+              </span>
+              <div className="min-w-0">
+                <h2
+                  id="online-menu-promotions-shortcut-title"
+                  className="text-sm font-bold text-koma-foreground"
+                  style={{ fontFamily: 'var(--koma-font-display)' }}
+                >
+                  Promoções, vitrine e benefícios
+                </h2>
+                <p className="mt-1 text-xs leading-relaxed text-koma-muted">
+                  Ofertas, combos, produto em destaque e recomendações da sacola ficam centralizados em Cardápio → Promoções e vitrine.
+                </p>
               </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              {hasCoupons && <button type="button" onClick={() => { setActiveTab('clientes'); setActiveSubTab('cupons'); }} className="min-h-11 rounded-xl border border-koma-border bg-koma-card px-4 text-xs font-bold text-koma-foreground">Configurar cupons</button>}
-              {hasLoyalty && <button type="button" onClick={() => { setActiveTab('clientes'); setActiveSubTab('fidelidade'); }} className="min-h-11 rounded-xl border border-koma-border bg-koma-card px-4 text-xs font-bold text-koma-foreground">Configurar fidelidade</button>}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('cardapio');
+                  setActiveSubTab('promocoes');
+                }}
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-xs font-semibold transition"
+                style={{
+                  background: 'var(--koma-action-bg)',
+                  color: 'var(--koma-action-text)',
+                }}
+              >
+                <span>Abrir Promoções e vitrine</span>
+                <ArrowRight size={14} aria-hidden="true" />
+              </button>
+              {hasCoupons && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('clientes');
+                    setActiveSubTab('cupons');
+                  }}
+                  className="min-h-11 rounded-xl border border-koma-border bg-koma-card px-4 text-xs font-semibold text-koma-foreground transition hover:bg-koma-raised"
+                >
+                  Configurar cupons
+                </button>
+              )}
+              {hasLoyalty && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('clientes');
+                    setActiveSubTab('fidelidade');
+                  }}
+                  className="min-h-11 rounded-xl border border-koma-border bg-koma-card px-4 text-xs font-semibold text-koma-foreground transition hover:bg-koma-raised"
+                >
+                  Configurar fidelidade
+                </button>
+              )}
             </div>
           </section>
         )}

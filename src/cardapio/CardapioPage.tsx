@@ -14,6 +14,7 @@ import {
   getPublicMenuLoadDurationMs,
 } from "./publicMenuClient";
 import { buildWhatsAppContactUrl } from "../config/whatsappUtils";
+import { getEffectiveProductPrice, normalizeProductBadge } from "../domain/productMerchandising";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
@@ -357,7 +358,13 @@ export default function CardapioPage() {
         categoryMap[String(category.id)] = String(category.nome || "");
       });
 
-      const mapPublicProduct = (product: Record<string, any>): Product => ({
+      const mapPublicProduct = (product: Record<string, any>): Product => {
+        const regularPrice = Number(product.preco || 0);
+        const rawPromo = product.preco_promocional == null ? null : Number(product.preco_promocional);
+        const validPromo = rawPromo != null && Number.isFinite(rawPromo) && rawPromo > 0 && rawPromo < regularPrice
+          ? rawPromo
+          : null;
+        return {
         marmitaria: product.marmitaria === true,
         familia_id: product.familia_id ? String(product.familia_id) : null,
         familia_nome: product.familia_nome ? String(product.familia_nome) : null,
@@ -368,7 +375,10 @@ export default function CardapioPage() {
         id: String(product.id),
         name: String(product.nome || ""),
         description: String(product.descricao || ""),
-        price: Number(product.preco || 0),
+        price: regularPrice,
+        promotionalPrice: validPromo,
+        destaque: product.destaque === true,
+        selo: normalizeProductBadge(product.selo),
         image: getProductImageUrl(String(product.imagem_url || "")),
         imagesGallery: Array.isArray(product.imagens_galeria) && product.imagens_galeria.length > 0
           ? product.imagens_galeria.map((url: string) => getProductImageUrl(url))
@@ -395,7 +405,8 @@ export default function CardapioPage() {
           : [],
         isAvailable: true,
         ordem_exibicao: product.ordem_exibicao != null ? Number(product.ordem_exibicao) : null,
-      });
+      };
+      };
       const products: Product[] = payload.produtos.map(mapPublicProduct);
       const promotionProducts: Product[] = (payload.produtos_promocionais || []).map(mapPublicProduct);
 
@@ -471,12 +482,17 @@ export default function CardapioPage() {
         promotionProducts,
         explicitPromotionComposition: payload.promocao_composicao_explicita === true,
         promotions: Array.isArray(payload.promocoes) ? payload.promocoes
-          .filter(p => p && Array.isArray(p.componentes) && p.componentes.length === 2)
+          .filter(p => p && Array.isArray(p.componentes) && p.componentes.length >= 1 && p.componentes.length <= 4)
           .map(p => ({
-            id: String(p.id), nome: String(p.nome), descricao: String(p.descricao || ''),
+            id: String(p.id),
+            nome: String(p.nome),
+            descricao: String(p.descricao || ''),
+            tipo: p.tipo === 'compre_ganhe' || p.tipo === 'desconto_item' || p.tipo === 'combo' ? p.tipo : undefined,
+            brinde_nome: typeof p.brinde_nome === 'string' && p.brinde_nome.trim() ? p.brinde_nome.trim() : null,
             inicio_em: typeof p.inicio_em === 'string' ? p.inicio_em : null,
             fim_em: typeof p.fim_em === 'string' ? p.fim_em : null,
-            preco: Number(p.preco), componentes: p.componentes.map((ids: unknown) =>
+            preco: Number(p.preco),
+            componentes: p.componentes.map((ids: unknown) =>
               Array.isArray(ids) ? ids.map(String) : []),
           })) : [],
         socials,
@@ -1037,7 +1053,8 @@ export default function CardapioPage() {
     setCartAnnouncement(`${quantity} ${quantity === 1 ? "unidade incluída" : "unidades incluídas"}: ${product.name}`);
 
     const optionsCount = Object.values(selectedOptions).reduce((acc, list) => acc + list.length, 0);
-    let unitPrice = product.price;
+    const baseUnitPrice = getEffectiveProductPrice(product.price, product.promotionalPrice).effectivePrice;
+    let unitPrice = baseUnitPrice;
     Object.values(selectedOptions).forEach((list) => {
       list.forEach((opt) => {
         unitPrice += (opt.extraPrice || 0);
@@ -1048,7 +1065,7 @@ export default function CardapioPage() {
       product_id: product.id,
       product_name: product.name,
       category: product.category,
-      price: product.price,
+      price: baseUnitPrice,
       quantity,
       total_price: unitPrice * quantity,
       options_count: optionsCount,
@@ -1116,7 +1133,7 @@ export default function CardapioPage() {
 
   const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
   const cartTotal = cart.reduce((total, item) => {
-    let unit = item.product.price;
+    let unit = getEffectiveProductPrice(item.product.price, item.product.promotionalPrice).effectivePrice;
     Object.values(item.selectedOptions).forEach((options) => options.forEach((option) => { unit += option.extraPrice; }));
     return total + unit * item.quantity;
   }, 0);
@@ -1653,6 +1670,8 @@ export default function CardapioPage() {
             title={selectedPromotion.nome}
             basePrice={selectedPromotion.preco}
             restaurantId={activeBrand.id}
+            expectedStepCount={selectedPromotion.componentes.length}
+            brindeNome={selectedPromotion.brinde_nome}
             steps={selectedPromotion.componentes.map(ids => {
               const product = [...activeBrand.products, ...(activeBrand.promotionProducts || [])].find(candidate => ids.includes(candidate.id));
               return product ? { product, label: product.name } : null;

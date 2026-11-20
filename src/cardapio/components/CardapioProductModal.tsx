@@ -14,8 +14,11 @@ import {
   Plus,
   Share2,
   ShoppingBag,
+  Star,
+  Tag,
   X,
 } from "lucide-react";
+import { getEffectiveProductPrice, getProductBadgeLabel } from "../../domain/productMerchandising";
 import {
   canIncrementSelectionQuantity,
   changeSelectionQuantity,
@@ -232,15 +235,20 @@ export default function CardapioProductModal({
     }
   }, [allModifiers, effectiveProduct, initialItem, restaurantId, draftIdentity]);
 
+  const effectivePriceInfo = useMemo(
+    () => getEffectiveProductPrice(effectiveProduct.price, effectiveProduct.promotionalPrice),
+    [effectiveProduct.price, effectiveProduct.promotionalPrice],
+  );
+
   const unitPrice = useMemo(() => {
-    let value = effectiveProduct.price;
+    let value = effectivePriceInfo.effectivePrice;
     Object.values(selectedOptions).forEach((options) => {
       options.forEach((option) => {
         value += option.extraPrice;
       });
     });
     return value;
-  }, [effectiveProduct.price, selectedOptions]);
+  }, [effectivePriceInfo.effectivePrice, selectedOptions]);
 
   const totalPrice = unitPrice * quantity;
 
@@ -453,14 +461,55 @@ export default function CardapioProductModal({
           )}
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
+              {(effectiveProduct.destaque || product.destaque || getProductBadgeLabel(effectiveProduct.selo || product.selo)) && (
+                <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                  {(effectiveProduct.destaque || product.destaque) && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                      style={{
+                        background: "var(--koma-info-bg)",
+                        borderColor: "var(--koma-info-border)",
+                        color: "var(--koma-info-text)",
+                      }}
+                    >
+                      <Star size={11} aria-hidden="true" /> Destaque
+                    </span>
+                  )}
+                  {getProductBadgeLabel(effectiveProduct.selo || product.selo) && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                      style={{
+                        background: "var(--koma-warning-bg)",
+                        borderColor: "var(--koma-warning-border)",
+                        color: "var(--koma-warning-text)",
+                      }}
+                    >
+                      <Tag size={11} aria-hidden="true" /> {getProductBadgeLabel(effectiveProduct.selo || product.selo)}
+                    </span>
+                  )}
+                </div>
+              )}
               <h2 className="font-serif text-2xl font-black tracking-tight text-koma-foreground sm:text-3xl" id="modal-product-name">{product.name}</h2>
               {(activeVariant?.description || effectiveProduct.description || product.description) && (
                 <p className="mt-2 text-sm leading-relaxed text-koma-muted">{activeVariant?.description || effectiveProduct.description || product.description}</p>
               )}
             </div>
-            <strong className="shrink-0 font-serif text-lg font-black text-emerald-400 sm:text-xl">
-              {compositionStep ? "Incluso na promoção" : needsVariantSelection ? `A partir de ${formatPrice(unitPrice)}` : formatPrice(unitPrice)}
-            </strong>
+            <div className="shrink-0 text-right tabular-nums">
+              {!compositionStep && !needsVariantSelection && effectivePriceInfo.hasDiscount && effectivePriceInfo.originalPrice != null && (
+                <span className="block text-xs text-koma-muted line-through">
+                  De {formatPrice(effectivePriceInfo.originalPrice)}
+                </span>
+              )}
+              <strong className="block font-serif text-lg font-black sm:text-xl" style={{ color: "var(--koma-success-text)" }}>
+                {compositionStep
+                  ? "Incluso na promoção"
+                  : needsVariantSelection
+                    ? `A partir de ${formatPrice(unitPrice)}`
+                    : effectivePriceInfo.hasDiscount
+                      ? `Por ${formatPrice(unitPrice)}`
+                      : formatPrice(unitPrice)}
+              </strong>
+            </div>
           </div>
 
           {isGrouped && product.variants && product.variants.length > 0 && (

@@ -15,7 +15,13 @@ from starlette.concurrency import run_in_threadpool
 from sqlalchemy import text
 from sqlalchemy.orm import Session, load_only, raiseload, lazyload
 
-from ..promotions import active_promotions, money, promotion_status
+from ..promotions import (
+    active_promotions,
+    money,
+    normalize_gift_name,
+    normalize_promotion_type,
+    promotion_status,
+)
 from ..catalog_addons import effective_modifier_payloads_by_product
 from ..services.catalog_family_metadata import family_metadata_for_products
 from ..marmitaria_catalog import enabled as marmitaria_enabled, size_category
@@ -432,11 +438,15 @@ def _public_product_payload(
     product: Produto, modifier_groups: Optional[list[dict]] = None,
     *, marmitaria: bool = False, family_metadata: dict | None = None,
 ) -> dict:
+    promo_price = getattr(product, "preco_promocional", None)
     return {
         "id": product.id,
         "nome": product.nome,
         "descricao": product.descricao or "",
         "preco": float(product.preco) if product.preco is not None else 0.0,
+        "destaque": bool(getattr(product, "destaque", False)),
+        "selo": getattr(product, "selo", None),
+        "preco_promocional": float(promo_price) if promo_price is not None else None,
         "imagem_url": product.imagem or "",
         "imagens_galeria": product.imagens_galeria or [],
         "categoria_id": product.categoria_id,
@@ -1057,12 +1067,17 @@ def atualizar_config_cardapio_digital(
     return restaurante
 
 
+PromotionType = Literal["combo", "compre_ganhe", "desconto_item"]
+
+
 class PromotionConfigInput(BaseModel):
     nome: str = Field(min_length=4, max_length=90)
     descricao: str = Field(default="", max_length=240)
+    tipo: PromotionType = "combo"
+    brinde_nome: str | None = Field(default=None, max_length=90)
     preco: Decimal = Field(ge=0, le=100000, max_digits=8, decimal_places=2)
-    # Cada slot contém um ou mais IDs aceitáveis: G + (bebida A ou B).
-    componentes: list[list[str]] = Field(min_length=2, max_length=2)
+    # Cada slot contém um ou mais IDs aceitáveis: G + (bebida A ou B), 1..4 slots conforme tipo.
+    componentes: list[list[str]] = Field(min_length=1, max_length=4)
     ativo: bool = False
     inicio_em: datetime | None = None
     fim_em: datetime | None = None
@@ -1099,6 +1114,45 @@ def _validate_promotion_input(db: Session, rest_id: int, offer: PromotionConfigI
             raise HTTPException(status_code=422, detail="Informe data e horário com fuso horário.")
     if offer.inicio_em and offer.fim_em and offer.fim_em <= offer.inicio_em:
         raise HTTPException(status_code=422, detail="O encerramento deve ser posterior ao início.")
+
+    tipo = offer.tipo
+    brinde_nome = normalize_gift_name(offer.brinde_nome)
+    slot_count = len(offer.componentes)
+    if tipo == "combo":
+        if not (2 <= slot_count <= 4):
+            raise HTTPException(status_code=422, detail="Combo precisa de 2 a 4 etapas.")
+        if brinde_nome is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Brinde textual só é permitido em promoções Compre e Ganhe.",
+            )
+    elif tipo == "compre_ganhe":
+        if slot_count == 1:
+            if brinde_nome is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Informe o nome do brinde ou adicione o produto brinde do cardápio.",
+                )
+        elif slot_count == 2:
+            if brinde_nome is not None:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Escolha um produto do cardápio como brinde ou informe o nome do brinde, não ambos.",
+                )
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail="Compre e Ganhe aceita 1 etapa (com brinde textual) ou 2 etapas (item principal + produto brinde).",
+            )
+    elif tipo == "desconto_item":
+        if slot_count != 1:
+            raise HTTPException(status_code=422, detail="Desconto em item aceita exatamente 1 etapa.")
+        if brinde_nome is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="Brinde textual só é permitido em promoções Compre e Ganhe.",
+            )
+
     cleaned = []
     seen: set[str] = set()
     for ids in offer.componentes:
@@ -1116,12 +1170,13 @@ def _validate_promotion_input(db: Session, rest_id: int, offer: PromotionConfigI
     ).all()
     if len(products) != len(seen):
         raise HTTPException(status_code=422, detail="Todos os produtos devem existir neste restaurante.")
-    by_id = {str(product.id): product for product in products}
     if offer.ativo and any(not product.ativo for product in products):
         raise HTTPException(status_code=409, detail="Ative os produtos componentes antes de publicar esta oferta.")
     return {
         "nome": " ".join(offer.nome.split()),
         "descricao": offer.descricao.strip(),
+        "tipo": tipo,
+        "brinde_nome": brinde_nome,
         "preco": float(money(offer.preco)),
         "componentes": cleaned,
         "ativo": offer.ativo,
@@ -1140,11 +1195,26 @@ def listar_promocoes_admin(
     products = db.query(Produto).filter(Produto.restaurante_id == rest_id).all()
     return {
         "perfil_marmitaria": marmitaria_enabled(db, rest_id),
-        "promocoes": [{**entry, "status": promotion_status(entry)} for entry in (config.promocoes or [])],
+        "promocoes": [
+            {
+                **entry,
+                "tipo": normalize_promotion_type(entry),
+                "brinde_nome": normalize_gift_name(entry.get("brinde_nome")),
+                "status": promotion_status(entry),
+            }
+            for entry in (config.promocoes or [])
+        ],
         "produtos": [
             {"id": p.id, "nome": p.nome, "preco": float(p.preco), "ativo": bool(p.ativo),
              "tamanho": p.marmitaria_tamanho, "categoria_id": p.categoria_id,
-             "somente_promocao": bool(p.somente_promocao)}
+             "somente_promocao": bool(p.somente_promocao),
+             "destaque": bool(getattr(p, "destaque", False)),
+             "selo": getattr(p, "selo", None),
+             "preco_promocional": (
+                 float(p.preco_promocional)
+                 if getattr(p, "preco_promocional", None) is not None
+                 else None
+             )}
             for p in products
         ],
         "categorias": [

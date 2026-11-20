@@ -5,10 +5,11 @@ import CatalogProductImage from './CatalogProductImage';
  */
 
 import React from "react";
-import { ChevronRight, Minus, Plus } from "lucide-react";
+import { ChevronRight, Minus, Plus, Star, Tag } from "lucide-react";
 import { Product } from "../CardapioTypes";
 import { isGroupedProduct, type GroupedDisplayProduct } from "../catalogGrouping";
 import { getProductCatalogSignalLabel } from "../cardapioMerchandising";
+import { getEffectiveProductPrice, getProductBadgeLabel } from "../../domain/productMerchandising";
 import "../cardapioTone.css";
 
 interface CardapioProductCardProps {
@@ -35,11 +36,17 @@ export default function CardapioProductCard({
     (product.modifierGroups && product.modifierGroups.length > 0)
   );
   const catalogSignal = getProductCatalogSignalLabel(product.category);
+  const badgeLabel = getProductBadgeLabel(product.selo);
+  const priceInfo = getEffectiveProductPrice(product.price, product.promotionalPrice);
 
   const rawFormattedPrice = new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
-  }).format(product.price);
+  }).format(priceInfo.effectivePrice);
+
+  const originalFormattedPrice = priceInfo.hasDiscount && priceInfo.originalPrice != null
+    ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(priceInfo.originalPrice)
+    : null;
 
   const formattedPrice = isGrouped && product.hasVariablePrice
     ? `A partir de ${rawFormattedPrice}`
@@ -82,9 +89,38 @@ export default function CardapioProductCard({
                 Esgotado
               </span>
             )}
-            {available && catalogSignal && (
+            {available && product.destaque && (
               <span
-                className="rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wider text-amber-300"
+                className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                style={{
+                  background: "var(--koma-info-bg)",
+                  borderColor: "var(--koma-info-border)",
+                  color: "var(--koma-info-text)",
+                }}
+              >
+                <Star size={10} aria-hidden="true" /> Destaque
+              </span>
+            )}
+            {available && badgeLabel && (
+              <span
+                className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                style={{
+                  background: "var(--koma-warning-bg)",
+                  borderColor: "var(--koma-warning-border)",
+                  color: "var(--koma-warning-text)",
+                }}
+              >
+                <Tag size={10} aria-hidden="true" /> {badgeLabel}
+              </span>
+            )}
+            {available && !badgeLabel && !product.destaque && catalogSignal && (
+              <span
+                className="rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                style={{
+                  background: "var(--koma-warning-bg)",
+                  borderColor: "var(--koma-warning-border)",
+                  color: "var(--koma-warning-text)",
+                }}
                 title="Sinal publicado na categoria do catálogo"
               >
                 {catalogSignal}
@@ -92,14 +128,21 @@ export default function CardapioProductCard({
             )}
           </div>
           {product.description && (
-            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-gray-400 font-normal">
+            <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-koma-muted font-normal">
               {product.description}
             </p>
           )}
           <div className="cardapio-product-card__footer mt-auto pt-3">
-            <strong className="cardapio-product-card__price text-sm font-extrabold text-emerald-400">
-              {formattedPrice}
-            </strong>
+            <div className="flex flex-wrap items-baseline gap-1.5 tabular-nums">
+              {!isGrouped && originalFormattedPrice && (
+                <span className="text-xs text-koma-muted line-through">
+                  De {originalFormattedPrice}
+                </span>
+              )}
+              <strong className="cardapio-product-card__price text-sm font-extrabold" style={{ color: "var(--koma-success-text)" }}>
+                {!isGrouped && originalFormattedPrice ? `Por ${formattedPrice}` : formattedPrice}
+              </strong>
+            </div>
             {available && (
               hasModifiers ? (
                 <span className="cardapio-product-card__choose">{product.marmitaria ? "Montar" : "Escolher"}<ChevronRight size={14} aria-hidden="true" /></span>
