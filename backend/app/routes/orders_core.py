@@ -51,6 +51,8 @@ from ..application.printing import (
     UniversalPrintingError,
 )
 from ..waiter_permissions import (
+    require_order_reader,
+    require_salon_order_operator,
     require_waiter_permission,
 )
 from ..services.plan_entitlements import (
@@ -109,6 +111,7 @@ def get_comandas(
     """
     Retorna a lista de comandas, com filtros opcionais por mesa e status (aberta/fechada).
     """
+    require_order_reader(current_user)
     rest_id = require_tenant_id()
     query = db.query(Comanda).filter(
         Comanda.restaurante_id == rest_id,
@@ -130,6 +133,7 @@ def get_comandas_detalhes(
     """
     Retorna a lista de comandas completas (com itens e lançamentos), com filtros opcionais.
     """
+    require_order_reader(current_user)
     query = db.query(Comanda).options(
         joinedload(Comanda.itens).joinedload(Item.produto),
         joinedload(Comanda.criada_por),
@@ -150,6 +154,7 @@ def get_comanda(comanda_id: str, db: Session = Depends(get_db), current_user: Us
     """
     Retorna os detalhes completos de uma comanda específica (incluindo lançamentos e itens).
     """
+    require_order_reader(current_user)
     comanda = (
         db.query(Comanda)
         .options(
@@ -186,6 +191,8 @@ def abrir_comanda(comanda_in: ComandaCreate, background_tasks: BackgroundTasks, 
             current_user,
             "perm_garcom_delivery",
         )
+    else:
+        require_salon_order_operator(current_user, "abrir comandas de mesa")
 
     rid = require_tenant_id()
     require_open_cash_shift(db, rid)
@@ -351,6 +358,7 @@ def pedir_conta(
     Garçom solicita a conta para a mesa. Altera status_comanda para 'aguardando_pagamento',
     movendo a mesa para a coluna 3 do Kanban (Fechar Conta) sem passar pela coluna 2.
     """
+    require_salon_order_operator(current_garcom, "solicitar a conta de uma comanda")
     rest_id = require_tenant_id()
     comanda = db.query(Comanda).filter(
         Comanda.restaurante_id == rest_id,
@@ -1086,12 +1094,14 @@ def listar_delivery_ativos(db: Session = Depends(get_db), current_user: Usuario 
     lote. Retornar ORM cru aqui fazia a serialização disparar lazy-loads por
     pedido/item e transformava uma query de ~milissegundos em segundos.
     """
+    require_order_reader(current_user)
     return _listar_delivery_operacional(db, pending_only=False)
 
 
 @router.get("/delivery/pendentes", response_model=List[ComandaDetail])
 def listar_delivery_pendentes(db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)):
     """Somente pedidos cujo estado persistido ainda aguarda o primeiro aceite."""
+    require_order_reader(current_user)
     return _listar_delivery_operacional(db, pending_only=True)
 
 
@@ -1328,6 +1338,7 @@ def listar_retiradas_concluidas_recentes(
     Este endpoint é somente leitura; o ciclo de vida continua pertencendo à
     máquina de estados e às ações canônicas de comanda.
     """
+    require_order_reader(current_user)
     cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=36)
     return (
         _completed_fulfillment_query(db)
@@ -1355,6 +1366,7 @@ def listar_entregas_concluidas_recentes(
     A resposta é somente leitura e usa a mesma janela curta das retiradas. O
     cliente recorta o dia local sem introduzir uma segunda máquina de estados.
     """
+    require_order_reader(current_user)
     cutoff = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=36)
     return (
         _completed_fulfillment_query(db)
