@@ -61,6 +61,7 @@ import { getCheckoutPaymentMethods, getPaymentSelectionError, resolvePaymentSele
 import { getPairingRecommendations, classifyProduct } from "../pairingRecommendations";
 import { resolvePairingDisplay } from "../resolvePairingDisplay";
 import { isGroupedProduct } from "../catalogGrouping";
+import { inspectCartAgainstLiveCatalog } from "../cartCatalogConsistency";
 import { KomaPrimaryAction } from "./KomaActionPrimitives";
 
 /** PagBank Order requires a valid payer email of at least 6 characters; this checkout caps input at 254. */
@@ -390,6 +391,10 @@ export default function CardapioCartDrawer({
   }, 0), [cart]);
 
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const cartCatalogDrift = useMemo(
+    () => inspectCartAgainstLiveCatalog(cart, allProducts, brandConfig?.promotions, brandConfig?.promotionProducts),
+    [allProducts, brandConfig?.promotionProducts, brandConfig?.promotions, cart],
+  );
   const couponValidationFingerprint = `${restaurantId}:${couponsEnabled}:${subtotal.toFixed(2)}:${normalizeBrazilianPhone(user?.phone || guestPhone)}:${couponCode.trim().toUpperCase()}`;
   const couponFingerprintRef = useRef(couponValidationFingerprint);
   const appliedCouponFingerprintRef = useRef<string | null>(null);
@@ -606,6 +611,14 @@ export default function CardapioCartDrawer({
       reportValidationError("Sua sacola está vazia.", "cart-items");
       return false;
     }
+    if (sectionId === "cart-items" && cartCatalogDrift.size > 0) {
+      const affected = Array.from(cartCatalogDrift.values()).map((entry) => entry.productName).join(", ");
+      reportValidationError(
+        `O cardápio mudou desde a montagem (${affected}). Atualize ou remova os itens destacados antes de continuar.`,
+        "cart-items",
+      );
+      return false;
+    }
     if (sectionId === "cart-receive-methods") {
       if (!deliveryMethod) {
         reportValidationError("Nenhuma modalidade de recebimento disponível.", "cart-receive-methods");
@@ -729,7 +742,7 @@ export default function CardapioCartDrawer({
       onAuthClick?.();
       return;
     }
-    if (!validateSection("cart-receive-methods") || !validateSection("cart-payment-methods") || !deliveryMethod) return;
+    if (!validateSection("cart-items") || !validateSection("cart-receive-methods") || !validateSection("cart-payment-methods") || !deliveryMethod) return;
 
     if (!recognizedExistingCustomer && customerName.trim().length < 2) {
       reportValidationError("Informe seu nome para o restaurante identificar o pedido.", "input-guest-name");
@@ -1027,6 +1040,7 @@ export default function CardapioCartDrawer({
                       });
                     });
 
+                    const itemDrift = cartCatalogDrift.get(item.id);
                     return (
                       <div key={item.id} className="koma-art-cart-item-card" id={`cart-item-${item.id}`}>
                         <img
@@ -1053,7 +1067,21 @@ export default function CardapioCartDrawer({
                               ))}
                             </div>
                           ) : <OrderItemComposition item={cardapioCompositionSource(item)} className="mt-1 text-koma-muted text-xs" />}
-                          {onEditItem && <button type="button" onClick={() => onEditItem(item)} className="mt-2 min-h-11 text-xs font-bold text-emerald-400 hover:text-emerald-300" aria-label={`Editar montagem de ${item.product.name}`}>Editar montagem</button>}
+                          {itemDrift && (
+                            <div
+                              id={`cart-item-drift-${item.id}`}
+                              role="status"
+                              className={`mt-2 flex items-start gap-2 rounded-xl border p-2.5 text-[11px] font-semibold leading-relaxed ${
+                                itemDrift.canEdit
+                                  ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                                  : "border-rose-500/30 bg-rose-500/10 text-rose-300"
+                              }`}
+                            >
+                              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                              <span>{itemDrift.message}</span>
+                            </div>
+                          )}
+                          {onEditItem && (!itemDrift || itemDrift.canEdit) && <button type="button" onClick={() => onEditItem(item)} className="mt-2 min-h-11 text-xs font-bold text-emerald-400 hover:text-emerald-300" aria-label={`Editar montagem de ${item.product.name}`}>Editar montagem</button>}
                           {onComposeAnother && !item.promotionId && Boolean(item.product.modifiers?.length || item.product.modifierGroups?.length) && <button type="button" onClick={() => onComposeAnother(item)} className="mt-2 block min-h-11 text-xs font-bold text-emerald-400 hover:text-emerald-300" aria-label={`Montar outra diferente de ${item.product.name}`}>Montar outra diferente</button>}
                           {item.notes && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-amber-400">Obs.: {item.notes}</p>}
                           {item.quantity > 1 && <p className="mt-1 text-xs text-koma-muted">{formatPrice(unitPrice)} cada · Mesma montagem</p>}
