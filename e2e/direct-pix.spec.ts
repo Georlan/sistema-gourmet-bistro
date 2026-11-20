@@ -344,3 +344,37 @@ test('muitas pendências rolam dentro da lateral e não deslocam a página',asyn
   if(test.info().project.name==='mobile-390' || test.info().project.name==='desktop-1366')
     await page.screenshot({path:test.info().outputPath('pix-lateral.png')});
 });
+
+test('conferência Pix mantém leitura e seleção claras nos temas claro e escuro',async({page})=>{
+  await open(page,true);
+  await page.route('**/payments/direct-pix/pending',route=>route.fulfill({json:[
+    {id:'readable-1',order_number:'13',customer:'Edilene',customer_phone:'88996992999',amount:'13.00',released_unpaid:true},
+    {id:'readable-2',order_number:'15',customer:'Cliente com nome extenso para conferir',amount:'1200.50',customer_reported:true},
+    {id:'readable-3',order_number:'16',customer:'Cliente teste',amount:'5.00'}
+  ]}));
+  await page.reload();
+  await page.getByRole('button',{name:/Conferir Pix/}).click();
+  const panel=page.getByRole('dialog',{name:/Pix manual/});
+  await expect(panel.getByText('Selecione um pedido para conferir o Pix.')).toBeVisible();
+  for(const theme of ['light','dark']) {
+    await page.evaluate(theme=>document.documentElement.setAttribute('data-koma-theme',theme),theme);
+    const contrast=await panel.evaluate(el=>{
+      const rgb=(value:string)=>value.match(/[\d.]+/g)!.slice(0,3).map(Number).map(v=>{v/=255;return v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4;});
+      const luminance=(value:string)=>{const [r,g,b]=rgb(value);return 0.2126*r+0.7152*g+0.0722*b;};
+      const pairs=[['.pix-conference__amount','.pix-conference__card'],['.pix-conference__status','.pix-conference__card'],['.pix-conference__whatsapp','.pix-conference__whatsapp']];
+      return pairs.map(([text,bg])=>{
+        const a=luminance(getComputedStyle(el.querySelector(text)!).color);
+        const b=luminance(getComputedStyle(el.querySelector(bg)!).backgroundColor);
+        return (Math.max(a,b)+0.05)/(Math.min(a,b)+0.05);
+      });
+    });
+    for(const ratio of contrast)expect(ratio).toBeGreaterThanOrEqual(4.5);
+    expect(await panel.evaluate(el=>el.scrollWidth<=el.clientWidth)).toBe(true);
+    await test.info().attach(`pix-readable-${theme}`,{body:await page.screenshot(),contentType:'image/png'});
+  }
+  const select=panel.getByRole('button',{name:/#13 · Edilene/});
+  await select.click();
+  await expect(select).toHaveAttribute('aria-pressed','true');
+  await expect(select).toContainText('Selecionado');
+  await expect(panel.getByRole('button',{name:'Confirmar Pix recebido'})).toBeDisabled();
+});
