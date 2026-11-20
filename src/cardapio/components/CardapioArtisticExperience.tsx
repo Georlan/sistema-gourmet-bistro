@@ -1134,7 +1134,10 @@ export function CardapioArtisticExperience({
                   <div className="koma-art-pebble-content">
                     <h4 className="koma-art-pebble-title"><button type="button" className="koma-art-details-trigger" aria-label={`${item.name}, ver detalhes`} onClick={event => { event.stopPropagation(); onSelectProduct(item); }}>{item.name}</button></h4>
                     <div className="koma-art-pebble-footer">
-                      <span className="koma-art-pebble-price">{isGroupedProduct(item) && item.hasVariablePrice ? 'A partir de ' : ''}{formatPrice(item.price)}</span>
+                      <span className="koma-art-pebble-price">
+                        {isGroupedProduct(item) && item.hasVariablePrice && <span className="koma-art-pebble-price-prefix">A partir de</span>}
+                        <strong className="koma-art-pebble-price-amount">{formatPrice(item.price)}</strong>
+                      </span>
                       {!isAvailable ? (
                         <span className="koma-art-pebble-unavailable">Esgotado</span>
                       ) : qty > 0 && !hasMods ? (
