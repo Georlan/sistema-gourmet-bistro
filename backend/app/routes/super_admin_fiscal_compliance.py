@@ -67,9 +67,15 @@ def get_fiscal_compliance_health(
         return {
             "healthy": bool(states)
             and not stale
-            and all(state.status == "current" for state in states),
+            and all(
+                state.status == "current" and bool(state.active_snapshot_id)
+                for state in states
+            ),
             "requiresAttention": bool(stale)
-            or any(state.status in {"changed", "error"} for state in states),
+            or any(
+                state.status in {"changed", "error"} or not state.active_snapshot_id
+                for state in states
+            ),
             "staleSources": sorted(stale),
             "sources": items,
         }
