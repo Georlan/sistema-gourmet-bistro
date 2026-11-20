@@ -454,3 +454,55 @@ def test_expired_and_tampered_registration_links_fail(setup):
         "/cardapio/clientes/cadastro/confirmar",
         json={"token": token},
     ).status_code == 400
+
+
+def test_browser_session_cookie_restores_only_correct_tenant_after_verified_signup(setup):
+    client, factory, sent = setup
+    requested = client.post(
+        "/cardapio/clientes/cadastro/solicitar",
+        json=registration_payload(),
+    )
+    assert requested.status_code == 202
+    confirmed = client.post(
+        "/cardapio/clientes/cadastro/confirmar",
+        json={"token": sent[-1]["token"]},
+        headers={"Origin": "https://loja71.komafood.com.br"},
+    )
+    assert confirmed.status_code == 200
+    token = confirmed.json()["access_token"]
+    cookie = confirmed.headers["set-cookie"]
+    assert "HttpOnly" in cookie and "Secure" in cookie
+    assert "SameSite=none" in cookie and "Partitioned" in cookie
+    origin = "https://loja71.komafood.com.br"
+    name = routes._customer_cookie_name(71, origin)
+
+    assert client.get("/cardapio/clientes/sessao?restaurante_id=71").status_code == 204
+    restored = client.get(
+        "/cardapio/clientes/sessao?restaurante_id=71",
+        headers={"Cookie": f"{name}={token}", "Origin": origin},
+    )
+    assert restored.status_code == 200
+    assert restored.json()["access_token"] == token
+    assert restored.json()["cliente"]["id"] == confirmed.json()["cliente"]["id"]
+    assert client.get(
+        "/cardapio/clientes/sessao?restaurante_id=71",
+        headers={"Cookie": f"{name}={token}", "Origin": "https://loja72.komafood.com.br"},
+    ).status_code == 204
+    assert client.get(
+        "/cardapio/clientes/sessao?restaurante_id=72",
+        headers={"Cookie": f"{name}={token}", "Origin": origin},
+    ).status_code == 204
+    invalid = client.get(
+        "/cardapio/clientes/sessao?restaurante_id=71",
+        headers={"Cookie": f"{name}=not-a-token", "Origin": origin},
+    )
+    assert invalid.status_code == 204
+    assert "Max-Age=0" in invalid.headers["set-cookie"]
+
+    assert client.post("/cardapio/clientes/sessao/sair?restaurante_id=71").status_code == 422
+    logout = client.post(
+        "/cardapio/clientes/sessao/sair?restaurante_id=71",
+        headers={"X-Koma-Session-Action": "logout", "Origin": origin},
+    )
+    assert logout.status_code == 204
+    assert "Max-Age=0" in logout.headers["set-cookie"]
