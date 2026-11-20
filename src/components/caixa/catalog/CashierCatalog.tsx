@@ -5,6 +5,12 @@ import { CheckCircle2, Image as ImageIcon, Plus, RefreshCw, Trash2, Upload, X } 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CatalogCategory } from '../../../catalog/catalog';
 import { Product, CardapioMenu } from '../../../types';
+import {
+  getEffectiveProductPrice,
+  normalizeProductBadge,
+  PRODUCT_BADGE_OPTIONS,
+  type ProductBadge,
+} from '../../../domain/productMerchandising';
 import { CardapioCategoriasTab } from '../../cardapio/CardapioCategoriasTab';
 import { CardapioProdutosTab } from '../../cardapio/CardapioProdutosTab';
 import { CategoriaModal } from '../../cardapio/CategoriaModal';
@@ -13,7 +19,8 @@ import MoneyInput from '../../MoneyInput';
 import MarmitariaTamanhos from '../../cardapio/MarmitariaTamanhos';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import { usePublicMenuSlug } from '../online-menu/usePublicMenuSlug';
-import type { CaixaPanelProps, CashierNotice } from '../cashierContracts';
+import type { CaixaPanelProps, CashierNotice, CashierTab } from '../cashierContracts';
+import CashierPromotionsHub from './CashierPromotionsHub';
 
 interface Props {
   catalogReady: boolean;
@@ -23,6 +30,7 @@ interface Props {
   authHeaders: Record<string, string>;
   activeTab: string;
   activeSubTab: string;
+  setActiveTab?: (tab: CashierTab) => void;
   setActiveSubTab: (tab: string) => void;
   showToast: CashierNotice;
   apiProdutos: Product[];
@@ -30,6 +38,8 @@ interface Props {
   suggestedProductCode: string;
   hasOnlineMenu: boolean;
   hasPrinting: boolean;
+  hasLoyalty?: boolean;
+  hasCoupons?: boolean;
   fetchProdutos: () => Promise<void>;
   fetchCategorias: () => Promise<void>;
   cardapios?: CardapioMenu[];
@@ -72,6 +82,7 @@ export default function CashierCatalog({
   authHeaders,
   activeTab,
   activeSubTab,
+  setActiveTab,
   setActiveSubTab,
   showToast,
   apiProdutos,
@@ -79,6 +90,8 @@ export default function CashierCatalog({
   suggestedProductCode,
   hasOnlineMenu,
   hasPrinting,
+  hasLoyalty = false,
+  hasCoupons = false,
   fetchProdutos,
   fetchCategorias,
   catalogReady,
@@ -139,6 +152,9 @@ export default function CashierCatalog({
 
   const [prodFormAtivo, setProdFormAtivo] = useState(true);
   const [prodFormSomentePromocao, setProdFormSomentePromocao] = useState(false);
+  const [prodFormDestaque, setProdFormDestaque] = useState(false);
+  const [prodFormSelo, setProdFormSelo] = useState<ProductBadge | ''>('');
+  const [prodFormPrecoPromocional, setProdFormPrecoPromocional] = useState<number | ''>('');
   const [isLoading, setIsLoading] = useState(false);
   const [customizationGroups, setCustomizationGroups] = useState<ProductCustomizationGroup[]>([]);
   const [selectedCustomizationIds, setSelectedCustomizationIds] = useState<string[]>([]);
@@ -365,6 +381,9 @@ export default function CashierCatalog({
     resetProductImageState('');
     setProdFormAtivo(true);
     setProdFormSomentePromocao(false);
+    setProdFormDestaque(false);
+    setProdFormSelo('');
+    setProdFormPrecoPromocional('');
     setProdFormCardapioId(selectedCardapioId || activeMenuIds[0] || cardapios?.[0]?.id || '');
     setShowProductModal(true);
   };
@@ -387,6 +406,13 @@ export default function CashierCatalog({
     resetProductImageState(product.imagem || gallery[0] || '');
     setProdFormAtivo(product.ativo !== false);
     setProdFormSomentePromocao(product.somente_promocao === true);
+    setProdFormDestaque(product.destaque === true);
+    setProdFormSelo(normalizeProductBadge(product.selo) ?? '');
+    setProdFormPrecoPromocional(
+      product.preco_promocional != null && Number(product.preco_promocional) > 0
+        ? Number(product.preco_promocional)
+        : '',
+    );
     setProdFormCardapioId(product.cardapio_id || '');
     setShowProductModal(true);
   };
@@ -467,7 +493,11 @@ export default function CashierCatalog({
                       type="button"
                       disabled={isPublishingMenu}
                       onClick={() => handlePublishCardapio(activeSelectedMenu.id, activeSelectedMenu.nome)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600 disabled:opacity-50 text-xs font-bold shadow-sm transition-colors cursor-pointer"
+                      className="inline-flex min-h-11 items-center gap-1.5 px-3.5 py-1.5 rounded-xl disabled:opacity-50 text-xs font-semibold transition-colors cursor-pointer"
+                      style={{
+                        background: 'var(--koma-action-bg)',
+                        color: 'var(--koma-action-text)',
+                      }}
                     >
                       {isPublishingMenu ? (
                         <RefreshCw size={13} className="animate-spin" />
@@ -485,8 +515,7 @@ export default function CashierCatalog({
             produtos={displayedProdutos}
             categorias={apiCategorias}
             familyLabels={familyLabels}
-            recommendationProducts={apiProdutos}
-            promotionsConfig={{ apiBaseUrl, authHeaders }}
+            onOpenPromotions={() => setActiveSubTab('promocoes')}
             catalogReady={catalogReady || apiProdutos.length > 0 || apiCategorias.length > 0}
             previewUrl={
               hasOnlineMenu && configuredSlug
@@ -514,6 +543,9 @@ export default function CashierCatalog({
               resetProductImageState('');
               setProdFormAtivo(true);
               setProdFormSomentePromocao(false);
+              setProdFormDestaque(false);
+              setProdFormSelo('');
+              setProdFormPrecoPromocional('');
               setProdFormCardapioId(product.cardapio_id || '');
               setShowProductModal(true);
             }}
@@ -636,6 +668,23 @@ export default function CashierCatalog({
           />
         </div>
       )}
+      {activeTab === 'cardapio' && activeSubTab === 'promocoes' && (
+        <CashierPromotionsHub
+          apiBaseUrl={apiBaseUrl}
+          authHeaders={authHeaders}
+          produtos={apiProdutos}
+          hasCoupons={hasCoupons}
+          hasLoyalty={hasLoyalty}
+          onNavigate={
+            setActiveTab
+              ? (tab, subTab) => {
+                  setActiveTab(tab);
+                  setActiveSubTab(subTab);
+                }
+              : undefined
+          }
+        />
+      )}
       {showProductType && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
         <div role="dialog" aria-modal="true" aria-label="Novo produto" className="w-full max-w-md rounded-2xl border border-koma-border bg-koma-card p-5 space-y-4">
           <h3 className="font-bold">O que você quer adicionar?</h3>
@@ -673,15 +722,15 @@ export default function CashierCatalog({
           onClick={(e) => {
             if (e.target === e.currentTarget) setShowProductModal(false);
           }}
-          className={"fixed inset-0 bg-black/85 backdrop-blur-xs z-50 flex items-center justify-center p-0 sm:p-4 overflow-hidden cursor-pointer"}
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-0 sm:p-4 overflow-hidden cursor-pointer"
         >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="product-modal-title"
-            className={"cashier-product-modal w-full h-[100dvh] sm:h-auto max-w-xl max-h-[100dvh] sm:max-h-[calc(100dvh-2rem)] overflow-y-auto bg-koma-card border-0 sm:border border-koma-border rounded-none sm:rounded-3xl px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-0 sm:p-6 space-y-4 text-left shadow-2xl relative animate-scale-in cursor-default"}
+            className="cashier-product-modal w-full h-[100dvh] sm:h-auto max-w-xl max-h-[100dvh] sm:max-h-[calc(100dvh-2rem)] overflow-y-auto bg-koma-card border-0 sm:border border-koma-border rounded-none sm:rounded-3xl px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-0 sm:p-6 space-y-4 text-left shadow-2xl relative animate-scale-in cursor-default"
           >
-            <div className={"sticky top-0 z-20 -mx-4 flex min-h-16 items-center justify-between border-b border-koma-border bg-koma-card/95 px-4 py-3 backdrop-blur-md sm:static sm:mx-0 sm:min-h-0 sm:bg-transparent sm:px-0 sm:pb-2 sm:pt-0"}>
+            <div className="sticky top-0 z-20 -mx-4 flex min-h-16 items-center justify-between border-b border-koma-border bg-koma-card px-4 py-3 sm:static sm:mx-0 sm:min-h-0 sm:bg-transparent sm:px-0 sm:pb-2 sm:pt-0">
               <div>
                 <div className="flex items-center gap-2">
                   <h3 id="product-modal-title" className="text-base font-bold text-koma-foreground">
@@ -709,7 +758,7 @@ export default function CashierCatalog({
 
             {!isMarmitaria && (
               <div role="tablist" aria-label="Seções do produto"
-                className="sticky top-16 z-10 -mx-4 grid grid-cols-4 gap-1 border-b border-koma-border bg-koma-card/95 px-4 py-2 backdrop-blur-md sm:top-0 sm:mx-0 sm:px-0">
+                className="sticky top-16 z-10 -mx-4 grid grid-cols-4 gap-1 border-b border-koma-border bg-koma-card px-4 py-2 sm:top-0 sm:mx-0 sm:px-0">
                 {([
                   ['produto', 'Produto'],
                   ['variacoes', 'Variações'],
@@ -740,6 +789,16 @@ export default function CashierCatalog({
                   showToast('Informe nome, categoria e preço antes de salvar.', 'error');
                   return;
                 }
+                const regularPriceNum = Number(prodFormPreco || 0);
+                const hasPromoPriceInput = prodFormPrecoPromocional !== '' && prodFormPrecoPromocional !== null;
+                const promoPriceNum = hasPromoPriceInput ? Number(prodFormPrecoPromocional) : null;
+                if (!hasVariants && hasPromoPriceInput) {
+                  if (!Number.isFinite(promoPriceNum) || promoPriceNum! <= 0 || promoPriceNum! >= regularPriceNum) {
+                    setProductEditorTab('produto');
+                    showToast('O preço promocional deve ser maior que zero e menor que o preço de venda.', 'error');
+                    return;
+                  }
+                }
                 setIsLoading(true);
                 try {
                   const preparedImage = prodFormImageFile
@@ -747,7 +806,10 @@ export default function CashierCatalog({
                   const payload = {
                     nome: prodFormNome.trim(),
                     categoria_id: prodFormCategoriaId,
-                    preco: Number(prodFormPreco || 0),
+                    preco: regularPriceNum,
+                    preco_promocional: !hasVariants ? promoPriceNum : null,
+                    destaque: prodFormDestaque,
+                    selo: prodFormSelo || null,
                     descricao: prodFormDescricao.trim(),
                     imagem: prodFormImageRemoveRequested ? prodFormOriginalImagem : prodFormImagem.trim(),
                     imagens_galeria: [],
@@ -1103,6 +1165,123 @@ export default function CashierCatalog({
                 </p>
               </div>
 
+              <section
+                aria-label="Vitrine e preço promocional"
+                className="space-y-3 rounded-xl border border-koma-border bg-koma-panel p-3"
+              >
+                <div>
+                  <strong className="block text-xs font-bold text-koma-foreground">Vitrine e preço promocional</strong>
+                  <p className="mt-0.5 text-[11px] text-koma-muted">
+                    Destaque este item no cardápio, adicione um selo ou defina um desconto direto (De / Por).
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-koma-border bg-koma-card px-3 py-2.5">
+                  <span className="min-w-0">
+                    <strong className="block text-xs font-semibold text-koma-foreground">Destaque no cardápio</strong>
+                    <span className="mt-0.5 block text-[11px] text-koma-muted">
+                      Sinaliza o produto como destaque nas vitrines e filtros.
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={prodFormDestaque}
+                    aria-label="Destaque no cardápio"
+                    onClick={() => setProdFormDestaque((current) => !current)}
+                    className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors"
+                    style={
+                      prodFormDestaque
+                        ? { background: 'var(--koma-action-bg)', borderColor: 'var(--koma-action-bg)' }
+                        : { background: 'var(--koma-surface-raised)', borderColor: 'var(--koma-border-default)' }
+                    }
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 rounded-full transition-transform ${
+                        prodFormDestaque ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                      style={{ background: 'var(--koma-surface-card)' }}
+                    />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label
+                      htmlFor="product-badge"
+                      className="block text-[11px] font-semibold text-koma-secondary"
+                    >
+                      Selo de vitrine
+                    </label>
+                    <select
+                      id="product-badge"
+                      value={prodFormSelo}
+                      onChange={(event) => setProdFormSelo(event.target.value as ProductBadge | '')}
+                      className="min-h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--koma-focus-ring)]"
+                    >
+                      {PRODUCT_BADGE_OPTIONS.map((option) => (
+                        <option key={option.value || 'nenhum'} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {!hasVariants && (
+                    <div className="space-y-1.5">
+                      <label
+                        htmlFor="product-promo-price"
+                        className="block text-[11px] font-semibold text-koma-secondary"
+                      >
+                        Preço promocional (Por R$)
+                      </label>
+                      <MoneyInput
+                        id="product-promo-price"
+                        placeholder="Opcional"
+                        value={prodFormPrecoPromocional}
+                        onValueChange={setProdFormPrecoPromocional}
+                        className="min-h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground tabular-nums outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--koma-focus-ring)]"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {!hasVariants && prodFormPrecoPromocional !== '' && (() => {
+                  const base = Number(prodFormPreco || 0);
+                  const promo = Number(prodFormPrecoPromocional);
+                  const resolution = getEffectiveProductPrice(base, promo);
+                  if (!resolution.hasDiscount) {
+                    return (
+                      <p
+                        role="alert"
+                        className="rounded-lg border px-2.5 py-1.5 text-xs font-semibold"
+                        style={{
+                          background: 'var(--koma-danger-bg)',
+                          borderColor: 'var(--koma-danger-border)',
+                          color: 'var(--koma-danger-text)',
+                        }}
+                      >
+                        O preço promocional precisa ser menor que o preço de venda.
+                      </p>
+                    );
+                  }
+                  return (
+                    <p
+                      className="rounded-lg border px-2.5 py-1.5 text-xs font-semibold tabular-nums"
+                      style={{
+                        background: 'var(--koma-success-bg)',
+                        borderColor: 'var(--koma-success-border)',
+                        color: 'var(--koma-success-text)',
+                      }}
+                    >
+                      Desconto ativo: -{resolution.discountPercent}% (de{' '}
+                      {base.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} por{' '}
+                      {promo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})
+                    </p>
+                  );
+                })()}
+              </section>
+
               </div>
               <div hidden={isMarmitaria || productEditorTab !== 'variacoes'} className="space-y-5">
               {!isMarmitaria && (
@@ -1448,7 +1627,7 @@ export default function CashierCatalog({
                       : 'border-koma-border bg-koma-raised'}`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${prodFormAtivo ? 'translate-x-6' : 'translate-x-1'}`}
+                      className={`inline-block h-4 w-4 rounded-full bg-koma-card shadow-sm transition-transform ${prodFormAtivo ? 'translate-x-6' : 'translate-x-1'}`}
                     />
                   </button>
                 </div>
@@ -1456,7 +1635,7 @@ export default function CashierCatalog({
 
               </div>
 
-              <div className={"fixed inset-x-0 bottom-0 z-20 flex gap-2 border-t border-koma-border bg-koma-card/95 p-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] backdrop-blur-md sm:sticky sm:-mx-1 sm:bottom-0 sm:rounded-xl sm:border sm:p-2"}>
+              <div className="fixed inset-x-0 bottom-0 z-20 flex gap-2 border-t border-koma-border bg-koma-card p-3 pb-[calc(.75rem+env(safe-area-inset-bottom))] sm:sticky sm:-mx-1 sm:bottom-0 sm:rounded-xl sm:border sm:p-2">
                 <button
                   type="button"
                   onClick={() => setShowProductModal(false)}

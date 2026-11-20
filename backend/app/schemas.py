@@ -154,6 +154,43 @@ class CardapiosListResponse(BaseModel):
 
 
 # ----------------- PRODUCT -----------------
+ALLOWED_PRODUCT_SELO_VALUES = frozenset({
+    "novidade",
+    "mais_vendido",
+    "recomendado",
+    "edicao_limitada",
+})
+
+
+def _normalize_and_validate_selo(value):
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("Selo inválido.")
+    cleaned = value.strip()
+    if not cleaned:
+        return None
+    if cleaned not in ALLOWED_PRODUCT_SELO_VALUES:
+        raise ValueError(
+            "Selo inválido. Use um dos valores permitidos: "
+            "novidade, mais_vendido, recomendado ou edicao_limitada."
+        )
+    return cleaned
+
+
+def _validate_non_negative_promo_price(value):
+    if value is None or value == "":
+        return None
+    import math
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Preço promocional inválido.") from exc
+    if not math.isfinite(numeric) or numeric < 0:
+        raise ValueError("Preço promocional deve ser maior ou igual a zero.")
+    return numeric
+
+
 class ProdutoBase(BaseModel):
     id: str
     nome: str
@@ -165,6 +202,9 @@ class ProdutoBase(BaseModel):
     imagens_galeria: Optional[List[str]] = Field(default_factory=list)
     ativo: bool = True
     somente_promocao: bool = False
+    destaque: bool = False
+    selo: Optional[str] = None
+    preco_promocional: Optional[float] = None
     ordem_exibicao: Optional[int] = None
 
     @field_validator("descricao", "imagem", mode="before")
@@ -181,8 +221,32 @@ class ProdutoBase(BaseModel):
             return []
         return v
 
+    @field_validator("destaque", mode="before")
+    @classmethod
+    def null_to_false(cls, v):
+        if v is None:
+            return False
+        return v
+
+
 class ProdutoCreate(ProdutoBase):
-    pass
+    @field_validator("selo", mode="before")
+    @classmethod
+    def validate_selo(cls, v):
+        return _normalize_and_validate_selo(v)
+
+    @field_validator("preco_promocional", mode="before")
+    @classmethod
+    def validate_preco_promocional(cls, v):
+        return _validate_non_negative_promo_price(v)
+
+    @model_validator(mode="after")
+    def validate_promo_less_than_price(self):
+        if self.preco_promocional is not None:
+            if Decimal(str(self.preco_promocional)) >= Decimal(str(self.preco)):
+                raise ValueError("Preço promocional deve ser menor que o preço normal do produto.")
+        return self
+
 
 class ProdutoUpdate(BaseModel):
     nome: Optional[str] = None
@@ -194,7 +258,27 @@ class ProdutoUpdate(BaseModel):
     imagens_galeria: Optional[List[str]] = None
     ativo: Optional[bool] = None
     somente_promocao: Optional[bool] = None
+    destaque: Optional[bool] = None
+    selo: Optional[str] = None
+    preco_promocional: Optional[float] = None
     ordem_exibicao: Optional[int] = None
+
+    @field_validator("selo", mode="before")
+    @classmethod
+    def validate_selo(cls, v):
+        return _normalize_and_validate_selo(v)
+
+    @field_validator("preco_promocional", mode="before")
+    @classmethod
+    def validate_preco_promocional(cls, v):
+        return _validate_non_negative_promo_price(v)
+
+    @model_validator(mode="after")
+    def validate_promo_less_than_price(self):
+        if self.preco_promocional is not None and self.preco is not None:
+            if Decimal(str(self.preco_promocional)) >= Decimal(str(self.preco)):
+                raise ValueError("Preço promocional deve ser menor que o preço normal do produto.")
+        return self
 
 class ProdutoResponse(ProdutoBase):
     familia_id: Optional[str] = None
@@ -1026,6 +1110,9 @@ class CardapioPublicProductResponse(BaseModel):
     nome: str
     descricao: str = ""
     preco: float
+    destaque: bool = False
+    selo: Optional[str] = None
+    preco_promocional: Optional[float] = None
     imagem_url: str = ""
     imagens_galeria: List[str] = Field(default_factory=list)
     categoria_id: str
@@ -1216,7 +1303,7 @@ class CardapioItemPedido(BaseModel):
 class CardapioPedidoCreate(BaseModel):
     restaurante_id: int = Field(gt=0)
     promocao_id: Optional[str] = Field(default=None, min_length=1, max_length=64)
-    promocao_item_indices: Optional[List[int]] = Field(default=None, min_length=2, max_length=2)
+    promocao_item_indices: Optional[List[int]] = Field(default=None, min_length=1, max_length=4)
     promocao_preco_esperado: Optional[Decimal] = Field(default=None, ge=0, le=100000, max_digits=8, decimal_places=2)
     itens: List[CardapioItemPedido] = Field(min_length=1, max_length=100)
     cliente_nome: str = Field(min_length=2, max_length=100)

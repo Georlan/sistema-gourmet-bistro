@@ -33,6 +33,7 @@ from ...models import (
     Produto,
 )
 from ...services.coupon_eligibility import customer_matches_targeted_coupon
+from .pricing_loader import effective_product_price
 
 
 class ValidationDataLoader:
@@ -102,7 +103,7 @@ class ValidationDataLoader:
                     id=p.id,
                     restaurant_id=p.restaurante_id,
                     name=p.nome,
-                    price=to_money_decimal(p.preco),
+                    price=effective_product_price(p),
                     is_active=bool(p.ativo),
                     cardapio_id=p.cardapio_id,
                     is_promotion_exclusive=bool(getattr(p, "somente_promocao", False)),

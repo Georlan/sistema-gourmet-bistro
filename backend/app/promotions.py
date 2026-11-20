@@ -13,6 +13,57 @@ from typing import Any
 from .domain.orders.validation import ValidatedOrderInput
 from .domain.orders.errors import OrderValidationError
 
+VALID_PROMOTION_TYPES = ("combo", "compre_ganhe", "desconto_item")
+
+
+def normalize_promotion_type(promotion: dict) -> str:
+    """Normaliza tipo da promoção preservando 'combo' para registros legados."""
+    raw = promotion.get("tipo")
+    if raw is None or raw == "":
+        return "combo"
+    return str(raw).strip()
+
+
+def normalize_gift_name(value: Any) -> str | None:
+    """Normaliza nome de brinde textual; string vazia/espaços vira None."""
+    if value is None or not isinstance(value, str):
+        return None
+    cleaned = " ".join(value.split())
+    return cleaned or None
+
+
+def is_valid_promotion_structure(promotion: dict) -> bool:
+    """Valida contrato estrutural de tipo, brinde_nome e quantidade de etapas."""
+    tipo = normalize_promotion_type(promotion)
+    if tipo not in VALID_PROMOTION_TYPES:
+        return False
+    parts = promotion.get("componentes")
+    if not isinstance(parts, list) or not parts:
+        return False
+    if any(not isinstance(ids, list) or not ids for ids in parts):
+        return False
+    gift_name = normalize_gift_name(promotion.get("brinde_nome"))
+    slot_count = len(parts)
+    if tipo == "combo":
+        return 2 <= slot_count <= 4 and gift_name is None
+    if tipo == "compre_ganhe":
+        return (slot_count == 2 and gift_name is None) or (
+            slot_count == 1 and gift_name is not None
+        )
+    if tipo == "desconto_item":
+        return slot_count == 1 and gift_name is None
+    return False
+
+
+def _append_gift_note(existing_notes: str | None, gift_name: str) -> str:
+    tag = f"Brinde: {gift_name}"
+    base = (existing_notes or "").strip()
+    if not base:
+        return tag
+    if tag.lower() in base.lower():
+        return base
+    return f"{base} | {tag}"
+
 
 def money(value: Any) -> Decimal:
     try:
@@ -57,9 +108,10 @@ def active_promotions(config: Any, products: list[Any]) -> list[dict]:
     for promotion in getattr(config, "promocoes", None) or []:
         if promotion_status(promotion) != "ativa":
             continue
+        if not is_valid_promotion_structure(promotion):
+            continue
         parts = promotion.get("componentes") or []
-        if len(parts) != 2 or any(
-            not isinstance(ids, list) or not ids or
+        if any(
             not any(str(identifier) in products_by_id for identifier in ids)
             for ids in parts
         ):
@@ -68,6 +120,8 @@ def active_promotions(config: Any, products: list[Any]) -> list[dict]:
             "id": promotion["id"],
             "nome": promotion["nome"],
             "descricao": promotion.get("descricao", ""),
+            "tipo": normalize_promotion_type(promotion),
+            "brinde_nome": normalize_gift_name(promotion.get("brinde_nome")),
             "preco": float(money(promotion["preco"])),
             "componentes": parts,
             "inicio_em": promotion.get("inicio_em"),
@@ -113,7 +167,11 @@ def validate_exclusive_promotion_parts(
     """Protege SKUs exclusivos inclusive de pedidos forjados e itens extras."""
     if not exclusive_ids:
         return
-    if promotion is None or promotion_status(promotion) != "ativa":
+    if (
+        promotion is None
+        or promotion_status(promotion) != "ativa"
+        or not is_valid_promotion_structure(promotion)
+    ):
         raise OrderValidationError("Item exclusivo disponível somente dentro de uma promoção ativa.")
     selected = _promotion_item_indices(validated, promotion, item_indices)
     if any(str(item.product_id) in exclusive_ids and index not in selected
@@ -132,8 +190,7 @@ def apply_promotion_to_validated(
     O cliente nunca envia preço ou desconto. Apenas o id da promoção;
     o servidor revalida a política ativa no tenant da transação.
     """
-    parts = promotion.get("componentes") or []
-    if promotion_status(promotion) != "ativa" or len(parts) != 2:
+    if promotion_status(promotion) != "ativa" or not is_valid_promotion_structure(promotion):
         raise OrderValidationError("Promoção indisponível.")
     items = list(validated.items)
     selected = _promotion_item_indices(validated, promotion, item_indices)
@@ -152,21 +209,29 @@ def apply_promotion_to_validated(
             items[target],
             base_price=items[target].base_price + promo_price - base_total,
         )
-        return replace(validated, items=tuple(items))
-    # Distribuir a diferença em um item real mantém estoque e comanda canônicos.
-    discount = base_total - promo_price
-    first = selected[0]
-    if discount > items[first].base_price:
-        # Distribuição determinística entre componentes, nunca preço unitário negativo.
-        remainder = discount
-        for index in selected:
-            part = min(remainder, items[index].base_price)
-            items[index] = replace(items[index], base_price=items[index].base_price - part)
-            remainder -= part
-            if remainder == 0:
-                break
-        if remainder:
-            raise OrderValidationError("Preço promocional inválido.")
     else:
-        items[first] = replace(items[first], base_price=items[first].base_price - discount)
+        # Distribuir a diferença em um item real mantém estoque e comanda canônicos.
+        discount = base_total - promo_price
+        first = selected[0]
+        if discount > items[first].base_price:
+            # Distribuição determinística entre componentes, nunca preço unitário negativo.
+            remainder = discount
+            for index in selected:
+                part = min(remainder, items[index].base_price)
+                items[index] = replace(items[index], base_price=items[index].base_price - part)
+                remainder -= part
+                if remainder == 0:
+                    break
+            if remainder:
+                raise OrderValidationError("Preço promocional inválido.")
+        else:
+            items[first] = replace(items[first], base_price=items[first].base_price - discount)
+
+    gift_name = normalize_gift_name(promotion.get("brinde_nome"))
+    if gift_name and normalize_promotion_type(promotion) == "compre_ganhe":
+        primary = selected[0]
+        items[primary] = replace(
+            items[primary],
+            notes=_append_gift_note(items[primary].notes, gift_name),
+        )
     return replace(validated, items=tuple(items))

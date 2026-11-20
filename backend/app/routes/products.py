@@ -30,6 +30,7 @@ from ..services.storage_paths import (
     validate_tenant_storage_reference,
 )
 from ..websocket_manager import manager
+from .cardapio_popular import invalidate_popular_products_cache
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 import re
 import unicodedata
@@ -70,6 +71,7 @@ def notify_catalog_update(
     restaurante_id: int,
 ) -> None:
     """Publica um único evento canônico para caixa, garçom e cardápio digital."""
+    invalidate_popular_products_cache(restaurante_id)
     background_tasks.add_task(
         manager.broadcast,
         {"event": "catalog_updated", "message": message},
@@ -1007,6 +1009,26 @@ def update_produto(
             raise HTTPException(409, "Somente produtos comuns da marmitaria podem ser exclusivos de promoção.")
     if data.get('ativo'):
         ensure_marmitas_available(db, rest_id, [db_produto])
+    if "preco" in data or "preco_promocional" in data:
+        effective_preco = data["preco"] if "preco" in data else db_produto.preco
+        effective_promo = (
+            data["preco_promocional"]
+            if "preco_promocional" in data
+            else db_produto.preco_promocional
+        )
+        if effective_promo is not None:
+            promo_dec = Decimal(str(effective_promo))
+            preco_dec = Decimal(str(effective_preco))
+            if promo_dec < 0:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Preço promocional deve ser maior ou igual a zero.",
+                )
+            if promo_dec >= preco_dec:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Preço promocional deve ser menor que o preço normal do produto.",
+                )
     for key, value in data.items():
         setattr(db_produto, key, value)
 

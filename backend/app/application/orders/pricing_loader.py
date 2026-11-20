@@ -8,7 +8,7 @@ Mantém a separação entre I/O e computação de domínio.
 from __future__ import annotations
 
 import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Sequence
 from sqlalchemy.orm import Session
 
@@ -23,6 +23,29 @@ from ...domain.orders.pricing import (
 from ...domain.orders.quote import OrderQuote
 from ...domain.orders.types import FulfillmentType, normalize_to_fulfillment
 from ...models import Cliente, Comanda, Cupom, OpcaoModificador, Produto
+
+
+def effective_product_price(produto: object | None) -> Decimal:
+    """Retorna o preço efetivo autoritativo de um produto.
+
+    Usa ``preco_promocional`` somente quando está preenchido, é não-negativo
+    e estritamente menor que ``preco``; caso contrário retorna ``preco``.
+    """
+    if produto is None:
+        return Decimal("0.00")
+    regular_raw = getattr(produto, "preco", None)
+    regular = to_money_decimal(regular_raw if regular_raw is not None else 0.0)
+    promo_raw = getattr(produto, "preco_promocional", None)
+    if promo_raw is None:
+        return regular
+    try:
+        promo_dec = Decimal(str(promo_raw))
+        regular_dec = Decimal(str(regular_raw if regular_raw is not None else 0.0))
+    except (InvalidOperation, TypeError, ValueError):
+        return regular
+    if promo_dec.is_finite() and regular_dec.is_finite() and Decimal("0") <= promo_dec < regular_dec:
+        return to_money_decimal(promo_dec)
+    return regular
 
 
 class PricingDataLoader:
@@ -84,7 +107,7 @@ class PricingDataLoader:
             pid = str(it.get("produto_id"))
             prod = products_map.get(pid)
             prod_name = prod.nome if prod else f"Produto {pid}"
-            base_price = to_money_decimal(prod.preco if prod else 0.0)
+            base_price = effective_product_price(prod)
             quantity = it.get("quantidade") or 1
 
             mod_inputs: list[ModifierPricingInput] = []

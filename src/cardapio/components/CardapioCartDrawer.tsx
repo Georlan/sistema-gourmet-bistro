@@ -4,6 +4,7 @@
  */
 
 import { getFulfillmentAvailability, resolveFulfillmentSelection, type CardapioFulfillment } from "../fulfillment";
+import { getEffectiveProductPrice } from "../../domain/productMerchandising";
 import { OrderItemComposition } from "../../components/shared/OrderItemComposition";
 import { cardapioCompositionSource } from "../orderItems";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -381,7 +382,7 @@ export default function CardapioCartDrawer({
 
   // Subtotal calculation
   const subtotal = useMemo(() => cart.reduce((acc, item) => {
-    let itemPrice = item.product.price;
+    let itemPrice = getEffectiveProductPrice(item.product.price, item.product.promotionalPrice).effectivePrice;
     Object.values(item.selectedOptions).forEach((opts) => {
       opts.forEach((option) => {
         itemPrice += option.extraPrice;
@@ -1037,7 +1038,7 @@ export default function CardapioCartDrawer({
                 <div id="cart-items-content" hidden={activeSection !== "cart-items"}>
                 <div className="space-y-3">
                   {cart.map((item) => {
-                    let unitPrice = item.product.price;
+                    let unitPrice = getEffectiveProductPrice(item.product.price, item.product.promotionalPrice).effectivePrice;
                     Object.values(item.selectedOptions).forEach((opts) => {
                       opts.forEach((option) => {
                         unitPrice += option.extraPrice;

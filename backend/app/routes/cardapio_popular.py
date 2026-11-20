@@ -51,6 +51,12 @@ def _store_cache(restaurante_id: int, payload: list[dict[str, object]]) -> None:
         )
 
 
+def invalidate_popular_products_cache(restaurante_id: int) -> None:
+    """Invalida o cache em memória de produtos populares do restaurante."""
+    with _CACHE_LOCK:
+        _POPULAR_CACHE.pop(int(restaurante_id), None)
+
+
 def listar_produtos_populares(
     response: Response,
     restaurante_id: Optional[str] = None,

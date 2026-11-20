@@ -4,6 +4,9 @@
  */
 
 import { KOMA_SYMBOL_ON_LIGHT_SRC } from '../brand/komaBrand';
+import type { ProductBadge } from '../domain/productMerchandising';
+
+export type { ProductBadge };
 
 export interface ProductOption {
   id: string;
@@ -49,6 +52,9 @@ export interface Product {
   name: string;
   description: string;
   price: number;
+  promotionalPrice?: number | null;
+  destaque?: boolean;
+  selo?: ProductBadge | null;
   image: string;
   imagesGallery?: string[];
   category: string;
@@ -58,11 +64,15 @@ export interface Product {
   ordem_exibicao?: number | null;
 }
 
+export type CatalogPromotionType = 'combo' | 'compre_ganhe' | 'desconto_item';
+
 export interface CatalogPromotion {
   id: string;
   nome: string;
   descricao: string;
   preco: number;
+  tipo?: CatalogPromotionType;
+  brinde_nome?: string | null;
   componentes: string[][];
   inicio_em?: string | null;
   fim_em?: string | null;
