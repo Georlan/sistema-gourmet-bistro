@@ -42,8 +42,8 @@ test('opt-in remembers contact after closing a tab, can be removed and never cro
   const cart = await openContact(page);
   const checkbox = cart.getByRole('checkbox', { name: /Lembrar meu nome/ });
   await expect(checkbox).not.toBeChecked();
-  await cart.locator('#input-guest-phone').fill('85999991111');
   await cart.locator('#input-guest-name').fill('Ana Teste');
+  await cart.locator('#input-guest-phone').fill('85999991111');
   await checkbox.check();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('koma_remembered_contact:2'))).not.toBeNull();
   await page.close();
@@ -67,8 +67,8 @@ test('post-purchase account invitation preserves the order and pre-fills registr
     if (request.url().endsWith('/cadastro/solicitar')) registration = request.postDataJSON();
   });
   const cart = await openContact(page);
-  await cart.locator('#input-guest-phone').fill('85999991111');
   await cart.locator('#input-guest-name').fill('Ana Teste');
+  await cart.locator('#input-guest-phone').fill('85999991111');
   await cart.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
   await page.locator('#btn-place-order-final').click();
   await expect(page.locator('#checkout-card')).toContainText('Pedido #888');
