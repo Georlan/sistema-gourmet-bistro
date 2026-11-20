@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 
 from ...models import PublicRateLimit
 from ..customer_auth import hash_public_rate_key
-from ..online_order_control import capacity_gate_before_order, customer_is_blocked
+from ..online_order_control import (
+    CapacityGateResult,
+    capacity_gate_before_order,
+    customer_is_blocked,
+)
 
 MAX_PUBLIC_ORDER_UNITS = 200
 PUBLIC_ORDER_RATE_WINDOW_SECONDS = 15 * 60
@@ -102,7 +106,7 @@ def enforce_public_order_rate_limits(
     request: Request,
     restaurante_id: int,
     telefone: str,
-) -> None:
+) -> CapacityGateResult:
     """Aplica bloqueio, quotas e o gate serializado de capacidade.
 
     As quotas são commitadas primeiro. Em seguida, quando auto-pausa está ativa,
@@ -152,3 +156,4 @@ def enforce_public_order_rate_limits(
     # Se gate.blocked == False e auto_pause estiver habilitada, há um lock vivo
     # deliberado. NÃO adicionar commit aqui; a transação canônica do pedido é a
     # dona desse commit e libera o slot/lock de forma atômica.
+    return gate

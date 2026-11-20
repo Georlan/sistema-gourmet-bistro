@@ -183,22 +183,27 @@ def create_conversation_for_order(
     db: Session,
     restaurante_id: int,
     pedido_id: str,
+    *,
+    assume_new_order: bool = False,
 ) -> tuple[OrderConversation, str | None]:
     """Cria a conversa atômica para um pedido caso ainda não exista.
 
     Retorna a conversa e o token bruto somente na criação (raw_token).
     Em consultas idempotentes subsequentes, o raw_token retornado é None.
+    Quando ``assume_new_order=True``, o chamador garante que ``pedido_id`` foi
+    inserido na mesma transação ainda não commitada, dispensando o SELECT prévio.
     """
-    existing = (
-        db.query(OrderConversation)
-        .filter(
-            OrderConversation.restaurante_id == restaurante_id,
-            OrderConversation.pedido_id == pedido_id,
+    if not assume_new_order:
+        existing = (
+            db.query(OrderConversation)
+            .filter(
+                OrderConversation.restaurante_id == restaurante_id,
+                OrderConversation.pedido_id == pedido_id,
+            )
+            .first()
         )
-        .first()
-    )
-    if existing:
-        return existing, None
+        if existing:
+            return existing, None
 
     raw_token, token_hash = generate_secure_tracking_token()
     now = datetime.datetime.now(datetime.timezone.utc)
