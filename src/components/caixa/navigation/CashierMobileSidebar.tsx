@@ -165,7 +165,7 @@ export function CashierMobileSidebar({
                   ? getCashierSetupSidebarGroupsForPlan(planId, entitlements)
                   : getCashierSidebarGroupsForPlan(planId, entitlements, showSalon)}
                 closeMobile
-                expandActiveChildren={false}
+                expandActiveChildren={showSalon && isSidebarTabActive('vendas_pedidos')}
                 hasOnlineMenu={hasOnlineMenu}
                 isSidebarTabActive={isSidebarTabActive}
                 sidebarOrderCount={sidebarOrderCount}

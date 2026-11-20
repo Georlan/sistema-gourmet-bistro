@@ -269,12 +269,12 @@ test('online menu keeps edit and publish actions in their canonical editor witho
 });
 
 
-test('mobile information architecture avoids duplicated deep navigation', () => {
+test('mobile information architecture exposes sales shortcuts only for orders with salon', () => {
   const mobileSidebar = readFileSync(new URL('../src/components/caixa/navigation/CashierMobileSidebar.tsx', import.meta.url), 'utf8');
   const sidebarNavigation = readFileSync(new URL('../src/components/caixa/navigation/CashierSidebarNavigation.tsx', import.meta.url), 'utf8');
   const caixaPanel = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
 
-  assert.match(mobileSidebar, /expandActiveChildren=\{false\}/);
+  assert.match(mobileSidebar, /expandActiveChildren=\{showSalon && isSidebarTabActive\('vendas_pedidos'\)\}/);
   assert.match(sidebarNavigation, /expandActiveChildren = true/);
   assert.match(caixaPanel, /<CashierSubNavigation/);
   assert.doesNotMatch(caixaPanel, /cashier-subnav__mobile-select/);

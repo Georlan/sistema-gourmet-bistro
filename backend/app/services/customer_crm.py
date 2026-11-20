@@ -229,15 +229,15 @@ def enrich_customer_crm_payloads(
         .all()
     )
     prefs_by_cid = {str(row.cliente_id): row for row in prefs_rows}
-    # Only proven contacts need the shared WhatsApp cancellation lookup. One
-    # bounded query for the whole page; no new SQL for unproven customers.
-    proof_hashes={row.whatsapp_interaction_phone_hash for row in prefs_rows
-        if row.whatsapp_marketing_opt_in and row.whatsapp_interaction_phone_hash}
-    blocked_proof_hashes=set()
-    if proof_hashes:
-        blocked_proof_hashes={row[0] for row in db.query(WhatsAppContactOptOut.phone_hash).filter(
-            WhatsAppContactOptOut.restaurante_id==restaurante_id,
-            WhatsAppContactOptOut.phone_hash.in_(proof_hashes)).all()}
+    # Load tenant-scoped WhatsApp opt-out hashes once per page so any customer
+    # who revoked consent via WhatsApp link is excluded from CRM opportunities
+    # even if they never had an explicit whatsapp_marketing_opt_in record.
+    blocked_phone_hashes = {
+        row[0]
+        for row in db.query(WhatsAppContactOptOut.phone_hash)
+        .filter(WhatsAppContactOptOut.restaurante_id == restaurante_id)
+        .all()
+    }
 
     # 2. Último contato registrado por cliente
     contatos_rows = (
@@ -346,22 +346,28 @@ def enrich_customer_crm_payloads(
         raw_phone = copy_item.get("telefone")
         if raw_phone is None and "_encrypted_telefone" in copy_item:
             enc_phone = copy_item.pop("_encrypted_telefone")
-            if not opt_out and not contato_recente and (
-                int(copy_item.get("pedidos_concluidos") or 0) >= 1 or ocorrencia_aberta
+            if not opt_out and (
+                blocked_phone_hashes
+                or (
+                    not contato_recente
+                    and (int(copy_item.get("pedidos_concluidos") or 0) >= 1 or ocorrencia_aberta)
+                )
             ):
                 raw_phone = decrypt_field(enc_phone)
 
         from .central_whatsapp_campaigns import interaction_verified
-        proof_valid=interaction_verified(pref, restaurante_id, raw_phone, utc_now)
-        if pref and pref.whatsapp_interaction_phone_hash in blocked_proof_hashes:
+        proof_valid = interaction_verified(pref, restaurante_id, raw_phone, utc_now)
+        if blocked_phone_hashes and not opt_out:
             from .central_whatsapp import recipient_fingerprint
-            try:
-                same_phone=recipient_fingerprint(restaurante_id,raw_phone)==pref.whatsapp_interaction_phone_hash
-            except (ValueError,TypeError):
-                same_phone=False
-            if same_phone:
-                opt_out=True
-                motivo_opt_out=motivo_opt_out or "Cancelamento de promoções pelo WhatsApp."
+            phone_digest: Optional[str] = None
+            if raw_phone:
+                try:
+                    phone_digest = recipient_fingerprint(restaurante_id, raw_phone)
+                except (ValueError, TypeError):
+                    phone_digest = None
+            if phone_digest is not None and phone_digest in blocked_phone_hashes:
+                opt_out = True
+                motivo_opt_out = motivo_opt_out or "Cancelamento de promoções pelo WhatsApp."
         copy_item["whatsapp_campaign_interaction_verified"] = proof_valid and not opt_out
 
         copy_item.update(
@@ -1217,7 +1223,7 @@ def record_crm_customer_contact(
         if abordagem_tipo == "SEM_DESCONTO" and campanha.abordagem_tipo:
             abordagem_tipo = campanha.abordagem_tipo
 
-    # Verificar opt-out de marketing
+    # Verificar opt-out de marketing (preferência CRM e descadastro LGPD pelo WhatsApp)
     pref = (
         db.query(CrmClientePreferencia)
         .filter(
@@ -1226,11 +1232,25 @@ def record_crm_customer_contact(
         )
         .first()
     )
-    if pref and pref.opt_out_marketing and acao_executada != "IGNORADO":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Este cliente está marcado para não receber campanhas (opt-out ativo).",
-        )
+    if acao_executada != "IGNORADO":
+        if pref and pref.opt_out_marketing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Este cliente está marcado para não receber campanhas (opt-out ativo).",
+            )
+        from .central_whatsapp import recipient_fingerprint
+        from .customer_whatsapp_dispatch import opted_out as whatsapp_opted_out
+        try:
+            phone_digest = recipient_fingerprint(restaurante_id, cliente.telefone)
+        except (ValueError, TypeError):
+            phone_digest = None
+        if phone_digest is not None and whatsapp_opted_out(
+            db, restaurante_id, phone_digest, include_marketing=True
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Este cliente cancelou o recebimento de promoções pelo WhatsApp (opt-out ativo).",
+            )
 
     # Validar telefone se a ação tentar abrir WhatsApp
     if canal == "WHATSAPP_MANUAL" and acao_executada == "WHATSAPP_ABERTO":

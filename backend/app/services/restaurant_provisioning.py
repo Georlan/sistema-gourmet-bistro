@@ -644,6 +644,15 @@ def is_provisional_preparation(db: Session, restaurante_id: int) -> bool:
     if restaurante_id is None or restaurante_id <= 0:
         return False
 
+    db_info = getattr(db, "info", None)
+    provisional_cache = (
+        db_info.get("_koma_provisional_by_rid")
+        if isinstance(db_info, dict)
+        else None
+    )
+    if isinstance(provisional_cache, dict) and int(restaurante_id) in provisional_cache:
+        return bool(provisional_cache[int(restaurante_id)])
+
     audit = (
         db.query(SuperAdminAuditLog)
         .filter(
