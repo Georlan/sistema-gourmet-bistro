@@ -1,0 +1,56 @@
+/* The portal inherits the active theme from html, including in light mode. */
+.pix-conference {
+  position: fixed; inset: 0; margin: 0; padding: 0; border: 0;
+  width: 100%; max-width: none; height: 100dvh; max-height: none;
+  background: var(--koma-surface-overlay); color: var(--koma-text-primary);
+  font-family: var(--koma-font-body);
+}
+.pix-conference[open] { display: flex; }
+.pix-conference__panel {
+  margin-left: auto; display: flex; flex-direction: column; min-height: 0;
+  width: min(100%, 30rem); height: 100%; background: var(--koma-surface-panel);
+  border-left: 1px solid var(--koma-border-default);
+}
+.pix-conference__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 20px; border-bottom: 1px solid var(--koma-border-default); }
+.pix-conference__header h2 { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 20px; font-weight: 700; line-height: 1.4; }
+.pix-conference__header p, .pix-conference__hint, .pix-conference__help { color: var(--koma-text-muted); font-size: 14px; line-height: 1.5; }
+.pix-conference__header p { margin: 6px 0 0; }
+.pix-conference__count { border-radius: 8px; padding: 2px 8px; background: var(--koma-surface-raised); font-size: 14px; }
+.pix-conference__close { flex-shrink: 0; display: grid; place-items: center; min-width: 44px; min-height: 44px; border: 1px solid var(--koma-border-default); border-radius: 10px; background: var(--koma-surface-raised); }
+.pix-conference__body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 20px; padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+.pix-conference__hint { margin: 0 0 16px; }
+.pix-conference__list { display: grid; gap: 12px; }
+.pix-conference__card { border: 1px solid var(--koma-border-default); border-radius: 12px; overflow: hidden; background: var(--koma-surface-card); }
+.pix-conference__card.is-selected { border-color: var(--koma-accent-text); box-shadow: inset 3px 0 var(--koma-accent-text); }
+.pix-conference__select { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px 12px; width: 100%; text-align: left; padding: 16px; }
+.pix-conference__identity { display: grid; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.pix-conference__identity strong { font-size: 15px; line-height: 1.4; }
+.pix-conference__identity > span { color: var(--koma-text-muted); font-size: 14px; }
+.pix-conference__amount { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.4; }
+.pix-conference__status { grid-column: 1 / -1; color: var(--koma-text-secondary); font-size: 13px; font-weight: 500; line-height: 1.5; }
+.pix-conference__select-label { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--koma-accent-text); font-size: 14px; font-weight: 600; }
+.pix-conference__whatsapp { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 12px 16px; border-top: 1px solid var(--koma-border-default); color: var(--koma-accent-text); background: var(--koma-accent-soft); font-size: 13px; font-weight: 600; }
+.pix-conference__whatsapp > span { font-weight: 400; }
+.pix-conference__review { display: grid; gap: 16px; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--koma-border-default); }
+.pix-conference__bank { display: grid; gap: 12px; }
+.pix-conference__eyebrow { font-size: 18px; font-weight: 700; line-height: 1.4; }
+.pix-conference__check { display: flex; align-items: center; gap: 12px; min-height: 48px; cursor: pointer; font-size: 14px; line-height: 1.5; }
+.pix-conference__checkbox { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--koma-action-bg); }
+.pix-conference__primary, .pix-conference__secondary, .pix-conference__danger { width: 100%; min-height: 48px; padding: 12px 16px; border-radius: 10px; font-size: 14px; font-weight: 600; line-height: 1.5; }
+.pix-conference__primary { background: var(--koma-action-bg); color: var(--koma-action-text); }
+.pix-conference__primary:hover:enabled { background: var(--koma-action-hover); }
+.pix-conference__secondary, .pix-conference__danger { border: 1px solid var(--koma-border-strong); background: var(--koma-surface-raised); color: var(--koma-text-primary); }
+.pix-conference button:disabled { cursor: not-allowed; }
+.pix-conference__primary:disabled, .pix-conference__danger:disabled { background: var(--koma-surface-raised); color: var(--koma-text-muted); border: 1px solid var(--koma-border-default); }
+.pix-conference__notice { padding: 12px; background: var(--koma-accent-soft); color: var(--koma-accent-text); border-radius: 10px; font-size: 14px; line-height: 1.5; }
+.pix-conference__release { display: grid; gap: 8px; }
+.pix-conference__cancel { border-top: 1px solid var(--koma-border-default); padding-top: 8px; }
+.pix-conference__summary { min-height: 44px; padding: 12px 0; font-size: 14px; font-weight: 500; cursor: pointer; }
+.pix-conference__error { border: 1px solid var(--koma-border-strong); border-radius: 8px; padding: 12px; font-size: 14px; font-weight: 600; }
+.pix-conference__empty { padding: 24px 0; font-size: 15px; color: var(--koma-text-secondary); }
+.pix-conference :is(button, a, summary, input):focus-visible { outline: 2px solid var(--koma-focus-ring); outline-offset: -3px; }
+@media (max-width: 360px) {
+  .pix-conference__header, .pix-conference__body { padding: 16px; }
+  .pix-conference__select { grid-template-columns: minmax(0, 1fr); }
+  .pix-conference__amount { grid-column: 1; }
+}
