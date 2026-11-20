@@ -94,6 +94,7 @@ export default function CashierSettings({
   const [configSalSubTab, setConfigSalSubTab] = useState<'pedido' | 'fechamento' | 'atendimento'>('pedido');
   const isTechnicalIntegrations = activeSubTab === 'integracoes' || activeSubTab === 'fiscal';
   const isAppearance = activeSubTab === 'aparencia';
+  const [futureArea, setFutureArea] = useState<'pagar' | 'receber'>('pagar');
   const isInitialSetup = activeSubTab === 'implantacao';
 
   const {
@@ -143,6 +144,23 @@ export default function CashierSettings({
         <div className="space-y-5">
           {isAppearance && <CashierAppearanceSettings />}
 
+          {activeSubTab === 'planejamento' && (
+            <section className="space-y-4 rounded-2xl border border-koma-border bg-koma-panel p-5" aria-label="Recursos futuros">
+              <h2 className="text-lg font-bold text-koma-foreground">Financeiro em planejamento</h2>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Áreas financeiras planejadas">
+                {(['pagar', 'receber'] as const).map(area => (
+                  <button key={area} type="button" aria-pressed={futureArea === area}
+                    className="min-h-11 rounded-xl border border-koma-border px-4 text-sm font-semibold aria-pressed:bg-koma-raised"
+                    onClick={() => setFutureArea(area)}>Contas a {area}</button>
+                ))}
+              </div>
+              <p aria-live="polite" className="text-sm text-koma-muted">
+                {futureArea === 'pagar'
+                  ? 'Recurso previsto para acompanhar despesas com fornecedores e vencimentos.'
+                  : 'Recurso previsto para acompanhar valores a receber e datas de recebimento.'}
+              </p>
+            </section>
+          )}
           {isInitialSetup && (
             <section className="rounded-2xl border border-koma-border bg-koma-panel p-5 sm:p-6" aria-labelledby="cashier-initial-setup-title">
               <div className="flex items-start gap-3">

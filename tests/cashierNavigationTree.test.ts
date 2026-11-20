@@ -215,7 +215,7 @@ test('configurações expõe os mesmos destinos canônicos para navegação vert
   const settings = parents().find((item) => item.id === 'impressao_salao');
 
   assert.deepEqual(settings?.children?.map((child) => child.label), [
-    'Mesas', 'Atendimento', 'Impressão', 'Fiscal', 'Integrações', 'Aparência', 'Implantação inicial',
+    'Mesas', 'Atendimento', 'Impressão', 'Fiscal', 'Integrações', 'Aparência', 'Recursos futuros', 'Implantação inicial',
   ]);
   assert.deepEqual(getCashierNavigationTarget('config_aparencia'), { tab: 'impressao_salao', subTab: 'aparencia' });
   assert.deepEqual(getCashierNavigationTarget('config_impressao'), { tab: 'impressao_salao', subTab: 'impressao' });
@@ -345,7 +345,7 @@ test('child aliases select the canonical visible shortcut only inside their pare
 
 test('online-menu detail sections stay open under exactly one sidebar child', () => {
   const cases = [
-    ['cardapio_marca', 'online_marca'],
+    ['cardapio_marca', 'online_perfil'],
     ['cardapio_pedidos', 'online_pedidos'],
     ['cardapio_bloqueios', 'online_bloqueios'],
     ['cardapio_entrega', 'online_entrega'],
@@ -358,7 +358,7 @@ test('online-menu detail sections stay open under exactly one sidebar child', ()
     assert.deepEqual(normalizeCashierNavigationState('cardapio_digital', subTab), {
       tab: 'cardapio_digital', subTab,
     });
-    const activeChildren = online?.children?.filter((child) =>
+    const activeChildren = online?.children?.filter((child) => !child.navigationHidden &&
       isCashierNavigationActive(child.id, 'cardapio_digital', subTab)) ?? [];
     assert.deepEqual(activeChildren.map((child) => child.id), [expectedChild]);
   }
@@ -523,7 +523,7 @@ test('Pocket mostra apenas os grupos operacionais essenciais nesta primeira redu
     .flatMap((group) => group.items)
     .find((item) => item.id === 'impressao_salao');
   assert.deepEqual(pocketSettings?.children?.map((child) => child.id), [
-    'config_mesas', 'config_atendimento', 'config_fiscal', 'config_integracoes', 'config_aparencia', 'config_implantacao',
+    'config_mesas', 'config_atendimento', 'config_fiscal', 'config_integracoes', 'config_aparencia', 'config_planejamento', 'config_implantacao',
   ]);
   assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_impressao'), false);
   assert.equal(pocketSettings?.children?.some((child) => child.id === 'config_atendimento'), true);

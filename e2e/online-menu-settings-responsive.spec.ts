@@ -114,7 +114,7 @@ for (const theme of ['dark', 'light'] as const) {
 
       const subnav = page.locator('.cashier-subnav');
       await expect(subnav).toBeVisible();
-      await expect(subnav.locator('.cashier-subnav__button')).toHaveCount(7);
+      await expect(subnav.locator('.cashier-subnav__button')).toHaveCount(6);
       await expect(subnav.getByRole('button', { name: 'Dados da loja', exact: true })).toHaveClass(/is-active/);
       await expect(page.getByRole('heading', { name: 'Perfil do cardápio', exact: true })).toBeVisible();
       await expect(page.getByText('Informações principais', { exact: true })).toBeVisible();
@@ -122,7 +122,7 @@ for (const theme of ['dark', 'light'] as const) {
       await expect(additional).toBeVisible();
       await expect(additional).not.toHaveAttribute('open', '');
 
-      await navigateHorizontal(page, 'Marca');
+      await page.getByRole('button', { name: 'Editar marca da loja' }).click();
       await expect(page.getByRole('heading', { name: 'Marca', exact: true })).toBeVisible();
       await expectNoHorizontalOverflow(page);
 
@@ -172,7 +172,7 @@ test('cardápio online mantém abas verticais e horizontais no notebook', async 
   const subnav = page.locator('.cashier-subnav');
   await expect(subnav).toBeVisible();
 
-  for (const label of ['Dados da loja', 'Marca', 'Horários e pedidos', 'Bloqueios', 'Entrega', 'Pagamentos', 'Divulgação']) {
+  for (const label of ['Dados da loja', 'Horários e pedidos', 'Bloqueios', 'Entrega', 'Pagamentos', 'Divulgação']) {
     await expect(sidebar.getByRole('button', { name: label, exact: true })).toBeVisible();
     await expect(subnav.getByRole('button', { name: label, exact: true })).toBeVisible();
   }

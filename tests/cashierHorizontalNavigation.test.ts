@@ -25,3 +25,14 @@ test('attendance replaces small standalone tabs without hiding service tax when 
   assert.equal(searchCashierFunctions(entries, 'gorjeta')[0]?.id, 'config_atendimento');
   assert.deepEqual(searchCashierFunctions(entries, 'permissoes garcom'), []);
 });
+
+test('marca e comparação de planos permanecem acessíveis dentro das abas principais', () => {
+  for (const [tab, parent, detail, subTab] of [
+    ['cardapio_digital', 'online_perfil', 'online_marca', 'cardapio_marca'],
+    ['assinatura_pix', 'assinatura_meu_plano', 'assinatura_planos_upgrade', 'planos_upgrade'],
+  ]) {
+    const visible = getCashierHorizontalItems(tab, 'premium', enabled);
+    assert.equal(visible.some(item => item.id === detail), false);
+    assert.deepEqual(visible.filter(item => isCashierNavigationActive(item.id, tab, subTab)).map(item => item.id), [parent]);
+  }
+});

@@ -12,7 +12,7 @@ test('Configurações expõe destinos diretos sem duplicar os owners técnicos',
   const settings = system?.items.find((item) => item.id === 'impressao_salao');
 
   assert.deepEqual(settings?.children?.map((child) => child.label), [
-    'Mesas', 'Atendimento', 'Impressão', 'Fiscal', 'Integrações', 'Aparência', 'Implantação inicial',
+    'Mesas', 'Atendimento', 'Impressão', 'Fiscal', 'Integrações', 'Aparência', 'Recursos futuros', 'Implantação inicial',
   ]);
   assert.deepEqual(getCashierNavigationTarget('config_integracoes'), {
     tab: 'impressao_salao',

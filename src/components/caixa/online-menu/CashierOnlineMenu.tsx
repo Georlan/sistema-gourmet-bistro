@@ -145,6 +145,11 @@ export default function CashierOnlineMenu({
 
   contents.perfil = (
       <>
+        <button type="button"
+          className="mb-3 min-h-11 rounded-xl border border-koma-border bg-koma-panel px-4 text-sm font-semibold text-koma-foreground"
+          onClick={() => setActiveSubTab(activeSection === 'marca' ? 'cardapio_perfil' : 'cardapio_marca')}>
+          {activeSection === 'marca' ? 'Voltar aos dados da loja' : 'Editar marca da loja'}
+        </button>
         <CardapioDigitalSettingsPanel
           key={authHeaders.Authorization || authHeaders.authorization}
           apiBaseUrl={apiBaseUrl}
