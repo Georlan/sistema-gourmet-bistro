@@ -195,3 +195,77 @@
   border-color: var(--koma-accent-border);
   color: var(--koma-accent-text);
 }
+
+/* Two predictable touch rows, including when Pix has pending confirmations.
+   Search expands onto its own row only while editing or showing a query. */
+@media (max-width: 767px) {
+  .cashier-shell--mobile-orders .orders-workspace .orders-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    gap: 4px 8px;
+    padding: 4px;
+    border-radius: .75rem;
+    margin-bottom: 6px;
+  }
+  .cashier-shell--mobile-orders .orders-toolbar .orders-mobile-stages { width: 100%; }
+  .cashier-shell--mobile-orders .orders-workspace .orders-search { width: 44px; }
+  .cashier-shell--mobile-orders .orders-workspace .orders-search:is(:focus-within,.has-query) {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+  .cashier-shell--mobile-orders .orders-toolbar__actions {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+  }
+  .cashier-shell--mobile-orders .orders-toolbar__actions .orders-pix-conference {
+    position: relative;
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 6px 8px;
+    gap: 4px;
+    font-size: .75rem;
+    white-space: nowrap;
+  }
+  .cashier-shell--mobile-orders .orders-toolbar__actions .orders-new-orders__count {
+    position: static;
+    min-width: 20px;
+    min-height: 20px;
+    font-size: .75rem;
+  }
+  .cashier-shell--mobile-orders .orders-workspace .orders-auto-accept {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0;
+    gap: 6px;
+  }
+  .cashier-shell--mobile-orders .orders-auto-accept__label { font-size: .75rem; line-height: 1.2; }
+  .cashier-shell--mobile-orders .orders-switch { flex-shrink: 0; }
+  .cashier-shell--mobile-orders .orders-workspace .orders-new-orders:not(.orders-pix-conference) {
+    position: relative;
+    flex: 0 0 44px;
+    min-height: 44px;
+    padding: 4px;
+  }
+  .cashier-shell--mobile-orders .orders-new-orders:not(.orders-pix-conference) > span:not(.orders-new-orders__count) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .cashier-shell--mobile-orders .orders-new-orders:not(.orders-pix-conference) .orders-new-orders__count {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+  }
+  .cashier-shell--mobile-orders .orders-search__result,
+  .cashier-shell--mobile-orders .orders-queue-notice { grid-column: 1 / -1; }
+}
