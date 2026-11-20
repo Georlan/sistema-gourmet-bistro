@@ -179,11 +179,18 @@ test('vitrine padrão do JE mantém contato e compartilhar visíveis no mobile a
     await expect(share).toBeVisible();
     await expect(page.locator('#btn-whatsapp-header')).toBeHidden();
     await expect(page.locator('#btn-share-header')).toBeHidden();
-    const row = page.getByRole('navigation', { name: 'Contato e compartilhamento' });
-    const box = await row.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box!.x).toBeGreaterThanOrEqual(0);
-    expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1);
+    const socialLinks = page.getByRole('navigation', { name: 'Redes sociais do restaurante' });
+    await expect(socialLinks).toBeVisible();
+    expect(await socialLinks.evaluate(el => Boolean(el.closest('.koma-art-search-and-social')))).toBe(true);
+    expect(await share.evaluate(el => Boolean(el.closest('.koma-art-canopy__topline')))).toBe(true);
+    for (const control of [whatsapp, instagram, share]) {
+      const box = await control.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.width).toBeGreaterThanOrEqual(44);
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1);
+    }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
   await expect(whatsapp).toHaveAttribute('href', 'https://wa.me/5588999112233');
@@ -192,7 +199,7 @@ test('vitrine padrão do JE mantém contato e compartilhar visíveis no mobile a
   await expect(page.locator('html')).toHaveAttribute('data-koma-share-invoked', 'true');
 
   await page.setViewportSize({ width: 768, height: 760 });
-  await expect(page.getByRole('navigation', { name: 'Contato e compartilhamento' })).toBeHidden();
+  await expect(page.getByRole('navigation', { name: 'Redes sociais do restaurante' })).toBeHidden();
   await expect(page.locator('#btn-whatsapp-header')).toBeVisible();
   await expect(page.locator('#btn-instagram-header')).toBeVisible();
   await expect(page.locator('#btn-share-header')).toBeVisible();

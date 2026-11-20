@@ -313,49 +313,74 @@ html[data-koma-theme="light"] .koma-art-canvas,
   cursor: pointer;
 }
 
-/* Compact contact shortcuts belong to the artistic (default) header.
-   Desktop keeps the existing top-right actions; mobile uses this row. */
+/* No mobile, a busca divide sua linha apenas com os atalhos sociais cadastrados.
+   Compartilhar fica junto de perfil/sacola na linha da marca, sem faixa extra. */
+.koma-art-search-and-social {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.koma-art-search-and-social .koma-art-search-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.koma-art-search-input {
+  min-width: 0;
+}
+
+.koma-art-action-pill--share-mobile,
 .koma-art-mobile-contacts {
   display: none;
 }
 
 @media (max-width: 767px) {
+  .koma-art-canopy__topline {
+    gap: 6px;
+  }
+
+  .koma-art-canopy__actions {
+    gap: 4px;
+  }
+
+  .koma-art-brand-badge {
+    gap: 8px;
+  }
+
+  .koma-art-brand-name {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .koma-art-action-pill--share-mobile {
+    display: flex;
+  }
+
   .koma-art-mobile-contacts {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(85px, 168px));
-    justify-content: start;
-    gap: 7px;
-    width: 100%;
-    min-width: 0;
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 4px;
   }
 
   .koma-art-mobile-contact-action {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 5px;
-    min-width: 0;
-    min-height: 44px;
-    padding: 0 5px;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
     border: 1px solid rgba(255, 255, 255, 0.22);
-    border-radius: 12px;
+    border-radius: 50%;
     background: rgba(255, 255, 255, 0.1);
     color: #ffffff;
-    font-size: 11px;
-    font-weight: 700;
-    white-space: nowrap;
     text-decoration: none;
     cursor: pointer;
     touch-action: manipulation;
-  }
-
-  .koma-art-mobile-contact-action svg {
-    flex-shrink: 0;
-  }
-
-  .koma-art-mobile-contact-action:focus-visible {
-    outline: 2px solid #34d399;
-    outline-offset: 2px;
   }
 }
 

@@ -406,6 +406,18 @@ export function CardapioArtisticExperience({
                 <KomaShareIcon size={15} />
               </button>
 
+              {/* Compartilhar permanece acessível no topo, sem faixa secundária no celular. */}
+              <button
+                type="button"
+                onClick={handleShare}
+                className="koma-art-action-pill koma-art-action-pill--share-mobile"
+                title="Compartilhar cardápio"
+                aria-label="Compartilhar cardápio"
+                id="btn-share-mobile"
+              >
+                <KomaShareIcon size={15} />
+              </button>
+
               {/* Informações da loja */}
               <button
                 type="button"
@@ -509,73 +521,64 @@ export function CardapioArtisticExperience({
             </div>
           )}
 
-          {/* Cápsula de Busca Integrada */}
-          <div className="koma-art-search-wrap">
-            <label className="koma-art-search-capsule" id="search-bar-wrapper">
-              <KomaSearchIcon size={16} className="text-emerald-400 shrink-0 ml-1" />
-              <input
-                type="search"
-                id="input-search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar por prato, ingrediente ou bebida..."
-                className="koma-art-search-input"
-                aria-label="Campo de busca de produtos"
-                autoComplete="off"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="koma-art-search-clear"
-                  aria-label="Limpar busca"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </label>
+          {/* A busca conserva a prioridade; redes reais ocupam apenas os atalhos configurados. */}
+          <div className="koma-art-search-and-social">
+            <div className="koma-art-search-wrap">
+              <label className="koma-art-search-capsule" id="search-bar-wrapper">
+                <KomaSearchIcon size={16} className="text-emerald-400 shrink-0 ml-1" />
+                <input
+                  type="search"
+                  id="input-search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Buscar por prato, ingrediente ou bebida..."
+                  className="koma-art-search-input"
+                  aria-label="Campo de busca de produtos"
+                  autoComplete="off"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="koma-art-search-clear"
+                    aria-label="Limpar busca"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </label>
+            </div>
+            {(whatsappUrl || instagramSocial) && (
+              <nav className="koma-art-mobile-contacts" aria-label="Redes sociais do restaurante">
+                {whatsappUrl && (
+                  <a
+                    href={whatsappUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="koma-art-mobile-contact-action"
+                    aria-label="Falar no WhatsApp"
+                    title="Falar no WhatsApp"
+                    id="btn-whatsapp-mobile"
+                  >
+                    <Phone size={16} aria-hidden="true" />
+                  </a>
+                )}
+                {instagramSocial && (
+                  <a
+                    href={instagramSocial.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="koma-art-mobile-contact-action"
+                    aria-label="Instagram do restaurante"
+                    title="Instagram do restaurante"
+                    id="btn-instagram-mobile"
+                  >
+                    <KomaSocialCameraIcon size={16} />
+                  </a>
+                )}
+              </nav>
+            )}
           </div>
-
-          {/* The default public vitrine owns this header (not CardapioHeader).
-              Keep real configured contact actions reachable below the search on phones. */}
-          <nav className="koma-art-mobile-contacts" aria-label="Contato e compartilhamento">
-            {whatsappUrl && (
-              <a
-                href={whatsappUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="koma-art-mobile-contact-action"
-                aria-label="Falar no WhatsApp"
-                id="btn-whatsapp-mobile"
-              >
-                <Phone size={15} aria-hidden="true" />
-                <span>WhatsApp</span>
-              </a>
-            )}
-            {instagramSocial && (
-              <a
-                href={instagramSocial.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="koma-art-mobile-contact-action"
-                aria-label="Instagram do restaurante"
-                id="btn-instagram-mobile"
-              >
-                <KomaSocialCameraIcon size={15} />
-                <span>Instagram</span>
-              </a>
-            )}
-            <button
-              type="button"
-              onClick={handleShare}
-              className="koma-art-mobile-contact-action"
-              aria-label="Compartilhar cardápio"
-              id="btn-share-mobile"
-            >
-              <KomaShareIcon size={15} />
-              <span>Compartilhar</span>
-            </button>
-          </nav>
 
           {/* Barra de Hospitalidade Integrada */}
           <div className="koma-art-hospitality-strip">
