@@ -1,3 +1,4 @@
+import "../accountInvitation.css";
 import PixCopyCode from "./PixCopyCode";
 import { DirectPixCustomerConfirm } from "./DirectPixCustomerConfirm";
 import { OrderItemComposition } from "../../components/shared/OrderItemComposition";
@@ -12,6 +13,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowLeft,
+  ArrowRight,
   CalendarClock,
   Check,
   CheckCircle2,
@@ -744,12 +746,15 @@ export default function CardapioDigital({
                 )}
               </div>
               {!customerToken && onCreateAccount && (
-                <section className="mt-5 w-full max-w-md border-t border-koma-border pt-5 text-left" aria-labelledby="post-purchase-account-title">
-                  <h4 id="post-purchase-account-title" className="font-display text-base font-semibold text-koma-foreground">Na próxima, peça mais rápido</h4>
-                  <p className="mt-2 text-sm leading-relaxed text-koma-muted">Crie sua conta com os dados que você já informou. Consulte seus pedidos e repita seus favoritos neste restaurante.</p>
-                  <button type="button" onClick={() => { handleFinish(); onCreateAccount(); }}
-                    className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl border border-koma-border px-4 text-sm font-semibold text-koma-foreground hover:bg-koma-raised">Criar conta com meus dados</button>
-                  <p className="mt-2 text-xs leading-relaxed text-koma-muted">É opcional. Seu pedido já foi enviado e pode ser acompanhado sem conta.</p>
+                <section className="k-account-invitation" aria-labelledby="post-purchase-account-title">
+                  <div className="k-account-invitation__heading">
+                    <h4 id="post-purchase-account-title">Peça de novo.<br /><span>Mais rápido.</span></h4>
+                    <img className="k-account-invitation__art" src="/brand/cashier/operator-access-v1.svg" width="80" height="93" alt="" aria-hidden="true" />
+                  </div>
+                  <p className="k-account-invitation__benefit">Seus dados salvos para a próxima.</p>
+                  <button type="button" aria-label="Criar conta com meus dados" onClick={() => { handleFinish(); onCreateAccount(); }}
+                    className="k-account-invitation__action">Criar conta <ArrowRight size={18} aria-hidden="true" /></button>
+                  <p className="k-account-invitation__optional">Cadastro opcional</p>
                 </section>
               )}
             </div>
