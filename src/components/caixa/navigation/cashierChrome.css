@@ -643,3 +643,13 @@
     padding: 0;
   }
 }
+
+/* Pedidos already has the same destinations in the mobile bottom navigation. */
+@media (max-width: 767px) {
+  .cashier-shell--mobile-orders .cashier-subnav--sales { display: none; }
+  .cashier-shell--mobile-orders .cashier-topbar {
+    /* Override the legacy mobile density rule, which also uses !important. */
+    height: 48px !important;
+    min-height: 48px !important;
+  }
+}

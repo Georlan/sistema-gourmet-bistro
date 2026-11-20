@@ -149,6 +149,7 @@ export function useCashierPdv({
     if (allowedPdvOrderTypes.includes(nextType)) {
       setPdvOrderTypeState(nextType);
       setCustomerState((prev) => handleOrderTypeSwitch(prev, nextType));
+      if (nextType !== 'dine_in') setPdvTargetMesaId(0);
     }
   }, [allowedPdvOrderTypes]);
 
@@ -561,6 +562,7 @@ export function useCashierPdv({
         }
 
         setChangeFor('');
+        setPdvTargetMesaId(0);
         if (confirmedComanda?.id && orderType !== 'dine_in') applyConfirmedPdvOrder?.(confirmedComanda);
         if (optimisticTempId && confirmedComanda?.id) {
           window.dispatchEvent(new CustomEvent('koma_optimistic_order_reconcile', {
@@ -632,9 +634,7 @@ export function useCashierPdv({
       pdvOrderType === 'delivery'
         ? 'Delivery'
         : pdvOrderType === 'pickup'
-          ? pdvTargetMesaId > 0
-            ? `Retirada · Mesa ${pdvTargetMesaId}`
-            : 'Retirada'
+          ? 'Retirada'
           : pdvTargetMesaId > 0
             ? `Consumo local · Mesa ${pdvTargetMesaId}`
             : 'Consumo no local';

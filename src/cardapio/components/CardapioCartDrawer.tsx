@@ -61,6 +61,7 @@ import { getCheckoutPaymentMethods, getPaymentSelectionError, resolvePaymentSele
 import { getPairingRecommendations, classifyProduct } from "../pairingRecommendations";
 import { resolvePairingDisplay } from "../resolvePairingDisplay";
 import { isGroupedProduct } from "../catalogGrouping";
+import { inspectCartAgainstLiveCatalog } from "../cartCatalogConsistency";
 import { KomaPrimaryAction } from "./KomaActionPrimitives";
 
 /** PagBank Order requires a valid payer email of at least 6 characters; this checkout caps input at 254. */
@@ -163,6 +164,11 @@ export default function CardapioCartDrawer({
   onDismissDraftRestoreIssues,
 }: CardapioCartDrawerProps) {
   const [selectedFulfillment, setSelectedFulfillment] = useState<CardapioFulfillment | null>(initialFulfillment ?? null);
+  useEffect(() => {
+    if (initialFulfillment && selectedFulfillment === null) {
+      setSelectedFulfillment(initialFulfillment);
+    }
+  }, [initialFulfillment, selectedFulfillment]);
   const deliveryMethod = resolveFulfillmentSelection(brandConfig, selectedFulfillment);
   const { pickup: pickupEnabled, dine_in: dineInEnabled, delivery: deliveryEnabled } = getFulfillmentAvailability(brandConfig);
   const setDeliveryMethod = (method: CardapioFulfillment) => {
@@ -173,17 +179,30 @@ export default function CardapioCartDrawer({
   const couponsEnabled = !hasPromotion && brandConfig?.benefits?.coupons === true;
   const cashbackEnabled = !hasPromotion && brandConfig?.benefits?.cashback === true;
   const showDiscounts = couponsEnabled || cashbackEnabled;
-  const [address, setAddress] = useState(user?.address || "");
+  const initialGuestContact = useMemo(() => {
+    if (user) return null;
+    try {
+      return loadGuestCheckoutContact(restaurantId);
+    } catch {
+      return null;
+    }
+  // Leitura síncrona somente para hidratar o primeiro render sem sobrescrever sessionStorage.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const [address, setAddress] = useState(user?.address || initialGuestContact?.address || "");
   const [deliveryAddressDraft, setDeliveryAddressDraft] = useState<DeliveryAddressDraft>(() => (
-    parseDeliveryAddressLegacy(user?.address) || emptyAddress()
+    parseDeliveryAddressLegacy(user?.address || initialGuestContact?.address) || emptyAddress()
   ));
   const [legacyAddressHint, setLegacyAddressHint] = useState<string | null>(() => (
     user?.address && !parseDeliveryAddressLegacy(user.address) ? user.address : null
   ));
   const [selectedBairro, setSelectedBairro] = useState(() => deliveryAddressDraft.bairro);
-  const [guestName, setGuestName] = useState("");
-  const [guestPhone, setGuestPhone] = useState("");
-  const [guestEmail, setGuestEmail] = useState("");
+  const [guestName, setGuestName] = useState(() => user?.name || initialGuestContact?.name || "");
+  const [guestPhone, setGuestPhone] = useState(() => formatBrazilianPhone(user?.phone || initialGuestContact?.phone || ""));
+  const [guestEmail, setGuestEmail] = useState(() => user?.email || initialGuestContact?.email || "");
+  const [hydratedGuestRestaurantId, setHydratedGuestRestaurantId] = useState<string | null>(() => (
+    user ? null : String(restaurantId)
+  ));
   const [guestDocument, setGuestDocument] = useState("");
   const [customerRecognition, setCustomerRecognition] = useState<CustomerRecognitionStatus>("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -250,6 +269,7 @@ export default function CardapioCartDrawer({
   } | null>(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
   const [couponError, setCouponError] = useState("");
+  const [pendingCouponAfterPhone, setPendingCouponAfterPhone] = useState(false);
 
   useEffect(() => {
     if (!initialCouponCode.trim()) return;
@@ -257,6 +277,7 @@ export default function CardapioCartDrawer({
     setAppliedCoupon(null);
     appliedCouponFingerprintRef.current = null;
     setCouponError("");
+    setPendingCouponAfterPhone(false);
   }, [initialCouponCode]);
 
   // Cashback state
@@ -267,6 +288,7 @@ export default function CardapioCartDrawer({
     appliedCouponFingerprintRef.current = null;
     setUseCashback(false);
     setCouponError("");
+    setPendingCouponAfterPhone(false);
   }, [restaurantId, couponsEnabled, cashbackEnabled]);
 
   useEffect(() => {
@@ -285,6 +307,7 @@ export default function CardapioCartDrawer({
     };
 
     if (user) {
+      setHydratedGuestRestaurantId(null);
       setGuestName(user.name || "");
       setGuestPhone(formatBrazilianPhone(user.phone || ""));
       setGuestEmail(user.email || "");
@@ -292,12 +315,23 @@ export default function CardapioCartDrawer({
       return;
     }
 
-    const parsed = loadGuestCheckoutContact(restaurantId);
-    if (!parsed) return;
-    setGuestName(parsed.name);
-    setGuestPhone(formatBrazilianPhone(parsed.phone));
-    setGuestEmail(parsed.email);
-    applyStoredAddress(parsed.address || "");
+    let parsed = null;
+    try {
+      parsed = loadGuestCheckoutContact(restaurantId);
+    } catch {
+      parsed = null;
+    }
+    if (parsed) {
+      setGuestName(parsed.name);
+      setGuestPhone(formatBrazilianPhone(parsed.phone));
+      setGuestEmail(parsed.email);
+      applyStoredAddress(parsed.address || "");
+    } else {
+      setGuestName("");
+      setGuestPhone("");
+      setGuestEmail("");
+    }
+    setHydratedGuestRestaurantId(String(restaurantId));
   }, [restaurantId, user]);
 
   useEffect(() => {
@@ -332,7 +366,7 @@ export default function CardapioCartDrawer({
   }, [guestPhone, restaurantId, user]);
 
   useEffect(() => {
-    if (user) return;
+    if (user || hydratedGuestRestaurantId !== String(restaurantId)) return;
     try {
       saveGuestCheckoutContact(restaurantId, {
         name: guestName.trim(),
@@ -343,7 +377,7 @@ export default function CardapioCartDrawer({
     } catch {
       // Storage can be unavailable in hardened/private browser contexts.
     }
-  }, [address, guestEmail, guestName, guestPhone, restaurantId, user]);
+  }, [address, guestEmail, guestName, guestPhone, hydratedGuestRestaurantId, restaurantId, user]);
 
   // Subtotal calculation
   const subtotal = useMemo(() => cart.reduce((acc, item) => {
@@ -357,6 +391,10 @@ export default function CardapioCartDrawer({
   }, 0), [cart]);
 
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const cartCatalogDrift = useMemo(
+    () => inspectCartAgainstLiveCatalog(cart, allProducts, brandConfig?.promotions, brandConfig?.promotionProducts),
+    [allProducts, brandConfig?.promotionProducts, brandConfig?.promotions, cart],
+  );
   const couponValidationFingerprint = `${restaurantId}:${couponsEnabled}:${subtotal.toFixed(2)}:${normalizeBrazilianPhone(user?.phone || guestPhone)}:${couponCode.trim().toUpperCase()}`;
   const couponFingerprintRef = useRef(couponValidationFingerprint);
   const appliedCouponFingerprintRef = useRef<string | null>(null);
@@ -453,6 +491,7 @@ export default function CardapioCartDrawer({
     if (e) e.preventDefault();
     if (!couponsEnabled || !couponCode.trim()) return;
     if (!user && !isCompleteBrazilianPhone(guestPhone)) {
+      setPendingCouponAfterPhone(true);
       reportValidationError("Informe seu celular em Contato para conferir este cupom.", "input-guest-phone");
       return;
     }
@@ -472,21 +511,32 @@ export default function CardapioCartDrawer({
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => null) as {
+        valido?: boolean;
+        codigo?: string;
+        desconto_calculado?: number;
+        mensagem?: string;
+        detail?: unknown;
+      } | null;
       if (couponFingerprintRef.current !== requestFingerprint) {
         setCouponError("O pedido, celular ou cupom mudou. Confira o cupom novamente.");
         return;
       }
-      if (!data.valido) {
-        setCouponError(data.mensagem || "Cupom inválido.");
+      if (!res.ok || !data?.valido) {
+        const detail = typeof data?.detail === "string" ? data.detail.trim() : "";
+        const message = (typeof data?.mensagem === "string" && data.mensagem.trim())
+          || detail
+          || (res.ok ? "Cupom inválido." : "Erro ao validar cupom. Tente novamente.");
+        setCouponError(message);
         setAppliedCoupon(null);
       } else {
         appliedCouponFingerprintRef.current = requestFingerprint;
         setAppliedCoupon({
-          codigo: data.codigo,
+          codigo: data.codigo || couponCode.trim().toUpperCase(),
           desconto: data.desconto_calculado || 0,
           mensagem: data.mensagem || "Cupom aplicado com sucesso!",
         });
+        setPendingCouponAfterPhone(false);
         setCouponError("");
       }
     } catch (err) {
@@ -501,6 +551,7 @@ export default function CardapioCartDrawer({
     appliedCouponFingerprintRef.current = null;
     setCouponCode("");
     setCouponError("");
+    setPendingCouponAfterPhone(false);
   };
 
   const recognizedExistingCustomer = !user && customerRecognition === "found";
@@ -558,6 +609,14 @@ export default function CardapioCartDrawer({
   const validateSection = (sectionId: string) => {
     if (sectionId === "cart-items" && cart.length === 0) {
       reportValidationError("Sua sacola está vazia.", "cart-items");
+      return false;
+    }
+    if (sectionId === "cart-items" && cartCatalogDrift.size > 0) {
+      const affected = Array.from(cartCatalogDrift.values()).map((entry) => entry.productName).join(", ");
+      reportValidationError(
+        `O cardápio mudou desde a montagem (${affected}). Atualize ou remova os itens destacados antes de continuar.`,
+        "cart-items",
+      );
       return false;
     }
     if (sectionId === "cart-receive-methods") {
@@ -683,7 +742,7 @@ export default function CardapioCartDrawer({
       onAuthClick?.();
       return;
     }
-    if (!validateSection("cart-receive-methods") || !validateSection("cart-payment-methods") || !deliveryMethod) return;
+    if (!validateSection("cart-items") || !validateSection("cart-receive-methods") || !validateSection("cart-payment-methods") || !deliveryMethod) return;
 
     if (!recognizedExistingCustomer && customerName.trim().length < 2) {
       reportValidationError("Informe seu nome para o restaurante identificar o pedido.", "input-guest-name");
@@ -981,6 +1040,7 @@ export default function CardapioCartDrawer({
                       });
                     });
 
+                    const itemDrift = cartCatalogDrift.get(item.id);
                     return (
                       <div key={item.id} className="koma-art-cart-item-card" id={`cart-item-${item.id}`}>
                         <img
@@ -1007,7 +1067,21 @@ export default function CardapioCartDrawer({
                               ))}
                             </div>
                           ) : <OrderItemComposition item={cardapioCompositionSource(item)} className="mt-1 text-koma-muted text-xs" />}
-                          {onEditItem && <button type="button" onClick={() => onEditItem(item)} className="mt-2 min-h-11 text-xs font-bold text-emerald-400 hover:text-emerald-300" aria-label={`Editar montagem de ${item.product.name}`}>Editar montagem</button>}
+                          {itemDrift && (
+                            <div
+                              id={`cart-item-drift-${item.id}`}
+                              role="status"
+                              className={`mt-2 flex items-start gap-2 rounded-xl border p-2.5 text-[11px] font-semibold leading-relaxed ${
+                                itemDrift.canEdit
+                                  ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+                                  : "border-rose-500/30 bg-rose-500/10 text-rose-300"
+                              }`}
+                            >
+                              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                              <span>{itemDrift.message}</span>
+                            </div>
+                          )}
+                          {onEditItem && (!itemDrift || itemDrift.canEdit) && <button type="button" onClick={() => onEditItem(item)} className="mt-2 min-h-11 text-xs font-bold text-emerald-400 hover:text-emerald-300" aria-label={`Editar montagem de ${item.product.name}`}>Editar montagem</button>}
                           {onComposeAnother && !item.promotionId && Boolean(item.product.modifiers?.length || item.product.modifierGroups?.length) && <button type="button" onClick={() => onComposeAnother(item)} className="mt-2 block min-h-11 text-xs font-bold text-emerald-400 hover:text-emerald-300" aria-label={`Montar outra diferente de ${item.product.name}`}>Montar outra diferente</button>}
                           {item.notes && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-amber-400">Obs.: {item.notes}</p>}
                           {item.quantity > 1 && <p className="mt-1 text-xs text-koma-muted">{formatPrice(unitPrice)} cada · Mesma montagem</p>}
@@ -1259,8 +1333,10 @@ export default function CardapioCartDrawer({
                         placeholder="Código do cupom..."
                         value={couponCode}
                         onChange={(e) => {
-                          setCouponCode(e.target.value.toUpperCase());
+                          const nextCode = e.target.value.toUpperCase();
+                          setCouponCode(nextCode);
                           setCouponError("");
+                          if (!nextCode.trim()) setPendingCouponAfterPhone(false);
                         }}
                         aria-label="Código do cupom"
                         className="min-h-12 w-full pl-10 pr-3 py-2 bg-white/[0.03] border border-white/10 rounded-2xl text-base sm:text-xs font-mono font-bold uppercase text-koma-foreground placeholder:normal-case placeholder:font-normal focus:outline-none focus:border-emerald-500 tracking-wider"
@@ -1460,6 +1536,44 @@ export default function CardapioCartDrawer({
                       </label>
                     )}
                     {onAuthClick && <button type="button" onClick={onAuthClick} className="text-left text-xs font-semibold leading-relaxed text-koma-muted transition hover:text-emerald-400">{brandConfig?.benefits?.loyalty ? "Quer acompanhar seus benefícios? " : "Já tem cadastro? "}<strong className="text-emerald-400">Entrar na conta.</strong></button>}
+                    {couponsEnabled && pendingCouponAfterPhone && couponCode.trim() && !appliedCoupon && (
+                      <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3.5 text-xs" role="status" id="pending-coupon-phone-banner">
+                        <div className="flex items-start gap-2.5">
+                          <Ticket className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+                          <div className="min-w-0 flex-1">
+                            <p className="font-bold text-koma-foreground">Cupom {couponCode.trim().toUpperCase()} aguardando aplicação</p>
+                            <p className="mt-0.5 text-[11px] leading-relaxed text-koma-muted">
+                              {isCompleteBrazilianPhone(guestPhone)
+                                ? "Seu celular já foi informado. Aplique o cupom agora antes de revisar o pedido."
+                                : "Preencha seu celular acima para aplicar o cupom."}
+                            </p>
+                            {couponError && (
+                              <p className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-rose-400">
+                                <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> {couponError}
+                              </p>
+                            )}
+                            <div className="mt-2.5 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                disabled={validatingCoupon || !isCompleteBrazilianPhone(guestPhone)}
+                                onClick={() => void handleApplyCoupon()}
+                                id="btn-apply-pending-coupon"
+                                className="min-h-10 rounded-xl bg-emerald-500 px-3.5 py-2 text-xs font-black text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                              >
+                                {validatingCoupon ? "Validando..." : `Aplicar ${couponCode.trim().toUpperCase()}`}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPendingCouponAfterPhone(false)}
+                                className="min-h-10 rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-koma-muted transition hover:text-koma-foreground cursor-pointer"
+                              >
+                                Continuar sem cupom
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 {paymentDetail === "pix" && brandConfig?.pixPayerDocumentRequired && (
