@@ -726,7 +726,7 @@ export default function CardapioDigital({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex items-end justify-center overflow-hidden p-0 sm:items-center sm:p-4 animate-fade-in"
+      className="fixed inset-0 z-50 flex items-end justify-center overflow-hidden p-0 sm:items-center sm:p-4 animate-fade-in"
       style={{ backgroundColor: "var(--km-overlay)" }}
       id="cardapio-checkout-overlay"
     >
@@ -872,7 +872,7 @@ export default function CardapioDigital({
                   className="flex h-13 w-full items-center justify-center gap-2 rounded-full bg-[var(--km-accent)] px-5 text-xs font-black uppercase tracking-wider text-[var(--km-on-accent)] shadow-md transition hover:bg-[var(--km-accent-hover)] active:scale-[0.99] cursor-pointer"
                 >
                   <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                  <span>Acompanhar pedido</span>
+                  <span>Acompanhar pedido ao vivo</span>
                 </button>
               </div>
 
@@ -1010,7 +1010,7 @@ export default function CardapioDigital({
 
               {customerWhatsAppStatusEnabled && deliveryMethod !== "dine_in" && (
                 <label htmlFor="checkout-whatsapp-status-opt-in"
-                  className={`flex min-h-16 cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition-colors ${whatsappStatusOptIn
+                  className={`flex min-h-24 cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3.5 transition-colors focus-within:ring-2 focus-within:ring-[var(--km-focus)] ${whatsappStatusOptIn
                     ? 'border-[var(--km-accent)] bg-[var(--km-accent-soft)]'
                     : 'border-[var(--km-line)] bg-[var(--km-card)] hover:border-[var(--km-accent-border)]'}`}>
                   <input
@@ -1024,10 +1024,10 @@ export default function CardapioDigital({
                   <span className="min-w-0 flex-1 text-xs leading-relaxed text-[var(--km-ink)]">
                     <span className="flex items-center gap-1.5">
                       <MessageCircle aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-[var(--km-accent-text)]" />
-                      <strong className="text-xs font-bold">Avisar andamento no WhatsApp</strong>
+                      <strong className="text-xs font-bold">Receba atualizações deste pedido pelo WhatsApp</strong>
                     </span>
                     <span className="mt-0.5 block text-[11px] text-[var(--km-muted)]">
-                      Grátis e opcional.
+                      É grátis e opcional, sem promoções.
                     </span>
                   </span>
                 </label>

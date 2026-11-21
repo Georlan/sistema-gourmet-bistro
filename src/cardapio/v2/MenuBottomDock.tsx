@@ -17,14 +17,15 @@ interface MenuBottomDockProps {
   cartTotal: number;
   activeOrdersCount: number;
   userFirstName?: string | null;
+  hidden?: boolean;
   onNavigate: (tab: MenuDockTab) => void;
 }
 
-const TABS: Array<{ id: MenuDockTab; label: string }> = [
-  { id: "home", label: "Início" },
-  { id: "orders", label: "Pedidos" },
-  { id: "bag", label: "Sacola" },
-  { id: "account", label: "Conta" },
+const TABS: Array<{ id: MenuDockTab; label: string; domId: string }> = [
+  { id: "home", label: "Início", domId: "mobile-nav-home" },
+  { id: "orders", label: "Pedidos", domId: "mobile-nav-orders" },
+  { id: "bag", label: "Sacola", domId: "mobile-nav-cart" },
+  { id: "account", label: "Conta", domId: "mobile-nav-account" },
 ];
 
 export default function MenuBottomDock({
@@ -33,8 +34,11 @@ export default function MenuBottomDock({
   cartTotal,
   activeOrdersCount,
   userFirstName,
+  hidden = false,
   onNavigate,
 }: MenuBottomDockProps) {
+  if (hidden) return null;
+
   const renderGlyph = (id: MenuDockTab) => {
     switch (id) {
       case "home":
@@ -50,7 +54,7 @@ export default function MenuBottomDock({
 
   return (
     <div className="km-dock-wrap">
-      <nav className="km-dock" aria-label="Navegação rápida">
+      <nav className="km-dock" id="koma-art-dock" aria-label="Navegação rápida">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
           const badge =
@@ -64,6 +68,7 @@ export default function MenuBottomDock({
             <motion.button
               key={tab.id}
               type="button"
+              id={tab.domId}
               className={`km-dock__btn ${isActive ? "is-active" : ""}`}
               aria-current={isActive ? "page" : undefined}
               whileTap={{ scale: 0.94 }}

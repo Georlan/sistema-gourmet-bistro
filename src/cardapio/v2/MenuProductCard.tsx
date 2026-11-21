@@ -3,6 +3,7 @@ import { Minus, Plus } from "lucide-react";
 import { Product } from "../CardapioTypes";
 import { isGroupedProduct, type GroupedDisplayProduct } from "../catalogGrouping";
 import { getEffectiveProductPrice, getProductBadgeLabel } from "../../domain/productMerchandising";
+import { getProductCatalogSignalLabel } from "../cardapioMerchandising";
 import CatalogProductImage from "../components/CatalogProductImage";
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", {
@@ -34,6 +35,7 @@ const MenuProductCard = React.memo(function MenuProductCard({
   const available = product.isAvailable !== false;
   const isGrouped = isGroupedProduct(product);
   const badgeLabel = getProductBadgeLabel(product.selo);
+  const catalogSignal = getProductCatalogSignalLabel(product.category);
   const priceInfo = getEffectiveProductPrice(product.price, product.promotionalPrice);
 
   const formattedEffective = formatMenuPrice(priceInfo.effectivePrice);
@@ -69,6 +71,8 @@ const MenuProductCard = React.memo(function MenuProductCard({
 
   const isHighlight = variant === "highlight";
 
+  const fastAddId = !isGrouped && !hasModifiers ? `btn-fast-add-${product.id}` : undefined;
+
   return (
     <article
       className={`km-product-card ${isHighlight ? "km-product-card--highlight" : ""} ${available ? "" : "is-unavailable"}`}
@@ -89,6 +93,7 @@ const MenuProductCard = React.memo(function MenuProductCard({
           {available && (cartQuantity === 0 || hasModifiers) && (
             <button
               type="button"
+              id={fastAddId}
               className="km-add-fab"
               onClick={handleQuickAdd}
               aria-label={`Adicionar ${product.name} à sacola`}
@@ -100,11 +105,14 @@ const MenuProductCard = React.memo(function MenuProductCard({
       )}
 
       <div className="km-product-card__info">
-        {(!available || badgeLabel || product.destaque) && (
+        {(!available || badgeLabel || catalogSignal || product.destaque) && (
           <div>
             {!available && <span className="km-badge km-badge--muted">Esgotado</span>}
             {available && badgeLabel && <span className="km-badge">{badgeLabel}</span>}
-            {available && !badgeLabel && product.destaque && (
+            {available && !badgeLabel && catalogSignal && (
+              <span className="km-badge" title="Sinal publicado na categoria do catálogo">{catalogSignal}</span>
+            )}
+            {available && !badgeLabel && !catalogSignal && product.destaque && (
               <span className="km-badge">Destaque</span>
             )}
           </div>
@@ -145,6 +153,7 @@ const MenuProductCard = React.memo(function MenuProductCard({
           {!isHighlight && available && (cartQuantity === 0 || hasModifiers) && (
             <button
               type="button"
+              id={fastAddId}
               className="km-add-pill"
               style={{ marginLeft: "auto" }}
               onClick={handleQuickAdd}

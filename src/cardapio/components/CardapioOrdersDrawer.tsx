@@ -656,12 +656,10 @@ export default function CardapioOrdersDrawer({
         <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5 no-scrollbar">
           {orders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-14 text-center">
-              <div className="grid h-20 w-20 place-items-center rounded-3xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] text-[var(--km-accent-text)]">
-                <Receipt className="h-9 w-9" />
-              </div>
-              <h3 className="mt-5 font-display text-lg font-black text-[var(--km-ink)]">Nenhum pedido ainda</h3>
+              <KomaOrderStatusAsset className="h-20 w-20" />
+              <h3 className="mt-5 font-display text-lg font-black text-[var(--km-ink)]">Nenhum pedido por aqui ainda</h3>
               <p className="mt-1.5 max-w-[260px] text-xs leading-relaxed text-[var(--km-muted)]">
-                Seus pedidos e atualizações em tempo real aparecem aqui automaticamente.
+                Este atalho continua disponível mesmo sem login. Seus pedidos e atualizações aparecem aqui automaticamente.
               </p>
               <button type="button" onClick={closeDrawer} className="mt-6 min-h-12 w-full max-w-xs rounded-full bg-[var(--km-accent)] px-5 text-xs font-black uppercase tracking-wider text-[var(--km-on-accent)] hover:bg-[var(--km-accent-hover)] transition cursor-pointer">
                 Explorar cardápio

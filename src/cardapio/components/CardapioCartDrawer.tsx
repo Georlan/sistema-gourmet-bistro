@@ -594,17 +594,17 @@ export default function CardapioCartDrawer({
   const visibleSteps = useMemo(() => {
     const rawSteps: CartStepDefinition[] = [
       { id: "items", label: "Itens", fullTitle: "Seu pedido", sectionId: "cart-items", icon: ShoppingBag },
-      { id: "delivery", label: "Receber", fullTitle: "Como receber", sectionId: "cart-receive-methods", icon: Bike },
-      ...(showDiscounts ? [{ id: "discounts", label: "Cupom", accessibleName: "Cupom", fullTitle: "Descontos", sectionId: "cart-discounts", icon: Ticket }] : []),
-      { id: "payment", label: "Pagar", accessibleName: "Pagamento", fullTitle: "Como pagar", sectionId: "cart-payment-methods", icon: CreditCard },
-      { id: "contact", label: "Dados", accessibleName: "Contato", fullTitle: "Seus dados", sectionId: "cart-identification", icon: UserCheck },
+      { id: "delivery", label: "Receber", fullTitle: "Como quer receber?", sectionId: "cart-receive-methods", icon: Bike },
+      ...(showDiscounts ? [{ id: "discounts", label: "Descontos", accessibleName: "Descontos", fullTitle: "Descontos & Benefícios", sectionId: "cart-discounts", icon: Ticket }] : []),
+      { id: "payment", label: "Pagamento", accessibleName: "Pagamento", fullTitle: "Como quer pagar?", sectionId: "cart-payment-methods", icon: CreditCard },
+      { id: "contact", label: "Contato", accessibleName: "Contato", fullTitle: "Seu contato", sectionId: "cart-identification", icon: UserCheck },
     ];
 
     return rawSteps.map((step, index) => ({
       ...step,
       stepNumber: index + 1,
       chipLabel: `${index + 1}. ${step.label}`,
-      headingLabel: step.fullTitle,
+      headingLabel: `${index + 1}. ${step.fullTitle}`,
     }));
   }, [showDiscounts]);
 
@@ -1002,7 +1002,7 @@ export default function CardapioCartDrawer({
                                 : "font-semibold text-[var(--km-muted)]"
                         }`}
                       >
-                        {step.label}
+                        {step.chipLabel}
                       </span>
                     </button>
                     {!isLast && (
@@ -1419,38 +1419,42 @@ export default function CardapioCartDrawer({
                       <CheckCircle2 className="absolute right-2 top-2 h-4 w-4 text-[var(--km-accent-text)]" aria-hidden="true" />
                     )}
                     <KomaDineInAsset className="h-10 w-10 shrink-0" />
-                    <strong className="text-xs font-black leading-tight text-[var(--km-ink)]">No local</strong>
+                    <strong className="text-xs font-black leading-tight text-[var(--km-ink)]">Consumo local</strong>
                     <span className="text-[10px] leading-tight text-[var(--km-muted)]">{dineInEnabled ? "Na mesa" : "Indisponível"}</span>
                   </button>
 
-                  <button
-                    type="button"
-                    disabled={!deliveryEnabled}
-                    aria-pressed={deliveryMethod === "delivery"}
-                    onClick={() => { if (deliveryEnabled) setDeliveryMethod("delivery"); clearValidation("cart-receive-methods"); }}
-                    className={`relative flex min-h-[82px] flex-col items-center justify-center gap-1.5 rounded-2xl border p-3 text-center transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-45 ${
-                      deliveryMethod === "delivery"
-                        ? "border-[var(--km-accent)] bg-[var(--km-accent-soft)] text-[var(--km-ink)] ring-2 ring-[var(--km-accent-soft)]"
-                        : "border-[var(--km-line)] bg-[var(--km-card)] text-[var(--km-ink-2)] hover:border-[var(--km-line-strong)]"
-                    }`}
-                  >
-                    {deliveryMethod === "delivery" && (
-                      <CheckCircle2 className="absolute right-2 top-2 h-4 w-4 text-[var(--km-accent-text)]" aria-hidden="true" />
-                    )}
-                    <KomaDeliveryAsset className="h-10 w-10 shrink-0" />
-                    <strong className="text-xs font-black leading-tight text-[var(--km-ink)]">Entrega</strong>
-                    <span className="text-[10px] leading-tight text-[var(--km-muted)] truncate max-w-full">
-                      {deliveryEnabled ? (deliveryQuote.fee === 0 ? "Grátis" : formatPrice(deliveryQuote.fee)) : "Indisponível"}
-                    </span>
-                  </button>
+                  {(() => {
+                    const deliveryLabel = deliveryQuote.fee === 0 ? "Grátis" : formatPrice(deliveryQuote.fee);
+                    return (
+                      <button
+                        type="button"
+                        disabled={!deliveryEnabled} aria-pressed={deliveryMethod === "delivery"}
+                        onClick={() => { if (deliveryEnabled) setDeliveryMethod("delivery"); clearValidation("cart-receive-methods"); }}
+                        className={`relative flex min-h-[82px] flex-col items-center justify-center gap-1.5 rounded-2xl border p-3 text-center transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-45 ${
+                          deliveryMethod === "delivery"
+                            ? "border-[var(--km-accent)] bg-[var(--km-accent-soft)] text-[var(--km-ink)] ring-2 ring-[var(--km-accent-soft)]"
+                            : "border-[var(--km-line)] bg-[var(--km-card)] text-[var(--km-ink-2)] hover:border-[var(--km-line-strong)]"
+                        }`}
+                      >
+                        {deliveryMethod === "delivery" && (
+                          <CheckCircle2 className="absolute right-2 top-2 h-4 w-4 text-[var(--km-accent-text)]" aria-hidden="true" />
+                        )}
+                        <KomaDeliveryAsset className="h-10 w-10 shrink-0" />
+                        <strong className="text-xs font-black leading-tight text-[var(--km-ink)]">Entrega</strong>
+                        <span className="text-[10px] leading-tight text-[var(--km-muted)] truncate max-w-full">
+                          {deliveryEnabled ? deliveryLabel : "Indisponível no momento"}
+                        </span>
+                      </button>
+                    );
+                  })()}
                 </div>
 
                 {deliveryMethod === "dine_in" && (
                   <div className="mt-3 flex items-start gap-2.5 rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] p-3.5">
                     <Store className="mt-0.5 h-4 w-4 shrink-0 text-[var(--km-accent-text)]" />
                     <div className="min-w-0 text-xs leading-relaxed">
-                      <strong className="text-[var(--km-ink)] font-bold">Consumo no local</strong>
-                      <p className="mt-0.5 text-[var(--km-muted)]">Peça agora e retire ou aguarde na mesa.</p>
+                      <strong className="text-[var(--km-ink)] font-bold">Consumo local</strong>
+                      <p className="mt-0.5 text-[var(--km-muted)]">O restaurante pode associar seu pedido a uma mesa depois.</p>
                       {restaurantAddress && <p className="mt-1 break-words text-[var(--km-subtle)] text-[11px]">{restaurantAddress}</p>}
                     </div>
                   </div>
@@ -1605,7 +1609,7 @@ export default function CardapioCartDrawer({
                           : `${selectedBairro}: taxa padrão de ${formatPrice(deliveryQuote.fee)} incluída.`
                         : deliveryQuote.fee === 0
                           ? "Sem taxa de entrega neste pedido."
-                          : `Taxa padrão de ${formatPrice(deliveryQuote.fee)} incluída.`}
+                          : `Taxa padrão de ${formatPrice(deliveryQuote.fee)} incluída no resumo.`}
                     </p>
                   </div>
                 )}
@@ -1869,7 +1873,7 @@ export default function CardapioCartDrawer({
                     {customerRecognition === "found" && (
                       <div className="flex items-start gap-2.5 rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] px-3.5 py-2.5" role="status">
                         <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--km-accent-text)]" />
-                        <p className="text-[11px] font-semibold leading-relaxed text-[var(--km-accent-text)]">Celular reconhecido! Pode continuar direto.</p>
+                        <p className="text-[11px] font-semibold leading-relaxed text-[var(--km-accent-text)]">Reconhecemos seu celular! Pode continuar direto.</p>
                       </div>
                     )}
                     {customerRecognition === "new" && (
@@ -1989,7 +1993,7 @@ export default function CardapioCartDrawer({
                   </div>
                 )}
                 <div className="flex justify-between border-t border-[var(--km-line-subtle)] pt-2 text-sm font-black text-[var(--km-ink)]">
-                  <span>Total</span>
+                  <span>Total estimado</span>
                   <span className="font-display text-lg font-black text-[var(--km-accent-text)] tabular-nums">{formatPrice(total)}</span>
                 </div>
               </div>

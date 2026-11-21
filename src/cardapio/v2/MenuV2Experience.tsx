@@ -1,20 +1,52 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import NumberFlow from "@number-flow/react";
-import { ArrowUpRight, ChevronRight, Instagram, Moon, Phone, Share2, Sun, Tag, X } from "lucide-react";
 import {
+  ArrowUpRight,
+  ChevronRight,
+  Clock3,
+  Gift,
+  Instagram,
+  Moon,
+  Phone,
+  Plus,
+  RefreshCw,
+  Search,
+  Share2,
+  Sun,
+  Tag,
+  X,
+} from "lucide-react";
+import {
+  BrandConfig,
   CatalogPromotion,
   LOCAL_LOGO_PLACEHOLDER,
   LOCAL_PRODUCT_PLACEHOLDER,
   Product,
 } from "../CardapioTypes";
-import type { CardapioArtisticExperienceProps } from "../components/CardapioArtisticExperience";
+import type { CartItem } from "../components/CardapioCartDrawer";
+import type { CustomerProfile } from "../customerSession";
+import { DeliveryReceiptCode } from "../components/DeliveryReceiptCode";
+import { API_BASE_URL } from "../../config/api";
+import { smartSearchMatch } from "../../domain";
 import { useActivePromotions } from "../useActivePromotions";
-import { groupCategoryProductsForDisplay, type CatalogDisplayItem } from "../catalogGrouping";
+import { fetchPopularProducts } from "../popularProductsClient";
+import {
+  groupCategoryProductsForDisplay,
+  isGroupedProduct,
+  type CatalogDisplayItem,
+} from "../catalogGrouping";
+import { resolveCatalogDisplayProduct } from "../resolvePairingDisplay";
 import { getFulfillmentAvailability } from "../fulfillment";
 import { buildWhatsAppContactUrl } from "../../config/whatsappUtils";
 import { buildKomaAttributionUrl } from "../komaAttribution";
-import { customerOrderLabel, orderFulfillmentLabel } from "../orderTracking";
+import {
+  customerOrderLabel,
+  orderFulfillmentLabel,
+  type OrderStateContract,
+  type StoredOrder,
+  resolveOrderState,
+} from "../orderTracking";
 import {
   buildMenuThemeTokens,
   KOMA_DEFAULT_BRAND_HEX,
@@ -25,6 +57,7 @@ import { toSafeCategoryDomId } from "../categoryDomId";
 import { KOMA_WORDMARK_ON_DARK_SRC } from "../../brand/komaBrand";
 import { useKomaThemeTransition } from "../../components/shared/useKomaThemeTransition";
 import "../../components/shared/komaThemeTransition.css";
+import CatalogProductImage from "../components/CatalogProductImage";
 import {
   MenuBagGlyph,
   MenuCategoriesGlyph,
@@ -39,13 +72,55 @@ import MenuSearchOverlay from "./MenuSearchOverlay";
 import MenuKomaPlatformModal from "./MenuKomaPlatformModal";
 import "./komaMenu.css";
 
+export interface MenuV2ExperienceProps {
+  activeBrand: BrandConfig;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  selectedCategory: string;
+  onSelectCategory: (category: string) => void;
+  onSelectProduct: (product: Product | CatalogDisplayItem) => void;
+  onFastAdd: (product: Product, event?: React.MouseEvent) => void;
+  onFastRemove: (product: Product, event?: React.MouseEvent) => void;
+  getProductCartQuantity: (productId: string) => number;
+  onCartToggle: () => void;
+  cartCount: number;
+  cartTotal?: number;
+  cart?: CartItem[];
+  onStoreInfoClick: () => void;
+  onOrdersClick?: () => void;
+  activeOrdersCount?: number;
+  hasOpenOverlay?: boolean;
+  onPromotionSelect?: (promotion: CatalogPromotion) => void;
+  user?: CustomerProfile | null;
+  onAuthClick?: () => void;
+  onBenefitsClick?: () => void;
+  activeOrder?: StoredOrder | null;
+  activeState?: OrderStateContract | null;
+  storedOrders?: StoredOrder[];
+  storedOrdersCount?: number;
+  onSelectOrderId?: (id: string) => void;
+  onPayPixClick?: (order: StoredOrder) => void;
+  onRefreshOrders?: () => void;
+  isRefreshingOrders?: boolean;
+  onClearTrackedOrder?: (orderId: string) => void;
+  orderingMessage?: string;
+  activeDockTab?: "home" | "orders" | "bag" | "account";
+  onDockNavigate?: (tab: "home" | "orders" | "bag" | "account") => void;
+}
+
 function readInitialThemeMode(): MenuThemeMode {
   if (typeof window === "undefined") return "dark";
-  const params = new URLSearchParams(window.location.search);
+  const params = new URLSearchParams(window.location?.search || "");
   const urlTheme = params.get("tema");
   if (urlTheme === "light" || urlTheme === "dark") return urlTheme;
-  const stored = window.localStorage.getItem("koma_menu_theme_mode");
-  if (stored === "light" || stored === "dark") return stored;
+  try {
+    const stored = typeof window.localStorage?.getItem === "function"
+      ? window.localStorage.getItem("koma_menu_theme_mode")
+      : null;
+    if (stored === "light" || stored === "dark") return stored;
+  } catch {
+    // Ignore storage access errors in restricted contexts
+  }
   return "dark";
 }
 
@@ -69,13 +144,21 @@ export default function MenuV2Experience({
   onPromotionSelect,
   user,
   onAuthClick,
+  onBenefitsClick,
   activeOrder,
   activeState,
+  storedOrders = [],
+  onSelectOrderId,
   onPayPixClick,
+  onRefreshOrders,
+  isRefreshingOrders = false,
+  onClearTrackedOrder,
+  orderingMessage,
   activeDockTab = "home",
   onDockNavigate,
-}: CardapioArtisticExperienceProps) {
+}: MenuV2ExperienceProps) {
   const [themeMode, setThemeMode] = useState<MenuThemeMode>(readInitialThemeMode);
+  const [popularIds, setPopularIds] = useState<string[]>(() => activeBrand.popularProductIds || []);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [isPlatformModalOpen, setIsPlatformModalOpen] = useState(false);
@@ -89,6 +172,28 @@ export default function MenuV2Experience({
     () => buildMenuThemeTokens(brandColorHex, themeMode),
     [brandColorHex, themeMode],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeBrand.id) return;
+    setPopularIds(activeBrand.popularProductIds || []);
+    void fetchPopularProducts({
+      apiBaseUrl: API_BASE_URL,
+      slug: activeBrand.slug,
+      restaurantId: activeBrand.id,
+    })
+      .then((ids) => {
+        if (!cancelled && Array.isArray(ids) && ids.length > 0) {
+          setPopularIds(ids);
+        }
+      })
+      .catch(() => {
+        // Fallback to activeBrand.popularProductIds / catalog
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBrand.id, activeBrand.slug, activeBrand.popularProductIds]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -127,7 +232,14 @@ export default function MenuV2Experience({
     root.style.setProperty("--color-brand-text", themeTokens.vars["--km-ink"]);
     root.style.setProperty("--color-brand-card", themeTokens.vars["--km-dialog"]);
     document.body.style.backgroundColor = themeTokens.vars["--km-page"];
-    window.localStorage.setItem("koma_menu_theme_mode", themeMode);
+    document.body.style.color = themeTokens.vars["--km-ink"];
+    try {
+      if (typeof window.localStorage?.setItem === "function") {
+        window.localStorage.setItem("koma_menu_theme_mode", themeMode);
+      }
+    } catch {
+      // Ignore storage access errors
+    }
   }, [themeMode, themeTokens]);
 
   const handleToggleTheme = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -158,24 +270,81 @@ export default function MenuV2Experience({
   const activePromotions = useActivePromotions(activeBrand.promotions);
   const fulfillment = useMemo(() => getFulfillmentAvailability(activeBrand), [activeBrand]);
 
+  const effectivePopularIds = useMemo(
+    () => (popularIds.length > 0 ? popularIds : (activeBrand.popularProductIds || [])),
+    [popularIds, activeBrand.popularProductIds],
+  );
+
+  const heroProduct = useMemo<CatalogDisplayItem | null>(() => {
+    const catalog = activeBrand.products || [];
+    if (catalog.length === 0) return null;
+    const manual = activeBrand.manualHighlightProductId
+      ? catalog.find((p) => String(p.id) === activeBrand.manualHighlightProductId && p.isAvailable !== false)
+      : null;
+    const top = effectivePopularIds.length > 0
+      ? catalog.find((p) => String(p.id) === String(effectivePopularIds[0]) && p.isAvailable !== false)
+      : null;
+    const source = manual || top || null;
+    return source ? resolveCatalogDisplayProduct(catalog, source, activeBrand.id) : null;
+  }, [activeBrand.products, activeBrand.id, activeBrand.manualHighlightProductId, effectivePopularIds]);
+
+  const isManualHero = Boolean(
+    heroProduct &&
+    activeBrand.manualHighlightProductId &&
+    activeBrand.products.some(
+      (p) => String(p.id) === activeBrand.manualHighlightProductId && p.isAvailable !== false,
+    ) &&
+    (isGroupedProduct(heroProduct)
+      ? heroProduct.variants.some((v) => String(v.id) === activeBrand.manualHighlightProductId)
+      : String(heroProduct.id) === activeBrand.manualHighlightProductId),
+  );
+
+  const isVerifiedTopRanked = Boolean(
+    !isManualHero &&
+    effectivePopularIds.length > 0 &&
+    heroProduct &&
+    (isGroupedProduct(heroProduct)
+      ? heroProduct.variants.some((v) => String(v.id) === String(effectivePopularIds[0]))
+      : String(effectivePopularIds[0]) === String(heroProduct.id)),
+  );
+
   const highlightProducts = useMemo(() => {
-    const popularSet = new Set(activeBrand.popularProductIds || []);
+    const popularSet = new Set(effectivePopularIds);
     return activeBrand.products.filter(
       (p) =>
         p.isAvailable !== false &&
         (p.destaque || p.id === activeBrand.manualHighlightProductId || popularSet.has(p.id)),
     );
-  }, [activeBrand]);
+  }, [activeBrand.products, activeBrand.manualHighlightProductId, effectivePopularIds]);
+
+  const getDisplayItemCartQty = useCallback(
+    (item: CatalogDisplayItem) =>
+      isGroupedProduct(item)
+        ? item.variants.reduce((acc, variant) => acc + getProductCartQuantity(variant.id), 0)
+        : getProductCartQuantity(item.id),
+    [getProductCartQuantity],
+  );
 
   const groupedCategories = useMemo(() => {
+    const query = searchQuery.trim();
     return activeBrand.categories
       .map((category) => {
-        const rawProducts = activeBrand.products.filter((p) => p.category === category);
-        const items = groupCategoryProductsForDisplay(category, rawProducts, activeBrand.id);
+        const filtered = activeBrand.products
+          .filter(
+            (p) =>
+              p.category === category &&
+              (!query || smartSearchMatch(`${p.name} ${p.familia_nome || ""} ${p.description || ""}`, query)),
+          )
+          .sort((a, b) => {
+            const orderA = a.ordem_exibicao ?? Number.MAX_SAFE_INTEGER;
+            const orderB = b.ordem_exibicao ?? Number.MAX_SAFE_INTEGER;
+            return orderA - orderB;
+          });
+        const items = groupCategoryProductsForDisplay(category, filtered, activeBrand.id);
         return { category, items };
       })
       .filter((entry) => entry.items.length > 0);
-  }, [activeBrand.categories, activeBrand.products, activeBrand.id]);
+  }, [activeBrand.categories, activeBrand.products, activeBrand.id, searchQuery]);
 
   const [visibleCategory, setVisibleCategory] = useState<string>(selectedCategory || "");
   const catTrackRef = useRef<HTMLDivElement>(null);
@@ -271,13 +440,13 @@ export default function MenuV2Experience({
     <MotionConfig reducedMotion="user">
     <div
       className="km-root"
-      id="km-top"
+      id="koma-artistic-canvas"
       data-koma-theme={themeMode}
       style={themeTokens.vars as React.CSSProperties}
     >
       {/* Full-Bleed Integrated Organic Wave Hero */}
-      <header className="km-hero-header">
-        <div className="km-hero-wave-wrap">
+      <header className="km-hero-header" id="km-top">
+        <div className="km-hero-wave-wrap" id={activeBrand.hasCustomBanner ? "brand-banner-hero" : undefined}>
           {activeBrand.bannerImage ? (
             <>
               <img
@@ -334,13 +503,39 @@ export default function MenuV2Experience({
 
               <button
                 type="button"
-                className="km-wave-btn"
+                id="btn-share-mobile"
+                className="km-wave-btn km-mobile-only-btn"
                 onClick={handleShare}
                 aria-label={linkCopied ? "Link copiado" : "Compartilhar cardápio"}
                 title={linkCopied ? "Link copiado" : "Compartilhar"}
               >
                 <Share2 size={18} aria-hidden="true" />
               </button>
+
+              <button
+                type="button"
+                id="btn-share-header"
+                className="km-wave-btn km-desktop-only-btn"
+                onClick={handleShare}
+                aria-label={linkCopied ? "Link copiado" : "Compartilhar cardápio"}
+                title={linkCopied ? "Link copiado" : "Compartilhar"}
+              >
+                <Share2 size={18} aria-hidden="true" />
+              </button>
+
+              {(activeBrand.benefits?.coupons || activeBrand.benefits?.loyalty) && onBenefitsClick && (
+                <button
+                  type="button"
+                  id="btn-benefits-header"
+                  className="km-wave-btn km-desktop-only-btn"
+                  onClick={onBenefitsClick}
+                  aria-label="Benefícios e ofertas"
+                  title="Benefícios"
+                >
+                  <Gift size={16} aria-hidden="true" />
+                  <span className="text-xs font-bold">Benefícios</span>
+                </button>
+              )}
 
               <button
                 type="button"
@@ -355,6 +550,7 @@ export default function MenuV2Experience({
 
               <button
                 type="button"
+                id="btn-cart-header"
                 className="km-wave-btn km-desktop-only-btn"
                 onClick={onCartToggle}
                 aria-label={`Abrir sacola, ${cartCount} ${cartCount === 1 ? "item" : "itens"}`}
@@ -366,6 +562,7 @@ export default function MenuV2Experience({
 
               <button
                 type="button"
+                id={user ? "btn-user-profile" : "btn-login-trigger"}
                 className="km-wave-btn km-desktop-only-btn"
                 onClick={onAuthClick}
                 aria-label="Minha conta"
@@ -382,6 +579,7 @@ export default function MenuV2Experience({
           <div className="km-store-identity__row">
             <button
               type="button"
+              id="header-brand-info-trigger"
               className="km-store-avatar-btn"
               onClick={onStoreInfoClick}
               aria-label={`Abrir opções e informações de ${activeBrand.name}`}
@@ -409,15 +607,43 @@ export default function MenuV2Experience({
           </div>
 
           <div className="km-store-actions-row">
-            <button type="button" className="km-fees-link" onClick={onStoreInfoClick}>
-              <span>Taxas de entrega e horários</span>
-              <ChevronRight size={14} aria-hidden="true" />
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" className="km-fees-link" onClick={onStoreInfoClick}>
+                <span>Taxas de entrega e horários</span>
+                <ChevronRight size={14} aria-hidden="true" />
+              </button>
+
+              {(activeBrand.benefits?.coupons || activeBrand.benefits?.loyalty) && onBenefitsClick && (
+                <button
+                  type="button"
+                  id="mobile-nav-benefits"
+                  className="km-fees-link"
+                  onClick={onBenefitsClick}
+                  aria-label="Abrir benefícios"
+                >
+                  <Gift size={13} aria-hidden="true" />
+                  <span>Benefícios</span>
+                </button>
+              )}
+
+              {user && onAuthClick && (
+                <button
+                  type="button"
+                  id="btn-order-again-home"
+                  className="km-fees-link"
+                  onClick={onAuthClick}
+                >
+                  <span>Peça novamente</span>
+                  <ChevronRight size={14} aria-hidden="true" />
+                </button>
+              )}
+            </div>
 
             {(whatsappUrl || instagramUrl) && (
               <div className="km-store-socials">
                 {whatsappUrl && (
                   <a
+                    id="btn-whatsapp-mobile"
                     href={whatsappUrl}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -429,6 +655,7 @@ export default function MenuV2Experience({
                 )}
                 {instagramUrl && (
                   <a
+                    id="btn-instagram-mobile"
                     href={instagramUrl}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -456,32 +683,116 @@ export default function MenuV2Experience({
           <span>Buscar prato, bebida ou ingrediente...</span>
         </button>
 
+        {/* Store Availability Notice (real closed / schedule / cash status) */}
+        {activeBrand.storeStatus === "closed" && (
+          <div id="menu-availability" className="km-availability-banner" role="status">
+            <Clock3 size={16} className="mt-0.5 shrink-0" style={{ color: "var(--km-alert-text)" }} aria-hidden="true" />
+            <div className="min-w-0">
+              <strong>
+                {activeBrand.availabilitySource === "provisional_preparation"
+                  ? "Estabelecimento em fase de preparação."
+                  : activeBrand.availabilitySource === "schedule"
+                    ? activeBrand.nextOpeningLabel
+                      ? `Estabelecimento fechado. Abre ${activeBrand.nextOpeningLabel}.`
+                      : "Estabelecimento fechado."
+                    : activeBrand.availabilitySource === "cash_closed"
+                      ? "Estabelecimento fechado. Aguardando abertura do caixa."
+                      : "Pedidos pausados."}
+              </strong>
+              <span>
+                {!["schedule", "cash_closed"].includes(activeBrand.availabilitySource || "") && orderingMessage
+                  ? ` ${orderingMessage} `
+                  : " "}
+                O cardápio continua disponível para consulta.
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Active Order Banner */}
         {activeOrder && activeState && (
-          <section className="km-order-banner" aria-label="Pedido em andamento">
-            <div>
-              <div className="km-order-banner__eyebrow">
-                {activeOrder.numero_pedido ? `Pedido #${activeOrder.numero_pedido}` : "Acompanhamento"}
+          <section id="active-order-banner" className="km-order-banner flex-col items-stretch" aria-label="Pedido em andamento">
+            {storedOrders.length > 1 && onSelectOrderId && (
+              <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--km-line-subtle)] pb-2 mb-2">
+                {storedOrders.map((ord) => {
+                  const selected = ord.id === activeOrder.id;
+                  const ordActive = !resolveOrderState(ord).terminal;
+                  return (
+                    <button
+                      key={ord.id}
+                      type="button"
+                      onClick={() => onSelectOrderId(ord.id)}
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold transition cursor-pointer ${
+                        selected
+                          ? "bg-[var(--km-accent)] text-[var(--km-on-accent)]"
+                          : "border border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-ink-2)]"
+                      }`}
+                    >
+                      <span>#{ord.numero_pedido}</span>
+                      {ordActive && (
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${selected ? "bg-white" : "bg-[var(--km-accent)]"}`}
+                          aria-hidden="true"
+                        />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
-              <div className="km-order-banner__title km-tabular">
-                {customerOrderLabel(activeState)} · {orderFulfillmentLabel(activeState.fulfillment)}
-              </div>
-              {activeOrder.total > 0 && (
-                <div className="km-order-banner__desc km-tabular">
-                  Total: {formatMenuPrice(activeOrder.total)}
+            )}
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="km-order-banner__eyebrow">
+                  {activeOrder.numero_pedido ? `Pedido #${activeOrder.numero_pedido}` : "Acompanhamento"}
                 </div>
-              )}
+                <div className="km-order-banner__title km-tabular">
+                  {customerOrderLabel(activeState)} · {orderFulfillmentLabel(activeState.fulfillment)}
+                </div>
+                {activeOrder.total > 0 && (
+                  <div className="km-order-banner__desc km-tabular">
+                    Total: {formatMenuPrice(activeOrder.total)}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {activeState.phase === "payment_pending" && activeOrder.pagamento?.qr_code && onPayPixClick ? (
+                  <button type="button" className="km-pill-cta cursor-pointer" onClick={() => onPayPixClick(activeOrder)}>
+                    Pagar Pix
+                  </button>
+                ) : null}
+                {!activeState.terminal && onRefreshOrders && (
+                  <button
+                    type="button"
+                    disabled={isRefreshingOrders}
+                    onClick={onRefreshOrders}
+                    aria-label="Atualizar status do pedido"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--km-line)] bg-[var(--km-raised)] px-3 text-xs font-bold text-[var(--km-ink)] transition disabled:opacity-50 cursor-pointer"
+                  >
+                    <RefreshCw size={13} className={isRefreshingOrders ? "animate-spin" : ""} aria-hidden="true" />
+                    <span>Atualizar</span>
+                  </button>
+                )}
+                {activeState.terminal && onClearTrackedOrder ? (
+                  <button
+                    type="button"
+                    className="km-pill-cta cursor-pointer"
+                    onClick={() => onClearTrackedOrder(activeOrder.id)}
+                  >
+                    Fazer novo pedido
+                  </button>
+                ) : (
+                  onOrdersClick && (
+                    <button type="button" className="km-pill-cta cursor-pointer" onClick={onOrdersClick}>
+                      Ver pedido
+                    </button>
+                  )
+                )}
+              </div>
             </div>
-            {activeOrder.pagamento?.status === "pendente" && onPayPixClick ? (
-              <button type="button" className="km-pill-cta" onClick={() => onPayPixClick(activeOrder)}>
-                Pagar Pix
-              </button>
-            ) : (
-              onOrdersClick && (
-                <button type="button" className="km-pill-cta" onClick={onOrdersClick}>
-                  Ver pedido
-                </button>
-              )
+            {!activeState.terminal && activeOrder.delivery_receipt_code && (
+              <div className="mt-2">
+                <DeliveryReceiptCode code={activeOrder.delivery_receipt_code} />
+              </div>
             )}
           </section>
         )}
@@ -556,11 +867,64 @@ export default function MenuV2Experience({
           </div>
         </nav>
 
+        {/* Verified Hero Showcase (#koma-art-hero-showcase) */}
+        {!searchQuery.trim() && heroProduct && (isManualHero || isVerifiedTopRanked) && (
+          <section
+            id="koma-art-hero-showcase"
+            className="km-hero-showcase"
+            aria-label={isVerifiedTopRanked ? "Mais pedido do cardápio" : "Destaque do cardápio"}
+          >
+            <div className="km-hero-showcase__copy">
+              <span className="km-hero-showcase__tag">
+                {isVerifiedTopRanked ? "Nº 1 mais pedido" : "Destaque da casa"}
+              </span>
+              <h2 className="km-hero-showcase__title">{heroProduct.name}</h2>
+              {heroProduct.description && (
+                <p className="km-hero-showcase__desc">{heroProduct.description}</p>
+              )}
+              <div className="mt-2.5 flex items-center gap-3">
+                <span className="km-price">{formatMenuPrice(heroProduct.price)}</span>
+                <button
+                  type="button"
+                  id={!isGroupedProduct(heroProduct) && !(heroProduct.modifierGroups?.length || heroProduct.modifiers?.length)
+                    ? `btn-hero-fast-add-${heroProduct.id}`
+                    : undefined}
+                  onClick={(e) => {
+                    if (isGroupedProduct(heroProduct) || heroProduct.modifierGroups?.length || heroProduct.modifiers?.length) {
+                      onSelectProduct(heroProduct);
+                    } else {
+                      onFastAdd(heroProduct as Product, e);
+                    }
+                  }}
+                  className="km-add-pill cursor-pointer"
+                >
+                  <span>
+                    {isGroupedProduct(heroProduct) || heroProduct.modifierGroups?.length || heroProduct.modifiers?.length
+                      ? "Escolher"
+                      : "Adicionar"}
+                  </span>
+                  <span className="km-add-pill__circle">
+                    <Plus size={14} aria-hidden="true" />
+                  </span>
+                </button>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => onSelectProduct(heroProduct)}
+              className="km-hero-showcase__media cursor-pointer border-0 p-0"
+              aria-label={`Ver ${heroProduct.name}`}
+            >
+              <CatalogProductImage image={heroProduct.image} alt={heroProduct.name} priority width={96} height={96} />
+            </button>
+          </section>
+        )}
+
         {/* Curved Promo Showcase (Tag OUTSIDE image!) */}
         {activePromotions.length > 0 && (
-          <section className="km-promo-showcase" id="km-highlights">
+          <section className="km-promo-showcase" id="cardapio-promotions-home">
             <MenuPromoArcBackdrop className="km-promo-arc-svg" />
-            <div className="km-promo-showcase__inner">
+            <div className="km-promo-showcase__inner" id="km-highlights">
               <div className="km-section__head">
                 <h2 className="km-promo-showcase__title">Promoções da Casa</h2>
                 <span className="km-promo-showcase__count">{activePromotions.length} ofertas</span>
@@ -607,12 +971,12 @@ export default function MenuV2Experience({
         )}
 
         {/* Destaques 2-Column Editorial Grid */}
-        {highlightProducts.length > 0 && (
+        {!searchQuery.trim() && highlightProducts.length > 0 && (
           <section
             className="km-section"
-            id={activePromotions.length === 0 ? "km-highlights" : undefined}
+            id="popular-products-home"
           >
-            <div className="km-section__head">
+            <div className="km-section__head" id={activePromotions.length === 0 ? "km-highlights" : undefined}>
               <h2 className="km-section__title">Destaques</h2>
               <span className="km-section__count">{highlightProducts.length} itens</span>
             </div>
@@ -623,6 +987,7 @@ export default function MenuV2Experience({
                   key={`hl-${product.id}`}
                   product={product}
                   variant="highlight"
+                  priority
                   cartQuantity={getProductCartQuantity(product.id)}
                   onSelectProduct={onSelectProduct as any}
                   onFastAdd={onFastAdd as any}
@@ -633,40 +998,66 @@ export default function MenuV2Experience({
           </section>
         )}
 
-        {/* Category Product Sections */}
-        {groupedCategories.map(({ category, items }, catIndex) => (
-          <section
-            key={category}
-            className={`km-section ${catIndex >= 2 ? "km-section--deferred" : ""}`}
-            id={`km-cat-${toSafeCategoryDomId(category)}`}
-            data-category={category}
-          >
-            <div className="km-section__head">
-              <h2 className="km-section__title">
-                <span className="km-section__accent" aria-hidden="true" />
-                {category}
-              </h2>
-              <span className="km-section__count">
-                {items.length} {items.length === 1 ? "opção" : "opções"}
-              </span>
+        {/* Category Product Sections (#catalog-feed) */}
+        <div id="catalog-feed" className="flex flex-col gap-5">
+          {groupedCategories.length === 0 ? (
+            <div className="rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-8 text-center">
+              {searchQuery.trim() ? (
+                <>
+                  <Search size={24} className="mx-auto mb-2 text-[var(--km-muted)]" aria-hidden="true" />
+                  <p className="text-sm font-bold text-[var(--km-ink)]">
+                    Nenhum item encontrado para &ldquo;{searchQuery}&rdquo;
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="mt-3 rounded-full border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] px-4 py-2 text-xs font-bold text-[var(--km-accent-text)] cursor-pointer"
+                  >
+                    Limpar busca
+                  </button>
+                </>
+              ) : (
+                <p className="text-xs text-[var(--km-muted)]">
+                  Este restaurante ainda não publicou produtos no cardápio.
+                </p>
+              )}
             </div>
+          ) : (
+            groupedCategories.map(({ category, items }, catIndex) => (
+              <section
+                key={category}
+                className={`km-section ${catIndex >= 4 ? "km-section--deferred" : ""}`}
+                id={`km-cat-${toSafeCategoryDomId(category)}`}
+                data-category={category}
+              >
+                <div className="km-section__head">
+                  <h2 className="km-section__title">
+                    <span className="km-section__accent" aria-hidden="true" />
+                    {category}
+                  </h2>
+                  <span className="km-section__count">
+                    {items.length} {items.length === 1 ? "opção" : "opções"}
+                  </span>
+                </div>
 
-            <div className="km-product-grid">
-              {items.map((item: CatalogDisplayItem, itemIndex) => (
-                <MenuProductCard
-                  key={item.id}
-                  product={item as any}
-                  variant="row"
-                  priority={catIndex === 0 && itemIndex < 6}
-                  cartQuantity={getProductCartQuantity(item.id)}
-                  onSelectProduct={onSelectProduct as any}
-                  onFastAdd={onFastAdd as any}
-                  onFastRemove={onFastRemove as any}
-                />
-              ))}
-            </div>
-          </section>
-        ))}
+                <div className="km-product-grid">
+                  {items.map((item: CatalogDisplayItem, itemIndex) => (
+                    <MenuProductCard
+                      key={item.id}
+                      product={item as any}
+                      variant="row"
+                      priority={catIndex === 0 && itemIndex < 6}
+                      cartQuantity={getDisplayItemCartQty(item)}
+                      onSelectProduct={onSelectProduct as any}
+                      onFastAdd={onFastAdd as any}
+                      onFastRemove={onFastRemove as any}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))
+          )}
+        </div>
 
         {/* Footer + Official KÔMA Attribution Card (opens Interactive Modal) */}
         <footer className="km-footer">
@@ -676,6 +1067,7 @@ export default function MenuV2Experience({
 
           <button
             type="button"
+            id="koma-powered-by-footer"
             className="km-koma-cta-card"
             onClick={() => setIsPlatformModalOpen(true)}
           >
@@ -745,6 +1137,7 @@ export default function MenuV2Experience({
         cartTotal={cartTotal}
         activeOrdersCount={activeOrdersCount}
         userFirstName={user?.name ? user.name.split(" ")[0] : null}
+        hidden={Boolean(hasOpenOverlay && activeDockTab === "home")}
         onNavigate={(tab) => {
           if (onDockNavigate) {
             onDockNavigate(tab);

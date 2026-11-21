@@ -1057,7 +1057,8 @@ export default function CardapioProductModal({
           <>
           {hasUnsatisfied ? (
             <p
-              className="mb-2 flex items-center gap-1.5 text-xs font-bold text-rose-700 dark:text-rose-300"
+              className="mb-2 flex items-center gap-1.5 text-xs font-bold"
+              style={{ color: "var(--km-alert-text)" }}
               role="status"
             >
               <AlertCircle className="h-3.5 w-3.5 shrink-0" />
@@ -1097,10 +1098,18 @@ export default function CardapioProductModal({
             onClick={handleAdd}
             className={`flex min-h-12 min-w-0 touch-manipulation flex-1 items-center justify-between gap-3 rounded-full px-5 transition active:scale-[0.99] cursor-pointer ${
               hasUnsatisfied
-                ? "border border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 dark:border-rose-500/30 dark:bg-rose-500/12 dark:text-rose-200"
+                ? "border"
                 : "koma-action-primary bg-[var(--km-accent)] text-[var(--km-on-accent)] hover:bg-[var(--km-accent-hover)]"
             }`}
-            style={hasUnsatisfied ? undefined : { boxShadow: "var(--km-shadow-cta)" }}
+            style={
+              hasUnsatisfied
+                ? {
+                    backgroundColor: "var(--km-alert-soft)",
+                    borderColor: "var(--km-alert-border)",
+                    color: "var(--km-alert-text)",
+                  }
+                : { boxShadow: "var(--km-shadow-cta)" }
+            }
             id="btn-add-to-cart-action"
             aria-label={`${initialItem ? "Salvar" : "Adicionar"} ${quantity} × ${product.name} · ${formatPrice(totalPrice)}`}
           >
