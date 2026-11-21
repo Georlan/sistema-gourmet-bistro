@@ -1,7 +1,13 @@
 import os
 from pathlib import Path
 
-TEST_DB_PATH = Path(__file__).resolve().parent / ".pytest_koma.db"
+_XDIST_WORKER = os.getenv("PYTEST_XDIST_WORKER", "").strip()
+if _XDIST_WORKER:
+    _WORKER_DB_DIR = Path(__file__).resolve().parent / ".pytest_koma_workers" / _XDIST_WORKER
+    _WORKER_DB_DIR.mkdir(parents=True, exist_ok=True)
+    TEST_DB_PATH = _WORKER_DB_DIR / ".pytest_koma.db"
+else:
+    TEST_DB_PATH = Path(__file__).resolve().parent / ".pytest_koma.db"
 USE_EXTERNAL_TEST_DATABASE = (
     os.getenv("KOMA_PYTEST_USE_EXTERNAL_DATABASE", "false").lower() == "true"
 )
@@ -75,6 +81,12 @@ def cleanup_isolated_test_database():
     engine.dispose()
     for suffix in ("", "-wal", "-shm", "-journal"):
         Path(f"{TEST_DB_PATH}{suffix}").unlink(missing_ok=True)
+    if _XDIST_WORKER:
+        try:
+            TEST_DB_PATH.parent.rmdir()
+            TEST_DB_PATH.parent.parent.rmdir()
+        except OSError:
+            pass
 
 
 @pytest.fixture(autouse=True)
