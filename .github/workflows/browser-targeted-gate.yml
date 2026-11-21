@@ -1,0 +1,335 @@
+name: Browser Targeted Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'e2e/**'
+      - 'public/**'
+      - 'index.html'
+      - 'vite.config.ts'
+      - 'playwright.config.ts'
+      - '.github/workflows/browser-targeted-gate.yml'
+  schedule:
+    - cron: '45 6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: browser-targeted-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  browser-gate:
+    name: Browser targeted regressions
+    # Playwright 1.58.2 cannot install Chromium deps on ubuntu-26.04 runners.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Route changed frontend paths to targeted E2E specs
+        id: route
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ] || [ -z "$BASE_SHA" ]; then
+            echo 'mode=full' >> "$GITHUB_OUTPUT"
+            echo 'dev_specs=' >> "$GITHUB_OUTPUT"
+            echo 'checkout_360=true' >> "$GITHUB_OUTPUT"
+            echo 'preview_transfer=true' >> "$GITHUB_OUTPUT"
+            echo 'preview_seo=true' >> "$GITHUB_OUTPUT"
+            echo 'preview_recovery=true' >> "$GITHUB_OUTPUT"
+            echo 'firefox_smoke=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          fi
+          changed="$(git diff --name-only "$BASE_SHA" HEAD)"
+
+          python3 - "$changed" <<'PY' >> "$GITHUB_OUTPUT"
+          import os, sys
+
+          files = [f.strip() for f in sys.argv[1].splitlines() if f.strip()]
+          dev_specs = set()
+          checkout_360 = False
+          preview_transfer = False
+          preview_seo = False
+          preview_recovery = False
+
+          preview_only_specs = {
+              "e2e/cashier-transfer-conflict.spec.ts",
+              "e2e/public-seo.spec.ts",
+              "e2e/landing-demo-capture.spec.ts",
+              "e2e/app-recovery.spec.ts",
+              "e2e/analytics-ingestion.spec.ts",
+              "e2e/checkout-money-clicks.spec.ts",
+          }
+
+          for f in files:
+              if f.startswith("e2e/") and f.endswith(".spec.ts") and os.path.exists(f):
+                  if f == "e2e/checkout-money-clicks.spec.ts":
+                      checkout_360 = True
+                  elif f == "e2e/cashier-transfer-conflict.spec.ts":
+                      preview_transfer = True
+                  elif f in {"e2e/public-seo.spec.ts", "e2e/landing-demo-capture.spec.ts"}:
+                      preview_seo = True
+                  elif f in {"e2e/app-recovery.spec.ts", "e2e/analytics-ingestion.spec.ts"}:
+                      preview_recovery = True
+                  else:
+                      dev_specs.add(f)
+
+              if f.startswith(("src/cardapio/", "src/components/cardapio/")):
+                  dev_specs.update([
+                      "e2e/public-menu-order.spec.ts",
+                      "e2e/cardapio-promotions.spec.ts",
+                      "e2e/cardapio-draft-and-checkout.spec.ts",
+                      "e2e/marmitaria-daily-menu.spec.ts",
+                      "e2e/cardapio-foundation-accessibility.spec.ts",
+                      "e2e/cardapio-whatsapp-optout.spec.ts",
+                      "e2e/order-tracking-chat.spec.ts",
+                  ])
+
+              if f.startswith(("src/components/caixa/pdv/", "src/components/caixa/checkout/")):
+                  dev_specs.update([
+                      "e2e/cashier-pdv-product-card.spec.ts",
+                      "e2e/cashier-mixed-payment.spec.ts",
+                      "e2e/cashier-delivery-new-order.spec.ts",
+                      "e2e/cashier-sale-recovery.spec.ts",
+                  ])
+
+              if f.startswith(("src/components/caixa/orders/", "src/components/courier/")) or f == "src/components/MotoboyPwaPage.tsx":
+                  dev_specs.update([
+                      "e2e/cashier-fulfillment-workspaces.spec.ts",
+                      "e2e/cashier-delivery-stages.spec.ts",
+                      "e2e/courier-realtime-cache.spec.ts",
+                  ])
+                  if "useCashierOrders.ts" in f:
+                      preview_transfer = True
+
+              if f.startswith(("src/components/caixa/customers/", "src/components/caixa/navigation/", "src/components/clientes/")):
+                  dev_specs.update([
+                      "e2e/relationship-navigation.spec.ts",
+                      "e2e/customer-crm.spec.ts",
+                      "e2e/cashier-horizontal-navigation.spec.ts",
+                      "e2e/crm-api-contract.spec.ts",
+                  ])
+
+              if f.startswith(("src/components/mesas/", "src/components/Mesa")) or f.startswith("src/domain/waiter"):
+                  dev_specs.update([
+                      "e2e/waiter-config-layout.spec.ts",
+                      "e2e/waiter-salon-wave1.spec.ts",
+                      "e2e/waiter-projections.spec.ts",
+                  ])
+
+              if f.startswith(("src/components/onboarding/", "src/components/auth/")) or f == "src/utils/authSession.ts":
+                  dev_specs.update([
+                      "e2e/auth-persistence.spec.ts",
+                      "e2e/onboarding-first-client-ux.spec.ts",
+                  ])
+                  if f == "src/components/auth/AppRecoveryBoundary.tsx":
+                      preview_recovery = True
+                  if f == "src/components/auth/TenantSuspensionBoundary.tsx":
+                      dev_specs.add("e2e/tenant-suspension-idle.spec.ts")
+
+              if f.startswith("src/components/printing/"):
+                  dev_specs.add("e2e/print-local-connection.spec.ts")
+
+              if f.startswith(("src/components/relatorios/", "src/components/caixa/reports/")):
+                  dev_specs.add("e2e/reports-practical.spec.ts")
+
+              if "Pix" in f or f in {"src/components/caixa/orders/DirectPixPendingPanel.tsx", "src/components/caixa/orders/pendingPixPolling.ts"}:
+                  dev_specs.update(["e2e/direct-pix.spec.ts", "e2e/pagbank-connect.spec.ts"])
+
+              if f.startswith(("src/components/caixa/online-menu/", "src/components/caixa/realtime/")):
+                  dev_specs.update([
+                      "e2e/online-control-idle.spec.ts",
+                      "e2e/idle-reconciliation.spec.ts",
+                      "e2e/pocket-android-alerts.spec.ts",
+                  ])
+
+              if f.startswith("src/legal/"):
+                  checkout_360 = True
+
+              if f.startswith(("src/landing/", "public/")) or f in {"scripts/prerenderLanding.ts", "index.html", "vite.config.ts"}:
+                  preview_seo = True
+
+              if f.startswith("src/analytics/"):
+                  preview_recovery = True
+
+          if not (dev_specs or checkout_360 or preview_transfer or preview_seo or preview_recovery):
+              dev_specs.update([
+                  "e2e/public-menu-order.spec.ts",
+                  "e2e/cashier-pdv-product-card.spec.ts",
+              ])
+
+          dev_list = sorted(s for s in dev_specs if os.path.exists(s) and s not in preview_only_specs)
+          print("mode=targeted")
+          print(f"dev_specs={' '.join(dev_list)}")
+          print(f"checkout_360={'true' if checkout_360 else 'false'}")
+          print(f"preview_transfer={'true' if preview_transfer else 'false'}")
+          print(f"preview_seo={'true' if preview_seo else 'false'}")
+          print(f"preview_recovery={'true' if preview_recovery else 'false'}")
+          print("firefox_smoke=false")
+          PY
+
+      - name: Cache Playwright browsers (Chromium for PR, Chromium+Firefox for full)
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ steps.route.outputs.mode }}-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright browsers and OS deps
+        run: |
+          if [ "${{ steps.route.outputs.mode }}" = "full" ]; then
+            if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+              npx playwright install-deps chromium firefox
+            else
+              npx playwright install --with-deps chromium firefox
+            fi
+          else
+            if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+              npx playwright install-deps chromium
+            else
+              npx playwright install --with-deps chromium
+            fi
+          fi
+
+      - name: Run targeted browser regressions (mobile-390 + desktop-1366)
+        if: steps.route.outputs.mode == 'targeted' && steps.route.outputs.dev_specs != ''
+        env:
+          KOMA_E2E_PORT: '4283'
+        run: >-
+          npm run test:e2e --
+          ${{ steps.route.outputs.dev_specs }}
+          --project=mobile-390
+          --project=desktop-1366
+          --workers=2
+
+      - name: Run checkout 360px + desktop smoke
+        if: steps.route.outputs.checkout_360 == 'true'
+        env:
+          KOMA_E2E_PORT: '4284'
+        run: >-
+          npm run test:e2e --
+          e2e/checkout-money-clicks.spec.ts
+          --project=mobile-360
+          --project=desktop-1366
+          --workers=2
+
+      - name: Run preview transfer conflict smoke
+        if: steps.route.outputs.preview_transfer == 'true'
+        env:
+          KOMA_E2E_PORT: '4298'
+          KOMA_E2E_PREVIEW: 'true'
+        run: |
+          npm run build
+          npm run test:e2e -- e2e/cashier-transfer-conflict.spec.ts --project=mobile-390 --project=desktop-1366 --workers=2
+
+      - name: Run preview SEO and auth smoke
+        if: steps.route.outputs.preview_seo == 'true'
+        env:
+          KOMA_E2E_PORT: '4285'
+          KOMA_E2E_PREVIEW: 'true'
+        run: |
+          npm run build
+          npm run test:e2e -- e2e/public-seo.spec.ts e2e/auth-persistence.spec.ts e2e/landing-demo-capture.spec.ts --project=desktop-1366 --project=mobile-390 --workers=2
+
+      - name: Run preview recovery and analytics smoke
+        if: steps.route.outputs.preview_recovery == 'true'
+        env:
+          KOMA_E2E_PORT: '4297'
+          KOMA_E2E_PREVIEW: 'true'
+        run: |
+          VITE_POSTHOG_PROJECT_TOKEN=phc_fixture_public_project \
+          VITE_POSTHOG_HOST=http://127.0.0.1:7999 \
+          npm run build
+          npm run test:e2e -- e2e/app-recovery.spec.ts e2e/analytics-ingestion.spec.ts --project=mobile-390 --project=desktop-1366 --workers=2
+
+      - name: Run comprehensive scheduled/manual E2E regression
+        if: steps.route.outputs.mode == 'full'
+        env:
+          KOMA_E2E_PORT: '4283'
+        run: |
+          npm run test:e2e -- \
+            e2e/public-menu-order.spec.ts \
+            e2e/cardapio-promotions.spec.ts \
+            e2e/cardapio-promotion-expiry.spec.ts \
+            e2e/cardapio-promotion-mixed-cart.spec.ts \
+            e2e/cardapio-foundation-accessibility.spec.ts \
+            e2e/cardapio-draft-and-checkout.spec.ts \
+            e2e/marmitaria-daily-menu.spec.ts \
+            e2e/marmitaria-optional-salad.spec.ts \
+            e2e/linked-complements.spec.ts \
+            e2e/order-tracking-chat.spec.ts \
+            e2e/cashier-pdv-product-card.spec.ts \
+            e2e/cashier-mixed-payment.spec.ts \
+            e2e/cashier-delivery-new-order.spec.ts \
+            e2e/cashier-sale-recovery.spec.ts \
+            e2e/cashier-fulfillment-workspaces.spec.ts \
+            e2e/cashier-delivery-stages.spec.ts \
+            e2e/cashier-fulfillment-conversion.spec.ts \
+            e2e/courier-realtime-cache.spec.ts \
+            e2e/auth-persistence.spec.ts \
+            e2e/onboarding-first-client-ux.spec.ts \
+            e2e/installed-pwa-auth-persistence.spec.ts \
+            e2e/print-local-connection.spec.ts \
+            e2e/reports-practical.spec.ts \
+            e2e/direct-pix.spec.ts \
+            e2e/pagbank-connect.spec.ts \
+            e2e/waiter-salon-wave1.spec.ts \
+            e2e/waiter-projections.spec.ts \
+            e2e/waiter-sync.spec.ts \
+            e2e/relationship-navigation.spec.ts \
+            e2e/customer-crm.spec.ts \
+            e2e/crm-api-contract.spec.ts \
+            e2e/cashier-horizontal-navigation.spec.ts \
+            e2e/whatsapp-marketing-consent.spec.ts \
+            e2e/cardapio-whatsapp-optout.spec.ts \
+            --project=mobile-390 \
+            --project=desktop-1366 \
+            --workers=2
+
+          npm run test:e2e -- e2e/waiter-config-layout.spec.ts --project=mobile-360 --project=mobile-390 --project=mobile-412 --project=tablet-768 --project=desktop-1366 --workers=2
+          npm run test:e2e -- e2e/tenant-suspension-idle.spec.ts e2e/online-control-idle.spec.ts e2e/idle-reconciliation.spec.ts --project=desktop-1366 --project=mobile-390 --project=tablet-768 --workers=2
+          npm run test:e2e -- e2e/cardapio-mobile-layout.spec.ts --workers=2
+
+      - name: Run Firefox preview smoke (scheduled/manual)
+        if: steps.route.outputs.firefox_smoke == 'true'
+        env:
+          KOMA_E2E_PORT: '4288'
+          KOMA_E2E_FIREFOX: 'true'
+          KOMA_E2E_PREVIEW: 'true'
+        run: |
+          npm run build
+          npm run test:e2e -- e2e/cardapio-artistic-parity.spec.ts --grep "contato preserva" --project=firefox-390 --workers=2
+
+      - name: Upload browser failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: browser-targeted-failures-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 3

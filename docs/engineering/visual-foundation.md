@@ -57,7 +57,7 @@ de quantidade/opção, nem interfere na história de navegação já existente.
 - Capturas opcionais: definir `KOMA_VISUAL_CAPTURE_DIR` ao executar o teste novo.
   São telas reais com fixture local, não pedidos de produção. O claro do Cardápio
   exercita o CSS de compatibilidade; não foi criado um seletor público de tema.
-- O workflow existente `cardapio-browser-targeted.yml` inclui a nova regressão.
+- O workflow consolidado `browser-targeted-gate.yml` inclui a regressão do Cardápio e executa a suíte de acessibilidade ao alterar `src/cardapio/` ou `src/components/cardapio/`.
 
 Sem novas bibliotecas, serviços, imagens, gravações no backend ou alterações de
 assets. Desfazer o PR restaura os estilos e o comportamento anteriores. O rollout

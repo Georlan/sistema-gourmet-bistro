@@ -8,6 +8,10 @@ on:
       - '.github/workflows/koma-print-android.yml'
   workflow_dispatch:
 
+concurrency:
+  group: koma-print-android-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 

@@ -1,6 +1,7 @@
 name: Print agent
 on:
   pull_request:
+    branches: [main]
     paths:
       - 'print-agent/**'
       - 'backend/app/routes/print_agents.py'
@@ -17,12 +18,19 @@ on:
       - 'scripts/package_print_agent.py'
       - 'scripts/tests/test_print_agent_distribution.py'
   workflow_dispatch:
+
+concurrency:
+  group: print-agent-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
+
 jobs:
   transport:
     name: Print transport (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
@@ -31,6 +39,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            print-agent/requirements.lock
+            print-agent/requirements.txt
       - run: python -m pip install -r print-agent/requirements.txt "pytest>=8,<9"
       - run: python -m pytest print-agent/tests -q -ra
       - name: Parse Windows installers
@@ -46,7 +58,8 @@ jobs:
 
   backend-contract:
     name: Print backend contract
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:17-alpine
@@ -65,6 +78,10 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.lock
+            backend/requirements.txt
       - run: python -m pip install -r backend/requirements.txt "pytest>=8,<9"
       - run: python -m pytest backend/tests/test_print_agents.py backend/tests/test_print_job_terminal_invariant.py backend/tests/test_print_ack_concurrency_postgres.py -q -ra
         env:
@@ -73,7 +90,8 @@ jobs:
 
   distribution-bundle:
     name: Print distribution ZIP
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -86,7 +104,7 @@ jobs:
         run: python scripts/package_print_agent.py --output dist/KOMA-print-agent.zip
       - name: Record SHA256 for support delivery
         run: sha256sum dist/KOMA-print-agent.zip
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: KOMA-print-agent
           path: dist/KOMA-print-agent.zip
