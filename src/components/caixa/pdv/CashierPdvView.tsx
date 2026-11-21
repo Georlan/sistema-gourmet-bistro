@@ -1,8 +1,8 @@
 import clsx from 'clsx';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PAYMENT_LABELS, type PaymentMethod } from '../../../cardapio/paymentMethods';
 import { Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CreditCard, MapPin, Package, Plus, Search, ShoppingCart, Tag, Truck, UserRound, UtensilsCrossed, X } from 'lucide-react';
-import CardapioPromotionWizard from '../../../cardapio/components/CardapioPromotionWizard';
+const CardapioPromotionWizard = lazy(() => import('../../../cardapio/components/CardapioPromotionWizard'));
 import { calculatePromotionRegularTotal, formatPromotionItemsSummary } from '../../../utils/promotionFormHelpers';
 import {
   findPromotionStepProducts,
@@ -970,7 +970,8 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
       />
 
       {configuringPromotion && (
-        <CardapioPromotionWizard
+        <Suspense fallback={null}>
+          <CardapioPromotionWizard
           key={configuringPromotion.id}
           title={configuringPromotion.nome}
           basePrice={configuringPromotion.preco}
@@ -988,6 +989,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
             setConfiguringPromotion(null);
           }}
         />
+        </Suspense>
       )}
 
       {configProduct && (
