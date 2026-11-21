@@ -811,3 +811,49 @@ def test_e2e_compre_ganhe_multi_qty_5_mais_1_agrupado_e_customizado(universal_pr
     ]
     res_wrong = client.post("/cardapio/pedidos", json=wrong_payload)
     assert res_wrong.status_code in (400, 422), res_wrong.text
+
+
+def test_promotion_imagem_url_persisted_and_exposed():
+    res = client.post(
+        "/api/cardapio-digital/promocoes",
+        headers=_admin_headers(),
+        json={
+            "nome": "Combo Foto Teste",
+            "descricao": "Com imagem",
+            "imagem_url": "  https://cdn.example.com/promo.webp  ",
+            "tipo": "combo",
+            "preco": 35.0,
+            "componentes": [["univ-burger"], ["univ-refri"]],
+            "ativo": True,
+        },
+    )
+    assert res.status_code == 201, res.text
+    promo_id = res.json()["id"]
+    assert res.json()["imagem_url"] == "https://cdn.example.com/promo.webp"
+
+    admin_list = client.get("/api/cardapio-digital/promocoes", headers=_admin_headers())
+    assert admin_list.status_code == 200
+    admin_entry = next(p for p in admin_list.json()["promocoes"] if p["id"] == promo_id)
+    assert admin_entry["imagem_url"] == "https://cdn.example.com/promo.webp"
+
+    pub_res = client.get(f"/api/cardapio-digital/public?restaurante_id={RESTAURANTE_ID}")
+    assert pub_res.status_code == 200
+    pub_entry = next(p for p in pub_res.json()["promocoes"] if p["id"] == promo_id)
+    assert pub_entry["imagem_url"] == "https://cdn.example.com/promo.webp"
+
+    # Whitespace-only imagem_url normalizes to None
+    upd = client.put(
+        f"/api/cardapio-digital/promocoes/{promo_id}",
+        headers=_admin_headers(),
+        json={
+            "nome": "Combo Foto Teste",
+            "descricao": "Sem imagem",
+            "imagem_url": "   ",
+            "tipo": "combo",
+            "preco": 35.0,
+            "componentes": [["univ-burger"], ["univ-refri"]],
+            "ativo": True,
+        },
+    )
+    assert upd.status_code == 200, upd.text
+    assert upd.json()["imagem_url"] is None

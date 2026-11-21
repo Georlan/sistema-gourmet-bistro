@@ -492,6 +492,7 @@ export default function CardapioPage() {
             brinde_nome: typeof p.brinde_nome === 'string' && p.brinde_nome.trim() ? p.brinde_nome.trim() : null,
             inicio_em: typeof p.inicio_em === 'string' ? p.inicio_em : null,
             fim_em: typeof p.fim_em === 'string' ? p.fim_em : null,
+            imagem_url: typeof p.imagem_url === 'string' && p.imagem_url.trim() ? p.imagem_url.trim() : null,
             preco: Number(p.preco),
             componentes: p.componentes.map((ids: unknown) =>
               Array.isArray(ids) ? ids.map(String) : []),

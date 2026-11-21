@@ -5,6 +5,7 @@ import {
   Check,
   Eye,
   Gift,
+  ImagePlus,
   Layers,
   LoaderCircle,
   Minus,
@@ -56,6 +57,7 @@ type Promotion = {
   fim_em?: string | null;
   fuso_horario?: string;
   status?: 'agendada' | 'ativa' | 'pausada' | 'encerrada';
+  imagem_url?: string | null;
 };
 
 type PromotionFormState = {
@@ -66,6 +68,7 @@ type PromotionFormState = {
   slotQuantities: number[];
   nome: string;
   descricao: string;
+  imagemUrl: string;
   preco: string;
   ativo: boolean;
   inicio: string;
@@ -81,6 +84,7 @@ const createEmptyForm = (tipo: PromotionType = 'compre_ganhe'): PromotionFormSta
   slotQuantities: tipo === 'combo' || tipo === 'compre_ganhe' ? [1, 1] : [1],
   nome: '',
   descricao: '',
+  imagemUrl: '',
   preco: '',
   ativo: false,
   inicio: '',
@@ -144,6 +148,7 @@ export default function PromotionsSettings({
   const [loading, setLoading] = useState(true);
   const [available, setAvailable] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [notice, setNotice] = useState('');
   const [noticeTone, setNoticeTone] = useState<'info' | 'warning' | 'success'>('info');
   const [showEditor, setShowEditor] = useState(false);
@@ -385,12 +390,43 @@ export default function PromotionsSettings({
       slotQuantities,
       nome: p.nome,
       descricao: p.descricao || '',
+      imagemUrl: p.imagem_url?.trim() || '',
       preco: String(p.preco),
       ativo: p.ativo,
       inicio: campaignLocalTime(p.inicio_em, p.fuso_horario || 'America/Fortaleza'),
       fim: campaignLocalTime(p.fim_em, p.fuso_horario || 'America/Fortaleza'),
       fuso: p.fuso_horario || 'America/Fortaleza',
     });
+  };
+
+  const uploadPromotionImage = async (file: File) => {
+    setUploadingImage(true);
+    setNotice('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch(`${apiBaseUrl}/api/cardapio-digital/assets/promotion`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: formData,
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof data.detail === 'string' ? data.detail : 'Não foi possível enviar a foto.');
+      }
+      const uploadedUrl = typeof data.url === 'string' ? data.url : typeof data.imagem_url === 'string' ? data.imagem_url : '';
+      if (!uploadedUrl) {
+        throw new Error('Resposta inválida ao enviar a foto da promoção.');
+      }
+      setForm((f) => ({ ...f, imagemUrl: uploadedUrl }));
+      setNoticeTone('success');
+      setNotice('Foto da promoção enviada.');
+    } catch (error) {
+      setNoticeTone('warning');
+      setNotice(error instanceof Error ? error.message : 'Erro ao enviar foto.');
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const submit = async () => {
@@ -495,6 +531,7 @@ export default function PromotionsSettings({
           inicio_em: campaignInstant(form.inicio, form.fuso),
           fim_em: campaignInstant(form.fim, form.fuso),
           fuso_horario: form.fuso,
+          imagem_url: form.imagemUrl.trim() || null,
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -538,6 +575,7 @@ export default function PromotionsSettings({
           inicio_em: p.inicio_em || null,
           fim_em: p.fim_em || null,
           fuso_horario: p.fuso_horario || 'America/Fortaleza',
+          imagem_url: p.imagem_url || null,
         }),
       });
       const data = await response.json().catch(() => ({}));
@@ -1218,6 +1256,51 @@ export default function PromotionsSettings({
                       placeholder="Explique o que está incluso para o cliente"
                     />
                   </label>
+
+                  <div className="space-y-2 sm:col-span-2">
+                    <span className="block text-xs font-semibold text-koma-secondary">
+                      Foto ou arte da promoção (opcional)
+                    </span>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {form.imagemUrl ? (
+                        <>
+                          <img
+                            src={form.imagemUrl}
+                            alt="Prévia da foto da promoção"
+                            className="h-14 w-20 rounded-lg border border-koma-border object-cover"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setForm((f) => ({ ...f, imagemUrl: '' }))}
+                            className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 text-xs font-semibold text-koma-secondary hover:text-koma-foreground"
+                          >
+                            <Trash2 size={14} aria-hidden="true" />
+                            Remover foto
+                          </button>
+                        </>
+                      ) : (
+                        <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 text-xs font-semibold text-koma-foreground hover:bg-koma-panel">
+                          {uploadingImage ? (
+                            <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
+                          ) : (
+                            <ImagePlus size={14} aria-hidden="true" />
+                          )}
+                          <span>{uploadingImage ? 'Enviando...' : 'Enviar foto ou arte'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={uploadingImage}
+                            className="sr-only"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = '';
+                              if (file) void uploadPromotionImage(file);
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -1338,6 +1421,13 @@ export default function PromotionsSettings({
               </div>
 
               <div className="space-y-2.5 rounded-xl border border-koma-border bg-koma-card p-3.5">
+                {form.imagemUrl && (
+                  <img
+                    src={form.imagemUrl}
+                    alt={form.nome.trim() || 'Foto da promoção'}
+                    className="h-28 w-full rounded-lg border border-koma-border object-cover"
+                  />
+                )}
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="rounded-full border border-koma-border bg-koma-panel px-2.5 py-0.5 text-xs font-semibold text-koma-secondary">
                     {getPromotionTypeLabel(form.tipo)}

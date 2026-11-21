@@ -77,6 +77,7 @@ export interface CatalogPromotion {
   quantidades?: number[];
   inicio_em?: string | null;
   fim_em?: string | null;
+  imagem_url?: string | null;
 }
 
 export interface BairroTaxa {

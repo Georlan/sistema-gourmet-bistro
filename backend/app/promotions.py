@@ -141,6 +141,7 @@ def active_promotions(config: Any, products: list[Any]) -> list[dict]:
             "id": promotion["id"],
             "nome": promotion["nome"],
             "descricao": promotion.get("descricao", ""),
+            "imagem_url": promotion.get("imagem_url"),
             "tipo": normalize_promotion_type(promotion),
             "brinde_nome": normalize_gift_name(promotion.get("brinde_nome")),
             "preco": float(money(promotion["preco"])),
