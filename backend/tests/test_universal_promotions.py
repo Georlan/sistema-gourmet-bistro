@@ -857,3 +857,76 @@ def test_promotion_imagem_url_persisted_and_exposed():
     )
     assert upd.status_code == 200, upd.text
     assert upd.json()["imagem_url"] is None
+
+
+def test_multiplas_instancias_da_mesma_promocao_aplicam_preco_por_instancia():
+    promo_bf = {
+        "id": "promo-bf",
+        "nome": "Quentinha G - Black Friday",
+        "tipo": "desconto_item",
+        "preco": 10.0,
+        "componentes": [["quentinha-g"]],
+        "quantidades": [1],
+        "ativo": True,
+    }
+    validated = _validated(
+        _item("quentinha-g", "18.00"),
+        _item("quentinha-g", "18.00"),
+    )
+    quoted = apply_promotion_to_validated(
+        validated,
+        promo_bf,
+        expected_price=Decimal("10.00"),
+        item_indices=(0, 1),
+    )
+    assert sum(it.base_price * it.quantity for it in quoted.items) == Decimal("20.00")
+
+    promo_5g_1m = {
+        "id": "promo-5g-1m",
+        "nome": "Compre 5 G ganhe 1 M",
+        "tipo": "compre_ganhe",
+        "preco": 50.0,
+        "componentes": [["quentinha-g"], ["quentinha-m"]],
+        "quantidades": [5, 1],
+        "brinde_nome": None,
+        "ativo": True,
+    }
+    two_combos = (
+        [_item("quentinha-g", "18.00") for _ in range(5)]
+        + [_item("quentinha-m", "14.00")]
+        + [_item("quentinha-g", "18.00") for _ in range(5)]
+        + [_item("quentinha-m", "14.00")]
+    )
+    quoted_combos = apply_promotion_to_validated(
+        _validated(*two_combos),
+        promo_5g_1m,
+        expected_price=Decimal("50.00"),
+        item_indices=tuple(range(12)),
+    )
+    assert sum(it.base_price * it.quantity for it in quoted_combos.items) == Decimal("100.00")
+
+    promo_brinde_1slot = {
+        "id": "promo-g-refri",
+        "nome": "Quentinha G + Refri",
+        "tipo": "compre_ganhe",
+        "preco": 20.0,
+        "componentes": [["quentinha-g"]],
+        "quantidades": [1],
+        "brinde_nome": "Refrigerante Lata",
+        "ativo": True,
+    }
+    quoted_gifts = apply_promotion_to_validated(
+        _validated(_item("quentinha-g", "18.00"), _item("quentinha-g", "18.00")),
+        promo_brinde_1slot,
+        expected_price=Decimal("20.00"),
+        item_indices=(0, 1),
+    )
+    assert sum(it.base_price * it.quantity for it in quoted_gifts.items) == Decimal("40.00")
+    assert sum(1 for it in quoted_gifts.items if "Refrigerante Lata" in (it.notes or "")) == 2
+
+    with pytest.raises(OrderValidationError):
+        apply_promotion_to_validated(
+            _validated(*two_combos[:7]),
+            promo_5g_1m,
+            item_indices=tuple(range(7)),
+        )

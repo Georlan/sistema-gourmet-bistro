@@ -366,7 +366,8 @@ export default function CardapioDigital({
       setErrorMessage("Esta promoção não é cumulativa com cupom ou cashback. Volte à sacola e retire o benefício.");
       return;
     }
-    if (cart.filter(item => item.promotionId).length > 1) {
+    const uniquePromotionIds = new Set(cart.map(item => item.promotionId).filter(Boolean));
+    if (uniquePromotionIds.size > 1) {
       setErrorMessage("Escolha apenas uma promoção por pedido.");
       return;
     }
