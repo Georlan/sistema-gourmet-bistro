@@ -7,6 +7,7 @@ import {
   Clock3,
   Gift,
   Instagram,
+  Minus,
   Moon,
   Phone,
   Plus,
@@ -104,6 +105,7 @@ export interface MenuV2ExperienceProps {
   isRefreshingOrders?: boolean;
   onClearTrackedOrder?: (orderId: string) => void;
   orderingMessage?: string;
+  onNotify?: (message: string) => void;
   activeDockTab?: "home" | "orders" | "bag" | "account";
   onDockNavigate?: (tab: "home" | "orders" | "bag" | "account") => void;
 }
@@ -154,6 +156,7 @@ export default function MenuV2Experience({
   isRefreshingOrders = false,
   onClearTrackedOrder,
   orderingMessage,
+  onNotify,
   activeDockTab = "home",
   onDockNavigate,
 }: MenuV2ExperienceProps) {
@@ -163,6 +166,11 @@ export default function MenuV2Experience({
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [isPlatformModalOpen, setIsPlatformModalOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [bannerFailed, setBannerFailed] = useState(false);
+
+  useEffect(() => {
+    setBannerFailed(false);
+  }, [activeBrand.bannerImage]);
 
   const themeTransition = useKomaThemeTransition(false);
 
@@ -261,11 +269,12 @@ export default function MenuV2Experience({
     try {
       await navigator.clipboard.writeText(url);
       setLinkCopied(true);
+      onNotify?.("Link do cardápio copiado!");
       window.setTimeout(() => setLinkCopied(false), 2000);
     } catch {
       // Ignore clipboard failure
     }
-  }, [activeBrand.name]);
+  }, [activeBrand.name, onNotify]);
 
   const activePromotions = useActivePromotions(activeBrand.promotions);
   const fulfillment = useMemo(() => getFulfillmentAvailability(activeBrand), [activeBrand]);
@@ -284,7 +293,8 @@ export default function MenuV2Experience({
     const top = effectivePopularIds.length > 0
       ? catalog.find((p) => String(p.id) === String(effectivePopularIds[0]) && p.isAvailable !== false)
       : null;
-    const source = manual || top || null;
+    const fallbackFirst = catalog.find((p) => p.isAvailable !== false) || null;
+    const source = manual || top || fallbackFirst;
     return source ? resolveCatalogDisplayProduct(catalog, source, activeBrand.id) : null;
   }, [activeBrand.products, activeBrand.id, activeBrand.manualHighlightProductId, effectivePopularIds]);
 
@@ -374,33 +384,39 @@ export default function MenuV2Experience({
   const isManualScrollRef = useRef(false);
 
   useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") return;
-    const sections = groupedCategories
-      .map((c) => ({
-        category: c.category,
-        el: document.getElementById(`km-cat-${toSafeCategoryDomId(c.category)}`),
-      }))
-      .filter((item): item is { category: string; el: HTMLElement } => Boolean(item.el));
+    if (typeof window === "undefined") return;
+    let rafId = 0;
 
-    if (sections.length === 0) return;
+    const updateActiveCategory = () => {
+      rafId = 0;
+      if (isManualScrollRef.current) return;
+      if (groupedCategories.length === 0) return;
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (isManualScrollRef.current) return;
-        const intersecting = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-
-        if (intersecting.length > 0) {
-          const cat = intersecting[0].target.getAttribute("data-category") || "";
-          setVisibleCategory(cat);
+      const triggerTop = 165;
+      let nextCategory = "";
+      for (const { category } of groupedCategories) {
+        const el = document.getElementById(`km-cat-${toSafeCategoryDomId(category)}`);
+        if (!el) continue;
+        if (el.getBoundingClientRect().top <= triggerTop) {
+          nextCategory = category;
         }
-      },
-      { rootMargin: "-90px 0px -65% 0px", threshold: 0 },
-    );
+      }
+      setVisibleCategory((prev) => (prev === nextCategory ? prev : nextCategory));
+    };
 
-    sections.forEach((s) => observer.observe(s.el));
-    return () => observer.disconnect();
+    const handleScroll = () => {
+      if (rafId) return;
+      rafId = window.requestAnimationFrame(updateActiveCategory);
+    };
+
+    updateActiveCategory();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll, { passive: true });
+    return () => {
+      if (rafId) window.cancelAnimationFrame(rafId);
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+    };
   }, [groupedCategories]);
 
   useEffect(() => {
@@ -408,8 +424,8 @@ export default function MenuV2Experience({
     const btn = catBtnRefs.current.get(visibleCategory);
     if (!track || !btn) return;
     track.scrollTo({
-      left: btn.offsetLeft - track.clientWidth / 2 + btn.clientWidth / 2,
-      behavior: "smooth",
+      left: Math.max(0, btn.offsetLeft - track.clientWidth / 2 + btn.clientWidth / 2),
+      behavior: "auto",
     });
   }, [visibleCategory]);
 
@@ -463,6 +479,8 @@ export default function MenuV2Experience({
     [activeBrand.id],
   );
 
+  const showBanner = Boolean(activeBrand.bannerImage && !bannerFailed);
+
   return (
     <MotionConfig reducedMotion="user">
     <div
@@ -473,16 +491,16 @@ export default function MenuV2Experience({
     >
       {/* Full-Bleed Integrated Organic Wave Hero */}
       <header className="km-hero-header" id="km-top">
-        <div className="km-hero-wave-wrap" id={activeBrand.hasCustomBanner ? "brand-banner-hero" : undefined}>
-          {activeBrand.bannerImage ? (
+        <div className="km-hero-wave-wrap" id={activeBrand.hasCustomBanner && showBanner ? "brand-banner-hero" : undefined}>
+          {showBanner ? (
             <>
               <img
                 src={activeBrand.bannerImage}
                 alt={`${activeBrand.name} — capa`}
                 className="km-hero-banner-bg"
                 decoding="async"
-                onError={(e) => {
-                  e.currentTarget.style.display = "none";
+                onError={() => {
+                  setBannerFailed(true);
                 }}
               />
               <div className="km-hero-banner-scrim" aria-hidden="true" />
@@ -539,6 +557,34 @@ export default function MenuV2Experience({
                 <Share2 size={18} aria-hidden="true" />
               </button>
 
+              {whatsappUrl && (
+                <a
+                  id="btn-whatsapp-header"
+                  href={whatsappUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="km-wave-btn km-desktop-only-btn"
+                  aria-label="Falar no WhatsApp"
+                  title="WhatsApp"
+                >
+                  <Phone size={16} aria-hidden="true" />
+                </a>
+              )}
+
+              {instagramUrl && (
+                <a
+                  id="btn-instagram-header"
+                  href={instagramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="km-wave-btn km-desktop-only-btn"
+                  aria-label="Instagram do restaurante"
+                  title="Instagram"
+                >
+                  <Instagram size={16} aria-hidden="true" />
+                </a>
+              )}
+
               <button
                 type="button"
                 id="btn-share-header"
@@ -580,7 +626,7 @@ export default function MenuV2Experience({
                 id="btn-cart-header"
                 className="km-wave-btn km-desktop-only-btn"
                 onClick={onCartToggle}
-                aria-label={`Abrir sacola, ${cartCount} ${cartCount === 1 ? "item" : "itens"}`}
+                aria-label={`Sua sacola, ${cartCount} ${cartCount === 1 ? "item" : "itens"}`}
                 title="Sacola"
               >
                 <MenuBagGlyph className="w-[18px] h-[18px]" />
@@ -592,8 +638,8 @@ export default function MenuV2Experience({
                 id={user ? "btn-user-profile" : "btn-login-trigger"}
                 className="km-wave-btn km-desktop-only-btn"
                 onClick={onAuthClick}
-                aria-label="Minha conta"
-                title="Conta"
+                aria-label={user ? user.name : "Minha conta"}
+                title={user ? user.name : "Conta"}
               >
                 <span className="text-xs font-bold">{user?.name ? user.name.split(" ")[0] : "Conta"}</span>
               </button>
@@ -667,7 +713,7 @@ export default function MenuV2Experience({
             </div>
 
             {(whatsappUrl || instagramUrl) && (
-              <div className="km-store-socials">
+              <nav className="km-store-socials km-mobile-only-flex" aria-label="Redes sociais do restaurante">
                 {whatsappUrl && (
                   <a
                     id="btn-whatsapp-mobile"
@@ -675,7 +721,7 @@ export default function MenuV2Experience({
                     target="_blank"
                     rel="noopener noreferrer"
                     className="km-soft-icon-btn"
-                    aria-label="WhatsApp da loja"
+                    aria-label="Falar no WhatsApp"
                   >
                     <Phone size={17} aria-hidden="true" />
                   </a>
@@ -687,28 +733,41 @@ export default function MenuV2Experience({
                     target="_blank"
                     rel="noopener noreferrer"
                     className="km-soft-icon-btn"
-                    aria-label="Instagram da loja"
+                    aria-label="Instagram do restaurante"
                   >
                     <Instagram size={17} aria-hidden="true" />
                   </a>
                 )}
-              </div>
+              </nav>
             )}
           </div>
         </div>
       </header>
 
       <main className="km-container">
-        {/* Airy Search Bar */}
-        <button
-          type="button"
-          className="km-search-bar"
-          onClick={() => setIsSearchOpen(true)}
-          aria-label="Buscar prato, bebida ou ingrediente"
-        >
-          <MenuSearchGlyph className="w-[18px] h-[18px]" />
-          <span>Buscar prato, bebida ou ingrediente...</span>
-        </button>
+        {/* Airy Inline Search Bar */}
+        <div className="km-search-bar">
+          <MenuSearchGlyph className="w-[18px] h-[18px] shrink-0" />
+          <input
+            type="search"
+            role="searchbox"
+            aria-label="Campo de busca de produtos"
+            placeholder="Buscar prato, bebida ou ingrediente..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="km-search-bar__input"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="km-search-bar__clear"
+              aria-label="Limpar busca"
+            >
+              <X size={14} aria-hidden="true" />
+            </button>
+          )}
+        </div>
 
         {/* Store Availability Notice (real closed / schedule / cash status) */}
         {activeBrand.storeStatus === "closed" && (
@@ -772,14 +831,18 @@ export default function MenuV2Experience({
                 <div className="km-order-banner__eyebrow">
                   {activeOrder.numero_pedido ? `Pedido #${activeOrder.numero_pedido}` : "Acompanhamento"}
                 </div>
-                <div className="km-order-banner__title km-tabular">
-                  {customerOrderLabel(activeState)} · {orderFulfillmentLabel(activeState.fulfillment)}
-                </div>
-                {activeOrder.total > 0 && (
-                  <div className="km-order-banner__desc km-tabular">
-                    Total: {formatMenuPrice(activeOrder.total)}
+                <h2 className="km-order-banner__title km-tabular">
+                  {customerOrderLabel(activeState)}
+                </h2>
+                {activeState.phase === "payment_pending" && (
+                  <div className="km-order-banner__desc font-semibold">
+                    Primeiro: confirme o Pix
                   </div>
                 )}
+                <div className="km-order-banner__desc km-tabular">
+                  {orderFulfillmentLabel(activeState.fulfillment)}
+                  {activeOrder.total > 0 ? ` · Total: ${formatMenuPrice(activeOrder.total)}` : ""}
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 shrink-0">
                 {activeState.phase === "payment_pending" && activeOrder.pagamento?.qr_code && onPayPixClick ? (
@@ -834,9 +897,10 @@ export default function MenuV2Experience({
                 else catBtnRefs.current.delete("");
               }}
               className={`km-cat-tab ${visibleCategory === "" ? "is-active" : ""}`}
+              aria-current={visibleCategory === "" ? "true" : undefined}
               onClick={() => handleSelectCat("")}
             >
-              Destaques
+              Início
               {visibleCategory === "" && (
                 <motion.span
                   layoutId="km-cat-active-bar"
@@ -857,6 +921,7 @@ export default function MenuV2Experience({
                     else catBtnRefs.current.delete(category);
                   }}
                   className={`km-cat-tab ${isActive ? "is-active" : ""}`}
+                  aria-current={isActive ? "true" : undefined}
                   onClick={() => handleSelectCat(category)}
                 >
                   {category}
@@ -894,8 +959,11 @@ export default function MenuV2Experience({
           </div>
         </nav>
 
-        {/* Verified Hero Showcase (#koma-art-hero-showcase) */}
-        {!searchQuery.trim() && heroProduct && (isManualHero || isVerifiedTopRanked) && (
+        {/* Hero Showcase (#koma-art-hero-showcase) */}
+        {!searchQuery.trim() && heroProduct && (() => {
+          const heroIsConfigurable = isGroupedProduct(heroProduct) || Boolean(heroProduct.modifierGroups?.length || heroProduct.modifiers?.length);
+          const heroQty = getDisplayItemCartQty(heroProduct);
+          return (
           <section
             id="koma-art-hero-showcase"
             className="km-hero-showcase"
@@ -903,7 +971,7 @@ export default function MenuV2Experience({
           >
             <div className="km-hero-showcase__copy">
               <span className="km-hero-showcase__tag">
-                {isVerifiedTopRanked ? "Nº 1 mais pedido" : "Destaque da casa"}
+                {isVerifiedTopRanked ? "Nº 1 mais pedido" : isManualHero ? "Destaque da casa" : "Em destaque"}
               </span>
               <h2 className="km-hero-showcase__title">{heroProduct.name}</h2>
               {heroProduct.description && (
@@ -911,29 +979,48 @@ export default function MenuV2Experience({
               )}
               <div className="mt-2.5 flex items-center gap-3">
                 <span className="km-price">{formatMenuPrice(heroProduct.price)}</span>
-                <button
-                  type="button"
-                  id={!isGroupedProduct(heroProduct) && !(heroProduct.modifierGroups?.length || heroProduct.modifiers?.length)
-                    ? `btn-hero-fast-add-${heroProduct.id}`
-                    : undefined}
-                  onClick={(e) => {
-                    if (isGroupedProduct(heroProduct) || heroProduct.modifierGroups?.length || heroProduct.modifiers?.length) {
-                      onSelectProduct(heroProduct);
-                    } else {
-                      onFastAdd(heroProduct as Product, e);
-                    }
-                  }}
-                  className="km-add-pill cursor-pointer"
-                >
-                  <span>
-                    {isGroupedProduct(heroProduct) || heroProduct.modifierGroups?.length || heroProduct.modifiers?.length
-                      ? "Escolher"
-                      : "Adicionar"}
-                  </span>
-                  <span className="km-add-pill__circle">
-                    <Plus size={14} aria-hidden="true" />
-                  </span>
-                </button>
+                {!heroIsConfigurable && heroQty > 0 ? (
+                  <div className="km-qty-control">
+                    <button
+                      type="button"
+                      className="km-qty-btn"
+                      onClick={(e) => onFastRemove(heroProduct as Product, e)}
+                      aria-label="Diminuir quantidade"
+                    >
+                      <Minus size={13} aria-hidden="true" />
+                    </button>
+                    <span className="km-qty-value" id={`hero-qty-${heroProduct.id}`}>{heroQty}</span>
+                    <button
+                      type="button"
+                      id={`btn-hero-fast-add-${heroProduct.id}`}
+                      className="km-qty-btn km-qty-btn--add"
+                      onClick={(e) => onFastAdd(heroProduct as Product, e)}
+                      aria-label="Aumentar quantidade"
+                    >
+                      <Plus size={13} aria-hidden="true" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    id={`btn-hero-fast-add-${heroProduct.id}`}
+                    onClick={(e) => {
+                      if (heroIsConfigurable) {
+                        onSelectProduct(heroProduct);
+                      } else {
+                        onFastAdd(heroProduct as Product, e);
+                      }
+                    }}
+                    className="km-add-pill cursor-pointer"
+                  >
+                    <span>
+                      {heroIsConfigurable ? "Escolher" : "Adicionar"}
+                    </span>
+                    <span className="km-add-pill__circle">
+                      <Plus size={14} aria-hidden="true" />
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
             <button
@@ -945,7 +1032,8 @@ export default function MenuV2Experience({
               <CatalogProductImage image={heroProduct.image} alt={heroProduct.name} priority width={96} height={96} />
             </button>
           </section>
-        )}
+          );
+        })()}
 
         {/* Curved Promo Showcase (Tag OUTSIDE image!) */}
         {activePromotions.length > 0 && (
@@ -970,6 +1058,7 @@ export default function MenuV2Experience({
                       key={promo.id}
                       type="button"
                       className="km-promo-card"
+                      aria-label={`Montar promoção ${promo.nome} por ${formatMenuPrice(promo.preco)}`}
                       onClick={() => onPromotionSelect?.(promo)}
                     >
                       <span className="km-promo-tag">
@@ -1011,18 +1100,19 @@ export default function MenuV2Experience({
               <span className="km-section__count">{highlightProducts.length} itens</span>
             </div>
 
-            <div className="km-highlight-grid">
+            <div className="km-highlight-grid" role="list">
               {highlightProducts.slice(0, 4).map((product) => (
-                <MenuProductCard
-                  key={`hl-${product.id}`}
-                  product={product}
-                  variant="highlight"
-                  priority
-                  cartQuantity={getProductCartQuantity(product.id)}
-                  onSelectProduct={onSelectProduct as any}
-                  onFastAdd={onFastAdd as any}
-                  onFastRemove={onFastRemove as any}
-                />
+                <div role="listitem" aria-label={`Abrir ${product.name}`} key={`hl-${product.id}`}>
+                  <MenuProductCard
+                    product={product}
+                    variant="highlight"
+                    priority
+                    cartQuantity={getProductCartQuantity(product.id)}
+                    onSelectProduct={onSelectProduct as any}
+                    onFastAdd={onFastAdd as any}
+                    onFastRemove={onFastRemove as any}
+                  />
+                </div>
               ))}
             </div>
           </section>
@@ -1031,7 +1121,7 @@ export default function MenuV2Experience({
         {/* Category Product Sections (#catalog-feed) */}
         <div id="catalog-feed" className="flex flex-col gap-5">
           {groupedCategories.length === 0 ? (
-            <div className="rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-8 text-center">
+            <div className="rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-8 text-center" role="status">
               {searchQuery.trim() ? (
                 <>
                   <MenuSearchGlyph className="mx-auto mb-2 h-6 w-6 text-[var(--km-muted)]" />
@@ -1059,6 +1149,7 @@ export default function MenuV2Experience({
                 className={`km-section ${catIndex >= 4 ? "km-section--deferred" : ""}`}
                 id={`km-cat-${toSafeCategoryDomId(category)}`}
                 data-category={category}
+                data-menu-category={category}
               >
                 <div className="km-section__head">
                   <h2 className="km-section__title">
@@ -1171,7 +1262,8 @@ export default function MenuV2Experience({
         cartTotal={cartTotal}
         activeOrdersCount={activeOrdersCount}
         userFirstName={user?.name ? user.name.split(" ")[0] : null}
-        hidden={Boolean(hasOpenOverlay && activeDockTab === "home")}
+        userFullName={user?.name || null}
+        hidden={Boolean(hasOpenOverlay)}
         onNavigate={(tab) => {
           if (onDockNavigate) {
             onDockNavigate(tab);

@@ -1082,6 +1082,7 @@ export default function CardapioCartDrawer({
                       return (
                         <div
                           key={prod.id}
+                          data-empty-suggestion="true"
                           className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-3"
                         >
                           <div className="flex items-center gap-3 min-w-0">

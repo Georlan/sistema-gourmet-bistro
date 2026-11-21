@@ -69,7 +69,7 @@ test('post-purchase account invitation preserves the order and pre-fills registr
   await page.locator('#btn-place-order-final').click();
   await expect(page.locator('#checkout-card')).toContainText('Pedido #888');
   await page.screenshot({ path: `/tmp/koma-account-success-${testInfo.project.name}.png` });
-  await expect(page.getByRole('button', { name: 'Acompanhar pedido', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Acompanhar pedido/ })).toBeVisible();
   await page.getByRole('button', { name: 'Criar conta com meus dados', exact: true }).click();
   await expect(page.locator('#customer-register-name')).toHaveValue('Ana Teste');
   await page.screenshot({ path: `/tmp/koma-account-register-${testInfo.project.name}.png` });
@@ -108,31 +108,32 @@ test('verified browser account restores across tabs, isolates tenants, and signs
   });
 
   await page.goto('/cardapio?restaurante_id=2&vitrine=artistic-total');
-  await expect(page.locator('#btn-user-profile')).toHaveAttribute('aria-label', 'Ana Teste');
+  await expect(page.locator('#btn-user-profile:visible, #mobile-nav-account:visible').first()).toHaveAttribute('aria-label', 'Ana Teste');
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem('koma_customer_session:2'))).not.toBeNull();
   await expect(page.evaluate(() => localStorage.getItem('koma_customer_session:2'))).resolves.toBeNull();
 
   const secondTab = await context.newPage();
   await secondTab.goto('/c/loja-2?vitrine=artistic-total');
-  await expect(secondTab.locator('#btn-user-profile')).toHaveAttribute('aria-label', 'Ana Teste');
+  await expect(secondTab.locator('#btn-user-profile:visible, #mobile-nav-account:visible').first()).toHaveAttribute('aria-label', 'Ana Teste');
   await expect.poll(() => restoredCalls).toBeGreaterThanOrEqual(2);
 
   const other = await context.newPage();
   await other.goto('/cardapio?restaurante_id=999&vitrine=artistic-total');
-  await expect(other.locator('#btn-login-trigger')).toBeVisible();
+  await expect(other.locator('#btn-login-trigger:visible, #mobile-nav-account:visible').first()).toBeVisible();
+  await expect(other.locator('#btn-login-trigger:visible, #mobile-nav-account:visible').first()).toHaveAttribute('aria-label', 'Minha conta');
   await expect(other.evaluate(() => sessionStorage.getItem('koma_customer_session:999'))).resolves.toBeNull();
 
   page.once('dialog', dialog => dialog.accept());
-  await page.locator('#btn-user-profile').click();
-  await page.locator('#user-profile-overlay').getByRole('button', { name: 'Sair', exact: true }).click();
-  await expect(page.locator('#btn-login-trigger')).toBeVisible();
-  await expect(secondTab.locator('#btn-login-trigger')).toBeVisible();
+  await page.locator('#btn-user-profile:visible, #mobile-nav-account:visible').first().click();
+  await page.locator('#user-profile-overlay').getByRole('button', { name: /Sair/ }).click();
+  await expect(page.locator('#btn-login-trigger:visible, #mobile-nav-account:visible').first()).toHaveAttribute('aria-label', 'Minha conta');
+  await expect(secondTab.locator('#btn-login-trigger:visible, #mobile-nav-account:visible').first()).toHaveAttribute('aria-label', 'Minha conta');
   await expect.poll(() => logoutCalls).toBe(1);
 
   const beforeNextTab = restoredCalls;
   const nextTab = await context.newPage();
   await nextTab.goto('/c/loja-2?vitrine=artistic-total');
-  await expect(nextTab.locator('#btn-login-trigger')).toBeVisible();
+  await expect(nextTab.locator('#btn-login-trigger:visible, #mobile-nav-account:visible').first()).toHaveAttribute('aria-label', 'Minha conta');
   await expect.poll(() => nextTab.evaluate(() => localStorage.getItem('koma_customer_signed_out:2'))).toBe('1');
   expect(restoredCalls).toBe(beforeNextTab);
 });

@@ -127,7 +127,7 @@ async function expectInsideViewport(page: Page, selector: string) {
 async function openOrderChat(page: Page) {
   if ((page.viewportSize()?.width || 0) <= 640) {
     await page.locator('#mobile-nav-orders').click();
-    await page.locator('#orders-drawer-panel').getByRole('button', { name: /Abrir mensagem|Chat & Status/ }).first().click();
+    await page.locator('#orders-drawer-panel').getByRole('button', { name: /Ler mensagem|Falar com a loja|Abrir mensagem|Chat & Status/ }).first().click();
   } else {
     await page.locator('#floating-order-chat-trigger').click();
   }

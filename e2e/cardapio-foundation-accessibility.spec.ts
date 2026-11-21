@@ -12,14 +12,12 @@ async function openMenu(page: Page, theme: 'dark' | 'light' = 'dark') {
   });
   await page.goto('/cardapio?restaurante_id=2&vitrine=artistic-total');
   await expect(page.locator('#btn-hero-fast-add-201')).toBeVisible();
-  // Public entry currently defaults to dark. Exercise the existing light CSS
-  // compatibility contract without adding a customer-facing theme switch.
-  await page.evaluate(value => {
-    document.documentElement.dataset.komaTheme = value;
-    document.documentElement.dataset.cardapioTone = value;
-  }, theme);
+  if (theme === 'light') {
+    await page.getByRole('button', { name: 'Mudar para modo claro' }).click();
+  }
+  await expect(page.locator('#koma-artistic-canvas')).toHaveAttribute('data-koma-theme', theme);
   await expect(page.locator('#btn-hero-fast-add-201')).toHaveCSS('color',
-    theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(7, 28, 23)');
+    theme === 'light' ? 'rgb(255, 255, 255)' : 'rgb(4, 21, 20)');
 }
 
 async function capture(page: Page, info: TestInfo, name: string) {
@@ -122,7 +120,7 @@ test('fechar e Voltar restauram o fundo; reabrir e editar na sacola preservam fo
   await trigger.press('Enter');
   await page.getByRole('checkbox', { name: 'Selecionar Catupiry' }).check();
   await page.locator('#btn-add-to-cart-action').click();
-  if (!await page.locator('#cart-drawer-container').isVisible()) await page.locator('#btn-cart-header').click();
+  if (!await page.locator('#cart-drawer-container').isVisible()) await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
   const edit = page.getByRole('button', { name: 'Editar montagem de Pizza Margherita Especial', exact: true });
   await edit.click();
   await expect(page.getByRole('checkbox', { name: 'Selecionar Catupiry' })).toBeChecked();

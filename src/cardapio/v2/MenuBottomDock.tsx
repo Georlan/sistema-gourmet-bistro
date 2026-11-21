@@ -17,6 +17,7 @@ interface MenuBottomDockProps {
   cartTotal: number;
   activeOrdersCount: number;
   userFirstName?: string | null;
+  userFullName?: string | null;
   hidden?: boolean;
   onNavigate: (tab: MenuDockTab) => void;
 }
@@ -36,6 +37,7 @@ export default function MenuBottomDock({
   cartTotal,
   activeOrdersCount,
   userFirstName,
+  userFullName,
   hidden = false,
   onNavigate,
 }: MenuBottomDockProps) {
@@ -75,6 +77,7 @@ export default function MenuBottomDock({
               id={tab.domId}
               className={`km-dock__btn ${isActive ? "is-active" : ""}`}
               aria-current={isActive ? "page" : undefined}
+              aria-label={tab.id === "account" ? (userFullName || "Minha conta") : undefined}
               whileTap={{ scale: 0.94 }}
               transition={KOMA_SPRING_BUBBLE}
               onClick={() => onNavigate(tab.id)}

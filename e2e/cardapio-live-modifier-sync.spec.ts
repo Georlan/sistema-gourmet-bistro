@@ -27,7 +27,7 @@ for (const variant of ['editorial', 'artistic-total']) {
     const modal=page.locator('#product-details-modal');
     await modal.getByRole('button',{name:'Adicionar uma unidade de Frango',exact:true}).click();
     await modal.getByRole('button',{name:'Adicionar uma unidade de Carne',exact:true}).click();
-    const extraBtn=modal.getByRole('button',{name:/Adicionais pagos/});
+    const extraBtn=modal.locator('button[aria-expanded]').filter({hasText:/Adicionais pagos/}).first();
     if(await extraBtn.count() > 0 && await extraBtn.getAttribute('aria-expanded') !== 'true') {
       await extraBtn.click();
     }
@@ -61,7 +61,7 @@ for (const variant of ['editorial', 'artistic-total']) {
     await expect(notes).toHaveValue('Sem cebola');
     await modal.locator('#btn-add-to-cart-action').click();
     await expect(modal).toHaveCount(0);
-    if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#btn-cart-header').click();
+    if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
     const cart=page.locator('#cart-drawer-container');
     await expect(cart.locator('#cart-items')).toContainText('2× Quentinha G');
     await expect(cart.locator('#cart-items')).toContainText('Carne');
@@ -86,7 +86,7 @@ for (const variant of ['editorial', 'artistic-total']) {
     const modal=page.locator('#product-details-modal');
     await modal.getByRole('checkbox',{name:'Selecionar Catupiry',exact:true}).check();
     await modal.locator('#btn-add-to-cart-action').click();
-    if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#btn-cart-header').click();
+    if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
     const cart=page.locator('#cart-drawer-container');
     await cart.getByRole('button',{name:'Editar montagem de Pizza Margherita Especial',exact:true}).click();
     await expect(modal).toBeVisible();
@@ -98,7 +98,7 @@ for (const variant of ['editorial', 'artistic-total']) {
     // A retirada do catálogo não apaga a sacola e não deixa uma edição órfã.
     if(await cart.isVisible())await page.locator('#btn-close-cart').click();
     await page.getByRole('button',{name:'Adicionar Vinho Tinto Sangiovese (Taça) à sacola',exact:true}).click();
-    if(!await cart.isVisible())await page.locator('#btn-cart-header').click();
+    if(!await cart.isVisible())await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
     await expect(cart.locator('#cart-items')).toContainText('Pizza Margherita Especial');
     await expect(cart.locator('#cart-items')).toContainText('Vinho Tinto');
   });

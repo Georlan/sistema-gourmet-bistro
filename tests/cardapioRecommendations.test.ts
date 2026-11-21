@@ -30,7 +30,8 @@ test('home V2 reutiliza MenuProductCard canônico e preços correntes do catálo
   const v2 = source('../src/cardapio/v2/MenuV2Experience.tsx');
   const card = source('../src/cardapio/v2/MenuProductCard.tsx');
   assert.match(v2, /<MenuProductCard/);
-  assert.match(card, /id=\{`product-card-\$\{product\.id\}`\}/);
+  assert.match(card, /`product-card-\$\{product\.id\}`/);
+  assert.match(card, /id=\{cardId\}/);
   assert.match(card, /effectivePrice/);
   assert.match(card, /onClick=\{\(\) => onSelectProduct\(product\)\}/);
 });

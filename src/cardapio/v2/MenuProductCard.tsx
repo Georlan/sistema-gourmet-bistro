@@ -71,19 +71,31 @@ const MenuProductCard = React.memo(function MenuProductCard({
 
   const isHighlight = variant === "highlight";
 
-  const fastAddId = !isGrouped && !hasModifiers ? `btn-fast-add-${product.id}` : undefined;
+  const cardId = isHighlight
+    ? `highlight-product-card-${product.id}`
+    : `product-card-${product.id}`;
+  const actionId = isHighlight
+    ? `btn-highlight-fast-add-${product.id}`
+    : `btn-fast-add-${product.id}`;
+  const qtyId = isHighlight
+    ? `highlight-qty-${product.id}`
+    : `qty-${product.id}`;
 
   return (
     <article
       className={`km-product-card ${isHighlight ? "km-product-card--highlight" : ""} ${available ? "" : "is-unavailable"}`}
-      id={`product-card-${product.id}`}
+      id={cardId}
     >
       {available && (
         <button
           type="button"
           className="km-product-card__hitbox"
           onClick={() => onSelectProduct(product)}
-          aria-label={`Ver detalhes de ${product.name} — ${displayPrice}`}
+          aria-label={
+            isHighlight
+              ? `Abrir destaque ${product.name}, ${displayPrice}`
+              : `${product.name}, ${displayPrice}, ver detalhes`
+          }
         />
       )}
 
@@ -93,7 +105,7 @@ const MenuProductCard = React.memo(function MenuProductCard({
           {available && (cartQuantity === 0 || hasModifiers) && (
             <button
               type="button"
-              id={fastAddId}
+              id={actionId}
               className="km-add-fab"
               onClick={handleQuickAdd}
               aria-label={`Adicionar ${product.name} à sacola`}
@@ -138,7 +150,7 @@ const MenuProductCard = React.memo(function MenuProductCard({
               >
                 <Minus size={13} aria-hidden="true" />
               </button>
-              <span className="km-qty-value">{cartQuantity}</span>
+              <span className="km-qty-value" id={qtyId}>{cartQuantity}</span>
               <button
                 type="button"
                 className="km-qty-btn km-qty-btn--add"
@@ -153,7 +165,7 @@ const MenuProductCard = React.memo(function MenuProductCard({
           {!isHighlight && available && (cartQuantity === 0 || hasModifiers) && (
             <button
               type="button"
-              id={fastAddId}
+              id={actionId}
               className="km-add-pill"
               style={{ marginLeft: "auto" }}
               onClick={handleQuickAdd}

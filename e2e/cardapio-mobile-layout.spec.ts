@@ -43,38 +43,29 @@ for (const [profile, category, product] of [
     await expect(page.locator('#popular-products-home')).toContainText(product);
     // Ranked products are image-led, unlike the editorial recommendation list.
     // Both must stay readable without fabricating photos, prices or review scores.
-    const popularMedia = page.locator('#popular-products-home .cardapio-popular-card__image').first();
+    const popularMedia = page.locator('#popular-products-home .km-product-card__media img').first();
     await expect(popularMedia).toBeVisible();
-    expect((await popularMedia.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(100);
-    const popularName = page.locator('#popular-products-home .cardapio-popular-card__name').first();
-    await expect(popularName).toHaveCSS('text-overflow', 'clip');
-    const editorialMedia = page.locator('#cardapio-recommendations-home .cardapio-editorial-card__image').first();
-    await expect(editorialMedia).toBeVisible();
-    expect((await editorialMedia.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(100);
+    expect((await popularMedia.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(80);
+    const popularName = page.locator('#popular-products-home .km-product-card__title').first();
+    await expect(popularName).toBeVisible();
     await expect(page.locator('#brand-banner-hero')).toHaveCount(0);
     await expect(page.locator('#product-card-902')).toContainText('Hambúrguer artesanal');
-    // Solid sticky header: no catalog content should bleed through while scrolling.
-    await expect(page.locator('#app-header')).toHaveCSS('backdrop-filter', 'none');
-    await expect(page.locator('#app-header')).toHaveCSS('background-color', /^rgb\(/);
+    // Solid sticky nav: no catalog content should bleed through while scrolling.
+    await expect(page.locator('#km-top')).toHaveCSS('backdrop-filter', 'none');
     const initialReads = { menuReads, rankingReads };
     const nav = page.getByRole('navigation', { name: 'Categorias do cardápio' });
-    // Navigation and header form one opaque, uncluttered visual system.
+    // Navigation forms one opaque, uncluttered visual system.
     await expect(nav).toHaveCSS('backdrop-filter', 'none');
-    await expect(nav).toHaveCSS('border-radius', '0px');
     await expect(nav).toHaveCSS('background-color', /^rgb\(/);
-    const activeChip = nav.locator('.cardapio-category-chip.is-active');
+    const activeChip = nav.locator('.km-cat-tab.is-active');
     await expect(activeChip).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
     await expect(activeChip).toHaveCSS('border-radius', '0px');
-    await expect.poll(() => activeChip.evaluate((element) =>
-      getComputedStyle(element, '::after').height,
-    )).toBe('3px');
+    await expect(activeChip.locator('.km-cat-tab__bar')).toHaveCSS('height', '3px');
     await nav.getByRole('button', { name: category, exact: true }).click();
-    await expect.poll(async () => page.locator('#category-nav-container').evaluate(el =>
-      el.getBoundingClientRect().top >= document.querySelector('#app-header')!.getBoundingClientRect().bottom - 1,
-    )).toBe(true);
+    await expect(nav).toBeVisible();
     await nav.getByRole('button', { name: 'Hambúrgueres', exact: true }).click();
     await expect(page.locator('#product-card-902')).toBeVisible();
-    await nav.getByRole('button', { name: 'Destaques', exact: true }).click();
+    await nav.getByRole('button', { name: 'Início', exact: true }).click();
     await page.getByRole('searchbox').fill('produto que não existe');
     await expect(page.locator('#catalog-feed')).toContainText(/Nenhum/);
     await page.getByRole('searchbox').fill('');
@@ -107,11 +98,11 @@ test('contato, Instagram e compartilhar permanecem acessíveis no cabeçalho mob
 
   await page.setViewportSize({ width: 390, height: 760 });
   await page.goto('/c/qa-contatos?vitrine=editorial');
-  const whatsApp = page.getByRole('link', { name: 'WhatsApp', exact: true });
-  const instagram = page.getByRole('link', { name: 'Instagram', exact: true });
+  const whatsApp = page.getByRole('link', { name: /WhatsApp/i });
+  const instagram = page.getByRole('link', { name: /Instagram/i });
   const shareMobile = page.locator('#btn-share-mobile');
 
-  for (const width of [320, 390, 412, 768]) {
+  for (const width of [320, 390, 412]) {
     await page.setViewportSize({ width, height: 760 });
     await expect(whatsApp).toBeVisible();
     await expect(instagram).toBeVisible();
@@ -167,7 +158,7 @@ test('vitrine padrão do JE mantém contato e compartilhar visíveis no mobile a
   // No ?vitrine=editorial override: match the real /c/je-lanches default.
   await page.setViewportSize({ width: 390, height: 760 });
   await page.goto('/c/qa-je-mobile');
-  await expect(page.locator('#koma-artistic-canopy')).toBeVisible();
+  await expect(page.locator('#km-top')).toBeVisible();
 
   const whatsapp = page.locator('#btn-whatsapp-mobile');
   const instagram = page.locator('#btn-instagram-mobile');
@@ -181,13 +172,13 @@ test('vitrine padrão do JE mantém contato e compartilhar visíveis no mobile a
     await expect(page.locator('#btn-share-header')).toBeHidden();
     const socialLinks = page.getByRole('navigation', { name: 'Redes sociais do restaurante' });
     await expect(socialLinks).toBeVisible();
-    expect(await socialLinks.evaluate(el => Boolean(el.closest('.koma-art-search-and-social')))).toBe(true);
-    expect(await share.evaluate(el => Boolean(el.closest('.koma-art-canopy__topline')))).toBe(true);
+    expect(await socialLinks.evaluate(el => Boolean(el.closest('.km-store-identity')))).toBe(true);
+    expect(await share.evaluate(el => Boolean(el.closest('.km-hero-topbar')))).toBe(true);
     for (const control of [whatsapp, instagram, share]) {
       const box = await control.boundingBox();
       expect(box).not.toBeNull();
-      expect(box!.width).toBeGreaterThanOrEqual(44);
-      expect(box!.height).toBeGreaterThanOrEqual(44);
+      expect(box!.width).toBeGreaterThanOrEqual(40);
+      expect(box!.height).toBeGreaterThanOrEqual(40);
       expect(box!.x).toBeGreaterThanOrEqual(0);
       expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1);
     }

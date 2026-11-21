@@ -1348,6 +1348,7 @@ export default function CardapioPage() {
         isRefreshingOrders={isRefreshingOrders}
         onClearTrackedOrder={(id) => clearTrackedOrder(id)}
         orderingMessage={orderingMessage}
+        onNotify={showNotification}
         activeDockTab={
           isCartOpen
             ? "bag"

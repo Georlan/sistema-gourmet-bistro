@@ -19,8 +19,8 @@ test('vitrines reutilizam foto cadastrada e recuperam imagem quebrada', async ({
     return route.fulfill({ json: {} });
   });
   await page.goto('/cardapio?restaurante_id=6&vitrine=editorial');
-  for (const selector of ['#cardapio-recommendations-home', '#cardapio-highlights-home',
-    '#cardapio-promotions-home', '#popular-products-home', '#product-card-g']) {
+  for (const selector of ['#koma-art-hero-showcase', '#cardapio-promotions-home',
+    '#popular-products-home', '#product-card-g']) {
     const img = page.locator(selector).locator('img').first();
     await img.scrollIntoViewIfNeeded();
     await expect(img).toHaveAttribute('src', photo);

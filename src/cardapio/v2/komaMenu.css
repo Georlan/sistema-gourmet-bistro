@@ -211,12 +211,17 @@
   display: inline-flex;
 }
 
+.km-mobile-only-flex {
+  display: flex;
+}
+
 @media (min-width: 768px) {
   .km-desktop-only-btn {
     display: inline-flex;
   }
 
-  .km-mobile-only-btn {
+  .km-mobile-only-btn,
+  .km-mobile-only-flex {
     display: none;
   }
 }
@@ -300,6 +305,12 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+}
+
+@media (min-width: 768px) {
+  .km-store-socials.km-mobile-only-flex {
+    display: none;
+  }
 }
 
 .km-soft-icon-btn {
@@ -420,7 +431,7 @@
   gap: 20px;
 }
 
-/* ── Airy Search Trigger ────────────────────────────────────────────────── */
+/* ── Airy Inline Search Input ───────────────────────────────────────────── */
 .km-search-bar {
   width: 100%;
   min-height: 46px;
@@ -433,14 +444,43 @@
   align-items: center;
   gap: 10px;
   font-size: 0.875rem;
-  cursor: pointer;
   text-align: left;
   box-shadow: var(--km-shadow-card);
-  transition: transform 0.15s ease;
+  transition: border-color 0.15s ease;
 }
 
-.km-search-bar:active {
-  transform: scale(0.99);
+.km-search-bar:focus-within {
+  border-color: var(--km-accent);
+  color: var(--km-ink);
+}
+
+.km-search-bar__input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  background: transparent;
+  border: 0;
+  color: var(--km-ink);
+  font-size: 0.875rem;
+  font-weight: 500;
+  outline: none;
+}
+
+.km-search-bar__input::placeholder {
+  color: var(--km-muted);
+}
+
+.km-search-bar__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--km-raised);
+  color: var(--km-ink-2);
+  cursor: pointer;
 }
 
 /* ── Sticky Category Nav (Clean Underline + Quick Sheet) ────────────────── */
@@ -1089,13 +1129,17 @@
   border: 0;
   border-radius: 999px;
   background: transparent;
-  color: var(--km-muted);
+  color: var(--km-ink-2);
   font-size: 0.6875rem;
   font-weight: 600;
   cursor: pointer;
   z-index: 1;
   -webkit-tap-highlight-color: transparent;
   transition: color 0.18s ease;
+}
+
+.km-dock__btn:not(.is-active) {
+  background-color: var(--km-shell);
 }
 
 .km-dock__btn.is-active {
@@ -1828,6 +1872,11 @@
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.38);
   cursor: pointer;
   transition: transform 0.14s ease, background-color 0.14s ease;
+}
+
+.koma-art-glass-btn:focus-visible {
+  outline: 3px solid var(--km-focus);
+  outline-offset: 2px;
 }
 
 .koma-art-glass-btn:active {

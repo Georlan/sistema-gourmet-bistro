@@ -17,7 +17,7 @@ test('public menu keeps the restaurant logo only in the header identity', () => 
 });
 
 test('brand hero remains banner-first without duplicated branding overlays', () => {
-  const heroStart = v2Source.indexOf('activeBrand.hasCustomBanner ? "brand-banner-hero"');
+  const heroStart = v2Source.indexOf('activeBrand.hasCustomBanner && showBanner ? "brand-banner-hero"');
   const heroEnd = v2Source.indexOf('className="km-store-identity"', heroStart);
 
   assert.ok(heroStart >= 0, 'brand banner hero should exist');

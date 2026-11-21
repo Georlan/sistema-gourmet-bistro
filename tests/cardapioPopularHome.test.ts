@@ -22,7 +22,8 @@ test('Mais escolhidos só renderiza quando o ranking resolve para produtos atuai
   assert.match(v2, /id="popular-products-home"/);
   assert.match(v2, />Destaques</);
   assert.match(v2, /resolveCatalogDisplayProduct\(catalog, source, activeBrand\.id\)/);
-  assert.match(card, /id=\{`product-card-\$\{product\.id\}`\}/);
+  assert.match(card, /`product-card-\$\{product\.id\}`/);
+  assert.match(card, /id=\{cardId\}/);
 });
 
 test('ranking é uma melhoria progressiva e falha sem bloquear a home', () => {

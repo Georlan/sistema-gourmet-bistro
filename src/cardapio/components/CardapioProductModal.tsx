@@ -873,7 +873,7 @@ export default function CardapioProductModal({
                           }`}
                         >
                           <span className="min-w-0 flex-1 text-left text-sm font-bold text-[var(--km-ink)]">Sem salada</span>
-                          <span className="flex shrink-0 items-center gap-2.5">
+                          <span className="relative flex h-6 w-6 shrink-0 items-center justify-center">
                             <input
                               type="checkbox"
                               aria-label="Sem salada"
@@ -883,10 +883,10 @@ export default function CardapioProductModal({
                                 setSelectedOptions(current => ({ ...current, [modifier.id]: [] }));
                                 setFeedback("");
                               }}
-                              className="sr-only"
+                              className="peer absolute inset-0 z-10 m-0 h-full w-full cursor-pointer opacity-0"
                             />
                             <span
-                              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
+                              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--km-focus)] peer-focus-visible:ring-offset-1 ${
                                 selections.length === 0
                                   ? "border-[var(--km-accent)] bg-[var(--km-accent)] text-[var(--km-on-accent)]"
                                   : "border-[var(--km-line-strong)] bg-transparent"
@@ -953,10 +953,10 @@ export default function CardapioProductModal({
                                   checked={selected}
                                   disabled={!selected && !canIncrement}
                                   onChange={() => handleOptionQuantity(modifier, option, selected ? -1 : 1)}
-                                  className="sr-only"
+                                  className="peer absolute inset-0 z-10 m-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
                                 />
                                 <span
-                                  className={`flex h-6 w-6 items-center justify-center border-2 transition-colors ${
+                                  className={`flex h-6 w-6 items-center justify-center border-2 transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--km-focus)] peer-focus-visible:ring-offset-1 ${
                                     max === 1 ? "rounded-full" : "rounded-lg"
                                   } ${
                                     selected

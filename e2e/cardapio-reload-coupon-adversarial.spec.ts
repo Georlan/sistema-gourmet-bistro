@@ -226,7 +226,7 @@ test.describe('B3 — retomada de contato, fluxo sequencial de cupom e resiliên
     await expect(cart).toContainText(/R\$\s*18,00/);
 
     // Remove e testa erro HTTP 422 com detail específico do backend
-    await cart.getByRole('button', { name: 'Cupom', exact: true }).click();
+    await cart.getByRole('button', { name: 'Descontos', exact: true }).click();
     await cart.getByRole('button', { name: 'Remover cupom' }).click();
     await cart.getByLabel('Código do cupom').fill('EXPIRADO');
     await cart.getByRole('button', { name: 'Aplicar', exact: true }).click();
@@ -338,7 +338,7 @@ test.describe('B3 — retomada de contato, fluxo sequencial de cupom e resiliên
     await page.locator('#btn-add-to-cart-action').click();
 
     const cart = await openCartDrawer(page);
-    for (const step of ['Itens', 'Receber', 'Cupom', 'Pagamento', 'Contato']) {
+    for (const step of ['Itens', 'Receber', 'Descontos', 'Pagamento', 'Contato']) {
       await cart.getByRole('button', { name: step, exact: true }).click();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       expect(await cart.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
