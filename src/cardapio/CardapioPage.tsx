@@ -113,6 +113,7 @@ import {
   restoreCartDraftFromCatalog,
   saveCartDraft,
 } from "./cartDraftStorage";
+import { isLocalOpenStoreSimulation, isLocalOrderSimulation } from "./devSimulation";
 import { trackAnalyticsEvent } from "../analytics";
 
 const KOMA_PRIMARY = "#00b894";
@@ -120,16 +121,15 @@ const KOMA_BACKGROUND = "#090a0f";
 // A consulta pública de CEP é apenas conveniência progressiva; o checkout
 // permanece totalmente utilizável com preenchimento manual.
 
-function isLocalSimulationHost(): boolean {
-  if (typeof window === "undefined") return false;
-  const host = window.location.hostname;
-  return host === "localhost" || host === "127.0.0.1";
-}
-
-function isLocalSimulationOpenMode(): boolean {
-  if (!isLocalSimulationHost()) return false;
-  const params = new URLSearchParams(window.location.search);
-  return params.get("simular") !== "fechado";
+function resolveConfiguredColor(value: unknown, fallback: string): string {
+  const raw = String(value || "").trim().replace(/^#/, "");
+  if (/^[0-9a-f]{3}$/i.test(raw)) {
+    return `#${raw[0]}${raw[0]}${raw[1]}${raw[1]}${raw[2]}${raw[2]}`.toLowerCase();
+  }
+  if (/^[0-9a-f]{6}$/i.test(raw)) {
+    return `#${raw.toLowerCase()}`;
+  }
+  return fallback;
 }
 
 function parseStructuredValue(value: unknown): unknown {
@@ -475,8 +475,10 @@ export default function CardapioPage() {
       }
 
       const rawAcceptingOrders = restaurant.aceitando_pedidos === true;
-      const localSimulationUnlock = isLocalSimulationOpenMode();
+      const localSimulationUnlock = isLocalOpenStoreSimulation();
       const acceptingOrders = localSimulationUnlock ? true : rawAcceptingOrders;
+      const primaryColor = resolveConfiguredColor(restaurant.cor_primaria, KOMA_PRIMARY);
+      const backgroundColor = resolveConfiguredColor(restaurant.cor_fundo, KOMA_BACKGROUND);
       const brand: BrandConfig = {
         id: String(restaurant.id),
         slug: String(restaurant.slug || ""),
@@ -488,12 +490,12 @@ export default function CardapioPage() {
         phone: whatsappNumber,
         address: String(restaurant.endereco || ""),
         colors: {
-          primary: KOMA_PRIMARY,
-          background: KOMA_BACKGROUND,
+          primary: primaryColor,
+          background: backgroundColor,
           secondary: "#121420",
           text: "#ffffff",
           card: "#121420",
-          accent: KOMA_PRIMARY,
+          accent: primaryColor,
         },
         categories: payload.categorias.map((category) => String(category.nome || "")).filter(Boolean),
         products,
@@ -1393,7 +1395,7 @@ export default function CardapioPage() {
         )}
       </AnimatePresence>
 
-      {isLocalSimulationOpenMode() && activeBrand.availabilitySource === "local_simulation" && !hasOpenOverlay && (
+      {isLocalOpenStoreSimulation() && activeBrand.availabilitySource === "local_simulation" && !hasOpenOverlay && (
         <div className="km-sim-pill" aria-label="Modo simulação local ativo">
           <span className="km-sim-pill__dot" aria-hidden="true" />
           <span>Simulação local</span>
@@ -2004,7 +2006,7 @@ export default function CardapioPage() {
           <CardapioDigital
             activeBrand={activeBrand}
             cart={cart}
-            isLocalSimulation={isLocalSimulationHost()}
+            isLocalSimulation={isLocalOrderSimulation()}
             deliveryFee={checkoutRequest.deliveryFee}
             deliveryMethod={checkoutRequest.deliveryMethod}
             address={checkoutRequest.address}

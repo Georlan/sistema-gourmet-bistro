@@ -29,6 +29,9 @@ for (const sample of SAMPLE_BRAND_COLORS) {
       const accentTextOnCard = getContrastRatio(vars['--km-accent-text'], vars['--km-card']);
       const ctaDarkContrast = getContrastRatio(vars['--km-cta-dark-ink'], vars['--km-cta-dark']);
       const headerContrast = getContrastRatio(vars['--km-header-ink'], vars['--km-header-deep']);
+      const alertTextContrast = getContrastRatio(vars['--km-alert-text'], vars['--km-card']);
+      const onAlertContrast = getContrastRatio(vars['--km-on-alert'], vars['--km-alert-dot']);
+      const badgePastelContrast = getContrastRatio(vars['--km-badge-pastel-ink'], vars['--km-badge-pastel-bg']);
 
       assert.ok(inkOnCard >= 7.0, `${sample.name} (${mode}) ink/card contrast ${inkOnCard.toFixed(2)} < 7.0`);
       assert.ok(mutedOnCard >= 4.5, `${sample.name} (${mode}) muted/card contrast ${mutedOnCard.toFixed(2)} < 4.5`);
@@ -36,7 +39,11 @@ for (const sample of SAMPLE_BRAND_COLORS) {
       assert.ok(accentTextOnCard >= 4.5, `${sample.name} (${mode}) accentText/card contrast ${accentTextOnCard.toFixed(2)} < 4.5`);
       assert.ok(ctaDarkContrast >= 7.0, `${sample.name} (${mode}) ctaDark contrast ${ctaDarkContrast.toFixed(2)} < 7.0`);
       assert.ok(headerContrast >= 7.0, `${sample.name} (${mode}) header contrast ${headerContrast.toFixed(2)} < 7.0`);
+      assert.ok(alertTextContrast >= 4.5, `${sample.name} (${mode}) alertText/card contrast ${alertTextContrast.toFixed(2)} < 4.5`);
+      assert.ok(onAlertContrast >= 4.5, `${sample.name} (${mode}) onAlert/alertDot contrast ${onAlertContrast.toFixed(2)} < 4.5`);
+      assert.ok(badgePastelContrast >= 4.5, `${sample.name} (${mode}) badgePastel contrast ${badgePastelContrast.toFixed(2)} < 4.5`);
       assert.ok(Boolean(vars['--km-surface-soft']), `${sample.name} (${mode}) missing --km-surface-soft`);
+      assert.ok(Boolean(vars['--km-art-mid']) && Boolean(vars['--km-art-ink']), `${sample.name} (${mode}) missing art tokens`);
 
       const pageLum = getRelativeLuminance(vars['--km-page']);
       if (mode === 'light') {
@@ -54,5 +61,12 @@ test('komaMenuTheme shifts hue when brand color changes from green to pink', () 
 
   assert.notEqual(green.vars['--km-card'], pink.vars['--km-card']);
   assert.notEqual(green.vars['--km-accent'], pink.vars['--km-accent']);
+  assert.notEqual(green.vars['--km-alert-dot'], pink.vars['--km-alert-dot']);
   assert.ok(Math.abs(green.hue - pink.hue) > 60);
+});
+
+test('komaMenuTheme falls back safely on invalid/short/empty hex inputs', () => {
+  assert.equal(buildMenuThemeTokens('', 'dark').brandHex, KOMA_DEFAULT_BRAND_HEX);
+  assert.equal(buildMenuThemeTokens('not-a-color', 'light').brandHex, KOMA_DEFAULT_BRAND_HEX);
+  assert.equal(buildMenuThemeTokens('f0a', 'dark').brandHex, '#ff00aa');
 });

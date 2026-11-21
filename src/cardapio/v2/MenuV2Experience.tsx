@@ -20,6 +20,7 @@ import {
   KOMA_DEFAULT_BRAND_HEX,
   type MenuThemeMode,
 } from "../theme/komaMenuTheme";
+import { readDevBrandColorOverride } from "../devSimulation";
 import { toSafeCategoryDomId } from "../categoryDomId";
 import { KOMA_WORDMARK_ON_DARK_SRC } from "../../brand/komaBrand";
 import { useKomaThemeTransition } from "../../components/shared/useKomaThemeTransition";
@@ -46,15 +47,6 @@ function readInitialThemeMode(): MenuThemeMode {
   const stored = window.localStorage.getItem("koma_menu_theme_mode");
   if (stored === "light" || stored === "dark") return stored;
   return "dark";
-}
-
-function readPreviewBrandColor(fallback?: string): string {
-  if (typeof window !== "undefined") {
-    const params = new URLSearchParams(window.location.search);
-    const paramColor = params.get("cor");
-    if (paramColor) return paramColor.startsWith("#") ? paramColor : `#${paramColor}`;
-  }
-  return fallback || KOMA_DEFAULT_BRAND_HEX;
 }
 
 export default function MenuV2Experience({
@@ -84,20 +76,15 @@ export default function MenuV2Experience({
   onDockNavigate,
 }: CardapioArtisticExperienceProps) {
   const [themeMode, setThemeMode] = useState<MenuThemeMode>(readInitialThemeMode);
-  const [previewColor, setPreviewColor] = useState<string>(() =>
-    readPreviewBrandColor(activeBrand.colors?.primary),
-  );
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [isPlatformModalOpen, setIsPlatformModalOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
 
   const themeTransition = useKomaThemeTransition(false);
-  const isLocalhostDev =
-    typeof window !== "undefined" &&
-    (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
 
-  const brandColorHex = previewColor || readPreviewBrandColor(activeBrand.colors?.primary);
+  const brandColorHex =
+    readDevBrandColorOverride() || activeBrand.colors?.primary || KOMA_DEFAULT_BRAND_HEX;
   const themeTokens = useMemo(
     () => buildMenuThemeTokens(brandColorHex, themeMode),
     [brandColorHex, themeMode],
@@ -335,35 +322,6 @@ export default function MenuV2Experience({
             </button>
 
             <div className="km-hero-actions">
-              {isLocalhostDev && (
-                <div
-                  className="inline-flex items-center gap-1 rounded-full border border-white/20 bg-black/45 px-1.5 py-1"
-                  role="group"
-                  aria-label="Testar cor da loja"
-                >
-                  {[
-                    { label: "Verde KÔMA", hex: "#05c49d" },
-                    { label: "Rosa", hex: "#ec4899" },
-                    { label: "Azul", hex: "#2563eb" },
-                  ].map((swatch) => {
-                    const isActive = brandColorHex.toLowerCase() === swatch.hex.toLowerCase();
-                    return (
-                      <button
-                        key={swatch.hex}
-                        type="button"
-                        onClick={() => setPreviewColor(swatch.hex)}
-                        aria-label={`Testar tema ${swatch.label}`}
-                        title={`Testar cor: ${swatch.label}`}
-                        data-testid={`dev-color-${swatch.label.toLowerCase().replace(/\s+/g, "-")}`}
-                        className={`h-4 w-4 rounded-full transition-transform cursor-pointer ${
-                          isActive ? "scale-110 ring-2 ring-white" : "opacity-80 hover:opacity-100"
-                        }`}
-                        style={{ backgroundColor: swatch.hex }}
-                      />
-                    );
-                  })}
-                </div>
-              )}
               <button
                 type="button"
                 className="km-wave-btn"

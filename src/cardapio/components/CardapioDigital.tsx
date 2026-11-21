@@ -51,6 +51,7 @@ import {
   KomaPickupAsset,
 } from "../v2/KomaVisualAssets";
 import { getCheckoutPaymentMethods, getPaymentSelectionError, PAYMENT_LABELS } from "../paymentMethods";
+import { isLocalOrderSimulation } from "../devSimulation";
 import {
   buildOrderSubmissionFingerprint,
   normalizePendingOrderSubmissions,
@@ -448,8 +449,7 @@ export default function CardapioDigital({
 
     const isLocalSimulation =
       isLocalSimulationProp
-      ?? (typeof window !== "undefined"
-        && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"));
+      ?? isLocalOrderSimulation();
 
     if (isLocalSimulation) {
       isSubmittingRef.current = true;
