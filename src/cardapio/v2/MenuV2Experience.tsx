@@ -24,7 +24,6 @@ import {
   LOCAL_PRODUCT_PLACEHOLDER,
   Product,
 } from "../CardapioTypes";
-import type { CartItem } from "../components/CardapioCartDrawer";
 import type { CustomerProfile } from "../customerSession";
 import { DeliveryReceiptCode } from "../components/DeliveryReceiptCode";
 import { API_BASE_URL } from "../../config/api";
@@ -86,7 +85,6 @@ export interface MenuV2ExperienceProps {
   onCartToggle: () => void;
   cartCount: number;
   cartTotal?: number;
-  cart?: CartItem[];
   onStoreInfoClick: () => void;
   onOrdersClick?: () => void;
   activeOrdersCount?: number;

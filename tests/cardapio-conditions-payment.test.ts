@@ -136,7 +136,7 @@ test('troco é mostrado como valor entregue, somente para dinheiro', () => {
 test('consulta fica antes dos produtos e usa a loja ativa', () => {
   const page = readFileSync(new URL('../src/cardapio/CardapioPage.tsx', import.meta.url), 'utf8');
   const v2 = readFileSync(new URL('../src/cardapio/v2/MenuV2Experience.tsx', import.meta.url), 'utf8');
-  assert.match(page, /onStoreInfoClick=\{\(\) => setIsStoreInfoOpen\(true\)\}/);
+  assert.match(page, /onStoreInfoClick=\{handleOpenStoreInfo\}/);
   assert.match(v2, /onClick=\{onStoreInfoClick\}/);
   assert.ok(v2.indexOf('onClick={onStoreInfoClick}') < v2.indexOf('id="catalog-feed"'));
 });

@@ -31,7 +31,7 @@ const TABS: Array<{ id: MenuDockTab; label: string; domId: string }> = [
   { id: "account", label: "Conta", domId: "mobile-nav-account" },
 ];
 
-export default function MenuBottomDock({
+function MenuBottomDock({
   activeTab,
   cartCount,
   cartTotal,
@@ -130,3 +130,5 @@ export default function MenuBottomDock({
     </div>
   );
 }
+
+export default React.memo(MenuBottomDock);

@@ -401,25 +401,6 @@
   transform: scale(0.96);
 }
 
-/* Optional store banner strip */
-.km-store-banner-wrap {
-  width: 100%;
-  margin-top: 4px;
-  border-radius: 22px;
-  overflow: hidden;
-  aspect-ratio: 16 / 5.6;
-  max-height: 156px;
-  box-shadow: var(--km-shadow-card);
-  background: var(--km-card);
-}
-
-.km-store-banner-wrap img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
 /* ── Main Container ─────────────────────────────────────────────────────── */
 .km-container {
   width: 100%;
@@ -1277,8 +1258,11 @@
 }
 
 @media (min-width: 768px) {
+  /* Alinhada à esquerda para nunca disputar o canto direito com o chat flutuante do pedido. */
   .km-bag-fab-wrap {
     bottom: 20px;
+    justify-content: flex-start;
+    padding-left: 24px;
   }
 }
 
@@ -1307,6 +1291,24 @@
   color: var(--km-ink, #f7faf8);
   border: 1px solid var(--km-line, rgba(255, 255, 255, 0.12));
   box-shadow: var(--km-shadow-card, 0 10px 24px -10px rgba(0, 0, 0, 0.42));
+  animation: km-toast-in 0.2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes km-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .km-toast {
+    animation: none;
+  }
 }
 
 .km-toast__icon {
@@ -1357,7 +1359,8 @@
 .km-sim-pill {
   position: fixed;
   left: 12px;
-  bottom: calc(80px + env(safe-area-inset-bottom));
+  top: calc(10px + env(safe-area-inset-top));
+  bottom: auto;
   z-index: 48;
   display: inline-flex;
   align-items: center;
@@ -1380,12 +1383,6 @@
   height: 6px;
   border-radius: 50%;
   background: var(--km-accent, #05c49d);
-}
-
-@media (min-width: 768px) {
-  .km-sim-pill {
-    bottom: 14px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1690,17 +1687,6 @@
   gap: 12px;
 }
 
-.km-platform-modal__item-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  background: var(--km-accent-soft);
-  color: var(--km-accent-text);
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-}
-
 .km-platform-modal__item-title {
   display: block;
   font-size: 0.875rem;
@@ -1966,7 +1952,6 @@
   display: block;
 }
 
-.km-action-primary,
 .koma-action-primary {
   background: var(--km-accent) !important;
   background-image: none !important;
