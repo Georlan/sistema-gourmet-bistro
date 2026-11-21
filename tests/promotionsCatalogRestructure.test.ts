@@ -17,6 +17,7 @@ import {
   buildBuyGetSuggestion,
   buildComboSuggestion,
   buildItemDiscountSuggestion,
+  buildMultipartUploadHeaders,
   buildSchedulePreset,
   buildSimpleGiftSuggestion,
   calculatePromotionRegularTotal,
@@ -324,4 +325,28 @@ test('promoções multi-quantidade (Compre N e ganhe M) calculam preço, nome e 
     ),
     'Quentinha G + Brinde: Sobremesa do dia',
   );
+});
+
+test('upload de imagem da promoção remove Content-Type e preserva Authorization', () => {
+  const sanitized = buildMultipartUploadHeaders({
+    Authorization: 'Bearer token-123',
+    'Content-Type': 'application/json',
+    'X-Custom': 'keep',
+  });
+  assert.deepEqual(sanitized, {
+    Authorization: 'Bearer token-123',
+    'X-Custom': 'keep',
+  });
+  assert.equal('Content-Type' in sanitized, false);
+
+  const sanitizedLower = buildMultipartUploadHeaders({
+    authorization: 'Bearer token-abc',
+    'content-type': 'application/json; charset=utf-8',
+  });
+  assert.deepEqual(sanitizedLower, {
+    authorization: 'Bearer token-abc',
+  });
+
+  const source = readFileSync('src/components/cardapio/PromotionsSettings.tsx', 'utf8');
+  assert.match(source, /buildMultipartUploadHeaders\(authHeaders\)/);
 });
