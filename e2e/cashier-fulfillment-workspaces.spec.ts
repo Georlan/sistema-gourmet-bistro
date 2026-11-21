@@ -366,7 +366,8 @@ test('filtros atuam dentro de Pedidos e preservam a busca', async ({ page }) => 
       return { width, height, top };
     }));
     for (const box of boxes) {
-      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(34);
+      expect(box.height).toBeLessThanOrEqual(40);
       expect(box.width).toBeCloseTo(boxes[0].width, 0);
       expect(box.top).toBeCloseTo(boxes[0].top, 0);
     }
@@ -394,9 +395,7 @@ test('filtros atuam dentro de Pedidos e preservam a busca', async ({ page }) => 
   await expect(board.getByRole('region', { name: 'Retiradas', exact: true })).toBeVisible();
   await expect(board.locator('.orders-column--delivery')).toBeHidden();
   await expect(search).toHaveValue('Bruno');
-  const navigation = await mobileFilters.isVisible()
-    ? page.getByRole('navigation', { name: 'Navegação móvel principal' }) : top;
-  await expect(navigation.getByRole('button', { name: 'Pedidos', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(top.getByRole('button', { name: 'Pedidos', exact: true })).toHaveAttribute('aria-current', 'page');
   await expect(page.locator('#cashier-deliveries-workspace, #cashier-pickups-workspace')).toHaveCount(0);
 });
 

@@ -1039,7 +1039,7 @@ export function CaixaOrdersWorkspaceView({
               aria-label="Aceitar pedidos online automaticamente"
             />
             <span className="orders-switch" aria-hidden="true"><span /></span>
-            <span className="orders-auto-accept__label">Aceite automático<small>{autoAccept ? 'Ativo' : 'Manual'}</small></span>
+            <span className="orders-auto-accept__label"><span>Aceite<span className="orders-auto-accept__suffix"> automático</span></span><small>{autoAccept ? 'Ativo' : 'Manual'}</small></span>
           </label>
           {/* Bell button — opens floating drawer */}
           <button
