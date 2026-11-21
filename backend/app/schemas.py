@@ -507,6 +507,9 @@ class VendaDiretaCreate(BaseModel):
     origem: Optional[Literal["smartpos"]] = None
     idempotency_key: Optional[str] = Field(default=None, min_length=8, max_length=128)
     onboarding_test: bool = False
+    promocao_id: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    promocao_item_indices: Optional[List[int]] = Field(default=None, min_length=1, max_length=25)
+    promocao_preco_esperado: Optional[Decimal] = Field(default=None, ge=0, le=100000, max_digits=8, decimal_places=2)
     itens: List[VendaDiretaItemSchema] = Field(min_length=1)
 
 class LancamentoCreate(BaseModel):
