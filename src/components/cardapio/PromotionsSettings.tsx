@@ -21,6 +21,7 @@ import {
   buildBuyGetSuggestion,
   buildComboSuggestion,
   buildItemDiscountSuggestion,
+  buildMultipartUploadHeaders,
   buildSchedulePreset,
   buildSimpleGiftSuggestion,
   calculatePromotionRegularTotal,
@@ -407,7 +408,7 @@ export default function PromotionsSettings({
       formData.append('file', file);
       const response = await fetch(`${apiBaseUrl}/api/cardapio-digital/assets/promotion`, {
         method: 'POST',
-        headers: authHeaders,
+        headers: buildMultipartUploadHeaders(authHeaders),
         body: formData,
       });
       const data = await response.json().catch(() => ({}));
