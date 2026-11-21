@@ -1272,7 +1272,7 @@ export default function CashierCatalog({
                   placeholder={isMarmitaria ? 'Ex: Pudim ou refrigerante' : 'Ex: Cheeseburger Duplo'}
                   value={prodFormNome}
                   onChange={(e) => setProdFormNome(e.target.value)}
-                  className="min-h-11 w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-sm text-koma-foreground focus:outline-none focus:border-koma-border-strong"
+                  className="min-h-11 w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-koma-border-strong"
                 />
               </div>
 
@@ -1350,7 +1350,7 @@ export default function CashierCatalog({
                   value={prodFormDescricao}
                   onChange={(e) => setProdFormDescricao(e.target.value)}
                   rows={2}
-                  className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-sm text-koma-foreground focus:outline-none focus:border-koma-border-strong"
+                  className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-koma-border-strong"
                 />
                 <p className="text-xs text-koma-muted">
                   {isMarmitaria ? 'Descreva o produto que o cliente vai receber.' : 'Use uma frase curta com os principais ingredientes. Ela também ajuda na busca.'}

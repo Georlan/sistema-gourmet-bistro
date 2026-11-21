@@ -530,6 +530,7 @@ export function CardapioProdutosTab({
         role="switch"
         aria-checked={isAvailable}
         aria-label={`${isAvailable ? 'Pausar' : 'Ativar'} ${product.nome}`}
+        title={isAvailable ? 'Pausar venda' : 'Voltar a vender'}
         disabled={isBusy}
         onClick={() => void handleProductAvailability(product)}
         className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl border border-koma-border bg-koma-panel px-2.5 text-xs font-semibold text-koma-foreground transition hover:border-koma-border-strong disabled:opacity-50"
@@ -891,7 +892,7 @@ export function CardapioProdutosTab({
             <div
               className="flex flex-wrap items-center gap-1 rounded-xl border border-koma-border bg-koma-canvas p-1"
               role="group"
-              aria-label="Filtrar produtos"
+              aria-label="Filtrar por disponibilidade"
             >
               {statusFilterOptions.map((option) => {
                 const count = option.value === 'TODOS'
@@ -1208,7 +1209,7 @@ export function CardapioProdutosTab({
               className={
                 viewMode === 'list'
                   ? 'flex flex-col gap-2'
-                  : 'grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-3'
+                  : 'grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'
               }
             >
               {displayProducts.map((product) => {
