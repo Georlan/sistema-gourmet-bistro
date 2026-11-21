@@ -4,15 +4,16 @@ import test from 'node:test';
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const cart = source('../src/cardapio/components/CardapioCartDrawer.tsx');
-const page = source('../src/cardapio/CardapioPage.tsx');
-const css = source('../src/cardapio/cardapioPublic.css');
+const menuV2 = source('../src/cardapio/v2/MenuV2Experience.tsx');
+const css = source('../src/cardapio/v2/komaMenu.css');
 const ordersDrawer = source('../src/cardapio/components/CardapioOrdersDrawer.tsx');
 
-test('sacola fica acima do cabeçalho sem cobrir identificação ou checkout', () => {
-  const headerLayer = Number(css.match(/\.cardapio-public-header\s*\{[^}]*z-index:\s*(\d+)/)?.[1]);
+test('sacola fica acima da navegação sticky sem cobrir identificação ou checkout', () => {
+  const stickyNavLayer = Number(css.match(/\.km-sticky-nav\s*\{[^}]*z-index:\s*(\d+)/)?.[1]);
+  const dockLayer = Number(css.match(/\.km-dock-wrap\s*\{[^}]*z-index:\s*(\d+)/)?.[1]);
   const cartLayer = Number(cart.match(/className="fixed inset-0 z-\[(\d+)\]/)?.[1]);
-  assert.ok(Number.isFinite(headerLayer) && Number.isFinite(cartLayer));
-  assert.ok(cartLayer > headerLayer);
+  assert.ok(Number.isFinite(stickyNavLayer) && Number.isFinite(dockLayer) && Number.isFinite(cartLayer));
+  assert.ok(cartLayer > stickyNavLayer, 'sacola deve ficar acima das categorias sticky');
 
   for (const overlay of ['CardapioAuthModal', 'CardapioDigital']) {
     const content = source(`../src/cardapio/components/${overlay}.tsx`);
@@ -21,11 +22,12 @@ test('sacola fica acima do cabeçalho sem cobrir identificação ou checkout', (
       : Number(content.match(/className="fixed inset-0 z-(\d+)/)?.[1]);
     if (overlay === 'CardapioAuthModal') assert.match(content, /createPortal\(/);
     assert.ok(cartLayer < layer, `${overlay} deve ficar acima da sacola`);
+    assert.ok(dockLayer < layer, `${overlay} deve ficar acima da dock`);
   }
 });
 
 test('sacola móvel acompanha a altura disponível e mantém rolagem interna flexível', () => {
-  assert.match(css, /@media \(max-width: 639px\)\s*\{\s*#cart-drawer-container\s*\{[^}]*max-height: 94vh;\s*max-height: 94dvh;/);
+  assert.match(cart, /max-h-\[calc\(100dvh-100px\)\]/);
   assert.equal((cart.match(/min-h-0[^"\n]*overflow-y-auto/g) ?? []).length, 2);
   assert.match(cart, /className="flex shrink-0 items-center justify-between/);
   assert.match(cart, /className="shrink-0 border-t/);
@@ -37,20 +39,18 @@ test('fechar continua sendo um botão nomeado com alvo de toque de 44px', () => 
 });
 
 test('aviso de item adicionado não encobre ações da sacola ou da confirmação', () => {
+  const page = source('../src/cardapio/CardapioPage.tsx');
   assert.match(page, /\{notice && !isCartOpen && !isCheckoutOpen && \(/);
   assert.match(page, /onClose=\{\(\) => \{ setIsCartOpen\(false\); setCouponToApply\(""\); \}\}/);
 });
 
 test('gatilhos da sacola priorizam toque mobile e não disputam camada com o chat', () => {
-  assert.match(page, /cartCount > 0 && !hasOpenOverlay/);
-  assert.match(page, /bottom-\[calc\(1\.25rem\+env\(safe-area-inset-bottom,0px\)\)\]/);
-  assert.match(page, /z-\[44\]/);
-  assert.match(page, /touch-manipulation select-none/);
-  assert.match(page, /onClick=\{openCart\}/);
+  assert.match(menuV2, /!hasOpenOverlay && activeDockTab === "home" && cartCount > 0/);
+  assert.match(css, /\.km-bag-fab-wrap\s*\{[^}]*z-index:\s*44;/);
   assert.match(ordersDrawer, /bottom-\[calc\(6\.75rem\+env\(safe-area-inset-bottom,0px\)\)\]/);
   assert.match(ordersDrawer, /fixed right-4 z-40/);
 });
 
-test('sacola do cabeçalho tem alvo de toque de 44px no celular', () => {
-  assert.match(css, /@media \(max-width: 640px\)[\s\S]*\.cardapio-public-icon-button\.is-cart\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;[^}]*touch-action:\s*manipulation;/);
+test('ações sociais/táteis do cabeçalho mantêm alvo mínimo de 44px no celular', () => {
+  assert.match(css, /\.km-soft-icon-btn\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;/);
 });

@@ -33,8 +33,8 @@ test('pacote é apresentado como um só na sacola e serializado como dois produt
 });
 
 test('mais escolhidos têm prioridade sem remover a vitrine promocional', () => {
-  const source = readFileSync(new URL('../src/cardapio/components/CardapioOrderConditions.tsx', import.meta.url), 'utf8');
-  assert.ok(source.indexOf('<PopularProductsPreview') < source.indexOf('<CardapioPromotions'));
+  const v2 = readFileSync(new URL('../src/cardapio/v2/MenuV2Experience.tsx', import.meta.url), 'utf8');
+  assert.ok(v2.indexOf('id="koma-art-hero-showcase"') < v2.indexOf('id="cardapio-promotions-home"'));
   const page = readFileSync(new URL('../src/cardapio/CardapioPage.tsx', import.meta.url), 'utf8');
   assert.match(page, /<CardapioPromotionWizard/);
   assert.match(page, /promotionParts: parts/);

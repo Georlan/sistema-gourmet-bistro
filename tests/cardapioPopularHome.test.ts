@@ -5,29 +5,30 @@ import test from 'node:test';
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 test('home consome ranking público cacheado e mantém catálogo como fonte de verdade', () => {
-  const conditions = source('../src/cardapio/components/CardapioOrderConditions.tsx');
+  const v2 = source('../src/cardapio/v2/MenuV2Experience.tsx');
   const client = source('../src/cardapio/popularProductsClient.ts');
-  assert.match(conditions, /fetchPopularProducts\(/);
+  assert.match(v2, /fetchPopularProducts\(/);
   assert.match(client, /\/api\/cardapio-digital\/populares\?/);
-  assert.match(conditions, /brand\.products\.map/);
-  assert.match(conditions, /ids\.map\(\(id\) => byId\.get\(id\)\)/);
-  assert.match(conditions, /rankedIds\.filter/);
-  assert.doesNotMatch(conditions, /escolhas[^\n]*price|preco[^\n]*escolhas/i);
+  assert.match(v2, /activeBrand\.products/);
+  assert.match(v2, /byId\.get\(String\(id\)\)/);
+  assert.match(v2, /effectivePopularIds/);
+  assert.doesNotMatch(v2, /escolhas[^\n]*price|preco[^\n]*escolhas/i);
 });
 
 test('Mais escolhidos só renderiza quando o ranking resolve para produtos atuais', () => {
-  const conditions = source('../src/cardapio/components/CardapioOrderConditions.tsx');
-  assert.match(conditions, /if \(products\.length === 0\) return null/);
-  assert.match(conditions, /id="popular-products-home"/);
-  assert.match(conditions, />Mais escolhidos</);
-  assert.match(conditions, /resolveCatalogDisplayProduct\(brand\.products, product, brand\.id\)/);
-  assert.match(conditions, /product-card-\$\{displayProduct\.id\}/);
+  const v2 = source('../src/cardapio/v2/MenuV2Experience.tsx');
+  const card = source('../src/cardapio/v2/MenuProductCard.tsx');
+  assert.match(v2, /highlightProducts\.length > 0/);
+  assert.match(v2, /id="popular-products-home"/);
+  assert.match(v2, />Destaques</);
+  assert.match(v2, /resolveCatalogDisplayProduct\(catalog, source, activeBrand\.id\)/);
+  assert.match(card, /id=\{`product-card-\$\{product\.id\}`\}/);
 });
 
 test('ranking é uma melhoria progressiva e falha sem bloquear a home', () => {
-  const conditions = source('../src/cardapio/components/CardapioOrderConditions.tsx');
+  const v2 = source('../src/cardapio/v2/MenuV2Experience.tsx');
   const client = source('../src/cardapio/popularProductsClient.ts');
   assert.match(client, /if \(!response\.ok\) return \[\]/);
-  assert.match(conditions, /cancelled = true/);
-  assert.match(conditions, /setRankedIds\(\[\]\)/);
+  assert.match(v2, /cancelled = true/);
+  assert.match(v2, /setPopularIds\(activeBrand\.popularProductIds \|\| \[\]\)/);
 });

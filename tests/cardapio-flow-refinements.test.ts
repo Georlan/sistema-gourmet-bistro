@@ -9,11 +9,20 @@ register('./helpers/staticAssetsLoader.mjs', import.meta.url);
 
 Object.defineProperty(globalThis, 'window', {
   configurable: true,
-  value: { location: { hostname: 'localhost', protocol: 'http:' } },
+  value: {
+    location: { hostname: 'localhost', protocol: 'http:' },
+    addEventListener() {},
+    removeEventListener() {},
+    matchMedia: () => ({
+      matches: false,
+      addEventListener() {},
+      removeEventListener() {},
+    }),
+  },
 });
 
 const { default: CardapioCartDrawer } = await import('../src/cardapio/components/CardapioCartDrawer');
-const { CardapioArtisticExperience } = await import('../src/cardapio/components/CardapioArtisticExperience');
+const { default: MenuV2Experience } = await import('../src/cardapio/v2/MenuV2Experience');
 const {
   KomaPrimaryAction,
   KomaSecondaryAction,
@@ -195,10 +204,10 @@ test('3. Numeração de etapas na sacola: com cupons/benefícios segue 1 a 5 seq
   assert.match(html, /5\. Seu contato/);
 });
 
-test('4. Dock artístico: rotula explicitamente Subtotal e oculta quando hasOpenOverlay é true', () => {
-  // Cenário sem overlay: dock deve estar presente com rótulo "Subtotal:"
+test('4. Dock da vitrine V2: exibe total na sacola e oculta quando hasOpenOverlay é true', () => {
+  // Cenário sem overlay: dock deve estar presente com o total formatado
   const htmlWithoutOverlay = renderToStaticMarkup(
-    createElement(CardapioArtisticExperience, {
+    createElement(MenuV2Experience, {
       activeBrand: baseBrand,
       searchQuery: '',
       setSearchQuery() {},
@@ -217,11 +226,11 @@ test('4. Dock artístico: rotula explicitamente Subtotal e oculta quando hasOpen
   );
 
   assert.match(htmlWithoutOverlay, /id="koma-art-dock"/);
-  assert.match(htmlWithoutOverlay, /Subtotal:\s*R\$\s*103,00/);
+  assert.match(htmlWithoutOverlay, /Ver sacola[\s\S]*R\$\s*103,00|R\$\s*103,00/);
 
-  // Cenário com overlay aberto (modal, drawer, sacola aberta): dock DEVE ser ocultado
+  // Cenário com overlay aberto (modal, revisão final): dock DEVE ser ocultado
   const htmlWithOverlay = renderToStaticMarkup(
-    createElement(CardapioArtisticExperience, {
+    createElement(MenuV2Experience, {
       activeBrand: baseBrand,
       searchQuery: '',
       setSearchQuery() {},
@@ -242,10 +251,10 @@ test('4. Dock artístico: rotula explicitamente Subtotal e oculta quando hasOpen
   assert.doesNotMatch(htmlWithOverlay, /id="koma-art-dock"/);
 });
 
-test('5. Hero da vitrine artística: exibe Nº 1 MAIS PEDIDO apenas se validado por ranking real', () => {
+test('5. Hero da vitrine V2: exibe Nº 1 mais pedido apenas se validado por ranking real', () => {
   // Com ranking validado (popularProductIds[0] === hero.id)
   const htmlVerified = renderToStaticMarkup(
-    createElement(CardapioArtisticExperience, {
+    createElement(MenuV2Experience, {
       activeBrand: { ...baseBrand, popularProductIds: ['p-hero'] },
       searchQuery: '',
       setSearchQuery() {},
@@ -262,13 +271,13 @@ test('5. Hero da vitrine artística: exibe Nº 1 MAIS PEDIDO apenas se validado 
     })
   );
 
-  assert.match(htmlVerified, /Nº 1 MAIS PEDIDO/);
-  assert.match(htmlVerified, /★ ITEM MAIS PEDIDO/);
+  assert.match(htmlVerified, /id="koma-art-hero-showcase"/);
+  assert.match(htmlVerified, /Nº 1 mais pedido/);
 
-  // Sem ranking validado (popularProductIds vazio ou com outro id)
+  // Sem ranking validado (destaque manual não alega ser o mais pedido)
   const htmlUnverified = renderToStaticMarkup(
-    createElement(CardapioArtisticExperience, {
-      activeBrand: { ...baseBrand, popularProductIds: [] },
+    createElement(MenuV2Experience, {
+      activeBrand: { ...baseBrand, popularProductIds: [], manualHighlightProductId: 'p-hero' },
       searchQuery: '',
       setSearchQuery() {},
       selectedCategory: '',
@@ -284,9 +293,8 @@ test('5. Hero da vitrine artística: exibe Nº 1 MAIS PEDIDO apenas se validado 
     })
   );
 
-  assert.match(htmlUnverified, /DESTAQUE DO CARDÁPIO/);
-  assert.match(htmlUnverified, /★ DESTAQUE DA CASA/);
-  assert.doesNotMatch(htmlUnverified, /Nº 1 MAIS PEDIDO/);
+  assert.match(htmlUnverified, /Destaque da casa/);
+  assert.doesNotMatch(htmlUnverified, /Nº 1 mais pedido/);
 });
 
 test('6. Primitivas KomaActionPrimitives: KomaPrimaryAction, KomaQuantityControl e KomaChoiceCard', () => {

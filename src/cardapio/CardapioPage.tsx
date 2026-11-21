@@ -1,6 +1,5 @@
 import { clearGuestCheckoutContact } from "./guestCheckoutSession";
 import { allowCustomerBrowserRestore, blockCustomerBrowserRestore, closeCustomerBrowserSession, customerSignedOutKey, restoreCustomerBrowserSession } from "./customerBrowserSession";
-import { DeliveryReceiptCode } from "./components/DeliveryReceiptCode";
 import PixCopyCode from "./components/PixCopyCode";
 /**
  * @license
@@ -20,18 +19,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { AnimatePresence, motion } from "motion/react";
 import {
   CheckCircle2,
-  Clock3,
-  Gift,
-  House,
-  MessageCircle,
   QrCode,
-  RefreshCw,
-  Search,
-  ShoppingBag,
   X,
   XCircle,
 } from "lucide-react";
-import clsx from "clsx";
 import { KOMA_EASE_SMOOTH } from "./v2/motionTokens";
 import {
   BrandConfig,
@@ -44,14 +35,9 @@ import {
   getProductImageUrl,
   getRestaurantAssetUrl,
 } from "./CardapioTypes";
-import CardapioHeader from "./components/CardapioHeader";
-import CardapioCategoryNav from "./components/CardapioCategoryNav";
-import CardapioProductCard from "./components/CardapioProductCard";
 import CardapioProductModal from "./components/CardapioProductModal";
 import {
-  groupCategoryProductsForDisplay,
   isGroupedProduct,
-  type CatalogDisplayItem,
   type GroupedDisplayProduct,
 } from "./catalogGrouping";
 import type { PromotionPartSelection } from "./promotionComposition";
@@ -60,11 +46,9 @@ import CardapioCartDrawer, {
   type CartItem,
 } from "./components/CardapioCartDrawer";
 import type { CustomerHistoryOrder } from "./components/CardapioCustomerOrderHistory";
-import { CardapioConditionsSummary } from "./components/CardapioOrderConditions";
 import { ManualPixReceiptContact } from "./components/ManualPixReceiptContact";
 import { DirectPixCustomerConfirm } from "./components/DirectPixCustomerConfirm";
 import MenuV2Experience from "./v2/MenuV2Experience";
-const CardapioArtisticExperience = React.lazy(() => import("./components/CardapioArtisticExperience"));
 import { KomaLoading } from "../components/app/KomaLoading";
 
 const QRCodeSVG = React.lazy(() =>
@@ -78,8 +62,6 @@ const CardapioDigital = React.lazy(() => import("./components/CardapioDigital"))
 const CardapioStoreInfoDrawer = React.lazy(() => import("./components/CardapioStoreInfoDrawer"));
 const CardapioOrdersDrawer = React.lazy(() => import("./components/CardapioOrdersDrawer"));
 import { API_BASE_URL, WS_BASE_URL } from "../config/api";
-import { smartSearchMatch } from "../domain";
-import { buildKomaAttributionUrl } from "./komaAttribution";
 import {
   CustomerProfile,
   clearCustomerSession,
@@ -99,10 +81,6 @@ import {
   removeStoredOrder,
   clearAllStoredOrders,
   fallbackOrderState,
-  customerOrderLabel,
-  orderFulfillmentLabel,
-  orderPhaseDescription,
-  orderProgress,
   resolveOrderState,
   updateStoredOrderStatus,
 } from "./orderTracking";
@@ -139,16 +117,6 @@ function parseStructuredValue(value: unknown): unknown {
   } catch {
     return null;
   }
-}
-
-function categorySectionId(name: string) {
-  const slug = name
-    .toLocaleLowerCase("pt-BR")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return `sec-${slug || "categoria"}`;
 }
 
 export default function CardapioPage() {
@@ -190,37 +158,7 @@ export default function CardapioPage() {
   const [notice, setNotice] = useState("");
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [cartAnnouncement, setCartAnnouncement] = useState("");
-  const isProgrammaticScroll = useRef(false);
   const lastReportedMenuIdRef = useRef<string | number | null>(null);
-
-  const [vitrineVariant, setVitrineVariant] = useState<'editorial' | 'artistic' | 'catalog-first' | 'artistic-total'>(() => {
-    if (typeof window !== 'undefined') {
-      const param = new URLSearchParams(window.location.search).get('vitrine');
-      if (param === 'artistic-total' || param === 'catalog-first' || param === 'artistic' || param === 'editorial') return param;
-      if (new URLSearchParams(window.location.search).has('artistic')) return 'artistic-total';
-      if (window.location.pathname.includes('/preview-ui')) return 'artistic-total';
-    }
-    return 'artistic-total';
-  });
-
-  useEffect(() => {
-    if (typeof document !== 'undefined') {
-      document.documentElement.setAttribute('data-vitrine-variant', vitrineVariant);
-    }
-  }, [vitrineVariant]);
-
-  const handleVariantChange = useCallback((nextVariant: 'editorial' | 'artistic' | 'catalog-first' | 'artistic-total') => {
-    setVitrineVariant(nextVariant);
-    if (typeof document !== 'undefined') {
-      document.documentElement.setAttribute('data-vitrine-variant', nextVariant);
-    }
-    if (typeof window !== 'undefined') {
-      const url = new URL(window.location.href);
-      url.searchParams.set('vitrine', nextVariant);
-      window.history.replaceState(null, '', url.toString());
-      window.dispatchEvent(new CustomEvent('koma:vitrine-variant-change', { detail: nextVariant }));
-    }
-  }, []);
 
   const showNotification = useCallback((message: string) => {
     setNotice(message);
@@ -1025,33 +963,6 @@ export default function CardapioPage() {
     };
   }, [activeBrand?.id, loadRestaurantData]);
 
-  const visibleCategories = useMemo(() => {
-    if (!activeBrand) return [];
-    return activeBrand.categories.filter((category) => (
-      activeBrand.products
-        .filter((product) => product.category === category)
-        .some((product) => smartSearchMatch(`${product.name} ${product.description || ""}`, searchQuery))
-    ));
-  }, [activeBrand, searchQuery]);
-
-  useEffect(() => {
-    if (!activeBrand) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (isProgrammaticScroll.current) return;
-      entries.forEach((entry) => {
-        if (!entry.isIntersecting) return;
-        const category = (entry.target as HTMLElement).dataset.menuCategory || activeBrand.categories.find((item) => categorySectionId(item) === entry.target.id);
-        if (category) setActiveCategory(category);
-      });
-    }, { rootMargin: "-100px 0px -62% 0px", threshold: 0 });
-
-    visibleCategories.forEach((category) => {
-      const element = document.getElementById(vitrineVariant === "artistic-total" ? `cat-${category.toLowerCase().replace(/\s+/g, "-")}` : categorySectionId(category));
-      if (element) observer.observe(element);
-    });
-    return () => observer.disconnect();
-  }, [activeBrand, visibleCategories, vitrineVariant]);
-
   const orderingEnabled = activeBrand?.acceptingOrders !== false && activeBrand?.storeStatus !== "closed";
   const isPreparationSimulation = activeBrand?.availabilitySource === "provisional_preparation";
   const cartAssemblyEnabled = orderingEnabled || isPreparationSimulation;
@@ -1358,9 +1269,6 @@ export default function CardapioPage() {
   }
 
   const activeState = activeOrder ? resolveOrderState(activeOrder) : null;
-  const terminal = activeState?.terminal ?? false;
-  const rejected = activeState?.rejected ?? false;
-  const trackingProgress = activeState ? orderProgress(activeState) : null;
 
   return (
     <div className="min-h-screen overflow-x-clip bg-bg-app font-sans text-text-app" id="app-root-container">
@@ -1402,440 +1310,70 @@ export default function CardapioPage() {
         </div>
       )}
 
-      {vitrineVariant === 'artistic-total' ? (
-        typeof window !== "undefined" && new URLSearchParams(window.location.search).get("vitrine") === "legado" ? (
-          <React.Suspense fallback={<KomaLoading />}>
-            <CardapioArtisticExperience
-              activeBrand={activeBrand}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              selectedCategory={activeCategory}
-              onSelectCategory={(category) => {
-                setActiveCategory(category);
-                isProgrammaticScroll.current = true;
-                const element = document.getElementById(category ? `cat-${category.toLowerCase().replace(/\s+/g, '-')}` : 'koma-art-hero-showcase');
-                element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                window.setTimeout(() => { isProgrammaticScroll.current = false; }, 700);
-              }}
-              onSelectProduct={(product) => openProductModal(product, "catalog")}
-              onFastAdd={handleFastAdd}
-              onFastRemove={handleFastRemove}
-              getProductCartQuantity={getProductCartQuantity}
-              onCartToggle={openCart}
-              cartCount={cartCount}
-              cartTotal={cartTotal}
-              cart={cart}
-              onStoreInfoClick={() => setIsStoreInfoOpen(true)}
-              onOrdersClick={() => setIsOrdersDrawerOpen(true)}
-              activeOrdersCount={activeOrders.length}
-              hasOpenOverlay={hasOpenOverlay}
-              onPromotionSelect={(offer) => {
-                openPromotionModal(offer, "catalog");
-              }}
-              user={user}
-              onAuthClick={() => (user ? setIsProfileOpen(true) : setIsAuthOpen(true))}
-              onBenefitsClick={() => setIsBenefitsOpen(true)}
-              activeOrder={activeOrder}
-              activeState={activeState}
-              storedOrders={storedOrders}
-              storedOrdersCount={storedOrders.length}
-              onSelectOrderId={(id) => setSelectedOrderId(id)}
-              onPayPixClick={(order) => setPixModalOrder(order)}
-              onRefreshOrders={() => {
-                if (activeBrand?.id) void checkActiveOrders(Number(activeBrand.id));
-              }}
-              isRefreshingOrders={isRefreshingOrders}
-              onClearTrackedOrder={(id) => clearTrackedOrder(id)}
-              orderingMessage={orderingMessage}
-            />
-          </React.Suspense>
-        ) : (
-        <MenuV2Experience
-          activeBrand={activeBrand}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          selectedCategory={activeCategory}
-          onSelectCategory={(category) => {
-            setActiveCategory(category);
-            isProgrammaticScroll.current = true;
-            const element = document.getElementById(category ? `cat-${category.toLowerCase().replace(/\s+/g, '-')}` : 'koma-art-hero-showcase');
-            element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            window.setTimeout(() => { isProgrammaticScroll.current = false; }, 700);
-          }}
-          onSelectProduct={(product) => openProductModal(product, "catalog")}
-          onFastAdd={handleFastAdd}
-          onFastRemove={handleFastRemove}
-          getProductCartQuantity={getProductCartQuantity}
-          onCartToggle={openCart}
-          cartCount={cartCount}
-          cartTotal={cartTotal}
-          cart={cart}
-          onStoreInfoClick={() => setIsStoreInfoOpen(true)}
-          onOrdersClick={() => setIsOrdersDrawerOpen(true)}
-          activeOrdersCount={activeOrders.length}
-          hasOpenOverlay={hasOpenOverlay}
-          onPromotionSelect={(offer) => {
-            openPromotionModal(offer, "catalog");
-          }}
-          user={user}
-          onAuthClick={() => (user ? setIsProfileOpen(true) : setIsAuthOpen(true))}
-          onBenefitsClick={() => setIsBenefitsOpen(true)}
-          activeOrder={activeOrder}
-          activeState={activeState}
-          storedOrders={storedOrders}
-          storedOrdersCount={storedOrders.length}
-          onSelectOrderId={(id) => setSelectedOrderId(id)}
-          onPayPixClick={(order) => setPixModalOrder(order)}
-          onRefreshOrders={() => {
-            if (activeBrand?.id) void checkActiveOrders(Number(activeBrand.id));
-          }}
-          isRefreshingOrders={isRefreshingOrders}
-          onClearTrackedOrder={(id) => clearTrackedOrder(id)}
-          orderingMessage={orderingMessage}
-          activeDockTab={
-            isCartOpen
-              ? "bag"
-              : isOrdersDrawerOpen
-                ? "orders"
-                : isAuthOpen || isProfileOpen
-                  ? "account"
-                  : "home"
-          }
-          onDockNavigate={(tab) => {
-            setIsCartOpen(tab === "bag");
-            setIsOrdersDrawerOpen(tab === "orders");
-            if (tab === "account") {
-              if (user) {
-                setIsProfileOpen(true);
-                setIsAuthOpen(false);
-              } else {
-                setIsAuthOpen(true);
-                setIsProfileOpen(false);
-              }
-            } else {
+      <MenuV2Experience
+        activeBrand={activeBrand}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        selectedCategory={activeCategory}
+        onSelectCategory={(category) => {
+          setActiveCategory(category);
+        }}
+        onSelectProduct={(product) => openProductModal(product, "catalog")}
+        onFastAdd={handleFastAdd}
+        onFastRemove={handleFastRemove}
+        getProductCartQuantity={getProductCartQuantity}
+        onCartToggle={openCart}
+        cartCount={cartCount}
+        cartTotal={cartTotal}
+        cart={cart}
+        onStoreInfoClick={() => setIsStoreInfoOpen(true)}
+        onOrdersClick={() => setIsOrdersDrawerOpen(true)}
+        activeOrdersCount={activeOrders.length}
+        hasOpenOverlay={hasOpenOverlay}
+        onPromotionSelect={(offer) => {
+          openPromotionModal(offer, "catalog");
+        }}
+        user={user}
+        onAuthClick={() => (user ? setIsProfileOpen(true) : setIsAuthOpen(true))}
+        onBenefitsClick={() => setIsBenefitsOpen(true)}
+        activeOrder={activeOrder}
+        activeState={activeState}
+        storedOrders={storedOrders}
+        storedOrdersCount={storedOrders.length}
+        onSelectOrderId={(id) => setSelectedOrderId(id)}
+        onPayPixClick={(order) => setPixModalOrder(order)}
+        onRefreshOrders={() => {
+          if (activeBrand?.id) void checkActiveOrders(Number(activeBrand.id));
+        }}
+        isRefreshingOrders={isRefreshingOrders}
+        onClearTrackedOrder={(id) => clearTrackedOrder(id)}
+        orderingMessage={orderingMessage}
+        activeDockTab={
+          isCartOpen
+            ? "bag"
+            : isOrdersDrawerOpen
+              ? "orders"
+              : isAuthOpen || isProfileOpen
+                ? "account"
+                : "home"
+        }
+        onDockNavigate={(tab) => {
+          setIsCartOpen(tab === "bag");
+          setIsOrdersDrawerOpen(tab === "orders");
+          if (tab === "account") {
+            if (user) {
+              setIsProfileOpen(true);
               setIsAuthOpen(false);
+            } else {
+              setIsAuthOpen(true);
               setIsProfileOpen(false);
             }
-          }}
-        />
-        )
-      ) : (
-        <>
-          <CardapioHeader
-            activeBrand={activeBrand}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            user={user}
-            onAuthClick={() => user ? setIsProfileOpen(true) : setIsAuthOpen(true)}
-            onLogoClick={() => setIsStoreInfoOpen(true)}
-            onCartToggle={openCart}
-            cartCount={cartCount}
-            onOrdersClick={() => setIsOrdersDrawerOpen(true)}
-            onBenefitsClick={() => setIsBenefitsOpen(true)}
-            ordersCount={storedOrders.length}
-            activeOrdersCount={activeOrders.length}
-          />
-
-      <main className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 sm:px-6 sm:py-6" id="catalog-section">
-
-        {activeOrder && activeState && (
-          <section className={clsx(
-            "rounded-2xl border p-4 shadow-lg transition-all",
-            rejected ? "border-rose-500/30 bg-rose-500/[0.07]" : terminal ? "border-emerald-500/30 bg-emerald-500/[0.07]" : "border-emerald-500/25 bg-koma-card",
-          )} id="active-order-banner">
-            {storedOrders.length > 1 && (
-              <div className="mb-3 flex items-center justify-between border-b border-koma-border/60 pb-2.5">
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-                  {storedOrders.map((ord) => {
-                    const isSelected = ord.id === activeOrder.id;
-                    const isOrdActive = !resolveOrderState(ord).terminal;
-                    return (
-                      <button
-                        key={ord.id}
-                        type="button"
-                        onClick={() => setSelectedOrderId(ord.id)}
-                        className={clsx(
-                          "inline-flex shrink-0 items-center gap-1.5 rounded-xl px-2.5 py-1 text-[10px] font-bold transition",
-                          isSelected
-                            ? "bg-emerald-500 text-white shadow"
-                            : "border border-koma-border bg-koma-panel text-koma-secondary hover:text-white",
-                        )}
-                      >
-                        <span>Pedido #{ord.numero_pedido}</span>
-                        {isOrdActive && (
-                          <span className={clsx(
-                            "h-1.5 w-1.5 rounded-full",
-                            isSelected ? "bg-white" : "bg-emerald-400 animate-pulse",
-                          )} />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsOrdersDrawerOpen(true)}
-                  className="ml-2 shrink-0 text-[10px] font-bold text-emerald-400 hover:text-emerald-300"
-                >
-                  Ver todos ({storedOrders.length})
-                </button>
-              </div>
-            )}
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-start gap-3">
-                <div className={clsx("grid h-10 w-10 shrink-0 place-items-center rounded-xl", rejected ? "bg-rose-500/15 text-rose-400" : "bg-emerald-500/15 text-emerald-400")}> 
-                  {rejected ? <XCircle className="h-5 w-5" /> : terminal ? <CheckCircle2 className="h-5 w-5" /> : <Clock3 className="h-5 w-5" />}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className={clsx("text-[9px] font-black uppercase tracking-[0.14em]", rejected ? "text-rose-400" : "text-emerald-400")}> 
-                      Pedido #{activeOrder.numero_pedido}
-                    </span>
-                    {storedOrders.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => setIsOrdersDrawerOpen(true)}
-                        className="text-[9px] text-koma-subtle underline hover:text-white"
-                      >
-                        {activeOrders.length > 1 ? `${activeOrders.length} em andamento` : "Meus pedidos"}
-                      </button>
-                    )}
-                  </div>
-                  <h2 className="mt-1 text-base font-black text-koma-foreground">{customerOrderLabel(activeState)}</h2>
-                  <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
-                    {rejected
-                      ? "O restaurante não conseguiu aceitar este pedido. Você pode montar um novo pedido quando quiser."
-                      : terminal
-                        ? "Este pedido foi concluído. O resumo continua aqui até você iniciar outro acompanhamento."
-                        : activeState.phase === "payment_pending"
-                          ? "O Pix ainda não foi confirmado. Assim que o pagamento for aprovado, o restaurante poderá aceitar o pedido."
-                          : orderPhaseDescription(activeState)}
-                  </p>
-                  <p className="mt-1 text-[10px] text-koma-subtle">
-                    {orderFulfillmentLabel(activeState.fulfillment)} · {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(activeOrder.total || 0)}
-                  </p>
-                </div>
-              </div>
-              <div className="flex gap-2 sm:shrink-0 flex-wrap items-center">
-                {activeState.phase === "payment_pending" && activeOrder.pagamento?.qr_code && (
-                  <button
-                    type="button"
-                    onClick={() => setPixModalOrder(activeOrder)}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-3.5 text-[10px] font-black text-white shadow transition"
-                  >
-                    <QrCode className="h-3.5 w-3.5" /> Pagar Pix
-                  </button>
-                )}
-                {!terminal && (
-                  <button
-                    type="button"
-                    onClick={() => void checkActiveOrders(Number(activeBrand.id))}
-                    disabled={isRefreshingOrders}
-                    className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-panel px-3 text-[10px] font-bold text-koma-secondary transition hover:text-white disabled:opacity-50"
-                  >
-                    <RefreshCw className={clsx("h-3.5 w-3.5", isRefreshingOrders && "animate-spin text-emerald-400")} /> Atualizar
-                  </button>
-                )}
-                {terminal && (
-                  <button type="button" onClick={() => clearTrackedOrder(activeOrder.id)} className="h-9 rounded-xl bg-emerald-500 px-3 text-[10px] font-black text-white">Fazer novo pedido</button>
-                )}
-              </div>
-            </div>
-
-            {!terminal && <DeliveryReceiptCode code={activeOrder.delivery_receipt_code} />}
-
-            {!rejected && activeState.phase === "payment_pending" ? (
-              <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/[0.08] p-3">
-                <div className="flex items-start gap-2.5">
-                  <QrCode className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">
-                      {activeOrder.pagamento?.confirmacao_manual && activeOrder.pagamento?.cliente_informou_pagamento
-                        ? "Pagamento informado"
-                        : activeOrder.pagamento?.confirmacao_manual ? "Pix aguardando conferência" : "Primeiro: confirme o Pix"}
-                    </p>
-                    <p className="mt-1 text-[10px] leading-relaxed text-amber-200/80">
-                      {activeOrder.pagamento?.confirmacao_manual && activeOrder.pagamento?.cliente_informou_pagamento
-                        ? "Pagamento informado. Aguardando confirmação do restaurante."
-                        : activeOrder.pagamento?.confirmacao_manual
-                          ? "Pague o Pix. O restaurante já vê o pedido; avisar que pagou é opcional."
-                          : "O andamento do preparo começa depois da confirmação automática do pagamento."}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : !rejected && trackingProgress ? (
-              <div className={clsx("mt-4 grid gap-1.5 border-t border-koma-border pt-3", trackingProgress.labels.length === 4 ? "grid-cols-4" : "grid-cols-3")}>
-                {trackingProgress.labels.map((label, index) => {
-                  const step = index + 1;
-                  const passed = trackingProgress.current >= step;
-                  return (
-                    <div key={label} className="text-center">
-                      <div className={clsx("h-1.5 rounded-full", passed ? "bg-emerald-500" : "bg-koma-raised")} />
-                      <span className={clsx("mt-1 block text-[10px] font-bold", passed ? "text-koma-secondary" : "text-koma-subtle")}>{label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
-          </section>
-        )}
-
-        {activeBrand.hasCustomBanner && (
-          <section id="brand-banner-hero" aria-label="Capa do restaurante">
-            <img src={activeBrand.bannerImage} alt={`${activeBrand.name} — banner`} />
-          </section>
-        )}
-
-        {activeBrand.storeStatus === "closed" && (
-          <div id="menu-availability" className="cardapio-availability-note">
-            <strong>
-              {activeBrand.availabilitySource === "provisional_preparation"
-                ? "Estabelecimento em fase de preparação."
-                : activeBrand.availabilitySource === "schedule"
-                  ? activeBrand.nextOpeningLabel
-                    ? `Estabelecimento fechado. Abre ${activeBrand.nextOpeningLabel}.`
-                    : "Estabelecimento fechado."
-                  : activeBrand.availabilitySource === "cash_closed"
-                    ? "Estabelecimento fechado. Aguardando abertura do caixa."
-                    : "Pedidos pausados."}
-            </strong>
-            {!["schedule", "cash_closed"].includes(activeBrand.availabilitySource || "") && orderingMessage ? ` ${orderingMessage} ` : " "}
-            O cardápio continua disponível para consulta.
-          </div>
-        )}
-
-        <CardapioCategoryNav
-          categories={visibleCategories}
-          activeCategory={activeCategory}
-          onSelectHighlights={() => {
-            setActiveCategory("");
-            isProgrammaticScroll.current = true;
-            document.getElementById("menu-highlights")?.scrollIntoView({ behavior: "smooth", block: "start" });
-            window.setTimeout(() => { isProgrammaticScroll.current = false; }, 700);
-          }}
-          onSelectCategory={(category) => {
-            setActiveCategory(category);
-            isProgrammaticScroll.current = true;
-            const element = document.getElementById(categorySectionId(category));
-            element?.scrollIntoView({ behavior: "smooth", block: "start" });
-            window.setTimeout(() => { isProgrammaticScroll.current = false; }, 700);
-          }}
-        />
-
-        <CardapioConditionsSummary brand={activeBrand} onOpen={() => setIsStoreInfoOpen(true)} onPromotionSelect={offer => openPromotionModal(offer, "catalog")} />
-
-        <div className="flex flex-col gap-9" id="catalog-feed">
-          {visibleCategories.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-koma-border bg-koma-card p-10 text-center">
-              {searchQuery ? (
-                <>
-                  <div className="grid h-12 w-12 place-items-center rounded-2xl border border-koma-border bg-koma-panel text-koma-muted mb-3">
-                    <Search className="h-6 w-6" />
-                  </div>
-                  <p className="text-sm font-black text-koma-foreground">Nenhum item encontrado para "{searchQuery}"</p>
-                  <p className="mt-1 text-xs text-koma-muted max-w-sm">Tente buscar por outros termos ou limpe o campo para ver o cardápio completo.</p>
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 px-4 py-2 text-xs font-bold text-emerald-400 hover:bg-emerald-500/25 transition"
-                  >
-                    Limpar busca
-                  </button>
-                </>
-              ) : (
-                <p className="text-xs text-koma-muted">Este restaurante ainda não publicou produtos no cardápio.</p>
-              )}
-            </div>
-          ) : visibleCategories.map((category, catIndex) => {
-            const products = activeBrand.products
-              .filter((product) => (
-                product.category === category
-                && smartSearchMatch(`${product.name} ${product.familia_nome || ""} ${product.description || ""}`, searchQuery)
-              ))
-              .sort((a, b) => {
-                const orderA = a.ordem_exibicao ?? Number.MAX_SAFE_INTEGER;
-                const orderB = b.ordem_exibicao ?? Number.MAX_SAFE_INTEGER;
-                if (orderA !== orderB) return orderA - orderB;
-                return 0;
-              });
-            const displayItems = groupCategoryProductsForDisplay(category, products, activeBrand?.id);
-            const indexLabel = String(catIndex + 1).padStart(2, '0');
-            return (
-              <section key={category} id={categorySectionId(category)} className="scroll-mt-[10.5rem] cardapio-catalog-category-section">
-                <div className="cardapio-category-header-lockup">
-                  <div className="flex items-center gap-2.5">
-                    <span className="cardapio-category-index" aria-hidden="true">{indexLabel}</span>
-                    <h2 className="cardapio-category-title">{category}</h2>
-                  </div>
-                  <span className="cardapio-category-count-pill">{displayItems.length} {displayItems.length === 1 ? "opção" : "opções"}</span>
-                </div>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {displayItems.map((item) => (
-                    <CardapioProductCard
-                      key={item.id}
-                      product={item}
-                      cartQuantity={isGroupedProduct(item)
-                        ? item.variants.reduce((acc, v) => acc + getProductCartQuantity(v.id), 0)
-                        : getProductCartQuantity(item.id)}
-                      onSelectProduct={(product) => openProductModal(product, "catalog")}
-                      onFastAdd={handleFastAdd}
-                      onFastRemove={handleFastRemove}
-                    />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
-
-        <footer className="mt-4 border-t border-koma-border py-7 text-center">
-          <strong className="text-xs text-koma-secondary">{activeBrand.name}</strong>
-          <p className="mt-2 text-[9px] text-koma-subtle">Preços e disponibilidade atualizados pelo restaurante.</p>
-          <a
-            href={buildKomaAttributionUrl("menu_footer", activeBrand.id)}
-            target="_blank"
-            rel="noopener noreferrer"
-            id="koma-powered-by-footer"
-            aria-label="Conhecer o KÔMA, plataforma deste cardápio digital"
-            className="mt-3 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-koma-border bg-koma-card px-3 text-[9px] font-semibold text-koma-muted transition hover:border-emerald-500/35 hover:text-emerald-500"
-          >
-            Cardápio digital por <strong className="font-black text-koma-foreground">KÔMA</strong>
-            <span aria-hidden="true">↗</span>
-          </a>
-        </footer>
-      </main>
-
-      {!hasOpenOverlay && (
-        <nav className="cardapio-mobile-nav" style={{ gridTemplateColumns: `repeat(${activeBrand.benefits?.coupons || activeBrand.benefits?.loyalty ? 4 : 3}, minmax(0, 1fr))` }} aria-label="Navegação do cardápio" id="cardapio-mobile-nav">
-          <button type="button" onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} aria-label="Voltar ao início" id="mobile-nav-home">
-            <House aria-hidden="true" /><span>Início</span>
-          </button>
-          <button type="button" onClick={() => setIsOrdersDrawerOpen(true)} aria-label="Abrir pedidos e chat" id="mobile-nav-orders">
-            <MessageCircle aria-hidden="true" /><span>Pedidos</span>
-            {activeOrders.length > 0 && <small aria-hidden="true">{activeOrders.length > 9 ? "9+" : activeOrders.length}</small>}
-          </button>
-          {(activeBrand.benefits?.coupons || activeBrand.benefits?.loyalty) && <button type="button" onClick={() => setIsBenefitsOpen(true)} aria-label="Abrir benefícios" id="mobile-nav-benefits">
-            <Gift aria-hidden="true" /><span>Benefícios</span>
-          </button>}
-          <button type="button" onClick={openCart} aria-label={`Abrir sacola com ${cartCount} ${cartCount === 1 ? "item" : "itens"}`} className={cartCount > 0 ? "has-items" : undefined} id="mobile-nav-cart">
-            <ShoppingBag aria-hidden="true" /><span>Sacola</span>
-            {cartCount > 0 && <small aria-hidden="true">{cartCount > 9 ? "9+" : cartCount}</small>}
-          </button>
-        </nav>
-      )}
-
-          {cartCount > 0 && !hasOpenOverlay && (
-            <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] left-1/2 z-[44] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 lg:left-auto lg:right-5 lg:w-80 lg:translate-x-0" id="floating-cart-container">
-              <button type="button" onClick={openCart} className="flex h-14 w-full touch-manipulation select-none items-center justify-between rounded-2xl bg-emerald-500 px-4 text-white shadow-2xl active:scale-[0.99]" id="floating-cart-trigger" aria-label={`Abrir sacola com ${cartCount} ${cartCount === 1 ? "item" : "itens"}`}>
-                <span className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-white/15 text-xs font-black">{cartCount}</span><span className="text-xs font-black">Ver sacola</span></span>
-                <span className="text-sm font-black">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cartTotal)}</span>
-              </button>
-            </div>
-          )}
-        </>
-      )}
+          } else {
+            setIsAuthOpen(false);
+            setIsProfileOpen(false);
+          }
+        }}
+      />
 
       {selectedPromotion && (
         <React.Suspense fallback={null}>

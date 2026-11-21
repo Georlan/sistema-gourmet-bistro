@@ -22,12 +22,12 @@ test('card usa o classificador do catálogo para sinais promocionais explícitos
   }
   assert.equal(getProductCatalogSignalLabel('Bebidas'), null);
 
-  const card = source('../src/cardapio/components/CardapioProductCard.tsx');
+  const card = source('../src/cardapio/v2/MenuProductCard.tsx');
   assert.match(card, /getProductCatalogSignalLabel\(product\.category\)/);
 });
 
 test('indicador no produto não inventa desconto nem segunda fonte comercial', () => {
-  const card = source('../src/cardapio/components/CardapioProductCard.tsx');
+  const card = source('../src/cardapio/v2/MenuProductCard.tsx');
   const merchandising = source('../src/cardapio/cardapioMerchandising.ts');
 
   assert.match(card, /\{catalogSignal\}/);

@@ -3,21 +3,22 @@ register('./helpers/staticAssetsLoader.mjs', import.meta.url);
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-const { getCatalogHighlights } = await import('../src/cardapio/components/CardapioHighlights');
+const { getCatalogHighlights } = await import('../src/cardapio/catalogHighlights');
 import type { Product } from '../src/cardapio/CardapioTypes';
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 test('destaques usam somente o catálogo atual e não criam nova fonte de verdade', () => {
-  const highlights = source('../src/cardapio/components/CardapioHighlights.tsx');
-  assert.match(highlights, /brand\.products/);
+  const highlights = source('../src/cardapio/catalogHighlights.ts');
+  const v2 = source('../src/cardapio/v2/MenuV2Experience.tsx');
   assert.match(highlights, /product\.isAvailable !== false/);
   assert.match(highlights, /product\.category/);
+  assert.match(v2, /activeBrand\.products/);
   assert.doesNotMatch(highlights, /fetch\(|localStorage|sessionStorage|axios|API_BASE_URL/);
 });
 
 test('destaques reconhecem categorias promocionais sem inventar desconto', () => {
-  const highlights = source('../src/cardapio/components/CardapioHighlights.tsx');
+  const highlights = source('../src/cardapio/catalogHighlights.ts');
   for (const token of ['destaque', 'oferta', 'campanha', 'especial']) {
     assert.match(highlights, new RegExp(token));
   }
@@ -26,11 +27,9 @@ test('destaques reconhecem categorias promocionais sem inventar desconto', () =>
 });
 
 test('home prioriza ranking real e mantém a vitrine antes do catálogo', () => {
-  const conditions = source('../src/cardapio/components/CardapioOrderConditions.tsx');
-  assert.match(conditions, /CardapioHighlights/);
-  assert.ok(conditions.indexOf('<PopularProductsPreview') < conditions.indexOf('<CardapioHighlights'));
-  const page = source('../src/cardapio/CardapioPage.tsx');
-  assert.ok(page.indexOf('<CardapioConditionsSummary') < page.indexOf('id="catalog-feed"'));
+  const v2 = source('../src/cardapio/v2/MenuV2Experience.tsx');
+  assert.ok(v2.indexOf('id="koma-art-hero-showcase"') < v2.indexOf('id="popular-products-home"'));
+  assert.ok(v2.indexOf('id="popular-products-home"') < v2.indexOf('id="catalog-feed"'));
 });
 
 const sampleProduct = (id: string, category: string, available = true): Product => ({

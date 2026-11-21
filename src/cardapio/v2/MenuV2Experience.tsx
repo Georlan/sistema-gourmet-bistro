@@ -11,7 +11,6 @@ import {
   Phone,
   Plus,
   RefreshCw,
-  Search,
   Share2,
   Sun,
   Tag,
@@ -37,6 +36,7 @@ import {
   type CatalogDisplayItem,
 } from "../catalogGrouping";
 import { resolveCatalogDisplayProduct } from "../resolvePairingDisplay";
+import { getCatalogHighlights } from "../catalogHighlights";
 import { getFulfillmentAvailability } from "../fulfillment";
 import { buildWhatsAppContactUrl } from "../../config/whatsappUtils";
 import { buildKomaAttributionUrl } from "../komaAttribution";
@@ -309,13 +309,35 @@ export default function MenuV2Experience({
   );
 
   const highlightProducts = useMemo(() => {
-    const popularSet = new Set(effectivePopularIds);
-    return activeBrand.products.filter(
-      (p) =>
-        p.isAvailable !== false &&
-        (p.destaque || p.id === activeBrand.manualHighlightProductId || popularSet.has(p.id)),
-    );
+    const available = (activeBrand.products || []).filter((p) => p.isAvailable !== false);
+    const byId = new Map(available.map((p) => [String(p.id), p]));
+    const ordered: Product[] = [];
+    const seen = new Set<string>();
+    const pushUnique = (product?: Product | null) => {
+      if (!product || seen.has(product.id)) return;
+      seen.add(product.id);
+      ordered.push(product);
+    };
+
+    if (activeBrand.manualHighlightProductId) {
+      pushUnique(byId.get(String(activeBrand.manualHighlightProductId)));
+    }
+    for (const id of effectivePopularIds) {
+      pushUnique(byId.get(String(id)));
+    }
+    for (const product of getCatalogHighlights(available)) {
+      pushUnique(product);
+    }
+    for (const product of available) {
+      if (product.destaque) pushUnique(product);
+    }
+    return ordered;
   }, [activeBrand.products, activeBrand.manualHighlightProductId, effectivePopularIds]);
+
+  const promotionCatalogProducts = useMemo(
+    () => [...(activeBrand.products || []), ...(activeBrand.promotionProducts || [])],
+    [activeBrand.products, activeBrand.promotionProducts],
+  );
 
   const getDisplayItemCartQty = useCallback(
     (item: CatalogDisplayItem) =>
@@ -423,12 +445,17 @@ export default function MenuV2Experience({
   }, [activeBrand.socials]);
 
   const isOpen = activeBrand.acceptingOrders !== false;
-  const minOrderAmount = Number(activeBrand.pedidoMinimo || 0);
+  const minOrderAmount = fulfillment.delivery ? Number(activeBrand.pedidoMinimo || 0) : 0;
   const minOrderLabel = minOrderAmount > 0 ? `Mín. ${formatMenuPrice(minOrderAmount)}` : null;
 
   const fulfillmentParts: string[] = [isOpen ? "Aberto" : "Fechado"];
-  if (fulfillment.delivery) fulfillmentParts.push("Entrega");
-  if (fulfillment.pickup) fulfillmentParts.push("Retirada");
+  if (fulfillment.delivery) {
+    fulfillmentParts.push("Entrega");
+    if (fulfillment.pickup) fulfillmentParts.push("Retirada");
+  } else if (fulfillment.pickup) {
+    fulfillmentParts.push("Somente retirada");
+  }
+  if (fulfillment.dine_in) fulfillmentParts.push("Consumo local");
   if (minOrderLabel) fulfillmentParts.push(minOrderLabel);
 
   const attributionUrl = useMemo(
@@ -931,40 +958,43 @@ export default function MenuV2Experience({
               </div>
 
               <div className="km-carousel">
-                {activePromotions.map((promo: CatalogPromotion) => (
-                  <button
-                    key={promo.id}
-                    type="button"
-                    className="km-promo-card"
-                    onClick={() => onPromotionSelect?.(promo)}
-                  >
-                    <span className="km-promo-tag">
-                      <Tag size={11} aria-hidden="true" />
-                      {promo.tipo === "compre_ganhe" ? "Compre e ganhe" : "Oferta especial"}
-                    </span>
+                {activePromotions.map((promo: CatalogPromotion) => {
+                  const fallbackComponentImage = promo.componentes
+                    ?.flat()
+                    .map((id) => promotionCatalogProducts.find((candidate) => String(candidate.id) === String(id))?.image)
+                    .find((image) => image && image !== LOCAL_PRODUCT_PLACEHOLDER);
+                  const offerImage = promo.imagem_url || fallbackComponentImage;
 
-                    <div className="km-promo-card__media">
-                      <img
-                        src={promo.imagem_url || LOCAL_PRODUCT_PLACEHOLDER}
-                        alt={promo.nome}
-                        loading="eager"
-                        fetchPriority="high"
-                        decoding="async"
-                        onError={(e) => {
-                          e.currentTarget.src = LOCAL_PRODUCT_PLACEHOLDER;
-                        }}
-                      />
-                    </div>
+                  return (
+                    <button
+                      key={promo.id}
+                      type="button"
+                      className="km-promo-card"
+                      onClick={() => onPromotionSelect?.(promo)}
+                    >
+                      <span className="km-promo-tag">
+                        <Tag size={11} aria-hidden="true" />
+                        {promo.tipo === "compre_ganhe" ? "Compre e ganhe" : "Oferta especial"}
+                      </span>
 
-                    <h3 className="km-promo-card__title">{promo.nome}</h3>
-                    {promo.descricao && <p className="km-promo-card__desc">{promo.descricao}</p>}
+                      <div className="km-promo-card__media">
+                        <CatalogProductImage
+                          image={offerImage}
+                          alt={promo.nome}
+                          priority
+                        />
+                      </div>
 
-                    <div className="km-promo-card__footer">
-                      <span className="km-price">{formatMenuPrice(promo.preco)}</span>
-                      <span className="km-cta-mini">Aproveitar</span>
-                    </div>
-                  </button>
-                ))}
+                      <h3 className="km-promo-card__title">{promo.nome}</h3>
+                      {promo.descricao && <p className="km-promo-card__desc">{promo.descricao}</p>}
+
+                      <div className="km-promo-card__footer">
+                        <span className="km-price">{formatMenuPrice(promo.preco)}</span>
+                        <span className="km-cta-mini">Aproveitar</span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </section>
@@ -1004,7 +1034,7 @@ export default function MenuV2Experience({
             <div className="rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-8 text-center">
               {searchQuery.trim() ? (
                 <>
-                  <Search size={24} className="mx-auto mb-2 text-[var(--km-muted)]" aria-hidden="true" />
+                  <MenuSearchGlyph className="mx-auto mb-2 h-6 w-6 text-[var(--km-muted)]" />
                   <p className="text-sm font-bold text-[var(--km-ink)]">
                     Nenhum item encontrado para &ldquo;{searchQuery}&rdquo;
                   </p>
@@ -1119,11 +1149,15 @@ export default function MenuV2Experience({
               <span className="km-bag-fab__label">Ver sacola</span>
               <span className="km-bag-fab__dot" aria-hidden="true">·</span>
               <span className="km-bag-fab__total km-tabular">
-                <NumberFlow
-                  value={cartTotal}
-                  format={{ style: "currency", currency: "BRL" }}
-                  locales="pt-BR"
-                />
+                {typeof window !== "undefined" && typeof document !== "undefined" ? (
+                  <NumberFlow
+                    value={cartTotal}
+                    format={{ style: "currency", currency: "BRL" }}
+                    locales="pt-BR"
+                  />
+                ) : (
+                  formatMenuPrice(cartTotal)
+                )}
               </span>
             </motion.button>
           </div>

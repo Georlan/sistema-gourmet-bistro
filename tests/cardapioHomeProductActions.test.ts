@@ -4,27 +4,20 @@ import test from 'node:test';
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 
-const conditions = source('../src/cardapio/components/CardapioOrderConditions.tsx');
-const highlights = source('../src/cardapio/components/CardapioHighlights.tsx');
-const recommendations = source('../src/cardapio/components/CardapioRecommendations.tsx');
+const v2 = source('../src/cardapio/v2/MenuV2Experience.tsx');
+const card = source('../src/cardapio/v2/MenuProductCard.tsx');
 
-test('Mais escolhidos abre o mesmo acionador canônico do card do produto', () => {
-  assert.match(conditions, /querySelector<HTMLButtonElement>\('\.cardapio-product-card__details-hitbox'\)/);
-  assert.match(conditions, /detailsTrigger\.click\(\)/);
-  assert.match(conditions, /onClick=\{\(\) => openProduct\(product\)\}/);
-  assert.match(conditions, /aria-label=\{`Abrir \$\{product\.name\}`\}/);
+test('Hero mais pedido e destaques acionam o mesmo seletor canônico de produto sem roubo de foco', () => {
+  assert.match(v2, /onSelectProduct\(heroProduct\)/);
+  assert.match(v2, /aria-label=\{`Ver \$\{heroProduct\.name\}`\}/);
+  assert.match(card, /onClick=\{\(\) => onSelectProduct\(product\)\}/);
+  assert.match(card, /aria-label=\{`Ver detalhes de \$\{product\.name\}/);
+  assert.doesNotMatch(v2, /\.focus\(\)/);
+  assert.doesNotMatch(card, /\.focus\(\)/);
 });
 
-test('Destaques e Complete seu pedido usam a mesma abertura direta', () => {
-  for (const component of [highlights, recommendations]) {
-    assert.match(component, /detailsTrigger\.click\(\)/);
-    assert.match(component, /onClick=\{\(\) => openProduct\(product\)\}/);
-    assert.doesNotMatch(component, /\.focus\(\)/);
-  }
-});
-
-test('há fallback de navegação somente quando o card canônico não está no DOM', () => {
-  for (const component of [conditions, highlights, recommendations]) {
-    assert.match(component, /target\?\.scrollIntoView/);
-  }
+test('cards de destaques e feed da home delegam diretamente ao MenuProductCard canônico', () => {
+  assert.match(v2, /<MenuProductCard/);
+  assert.match(v2, /onSelectProduct=\{onSelectProduct/);
+  assert.match(card, /id=\{`product-card-\$\{product\.id\}`\}/);
 });

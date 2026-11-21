@@ -20,6 +20,7 @@ const trackingSource = readFileSync('src/cardapio/orderTracking.ts', 'utf8');
 const drawerSource = readFileSync('src/cardapio/components/CardapioOrdersDrawer.tsx', 'utf8');
 const chatSource = readFileSync('src/cardapio/components/CardapioOrderChatPanel.tsx', 'utf8');
 const pageSource = readFileSync('src/cardapio/CardapioPage.tsx', 'utf8');
+const v2Source = readFileSync('src/cardapio/v2/MenuV2Experience.tsx', 'utf8');
 
 test('cardápio usa contrato canônico e não recria parsers por substring', () => {
   assert.equal(drawerSource.includes('function deliveryOrderStep'), false);
@@ -31,7 +32,7 @@ test('cardápio usa contrato canônico e não recria parsers por substring', () 
   assert.match(drawerSource, /resolveOrderState\(order\)/);
   assert.match(chatSource, /orderProgress\(state\)/);
   assert.match(pageSource, /resolveOrderState\(activeOrder\)/);
-  assert.match(pageSource, /customerOrderLabel\(activeState\)/);
+  assert.match(v2Source, /customerOrderLabel\(activeState\)/);
 });
 
 test('fallback de compatibilidade é mapa exato, não substring', () => {
@@ -46,7 +47,7 @@ test('fulfillment público tem rótulo ternário e não rebaixa dine-in para ret
   assert.match(trackingSource, /return "Consumo local"/);
   assert.match(drawerSource, /orderFulfillmentLabel\(state\.fulfillment\)/);
   assert.match(chatSource, /orderFulfillmentLabel\(state\.fulfillment\)/);
-  assert.match(pageSource, /orderFulfillmentLabel\(activeState\.fulfillment\)/);
+  assert.match(v2Source, /orderFulfillmentLabel\(activeState\.fulfillment\)/);
   assert.equal(drawerSource.includes('isDelivery ? "Delivery" : "Retirada"'), false);
   assert.equal(chatSource.includes('isDelivery ? "Delivery" : "Retirada"'), false);
 });

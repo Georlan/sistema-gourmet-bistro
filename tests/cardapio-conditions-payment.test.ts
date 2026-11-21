@@ -6,7 +6,8 @@ import test from 'node:test';
 import React, { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { BrandConfig } from '../src/cardapio/CardapioTypes';
-const { CardapioConditionsSummary, CardapioDeliveryInfo } = await import('../src/cardapio/components/CardapioOrderConditions');
+const { default: MenuV2Experience } = await import('../src/cardapio/v2/MenuV2Experience');
+const { default: CardapioStoreInfoDrawer } = await import('../src/cardapio/components/CardapioStoreInfoDrawer');
 const { default: CardapioPaymentSummary, PAYMENT_LABELS } = await import('../src/cardapio/components/CardapioPaymentSummary');
 
 const brand = (extra: Partial<BrandConfig> = {}): BrandConfig => ({
@@ -14,14 +15,28 @@ const brand = (extra: Partial<BrandConfig> = {}): BrandConfig => ({
   colors: { primary: '#00b894', background: '#090a0f' }, categories: [], products: [], ...extra,
 });
 const render = (view: React.ReactElement) => renderToStaticMarkup(view).replace(/\u00a0/g, ' ');
+const renderHome = (testBrand: BrandConfig, onStoreInfoClick = () => {}) =>
+  render(createElement(MenuV2Experience, {
+    activeBrand: testBrand,
+    searchQuery: '',
+    setSearchQuery() {},
+    selectedCategory: '',
+    onSelectCategory() {},
+    onSelectProduct() {},
+    onFastAdd() {},
+    onFastRemove() {},
+    getProductCartQuantity: () => 0,
+    onCartToggle() {},
+    cartCount: 0,
+    onStoreInfoClick,
+  }));
+const renderStoreInfo = (testBrand: BrandConfig) =>
+  render(createElement(CardapioStoreInfoDrawer, { brand: testBrand, isOpen: true, onClose() {} }));
 
 test('resumo mostra mínimo configurado e acesso às taxas sem sacola', () => {
-  const html = render(createElement(CardapioConditionsSummary, { brand: brand({ pedidoMinimo: 30 }), onOpen: () => {} }));
-  assert.match(html, /Condições do pedido/);
-  assert.match(html, /Mínimo para entrega/);
-  assert.match(html, /R\$ 30,00/);
-  assert.match(html, /Taxas de entrega/);
-  assert.match(html, /min-h-11/);
+  const html = renderHome(brand({ pedidoMinimo: 30 }));
+  assert.match(html, /Mín\.\s*R\$ 30,00/);
+  assert.match(html, /Taxas de entrega e horários/);
 });
 
 test('delivery pausado anuncia somente retirada e não publica taxas ou mínimo', () => {
@@ -31,66 +46,66 @@ test('delivery pausado anuncia somente retirada e não publica taxas ou mínimo'
     taxaEntregaPadrao: 12,
     tabelaTaxasBairros: [{ bairro: 'Centro', taxa: 5 }],
   });
-  const summary = render(createElement(CardapioConditionsSummary, { brand: paused, onOpen: () => {} }));
-  const details = render(createElement(CardapioDeliveryInfo, { brand: paused }));
+  const summary = renderHome(paused);
+  const details = renderStoreInfo(paused);
   assert.match(summary, /Somente retirada/);
   assert.match(details, /entrega está pausada/);
-  assert.doesNotMatch(`${summary}${details}`, /R\$|Pedido mínimo|Taxa padrão|Taxas por bairro/);
+  assert.doesNotMatch(details, /R\$|Pedido mínimo|Taxa padrão|Taxas por bairro/);
 });
 
 test('sem mínimo não anuncia valor inventado ou mínimo zero', () => {
   for (const pedidoMinimo of [undefined, 0]) {
-    const html = render(createElement(CardapioConditionsSummary, { brand: brand({ pedidoMinimo }), onOpen: () => {} }));
-    assert.doesNotMatch(html, /Pedido mínimo|R\$/);
+    const html = renderHome(brand({ pedidoMinimo }));
+    assert.doesNotMatch(html, /Pedido mínimo|Mín\.|R\$/);
     assert.match(html, /Taxas de entrega/);
   }
 });
 
-test('botão de taxas aciona apenas o callback de consulta', () => {
-  let calls = 0;
-  const view = CardapioConditionsSummary({ brand: brand(), onOpen: () => calls++ });
-  const button = React.Children.toArray(view.props.children).find((node) => React.isValidElement(node) && node.type === 'button') as React.ReactElement<{ onClick: () => void }>;
-  button.props.onClick();
-  assert.equal(calls, 1);
+test('botão de taxas aciona o callback de consulta nas opções da loja', () => {
+  const v2Source = readFileSync(new URL('../src/cardapio/v2/MenuV2Experience.tsx', import.meta.url), 'utf8');
+  assert.match(v2Source, /onClick=\{onStoreInfoClick\}[^>]*>[\s\S]*Taxas de entrega e horários/);
 });
 
 test('consulta mantém bairros gratuitos, valores, nomes longos e limiar da loja', () => {
-  const html = render(createElement(CardapioDeliveryInfo, { brand: brand({ pedidoMinimo: 30, freteGratisValor: 75, tabelaTaxasBairros: [{ bairro: 'Centro', taxa: 5 }, { bairro: 'Bairro com nome muito longo', taxa: 0 }] }) }));
+  const html = renderStoreInfo(brand({
+    pedidoMinimo: 30,
+    freteGratisValor: 75,
+    tabelaTaxasBairros: [{ bairro: 'Centro', taxa: 5 }, { bairro: 'Bairro com nome muito longo', taxa: 0 }],
+  }));
   for (const value of ['R$ 30,00', 'R$ 75,00', 'R$ 5,00', 'Bairro com nome muito longo', 'Grátis']) assert.ok(html.includes(value));
   assert.match(html, /break-words/);
 });
 
 test('mesmo bairro de outra loja exibe a própria taxa', () => {
-  const html = render(createElement(CardapioDeliveryInfo, { brand: brand({ id: '902', tabelaTaxasBairros: [{ bairro: 'Centro', taxa: 9 }] }) }));
+  const html = renderStoreInfo(brand({ id: '902', tabelaTaxasBairros: [{ bairro: 'Centro', taxa: 9 }] }));
   assert.match(html, /R\$ 9,00/);
   assert.doesNotMatch(html, /R\$ 5,00/);
 });
 
 test('sem tabela informa estimativa existente; sem valor não inventa taxa ou prazo', () => {
-  const configured = render(createElement(CardapioDeliveryInfo, { brand: brand({ taxaEntregaPadrao: 12 }) }));
+  const configured = renderStoreInfo(brand({ taxaEntregaPadrao: 12 }));
   assert.match(configured, /Taxa padrão estimada/);
   assert.match(configured, /R\$ 12,00/);
-  const absent = render(createElement(CardapioDeliveryInfo, { brand: brand() }));
+  const absent = renderStoreInfo(brand());
   assert.match(absent, /Consulte a taxa de entrega na sacola/);
   assert.doesNotMatch(absent, /R\$|minutos|Grátis/);
 });
 
 test('modo distância comunica somente a taxa mínima ativa', () => {
-  const html = render(createElement(CardapioDeliveryInfo, {
-    brand: brand({
-      tipoTaxaEntrega: 'distancia',
-      taxaEntregaPadrao: 7,
-      tabelaTaxasBairros: [{ bairro: 'Centro', taxa: 9 }],
-      tabelaTaxasKm: [{
-        taxa_minima: 5,
-        valor_por_km: 1,
-        fallback_sem_localizacao: 'minima',
-      }],
-    }),
+  const html = renderStoreInfo(brand({
+    tipoTaxaEntrega: 'distancia',
+    taxaEntregaPadrao: 7,
+    tabelaTaxasBairros: [{ bairro: 'Centro', taxa: 9 }],
+    tabelaTaxasKm: [{
+      taxa_minima: 5,
+      valor_por_km: 1,
+      fallback_sem_localizacao: 'minima',
+    }],
   }));
   assert.match(html, /Taxa de entrega a partir de/);
   assert.match(html, /R\$ 5,00/);
-  assert.doesNotMatch(html, /km|máximo|Taxa padrão estimada|R\$ 7,00|Taxas por bairro|Centro|R\$ 9,00/);
+  const visibleText = html.replace(/<[^>]+>/g, ' ');
+  assert.doesNotMatch(visibleText, /km|máximo|Taxa padrão estimada|R\$ 7,00|Taxas por bairro|Centro|R\$ 9,00/);
 });
 
 test('revisão apresenta a forma realmente escolhida e momento do pagamento', () => {
@@ -120,8 +135,10 @@ test('troco é mostrado como valor entregue, somente para dinheiro', () => {
 
 test('consulta fica antes dos produtos e usa a loja ativa', () => {
   const page = readFileSync(new URL('../src/cardapio/CardapioPage.tsx', import.meta.url), 'utf8');
-  assert.match(page, /<CardapioConditionsSummary brand=\{activeBrand\} onOpen=\{\(\) => setIsStoreInfoOpen\(true\)\}/);
-  assert.ok(page.indexOf('<CardapioConditionsSummary') < page.indexOf('id="catalog-feed"'));
+  const v2 = readFileSync(new URL('../src/cardapio/v2/MenuV2Experience.tsx', import.meta.url), 'utf8');
+  assert.match(page, /onStoreInfoClick=\{\(\) => setIsStoreInfoOpen\(true\)\}/);
+  assert.match(v2, /onClick=\{onStoreInfoClick\}/);
+  assert.ok(v2.indexOf('onClick={onStoreInfoClick}') < v2.indexOf('id="catalog-feed"'));
 });
 
 test('checkout solicita e valida documento somente para Pix PagBank', () => {

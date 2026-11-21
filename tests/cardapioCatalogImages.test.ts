@@ -5,22 +5,85 @@ import test from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 const { default: CatalogProductImage } = await import('../src/cardapio/components/CatalogProductImage');
-const { CardapioRecommendations } = await import('../src/cardapio/components/CardapioRecommendations');
-const { CardapioHighlights } = await import('../src/cardapio/components/CardapioHighlights');
-const { default: CardapioPromotions } = await import('../src/cardapio/components/CardapioPromotions');
-import type { BrandConfig } from '../src/cardapio/CardapioTypes';
+const { default: MenuProductCard } = await import('../src/cardapio/v2/MenuProductCard');
+const { default: MenuV2Experience } = await import('../src/cardapio/v2/MenuV2Experience');
+import type { BrandConfig, Product } from '../src/cardapio/CardapioTypes';
 const { LOCAL_PRODUCT_PLACEHOLDER } = await import('../src/cardapio/CardapioTypes');
 
 const image = 'https://images.example.com/canonical.png';
-const brand = { products: [{ id: 'g', name: 'Prato', category: 'Especiais', price: 14,
-  description: '', image }], promotionProducts: [], promotions: [{ id: 'offer', nome: 'Conjunto',
-  preco: 16, componentes: [['g'], ['drink']] }] } as unknown as BrandConfig;
+const product: Product = {
+  id: 'g',
+  name: 'Prato',
+  category: 'Especiais',
+  price: 14,
+  description: '',
+  image,
+  isAvailable: true,
+};
+const brand = {
+  id: '2',
+  slug: 'teste',
+  name: 'Restaurante Teste',
+  categories: ['Especiais'],
+  products: [product],
+  promotionProducts: [],
+  promotions: [{ id: 'offer', nome: 'Conjunto', preco: 16, componentes: [['g'], ['drink']] }],
+  popularProductIds: [],
+  colors: { primary: '#00b894', background: '#090a0f' },
+} as unknown as BrandConfig;
 
-test('recomendações, destaques e ofertas renderizam a imagem canônica do catálogo', () => {
-  for (const component of [React.createElement(CardapioRecommendations, { brand }),
-    React.createElement(CardapioHighlights, { brand }),
-    React.createElement(CardapioPromotions, { brand, onSelect() {} })]) {
-    assert.match(renderToStaticMarkup(component), /src="https:\/\/images.example.com\/canonical.png"/);
+test('cards V2, destaques e ofertas renderizam a imagem canônica do catálogo', () => {
+  const noop = () => {};
+  const htmls = [
+    renderToStaticMarkup(
+      React.createElement(MenuProductCard, {
+        product,
+        variant: 'row',
+        cartQuantity: 0,
+        onSelectProduct: noop,
+        onFastAdd: noop,
+        onFastRemove: noop,
+      }),
+    ),
+    renderToStaticMarkup(
+      React.createElement(MenuProductCard, {
+        product,
+        variant: 'highlight',
+        cartQuantity: 0,
+        onSelectProduct: noop,
+        onFastAdd: noop,
+        onFastRemove: noop,
+      }),
+    ),
+    renderToStaticMarkup(
+      React.createElement(MenuV2Experience, {
+        activeBrand: brand,
+        searchQuery: '',
+        setSearchQuery: noop,
+        selectedCategory: 'Especiais',
+        onSelectCategory: noop,
+        onSelectProduct: noop,
+        onFastAdd: noop,
+        onFastRemove: noop,
+        getProductCartQuantity: () => 0,
+        onCartToggle: noop,
+        cartCount: 0,
+        cartTotal: 0,
+        cart: [],
+        onStoreInfoClick: noop,
+        onOrdersClick: noop,
+        activeOrdersCount: 0,
+        onPromotionSelect: noop,
+        user: null,
+        onAuthClick: noop,
+        activeDockTab: 'home',
+        onDockNavigate: noop,
+      }),
+    ),
+  ];
+
+  for (const html of htmls) {
+    assert.match(html, /src="https:\/\/images\.example\.com\/canonical\.png"/);
   }
 });
 
@@ -44,4 +107,3 @@ test('CatalogProductImage prioriza carregamento somente quando solicitado para i
   assert.equal(hero.props.width, 640);
   assert.equal(hero.props.height, 480);
 });
-

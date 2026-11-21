@@ -21,6 +21,8 @@ interface MenuBottomDockProps {
   onNavigate: (tab: MenuDockTab) => void;
 }
 
+const brlFormatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
 const TABS: Array<{ id: MenuDockTab; label: string; domId: string }> = [
   { id: "home", label: "Início", domId: "mobile-nav-home" },
   { id: "orders", label: "Pedidos", domId: "mobile-nav-orders" },
@@ -38,6 +40,8 @@ export default function MenuBottomDock({
   onNavigate,
 }: MenuBottomDockProps) {
   if (hidden) return null;
+
+  const canUseNumberFlow = typeof window !== "undefined" && typeof document !== "undefined";
 
   const renderGlyph = (id: MenuDockTab) => {
     switch (id) {
@@ -94,18 +98,22 @@ export default function MenuBottomDock({
                 {renderGlyph(tab.id)}
                 {badge > 0 && (
                   <span className="km-dock__badge" aria-label={`${badge} itens`}>
-                    <NumberFlow value={badge} />
+                    {canUseNumberFlow ? <NumberFlow value={badge} /> : badge}
                   </span>
                 )}
               </motion.span>
 
               <span className="km-dock__label km-tabular">
                 {tab.id === "bag" && cartCount > 0 ? (
-                  <NumberFlow
-                    value={cartTotal}
-                    format={{ style: "currency", currency: "BRL" }}
-                    locales="pt-BR"
-                  />
+                  canUseNumberFlow ? (
+                    <NumberFlow
+                      value={cartTotal}
+                      format={{ style: "currency", currency: "BRL" }}
+                      locales="pt-BR"
+                    />
+                  ) : (
+                    brlFormatter.format(cartTotal)
+                  )
                 ) : tab.id === "account" && userFirstName ? (
                   userFirstName
                 ) : (

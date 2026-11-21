@@ -191,14 +191,32 @@ export default function CardapioStoreInfoDrawer({
             <div className="mt-2 space-y-1.5 text-xs">
               {brand.deliveryEnabled === false ? (
                 <p className="text-[var(--km-ink-2)]">
-                  Entrega pausada no momento. Pedidos disponíveis para retirada no balcão.
+                  A entrega está pausada no momento. Pedidos disponíveis apenas para retirada.
                 </p>
+              ) : deliveryMode === "distancia" ? (
+                <>
+                  <p className="font-semibold text-[var(--km-ink)]">
+                    {distanceConfig && Number.isFinite(Number(distanceConfig.taxa_minima))
+                      ? `Taxa de entrega a partir de ${money(Number(distanceConfig.taxa_minima))}`
+                      : "Taxa de entrega calculada conforme seu endereço na sacola."}
+                  </p>
+                  {(brand.pedidoMinimo ?? 0) > 0 && (
+                    <p className="text-[var(--km-ink-2)]">
+                      Pedido mínimo: <strong className="text-[var(--km-ink)]">{money(brand.pedidoMinimo!)}</strong>
+                    </p>
+                  )}
+                  {(brand.freteGratisValor ?? 0) > 0 && (
+                    <p className="text-[var(--km-accent-text)] font-semibold">
+                      Frete grátis a partir de {money(brand.freteGratisValor!)}
+                    </p>
+                  )}
+                </>
               ) : (
                 <>
                   <p className="font-semibold text-[var(--km-ink)]">
                     {Number.isFinite(brand.taxaEntregaPadrao)
                       ? `Taxa padrão estimada: ${money(brand.taxaEntregaPadrao!)}`
-                      : "Taxa de entrega calculada na sacola conforme seu endereço."}
+                      : "Consulte a taxa de entrega na sacola conforme seu endereço."}
                   </p>
                   {(brand.pedidoMinimo ?? 0) > 0 && (
                     <p className="text-[var(--km-ink-2)]">
@@ -217,9 +235,9 @@ export default function CardapioStoreInfoDrawer({
                       </span>
                       <div className="max-h-32 overflow-y-auto space-y-1 pr-1 text-[11px]">
                         {neighborhoods.map((n, i) => (
-                          <div key={i} className="flex justify-between text-[var(--km-ink-2)]">
-                            <span>{n.bairro}</span>
-                            <span className="font-bold font-mono text-[var(--km-ink)]">
+                          <div key={i} className="flex items-start justify-between gap-2 text-[var(--km-ink-2)]">
+                            <span className="break-words min-w-0">{n.bairro}</span>
+                            <span className="shrink-0 font-bold font-mono text-[var(--km-ink)]">
                               {n.taxa === 0 ? "Grátis" : money(n.taxa)}
                             </span>
                           </div>
