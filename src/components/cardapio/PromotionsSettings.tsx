@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ArrowRight,
   CalendarClock,
+  Check,
   Eye,
   Gift,
   Layers,
   LoaderCircle,
+  Minus,
   Percent,
   Plus,
   Save,
@@ -19,8 +22,12 @@ import {
   buildItemDiscountSuggestion,
   buildSchedulePreset,
   buildSimpleGiftSuggestion,
+  calculatePromotionRegularTotal,
+  clampPromotionQuantity,
+  formatPromotionItemsSummary,
   getPromotionTypeLabel,
   inferPromotionType,
+  normalizeSlotQuantities,
   type GiftSourceMode,
   type PromotionType,
   type ScheduleQuickPreset,
@@ -43,6 +50,7 @@ type Promotion = {
   tipo?: PromotionType;
   brinde_nome?: string | null;
   componentes: string[][];
+  quantidades?: number[];
   ativo: boolean;
   inicio_em?: string | null;
   fim_em?: string | null;
@@ -55,6 +63,7 @@ type PromotionFormState = {
   giftSource: GiftSourceMode;
   brindeNome: string;
   slotIds: string[];
+  slotQuantities: number[];
   nome: string;
   descricao: string;
   preco: string;
@@ -66,9 +75,10 @@ type PromotionFormState = {
 
 const createEmptyForm = (tipo: PromotionType = 'compre_ganhe'): PromotionFormState => ({
   tipo,
-  giftSource: 'brinde_simples',
+  giftSource: 'produto_cardapio',
   brindeNome: '',
-  slotIds: tipo === 'combo' ? ['', ''] : [''],
+  slotIds: tipo === 'combo' || tipo === 'compre_ganhe' ? ['', ''] : [''],
+  slotQuantities: tipo === 'combo' || tipo === 'compre_ganhe' ? [1, 1] : [1],
   nome: '',
   descricao: '',
   preco: '',
@@ -88,25 +98,28 @@ const SCHEDULE_PRESETS: ReadonlyArray<{ id: ScheduleQuickPreset; label: string }
   { id: 'fim_de_semana', label: 'Fim de semana' },
 ];
 
+const BUY_QTY_PILLS = [1, 2, 3, 5] as const;
+const GIFT_QTY_PILLS = [1, 2, 3] as const;
+
 const PROMOTION_TYPES: ReadonlyArray<{
   id: PromotionType;
   title: string;
-  description: string;
+  example: string;
 }> = [
+  {
+    id: 'desconto_item',
+    title: 'Desconto em 1 item',
+    example: 'Ex.: Item de R$ 14 por R$ 10',
+  },
   {
     id: 'compre_ganhe',
     title: 'Compre e ganhe',
-    description: 'Escolha o item principal e informe o brinde sem precisar cadastrar produto oculto.',
+    example: 'Ex.: Comprando 5 unidades, ganha 1',
   },
   {
     id: 'combo',
-    title: 'Combo promocional',
-    description: 'Combine de 2 a 4 itens do cardápio com um preço fechado especial.',
-  },
-  {
-    id: 'desconto_item',
-    title: 'Desconto agendado',
-    description: 'Aplique preço promocional em 1 produto com início e fim programados.',
+    title: 'Combo com preço fechado',
+    example: 'Ex.: Prato + Bebida por preço especial',
   },
 ];
 
@@ -125,6 +138,8 @@ export default function PromotionsSettings({
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [form, setForm] = useState<PromotionFormState>(() => createEmptyForm('compre_ganhe'));
   const [autoSuggestedText, setAutoSuggestedText] = useState<{ nome: string; descricao: string } | null>(null);
+  const [priceManuallyEdited, setPriceManuallyEdited] = useState(false);
+  const [activeSchedulePreset, setActiveSchedulePreset] = useState<ScheduleQuickPreset | null>('agora');
   const [editing, setEditing] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [available, setAvailable] = useState(false);
@@ -175,22 +190,28 @@ export default function PromotionsSettings({
     forcePrice = false,
   ): PromotionFormState => {
     let suggestion: { nome: string; descricao: string; preco?: string } | null = null;
+    const qtys = normalizeSlotQuantities(nextForm.slotIds.length, nextForm.slotQuantities);
 
     if (nextForm.tipo === 'compre_ganhe') {
       const mainProduct = productById.get(nextForm.slotIds[0] || '');
+      const mainQty = qtys[0] ?? 1;
       if (nextForm.giftSource === 'brinde_simples') {
-        suggestion = buildSimpleGiftSuggestion(mainProduct, nextForm.brindeNome);
+        suggestion = buildSimpleGiftSuggestion(mainProduct, nextForm.brindeNome, mainQty);
       } else {
         const giftProduct = productById.get(nextForm.slotIds[1] || '');
-        suggestion = buildBuyGetSuggestion(mainProduct, giftProduct);
+        const giftQty = clampPromotionQuantity(qtys[1] ?? 1, 5);
+        suggestion = buildBuyGetSuggestion(mainProduct, giftProduct, mainQty, giftQty);
       }
     } else if (nextForm.tipo === 'desconto_item') {
       suggestion = buildItemDiscountSuggestion(productById.get(nextForm.slotIds[0] || ''));
     } else {
-      const chosen = nextForm.slotIds
-        .map((id) => productById.get(id))
-        .filter((p): p is CatalogProduct => Boolean(p));
-      suggestion = buildComboSuggestion(chosen);
+      const paired = nextForm.slotIds
+        .map((id, index) => ({ product: productById.get(id), qty: qtys[index] ?? 1 }))
+        .filter((entry): entry is { product: CatalogProduct; qty: number } => Boolean(entry.product));
+      suggestion = buildComboSuggestion(
+        paired.map((entry) => entry.product),
+        paired.map((entry) => entry.qty),
+      );
     }
 
     if (!suggestion) return nextForm;
@@ -215,22 +236,33 @@ export default function PromotionsSettings({
 
   const handleTypeChange = (nextType: PromotionType) => {
     setAutoSuggestedText(null);
+    setPriceManuallyEdited(false);
     setForm((current) => {
       const firstId = current.slotIds[0] || '';
       const secondId = current.slotIds[1] || '';
+      const firstQty = clampPromotionQuantity(current.slotQuantities[0] ?? 1, 20);
+      const secondQty = clampPromotionQuantity(current.slotQuantities[1] ?? 1, nextType === 'compre_ganhe' ? 5 : 20);
+
       let nextSlots: string[];
+      let nextQuantities: number[];
       if (nextType === 'combo') {
         nextSlots = [firstId, secondId];
+        nextQuantities = [firstQty, secondQty];
       } else if (nextType === 'compre_ganhe') {
         nextSlots = current.giftSource === 'produto_cardapio' ? [firstId, secondId] : [firstId];
+        nextQuantities = current.giftSource === 'produto_cardapio' ? [firstQty, secondQty] : [firstQty];
       } else {
         nextSlots = [firstId];
+        nextQuantities = [1];
       }
+
       const next: PromotionFormState = {
         ...current,
         tipo: nextType,
         slotIds: nextSlots,
+        slotQuantities: nextQuantities,
         brindeNome: nextType === 'compre_ganhe' ? current.brindeNome : '',
+        preco: nextType === 'desconto_item' ? '' : current.preco,
       };
       return applyAutoSuggestion(next, nextType === 'compre_ganhe');
     });
@@ -240,13 +272,16 @@ export default function PromotionsSettings({
     setForm((current) => {
       const firstId = current.slotIds[0] || '';
       const secondId = current.slotIds[1] || '';
+      const firstQty = clampPromotionQuantity(current.slotQuantities[0] ?? 1, 20);
+      const secondQty = clampPromotionQuantity(current.slotQuantities[1] ?? 1, 5);
       const next: PromotionFormState = {
         ...current,
         giftSource: nextSource,
         slotIds: nextSource === 'produto_cardapio' ? [firstId, secondId] : [firstId],
+        slotQuantities: nextSource === 'produto_cardapio' ? [firstQty, secondQty] : [firstQty],
         brindeNome: nextSource === 'brinde_simples' ? current.brindeNome : '',
       };
-      return applyAutoSuggestion(next, true);
+      return applyAutoSuggestion(next, !priceManuallyEdited);
     });
   };
 
@@ -255,15 +290,34 @@ export default function PromotionsSettings({
       const nextSlots = [...current.slotIds];
       nextSlots[index] = value;
       const next: PromotionFormState = { ...current, slotIds: nextSlots };
-      const shouldForcePrice =
-        current.tipo === 'compre_ganhe' && index === 0;
-      if (shouldForcePrice) {
+      const shouldRecalcBuyGetPrice =
+        current.tipo === 'compre_ganhe' && index === 0 && !priceManuallyEdited;
+      if (shouldRecalcBuyGetPrice) {
         const mainProduct = productById.get(value);
+        const mainQty = clampPromotionQuantity(current.slotQuantities[0] ?? 1, 20);
         if (mainProduct && Number.isFinite(Number(mainProduct.preco)) && Number(mainProduct.preco) > 0) {
-          next.preco = Number(mainProduct.preco).toFixed(2);
+          next.preco = (Number(mainProduct.preco) * mainQty).toFixed(2);
         }
       }
-      return applyAutoSuggestion(next, shouldForcePrice);
+      return applyAutoSuggestion(next, shouldRecalcBuyGetPrice);
+    });
+  };
+
+  const handleSlotQuantityChange = (index: number, rawQty: number, max = 20) => {
+    const qty = clampPromotionQuantity(rawQty, max);
+    setForm((current) => {
+      const nextQuantities = normalizeSlotQuantities(current.slotIds.length, current.slotQuantities, 20);
+      nextQuantities[index] = qty;
+      const next: PromotionFormState = { ...current, slotQuantities: nextQuantities };
+      const shouldRecalcBuyGetPrice =
+        current.tipo === 'compre_ganhe' && index === 0 && !priceManuallyEdited;
+      if (shouldRecalcBuyGetPrice) {
+        const mainProduct = productById.get(current.slotIds[0] || '');
+        if (mainProduct && Number.isFinite(Number(mainProduct.preco)) && Number(mainProduct.preco) > 0) {
+          next.preco = (Number(mainProduct.preco) * qty).toFixed(2);
+        }
+      }
+      return applyAutoSuggestion(next, shouldRecalcBuyGetPrice);
     });
   };
 
@@ -277,7 +331,11 @@ export default function PromotionsSettings({
   const addComboSlot = () => {
     setForm((current) => {
       if (current.slotIds.length >= 4) return current;
-      return { ...current, slotIds: [...current.slotIds, ''] };
+      return {
+        ...current,
+        slotIds: [...current.slotIds, ''],
+        slotQuantities: [...normalizeSlotQuantities(current.slotIds.length, current.slotQuantities), 1],
+      };
     });
   };
 
@@ -285,12 +343,16 @@ export default function PromotionsSettings({
     setForm((current) => {
       if (current.slotIds.length <= 2) return current;
       const nextSlots = current.slotIds.filter((_, i) => i !== index);
-      return applyAutoSuggestion({ ...current, slotIds: nextSlots }, false);
+      const nextQuantities = normalizeSlotQuantities(current.slotIds.length, current.slotQuantities).filter(
+        (_, i) => i !== index,
+      );
+      return applyAutoSuggestion({ ...current, slotIds: nextSlots, slotQuantities: nextQuantities }, false);
     });
   };
 
   const applySchedulePreset = (preset: ScheduleQuickPreset) => {
     const { inicio, fim } = buildSchedulePreset(preset, form.fuso);
+    setActiveSchedulePreset(preset);
     setForm((current) => ({ ...current, inicio, fim }));
   };
 
@@ -307,16 +369,20 @@ export default function PromotionsSettings({
         : tipo === 'compre_ganhe' && giftSource === 'produto_cardapio'
           ? [rawSlots[0] || '', rawSlots[1] || '']
           : [rawSlots[0] || ''];
+    const slotQuantities = normalizeSlotQuantities(slotIds.length, p.quantidades);
 
     setShowEditor(true);
     setEditing(p.id);
     setAutoSuggestedText(null);
+    setPriceManuallyEdited(true);
+    setActiveSchedulePreset(!p.inicio_em && !p.fim_em ? 'agora' : null);
     setNotice('');
     setForm({
       tipo,
       giftSource,
       brindeNome: p.brinde_nome?.trim() || '',
       slotIds,
+      slotQuantities,
       nome: p.nome,
       descricao: p.descricao || '',
       preco: String(p.preco),
@@ -336,10 +402,13 @@ export default function PromotionsSettings({
     }
 
     let finalSlotIds: string[] = [];
+    let finalQuantities: number[] = [];
     let brindeNomePayload: string | null = null;
+    const normalizedQty = normalizeSlotQuantities(form.slotIds.length, form.slotQuantities);
 
     if (form.tipo === 'compre_ganhe') {
       const mainId = form.slotIds[0] || '';
+      const mainQty = clampPromotionQuantity(normalizedQty[0] ?? 1, 20);
       if (!mainId) {
         setNoticeTone('warning');
         setNotice('Selecione o produto principal da oferta Compre e Ganhe.');
@@ -353,9 +422,11 @@ export default function PromotionsSettings({
           return;
         }
         finalSlotIds = [mainId];
+        finalQuantities = [mainQty];
         brindeNomePayload = cleanGift;
       } else {
         const giftId = form.slotIds[1] || '';
+        const giftQty = clampPromotionQuantity(normalizedQty[1] ?? 1, 5);
         if (!giftId) {
           setNoticeTone('warning');
           setNotice('Selecione o produto do cardápio que será entregue como brinde.');
@@ -367,15 +438,17 @@ export default function PromotionsSettings({
           return;
         }
         finalSlotIds = [mainId, giftId];
+        finalQuantities = [mainQty, giftQty];
       }
     } else if (form.tipo === 'desconto_item') {
       const itemId = form.slotIds[0] || '';
       if (!itemId) {
         setNoticeTone('warning');
-        setNotice('Selecione o produto que receberá o desconto agendado.');
+        setNotice('Selecione o produto que receberá o desconto.');
         return;
       }
       finalSlotIds = [itemId];
+      finalQuantities = [1];
     } else {
       const filled = form.slotIds.filter(Boolean);
       if (filled.length < 2 || filled.length !== form.slotIds.length) {
@@ -389,6 +462,14 @@ export default function PromotionsSettings({
         return;
       }
       finalSlotIds = filled;
+      finalQuantities = normalizedQty.slice(0, filled.length);
+    }
+
+    const totalUnits = finalQuantities.reduce((sum, qty) => sum + qty, 0);
+    if (totalUnits > 25) {
+      setNoticeTone('warning');
+      setNotice('O total de unidades na promoção não pode passar de 25.');
+      return;
     }
 
     const previousPromotion = editing ? promotions.find((p) => p.id === editing) : undefined;
@@ -409,6 +490,7 @@ export default function PromotionsSettings({
           tipo: form.tipo,
           brinde_nome: brindeNomePayload,
           componentes,
+          quantidades: finalQuantities,
           ativo: form.ativo,
           inicio_em: campaignInstant(form.inicio, form.fuso),
           fim_em: campaignInstant(form.fim, form.fuso),
@@ -422,9 +504,11 @@ export default function PromotionsSettings({
       setEditing(null);
       setForm(createEmptyForm('compre_ganhe'));
       setAutoSuggestedText(null);
+      setPriceManuallyEdited(false);
+      setActiveSchedulePreset('agora');
       setShowEditor(false);
       setNoticeTone('success');
-      setNotice('Promoção salva. Se estiver ativa, aparecerá automaticamente no cardápio online.');
+      setNotice('Promoção salva. Se estiver ativa, aparecerá automaticamente no topo do cardápio.');
       await load();
     } catch (error) {
       setNoticeTone('warning');
@@ -438,6 +522,7 @@ export default function PromotionsSettings({
     setSaving(true);
     try {
       const tipo = inferPromotionType(p);
+      const quantidades = normalizeSlotQuantities(p.componentes.length, p.quantidades);
       const response = await fetch(`${api}/${encodeURIComponent(p.id)}`, {
         method: 'PUT',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
@@ -448,6 +533,7 @@ export default function PromotionsSettings({
           tipo,
           brinde_nome: p.brinde_nome || null,
           componentes: p.componentes,
+          quantidades,
           ativo: !p.ativo,
           inicio_em: p.inicio_em || null,
           fim_em: p.fim_em || null,
@@ -476,6 +562,8 @@ export default function PromotionsSettings({
   const newOffer = () => {
     setEditing(null);
     setAutoSuggestedText(null);
+    setPriceManuallyEdited(false);
+    setActiveSchedulePreset('agora');
     setForm(createEmptyForm('compre_ganhe'));
     setNotice('');
     setShowEditor(true);
@@ -484,6 +572,8 @@ export default function PromotionsSettings({
   const cancelEditor = () => {
     setEditing(null);
     setAutoSuggestedText(null);
+    setPriceManuallyEdited(false);
+    setActiveSchedulePreset('agora');
     setForm(createEmptyForm('compre_ganhe'));
     setShowEditor(false);
     setNotice('');
@@ -528,20 +618,32 @@ export default function PromotionsSettings({
     );
   }
 
-  const selectedProducts = form.slotIds
-    .map((id) => productById.get(id))
-    .filter((p): p is CatalogProduct => Boolean(p));
+  const normalizedFormQtys = normalizeSlotQuantities(form.slotIds.length, form.slotQuantities);
+  const selectedSlots = form.slotIds
+    .map((id, index) => {
+      const product = productById.get(id);
+      if (!product) return null;
+      return {
+        product,
+        qty: normalizedFormQtys[index] ?? 1,
+      };
+    })
+    .filter((entry): entry is { product: CatalogProduct; qty: number } => Boolean(entry));
 
   const previewPrice = Number(form.preco);
   const hasValidPreviewPrice = Boolean(form.preco.trim()) && Number.isFinite(previewPrice) && previewPrice > 0;
 
   let previewSubtotal: number | null = null;
-  if (form.tipo === 'combo' && selectedProducts.length >= 2) {
-    previewSubtotal = selectedProducts.reduce((sum, item) => sum + Number(item.preco), 0);
-  } else if (form.tipo === 'compre_ganhe' && form.giftSource === 'produto_cardapio' && selectedProducts.length >= 2) {
-    previewSubtotal = selectedProducts.reduce((sum, item) => sum + Number(item.preco), 0);
-  } else if (form.tipo === 'desconto_item' && selectedProducts[0]) {
-    previewSubtotal = Number(selectedProducts[0].preco);
+  if (form.tipo === 'combo' && selectedSlots.length >= 2) {
+    previewSubtotal = calculatePromotionRegularTotal(
+      selectedSlots.map((entry) => ({ preco: entry.product.preco, qty: entry.qty })),
+    );
+  } else if (form.tipo === 'compre_ganhe' && form.giftSource === 'produto_cardapio' && selectedSlots.length >= 2) {
+    previewSubtotal = calculatePromotionRegularTotal(
+      selectedSlots.map((entry) => ({ preco: entry.product.preco, qty: entry.qty })),
+    );
+  } else if (form.tipo === 'desconto_item' && selectedSlots[0]) {
+    previewSubtotal = Number(selectedSlots[0].product.preco);
   }
 
   const previewSavings =
@@ -553,19 +655,65 @@ export default function PromotionsSettings({
       ? Math.round((previewSavings / previewSubtotal) * 100)
       : null;
 
-  const previewIncludedItems: string[] = selectedProducts.map((p) => p.nome);
-  if (form.tipo === 'compre_ganhe' && form.giftSource === 'brinde_simples' && form.brindeNome.trim()) {
-    previewIncludedItems.push(`Brinde: ${form.brindeNome.trim()}`);
-  }
+  const previewItemsSummary = formatPromotionItemsSummary(
+    selectedSlots.map((entry) => ({ nome: entry.product.nome, qty: entry.qty })),
+    form.tipo === 'compre_ganhe' && form.giftSource === 'brinde_simples' ? form.brindeNome : null,
+  );
+
+  const mainProductForBuyGet = productById.get(form.slotIds[0] || '');
+  const mainBuyQty = clampPromotionQuantity(normalizedFormQtys[0] ?? 1, 20);
+  const giftBuyQty = clampPromotionQuantity(normalizedFormQtys[1] ?? 1, 5);
+  const suggestedBuyGetPrice =
+    form.tipo === 'compre_ganhe' && mainProductForBuyGet && Number(mainProductForBuyGet.preco) > 0
+      ? Number(mainProductForBuyGet.preco) * mainBuyQty
+      : null;
+
+  const renderQuantityStepper = (
+    slotIndex: number,
+    value: number,
+    max: number,
+    ariaLabel: string,
+  ) => (
+    <div className="inline-flex items-center rounded-xl border border-koma-border bg-koma-input p-0.5">
+      <button
+        type="button"
+        onClick={() => handleSlotQuantityChange(slotIndex, value - 1, max)}
+        disabled={value <= 1}
+        aria-label={`Diminuir ${ariaLabel}`}
+        className="grid min-h-11 w-10 place-items-center rounded-lg text-koma-secondary transition hover:bg-koma-raised hover:text-koma-foreground disabled:opacity-40"
+      >
+        <Minus size={15} aria-hidden="true" />
+      </button>
+      <input
+        type="number"
+        min={1}
+        max={max}
+        value={value}
+        onChange={(e) => handleSlotQuantityChange(slotIndex, Number(e.target.value), max)}
+        aria-label={ariaLabel}
+        className="w-12 bg-transparent text-center text-sm font-bold text-koma-foreground tabular-nums outline-none"
+      />
+      <button
+        type="button"
+        onClick={() => handleSlotQuantityChange(slotIndex, value + 1, max)}
+        disabled={value >= max}
+        aria-label={`Aumentar ${ariaLabel}`}
+        className="grid min-h-11 w-10 place-items-center rounded-lg text-koma-secondary transition hover:bg-koma-raised hover:text-koma-foreground disabled:opacity-40"
+      >
+        <Plus size={15} aria-hidden="true" />
+      </button>
+    </div>
+  );
 
   const renderProductSelect = (
     slotIndex: number,
     label: string,
-    canRemove = false,
+    options?: { canRemove?: boolean; showQtyStepper?: boolean },
   ) => {
     const selectedId = form.slotIds[slotIndex] || '';
+    const slotQty = normalizedFormQtys[slotIndex] ?? 1;
     return (
-      <div key={`slot-${slotIndex}`} className="flex items-end gap-2">
+      <div key={`slot-${slotIndex}`} className="flex flex-wrap items-end gap-2">
         <label className="min-w-0 flex-1 text-xs font-semibold text-koma-secondary">
           {label}
           <select
@@ -584,7 +732,13 @@ export default function PromotionsSettings({
               ))}
           </select>
         </label>
-        {canRemove && (
+        {options?.showQtyStepper && (
+          <div className="shrink-0">
+            <span className="mb-1 block text-xs font-semibold text-koma-secondary">Qtd.</span>
+            {renderQuantityStepper(slotIndex, slotQty, 20, `quantidade do produto ${slotIndex + 1}`)}
+          </div>
+        )}
+        {options?.canRemove && (
           <button
             type="button"
             onClick={() => removeComboSlot(slotIndex)}
@@ -613,12 +767,12 @@ export default function PromotionsSettings({
             >
               Ofertas e combos
             </h2>
-            <span className="rounded-full border border-koma-border bg-koma-card px-2 py-0.5 text-xs font-semibold text-koma-muted tabular-nums">
+            <span className="rounded-full border border-koma-border bg-koma-card px-2.5 py-0.5 text-xs font-semibold text-koma-muted tabular-nums">
               {promotions.length}
             </span>
           </div>
           <p className="mt-1 text-xs text-koma-muted">
-            Crie ofertas Compre e Ganhe, combos de 2 a 4 itens ou descontos agendados para o cardápio online.
+            Crie descontos em 1 item, ofertas Compre N e ganhe M ou combos com preço fechado para o topo do cardápio.
           </p>
         </div>
         {!showEditor && (
@@ -639,7 +793,7 @@ export default function PromotionsSettings({
       {notice && (
         <p
           role="status"
-          className="rounded-xl border px-3 py-2 text-xs font-semibold"
+          className="rounded-xl border px-3.5 py-2.5 text-xs font-semibold"
           style={
             noticeTone === 'success'
               ? {
@@ -666,45 +820,532 @@ export default function PromotionsSettings({
 
       {showEditor && (
         <section
-          className="space-y-4 rounded-xl border border-koma-border bg-koma-card p-3 sm:p-4"
+          className="space-y-4 rounded-2xl border border-koma-border bg-koma-card p-3.5 sm:p-5"
           aria-label={editing ? 'Editar promoção' : 'Cadastrar promoção'}
         >
-          <div className="flex items-center justify-between gap-3">
-            <h3
-              className="text-sm font-bold text-koma-foreground"
-              style={{ fontFamily: 'var(--koma-font-display)' }}
-            >
-              {editing ? 'Editar promoção' : 'Nova promoção'}
-            </h3>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-koma-border pb-3">
+            <div>
+              <h3
+                className="text-base font-bold text-koma-foreground"
+                style={{ fontFamily: 'var(--koma-font-display)' }}
+              >
+                {editing ? 'Editar promoção' : 'Criar nova promoção'}
+              </h3>
+              <p className="text-xs text-koma-muted">
+                Siga os 3 passos e confira ao lado como a oferta aparece para o cliente.
+              </p>
+            </div>
             <button
               type="button"
               onClick={cancelEditor}
-              className="min-h-11 rounded-xl border border-koma-border bg-koma-panel px-3 text-xs font-semibold text-koma-secondary hover:bg-koma-raised"
+              className="min-h-11 rounded-xl border border-koma-border bg-koma-panel px-4 text-xs font-semibold text-koma-secondary transition hover:bg-koma-raised hover:text-koma-foreground"
             >
               Cancelar
             </button>
           </div>
 
-          <div className="space-y-2" role="group" aria-label="Tipo de oferta">
-            <span className="block text-xs font-semibold text-koma-secondary">Tipo de oferta</span>
-            <div className="grid gap-2 md:grid-cols-3">
-              {PROMOTION_TYPES.map((option) => {
-                const selected = form.tipo === option.id;
-                const Icon =
-                  option.id === 'compre_ganhe'
-                    ? Gift
-                    : option.id === 'combo'
-                      ? Layers
-                      : Percent;
-                return (
-                  <button
-                    key={option.id}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => handleTypeChange(option.id)}
-                    className="flex min-h-11 flex-col items-start rounded-xl border px-3.5 py-2.5 text-left transition"
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+            {/* Coluna esquerda: 3 passos objetivos */}
+            <div className="space-y-5">
+              {/* Passo 1: Tipo */}
+              <div className="space-y-2.5" role="group" aria-label="Tipo de oferta">
+                <div className="flex items-center gap-2">
+                  <span className="grid h-6 w-6 place-items-center rounded-full border border-koma-border bg-koma-panel text-xs font-bold text-koma-foreground tabular-nums">
+                    1
+                  </span>
+                  <span
+                    className="text-sm font-bold text-koma-foreground"
+                    style={{ fontFamily: 'var(--koma-font-display)' }}
+                  >
+                    Tipo de oferta
+                  </span>
+                </div>
+
+                <div className="grid gap-2.5 sm:grid-cols-3">
+                  {PROMOTION_TYPES.map((option) => {
+                    const selected = form.tipo === option.id;
+                    const Icon =
+                      option.id === 'compre_ganhe'
+                        ? Gift
+                        : option.id === 'combo'
+                          ? Layers
+                          : Percent;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => handleTypeChange(option.id)}
+                        className="flex min-h-11 flex-col items-start gap-1.5 rounded-xl border p-3.5 text-left transition"
+                        style={
+                          selected
+                            ? {
+                                background: 'var(--koma-success-bg)',
+                                borderColor: 'var(--koma-success-border)',
+                                color: 'var(--koma-success-text)',
+                              }
+                            : {
+                                background: 'var(--koma-surface-panel)',
+                                borderColor: 'var(--koma-border-default)',
+                                color: 'var(--koma-text-primary)',
+                              }
+                        }
+                      >
+                        <span className="flex w-full items-center justify-between gap-2">
+                          <span className="grid h-8 w-8 place-items-center rounded-lg border border-current/20">
+                            <Icon size={16} aria-hidden="true" />
+                          </span>
+                          {selected && <Check size={16} aria-hidden="true" />}
+                        </span>
+                        <span
+                          className="text-sm font-bold leading-snug"
+                          style={{ fontFamily: 'var(--koma-font-display)' }}
+                        >
+                          {option.title}
+                        </span>
+                        <span className="text-xs leading-relaxed opacity-85">{option.example}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Passo 2: Itens e preço */}
+              <div className="space-y-3 rounded-xl border border-koma-border bg-koma-panel p-3.5 sm:p-4">
+                <div className="flex items-center gap-2">
+                  <span className="grid h-6 w-6 place-items-center rounded-full border border-koma-border bg-koma-card text-xs font-bold text-koma-foreground tabular-nums">
+                    2
+                  </span>
+                  <span
+                    className="text-sm font-bold text-koma-foreground"
+                    style={{ fontFamily: 'var(--koma-font-display)' }}
+                  >
+                    Itens e preço
+                  </span>
+                </div>
+
+                {form.tipo === 'desconto_item' && (
+                  <div className="space-y-3">
+                    {renderProductSelect(0, 'Produto em oferta')}
+                    {selectedSlots[0] && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-xs">
+                        <span className="text-koma-muted">
+                          Preço normal:{' '}
+                          <strong className="text-koma-foreground tabular-nums">
+                            {money(selectedSlots[0].product.preco)}
+                          </strong>
+                        </span>
+                        {previewDiscountPercent != null && previewDiscountPercent > 0 && (
+                          <span
+                            className="rounded-full border px-2.5 py-0.5 text-xs font-bold tabular-nums"
+                            style={{
+                              background: 'var(--koma-success-bg)',
+                              borderColor: 'var(--koma-success-border)',
+                              color: 'var(--koma-success-text)',
+                            }}
+                          >
+                            {previewDiscountPercent}% OFF
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {form.tipo === 'compre_ganhe' && (
+                  <div className="space-y-4">
+                    <div className="space-y-2.5 rounded-xl border border-koma-border bg-koma-card p-3">
+                      <span className="block text-xs font-bold text-koma-foreground">
+                        O cliente compra
+                      </span>
+                      <div className="space-y-2">
+                        <span className="block text-xs font-semibold text-koma-secondary">
+                          Quantidade para comprar
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Atalhos de quantidade para comprar">
+                            {BUY_QTY_PILLS.map((qty) => {
+                              const active = mainBuyQty === qty;
+                              return (
+                                <button
+                                  key={qty}
+                                  type="button"
+                                  aria-pressed={active}
+                                  onClick={() => handleSlotQuantityChange(0, qty, 20)}
+                                  className="min-h-11 min-w-11 rounded-xl border px-3 text-xs font-bold tabular-nums transition"
+                                  style={
+                                    active
+                                      ? {
+                                          background: 'var(--koma-success-bg)',
+                                          borderColor: 'var(--koma-success-border)',
+                                          color: 'var(--koma-success-text)',
+                                        }
+                                      : {
+                                          background: 'var(--koma-surface-panel)',
+                                          borderColor: 'var(--koma-border-default)',
+                                          color: 'var(--koma-text-primary)',
+                                        }
+                                  }
+                                >
+                                  {qty}×
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {renderQuantityStepper(0, mainBuyQty, 20, 'quantidade para comprar')}
+                        </div>
+                      </div>
+                      {renderProductSelect(0, 'Produto principal')}
+                    </div>
+
+                    <div className="space-y-3 rounded-xl border border-koma-border bg-koma-card p-3">
+                      <span className="block text-xs font-bold text-koma-foreground">
+                        E ganha de brinde
+                      </span>
+                      <div className="grid gap-2 sm:grid-cols-2" role="group" aria-label="Origem do brinde">
+                        <button
+                          type="button"
+                          aria-pressed={form.giftSource === 'produto_cardapio'}
+                          onClick={() => handleGiftSourceChange('produto_cardapio')}
+                          className="min-h-11 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition"
+                          style={
+                            form.giftSource === 'produto_cardapio'
+                              ? {
+                                  background: 'var(--koma-success-bg)',
+                                  borderColor: 'var(--koma-success-border)',
+                                  color: 'var(--koma-success-text)',
+                                }
+                              : {
+                                  background: 'var(--koma-surface-panel)',
+                                  borderColor: 'var(--koma-border-default)',
+                                  color: 'var(--koma-text-primary)',
+                                }
+                          }
+                        >
+                          <span className="block font-bold">Produto do cardápio</span>
+                          <span className="mt-0.5 block text-xs opacity-80">
+                            Usa um item já cadastrado e mantém baixa normal.
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          aria-pressed={form.giftSource === 'brinde_simples'}
+                          onClick={() => handleGiftSourceChange('brinde_simples')}
+                          className="min-h-11 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition"
+                          style={
+                            form.giftSource === 'brinde_simples'
+                              ? {
+                                  background: 'var(--koma-success-bg)',
+                                  borderColor: 'var(--koma-success-border)',
+                                  color: 'var(--koma-success-text)',
+                                }
+                              : {
+                                  background: 'var(--koma-surface-panel)',
+                                  borderColor: 'var(--koma-border-default)',
+                                  color: 'var(--koma-text-primary)',
+                                }
+                          }
+                        >
+                          <span className="block font-bold">Brinde simples por nome</span>
+                          <span className="mt-0.5 block text-xs opacity-80">
+                            Digite o brinde sem precisar criar produto extra.
+                          </span>
+                        </button>
+                      </div>
+
+                      {form.giftSource === 'produto_cardapio' ? (
+                        <div className="space-y-3">
+                          {renderProductSelect(1, 'Produto de brinde')}
+                          <div className="space-y-1.5">
+                            <span className="block text-xs font-semibold text-koma-secondary">
+                              Quantidade de brinde
+                            </span>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Atalhos de quantidade de brinde">
+                                {GIFT_QTY_PILLS.map((qty) => {
+                                  const active = giftBuyQty === qty;
+                                  return (
+                                    <button
+                                      key={qty}
+                                      type="button"
+                                      aria-pressed={active}
+                                      onClick={() => handleSlotQuantityChange(1, qty, 5)}
+                                      className="min-h-11 min-w-11 rounded-xl border px-3 text-xs font-bold tabular-nums transition"
+                                      style={
+                                        active
+                                          ? {
+                                              background: 'var(--koma-success-bg)',
+                                              borderColor: 'var(--koma-success-border)',
+                                              color: 'var(--koma-success-text)',
+                                            }
+                                          : {
+                                              background: 'var(--koma-surface-panel)',
+                                              borderColor: 'var(--koma-border-default)',
+                                              color: 'var(--koma-text-primary)',
+                                            }
+                                      }
+                                    >
+                                      {qty}×
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              {renderQuantityStepper(1, giftBuyQty, 5, 'quantidade de brinde')}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <label className="block text-xs font-semibold text-koma-secondary">
+                          Nome do brinde
+                          <input
+                            value={form.brindeNome}
+                            onChange={(e) => handleBrindeNomeChange(e.target.value)}
+                            maxLength={90}
+                            placeholder="Ex: Refrigerante lata, Sobremesa, Molho especial"
+                            className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground"
+                          />
+                          <span className="mt-1 block text-xs font-normal text-koma-muted">
+                            O brinde aparece no cardápio, na comanda da cozinha e no cupom.
+                          </span>
+                        </label>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {form.tipo === 'combo' && (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-koma-secondary tabular-nums">
+                        Itens do combo ({form.slotIds.length} de 4)
+                      </span>
+                      {form.slotIds.length < 4 && (
+                        <button
+                          type="button"
+                          onClick={addComboSlot}
+                          className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 text-xs font-semibold text-koma-foreground transition hover:bg-koma-raised"
+                        >
+                          <Plus size={14} aria-hidden="true" /> Adicionar item ao combo
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-2.5">
+                      {form.slotIds.map((_, index) =>
+                        renderProductSelect(index, `Produto ${index + 1}`, {
+                          canRemove: index >= 2,
+                          showQtyStepper: true,
+                        }),
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Preço + publicação + nome/descrição */}
+                <div className="grid gap-3 border-t border-koma-border pt-3 sm:grid-cols-2">
+                  <label className="text-xs font-semibold text-koma-secondary">
+                    {form.tipo === 'desconto_item'
+                      ? 'Preço promocional (R$)'
+                      : form.tipo === 'compre_ganhe'
+                        ? 'Preço da oferta (R$)'
+                        : 'Preço do combo (R$)'}
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={form.preco}
+                      onChange={(e) => {
+                        setPriceManuallyEdited(true);
+                        setForm((f) => ({ ...f, preco: e.target.value }));
+                      }}
+                      placeholder="0,00"
+                      className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3 text-sm font-bold text-koma-foreground tabular-nums"
+                    />
+                    {suggestedBuyGetPrice != null && (
+                      <span className="mt-1 flex flex-wrap items-center gap-2 text-xs font-normal text-koma-muted tabular-nums">
+                        <span>
+                          Sugestão ({mainBuyQty}× {money(Number(mainProductForBuyGet?.preco || 0))}):{' '}
+                          <strong className="text-koma-foreground">{money(suggestedBuyGetPrice)}</strong>
+                        </span>
+                        {Math.abs(previewPrice - suggestedBuyGetPrice) > 0.005 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPriceManuallyEdited(false);
+                              setForm((f) => ({ ...f, preco: suggestedBuyGetPrice.toFixed(2) }));
+                            }}
+                            className="font-semibold text-koma-secondary underline hover:text-koma-foreground"
+                          >
+                            Usar sugestão
+                          </button>
+                        )}
+                      </span>
+                    )}
+                  </label>
+
+                  <label className="flex min-h-11 cursor-pointer items-center gap-2.5 self-start rounded-xl border border-koma-border bg-koma-card px-3.5 py-2.5 text-xs font-semibold text-koma-foreground sm:mt-5">
+                    <input
+                      type="checkbox"
+                      checked={form.ativo}
+                      onChange={(e) => setForm((f) => ({ ...f, ativo: e.target.checked }))}
+                    />
+                    <span>Habilitar oferta no cardápio</span>
+                  </label>
+
+                  <label className="text-xs font-semibold text-koma-secondary sm:col-span-2">
+                    Nome da promoção
+                    <input
+                      value={form.nome}
+                      onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}
+                      maxLength={90}
+                      className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground"
+                      placeholder={
+                        form.tipo === 'compre_ganhe'
+                          ? 'Ex: Comprando 5 unidades, ganha 1 brinde'
+                          : form.tipo === 'desconto_item'
+                            ? 'Ex: Oferta especial do dia'
+                            : 'Ex: Combo Almoço Completo'
+                      }
+                    />
+                  </label>
+
+                  <label className="text-xs font-semibold text-koma-secondary sm:col-span-2">
+                    Descrição curta (opcional)
+                    <input
+                      value={form.descricao}
+                      onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))}
+                      maxLength={240}
+                      className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground"
+                      placeholder="Explique o que está incluso para o cliente"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              {/* Passo 3: Quando vale */}
+              <div className="space-y-3 rounded-xl border border-koma-border bg-koma-panel p-3.5 sm:p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="grid h-6 w-6 place-items-center rounded-full border border-koma-border bg-koma-card text-xs font-bold text-koma-foreground tabular-nums">
+                      3
+                    </span>
+                    <span
+                      className="inline-flex items-center gap-1.5 text-sm font-bold text-koma-foreground"
+                      style={{ fontFamily: 'var(--koma-font-display)' }}
+                    >
+                      <CalendarClock size={15} aria-hidden="true" /> Quando vale
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5" role="group" aria-label="Atalhos de agendamento">
+                    {SCHEDULE_PRESETS.map((preset) => {
+                      const active = activeSchedulePreset === preset.id;
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          aria-pressed={active}
+                          onClick={() => applySchedulePreset(preset.id)}
+                          className="min-h-11 rounded-xl border px-3 text-xs font-semibold transition"
+                          style={
+                            active
+                              ? {
+                                  background: 'var(--koma-success-bg)',
+                                  borderColor: 'var(--koma-success-border)',
+                                  color: 'var(--koma-success-text)',
+                                }
+                              : {
+                                  background: 'var(--koma-surface-card)',
+                                  borderColor: 'var(--koma-border-default)',
+                                  color: 'var(--koma-text-secondary)',
+                                }
+                          }
+                        >
+                          {preset.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="text-xs font-semibold text-koma-secondary">
+                    Início programado (opcional)
+                    <input
+                      type="datetime-local"
+                      value={form.inicio}
+                      onChange={(e) => {
+                        setActiveSchedulePreset(null);
+                        setForm((f) => ({ ...f, inicio: e.target.value }));
+                      }}
+                      className="mt-1 min-h-11 w-full min-w-0 rounded-xl border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground tabular-nums"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-koma-secondary">
+                    Encerramento (opcional)
+                    <input
+                      type="datetime-local"
+                      value={form.fim}
+                      onChange={(e) => {
+                        setActiveSchedulePreset(null);
+                        setForm((f) => ({ ...f, fim: e.target.value }));
+                      }}
+                      className="mt-1 min-h-11 w-full min-w-0 rounded-xl border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground tabular-nums"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-koma-secondary sm:col-span-2">
+                    Fuso horário da campanha
+                    <select
+                      value={form.fuso}
+                      onChange={(e) => setForm((f) => ({ ...f, fuso: e.target.value }))}
+                      className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground"
+                    >
+                      {Array.from(
+                        new Set([form.fuso, 'America/Fortaleza', 'America/Sao_Paulo', 'America/Manaus', 'America/Rio_Branco']),
+                      ).map((zone) => (
+                        <option key={zone} value={zone}>
+                          {zone}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <p className="text-xs text-koma-muted">
+                  Sem início, a oferta habilitada entra no ar ao salvar. Sem encerramento, permanece válida até ser pausada.
+                </p>
+              </div>
+            </div>
+
+            {/* Coluna direita: Prévia sticky no topo do cardápio + botão salvar */}
+            <aside
+              aria-label="Prévia da oferta no cardápio online"
+              className="space-y-3 rounded-2xl border border-koma-border bg-koma-panel p-4 lg:sticky lg:top-4"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-koma-secondary">
+                  <Eye size={14} aria-hidden="true" /> Prévia no topo do cardápio
+                </span>
+                {previewDiscountPercent != null && previewDiscountPercent > 0 && (
+                  <span
+                    className="rounded-full border px-2 py-0.5 text-xs font-bold tabular-nums"
+                    style={{
+                      background: 'var(--koma-success-bg)',
+                      borderColor: 'var(--koma-success-border)',
+                      color: 'var(--koma-success-text)',
+                    }}
+                  >
+                    {previewDiscountPercent}% OFF
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-2.5 rounded-xl border border-koma-border bg-koma-card p-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="rounded-full border border-koma-border bg-koma-panel px-2.5 py-0.5 text-xs font-semibold text-koma-secondary">
+                    {getPromotionTypeLabel(form.tipo)}
+                  </span>
+                  <span
+                    className="rounded-full border px-2 py-0.5 text-xs font-semibold"
                     style={
-                      selected
+                      form.ativo
                         ? {
                             background: 'var(--koma-success-bg)',
                             borderColor: 'var(--koma-success-border)',
@@ -713,322 +1354,86 @@ export default function PromotionsSettings({
                         : {
                             background: 'var(--koma-surface-panel)',
                             borderColor: 'var(--koma-border-default)',
-                            color: 'var(--koma-text-primary)',
+                            color: 'var(--koma-text-muted)',
                           }
                     }
                   >
-                    <span className="inline-flex items-center gap-1.5 text-xs font-bold">
-                      <Icon size={14} aria-hidden="true" /> {option.title}
-                    </span>
-                    <span className="mt-0.5 text-[11px] opacity-85">{option.description}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {form.tipo === 'compre_ganhe' && (
-            <div className="space-y-3 rounded-xl border border-koma-border bg-koma-panel p-3">
-              {renderProductSelect(0, 'Produto principal (Compre X)')}
-
-              <div className="space-y-2">
-                <span className="block text-xs font-semibold text-koma-secondary">Origem do brinde</span>
-                <div className="grid gap-2 sm:grid-cols-2" role="group" aria-label="Origem do brinde">
-                  <button
-                    type="button"
-                    aria-pressed={form.giftSource === 'brinde_simples'}
-                    onClick={() => handleGiftSourceChange('brinde_simples')}
-                    className="min-h-11 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition"
-                    style={
-                      form.giftSource === 'brinde_simples'
-                        ? {
-                            background: 'var(--koma-success-bg)',
-                            borderColor: 'var(--koma-success-border)',
-                            color: 'var(--koma-success-text)',
-                          }
-                        : {
-                            background: 'var(--koma-surface-card)',
-                            borderColor: 'var(--koma-border-default)',
-                            color: 'var(--koma-text-primary)',
-                          }
-                    }
-                  >
-                    <span className="block font-bold">Brinde simples (digitar nome)</span>
-                    <span className="mt-0.5 block text-[11px] opacity-80">
-                      Sem cadastrar produto extra no cardápio.
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={form.giftSource === 'produto_cardapio'}
-                    onClick={() => handleGiftSourceChange('produto_cardapio')}
-                    className="min-h-11 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition"
-                    style={
-                      form.giftSource === 'produto_cardapio'
-                        ? {
-                            background: 'var(--koma-success-bg)',
-                            borderColor: 'var(--koma-success-border)',
-                            color: 'var(--koma-success-text)',
-                          }
-                        : {
-                            background: 'var(--koma-surface-card)',
-                            borderColor: 'var(--koma-border-default)',
-                            color: 'var(--koma-text-primary)',
-                          }
-                    }
-                  >
-                    <span className="block font-bold">Produto do cardápio</span>
-                    <span className="mt-0.5 block text-[11px] opacity-80">
-                      Usa um item já cadastrado e mantém baixa normal.
-                    </span>
-                  </button>
-                </div>
-              </div>
-
-              {form.giftSource === 'brinde_simples' ? (
-                <label className="block text-xs font-semibold text-koma-secondary">
-                  Nome do brinde (Ganhe Y)
-                  <input
-                    value={form.brindeNome}
-                    onChange={(e) => handleBrindeNomeChange(e.target.value)}
-                    maxLength={90}
-                    placeholder="Ex: Refrigerante lata, Sobremesa, Molho especial"
-                    className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground"
-                  />
-                  <span className="mt-1 block text-[11px] font-normal text-koma-muted">
-                    O brinde aparece automaticamente no cardápio, na comanda da cozinha e no cupom.
+                    {form.ativo ? 'Publicada' : 'Pausada'}
                   </span>
-                </label>
-              ) : (
-                renderProductSelect(1, 'Brinde do cardápio (Ganhe Y)')
-              )}
-            </div>
-          )}
-
-          {form.tipo === 'combo' && (
-            <div className="space-y-3 rounded-xl border border-koma-border bg-koma-panel p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-semibold text-koma-foreground">
-                  Itens do combo ({form.slotIds.length} de 4)
-                </span>
-                {form.slotIds.length < 4 && (
-                  <button
-                    type="button"
-                    onClick={addComboSlot}
-                    className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 text-xs font-semibold text-koma-foreground transition hover:bg-koma-raised"
-                  >
-                    <Plus size={14} aria-hidden="true" /> Adicionar produto ao combo
-                  </button>
-                )}
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {form.slotIds.map((_, index) =>
-                  renderProductSelect(index, `Produto ${index + 1}`, index >= 2),
-                )}
-              </div>
-            </div>
-          )}
-
-          {form.tipo === 'desconto_item' && (
-            <div className="space-y-2 rounded-xl border border-koma-border bg-koma-panel p-3">
-              {renderProductSelect(0, 'Produto em oferta')}
-              {selectedProducts[0] && (
-                <p className="text-xs text-koma-muted tabular-nums">
-                  Preço regular atual: <strong className="text-koma-foreground">{money(selectedProducts[0].preco)}</strong>
-                </p>
-              )}
-            </div>
-          )}
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-xs font-semibold text-koma-secondary sm:col-span-2">
-              Nome da promoção
-              <input
-                value={form.nome}
-                onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}
-                maxLength={90}
-                className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground"
-                placeholder={
-                  form.tipo === 'compre_ganhe'
-                    ? 'Ex: Compre Burger Clássico e ganhe Refrigerante lata'
-                    : form.tipo === 'desconto_item'
-                      ? 'Ex: Happy Hour — Pizza Grande com desconto'
-                      : 'Ex: Combo Almoço Completo'
-                }
-              />
-            </label>
-            <label className="text-xs font-semibold text-koma-secondary sm:col-span-2">
-              Descrição
-              <input
-                value={form.descricao}
-                onChange={(e) => setForm((f) => ({ ...f, descricao: e.target.value }))}
-                maxLength={240}
-                className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground"
-                placeholder="Explique o que está incluso para o cliente"
-              />
-            </label>
-            <label className="text-xs font-semibold text-koma-secondary">
-              {form.tipo === 'desconto_item'
-                ? 'Preço promocional (R$)'
-                : form.tipo === 'compre_ganhe'
-                  ? 'Preço da oferta (R$)'
-                  : 'Preço do combo (R$)'}
-              <input
-                type="number"
-                min="0.01"
-                step="0.01"
-                value={form.preco}
-                onChange={(e) => setForm((f) => ({ ...f, preco: e.target.value }))}
-                className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground tabular-nums"
-              />
-            </label>
-            <label className="flex min-h-11 cursor-pointer items-center gap-2.5 self-end rounded-xl border border-koma-border bg-koma-panel px-3 text-xs font-semibold text-koma-foreground">
-              <input
-                type="checkbox"
-                checked={form.ativo}
-                onChange={(e) => setForm((f) => ({ ...f, ativo: e.target.checked }))}
-              />
-              Habilitar oferta
-            </label>
-          </div>
-
-          <div className="space-y-3 rounded-xl border border-koma-border bg-koma-panel p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-koma-foreground">
-                <CalendarClock size={14} aria-hidden="true" /> Agendamento rápido
-              </span>
-              <div className="flex flex-wrap gap-1.5" role="group" aria-label="Atalhos de agendamento">
-                {SCHEDULE_PRESETS.map((preset) => (
-                  <button
-                    key={preset.id}
-                    type="button"
-                    onClick={() => applySchedulePreset(preset.id)}
-                    className="min-h-11 rounded-xl border border-koma-border bg-koma-card px-3 text-xs font-semibold text-koma-secondary transition hover:bg-koma-raised hover:text-koma-foreground"
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-xs font-semibold text-koma-secondary">
-                Início programado (opcional)
-                <input
-                  type="datetime-local"
-                  value={form.inicio}
-                  onChange={(e) => setForm((f) => ({ ...f, inicio: e.target.value }))}
-                  className="mt-1 min-h-11 w-full min-w-0 rounded-xl border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground tabular-nums"
-                />
-              </label>
-              <label className="text-xs font-semibold text-koma-secondary">
-                Encerramento (opcional)
-                <input
-                  type="datetime-local"
-                  value={form.fim}
-                  onChange={(e) => setForm((f) => ({ ...f, fim: e.target.value }))}
-                  className="mt-1 min-h-11 w-full min-w-0 rounded-xl border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground tabular-nums"
-                />
-              </label>
-              <label className="text-xs font-semibold text-koma-secondary sm:col-span-2">
-                Fuso horário da campanha
-                <select
-                  value={form.fuso}
-                  onChange={(e) => setForm((f) => ({ ...f, fuso: e.target.value }))}
-                  className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground"
-                >
-                  {Array.from(
-                    new Set([form.fuso, 'America/Fortaleza', 'America/Sao_Paulo', 'America/Manaus', 'America/Rio_Branco']),
-                  ).map((zone) => (
-                    <option key={zone} value={zone}>
-                      {zone}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <p className="text-xs text-koma-muted">
-              Sem início, a oferta habilitada entra no ar ao salvar. Sem encerramento, permanece válida até ser pausada.
-            </p>
-          </div>
-
-          {(previewIncludedItems.length > 0 || form.nome.trim()) && (
-            <aside
-              aria-label="Prévia da oferta no cardápio online"
-              className="rounded-xl border border-koma-border bg-koma-panel p-3.5"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-koma-muted">
-                  <Eye size={13} aria-hidden="true" /> Prévia no cardápio online
-                </span>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="rounded-full border border-koma-border bg-koma-card px-2 py-0.5 text-[11px] font-semibold text-koma-secondary">
-                    {getPromotionTypeLabel(form.tipo)}
-                  </span>
-                  {previewSavings != null && previewSavings > 0 && (
-                    <span
-                      className="rounded-full border px-2 py-0.5 text-[11px] font-semibold tabular-nums"
-                      style={{
-                        background: 'var(--koma-success-bg)',
-                        borderColor: 'var(--koma-success-border)',
-                        color: 'var(--koma-success-text)',
-                      }}
-                    >
-                      Economia de {money(previewSavings)}
-                      {previewDiscountPercent && previewDiscountPercent > 0 ? ` (${previewDiscountPercent}% OFF)` : ''}
-                    </span>
-                  )}
                 </div>
-              </div>
-              <div className="mt-2.5 rounded-xl border border-koma-border bg-koma-card p-3">
+
                 <strong
-                  className="block text-sm font-bold text-koma-foreground"
+                  className="block text-sm font-bold leading-snug text-koma-foreground"
                   style={{ fontFamily: 'var(--koma-font-display)' }}
                 >
-                  {form.nome.trim() || 'Nome da oferta'}
+                  {form.nome.trim() || 'Nome da oferta aparecerá aqui'}
                 </strong>
-                {form.descricao.trim() && (
-                  <p className="mt-1 text-xs text-koma-muted">{form.descricao.trim()}</p>
-                )}
-                {previewIncludedItems.length > 0 && (
-                  <p className="mt-2 text-xs text-koma-secondary">
-                    Inclui: {previewIncludedItems.join(' + ')}
+
+                {previewItemsSummary && (
+                  <p className="rounded-lg border border-koma-border bg-koma-panel px-2.5 py-1.5 text-xs font-semibold text-koma-secondary tabular-nums">
+                    {previewItemsSummary}
                   </p>
                 )}
-                <div className="mt-2.5 flex flex-wrap items-baseline gap-2 border-t border-koma-border pt-2">
-                  {previewSubtotal != null && hasValidPreviewPrice && previewSubtotal > previewPrice && (
-                    <span className="text-xs text-koma-muted line-through tabular-nums">
-                      De {money(previewSubtotal)}
-                    </span>
-                  )}
-                  <strong className="text-base font-bold text-koma-foreground tabular-nums">
-                    {hasValidPreviewPrice ? money(previewPrice) : 'Informe o preço'}
-                  </strong>
+
+                {form.descricao.trim() && (
+                  <p className="text-xs leading-relaxed text-koma-muted">{form.descricao.trim()}</p>
+                )}
+
+                <div className="flex items-end justify-between gap-2 border-t border-koma-border pt-2.5">
+                  <div className="min-w-0 tabular-nums">
+                    {previewSubtotal != null && hasValidPreviewPrice && previewSubtotal > previewPrice && (
+                      <span className="block text-xs text-koma-muted line-through">
+                        De {money(previewSubtotal)}
+                      </span>
+                    )}
+                    <strong
+                      className="block text-base font-bold"
+                      style={{ color: hasValidPreviewPrice ? 'var(--koma-success-text)' : 'var(--koma-text-muted)' }}
+                    >
+                      {hasValidPreviewPrice ? money(previewPrice) : 'Informe o preço'}
+                    </strong>
+                    {previewSavings != null && previewSavings > 0 && (
+                      <span className="block text-xs font-semibold text-koma-secondary">
+                        Economia de {money(previewSavings)}
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold"
+                    style={{
+                      background: 'var(--koma-action-bg)',
+                      color: 'var(--koma-action-text)',
+                    }}
+                  >
+                    {form.tipo === 'desconto_item' ? 'Aproveitar' : 'Montar'}
+                    <ArrowRight size={13} aria-hidden="true" />
+                  </span>
                 </div>
               </div>
+
+              <p className="text-xs leading-relaxed text-koma-muted">
+                O servidor confirma o preço da oferta no checkout. Adicionais pagos e entrega são cobrados à parte.
+              </p>
+
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void submit()}
+                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition disabled:opacity-50"
+                style={{
+                  background: 'var(--koma-action-bg)',
+                  color: 'var(--koma-action-text)',
+                }}
+              >
+                {saving ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Save className="h-4 w-4" aria-hidden="true" />
+                )}
+                {editing ? 'Salvar alterações' : 'Cadastrar promoção'}
+              </button>
             </aside>
-          )}
-
-          <p className="text-xs leading-relaxed text-koma-muted">
-            O servidor confirma o preço da oferta. Adicionais pagos e entrega são cobrados à parte.
-          </p>
-
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void submit()}
-            className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition disabled:opacity-50"
-            style={{
-              background: 'var(--koma-action-bg)',
-              color: 'var(--koma-action-text)',
-            }}
-          >
-            {saving ? (
-              <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
-            ) : (
-              <Save className="h-4 w-4" aria-hidden="true" />
-            )}
-            {editing ? 'Salvar alterações' : 'Cadastrar promoção'}
-          </button>
+          </div>
         </section>
       )}
 
@@ -1044,13 +1449,21 @@ export default function PromotionsSettings({
           />
           <p className="text-sm font-bold text-koma-foreground">Nenhuma promoção cadastrada</p>
           <p className="mt-1 max-w-sm text-xs text-koma-muted">
-            Crie uma oferta Compre e Ganhe, monte um combo promocional ou agende um desconto por tempo limitado.
+            Crie uma oferta Compre e Ganhe, monte um combo com preço fechado ou aplique desconto em 1 item.
           </p>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2" aria-label="Ofertas cadastradas">
           {promotions.map((p) => {
             const tipo = inferPromotionType(p);
+            const qtys = normalizeSlotQuantities(p.componentes.length, p.quantidades);
+            const itemsSummary = formatPromotionItemsSummary(
+              p.componentes.map((slot, index) => ({
+                nome: productById.get(slot?.[0] || '')?.nome || '',
+                qty: qtys[index] ?? 1,
+              })),
+              p.brinde_nome,
+            );
             const statusKey = p.status || (p.ativo ? 'ativa' : 'pausada');
             const statusLabel = {
               agendada: 'Agendada',
@@ -1081,7 +1494,7 @@ export default function PromotionsSettings({
               <article key={p.id} className="flex flex-col gap-3 rounded-xl border border-koma-border bg-koma-card p-4">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 space-y-1">
-                    <span className="inline-block rounded-full border border-koma-border bg-koma-panel px-2 py-0.5 text-[11px] font-semibold text-koma-secondary">
+                    <span className="inline-block rounded-full border border-koma-border bg-koma-panel px-2.5 py-0.5 text-xs font-semibold text-koma-secondary">
                       {getPromotionTypeLabel(tipo)}
                     </span>
                     <h3
@@ -1092,15 +1505,15 @@ export default function PromotionsSettings({
                     </h3>
                   </div>
                   <span
-                    className="shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold"
+                    className="shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-semibold"
                     style={statusStyle}
                   >
                     {statusLabel}
                   </span>
                 </div>
-                {p.brinde_nome && (
-                  <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-koma-secondary">
-                    <Gift size={13} aria-hidden="true" /> Brinde incluso: {p.brinde_nome}
+                {itemsSummary && (
+                  <p className="rounded-lg border border-koma-border bg-koma-panel px-2.5 py-1.5 text-xs font-semibold text-koma-secondary tabular-nums">
+                    Inclui: {itemsSummary}
                   </p>
                 )}
                 {(p.inicio_em || p.fim_em) && (

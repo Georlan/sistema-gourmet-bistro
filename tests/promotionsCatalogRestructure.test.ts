@@ -19,8 +19,12 @@ import {
   buildItemDiscountSuggestion,
   buildSchedulePreset,
   buildSimpleGiftSuggestion,
+  calculatePromotionRegularTotal,
+  clampPromotionQuantity,
+  formatPromotionItemsSummary,
   getPromotionTypeLabel,
   inferPromotionType,
+  normalizeSlotQuantities,
 } from '../src/utils/promotionFormHelpers';
 import { computeActivePromotions, getNextPromotionTransition } from '../src/cardapio/useActivePromotions';
 
@@ -250,7 +254,74 @@ test('PromotionsSettings e MarmitariaOfferTemplates não possuem hardcodes de te
   assert.match(settings, /compre_ganhe/);
   assert.match(settings, /desconto_item/);
   assert.match(settings, /brinde_nome/);
+  assert.match(settings, /quantidades/);
   assert.match(publicPage, /componentes\.length >= 1 && p\.componentes\.length <= 4/);
+  assert.match(publicPage, /slotQuantities=\{selectedPromotion\.quantidades\}/);
   assert.match(wizard, /steps\.length < 1[\s\S]*steps\.length > 4/);
   assert.match(wizard, /Brinde incluso:/);
+  assert.match(wizard, /Aplicar mesma escolha para todas/);
+});
+
+test('promoções multi-quantidade (Compre N e ganhe M) calculam preço, nome e resumo corretamente', () => {
+  assert.deepEqual(normalizeSlotQuantities(2, [5, 1]), [5, 1]);
+  assert.deepEqual(normalizeSlotQuantities(2, undefined), [1, 1]);
+  assert.deepEqual(normalizeSlotQuantities(2, [0, 99]), [1, 20]);
+  assert.equal(clampPromotionQuantity(25, 20), 20);
+  assert.equal(clampPromotionQuantity(-3, 20), 1);
+
+  const buy5Get1 = buildBuyGetSuggestion(
+    { id: 'g', nome: 'Quentinha G', preco: 14 },
+    { id: 'm', nome: 'Quentinha M', preco: 10 },
+    5,
+    1,
+  );
+  assert.deepEqual(buy5Get1, {
+    nome: 'Comprando 5 Quentinha G, ganha 1 Quentinha M',
+    descricao: 'Comprando 5× Quentinha G, leve 1× Quentinha M de brinde.',
+    preco: '70.00',
+  });
+
+  const buy5SimpleGift = buildSimpleGiftSuggestion(
+    { id: 'g', nome: 'Quentinha G', preco: 14 },
+    'Refrigerante 2L',
+    5,
+  );
+  assert.deepEqual(buy5SimpleGift, {
+    nome: 'Comprando 5 Quentinha G, ganha Refrigerante 2L',
+    descricao: 'Comprando 5× Quentinha G, leve Refrigerante 2L de brinde.',
+    preco: '70.00',
+  });
+
+  const comboMulti = buildComboSuggestion(
+    [
+      { id: 'p1', nome: 'Burger', preco: 28 },
+      { id: 'p2', nome: 'Batata Frita', preco: 14 },
+    ],
+    [2, 1],
+  );
+  assert.deepEqual(comboMulti, {
+    nome: 'Combo 2× Burger + 1× Batata Frita',
+    descricao: 'Inclui 2× Burger + 1× Batata Frita com preço especial de combo.',
+  });
+
+  const regularTotal = calculatePromotionRegularTotal([
+    { preco: 14, qty: 5 },
+    { preco: 10, qty: 1 },
+  ]);
+  assert.equal(regularTotal, 80);
+
+  assert.equal(
+    formatPromotionItemsSummary([
+      { nome: 'Quentinha G', qty: 5 },
+      { nome: 'Quentinha M', qty: 1 },
+    ]),
+    '5× Quentinha G + 1× Quentinha M',
+  );
+  assert.equal(
+    formatPromotionItemsSummary(
+      [{ nome: 'Quentinha G', qty: 1 }],
+      'Sobremesa do dia',
+    ),
+    'Quentinha G + Brinde: Sobremesa do dia',
+  );
 });

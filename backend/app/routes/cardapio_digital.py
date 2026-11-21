@@ -8,7 +8,7 @@ from decimal import Decimal
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, StrictInt
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
 from starlette.concurrency import run_in_threadpool
@@ -16,9 +16,12 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session, load_only, raiseload, lazyload
 
 from ..promotions import (
+    MAX_PROMOTION_TOTAL_ITEMS,
+    MAX_SLOT_QUANTITY,
     active_promotions,
     money,
     normalize_gift_name,
+    normalize_promotion_quantities,
     normalize_promotion_type,
     promotion_status,
 )
@@ -1078,6 +1081,8 @@ class PromotionConfigInput(BaseModel):
     preco: Decimal = Field(ge=0, le=100000, max_digits=8, decimal_places=2)
     # Cada slot contém um ou mais IDs aceitáveis: G + (bebida A ou B), 1..4 slots conforme tipo.
     componentes: list[list[str]] = Field(min_length=1, max_length=4)
+    # Quantidade exigida por slot (opcional; ausente assume [1, ..., 1]).
+    quantidades: list[StrictInt] | None = None
     ativo: bool = False
     inicio_em: datetime | None = None
     fim_em: datetime | None = None
@@ -1153,6 +1158,26 @@ def _validate_promotion_input(db: Session, rest_id: int, offer: PromotionConfigI
                 detail="Brinde textual só é permitido em promoções Compre e Ganhe.",
             )
 
+    if offer.quantidades is None:
+        normalized_quantidades = [1] * slot_count
+    else:
+        if len(offer.quantidades) != slot_count:
+            raise HTTPException(
+                status_code=422,
+                detail="Informe uma quantidade para cada etapa da promoção.",
+            )
+        if any(type(q) is not int or q < 1 or q > MAX_SLOT_QUANTITY for q in offer.quantidades):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Cada etapa deve ter quantidade entre 1 e {MAX_SLOT_QUANTITY}.",
+            )
+        if sum(offer.quantidades) > MAX_PROMOTION_TOTAL_ITEMS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"O total de itens da promoção não pode exceder {MAX_PROMOTION_TOTAL_ITEMS}.",
+            )
+        normalized_quantidades = list(offer.quantidades)
+
     cleaned = []
     seen: set[str] = set()
     for ids in offer.componentes:
@@ -1179,6 +1204,7 @@ def _validate_promotion_input(db: Session, rest_id: int, offer: PromotionConfigI
         "brinde_nome": brinde_nome,
         "preco": float(money(offer.preco)),
         "componentes": cleaned,
+        "quantidades": normalized_quantidades,
         "ativo": offer.ativo,
         "inicio_em": offer.inicio_em.astimezone(timezone.utc).isoformat() if offer.inicio_em else None,
         "fim_em": offer.fim_em.astimezone(timezone.utc).isoformat() if offer.fim_em else None,
@@ -1200,6 +1226,11 @@ def listar_promocoes_admin(
                 **entry,
                 "tipo": normalize_promotion_type(entry),
                 "brinde_nome": normalize_gift_name(entry.get("brinde_nome")),
+                "quantidades": (
+                    normalize_promotion_quantities(entry)
+                    if normalize_promotion_quantities(entry) is not None
+                    else entry.get("quantidades")
+                ),
                 "status": promotion_status(entry),
             }
             for entry in (config.promocoes or [])

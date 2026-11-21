@@ -49,7 +49,7 @@ export default function CashierPromotionsHub({
         eyebrow="PROMOÇÕES E VITRINE"
         title="Ofertas e destaque"
         accent="em um só lugar"
-        description="Configure Compre e Ganhe, combos, descontos agendados, produto em destaque e sugestões da sacola sem sair do cardápio."
+        description="Configure descontos em 1 item, ofertas Compre e Ganhe com quantidade, combos com preço fechado, produto em destaque e sugestões da sacola."
         metrics={[
           { label: 'ofertas cadastradas', value: promotionCount },
           { label: 'em destaque', value: highlightedCount },

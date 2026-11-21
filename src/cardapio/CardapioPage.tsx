@@ -495,6 +495,12 @@ export default function CardapioPage() {
             preco: Number(p.preco),
             componentes: p.componentes.map((ids: unknown) =>
               Array.isArray(ids) ? ids.map(String) : []),
+            quantidades: Array.isArray(p.quantidades) && p.quantidades.length === p.componentes.length
+              ? p.quantidades.map((qty: unknown) => {
+                  const parsed = Math.trunc(Number(qty));
+                  return Number.isFinite(parsed) && parsed >= 1 ? Math.min(20, parsed) : 1;
+                })
+              : p.componentes.map(() => 1),
           })) : [],
         socials,
         about: String(restaurant.sobre_nos || ""),
@@ -1705,6 +1711,7 @@ export default function CardapioPage() {
             restaurantId={activeBrand.id}
             expectedStepCount={selectedPromotion.componentes.length}
             brindeNome={selectedPromotion.brinde_nome}
+            slotQuantities={selectedPromotion.quantidades}
             steps={selectedPromotion.componentes.map(ids => {
               const product = [...activeBrand.products, ...(activeBrand.promotionProducts || [])].find(candidate => ids.includes(candidate.id));
               return product ? { product, label: product.name } : null;

@@ -74,6 +74,7 @@ export interface CatalogPromotion {
   tipo?: CatalogPromotionType;
   brinde_nome?: string | null;
   componentes: string[][];
+  quantidades?: number[];
   inicio_em?: string | null;
   fim_em?: string | null;
 }

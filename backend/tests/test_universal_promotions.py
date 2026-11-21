@@ -27,12 +27,19 @@ client = TestClient(app)
 ADMIN_USER_ID = "usr-admin-universal-promo"
 
 
-def _item(product_id: str, price: str, *, extra: str = "0", notes: str | None = None) -> ValidatedOrderItem:
+def _item(
+    product_id: str,
+    price: str,
+    *,
+    extra: str = "0",
+    notes: str | None = None,
+    quantity: int | str = 1,
+) -> ValidatedOrderItem:
     return ValidatedOrderItem(
         product_id=product_id,
         name=product_id,
         base_price=Decimal(price),
-        quantity=Decimal("1"),
+        quantity=Decimal(str(quantity)),
         modifiers=(
             (ValidatedModifier(id="extra", name="Adicional", price=Decimal(extra)),)
             if extra != "0"
@@ -525,8 +532,282 @@ def test_e2e_legacy_2_slot_combo_em_banco_retorna_tipo_combo_no_admin_e_publico(
     assert admin_entry["id"] == "legacy-2-slot"
     assert admin_entry["tipo"] == "combo"
     assert admin_entry["brinde_nome"] is None
+    assert admin_entry["quantidades"] == [1, 1]
 
     pub_entry = client.get(f"/api/cardapio-digital/public?restaurante_id={RESTAURANTE_ID}").json()["promocoes"][0]
     assert pub_entry["id"] == "legacy-2-slot"
     assert pub_entry["tipo"] == "combo"
     assert pub_entry["brinde_nome"] is None
+    assert pub_entry["quantidades"] == [1, 1]
+
+
+# ---------------------------------------------------------------------------
+# 4. Multi-quantity slots (e.g. "Compre 5 Quentinhas G, ganhe 1 M")
+# ---------------------------------------------------------------------------
+
+
+def test_compre_ganhe_multi_qty_item_agrupado_e_itens_customizados_exato_centavo():
+    promo = {
+        "id": "promo-5g-1m",
+        "nome": "Compre 5 Quentinhas G e ganhe 1 M",
+        "tipo": "compre_ganhe",
+        "brinde_nome": None,
+        "preco": 50.0,
+        "componentes": [["quentinha-g"], ["quentinha-m"]],
+        "quantidades": [5, 1],
+        "ativo": True,
+    }
+
+    # Caso A: 1 item com qty=5 (5x14 = 70) + 1 brinde qty=1 (10) -> base 80 -> promo 50.00
+    res_grouped = apply_promotion_to_validated(
+        _validated(
+            _item("quentinha-g", "14.00", extra="2.00", quantity=5),
+            _item("quentinha-m", "10.00", quantity=1),
+        ),
+        promo,
+        expected_price=Decimal("50.00"),
+    )
+    base_sum_a = sum(it.base_price * it.quantity for it in res_grouped.items)
+    assert base_sum_a == Decimal("50.00")
+    assert all(it.base_price >= Decimal("0.00") for it in res_grouped.items)
+    # Adicionais (5 * 2.00 = 10.00) preservados sobre a base promocional
+    total_with_mods_a = sum(
+        (it.base_price + sum(m.price for m in it.modifiers)) * it.quantity
+        for it in res_grouped.items
+    )
+    assert total_with_mods_a == Decimal("60.00")
+
+    # Caso B: 5 itens customizados de qty=1 + 1 brinde qty=1 (implícito e explícito)
+    custom_items = [
+        _item("quentinha-g", "14.00", notes=f"marmita {i + 1}") for i in range(5)
+    ] + [_item("quentinha-m", "10.00", notes="brinde sem salada")]
+
+    for indices in (None, (0, 1, 2, 3, 4, 5)):
+        res_split = apply_promotion_to_validated(
+            _validated(*custom_items),
+            promo,
+            item_indices=indices,
+        )
+        assert sum(it.base_price * it.quantity for it in res_split.items) == Decimal("50.00")
+        assert all(it.base_price >= Decimal("0.00") for it in res_split.items)
+        assert [it.notes for it in res_split.items] == [
+            "marmita 1", "marmita 2", "marmita 3", "marmita 4", "marmita 5", "brinde sem salada",
+        ]
+
+    # Caso C: carrinho misto com 1 Quentinha G avulsa no índice 0 + promoção nos índices 1..6
+    avulsa = _item("quentinha-g", "14.00", notes="avulsa")
+    res_mixed = apply_promotion_to_validated(
+        _validated(avulsa, *custom_items),
+        promo,
+        item_indices=(1, 2, 3, 4, 5, 6),
+    )
+    assert res_mixed.items[0] == avulsa
+    assert sum(it.base_price * it.quantity for it in res_mixed.items) == Decimal("64.00")
+
+
+def test_multi_qty_desconto_e_acrescimo_nao_divisiveis_mantem_centavo_exato_sem_negativo():
+    # Desconto R$ 11.00 sobre qty=3 (base 3*14 + 1*10 = 52 -> promo 41.00)
+    promo_discount = {
+        "id": "promo-3g-1m",
+        "nome": "3 G + 1 M",
+        "tipo": "compre_ganhe",
+        "preco": 41.0,
+        "componentes": [["quentinha-g"], ["quentinha-m"]],
+        "quantidades": [3, 1],
+        "ativo": True,
+    }
+    res_disc = apply_promotion_to_validated(
+        _validated(_item("quentinha-g", "14.00", quantity=3), _item("quentinha-m", "10.00", quantity=1)),
+        promo_discount,
+    )
+    assert sum(it.base_price * it.quantity for it in res_disc.items) == Decimal("41.00")
+    assert sum(it.quantity for it in res_disc.items if it.product_id == "quentinha-g") == Decimal("3")
+    assert all(it.base_price >= Decimal("0.00") for it in res_disc.items)
+
+    # Caso extremo: base 3*1.00 = 3.00 -> promo 0.01 (desconto 2.99 não divisível por 3)
+    promo_extreme = {
+        "id": "promo-extreme",
+        "nome": "3 itens por 1 centavo",
+        "tipo": "desconto_item",
+        "preco": 0.01,
+        "componentes": [["item-barato"]],
+        "quantidades": [3],
+        "ativo": True,
+    }
+    res_ext = apply_promotion_to_validated(
+        _validated(_item("item-barato", "1.00", quantity=3)),
+        promo_extreme,
+    )
+    assert sum(it.base_price * it.quantity for it in res_ext.items) == Decimal("0.01")
+    assert sum(it.quantity for it in res_ext.items) == Decimal("3")
+    assert all(it.base_price >= Decimal("0.00") for it in res_ext.items)
+
+    # Acréscimo (promo_price > base_total) não divisível por 3: base 3*10 = 30 -> promo 31.00
+    promo_surcharge = {
+        "id": "promo-surcharge",
+        "nome": "3 itens preço próprio",
+        "tipo": "desconto_item",
+        "preco": 31.0,
+        "componentes": [["item-base"]],
+        "quantidades": [3],
+        "ativo": True,
+    }
+    res_sur = apply_promotion_to_validated(
+        _validated(_item("item-base", "10.00", quantity=3)),
+        promo_surcharge,
+    )
+    assert sum(it.base_price * it.quantity for it in res_sur.items) == Decimal("31.00")
+    assert sum(it.quantity for it in res_sur.items) == Decimal("3")
+    assert all(it.base_price >= Decimal("0.00") for it in res_sur.items)
+
+
+@pytest.mark.parametrize(
+    "items,indices",
+    [
+        # Apenas 4xG agrupado em vez de 5xG
+        ([_item("quentinha-g", "14.00", quantity=4), _item("quentinha-m", "10.00", quantity=1)], None),
+        ([_item("quentinha-g", "14.00", quantity=4), _item("quentinha-m", "10.00", quantity=1)], (0, 1)),
+        # Apenas 4xG separados em vez de 5xG
+        ([_item("quentinha-g", "14.00") for _ in range(4)] + [_item("quentinha-m", "10.00")], (0, 1, 2, 3, 4)),
+        # Excesso: 6xG em vez de 5xG
+        ([_item("quentinha-g", "14.00", quantity=6), _item("quentinha-m", "10.00", quantity=1)], (0, 1)),
+        # Brinde com quantidade errada (2xM em vez de 1xM)
+        ([_item("quentinha-g", "14.00", quantity=5), _item("quentinha-m", "10.00", quantity=2)], (0, 1)),
+    ],
+)
+def test_multi_qty_rejeita_quantidade_incorreta(items, indices):
+    promo = {
+        "id": "promo-5g-1m",
+        "nome": "Compre 5 G ganhe 1 M",
+        "tipo": "compre_ganhe",
+        "preco": 50.0,
+        "componentes": [["quentinha-g"], ["quentinha-m"]],
+        "quantidades": [5, 1],
+        "ativo": True,
+    }
+    with pytest.raises(OrderValidationError):
+        apply_promotion_to_validated(_validated(*items), promo, item_indices=indices)
+
+
+@pytest.mark.parametrize(
+    "bad_quantidades",
+    [
+        [5],          # tamanho diferente de componentes (2 slots)
+        [5, 1, 1],    # tamanho maior que componentes
+        [0, 1],       # quantidade zero
+        [-2, 1],      # quantidade negativa
+        [21, 1],      # excede limite por etapa (20)
+        [20, 6],      # soma (26) excede limite total (25)
+        [True, 1],    # booleano não é inteiro válido
+    ],
+)
+def test_admin_promocoes_rejeita_quantidades_invalidas(universal_promo_catalog, bad_quantidades):
+    headers = _admin_headers()
+    res = client.post(
+        "/api/cardapio-digital/promocoes",
+        headers=headers,
+        json={
+            "nome": "Promo Quantidade Inválida",
+            "tipo": "compre_ganhe",
+            "preco": 50.0,
+            "componentes": [["univ-burger"], ["univ-refri"]],
+            "quantidades": bad_quantidades,
+            "ativo": True,
+        },
+    )
+    assert res.status_code == 422, res.text
+
+
+def test_e2e_compre_ganhe_multi_qty_5_mais_1_agrupado_e_customizado(universal_promo_catalog):
+    headers = _admin_headers()
+    create_res = client.post(
+        "/api/cardapio-digital/promocoes",
+        headers=headers,
+        json={
+            "nome": "Compre 5 X-Bacon, ganhe 1 Refri",
+            "descricao": "5 lanches + 1 refrigerante grátis",
+            "tipo": "compre_ganhe",
+            "preco": 100.0,
+            "componentes": [["univ-burger"], ["univ-refri"]],
+            "quantidades": [5, 1],
+            "ativo": True,
+        },
+    )
+    assert create_res.status_code == 201, create_res.text
+    created = create_res.json()
+    promo_id = created["id"]
+    assert created["quantidades"] == [5, 1]
+
+    # Admin e público expõem quantidades=[5, 1]
+    admin_entry = next(
+        p for p in client.get("/api/cardapio-digital/promocoes", headers=headers).json()["promocoes"]
+        if p["id"] == promo_id
+    )
+    assert admin_entry["quantidades"] == [5, 1]
+
+    pub_entry = next(
+        p for p in client.get(f"/api/cardapio-digital/public?restaurante_id={RESTAURANTE_ID}").json()["promocoes"]
+        if p["id"] == promo_id
+    )
+    assert pub_entry["quantidades"] == [5, 1]
+
+    # 1. Checkout agrupado: 1 item qty=5 + 1 item qty=1
+    grouped_payload = _payload("multi-grouped-" + uuid.uuid4().hex)
+    grouped_payload.update(
+        promocao_id=promo_id,
+        promocao_preco_esperado=100.0,
+        promocao_item_indices=[0, 1],
+    )
+    grouped_payload["itens"] = [
+        {"produto_id": "univ-burger", "quantidade": 5},
+        {"produto_id": "univ-refri", "quantidade": 1},
+    ]
+    res_grouped = client.post("/cardapio/pedidos", json=grouped_payload)
+    assert res_grouped.status_code == 201, res_grouped.text
+    assert res_grouped.json()["total"] == 107  # 100 + frete 7
+
+    # 2. Checkout customizado: 5 itens separados de qty=1 + 1 brinde qty=1 (6 índices!)
+    custom_payload = _payload("multi-custom-" + uuid.uuid4().hex)
+    custom_payload.update(
+        promocao_id=promo_id,
+        promocao_preco_esperado=100.0,
+        promocao_item_indices=[0, 1, 2, 3, 4, 5],
+    )
+    custom_payload["itens"] = [
+        {"produto_id": "univ-burger", "quantidade": 1, "observacao": f"lanche {i + 1}"}
+        for i in range(5)
+    ] + [{"produto_id": "univ-refri", "quantidade": 1, "observacao": "gelado"}]
+    res_custom = client.post("/cardapio/pedidos", json=custom_payload)
+    assert res_custom.status_code == 201, res_custom.text
+    assert res_custom.json()["total"] == 107  # 100 + frete 7
+
+    # Verifica 6 linhas Item persistidas no banco com observações preservadas
+    db = SessionLocal()
+    token = current_restaurante_id.set(RESTAURANTE_ID)
+    try:
+        persisted = (
+            db.query(Item)
+            .filter_by(restaurante_id=RESTAURANTE_ID, comanda_id=res_custom.json()["comanda_id"])
+            .all()
+        )
+        assert len(persisted) == 6
+        assert sorted(it.observacao or "" for it in persisted) == [
+            "gelado", "lanche 1", "lanche 2", "lanche 3", "lanche 4", "lanche 5",
+        ]
+    finally:
+        current_restaurante_id.reset(token)
+        db.close()
+
+    # 3. Checkout com quantidade errada (apenas 4 X-Bacon) deve falhar
+    wrong_payload = _payload("multi-wrong-" + uuid.uuid4().hex)
+    wrong_payload.update(
+        promocao_id=promo_id,
+        promocao_preco_esperado=100.0,
+        promocao_item_indices=[0, 1],
+    )
+    wrong_payload["itens"] = [
+        {"produto_id": "univ-burger", "quantidade": 4},
+        {"produto_id": "univ-refri", "quantidade": 1},
+    ]
+    res_wrong = client.post("/cardapio/pedidos", json=wrong_payload)
+    assert res_wrong.status_code in (400, 422), res_wrong.text

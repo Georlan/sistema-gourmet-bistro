@@ -9,6 +9,11 @@ import { fetchPopularProducts } from '../popularProductsClient';
 import { getFulfillmentAvailability } from '../fulfillment';
 import { smartSearchMatch } from '../../domain';
 import { getEffectiveProductPrice, getProductBadgeLabel } from '../../domain/productMerchandising';
+import {
+  calculatePromotionRegularTotal,
+  formatPromotionItemsSummary,
+  normalizeSlotQuantities,
+} from '../../utils/promotionFormHelpers';
 import { API_BASE_URL } from '../../config/api';
 import { buildWhatsAppContactUrl } from '../../config/whatsappUtils';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -901,27 +906,42 @@ export function CardapioArtisticExperience({
 
           <div className="koma-art-promo-grid">
             {offers.map((offer) => {
-              const offerImage = offer.componentes
-                ?.flat()
-                .map((id) =>
-                  [...activeBrand.products, ...(activeBrand.promotionProducts || [])].find(
-                    (product) => product.id === id
-                  )?.image
-                )
+              const allCatalogProducts = [...activeBrand.products, ...(activeBrand.promotionProducts || [])];
+              const qtys = normalizeSlotQuantities(offer.componentes.length, offer.quantidades);
+              const resolvedSlots = offer.componentes
+                .map((ids, index) => {
+                  const product = allCatalogProducts.find((candidate) => ids.includes(candidate.id));
+                  return product ? { product, qty: qtys[index] ?? 1 } : null;
+                })
+                .filter((entry): entry is { product: Product; qty: number } => Boolean(entry));
+              const offerImage = resolvedSlots
+                .map((entry) => entry.product.image)
                 .find((img) => img && img !== LOCAL_PRODUCT_PLACEHOLDER);
               const offerType = offer.tipo
                 || (offer.brinde_nome ? 'compre_ganhe' : offer.componentes.length === 1 ? 'desconto_item' : 'combo');
               const tagLabel = offerType === 'compre_ganhe'
                 ? 'COMPRE E GANHE'
                 : offerType === 'desconto_item'
-                  ? 'OFERTA ESPECIAL'
+                  ? 'DESCONTO EM 1 ITEM'
                   : 'COMBO PROMOCIONAL';
               const priceLabel = offerType === 'compre_ganhe'
                 ? 'Preço da oferta'
                 : offerType === 'desconto_item'
                   ? 'Preço promocional'
                   : 'Preço do combo';
-              const ctaLabel = offer.componentes.length === 1 ? 'Aproveitar' : 'Montar';
+              const totalUnits = qtys.reduce((sum, q) => sum + q, 0);
+              const ctaLabel = offer.componentes.length === 1 && totalUnits === 1 ? 'Aproveitar' : 'Montar';
+              const itemsSummary = formatPromotionItemsSummary(
+                resolvedSlots.map((entry) => ({ nome: entry.product.name, qty: entry.qty })),
+                offer.brinde_nome,
+              );
+              const regularTotal = calculatePromotionRegularTotal(
+                resolvedSlots.map((entry) => ({ preco: entry.product.price, qty: entry.qty })),
+              );
+              const hasSavings = regularTotal > offer.preco + 0.005;
+              const discountPercent = hasSavings && regularTotal > 0
+                ? Math.round(((regularTotal - offer.preco) / regularTotal) * 100)
+                : null;
 
               return (
                 <div
@@ -939,17 +959,23 @@ export function CardapioArtisticExperience({
                     ) : (
                       <ArtisticClocheIllustration />
                     )}
-                    <span className="koma-art-promo-tag">{tagLabel}</span>
+                    <span className="koma-art-promo-tag">
+                      {discountPercent != null && discountPercent > 0
+                        ? `${tagLabel} · ${discountPercent}% OFF`
+                        : tagLabel}
+                    </span>
                   </div>
 
                   <div className="koma-art-promo-content">
                     <div className="koma-art-promo-copy">
                       <span className="koma-art-promo-eyebrow">Oferta da casa</span>
                       <h3 className="koma-art-promo-name">{offer.nome}</h3>
-                      {offer.brinde_nome && (
-                        <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-koma-secondary">
-                          <Gift className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                          <span>Brinde incluso: {offer.brinde_nome}</span>
+                      {itemsSummary && (
+                        <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg border border-koma-border bg-koma-card px-2.5 py-1 text-xs font-semibold text-koma-secondary tabular-nums">
+                          {offerType === 'compre_ganhe' && (
+                            <Gift className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                          )}
+                          <span>{itemsSummary}</span>
                         </p>
                       )}
                       {offer.descricao && (
@@ -960,8 +986,13 @@ export function CardapioArtisticExperience({
                     <div className="koma-art-promo-footer">
                       <div className="koma-art-promo-price-box">
                         <span className="koma-art-promo-price-label">{priceLabel}</span>
+                        {hasSavings && (
+                          <span className="block text-xs text-koma-muted line-through tabular-nums">
+                            De {formatPrice(regularTotal)}
+                          </span>
+                        )}
                         <strong className="koma-art-promo-price-val tabular-nums">
-                          {formatPrice(offer.preco)}
+                          {hasSavings ? `Por ${formatPrice(offer.preco)}` : formatPrice(offer.preco)}
                         </strong>
                       </div>
 

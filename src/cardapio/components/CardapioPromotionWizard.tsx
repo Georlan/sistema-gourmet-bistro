@@ -1,15 +1,15 @@
-import React, { useState } from 'react';
-import { ArrowLeft, CheckCircle2, Gift, ShoppingBag } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { ArrowLeft, CheckCircle2, Copy, Gift, ShoppingBag, SlidersHorizontal } from 'lucide-react';
 import {
-  isValidPromotionParts,
   selectedPromotionExtras,
   type PromotionCompositionStep,
   type PromotionPartSelection,
 } from '../promotionComposition';
+import { normalizeSlotQuantities } from '../../utils/promotionFormHelpers';
 import CardapioProductModal from './CardapioProductModal';
 
 /**
- * Camada de apresentação de uma oferta (1 a 4 etapas + brinde simples opcional).
+ * Camada de apresentação de uma oferta (1 a 4 slots, com suporte a quantidades por slot e brinde simples opcional).
  * NÃO altera preços, não cria pedidos nem envia itens soltos: a promoção inteira
  * é submetida para validação atômica pelo Order Core.
  */
@@ -20,10 +20,19 @@ interface Props {
   steps: PromotionCompositionStep[];
   expectedStepCount?: number;
   brindeNome?: string | null;
+  slotQuantities?: number[];
   restaurantId: string | number;
   onClose: () => void;
   onConfirm: (parts: PromotionPartSelection[]) => void;
   initialParts?: PromotionPartSelection[];
+}
+
+interface WizardFlowEntry {
+  slotIdx: number;
+  unitIdx: number;
+  repeatAll: boolean;
+  label: string;
+  product: PromotionCompositionStep['product'];
 }
 
 const formatMoney = (amount: number) =>
@@ -32,28 +41,181 @@ const formatMoney = (amount: number) =>
     currency: 'BRL',
   }).format(amount);
 
+function partSelectionSignature(part: PromotionPartSelection | null | undefined): string {
+  if (!part) return '';
+  const optionEntries = Object.entries(part.selectedOptions)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([groupId, options]) => `${groupId}:${options.map((opt) => opt.id).sort().join(',')}`);
+  return `${part.product.id}|${optionEntries.join(';')}|${part.notes.trim()}`;
+}
+
+function hydrateInitialSlotSelections(
+  steps: PromotionCompositionStep[],
+  quantities: number[],
+  initialParts?: PromotionPartSelection[],
+): {
+  selections: Array<Array<PromotionPartSelection | null>>;
+  repeatModes: boolean[];
+} {
+  let cursor = 0;
+  const selections: Array<Array<PromotionPartSelection | null>> = [];
+  const repeatModes: boolean[] = [];
+
+  for (let slotIdx = 0; slotIdx < steps.length; slotIdx += 1) {
+    const qty = quantities[slotIdx] ?? 1;
+    const slotUnits: Array<PromotionPartSelection | null> = [];
+    for (let u = 0; u < qty; u += 1) {
+      const candidate = initialParts?.[cursor] ?? null;
+      slotUnits.push(candidate && candidate.product.id === steps[slotIdx].product.id ? candidate : null);
+      cursor += 1;
+    }
+    selections.push(slotUnits);
+    if (qty > 1 && slotUnits.every(Boolean)) {
+      const firstSig = partSelectionSignature(slotUnits[0]);
+      repeatModes.push(slotUnits.every((unit) => partSelectionSignature(unit) === firstSig));
+    } else {
+      repeatModes.push(true);
+    }
+  }
+
+  return { selections, repeatModes };
+}
+
 export default function CardapioPromotionWizard({
   title,
   basePrice,
   steps,
   expectedStepCount,
   brindeNome,
+  slotQuantities,
   restaurantId,
   onClose,
   onConfirm,
   initialParts,
 }: Props) {
+  const quantities = useMemo(
+    () => normalizeSlotQuantities(steps.length, slotQuantities),
+    [steps.length, slotQuantities],
+  );
+
+  const initialHydration = useMemo(
+    () => hydrateInitialSlotSelections(steps, quantities, initialParts),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  const [slotSelections, setSlotSelections] = useState<Array<Array<PromotionPartSelection | null>>>(
+    initialHydration.selections,
+  );
+  const [repeatModes, setRepeatModes] = useState<boolean[]>(initialHydration.repeatModes);
+
+  const wizardFlow = useMemo<WizardFlowEntry[]>(() => {
+    const entries: WizardFlowEntry[] = [];
+    steps.forEach((step, slotIdx) => {
+      const qty = quantities[slotIdx] ?? 1;
+      if (qty === 1) {
+        entries.push({
+          slotIdx,
+          unitIdx: 0,
+          repeatAll: false,
+          label: step.label,
+          product: step.product,
+        });
+      } else if (repeatModes[slotIdx]) {
+        entries.push({
+          slotIdx,
+          unitIdx: 0,
+          repeatAll: true,
+          label: `${qty}× ${step.label}`,
+          product: step.product,
+        });
+      } else {
+        for (let unitIdx = 0; unitIdx < qty; unitIdx += 1) {
+          entries.push({
+            slotIdx,
+            unitIdx,
+            repeatAll: false,
+            label: `${step.label} (${unitIdx + 1} de ${qty})`,
+            product: step.product,
+          });
+        }
+      }
+    });
+    return entries;
+  }, [steps, quantities, repeatModes]);
+
   const [stepIndex, setStepIndex] = useState(0);
-  const [parts, setParts] = useState<Array<PromotionPartSelection | null>>(initialParts || []);
-  const review = stepIndex >= steps.length;
+  const review = stepIndex >= wizardFlow.length;
+
   const hasUnavailableProduct =
     steps.length < 1
     || steps.length > 4
     || (expectedStepCount != null && steps.length !== expectedStepCount)
     || steps.some((step) => step.product.isAvailable === false);
-  const complete = isValidPromotionParts(steps, parts);
-  const extras = selectedPromotionExtras(parts);
+
+  const flatParts = useMemo<Array<PromotionPartSelection | null>>(
+    () => slotSelections.flat(),
+    [slotSelections],
+  );
+
+  const expectedTotalParts = quantities.reduce((sum, q) => sum + q, 0);
+  const complete =
+    !hasUnavailableProduct
+    && flatParts.length === expectedTotalParts
+    && steps.every((step, slotIdx) => {
+      const units = slotSelections[slotIdx] || [];
+      return (
+        units.length === (quantities[slotIdx] ?? 1)
+        && units.every(
+          (unit) =>
+            unit !== null
+            && unit.quantity === 1
+            && unit.product.id === step.product.id,
+        )
+      );
+    });
+
+  const extras = selectedPromotionExtras(flatParts);
   const cleanGift = typeof brindeNome === 'string' && brindeNome.trim() ? brindeNome.trim() : null;
+
+  const jumpToSlotUnit = (slotIdx: number, unitIdx: number, forceIndividual = false) => {
+    const nextRepeat = forceIndividual
+      ? repeatModes.map((mode, idx) => (idx === slotIdx ? false : mode))
+      : repeatModes;
+    if (forceIndividual) {
+      setRepeatModes(nextRepeat);
+    }
+    let targetIndex = 0;
+    for (let s = 0; s < steps.length; s += 1) {
+      const qty = quantities[s] ?? 1;
+      if (s === slotIdx) {
+        targetIndex += nextRepeat[s] || qty === 1 ? 0 : unitIdx;
+        break;
+      }
+      targetIndex += nextRepeat[s] || qty === 1 ? 1 : qty;
+    }
+    setStepIndex(targetIndex);
+  };
+
+  const applySameChoiceToSlot = (slotIdx: number) => {
+    setSlotSelections((current) => {
+      const next = current.map((units) => [...units]);
+      const template = next[slotIdx]?.find(Boolean) || null;
+      const qty = quantities[slotIdx] ?? 1;
+      if (template) {
+        next[slotIdx] = Array.from({ length: qty }, () => ({
+          ...template,
+          selectedOptions: { ...template.selectedOptions },
+        }));
+      }
+      return next;
+    });
+    setRepeatModes((current) => current.map((mode, idx) => (idx === slotIdx ? true : mode)));
+  };
+
+  const splitSlotForIndividualEditing = (slotIdx: number) => {
+    setRepeatModes((current) => current.map((mode, idx) => (idx === slotIdx ? false : mode)));
+  };
 
   if (hasUnavailableProduct) {
     return (
@@ -86,12 +248,12 @@ export default function CardapioPromotionWizard({
   }
 
   if (!review) {
-    const current = steps[stepIndex];
-    const stored = parts[stepIndex];
+    const current = wizardFlow[stepIndex];
+    const stored = slotSelections[current.slotIdx]?.[current.unitIdx] ?? null;
 
     return (
       <CardapioProductModal
-        key={`${stepIndex}-${current.product.id}`}
+        key={`${stepIndex}-${current.slotIdx}-${current.unitIdx}-${current.product.id}`}
         product={current.product}
         restaurantId={restaurantId}
         initialItem={
@@ -106,12 +268,12 @@ export default function CardapioPromotionWizard({
         onClose={onClose}
         compositionStep={{
           current: stepIndex + 1,
-          total: steps.length + 1,
+          total: wizardFlow.length + 1,
           stepLabel: current.label,
           actionLabel:
-            stepIndex === steps.length - 1
+            stepIndex === wizardFlow.length - 1
               ? 'Revisar promoção'
-              : `Continuar para ${steps[stepIndex + 1].label}`,
+              : `Continuar para ${wizardFlow[stepIndex + 1].label}`,
           onBack: stepIndex > 0 ? () => setStepIndex(stepIndex - 1) : undefined,
         }}
         onAddToCart={(product, _quantity, selectedOptions, notes) => {
@@ -121,9 +283,20 @@ export default function CardapioPromotionWizard({
             selectedOptions,
             notes,
           };
-          setParts((currentParts) => {
-            const next = [...currentParts];
-            next[stepIndex] = selection;
+          setSlotSelections((currentSlots) => {
+            const next = currentSlots.map((units) => [...units]);
+            const qty = quantities[current.slotIdx] ?? 1;
+            if (current.repeatAll) {
+              next[current.slotIdx] = Array.from({ length: qty }, () => ({
+                ...selection,
+                selectedOptions: { ...selection.selectedOptions },
+              }));
+            } else {
+              if (!next[current.slotIdx]) {
+                next[current.slotIdx] = Array.from({ length: qty }, () => null);
+              }
+              next[current.slotIdx][current.unitIdx] = selection;
+            }
             return next;
           });
           setStepIndex(stepIndex + 1);
@@ -145,7 +318,7 @@ export default function CardapioPromotionWizard({
             className="text-xs font-bold tabular-nums"
             style={{ color: 'var(--koma-success-text)' }}
           >
-            Etapa {steps.length + 1} de {steps.length + 1} · Conferir pedido
+            Etapa {wizardFlow.length + 1} de {wizardFlow.length + 1} · Conferir pedido
           </p>
           <h2
             id="promotion-review-title"
@@ -158,14 +331,54 @@ export default function CardapioPromotionWizard({
             Confira a montagem de cada item antes de adicionar a promoção.
           </p>
           <div className="mt-4 space-y-3">
-            {steps.map((step, index) => {
-              const part = parts[index];
-              const choices = part ? Object.values(part.selectedOptions).flat() : [];
+            {steps.map((step, slotIdx) => {
+              const qty = quantities[slotIdx] ?? 1;
+              const units = slotSelections[slotIdx] || [];
+              const isRepeated = repeatModes[slotIdx];
+              const allFilled = units.length === qty && units.every(Boolean);
+
+              if (qty === 1) {
+                const part = units[0];
+                const choices = part ? Object.values(part.selectedOptions).flat() : [];
+                return (
+                  <div key={`${slotIdx}-${step.product.id}`} className="rounded-xl border border-koma-border bg-koma-card p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <strong className="text-sm text-koma-foreground">{step.label}</strong>
+                      {part && (
+                        <CheckCircle2
+                          className="h-4 w-4 shrink-0"
+                          style={{ color: 'var(--koma-success-text)' }}
+                          aria-label="Montagem concluída"
+                        />
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-koma-muted">
+                      {choices.length
+                        ? choices.map((option) => option.name).join(', ')
+                        : 'Sem complementos selecionados'}
+                    </p>
+                    {part?.notes && <p className="mt-1 text-xs text-koma-muted">Observação: {part.notes}</p>}
+                    <button
+                      type="button"
+                      onClick={() => jumpToSlotUnit(slotIdx, 0)}
+                      className="mt-2 min-h-11 text-xs font-bold text-koma-secondary hover:text-koma-foreground"
+                    >
+                      Alterar escolhas
+                    </button>
+                  </div>
+                );
+              }
+
+              const firstPart = units[0];
+              const firstChoices = firstPart ? Object.values(firstPart.selectedOptions).flat() : [];
+
               return (
-                <div key={`${index}-${step.product.id}`} className="rounded-xl border border-koma-border bg-koma-card p-3">
+                <div key={`${slotIdx}-${step.product.id}`} className="space-y-2.5 rounded-xl border border-koma-border bg-koma-card p-3">
                   <div className="flex items-center justify-between gap-2">
-                    <strong className="text-sm text-koma-foreground">{step.label}</strong>
-                    {part && (
+                    <strong className="text-sm text-koma-foreground tabular-nums">
+                      {qty}× {step.label}
+                    </strong>
+                    {allFilled && (
                       <CheckCircle2
                         className="h-4 w-4 shrink-0"
                         style={{ color: 'var(--koma-success-text)' }}
@@ -173,19 +386,84 @@ export default function CardapioPromotionWizard({
                       />
                     )}
                   </div>
-                  <p className="mt-1 text-xs text-koma-muted">
-                    {choices.length
-                      ? choices.map((option) => option.name).join(', ')
-                      : 'Sem complementos selecionados'}
-                  </p>
-                  {part?.notes && <p className="mt-1 text-xs text-koma-muted">Observação: {part.notes}</p>}
-                  <button
-                    type="button"
-                    onClick={() => setStepIndex(index)}
-                    className="mt-2 min-h-11 text-xs font-bold text-koma-secondary hover:text-koma-foreground"
-                  >
-                    Alterar escolhas
-                  </button>
+
+                  {isRepeated ? (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-koma-secondary">
+                        Mesma escolha aplicada para todas ({qty}×)
+                      </p>
+                      <p className="text-xs text-koma-muted">
+                        {firstChoices.length
+                          ? firstChoices.map((option) => option.name).join(', ')
+                          : 'Sem complementos selecionados'}
+                      </p>
+                      {firstPart?.notes && (
+                        <p className="text-xs text-koma-muted">Observação: {firstPart.notes}</p>
+                      )}
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => jumpToSlotUnit(slotIdx, 0)}
+                          className="min-h-11 rounded-xl border border-koma-border bg-koma-panel px-3 text-xs font-bold text-koma-foreground transition hover:bg-koma-raised"
+                        >
+                          Alterar escolhas ({qty}×)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => splitSlotForIndividualEditing(slotIdx)}
+                          className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-panel px-3 text-xs font-semibold text-koma-secondary transition hover:bg-koma-raised hover:text-koma-foreground"
+                        >
+                          <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+                          Personalizar cada uma ({qty}×)
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => applySameChoiceToSlot(slotIdx)}
+                        className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-koma-border bg-koma-panel px-3 text-xs font-bold text-koma-secondary transition hover:bg-koma-raised hover:text-koma-foreground"
+                      >
+                        <Copy className="h-3.5 w-3.5" aria-hidden="true" />
+                        Aplicar mesma escolha para todas ({qty}×)
+                      </button>
+                      <div className="space-y-2">
+                        {units.map((unitPart, unitIdx) => {
+                          const unitChoices = unitPart ? Object.values(unitPart.selectedOptions).flat() : [];
+                          return (
+                            <div
+                              key={`${slotIdx}-${unitIdx}`}
+                              className="flex items-start justify-between gap-2 rounded-lg border border-koma-border bg-koma-panel p-2.5"
+                            >
+                              <div className="min-w-0">
+                                <span className="block text-xs font-bold text-koma-foreground tabular-nums">
+                                  {step.label} · Unidade {unitIdx + 1} de {qty}
+                                </span>
+                                <span className="mt-0.5 block text-xs text-koma-muted">
+                                  {unitChoices.length
+                                    ? unitChoices.map((option) => option.name).join(', ')
+                                    : 'Sem complementos selecionados'}
+                                </span>
+                                {unitPart?.notes && (
+                                  <span className="mt-0.5 block text-xs text-koma-muted">
+                                    Obs.: {unitPart.notes}
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => jumpToSlotUnit(slotIdx, unitIdx, true)}
+                                className="min-h-11 shrink-0 rounded-lg px-2.5 text-xs font-bold text-koma-secondary hover:text-koma-foreground"
+                              >
+                                Alterar
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -226,7 +504,7 @@ export default function CardapioPromotionWizard({
         <div className="flex gap-2 border-t border-koma-border p-4">
           <button
             type="button"
-            onClick={() => setStepIndex(steps.length - 1)}
+            onClick={() => setStepIndex(Math.max(0, wizardFlow.length - 1))}
             className="min-h-11 rounded-xl border border-koma-border bg-koma-card px-3 text-sm font-bold text-koma-foreground"
           >
             <ArrowLeft className="h-4 w-4" aria-hidden="true" />
@@ -243,7 +521,10 @@ export default function CardapioPromotionWizard({
             type="button"
             disabled={!complete}
             onClick={() => {
-              if (complete) onConfirm(parts);
+              if (complete) {
+                const parts = flatParts.filter((part): part is PromotionPartSelection => Boolean(part));
+                onConfirm(parts);
+              }
             }}
             className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold disabled:opacity-50"
             style={{

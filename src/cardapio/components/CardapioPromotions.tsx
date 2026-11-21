@@ -3,6 +3,11 @@ import { ArrowRight, Gift } from 'lucide-react';
 import CatalogProductImage from './CatalogProductImage';
 import { useActivePromotions } from '../useActivePromotions';
 import { LOCAL_PRODUCT_PLACEHOLDER, type BrandConfig, type CatalogPromotion } from '../CardapioTypes';
+import {
+  calculatePromotionRegularTotal,
+  formatPromotionItemsSummary,
+  normalizeSlotQuantities,
+} from '../../utils/promotionFormHelpers';
 
 const money = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
@@ -16,6 +21,8 @@ export default function CardapioPromotions({
 }) {
   const offers = useActivePromotions(brand.promotions);
   if (!offers.length) return null;
+
+  const catalogProducts = [...brand.products, ...(brand.promotionProducts || [])];
 
   return (
     <section
@@ -37,12 +44,12 @@ export default function CardapioPromotions({
           >
             Promoções
           </h2>
-          <p className="text-[11px] text-koma-muted">
+          <p className="text-xs text-koma-muted">
             Aproveite ofertas Compre e Ganhe, combos e descontos da casa.
           </p>
         </div>
       </div>
-      <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+      <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-none">
         {offers.map((offer) => {
           const offerType =
             offer.tipo
@@ -51,50 +58,88 @@ export default function CardapioPromotions({
             offerType === 'compre_ganhe'
               ? 'Compre e ganhe'
               : offerType === 'desconto_item'
-                ? 'Oferta especial'
+                ? 'Desconto em 1 item'
                 : 'Combo promocional';
-          const offerImage = offer.componentes
-            .flat()
-            .map(
-              (id) =>
-                [...brand.products, ...(brand.promotionProducts || [])].find((product) => product.id === id)?.image,
-            )
+          const qtys = normalizeSlotQuantities(offer.componentes.length, offer.quantidades);
+          const resolvedSlots = offer.componentes
+            .map((ids, index) => {
+              const product = catalogProducts.find((candidate) => ids.includes(candidate.id));
+              return product ? { product, qty: qtys[index] ?? 1 } : null;
+            })
+            .filter((entry): entry is { product: (typeof catalogProducts)[number]; qty: number } => Boolean(entry));
+
+          const offerImage = resolvedSlots
+            .map((entry) => entry.product.image)
             .find((image) => image && image !== LOCAL_PRODUCT_PLACEHOLDER);
+
+          const itemsSummary = formatPromotionItemsSummary(
+            resolvedSlots.map((entry) => ({ nome: entry.product.name, qty: entry.qty })),
+            offer.brinde_nome,
+          );
+          const regularTotal = calculatePromotionRegularTotal(
+            resolvedSlots.map((entry) => ({ preco: entry.product.price, qty: entry.qty })),
+          );
+          const hasSavings = regularTotal > offer.preco + 0.005;
+          const discountPercent = hasSavings && regularTotal > 0
+            ? Math.round(((regularTotal - offer.preco) / regularTotal) * 100)
+            : null;
 
           return (
             <button
               key={offer.id}
               type="button"
               onClick={() => onSelect(offer)}
-              className="flex min-w-[230px] max-w-[310px] flex-col gap-2 rounded-xl border border-koma-border bg-koma-panel p-3 text-left transition hover:bg-koma-raised"
+              className="flex min-w-[240px] max-w-[320px] flex-col gap-2 rounded-xl border border-koma-border bg-koma-panel p-3 text-left transition hover:bg-koma-raised"
               aria-label={`Montar promoção ${offer.nome} por ${money(offer.preco)}`}
             >
               <CatalogProductImage
                 image={offerImage}
                 className="h-28 w-full rounded-lg bg-koma-card object-cover"
               />
-              <span className="text-[10px] font-bold uppercase tracking-wide text-koma-secondary">
-                {eyebrow}
-              </span>
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
+                <span className="text-xs font-bold uppercase tracking-wide text-koma-secondary">
+                  {eyebrow}
+                </span>
+                {discountPercent != null && discountPercent > 0 && (
+                  <span
+                    className="rounded-full border px-2 py-0.5 text-xs font-bold tabular-nums"
+                    style={{
+                      background: 'var(--koma-success-bg)',
+                      borderColor: 'var(--koma-success-border)',
+                      color: 'var(--koma-success-text)',
+                    }}
+                  >
+                    {discountPercent}% OFF
+                  </span>
+                )}
+              </div>
               <strong
                 className="text-sm font-bold text-koma-foreground"
                 style={{ fontFamily: 'var(--koma-font-display)' }}
               >
                 {offer.nome}
               </strong>
-              {offer.brinde_nome && (
-                <span className="inline-flex items-center gap-1 text-xs font-semibold text-koma-secondary">
-                  <Gift className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                  Brinde: {offer.brinde_nome}
+              {itemsSummary && (
+                <span className="rounded-lg border border-koma-border bg-koma-card px-2 py-1 text-xs font-semibold text-koma-secondary tabular-nums">
+                  {itemsSummary}
                 </span>
               )}
               {offer.descricao && <span className="text-xs text-koma-muted">{offer.descricao}</span>}
               <span
-                className="mt-auto flex items-center justify-between pt-1"
+                className="mt-auto flex items-end justify-between gap-2 pt-1"
                 style={{ color: 'var(--koma-success-text)' }}
               >
-                <strong className="text-base font-bold tabular-nums">{money(offer.preco)}</strong>
-                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                <span className="tabular-nums">
+                  {hasSavings && (
+                    <span className="block text-xs text-koma-muted line-through">
+                      De {money(regularTotal)}
+                    </span>
+                  )}
+                  <strong className="text-base font-bold">
+                    {hasSavings ? `Por ${money(offer.preco)}` : money(offer.preco)}
+                  </strong>
+                </span>
+                <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
               </span>
             </button>
           );
