@@ -334,6 +334,13 @@ class PosAdapter:
                 customer_id=venda_in.cliente_id,
             ),
             delivery=delivery_input,
+            promotion_id=venda_in.promocao_id,
+            promotion_item_indices=(
+                tuple(venda_in.promocao_item_indices)
+                if venda_in.promocao_item_indices is not None
+                else None
+            ),
+            expected_promotion_price=venda_in.promocao_preco_esperado,
             payment_method=(
                 venda_in.delivery_forma_pagamento
                 if tipo_pedido in {"Entrega", "Retirada"} and not (is_smartpos and is_counter_sale)

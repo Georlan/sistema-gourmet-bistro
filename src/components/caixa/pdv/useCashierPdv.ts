@@ -18,6 +18,13 @@ import { formatApiError } from '../../../utils/apiError';
 import { makeOperationKey, operationalFetch } from '../../../utils/operationalRequest';
 import type { CaixaPanelProps, CashierNotice, CashierTab } from '../cashierContracts';
 import { formatCompactCurrency } from '../cashierPresentation';
+import type { PromotionPartSelection } from '../../../cardapio/promotionComposition';
+import {
+  extractPdvPromotionOrderFields,
+  filterActivePdvPromotions,
+  partSelectionToPdvCartFields,
+  type PdvPromotion,
+} from './pdvPromotions';
 import {
   createEmptyCustomerState,
   handleCustomerPhoneUpdate,
@@ -46,6 +53,7 @@ export type PdvCartItem = {
   client: string;
   modifierIds?: string[];
   modifiers?: PdvModifierSelection[];
+  promotionId?: string;
 };
 
 export const pdvCartItemUnitPrice = (item: PdvCartItem) =>
@@ -104,6 +112,8 @@ export function useCashierPdv({
   const [pdvSelectedCategory, setPdvSelectedCategory] = useState<string>('todos');
 
   const [pdvCart, setPdvCart] = useState<PdvCartItem[]>([]);
+  const [activePromotions, setActivePromotions] = useState<PdvPromotion[]>([]);
+  const [configuringPromotion, setConfiguringPromotion] = useState<PdvPromotion | null>(null);
 
   const [customerState, setCustomerState] = useState<CustomerSessionState>(createEmptyCustomerState);
 
@@ -532,6 +542,7 @@ export function useCashierPdv({
         delivery_forma_pagamento: orderType === 'dine_in' ? undefined : paymentMethod || undefined,
         delivery_troco_para: cashTender,
         onboarding_test: onboardingTest,
+        ...extractPdvPromotionOrderFields(cartItems),
         itens: itemsList,
       };
       const saleFingerprint = JSON.stringify(salePayload);
@@ -701,7 +712,52 @@ export function useCashierPdv({
     return () => window.removeEventListener('koma-navigation-open-counter', handleNavigationOpenCounter);
   }, [pdvCart.length]);
 
+  const loadPromotions = useCallback(async () => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/cardapio-digital/promocoes`, { headers: authHeaders });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setActivePromotions(filterActivePdvPromotions(data as PdvPromotion[]));
+      }
+    } catch {
+      // Keep existing promotions if transient network failure occurs.
+    }
+  }, [apiBaseUrl, authHeaders]);
+
+  useEffect(() => {
+    if (activeTab !== 'operacao' || activeSubTab !== 'balcao') return;
+    void loadPromotions();
+  }, [activeTab, activeSubTab, loadPromotions]);
+
+  const addPromotionToCart = useCallback((promo: PdvPromotion, parts: PromotionPartSelection[]) => {
+    const newItems: PdvCartItem[] = [];
+    for (const part of parts) {
+      const fields = partSelectionToPdvCartFields(part);
+      const matchedProduct = dynamicMenu.find((candidate) => String(candidate.id) === String(fields.productId));
+      if (!matchedProduct) continue;
+      newItems.push({
+        product: matchedProduct,
+        quantity: 1,
+        obs: fields.obs,
+        client: pdvCustomerName || 'Consumo Geral',
+        modifierIds: fields.modifierIds,
+        modifiers: fields.modifiers,
+        promotionId: promo.id,
+      });
+    }
+    if (newItems.length > 0) {
+      setPdvCart((prev) => [...prev, ...newItems]);
+      showToast(`Oferta "${promo.nome}" adicionada ao carrinho.`, 'success');
+    }
+  }, [dynamicMenu, pdvCustomerName, showToast]);
+
   return {
+    activePromotions,
+    configuringPromotion,
+    setConfiguringPromotion,
+    loadPromotions,
+    addPromotionToCart,
     openCounter,
     balcaoMobileView,
     setBalcaoMobileView,
