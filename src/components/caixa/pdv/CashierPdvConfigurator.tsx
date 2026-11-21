@@ -3,6 +3,7 @@ import { Check, Minus, Plus, X } from 'lucide-react';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import type { Product } from '../../../types';
 import { formatCurrency } from '../cashierPresentation';
+import { getEffectiveProductPrice } from '../../../domain/productMerchandising';
 import { CashierPdvModifierChoices } from './CashierPdvModifierChoices';
 
 interface Props {
@@ -99,7 +100,7 @@ export function CashierPdvConfigurator({
                 {isEditing ? 'Editar item' : 'Personalizar item'}
               </span>
               <h3 id="pdv-config-title">{product.nome}</h3>
-              <strong>{formatCurrency(Number(product.preco || 0))}</strong>
+              <strong>{formatCurrency(getEffectiveProductPrice(product.preco, product.preco_promocional).effectivePrice)}</strong>
             </div>
           </div>
           <button
