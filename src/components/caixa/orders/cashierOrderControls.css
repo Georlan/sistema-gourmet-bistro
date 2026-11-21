@@ -202,16 +202,35 @@
   .cashier-shell--mobile-orders .orders-workspace .orders-toolbar {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 44px;
-    gap: 4px 8px;
-    padding: 4px;
+    align-items: center;
+    gap: 3px 6px;
+    padding: 3px 4px;
     border-radius: .75rem;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
   }
-  .cashier-shell--mobile-orders .orders-toolbar .orders-mobile-stages { width: 100%; }
+  .cashier-shell--mobile-orders .orders-toolbar .orders-mobile-stages {
+    width: fit-content;
+    max-width: 100%;
+    justify-self: start;
+    gap: .25rem;
+  }
+  .cashier-shell--mobile-orders .orders-toolbar .orders-mobile-stages .orders-filter-button {
+    min-width: 52px;
+    min-height: 36px;
+    height: 36px;
+    padding: .15rem .5rem;
+    gap: .3rem;
+    font-size: .75rem;
+  }
   .cashier-shell--mobile-orders .orders-workspace .orders-search { grid-column: auto; width: 44px; }
+  .cashier-shell--mobile-orders .orders-workspace .orders-search__input { min-height: 36px; height: 36px; }
   .cashier-shell--mobile-orders .orders-workspace .orders-search:is(:focus-within,.has-query) {
     grid-column: 1 / -1;
     width: 100%;
+  }
+  .cashier-shell--mobile-orders .orders-workspace .orders-search:is(:focus-within,.has-query) .orders-search__input {
+    min-height: 44px;
+    height: 44px;
   }
   .cashier-shell--mobile-orders .orders-toolbar__actions {
     grid-column: 1 / -1;
