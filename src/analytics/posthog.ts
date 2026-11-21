@@ -6,7 +6,7 @@
 import type { PostHog } from 'posthog-js';
 import { resolveKomaHost } from '../domain/komaHost';
 import { API_BASE_URL } from '../config/api';
-import { observeOperationalFetch, operationalArea } from './operational';
+import { isKnownExternalWebViewNoise, observeOperationalFetch, operationalArea } from './operational';
 import { initWebVitals } from './webVitals';
 import type {
   AnalyticsEventMap,
@@ -202,6 +202,7 @@ export function initAnalytics(): Promise<boolean> {
           capture_console_errors: false,
         },
         before_send: event => {
+          if (isKnownExternalWebViewNoise(event)) return null;
           if (event?.properties) event.properties = sanitizePostHogProperties(event.properties, projectToken);
           return event;
         },

@@ -734,6 +734,23 @@ def test_product_image_uses_new_webp_and_keeps_original(mock_post, mock_delete, 
 
 
 @patch('httpx.AsyncClient.post')
+def test_promotion_image_uploads_optimized_webp(mock_post, test_setup):
+    mock_post.return_value = AsyncMock(status_code=201)
+    response = client.post(
+        '/api/cardapio-digital/assets/promotion',
+        headers={'Authorization': f"Bearer {test_setup['token']}"},
+        files={'file': ('promo.png', VALID_PNG_BYTES, 'image/png')},
+    )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert '/999/promotion/' in payload['url']
+    assert payload['url'].endswith('.webp')
+    assert mock_post.call_args.kwargs['headers']['x-upsert'] == 'false'
+    with Image.open(io.BytesIO(mock_post.call_args.kwargs['content'])) as image:
+        assert image.format == 'WEBP'
+
+
+@patch('httpx.AsyncClient.post')
 def test_failed_storage_keeps_existing_product_reference(mock_post, test_setup, image_product):
     from app.models import Produto
     mock_post.return_value = AsyncMock(status_code=500)
