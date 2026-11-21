@@ -904,7 +904,7 @@ export function CardapioArtisticExperience({
             </div>
           </div>
 
-          <div className="koma-art-promo-grid">
+          <div className="koma-art-promo-grid flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-3">
             {offers.map((offer) => {
               const allCatalogProducts = [...activeBrand.products, ...(activeBrand.promotionProducts || [])];
               const qtys = normalizeSlotQuantities(offer.componentes.length, offer.quantidades);
@@ -914,9 +914,11 @@ export function CardapioArtisticExperience({
                   return product ? { product, qty: qtys[index] ?? 1 } : null;
                 })
                 .filter((entry): entry is { product: Product; qty: number } => Boolean(entry));
-              const offerImage = resolvedSlots
-                .map((entry) => entry.product.image)
-                .find((img) => img && img !== LOCAL_PRODUCT_PLACEHOLDER);
+              const offerImage =
+                offer.imagem_url
+                || resolvedSlots
+                  .map((entry) => entry.product.image)
+                  .find((img) => img && img !== LOCAL_PRODUCT_PLACEHOLDER);
               const offerType = offer.tipo
                 || (offer.brinde_nome ? 'compre_ganhe' : offer.componentes.length === 1 ? 'desconto_item' : 'combo');
               const tagLabel = offerType === 'compre_ganhe'
@@ -946,15 +948,15 @@ export function CardapioArtisticExperience({
               return (
                 <div
                   key={offer.id}
-                  className="koma-art-promo-card"
+                  className="koma-art-promo-card w-[74vw] max-w-[270px] shrink-0 snap-start sm:w-auto sm:max-w-none"
                   onClick={() => onPromotionSelect?.(offer)}
                 >
-                  <div className="koma-art-promo-media">
+                  <div className="koma-art-promo-media h-28 w-full overflow-hidden">
                     {offerImage ? (
                       <CatalogProductImage
                         image={offerImage}
                         alt={offer.nome}
-                        className="koma-art-promo-img"
+                        className="koma-art-promo-img h-28 w-full object-cover"
                       />
                     ) : (
                       <ArtisticClocheIllustration />
@@ -979,7 +981,7 @@ export function CardapioArtisticExperience({
                         </p>
                       )}
                       {offer.descricao && (
-                        <p className="koma-art-promo-desc">{offer.descricao}</p>
+                        <p className="koma-art-promo-desc line-clamp-2">{offer.descricao}</p>
                       )}
                     </div>
 
@@ -1002,7 +1004,7 @@ export function CardapioArtisticExperience({
                           e.stopPropagation();
                           onPromotionSelect?.(offer);
                         }}
-                        className="koma-art-promo-cta"
+                        className="koma-art-promo-cta min-h-10"
                         aria-label={`Montar promoção ${offer.nome} por ${formatPrice(offer.preco)}`}
                       >
                         <span>{ctaLabel}</span>

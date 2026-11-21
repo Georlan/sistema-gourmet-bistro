@@ -824,6 +824,70 @@ async def upload_product_asset(
     }
 
 
+@router.post("/assets/promotion")
+async def upload_promotion_asset(
+    file: UploadFile = File(...),
+    current_user: Usuario = Depends(require_permission("configuracoes:administrar")),
+):
+    """Publica uma foto de promoção no storage do tenant autenticado."""
+    del current_user
+    rest_id = require_tenant_id()
+    content_type = file.content_type or ""
+    try:
+        content = await file.read(MAX_ASSET_SIZE + 1)
+    finally:
+        await file.close()
+    if len(content) > MAX_ASSET_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O arquivo excede o limite máximo de 5 MB.",
+        )
+    extension = _validate_asset_content(content_type, content)
+    optimized = await _prepare_public_image(content, "product")
+    content, content_type, extension = optimized.content, optimized.content_type, optimized.extension
+
+    object_path = f"{rest_id}/promotion/{uuid.uuid4().hex}.{extension}"
+    storage_url = _supabase_storage_url()
+    upload_url = (
+        f"{storage_url}/storage/v1/object/cardapio-assets/"
+        f"{quote(object_path, safe='/')}"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=20.0, trust_env=False) as client:
+            response = await client.post(
+                upload_url,
+                headers=_supabase_storage_headers(content_type),
+                content=content,
+            )
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "Falha de rede ao enviar foto de promoção do restaurante %s: %s.",
+            rest_id,
+            type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Não foi possível armazenar a imagem.",
+        ) from exc
+
+    if response.status_code not in {status.HTTP_200_OK, status.HTTP_201_CREATED}:
+        logger.warning(
+            "Storage rejeitou foto de promoção do restaurante %s com HTTP %s.",
+            rest_id,
+            response.status_code,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Não foi possível armazenar a imagem.",
+        )
+
+    public_url = (
+        f"{storage_url}/storage/v1/object/public/cardapio-assets/"
+        f"{quote(object_path, safe='/')}"
+    )
+    return {"url": public_url}
+
+
 @router.delete("/assets/product/{produto_id}")
 async def delete_product_asset(
     produto_id: str,
@@ -1076,6 +1140,7 @@ PromotionType = Literal["combo", "compre_ganhe", "desconto_item"]
 class PromotionConfigInput(BaseModel):
     nome: str = Field(min_length=4, max_length=90)
     descricao: str = Field(default="", max_length=240)
+    imagem_url: str | None = Field(default=None, max_length=500)
     tipo: PromotionType = "combo"
     brinde_nome: str | None = Field(default=None, max_length=90)
     preco: Decimal = Field(ge=0, le=100000, max_digits=8, decimal_places=2)
@@ -1200,6 +1265,7 @@ def _validate_promotion_input(db: Session, rest_id: int, offer: PromotionConfigI
     return {
         "nome": " ".join(offer.nome.split()),
         "descricao": offer.descricao.strip(),
+        "imagem_url": (offer.imagem_url or "").strip() or None,
         "tipo": tipo,
         "brinde_nome": brinde_nome,
         "preco": float(money(offer.preco)),

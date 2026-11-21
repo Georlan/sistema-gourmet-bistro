@@ -49,7 +49,7 @@ export default function CardapioPromotions({
           </p>
         </div>
       </div>
-      <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-none">
+      <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 sm:grid sm:grid-cols-2 sm:overflow-visible lg:grid-cols-3">
         {offers.map((offer) => {
           const offerType =
             offer.tipo
@@ -68,9 +68,11 @@ export default function CardapioPromotions({
             })
             .filter((entry): entry is { product: (typeof catalogProducts)[number]; qty: number } => Boolean(entry));
 
-          const offerImage = resolvedSlots
-            .map((entry) => entry.product.image)
-            .find((image) => image && image !== LOCAL_PRODUCT_PLACEHOLDER);
+          const offerImage =
+            offer.imagem_url
+            || resolvedSlots
+              .map((entry) => entry.product.image)
+              .find((image) => image && image !== LOCAL_PRODUCT_PLACEHOLDER);
 
           const itemsSummary = formatPromotionItemsSummary(
             resolvedSlots.map((entry) => ({ nome: entry.product.name, qty: entry.qty })),
@@ -89,7 +91,7 @@ export default function CardapioPromotions({
               key={offer.id}
               type="button"
               onClick={() => onSelect(offer)}
-              className="flex min-w-[240px] max-w-[320px] flex-col gap-2 rounded-xl border border-koma-border bg-koma-panel p-3 text-left transition hover:bg-koma-raised"
+              className="flex w-[74vw] max-w-[270px] shrink-0 snap-start flex-col gap-2 rounded-xl border border-koma-border bg-koma-panel p-3 text-left transition hover:bg-koma-raised sm:w-auto sm:max-w-none"
               aria-label={`Montar promoção ${offer.nome} por ${money(offer.preco)}`}
             >
               <CatalogProductImage
