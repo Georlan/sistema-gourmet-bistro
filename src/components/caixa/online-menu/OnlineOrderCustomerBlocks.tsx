@@ -109,12 +109,24 @@ export function OnlineOrderCustomerBlocks({
     <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5" id="online-order-customer-blocks">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-rose-500/25 bg-rose-500/10 text-rose-500">
-            <ShieldAlert size={19} />
+          <span
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border"
+            style={{
+              background: 'var(--koma-danger-bg)',
+              borderColor: 'var(--koma-danger-border)',
+              color: 'var(--koma-danger-text)',
+            }}
+          >
+            <ShieldAlert size={19} aria-hidden="true" />
           </span>
           <div>
-            <h3 className="text-sm font-black text-koma-foreground">Clientes bloqueados</h3>
-            <p className="mt-1 max-w-xl text-[10px] leading-relaxed text-koma-muted">
+            <h3
+              className="text-sm font-bold text-koma-foreground"
+              style={{ fontFamily: 'var(--koma-font-display)' }}
+            >
+              Clientes bloqueados
+            </h3>
+            <p className="mt-1 max-w-xl text-xs leading-relaxed text-koma-muted">
               Veja quem está impedido de pedir, desbloqueie quando necessário e consulte o histórico. Dados sensíveis do cliente não são expostos aqui.
             </p>
           </div>
@@ -123,53 +135,81 @@ export function OnlineOrderCustomerBlocks({
           type="button"
           onClick={() => void load()}
           disabled={loading}
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-koma-border bg-koma-raised text-koma-muted transition hover:text-koma-foreground disabled:opacity-50"
+          className="grid min-h-11 min-w-11 shrink-0 place-items-center rounded-xl border border-koma-border bg-koma-raised text-koma-muted transition hover:text-koma-foreground disabled:opacity-50"
           aria-label="Atualizar clientes bloqueados"
           title="Atualizar"
         >
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
         </button>
       </div>
 
       {loading ? (
-        <div className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 py-5 text-[10px] font-semibold text-koma-muted">
-          <Loader2 size={15} className="animate-spin text-emerald-500" /> Consultando bloqueios…
+        <div className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3 py-5 text-xs font-semibold text-koma-muted">
+          <Loader2 size={15} className="animate-spin" /> Consultando bloqueios…
         </div>
       ) : (
         <>
           <div className="mt-4">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <strong className="text-[10px] uppercase tracking-[0.12em] text-koma-muted">Bloqueios ativos</strong>
-              <span className="rounded-full border border-koma-border px-2 py-0.5 text-[9px] font-black text-koma-secondary">
+              <strong className="text-xs font-semibold text-koma-secondary">Bloqueios ativos</strong>
+              <span className="rounded-full border border-koma-border bg-koma-card px-2.5 py-0.5 text-xs font-bold tabular-nums text-koma-foreground">
                 {activeBlocks.length}
               </span>
             </div>
 
             {activeBlocks.length === 0 ? (
-              <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-3 text-[10px] font-semibold text-emerald-600 dark:text-emerald-300">
-                <CheckCircle2 size={15} /> Nenhum cliente bloqueado no momento.
+              <div
+                className="flex items-center gap-2 rounded-xl border px-3.5 py-3 text-xs font-semibold"
+                style={{
+                  background: 'var(--koma-success-bg)',
+                  borderColor: 'var(--koma-success-border)',
+                  color: 'var(--koma-success-text)',
+                }}
+              >
+                <CheckCircle2 size={15} aria-hidden="true" className="shrink-0" />
+                <span>Nenhum cliente bloqueado no momento.</span>
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 {activeBlocks.map((block) => (
-                  <article key={block.id} className="flex flex-col gap-3 rounded-xl border border-rose-500/20 bg-rose-500/[0.04] p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <article
+                    key={block.id}
+                    className="flex flex-col gap-3 rounded-xl border p-3.5 sm:flex-row sm:items-center sm:justify-between"
+                    style={{
+                      background: 'var(--koma-danger-bg)',
+                      borderColor: 'var(--koma-danger-border)',
+                    }}
+                  >
                     <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <Ban size={14} className="shrink-0 text-rose-500" />
-                        <strong className="text-[11px] text-koma-foreground">Bloqueio ativo</strong>
-                        {block.cliente_id && <span className="rounded-md bg-koma-raised px-1.5 py-0.5 text-[8px] font-bold text-koma-muted">Cliente vinculado</span>}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Ban size={14} className="shrink-0" style={{ color: 'var(--koma-danger-text)' }} aria-hidden="true" />
+                        <strong className="text-xs font-semibold text-koma-foreground">Bloqueio ativo</strong>
+                        {block.cliente_id && (
+                          <span className="rounded-md border border-koma-border bg-koma-card px-2 py-0.5 text-xs font-medium text-koma-muted">
+                            Cliente vinculado
+                          </span>
+                        )}
                       </div>
-                      <p className="mt-1 text-[10px] leading-relaxed text-koma-secondary">{block.reason || 'Sem motivo informado'}</p>
-                      <p className="mt-1 text-[9px] text-koma-muted">Expira: {formatDateTime(block.expires_at)}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-koma-secondary">
+                        {block.reason || 'Sem motivo informado'}
+                      </p>
+                      <p className="mt-1 text-xs tabular-nums text-koma-muted">
+                        Expira: {formatDateTime(block.expires_at)}
+                      </p>
                     </div>
                     <button
                       type="button"
                       onClick={() => void release(block)}
                       disabled={releasingId === block.id}
-                      className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 text-[10px] font-black text-emerald-600 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:opacity-50"
+                      className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl border px-3.5 text-xs font-semibold transition disabled:opacity-50"
+                      style={{
+                        background: 'var(--koma-success-bg)',
+                        borderColor: 'var(--koma-success-border)',
+                        color: 'var(--koma-success-text)',
+                      }}
                     >
-                      {releasingId === block.id ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
-                      {releasingId === block.id ? 'Desbloqueando…' : 'Desbloquear'}
+                      {releasingId === block.id ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                      <span>{releasingId === block.id ? 'Desbloqueando…' : 'Desbloquear'}</span>
                     </button>
                   </article>
                 ))}
@@ -179,22 +219,29 @@ export function OnlineOrderCustomerBlocks({
 
           <div className="mt-5 border-t border-koma-border pt-4">
             <div className="mb-2 flex items-center gap-2">
-              <History size={14} className="text-koma-muted" />
-              <strong className="text-[10px] uppercase tracking-[0.12em] text-koma-muted">Histórico de bloqueios</strong>
+              <History size={14} className="text-koma-muted" aria-hidden="true" />
+              <strong className="text-xs font-semibold text-koma-secondary">Histórico de bloqueios</strong>
             </div>
             {historyBlocks.length === 0 ? (
-              <p className="rounded-xl border border-dashed border-koma-border px-3 py-4 text-center text-[10px] text-koma-muted">
+              <p className="rounded-xl border border-dashed border-koma-border px-3.5 py-4 text-center text-xs text-koma-muted">
                 O histórico aparecerá aqui quando um bloqueio expirar ou for removido.
               </p>
             ) : (
               <div className="overflow-hidden rounded-xl border border-koma-border bg-koma-card">
                 {historyBlocks.map((block, index) => (
-                  <article key={block.id} className={`flex flex-col gap-1 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between ${index > 0 ? 'border-t border-koma-border' : ''}`}>
+                  <article
+                    key={block.id}
+                    className={`flex flex-col gap-1.5 px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between ${index > 0 ? 'border-t border-koma-border' : ''}`}
+                  >
                     <div className="min-w-0">
-                      <p className="truncate text-[10px] font-semibold text-koma-secondary">{block.reason || 'Sem motivo informado'}</p>
-                      <p className="mt-0.5 text-[9px] text-koma-muted">Criado em {formatDateTime(block.created_at)}</p>
+                      <p className="truncate text-xs font-semibold text-koma-foreground">
+                        {block.reason || 'Sem motivo informado'}
+                      </p>
+                      <p className="mt-0.5 text-xs tabular-nums text-koma-muted">
+                        Criado em {formatDateTime(block.created_at)}
+                      </p>
                     </div>
-                    <span className="shrink-0 rounded-full border border-koma-border px-2 py-1 text-[8px] font-black uppercase tracking-wider text-koma-muted">
+                    <span className="w-fit shrink-0 rounded-full border border-koma-border bg-koma-panel px-2.5 py-1 text-xs font-semibold text-koma-muted">
                       {statusLabel(block)}
                     </span>
                   </article>
@@ -205,7 +252,11 @@ export function OnlineOrderCustomerBlocks({
         </>
       )}
 
-      {feedback && <p className="mt-3 text-[10px] text-koma-muted" role="status">{feedback}</p>}
+      {feedback && (
+        <p className="mt-3 text-xs font-medium text-koma-secondary" role="status">
+          {feedback}
+        </p>
+      )}
     </section>
   );
 }

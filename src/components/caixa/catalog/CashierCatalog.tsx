@@ -156,6 +156,7 @@ export default function CashierCatalog({
   const [prodFormSelo, setProdFormSelo] = useState<ProductBadge | ''>('');
   const [prodFormPrecoPromocional, setProdFormPrecoPromocional] = useState<number | ''>('');
   const [isLoading, setIsLoading] = useState(false);
+  const [optimisticOverrides, setOptimisticOverrides] = useState<Record<string, Partial<Product>>>({});
   const [customizationGroups, setCustomizationGroups] = useState<ProductCustomizationGroup[]>([]);
   const [selectedCustomizationIds, setSelectedCustomizationIds] = useState<string[]>([]);
   const [previousCustomizationIds, setPreviousCustomizationIds] = useState<string[]>([]);
@@ -163,6 +164,19 @@ export default function CashierCatalog({
   const [loadingCustomizations, setLoadingCustomizations] = useState(false);
   const [customizationError, setCustomizationError] = useState('');
   const [customizationsLoaded, setCustomizationsLoaded] = useState(false);
+
+  const cacheScopeKey = `${apiBaseUrl}|${authorization || ''}`;
+  const customizationGroupsCacheRef = useRef<{ key: string; data: ProductCustomizationGroup[] } | null>(null);
+  const productFamiliesCacheRef = useRef<{ key: string; data: CatalogProductFamily[] } | null>(null);
+
+  const invalidateCatalogCaches = () => {
+    customizationGroupsCacheRef.current = null;
+    productFamiliesCacheRef.current = null;
+  };
+
+  useEffect(() => {
+    setOptimisticOverrides({});
+  }, [apiProdutos]);
 
   const [selectedCardapioId, setSelectedCardapioId] = useState<string | null>(
     () => cardapioAtivoId || (cardapios && cardapios.length > 0 ? cardapios[0].id : null),
@@ -178,8 +192,8 @@ export default function CashierCatalog({
     }
   }, [cardapios, cardapioAtivoId]);
 
-  // Carrega os grupos quando o editor é aberto. Não altera regras por categoria:
-  // só os vínculos explícitos deste produto são editáveis.
+  // Carrega os grupos quando o editor é aberto, reutilizando o cache em memória
+  // até ser invalidado por uma mutação ou troca de tenant/auth.
   useEffect(() => {
     if (!showProductModal || isMarmitaria) return;
     let cancelled = false;
@@ -187,60 +201,95 @@ export default function CashierCatalog({
     setCustomizationsLoaded(false);
     setCustomizationError('');
     const headers = authorization ? { Authorization: authorization } : authHeaders;
-    const requests: Promise<Response>[] = [
-      fetch(`${apiBaseUrl}/cardapio/modificadores/grupos`, { headers }),
-    ];
-    if (hasVariants && editingFamilyId) {
-      requests.push(fetch(`${apiBaseUrl}/produto-familias/${encodeURIComponent(editingFamilyId)}/personalizacoes`, { headers }));
-    } else if (!hasVariants && editingProduct?.id) {
-      requests.push(fetch(`${apiBaseUrl}/produtos/${encodeURIComponent(editingProduct.id)}/personalizacoes`, { headers }));
-    }
-    Promise.all(requests).then(async responses => {
-      if (!responses.every(response => response.ok)) throw new Error('Não foi possível carregar as personalizações.');
-      const [groups, links] = await Promise.all(responses.map(response => response.json()));
+    const cachedGroups = customizationGroupsCacheRef.current?.key === cacheScopeKey
+      ? customizationGroupsCacheRef.current.data
+      : null;
+
+    const groupsPromise: Promise<ProductCustomizationGroup[]> = cachedGroups
+      ? Promise.resolve(cachedGroups)
+      : fetch(`${apiBaseUrl}/cardapio/modificadores/grupos`, { headers }).then(async (response) => {
+          if (!response.ok) throw new Error('Não foi possível carregar as personalizações.');
+          const data = await response.json();
+          const normalized = Array.isArray(data) ? data : [];
+          customizationGroupsCacheRef.current = { key: cacheScopeKey, data: normalized };
+          return normalized;
+        });
+
+    const linksPromise: Promise<{ grupo_ids?: string[]; grupos_diretos?: string[]; grupos_herdados?: string[] } | null> =
+      hasVariants && editingFamilyId
+        ? fetch(`${apiBaseUrl}/produto-familias/${encodeURIComponent(editingFamilyId)}/personalizacoes`, { headers })
+            .then(async (response) => {
+              if (!response.ok) throw new Error('Não foi possível carregar as personalizações.');
+              return response.json();
+            })
+        : !hasVariants && editingProduct?.id
+          ? fetch(`${apiBaseUrl}/produtos/${encodeURIComponent(editingProduct.id)}/personalizacoes`, { headers })
+              .then(async (response) => {
+                if (!response.ok) throw new Error('Não foi possível carregar as personalizações.');
+                return response.json();
+              })
+          : Promise.resolve(null);
+
+    Promise.all([groupsPromise, linksPromise]).then(([groups, links]) => {
       if (cancelled) return;
-      setCustomizationGroups(Array.isArray(groups) ? groups : []);
+      setCustomizationGroups(groups);
       const direct = hasVariants ? (links?.grupo_ids || []) : (links?.grupos_diretos || []);
       setPreviousCustomizationIds(direct);
       setSelectedCustomizationIds(direct);
       setInheritedCustomizationIds(hasVariants ? [] : (links?.grupos_herdados || []));
       setCustomizationsLoaded(true);
-    }).catch(error => {
+    }).catch((error) => {
       if (!cancelled) setCustomizationError(error instanceof Error ? error.message : 'Erro ao carregar personalizações.');
     }).finally(() => { if (!cancelled) setLoadingCustomizations(false); });
     return () => { cancelled = true; };
     // A autorização é a identidade de leitura; mudanças no formulário não disparam novas consultas.
-  }, [showProductModal, editingProduct?.id, editingFamilyId, hasVariants, apiBaseUrl, authorization, isMarmitaria]);
+  }, [showProductModal, editingProduct?.id, editingFamilyId, hasVariants, apiBaseUrl, authorization, cacheScopeKey, isMarmitaria]);
 
-  // Existing families load into the same editor; no second product form.
+  // Existing families load into the same editor; reuse cached families when available.
   useEffect(() => {
     if (!showProductModal || !editingFamilyId || isMarmitaria) return;
     let cancelled = false;
     setLoadingFamily(true);
     setFamilyError('');
     const headers = authorization ? { Authorization: authorization } : authHeaders;
-    fetch(`${apiBaseUrl}/produto-familias`, { headers })
-      .then(async response => {
-        if (!response.ok) throw new Error('Não foi possível carregar os sabores ou tamanhos.');
-        const families = await response.json() as CatalogProductFamily[];
-        const family = families.find(item => item.id === editingFamilyId);
-        if (!family) throw new Error('Produto com variações não encontrado. Atualize o cardápio.');
-        if (cancelled) return;
-        setProdFormNome(family.nome);
-        setProdFormDescricao(family.descricao || '');
-        setProdFormCategoriaId(family.categoria_id);
-        setProdFormCardapioId(family.cardapio_id || '');
-        setVariantAxis(family.eixo === 'tamanho' ? 'tamanho' : 'sabor');
-        setFamilyImage(family.imagem || '');
-        setVariantRows(family.variantes.map(variant => ({
-          produto_id: variant.produto_id, rotulo: variant.rotulo,
-          preco: variant.preco, ativo: variant.ativo,
-        })));
-      })
-      .catch(error => { if (!cancelled) setFamilyError(error instanceof Error ? error.message : 'Não foi possível carregar o produto.'); })
+    const cachedFamilies = productFamiliesCacheRef.current?.key === cacheScopeKey
+      ? productFamiliesCacheRef.current.data
+      : null;
+
+    const applyFamily = (families: CatalogProductFamily[]) => {
+      const family = families.find((item) => item.id === editingFamilyId);
+      if (!family) throw new Error('Produto com variações não encontrado. Atualize o cardápio.');
+      if (cancelled) return;
+      setProdFormNome(family.nome);
+      setProdFormDescricao(family.descricao || '');
+      setProdFormCategoriaId(family.categoria_id);
+      setProdFormCardapioId(family.cardapio_id || '');
+      setVariantAxis(family.eixo === 'tamanho' ? 'tamanho' : 'sabor');
+      setFamilyImage(family.imagem || '');
+      setVariantRows(family.variantes.map((variant) => ({
+        produto_id: variant.produto_id,
+        rotulo: variant.rotulo,
+        preco: variant.preco,
+        ativo: variant.ativo,
+      })));
+    };
+
+    const familiesPromise: Promise<CatalogProductFamily[]> = cachedFamilies
+      ? Promise.resolve(cachedFamilies)
+      : fetch(`${apiBaseUrl}/produto-familias`, { headers }).then(async (response) => {
+          if (!response.ok) throw new Error('Não foi possível carregar os sabores ou tamanhos.');
+          const data = await response.json() as CatalogProductFamily[];
+          const normalized = Array.isArray(data) ? data : [];
+          productFamiliesCacheRef.current = { key: cacheScopeKey, data: normalized };
+          return normalized;
+        });
+
+    familiesPromise
+      .then(applyFamily)
+      .catch((error) => { if (!cancelled) setFamilyError(error instanceof Error ? error.message : 'Não foi possível carregar o produto.'); })
       .finally(() => { if (!cancelled) setLoadingFamily(false); });
     return () => { cancelled = true; };
-  }, [showProductModal, editingFamilyId, isMarmitaria, apiBaseUrl, authorization]);
+  }, [showProductModal, editingFamilyId, isMarmitaria, apiBaseUrl, authorization, cacheScopeKey]);
 
   const handlePublishCardapio = async (targetMenuId: string, targetMenuNome: string) => {
     if (isPublishingMenu) return;
@@ -279,12 +328,12 @@ export default function CashierCatalog({
   };
 
   const [familyLabels, setFamilyLabels] = useState<Record<string, string>>({});
-  // Reuse the family API that already powers the editor. Fetch only for
-  // native families; the legacy JE catalog stays unchanged until T6.
+  // Reuse the family API that already powers the editor and prime the in-memory cache.
   useEffect(() => {
     if (activeSubTab !== 'produtos' || isMarmitaria) return;
     if (!apiProdutos.some((product) => Boolean(product.familia_id))) {
       setFamilyLabels({});
+      productFamiliesCacheRef.current = null;
       return;
     }
     let cancelled = false;
@@ -293,23 +342,101 @@ export default function CashierCatalog({
       .then(async (response) => {
         if (!response.ok) throw new Error('Famílias indisponíveis.');
         const families = await response.json() as CatalogProductFamily[];
+        const normalized = Array.isArray(families) ? families : [];
+        productFamiliesCacheRef.current = { key: cacheScopeKey, data: normalized };
         if (!cancelled) setFamilyLabels(Object.fromEntries(
-          families.map((family) => [family.id, family.nome]),
+          normalized.map((family) => [family.id, family.nome]),
         ));
       })
       .catch(() => {
         if (!cancelled) setFamilyLabels({});
       });
     return () => { cancelled = true; };
-    // Refreshing the canonical catalog also refreshes the family labels.
-  }, [activeSubTab, apiBaseUrl, apiProdutos, authorization, isMarmitaria]);
+    // Refreshing the canonical catalog also refreshes the family labels and cache.
+  }, [activeSubTab, apiBaseUrl, apiProdutos, authorization, cacheScopeKey, isMarmitaria]);
+
+  const handleToggleHighlight = async (product: Product, destaque: boolean) => {
+    setOptimisticOverrides((current) => ({
+      ...current,
+      [product.id]: { ...current[product.id], destaque },
+    }));
+    try {
+      const response = await fetch(`${apiBaseUrl}/produtos/${product.id}`, {
+        method: 'PUT',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ destaque }),
+      });
+      if (!response.ok) {
+        setOptimisticOverrides((current) => {
+          const next = { ...current };
+          delete next[product.id];
+          return next;
+        });
+        showToast('Não foi possível atualizar o destaque.', 'error');
+        return;
+      }
+      await fetchProdutos();
+      showToast(destaque ? 'Produto marcado como destaque.' : 'Destaque removido.');
+    } catch {
+      setOptimisticOverrides((current) => {
+        const next = { ...current };
+        delete next[product.id];
+        return next;
+      });
+      showToast('Erro de conexão ao atualizar o destaque.', 'error');
+    }
+  };
+
+  const handleQuickPriceUpdate = async (product: Product, novoPreco: number): Promise<boolean> => {
+    if (!Number.isFinite(novoPreco) || novoPreco < 0) {
+      showToast('Informe um preço válido.', 'error');
+      return false;
+    }
+    setOptimisticOverrides((current) => ({
+      ...current,
+      [product.id]: { ...current[product.id], preco: novoPreco },
+    }));
+    try {
+      const response = await fetch(`${apiBaseUrl}/produtos/${product.id}`, {
+        method: 'PUT',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preco: novoPreco }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        setOptimisticOverrides((current) => {
+          const next = { ...current };
+          delete next[product.id];
+          return next;
+        });
+        showToast(errorData.detail || 'Não foi possível atualizar o preço.', 'error');
+        return false;
+      }
+      await fetchProdutos();
+      showToast('Preço atualizado.');
+      return true;
+    } catch {
+      setOptimisticOverrides((current) => {
+        const next = { ...current };
+        delete next[product.id];
+        return next;
+      });
+      showToast('Erro de conexão ao atualizar o preço.', 'error');
+      return false;
+    }
+  };
 
   const displayedProdutos = useMemo(() => {
-    if (!cardapios || cardapios.length === 0 || !selectedCardapioId) {
-      return apiProdutos;
-    }
-    return apiProdutos.filter((p) => p.cardapio_id === selectedCardapioId);
-  }, [apiProdutos, cardapios, selectedCardapioId]);
+    const base = !cardapios || cardapios.length === 0 || !selectedCardapioId
+      ? apiProdutos
+      : apiProdutos.filter((p) => p.cardapio_id === selectedCardapioId);
+    if (Object.keys(optimisticOverrides).length === 0) return base;
+    return base.map((product) => (
+      optimisticOverrides[product.id]
+        ? { ...product, ...optimisticOverrides[product.id] }
+        : product
+    ));
+  }, [apiProdutos, cardapios, optimisticOverrides, selectedCardapioId]);
 
   const activeSelectedMenu = cardapios?.find((c) => c.id === selectedCardapioId);
   const isSelectedMenuPublished = Boolean(
@@ -433,17 +560,14 @@ export default function CashierCatalog({
               {
                 label: displayedProdutos.filter((item) => item.ativo === false).length === 1 ? 'pausado' : 'pausados',
                 value: displayedProdutos.filter((item) => item.ativo === false).length,
-                valueClassName: displayedProdutos.some((item) => item.ativo === false)
-                  ? 'text-rose-600 dark:text-rose-300'
-                  : undefined,
               },
               { label: 'categorias', value: apiCategorias.length },
             ]}
           />
           {cardapios && cardapios.length > 0 && (
-            <div className="rounded-2xl border border-koma-border bg-koma-card p-3 sm:p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="rounded-2xl border border-koma-border bg-koma-card p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
-                <span className="text-[11px] font-bold text-koma-secondary uppercase tracking-wider shrink-0 mr-1">
+                <span className="text-xs font-bold text-koma-secondary uppercase tracking-wider shrink-0 mr-1">
                   Cardápios:
                 </span>
                 {cardapios.map((menu) => {
@@ -455,19 +579,28 @@ export default function CashierCatalog({
                       key={menu.id}
                       type="button"
                       onClick={() => setSelectedCardapioId(menu.id)}
-                      className={`relative flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
+                      className={`relative flex min-h-11 items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
                         isSelected
-                          ? 'bg-koma-panel border-koma-border text-koma-foreground shadow-sm ring-2 ring-[#10b981]/30'
-                          : 'bg-koma-card/50 border-transparent text-koma-secondary hover:text-koma-foreground hover:bg-koma-panel/60'
+                          ? 'border-transparent font-bold'
+                          : 'bg-koma-panel border-koma-border text-koma-secondary hover:text-koma-foreground hover:bg-koma-raised'
                       }`}
+                      style={
+                        isSelected
+                          ? {
+                              background: 'var(--kc-chrome-selected, var(--koma-action-bg))',
+                              color: 'var(--kc-chrome-on-selected, var(--koma-action-text))',
+                            }
+                          : undefined
+                      }
                     >
                       <span>{menu.nome}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-koma-panel/80 font-mono text-koma-muted">
+                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-koma-panel/80 text-koma-muted tabular-nums">
                         {itemCount}
                       </span>
                       {isPublished && (
                         <span
-                          className="flex h-2 w-2 rounded-full bg-emerald-500"
+                          className="flex h-2 w-2 rounded-full"
+                          style={{ background: 'var(--koma-success-text)' }}
                           title="Cardápio ativo no momento"
                         />
                       )}
@@ -478,14 +611,24 @@ export default function CashierCatalog({
 
               <div className="flex items-center gap-2 shrink-0">
                 {activeSelectedMenu && activeMenuIds.length > 0 && (!isSelectedMenuPublished || activeMenuIds.length > 1) && (
-                  <button type="button" disabled={isPublishingMenu} onClick={() => toggleAdditionalMenu(activeSelectedMenu.id)} className="rounded-xl border border-koma-border px-3 py-2 text-xs font-semibold">
+                  <button type="button" disabled={isPublishingMenu} onClick={() => toggleAdditionalMenu(activeSelectedMenu.id)} className="min-h-11 rounded-xl border border-koma-border bg-koma-panel px-3 py-2 text-xs font-semibold text-koma-foreground hover:bg-koma-raised">
                     {isSelectedMenuPublished ? `Retirar ${activeSelectedMenu.nome} dos ativos` : `Ativar ${activeSelectedMenu.nome} junto`}
                   </button>
                 )}
                 {activeSelectedMenu && (
                   isSelectedMenuPublished ? (
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-emerald-700 dark:text-emerald-400 text-xs font-semibold">
-                      <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <div
+                      className="inline-flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold"
+                      style={{
+                        background: 'var(--koma-success-bg)',
+                        borderColor: 'var(--koma-success-border)',
+                        color: 'var(--koma-success-text)',
+                      }}
+                    >
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ background: 'var(--koma-success-text)' }}
+                      />
                       <span>{activeSelectedMenu.nome} está ativo</span>
                     </div>
                   ) : (
@@ -523,6 +666,7 @@ export default function CashierCatalog({
                 : undefined
             }
             onCreateProduct={() => isMarmitaria ? setShowProductType(true) : startProduct()}
+            onCreateCategory={() => setShowCategoryModal(true)}
             onEditProduct={(product) => {
               editProductDetails(product);
             }}
@@ -562,6 +706,7 @@ export default function CashierCatalog({
                   headers: authHeaders,
                 });
                 if (!response.ok) throw new Error('Não foi possível remover o produto.');
+                invalidateCatalogCaches();
                 await fetchProdutos();
                 showToast('Produto removido dos canais de venda.');
               } catch (error) {
@@ -569,18 +714,29 @@ export default function CashierCatalog({
               }
             }}
             onToggleProduct={async (product, ativo) => {
+              setOptimisticOverrides((current) => ({
+                ...current,
+                [product.id]: { ...current[product.id], ativo },
+              }));
               const response = await fetch(`${apiBaseUrl}/produtos/${product.id}`, {
                 method: 'PUT',
                 headers: { ...authHeaders, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ ativo }),
               });
               if (!response.ok) {
+                setOptimisticOverrides((current) => {
+                  const next = { ...current };
+                  delete next[product.id];
+                  return next;
+                });
                 showToast('Não foi possível atualizar a disponibilidade.', 'error');
                 return;
               }
               await fetchProdutos();
               showToast(ativo ? 'Produto publicado.' : 'Produto pausado.');
             }}
+            onToggleHighlight={handleToggleHighlight}
+            onQuickPriceUpdate={handleQuickPriceUpdate}
             onSetCategoryAvailability={async (productIds, ativo) => {
               const response = await fetch(`${apiBaseUrl}/produtos/disponibilidade`, {
                 method: 'PATCH',
@@ -665,6 +821,9 @@ export default function CashierCatalog({
             produtos={apiProdutos}
             marmitariaCadastro={isMarmitaria}
             onShowNotification={(msg, type) => showToast(msg, type === 'error' ? 'error' : 'success')}
+            onGroupsChanged={() => {
+              customizationGroupsCacheRef.current = null;
+            }}
           />
         </div>
       )}
@@ -733,16 +892,20 @@ export default function CashierCatalog({
             <div className="sticky top-0 z-20 -mx-4 flex min-h-16 items-center justify-between border-b border-koma-border bg-koma-card px-4 py-3 sm:static sm:mx-0 sm:min-h-0 sm:bg-transparent sm:px-0 sm:pb-2 sm:pt-0">
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 id="product-modal-title" className="text-base font-bold text-koma-foreground">
+                  <h3
+                    id="product-modal-title"
+                    className="text-base font-bold text-koma-foreground"
+                    style={{ fontFamily: 'var(--koma-font-display)' }}
+                  >
                     {editingProduct ? 'Editar produto' : 'Novo produto'}
                   </h3>
                   {editingProduct && (
-                    <span className="rounded-full border border-koma-border bg-koma-raised px-2 py-0.5 font-mono text-[9px] text-koma-muted">
+                    <span className="rounded-full border border-koma-border bg-koma-raised px-2 py-0.5 font-mono text-xs text-koma-muted">
                       #{editingProduct.id}
                     </span>
                   )}
                 </div>
-                <p className="mt-0.5 text-[10px] text-koma-muted">
+                <p className="mt-0.5 text-xs text-koma-muted">
                   As alterações aparecem no caixa, atendimento e cardápio online.
                 </p>
               </div>
@@ -750,7 +913,7 @@ export default function CashierCatalog({
                 type="button"
                 onClick={() => setShowProductModal(false)}
                 aria-label="Fechar"
-                className={"grid h-11 w-11 place-items-center rounded-xl border border-koma-border text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer"}
+                className="grid h-11 w-11 place-items-center rounded-xl border border-koma-border text-koma-subtle hover:text-koma-foreground transition-colors cursor-pointer"
               >
                 <X size={16} />
               </button>
@@ -767,9 +930,18 @@ export default function CashierCatalog({
                 ] as const).map(([tab, label]) => (
                   <button key={tab} type="button" role="tab" aria-selected={productEditorTab === tab}
                     onClick={() => setProductEditorTab(tab)}
-                    className={`min-h-11 rounded-lg border px-1 text-[11px] font-bold transition-colors sm:text-xs ${productEditorTab === tab
-                      ? 'border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                      : 'border-transparent text-koma-secondary hover:bg-koma-raised'}`}>
+                    className={`min-h-11 rounded-lg border px-1 text-xs font-bold transition-colors ${productEditorTab === tab
+                      ? 'border-transparent'
+                      : 'border-transparent text-koma-secondary hover:bg-koma-raised'}`}
+                    style={
+                      productEditorTab === tab
+                        ? {
+                            background: 'var(--kc-chrome-selected, var(--koma-action-bg))',
+                            color: 'var(--kc-chrome-on-selected, var(--koma-action-text))',
+                          }
+                        : undefined
+                    }
+                  >
                     {label}
                   </button>
                 ))}
@@ -893,6 +1065,7 @@ export default function CashierCatalog({
                       }
                       resetProductImageState(String(imageData.imagem || ''));
                     }
+                    invalidateCatalogCaches();
                     await fetchProdutos();
                     setShowProductModal(false);
                     showToast('Produto e opções salvos. Cada opção tem seu próprio preço.');
@@ -960,6 +1133,7 @@ export default function CashierCatalog({
                       return;
                     }
                     setPreviousCustomizationIds(selected);
+                    customizationGroupsCacheRef.current = null;
                   }
 
                   if (preparedImage) {
@@ -1028,7 +1202,14 @@ export default function CashierCatalog({
             >
               <div hidden={!isMarmitaria && productEditorTab !== 'produto'} className="space-y-5">
               {apiCategorias.length === 0 && (
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-[10px] text-amber-800 dark:text-amber-200">
+                <div
+                  className="flex items-center justify-between gap-3 rounded-xl border p-3 text-xs"
+                  style={{
+                    background: 'var(--koma-warning-bg)',
+                    borderColor: 'var(--koma-warning-border)',
+                    color: 'var(--koma-warning-text)',
+                  }}
+                >
                   <span>{isMarmitaria ? 'Crie uma categoria, como Sobremesas ou Bebidas, para este produto.' : 'Crie uma categoria antes de salvar o primeiro produto.'}</span>
                   <button
                     type="button"
@@ -1048,11 +1229,16 @@ export default function CashierCatalog({
                     name="nextAction"
                     value="composition"
                     disabled={isLoading}
-                    className="flex w-full items-center justify-between gap-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-left text-emerald-400 shadow-sm transition hover:border-emerald-400 hover:bg-emerald-500/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex min-h-11 w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{
+                      background: 'var(--koma-success-bg)',
+                      borderColor: 'var(--koma-success-border)',
+                      color: 'var(--koma-success-text)',
+                    }}
                   >
                     <span>
                       <strong className="block text-sm">Salvar e configurar composição da quentinha</strong>
-                      <span aria-hidden="true" className="mt-0.5 block text-[10px] font-medium text-koma-muted">Defina os limites de proteínas, guarnições e saladas deste tamanho.</span>
+                      <span aria-hidden="true" className="mt-0.5 block text-xs font-medium text-koma-muted">Defina os limites de proteínas, guarnições e saladas deste tamanho.</span>
                     </span>
                     <span aria-hidden="true" className="text-lg font-black">→</span>
                   </button>
@@ -1064,7 +1250,8 @@ export default function CashierCatalog({
                       setShowMarmitaCreate(true);
                     }}
                     disabled={isLoading}
-                    className="block w-full text-right text-xs font-semibold text-emerald-500 hover:text-emerald-400 underline underline-offset-2"
+                    className="block w-full text-right text-xs font-semibold underline underline-offset-2"
+                    style={{ color: 'var(--koma-success-text)' }}
                   >
                     Abrir composição diretamente sem salvar dados básicos
                   </button>
@@ -1073,7 +1260,7 @@ export default function CashierCatalog({
               <div className="space-y-1.5">
                 <label
                   htmlFor="product-name"
-                  className={"text-[10px] font-bold text-koma-secondary block"}
+                  className="text-xs font-bold text-koma-secondary block"
                 >
                   Nome do produto
                 </label>
@@ -1085,15 +1272,15 @@ export default function CashierCatalog({
                   placeholder={isMarmitaria ? 'Ex: Pudim ou refrigerante' : 'Ex: Cheeseburger Duplo'}
                   value={prodFormNome}
                   onChange={(e) => setProdFormNome(e.target.value)}
-                  className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"}
+                  className="min-h-11 w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-koma-border-strong"
                 />
               </div>
 
-              <div className={"grid grid-cols-1 sm:grid-cols-2 gap-3"}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {!hasVariants && <div className="space-y-1.5">
                   <label
                     htmlFor="product-price"
-                    className={"text-[10px] font-bold text-koma-secondary block"}
+                    className="text-xs font-bold text-koma-secondary block"
                   >
                     Preço de venda
                   </label>
@@ -1103,24 +1290,24 @@ export default function CashierCatalog({
                     placeholder="25.90"
                     value={prodFormPreco}
                     onValueChange={setProdFormPreco}
-                    className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981] font-mono text-[11px]"}
+                    className="min-h-11 w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-sm text-koma-foreground tabular-nums focus:outline-none focus:border-koma-border-strong"
                   />
                 </div>}
                 <div className="space-y-1.5">
                   <label
                     htmlFor="product-category"
-                    className={"text-[10px] font-bold text-koma-secondary block"}
+                    className="text-xs font-bold text-koma-secondary block"
                   >
                     Categoria
                   </label>
-                  <div className={"flex gap-1.5"}>
+                  <div className="flex gap-1.5">
                     <select
                       id="product-category"
                       disabled={Boolean(editingFamilyId) || (isMarmitaria && Boolean(editingProduct) && isMarmita(editingProduct))}
                       required={isMarmitaria || productEditorTab === 'produto'}
                       value={prodFormCategoriaId}
                       onChange={(e) => setProdFormCategoriaId(e.target.value)}
-                      className={"flex-1 px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-koma-foreground focus:outline-none focus:border-[#10b981]"}
+                      className="min-h-11 flex-1 px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-sm text-koma-foreground focus:outline-none focus:border-koma-border-strong"
                     >
                       <option value="" disabled>
                         Selecione...
@@ -1137,9 +1324,14 @@ export default function CashierCatalog({
                       disabled={Boolean(editingFamilyId)}
                       title="Criar nova categoria"
                       aria-label="Criar nova categoria"
-                      className={"inline-flex items-center gap-1 px-2.5 bg-emerald-500/15 hover:bg-[#10b981]/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 rounded-xl font-bold text-[9px] cursor-pointer transition-colors"}
+                      className="inline-flex min-h-11 items-center gap-1 px-3 border rounded-xl font-bold text-xs cursor-pointer transition-colors"
+                      style={{
+                        background: 'var(--koma-success-bg)',
+                        borderColor: 'var(--koma-success-border)',
+                        color: 'var(--koma-success-text)',
+                      }}
                     >
-                      <Plus size={13} /> Nova
+                      <Plus size={14} /> Nova
                     </button>
                   </div>
                 </div>
@@ -1148,7 +1340,7 @@ export default function CashierCatalog({
               <div className="space-y-1.5">
                 <label
                   htmlFor="product-description"
-                  className={"text-[10px] font-bold text-koma-secondary block"}
+                  className="text-xs font-bold text-koma-secondary block"
                 >
                   Descrição para o cliente
                 </label>
@@ -1158,9 +1350,9 @@ export default function CashierCatalog({
                   value={prodFormDescricao}
                   onChange={(e) => setProdFormDescricao(e.target.value)}
                   rows={2}
-                  className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"}
+                  className="w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-koma-border-strong"
                 />
-                <p className="text-[9px] text-koma-muted">
+                <p className="text-xs text-koma-muted">
                   {isMarmitaria ? 'Descreva o produto que o cliente vai receber.' : 'Use uma frase curta com os principais ingredientes. Ela também ajuda na busca.'}
                 </p>
               </div>
@@ -1171,7 +1363,7 @@ export default function CashierCatalog({
               >
                 <div>
                   <strong className="block text-xs font-bold text-koma-foreground">Vitrine e preço promocional</strong>
-                  <p className="mt-0.5 text-[11px] text-koma-muted">
+                  <p className="mt-0.5 text-xs text-koma-muted">
                     Destaque este item no cardápio, adicione um selo ou defina um desconto direto (De / Por).
                   </p>
                 </div>
@@ -1179,7 +1371,7 @@ export default function CashierCatalog({
                 <div className="flex items-center justify-between gap-3 rounded-xl border border-koma-border bg-koma-card px-3 py-2.5">
                   <span className="min-w-0">
                     <strong className="block text-xs font-semibold text-koma-foreground">Destaque no cardápio</strong>
-                    <span className="mt-0.5 block text-[11px] text-koma-muted">
+                    <span className="mt-0.5 block text-xs text-koma-muted">
                       Sinaliza o produto como destaque nas vitrines e filtros.
                     </span>
                   </span>
@@ -1209,7 +1401,7 @@ export default function CashierCatalog({
                   <div className="space-y-1.5">
                     <label
                       htmlFor="product-badge"
-                      className="block text-[11px] font-semibold text-koma-secondary"
+                      className="block text-xs font-semibold text-koma-secondary"
                     >
                       Selo de vitrine
                     </label>
@@ -1231,7 +1423,7 @@ export default function CashierCatalog({
                     <div className="space-y-1.5">
                       <label
                         htmlFor="product-promo-price"
-                        className="block text-[11px] font-semibold text-koma-secondary"
+                        className="block text-xs font-semibold text-koma-secondary"
                       >
                         Preço promocional (Por R$)
                       </label>
@@ -1301,18 +1493,27 @@ export default function CashierCatalog({
                         setExistingVariantId('');
                       }} />
                   </label>
-                  {editingFamilyId && <p className="text-[11px] text-koma-muted">As opções estão vinculadas a este produto. Edite-as sem alterar os pedidos anteriores.</p>}
+                  {editingFamilyId && <p className="text-xs text-koma-muted">As opções estão vinculadas a este produto. Edite-as sem alterar os pedidos anteriores.</p>}
                   {loadingFamily && <p className="text-xs text-koma-muted">Carregando sabores e tamanhos…</p>}
-                  {familyError && <p role="alert" className="text-xs text-rose-400">{familyError}</p>}
+                  {familyError && <p role="alert" className="text-xs" style={{ color: 'var(--koma-danger-text)' }}>{familyError}</p>}
                   {hasVariants && !loadingFamily && (
                     <>
                       <div className="flex gap-2" aria-label="Tipo de variação">
                         {(['sabor', 'tamanho'] as const).map(axis => (
                           <button key={axis} type="button" aria-pressed={variantAxis === axis}
                             onClick={() => setVariantAxis(axis)}
-                            className={`min-h-10 flex-1 rounded-xl border px-3 text-xs font-bold ${variantAxis === axis
-                              ? 'border-emerald-500 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                              : 'border-koma-border text-koma-secondary'}`}>
+                            className={`min-h-11 flex-1 rounded-xl border px-3 text-xs font-bold transition-colors ${variantAxis === axis
+                              ? 'border-transparent'
+                              : 'border-koma-border bg-koma-card text-koma-secondary hover:text-koma-foreground'}`}
+                            style={
+                              variantAxis === axis
+                                ? {
+                                    background: 'var(--kc-chrome-selected, var(--koma-action-bg))',
+                                    color: 'var(--kc-chrome-on-selected, var(--koma-action-text))',
+                                  }
+                                : undefined
+                            }
+                          >
                             {axis === 'sabor' ? 'Sabores' : 'Tamanhos'}
                           </button>
                         ))}
@@ -1320,20 +1521,20 @@ export default function CashierCatalog({
                       <div className="space-y-2">
                         {variantRows.map((row, index) => (
                           <div key={row.produto_id || `novo-${index}`} className="flex flex-col gap-2 rounded-xl border border-koma-border bg-koma-card p-2 sm:flex-row sm:items-center">
-                            <label className="min-w-0 flex-1 text-[10px] font-bold text-koma-muted">
+                            <label className="min-w-0 flex-1 text-xs font-bold text-koma-muted">
                               {variantAxis === 'sabor' ? 'Sabor' : 'Tamanho'} {index + 1}
                               <input required={productEditorTab === 'variacoes'} value={row.rotulo} aria-label={`Nome da opção ${index + 1}`}
                                 onChange={event => setVariantRows(rows => rows.map((v, i) => i === index ? { ...v, rotulo: event.target.value } : v))}
                                 placeholder={variantAxis === 'sabor' ? 'Carne de Sol' : 'Média · 300 g'}
-                                className="mt-1 h-11 w-full rounded-lg border border-koma-border bg-koma-panel px-3 text-base font-normal text-koma-foreground sm:text-sm" />
+                                className="mt-1 h-11 w-full rounded-lg border border-koma-border bg-koma-input px-3 text-sm font-normal text-koma-foreground" />
                             </label>
-                            <label className="w-full text-[10px] font-bold text-koma-muted sm:w-32">
+                            <label className="w-full text-xs font-bold text-koma-muted sm:w-32">
                               Preço
                               <MoneyInput id={`variant-price-${index}`} value={row.preco} required={productEditorTab === 'variacoes'}
                                 onValueChange={value => setVariantRows(rows => rows.map((v, i) => i === index ? { ...v, preco: value } : v))}
-                                className="mt-1 h-11 w-full rounded-lg border border-koma-border bg-koma-panel px-3 text-sm text-koma-foreground" />
+                                className="mt-1 h-11 w-full rounded-lg border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground tabular-nums" />
                             </label>
-                            <label className="flex items-center gap-2 text-[11px] text-koma-muted sm:pt-4">
+                            <label className="flex items-center gap-2 text-xs text-koma-muted sm:pt-4">
                               <input type="checkbox" checked={row.ativo}
                                 onChange={event => setVariantRows(rows => rows.map((v, i) => i === index ? { ...v, ativo: event.target.checked } : v))} />
                               À venda
@@ -1341,14 +1542,15 @@ export default function CashierCatalog({
                             {!row.produto_id && variantRows.length > 1 && (
                               <button type="button" aria-label={`Remover opção ${index + 1}`}
                                 onClick={() => setVariantRows(rows => rows.filter((_, i) => i !== index))}
-                                className="grid h-10 w-10 place-items-center self-end rounded-lg text-rose-500 hover:bg-rose-500/10 sm:self-auto">
+                                className="grid h-11 w-11 place-items-center self-end rounded-lg hover:bg-koma-raised sm:self-auto"
+                                style={{ color: 'var(--koma-danger-text)' }}>
                                 <Trash2 size={15} />
                               </button>
                             )}
                           </div>
                         ))}
                       </div>
-                      <button type="button" className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-koma-border text-xs font-bold text-koma-secondary"
+                      <button type="button" className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card text-xs font-bold text-koma-secondary hover:text-koma-foreground"
                         onClick={() => setVariantRows(rows => [...rows, { rotulo: '', preco: '', ativo: true }])}>
                         <Plus size={15} /> Adicionar {variantAxis === 'sabor' ? 'sabor' : 'tamanho'}
                       </button>
@@ -1359,11 +1561,11 @@ export default function CashierCatalog({
                         && product.id !== editingProduct?.id) && (
                         <details className="rounded-xl border border-koma-border px-3 py-2">
                           <summary className="cursor-pointer text-xs font-bold text-koma-secondary">Vincular produto já cadastrado</summary>
-                          <p className="mt-2 text-[11px] text-koma-muted">Mantém o cadastro, estoque e histórico do produto existente.</p>
+                          <p className="mt-2 text-xs text-koma-muted">Mantém o cadastro, estoque e histórico do produto existente.</p>
                           <div className="mt-2 flex flex-wrap gap-2">
                             <select aria-label="Selecionar produto existente" value={existingVariantId}
                               onChange={event => setExistingVariantId(event.target.value)}
-                              className="min-h-11 min-w-0 flex-1 rounded-xl border border-koma-border bg-koma-panel px-2 text-sm text-koma-foreground">
+                              className="min-h-11 min-w-0 flex-1 rounded-xl border border-koma-border bg-koma-input px-2 text-sm text-koma-foreground">
                               <option value="">Escolha um produto…</option>
                               {apiProdutos.filter(product => !product.familia_id && !product.marmitaria_tamanho
                                 && !product.somente_promocao && product.categoria_id === prodFormCategoriaId
@@ -1388,13 +1590,17 @@ export default function CashierCatalog({
                                   ? [linked] : [...rows, linked]);
                                 setExistingVariantId('');
                               }}
-                              className="min-h-11 rounded-xl bg-emerald-500 px-3 text-xs font-bold text-emerald-950 disabled:opacity-50">
+                              className="min-h-11 rounded-xl px-3 text-xs font-bold disabled:opacity-50"
+                              style={{
+                                background: 'var(--koma-action-bg)',
+                                color: 'var(--koma-action-text)',
+                              }}>
                               Vincular
                             </button>
                           </div>
                         </details>
                       )}
-                      <p className="text-[11px] text-koma-muted">Cada opção possui preço próprio. O cliente verá somente um produto com suas escolhas.</p>
+                      <p className="text-xs text-koma-muted">Cada opção possui preço próprio. O cliente verá somente um produto com suas escolhas.</p>
                     </>
                   )}
                 </section>
@@ -1406,7 +1612,7 @@ export default function CashierCatalog({
                 <div className="space-y-1.5">
                   <label
                     htmlFor="product-cardapio"
-                    className="text-[10px] font-bold text-koma-secondary block"
+                    className="text-xs font-bold text-koma-secondary block"
                   >
                     Cardápio Operacional
                   </label>
@@ -1415,16 +1621,16 @@ export default function CashierCatalog({
                     value={prodFormCardapioId}
                     disabled={Boolean(editingFamilyId)}
                     onChange={(e) => setProdFormCardapioId(e.target.value)}
-                    className="w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"
+                    className="min-h-11 w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-sm text-koma-foreground focus:outline-none focus:border-koma-border-strong"
                   >
                     <option value="">Sem cardápio específico</option>
                     {cardapios.map((c) => (
                       <option key={c.id} value={c.id}>
-                        {c.nome} {activeMenuIds.includes(c.id) ? '★ (Ativo no momento)' : ''}
+                        {c.nome} {activeMenuIds.includes(c.id) ? '(Ativo no momento)' : ''}
                       </option>
                     ))}
                   </select>
-                  <p className="text-[9px] text-koma-muted">
+                  <p className="text-xs text-koma-muted">
                     Cada produto pertence exclusivamente a um cardápio operacional.
                   </p>
                 </div>
@@ -1444,15 +1650,15 @@ export default function CashierCatalog({
 
               {!hasVariants && !editingProduct && (
                 <details className="group overflow-hidden rounded-xl border border-koma-border bg-koma-panel">
-                  <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between px-3 text-[10px] font-bold text-koma-secondary">
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-3 text-xs font-bold text-koma-secondary">
                     <span>Mais opções</span>
-                    <span className="text-[9px] font-medium text-koma-muted group-open:hidden">Código e ajustes avançados</span>
-                    <span className="hidden text-[9px] font-medium text-koma-muted group-open:inline">Ocultar</span>
+                    <span className="text-xs font-medium text-koma-muted group-open:hidden">Código e ajustes avançados</span>
+                    <span className="hidden text-xs font-medium text-koma-muted group-open:inline">Ocultar</span>
                   </summary>
                   <div className="space-y-1.5 border-t border-koma-border p-3">
                     <label
                       htmlFor="product-code"
-                      className={"text-[10px] font-bold text-koma-secondary block"}
+                      className="text-xs font-bold text-koma-secondary block"
                     >
                       Código de busca / PDV
                     </label>
@@ -1463,9 +1669,9 @@ export default function CashierCatalog({
                       placeholder="Ex.: 001"
                       value={prodFormId}
                       onChange={(e) => setProdFormId(e.target.value)}
-                      className={"w-full px-3 py-2 bg-koma-panel border border-koma-border rounded-xl text-base sm:text-xs text-koma-foreground focus:outline-none focus:border-[#10b981]"}
+                      className="min-h-11 w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-sm text-koma-foreground focus:outline-none focus:border-koma-border-strong"
                     />
-                    <p className="text-[9px] leading-relaxed text-koma-muted">
+                    <p className="text-xs leading-relaxed text-koma-muted">
                       O KÔMA já sugere um código. Altere apenas se sua operação usa código curto, etiqueta ou leitura no PDV.
                     </p>
                   </div>
@@ -1476,8 +1682,8 @@ export default function CashierCatalog({
               <div hidden={!isMarmitaria && productEditorTab !== 'produto'} className="space-y-5">
               <section className="rounded-xl border border-koma-border bg-koma-panel p-3">
                 <div className="mb-3">
-                  <strong className="block text-[10px] text-koma-foreground">Foto do produto <span className="font-normal text-koma-muted">(opcional)</span></strong>
-                  <p className="mt-1 text-[9px] leading-relaxed text-koma-muted">
+                  <strong className="block text-xs text-koma-foreground">Foto do produto <span className="font-normal text-koma-muted">(opcional)</span></strong>
+                  <p className="mt-1 text-xs leading-relaxed text-koma-muted">
                     Use uma única foto. Clique em adicionar ou trocar para escolher um arquivo do seu dispositivo.
                   </p>
                 </div>
@@ -1486,7 +1692,7 @@ export default function CashierCatalog({
                     type="button"
                     onClick={() => productImageInputRef.current?.click()}
                     disabled={isLoading}
-                    className="grid h-24 w-full shrink-0 place-items-center overflow-hidden rounded-xl border border-dashed border-koma-border bg-koma-raised transition hover:border-emerald-500/50 sm:h-32 sm:w-44"
+                    className="grid h-24 w-full shrink-0 place-items-center overflow-hidden rounded-xl border border-dashed border-koma-border bg-koma-raised transition hover:border-koma-border-strong sm:h-32 sm:w-44"
                     aria-label={productImagePreview ? 'Trocar foto do produto' : 'Adicionar foto do produto'}
                   >
                     {productImagePreview ? (
@@ -1494,20 +1700,20 @@ export default function CashierCatalog({
                     ) : (
                       <span className="flex flex-col items-center gap-2 text-koma-muted">
                         <ImageIcon size={24} />
-                        <span className="text-[9px] font-bold">Adicionar foto</span>
+                        <span className="text-xs font-bold">Adicionar foto</span>
                       </span>
                     )}
                   </button>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[9px] text-koma-muted">PNG, JPG ou WEBP · até 20 MB · otimização automática</p>
+                    <p className="text-xs text-koma-muted">PNG, JPG ou WEBP · até 20 MB · otimização automática</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => productImageInputRef.current?.click()}
                         disabled={isLoading}
-                        className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-[9px] font-bold text-koma-secondary transition hover:bg-koma-raised disabled:opacity-50"
+                        className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 py-2 text-xs font-bold text-koma-secondary transition hover:bg-koma-raised disabled:opacity-50"
                       >
-                        {productImagePreview ? <RefreshCw size={12} /> : <Upload size={12} />}
+                        {productImagePreview ? <RefreshCw size={14} /> : <Upload size={14} />}
                         {productImagePreview ? 'Trocar foto' : 'Adicionar foto'}
                       </button>
                       {productImagePreview && (
@@ -1515,19 +1721,24 @@ export default function CashierCatalog({
                           type="button"
                           onClick={removeProductImageLocally}
                           disabled={isLoading}
-                          className="inline-flex min-h-9 items-center gap-1.5 rounded-xl px-3 py-2 text-[9px] font-bold text-rose-600 transition hover:bg-rose-500/10 dark:text-rose-300 disabled:opacity-50"
+                          className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition disabled:opacity-50"
+                          style={{
+                            background: 'var(--koma-danger-bg)',
+                            borderColor: 'var(--koma-danger-border)',
+                            color: 'var(--koma-danger-text)',
+                          }}
                         >
-                          <Trash2 size={12} /> Remover foto
+                          <Trash2 size={14} /> Remover foto
                         </button>
                       )}
                     </div>
                     {prodFormImageFile && (
-                      <p className="mt-2 truncate text-[9px] font-semibold text-emerald-600 dark:text-emerald-300">
+                      <p className="mt-2 truncate text-xs font-semibold" style={{ color: 'var(--koma-success-text)' }}>
                         {prodFormImageFile.name}
                       </p>
                     )}
                     {prodFormImageError && (
-                      <p className="mt-2 text-[9px] font-semibold text-rose-600 dark:text-rose-300">
+                      <p className="mt-2 text-xs font-semibold" style={{ color: 'var(--koma-danger-text)' }}>
                         {prodFormImageError}
                       </p>
                     )}
@@ -1558,7 +1769,7 @@ export default function CashierCatalog({
                     </p>
                   </div>
                   {loadingCustomizations && <p className="text-xs text-koma-muted">Carregando escolhas e adicionais…</p>}
-                  {customizationError && <p role="alert" className="text-xs text-rose-400">{customizationError} {hasVariants ? 'Reabra o produto antes de salvar.' : 'O produto simples pode ser salvo sem alterar seus vínculos.'}</p>}
+                  {customizationError && <p role="alert" className="text-xs" style={{ color: 'var(--koma-danger-text)' }}>{customizationError} {hasVariants ? 'Reabra o produto antes de salvar.' : 'O produto simples pode ser salvo sem alterar seus vínculos.'}</p>}
                   {!loadingCustomizations && customizationsLoaded && customizationGroups.length === 0 && (
                     <p className="text-xs text-koma-muted">Ainda não há escolhas cadastradas. Crie grupos reutilizáveis na aba Complementos.</p>
                   )}
@@ -1597,7 +1808,7 @@ export default function CashierCatalog({
                       })}
                     </div>
                   )}
-                  <p className="text-[11px] text-koma-muted">Para criar novas escolhas ou definir limites de múltiplas seleções, use Cardápio → Complementos.</p>
+                  <p className="text-xs text-koma-muted">Para criar novas escolhas ou definir limites de múltiplas seleções, use Cardápio → Complementos.</p>
                 </section>
               )}
 
@@ -1605,15 +1816,18 @@ export default function CashierCatalog({
               <div hidden={!isMarmitaria && productEditorTab !== 'produto'} className="space-y-5">
               {!hasVariants && <div className="flex items-center justify-between gap-3 rounded-xl border border-koma-border bg-koma-panel p-3">
                 <span>
-                  <strong className="block text-[10px] text-koma-foreground">Produto à venda</strong>
-                  <span className="mt-0.5 block text-[9px] text-koma-muted">
+                  <strong className="block text-xs text-koma-foreground">Produto à venda</strong>
+                  <span className="mt-0.5 block text-xs text-koma-muted">
                     {prodFormAtivo
                       ? 'O produto aparece normalmente nos canais de venda.'
                       : 'Pausado: continua cadastrado e pode ser reativado a qualquer momento.'}
                   </span>
                 </span>
                 <div className="flex shrink-0 items-center gap-2">
-                  <span className={`text-[9px] font-bold ${prodFormAtivo ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'}`}>
+                  <span
+                    className="text-xs font-bold"
+                    style={{ color: prodFormAtivo ? 'var(--koma-success-text)' : 'var(--koma-danger-text)' }}
+                  >
                     {prodFormAtivo ? 'À venda' : 'Pausado'}
                   </span>
                   <button
@@ -1622,12 +1836,16 @@ export default function CashierCatalog({
                     aria-checked={prodFormAtivo}
                     aria-label="Produto à venda"
                     onClick={() => setProdFormAtivo((current) => !current)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full border transition-colors ${prodFormAtivo
-                      ? 'border-emerald-500 bg-emerald-500'
-                      : 'border-koma-border bg-koma-raised'}`}
+                    className="relative inline-flex h-6 w-11 items-center rounded-full border transition-colors"
+                    style={
+                      prodFormAtivo
+                        ? { background: 'var(--koma-action-bg)', borderColor: 'var(--koma-action-bg)' }
+                        : { background: 'var(--koma-surface-raised)', borderColor: 'var(--koma-border-default)' }
+                    }
                   >
                     <span
-                      className={`inline-block h-4 w-4 rounded-full bg-koma-card shadow-sm transition-transform ${prodFormAtivo ? 'translate-x-6' : 'translate-x-1'}`}
+                      className={`inline-block h-4 w-4 rounded-full shadow-sm transition-transform ${prodFormAtivo ? 'translate-x-6' : 'translate-x-1'}`}
+                      style={{ background: 'var(--koma-surface-card)' }}
                     />
                   </button>
                 </div>
@@ -1639,14 +1857,18 @@ export default function CashierCatalog({
                 <button
                   type="button"
                   onClick={() => setShowProductModal(false)}
-                  className={"flex-1 min-h-11 py-2 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-foreground rounded-xl font-bold cursor-pointer transition-colors"}
+                  className="flex-1 min-h-11 py-2 bg-koma-card hover:bg-koma-raised border border-koma-border text-koma-foreground rounded-xl font-bold cursor-pointer transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isLoading || apiCategorias.length === 0 || (hasVariants && (loadingFamily || loadingCustomizations || !customizationsLoaded || Boolean(familyError) || Boolean(customizationError)))}
-                  className={"flex-1 min-h-11 py-2 bg-[#10b981] hover:bg-[#059669] text-[#121214] rounded-xl font-bold cursor-pointer transition-colors disabled:opacity-50"}
+                  className="flex-1 min-h-11 py-2 rounded-xl font-bold cursor-pointer transition-colors disabled:opacity-50"
+                  style={{
+                    background: 'var(--koma-action-bg)',
+                    color: 'var(--koma-action-text)',
+                  }}
                 >
                   {isLoading ? 'Salvando…' : editingProduct || editingFamilyId ? 'Salvar alterações' : 'Criar produto'}
                 </button>

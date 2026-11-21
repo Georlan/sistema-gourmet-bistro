@@ -11,6 +11,7 @@ import {
   getDeliveryAddressValidationError,
   parseDeliveryAddressLegacy,
 } from '../../../domain/deliveryAddress';
+import { getEffectiveProductPrice } from '../../../domain/productMerchandising';
 import { smartSearchMatch } from '../../../domain/search';
 import { Product } from '../../../types';
 import { formatApiError } from '../../../utils/apiError';
@@ -48,7 +49,7 @@ export type PdvCartItem = {
 };
 
 export const pdvCartItemUnitPrice = (item: PdvCartItem) =>
-  Number(item.product.preco || 0)
+  getEffectiveProductPrice(Number(item.product.preco || 0), item.product.preco_promocional).effectivePrice
   + (item.modifiers || []).reduce((sum, modifier) => sum + Number(modifier.preco || 0), 0);
 
 type Props = {
