@@ -63,3 +63,37 @@ test('production smoke treats missing asset fallback as a hard failure and waits
   assert.match(workflow, /push:[\s\S]*branches:[\s\S]*- main/);
   assert.match(workflow, /KOMA_EXPECTED_FRONTEND_SHA/);
 });
+
+test('public menu bundles checkout, promotion wizard, auth, and order tracking drawers statically without post-interaction lazy chunk boundaries', () => {
+  const cardapioPage = source('../src/cardapio/CardapioPage.tsx');
+  assert.doesNotMatch(cardapioPage, /React\.lazy\(/);
+  assert.match(cardapioPage, /import CardapioDigital from ["']\.\/components\/CardapioDigital["']/);
+  assert.match(cardapioPage, /import CardapioPromotionWizard from ["']\.\/components\/CardapioPromotionWizard["']/);
+  assert.match(cardapioPage, /import CardapioOrdersDrawer from ["']\.\/components\/CardapioOrdersDrawer["']/);
+  assert.match(cardapioPage, /import CardapioAuthModal from ["']\.\/components\/CardapioAuthModal["']/);
+  assert.match(cardapioPage, /import CardapioBenefitsDrawer from ["']\.\/components\/CardapioBenefitsDrawer["']/);
+  assert.match(cardapioPage, /import CardapioStoreInfoDrawer from ["']\.\/components\/CardapioStoreInfoDrawer["']/);
+  assert.match(cardapioPage, /import CardapioUserProfileModal from ["']\.\/components\/CardapioUserProfileModal["']/);
+});
+
+test('operational views prewarm deferred module chunks shortly after mount and isolate lazy modals behind FeatureErrorBoundary', () => {
+  const deferredSection = source('../src/components/caixa/loading/DeferredCashierSection.tsx');
+  assert.match(deferredSection, /const warmDelayMs = label === ['"]Novo pedido['"] \? 120 : 900/);
+  assert.match(deferredSection, /window\.setTimeout\(warmLoad, warmDelayMs\)/);
+  assert.match(deferredSection, /<FeatureErrorBoundary label=\{label\}>/);
+
+  const pdvView = source('../src/components/caixa/pdv/CashierPdvView.tsx');
+  assert.match(pdvView, /void loadCardapioPromotionWizard\(\)\.catch\(\(\) => null\)/);
+  assert.match(pdvView, /<FeatureErrorBoundary label="Montagem de oferta">/);
+
+  const waiterHistory = source('../src/components/app/WaiterHistoryHost.tsx');
+  assert.match(waiterHistory, /void loadWaiterHistoryPanel\(\)\.catch\(\(\) => null\)/);
+  assert.match(waiterHistory, /<FeatureErrorBoundary label="Histórico de lançamentos">/);
+
+  const unifiedEntry = source('../src/components/auth/UnifiedOperationalEntry.tsx');
+  assert.match(unifiedEntry, /void loadOperationalApp\(\)\.catch\(\(\) => null\)/);
+
+  const app = source('../src/App.tsx');
+  assert.match(app, /void loadMemoizedCaixaPanel\(\)\.catch\(\(\) => null\)/);
+  assert.match(app, /void loadAttendantQuickOrderPanel\(\)\.catch\(\(\) => null\)/);
+});

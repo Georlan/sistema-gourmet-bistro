@@ -63,12 +63,14 @@ const ContractInviteAcceptPage = React.lazy(() => import('./legal/ContractInvite
 const MotoboyPwaPage = React.lazy(() => import('./components/MotoboyPwaPage').then(module => ({ default: module.MotoboyPwaPage })));
 const OrderTrackingPage = React.lazy(() => import('./cardapio/OrderTrackingPage').then(module => ({ default: module.OrderTrackingPage })));
 
-const AttendantQuickOrderPanel = React.lazy(() => import('./components/AttendantQuickOrderPanel').then(module => ({ default: module.AttendantQuickOrderPanel })));
-const MemoizedCaixaPanel = React.lazy(() =>
+const loadAttendantQuickOrderPanel = () =>
+  import('./components/AttendantQuickOrderPanel').then(module => ({ default: module.AttendantQuickOrderPanel }));
+const AttendantQuickOrderPanel = React.lazy(loadAttendantQuickOrderPanel);
+const loadMemoizedCaixaPanel = () =>
   import('./components/CaixaPanel').then(module => ({
     default: module.MemoizedCaixaPanel
-  }))
-);
+  }));
+const MemoizedCaixaPanel = React.lazy(loadMemoizedCaixaPanel);
 
 const CashierLoading = () => (
   <div className="w-full h-full bg-koma-page text-koma-accent flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.18em]">
@@ -238,6 +240,11 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         role: activeRole,
         restaurante_id: activeRestaurantId || undefined,
       });
+      if (activeRole === 'atendente') {
+        void loadAttendantQuickOrderPanel().catch(() => null);
+      } else if (isManagementRole(activeRole)) {
+        void loadMemoizedCaixaPanel().catch(() => null);
+      }
     } else {
       resetAnalytics();
     }
