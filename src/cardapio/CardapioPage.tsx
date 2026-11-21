@@ -17,6 +17,7 @@ import {
 import { buildWhatsAppContactUrl } from "../config/whatsappUtils";
 import { getEffectiveProductPrice, normalizeProductBadge } from "../domain/productMerchandising";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   CheckCircle2,
   Clock3,
@@ -27,9 +28,11 @@ import {
   RefreshCw,
   Search,
   ShoppingBag,
+  X,
   XCircle,
 } from "lucide-react";
 import clsx from "clsx";
+import { KOMA_EASE_SMOOTH } from "./v2/motionTokens";
 import {
   BrandConfig,
   CatalogPromotion,
@@ -60,7 +63,8 @@ import type { CustomerHistoryOrder } from "./components/CardapioCustomerOrderHis
 import { CardapioConditionsSummary } from "./components/CardapioOrderConditions";
 import { ManualPixReceiptContact } from "./components/ManualPixReceiptContact";
 import { DirectPixCustomerConfirm } from "./components/DirectPixCustomerConfirm";
-import CardapioArtisticExperience from "./components/CardapioArtisticExperience";
+import MenuV2Experience from "./v2/MenuV2Experience";
+const CardapioArtisticExperience = React.lazy(() => import("./components/CardapioArtisticExperience"));
 import { KomaLoading } from "../components/app/KomaLoading";
 
 const QRCodeSVG = React.lazy(() =>
@@ -115,6 +119,18 @@ const KOMA_PRIMARY = "#00b894";
 const KOMA_BACKGROUND = "#090a0f";
 // A consulta pública de CEP é apenas conveniência progressiva; o checkout
 // permanece totalmente utilizável com preenchimento manual.
+
+function isLocalSimulationHost(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return host === "localhost" || host === "127.0.0.1";
+}
+
+function isLocalSimulationOpenMode(): boolean {
+  if (!isLocalSimulationHost()) return false;
+  const params = new URLSearchParams(window.location.search);
+  return params.get("simular") !== "fechado";
+}
 
 function parseStructuredValue(value: unknown): unknown {
   if (typeof value !== "string") return value;
@@ -295,10 +311,14 @@ export default function CardapioPage() {
   }, [storedOrders, selectedOrderId, activeOrders]);
 
   const checkActiveOrders = useCallback(async (restaurantId: number) => {
+    const currentOrders = storedOrdersRef.current;
+    const simulatedOrders = currentOrders.filter((order) => String(order.id).toLowerCase().startsWith("sim-"));
+    const realOrders = currentOrders.filter((order) => !String(order.id).toLowerCase().startsWith("sim-"));
+    if (realOrders.length === 0) return;
     try {
       setIsRefreshingOrders(true);
-      const updated = await refreshAllStoredOrders(restaurantId, API_BASE_URL, storedOrdersRef.current);
-      setStoredOrders(updated);
+      const updated = await refreshAllStoredOrders(restaurantId, API_BASE_URL, realOrders);
+      setStoredOrders([...simulatedOrders, ...updated]);
     } catch (error) {
       console.warn("Erro ao consultar status dos pedidos:", error);
     } finally {
@@ -454,7 +474,9 @@ export default function CardapioPage() {
         });
       }
 
-      const acceptingOrders = restaurant.aceitando_pedidos === true;
+      const rawAcceptingOrders = restaurant.aceitando_pedidos === true;
+      const localSimulationUnlock = isLocalSimulationOpenMode();
+      const acceptingOrders = localSimulationUnlock ? true : rawAcceptingOrders;
       const brand: BrandConfig = {
         id: String(restaurant.id),
         slug: String(restaurant.slug || ""),
@@ -549,8 +571,10 @@ export default function CardapioPage() {
         taxaEntregaPadrao: Number(restaurant.taxa_entrega_fixa ?? restaurant.taxa_entrega_padrao ?? 0),
         storeStatus: acceptingOrders ? "open" : "closed",
         acceptingOrders,
-        orderingMessage: String(restaurant.motivo_indisponibilidade || ""),
-        availabilitySource: String(restaurant.origem_disponibilidade || "automatic"),
+        orderingMessage: localSimulationUnlock ? "" : String(restaurant.motivo_indisponibilidade || ""),
+        availabilitySource: localSimulationUnlock && !rawAcceptingOrders
+          ? "local_simulation"
+          : String(restaurant.origem_disponibilidade || "automatic"),
         nextOpening: restaurant.proxima_abertura ? String(restaurant.proxima_abertura) : undefined,
         nextOpeningLabel: restaurant.proxima_abertura_texto ? String(restaurant.proxima_abertura_texto) : undefined,
       };
@@ -1342,20 +1366,89 @@ export default function CardapioPage() {
       <span className="sr-only" aria-live="polite" aria-atomic="true">
         {cartAnnouncement}
       </span>
-      {notice && !isCartOpen && !isCheckoutOpen && (
-        <div
-          className="fixed top-16 sm:top-20 left-1/2 z-[60] -translate-x-1/2 max-w-[calc(100vw-2rem)] rounded-full border border-emerald-500/30 bg-[#0d1612]/95 backdrop-blur-md px-4 py-2 text-center text-xs font-bold text-emerald-300 shadow-2xl animate-fade-in flex items-center gap-2 pointer-events-auto cursor-pointer"
-          role="status"
-          aria-live="polite"
-          onClick={() => setNotice("")}
-        >
-          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
-          <span>{notice}</span>
+      <AnimatePresence>
+        {notice && !isCartOpen && !isCheckoutOpen && (
+          <div className="km-toast-wrap" role="status" aria-live="polite">
+            <motion.div
+              className="km-toast"
+              initial={{ opacity: 0, y: -12, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -10, scale: 0.97 }}
+              transition={{ duration: 0.2, ease: KOMA_EASE_SMOOTH }}
+            >
+              <span className="km-toast__icon" aria-hidden="true">
+                <CheckCircle2 className="h-4 w-4" />
+              </span>
+              <span className="km-toast__text">{notice}</span>
+              <button
+                type="button"
+                className="km-toast__close"
+                aria-label="Fechar aviso"
+                onClick={() => setNotice("")}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {isLocalSimulationOpenMode() && activeBrand.availabilitySource === "local_simulation" && !hasOpenOverlay && (
+        <div className="km-sim-pill" aria-label="Modo simulação local ativo">
+          <span className="km-sim-pill__dot" aria-hidden="true" />
+          <span>Simulação local</span>
         </div>
       )}
 
       {vitrineVariant === 'artistic-total' ? (
-        <CardapioArtisticExperience
+        typeof window !== "undefined" && new URLSearchParams(window.location.search).get("vitrine") === "legado" ? (
+          <React.Suspense fallback={<KomaLoading />}>
+            <CardapioArtisticExperience
+              activeBrand={activeBrand}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              selectedCategory={activeCategory}
+              onSelectCategory={(category) => {
+                setActiveCategory(category);
+                isProgrammaticScroll.current = true;
+                const element = document.getElementById(category ? `cat-${category.toLowerCase().replace(/\s+/g, '-')}` : 'koma-art-hero-showcase');
+                element?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                window.setTimeout(() => { isProgrammaticScroll.current = false; }, 700);
+              }}
+              onSelectProduct={(product) => openProductModal(product, "catalog")}
+              onFastAdd={handleFastAdd}
+              onFastRemove={handleFastRemove}
+              getProductCartQuantity={getProductCartQuantity}
+              onCartToggle={openCart}
+              cartCount={cartCount}
+              cartTotal={cartTotal}
+              cart={cart}
+              onStoreInfoClick={() => setIsStoreInfoOpen(true)}
+              onOrdersClick={() => setIsOrdersDrawerOpen(true)}
+              activeOrdersCount={activeOrders.length}
+              hasOpenOverlay={hasOpenOverlay}
+              onPromotionSelect={(offer) => {
+                openPromotionModal(offer, "catalog");
+              }}
+              user={user}
+              onAuthClick={() => (user ? setIsProfileOpen(true) : setIsAuthOpen(true))}
+              onBenefitsClick={() => setIsBenefitsOpen(true)}
+              activeOrder={activeOrder}
+              activeState={activeState}
+              storedOrders={storedOrders}
+              storedOrdersCount={storedOrders.length}
+              onSelectOrderId={(id) => setSelectedOrderId(id)}
+              onPayPixClick={(order) => setPixModalOrder(order)}
+              onRefreshOrders={() => {
+                if (activeBrand?.id) void checkActiveOrders(Number(activeBrand.id));
+              }}
+              isRefreshingOrders={isRefreshingOrders}
+              onClearTrackedOrder={(id) => clearTrackedOrder(id)}
+              orderingMessage={orderingMessage}
+            />
+          </React.Suspense>
+        ) : (
+        <MenuV2Experience
           activeBrand={activeBrand}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
@@ -1397,7 +1490,33 @@ export default function CardapioPage() {
           isRefreshingOrders={isRefreshingOrders}
           onClearTrackedOrder={(id) => clearTrackedOrder(id)}
           orderingMessage={orderingMessage}
+          activeDockTab={
+            isCartOpen
+              ? "bag"
+              : isOrdersDrawerOpen
+                ? "orders"
+                : isAuthOpen || isProfileOpen
+                  ? "account"
+                  : "home"
+          }
+          onDockNavigate={(tab) => {
+            setIsCartOpen(tab === "bag");
+            setIsOrdersDrawerOpen(tab === "orders");
+            if (tab === "account") {
+              if (user) {
+                setIsProfileOpen(true);
+                setIsAuthOpen(false);
+              } else {
+                setIsAuthOpen(true);
+                setIsProfileOpen(false);
+              }
+            } else {
+              setIsAuthOpen(false);
+              setIsProfileOpen(false);
+            }
+          }}
         />
+        )
       ) : (
         <>
           <CardapioHeader
@@ -1885,6 +2004,7 @@ export default function CardapioPage() {
           <CardapioDigital
             activeBrand={activeBrand}
             cart={cart}
+            isLocalSimulation={isLocalSimulationHost()}
             deliveryFee={checkoutRequest.deliveryFee}
             deliveryMethod={checkoutRequest.deliveryMethod}
             address={checkoutRequest.address}

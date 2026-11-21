@@ -98,6 +98,8 @@ export interface CardapioArtisticExperienceProps {
   isRefreshingOrders?: boolean;
   onClearTrackedOrder?: (orderId: string) => void;
   orderingMessage?: string;
+  activeDockTab?: "home" | "orders" | "bag" | "account";
+  onDockNavigate?: (tab: "home" | "orders" | "bag" | "account") => void;
 }
 
 const currencyFormatter = new Intl.NumberFormat('pt-BR', {

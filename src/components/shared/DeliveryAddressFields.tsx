@@ -18,6 +18,7 @@ type DeliveryAddressFieldsProps = {
   compact?: boolean;
   legacyHint?: string | null;
   idPrefix?: string;
+  hideBairroField?: boolean;
 };
 
 const updateField = (
@@ -36,6 +37,7 @@ export default function DeliveryAddressFields({
   compact = false,
   legacyHint,
   idPrefix = 'delivery-address',
+  hideBairroField = false,
 }: DeliveryAddressFieldsProps) {
   const inputClass = compact
     ? 'w-full rounded-lg border border-koma-border bg-koma-input px-2 py-1.5 text-sm text-koma-foreground outline-none focus:border-emerald-500'
@@ -69,6 +71,7 @@ export default function DeliveryAddressFields({
         <PostalCodeLookupStatus value={value} onChange={onChange} compact={compact} />
       </label>
 
+      {!hideBairroField && (
       <div className="space-y-1.5">
         <label className="block">
           <span className={labelClass}>Bairro <span className="font-normal opacity-70">(opcional)</span></span>
@@ -113,6 +116,7 @@ export default function DeliveryAddressFields({
           </div>
         )}
       </div>
+      )}
 
       <div className="grid grid-cols-[minmax(0,1fr)_92px] gap-2">
         <label>

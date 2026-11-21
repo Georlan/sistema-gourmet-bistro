@@ -14,13 +14,18 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
+  Banknote,
+  Bike,
   CalendarClock,
-  Check,
   CheckCircle2,
+  CreditCard,
   MapPin,
   MessageCircle,
+  QrCode,
   Send,
   ShoppingBag,
+  Sparkles,
+  Store,
   UserRound,
   X,
 } from "lucide-react";
@@ -37,6 +42,14 @@ import { buildCardapioOrderItems, buildCardapioPromotionItemIndices } from "../o
 import { findOutdatedCartProducts } from "../cartCatalogConsistency";
 import { isOrderingBlockConflict } from "../orderingBlockUi";
 import CardapioPaymentSummary from "./CardapioPaymentSummary";
+import {
+  KomaAccountInviteAsset,
+  KomaBagAsset,
+  KomaDeliveryAsset,
+  KomaDineInAsset,
+  KomaOrderStatusAsset,
+  KomaPickupAsset,
+} from "../v2/KomaVisualAssets";
 import { getCheckoutPaymentMethods, getPaymentSelectionError, PAYMENT_LABELS } from "../paymentMethods";
 import {
   buildOrderSubmissionFingerprint,
@@ -105,6 +118,7 @@ interface CardapioDigitalProps {
   onOrderSuccess: (order: CreatedOrder) => void;
   onCreateAccount?: () => void;
   onSessionExpired?: () => void;
+  isLocalSimulation?: boolean;
 }
 
 
@@ -182,6 +196,7 @@ export default function CardapioDigital({
   onOrderSuccess,
   onSessionExpired,
   onCreateAccount,
+  isLocalSimulation: isLocalSimulationProp,
 }: CardapioDigitalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -431,6 +446,60 @@ export default function CardapioDigital({
       return;
     }
 
+    const isLocalSimulation =
+      isLocalSimulationProp
+      ?? (typeof window !== "undefined"
+        && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1"));
+
+    if (isLocalSimulation) {
+      isSubmittingRef.current = true;
+      setIsSubmitting(true);
+      setErrorMessage("");
+      setRequiresCartReview(false);
+      setCanCorrectSubmission(false);
+
+      const simComandaId = `sim-local-${Date.now()}`;
+      const simOrderNumber = "SIM-101";
+      const simOrderObj = {
+        id: simComandaId,
+        numero_pedido: simOrderNumber,
+        timestamp: Date.now(),
+        restaurante_id: targetRestauranteId,
+        cliente_nome: normalizedName,
+        cliente_telefone: normalizedPhone,
+        tipo: storedFulfillmentLabel(deliveryMethod),
+        total: estimatedTotal,
+        idempotency_key: idempotencyKey,
+        status: "recebido",
+        itens: cart.map((item) => ({
+          id: item.product.id,
+          nome: item.product.name,
+          quantidade: item.quantity,
+          observacao: item.notes,
+        })),
+      };
+      try {
+        saveStoredOrder(simOrderObj);
+      } catch (error) {
+        console.warn("Não foi possível salvar pedido simulado localmente:", error);
+      }
+      clearPendingSubmission(idempotencyKey);
+
+      const simulatedPayload: CreatedOrder = {
+        comanda_id: simComandaId,
+        numero_pedido: simOrderNumber,
+        total: estimatedTotal,
+        fulfillment: deliveryMethod,
+        delivery_address: deliveryMethod === "delivery" ? normalizedAddress : "",
+        scheduled_for: scheduledForIso || null,
+      };
+      setCreatedOrder(simulatedPayload);
+      onOrderCreated?.(simulatedPayload);
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+
     isSubmittingRef.current = true;
     setIsSubmitting(true);
     setErrorMessage("");
@@ -636,63 +705,118 @@ export default function CardapioDigital({
     };
   }, [createdOrder?.comanda_id, createdOrder?.pagamento?.cobranca_online, createdOrder?.pagamento?.status]);
 
-  const handleFinish = () => {
-    if (createdOrder) onOrderSuccess(createdOrder);
+  const handleFinish = (openOrdersDrawer = false) => {
+    if (!createdOrder) return;
+    const finishedOrder = createdOrder;
+    onOrderSuccess(finishedOrder);
+    if (openOrdersDrawer && typeof window !== "undefined") {
+      window.dispatchEvent(
+        new CustomEvent("koma:open-orders-drawer", {
+          detail: { orderId: finishedOrder.comanda_id },
+        }),
+      );
+    }
   };
 
   const isCreatedOrderScheduled = Boolean(createdOrder?.scheduled_for);
   const createdScheduleLabel = formatScheduledDate(createdOrder?.scheduled_for);
+  const FulfillmentIcon = deliveryMethod === "delivery" ? Bike : deliveryMethod === "dine_in" ? Store : ShoppingBag;
+  const PaymentIcon = paymentMethodDetail === "pix" ? QrCode : paymentMethodDetail === "dinheiro" ? Banknote : CreditCard;
+  const totalItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-hidden bg-black/80 backdrop-blur-sm p-0 sm:items-center sm:p-4 animate-fade-in" id="cardapio-checkout-overlay">
-      <div className="relative flex h-[100dvh] max-h-[100dvh] sm:h-auto sm:max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-[28px] border border-koma-border bg-koma-panel text-koma-foreground shadow-2xl sm:rounded-[28px] animate-scale-up" id="checkout-card">
+    <div
+      className="fixed inset-0 z-[70] flex items-end justify-center overflow-hidden p-0 sm:items-center sm:p-4 animate-fade-in"
+      style={{ backgroundColor: "var(--km-overlay)" }}
+      id="cardapio-checkout-overlay"
+    >
+      <div
+        className="relative flex h-[calc(100dvh-24px)] max-h-[calc(100dvh-24px)] sm:h-auto sm:max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-[28px] border border-[var(--km-line)] bg-[var(--km-dialog)] text-[var(--km-ink)] shadow-2xl sm:rounded-[28px] animate-scale-up"
+        id="checkout-card"
+      >
         {!createdOrder && (
-          <header className="shrink-0 border-b border-koma-border px-5 py-4 sm:px-6">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <div className={`flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.15em] ${orderingBlocked ? "text-rose-400" : "text-emerald-500"}`}>
-                  {orderingBlocked ? <AlertCircle className="h-3.5 w-3.5" /> : <ShoppingBag className="h-3.5 w-3.5" />}
-                  {orderingBlocked ? "Pedido indisponível" : "Etapa final"}
+          <header className="shrink-0 border-b border-[var(--km-line-subtle)] px-5 pt-4 pb-3.5 sm:px-6 sm:pt-5">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                {orderingBlocked ? (
+                  <div
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border"
+                    style={{
+                      borderColor: "var(--km-alert-border)",
+                      backgroundColor: "var(--km-alert-soft)",
+                      color: "var(--km-alert-text)",
+                    }}
+                  >
+                    <AlertCircle className="h-5 w-5" />
+                  </div>
+                ) : (
+                  <KomaBagAsset className="h-10 w-10 shrink-0" />
+                )}
+                <div className="min-w-0">
+                  <h2 className="font-display text-lg font-black tracking-tight text-[var(--km-ink)] truncate">
+                    {orderingBlocked ? "Novos pedidos bloqueados" : "Confira seu pedido"}
+                  </h2>
+                  <p className="text-[11px] text-[var(--km-muted)] truncate">
+                    {orderingBlocked
+                      ? "O restaurante não está aceitando pedidos para este contato agora."
+                      : "Tudo certo? É só tocar em enviar."}
+                  </p>
                 </div>
-                <h2 className="mt-1.5 font-display text-lg font-black tracking-tight text-koma-foreground">{orderingBlocked ? "Novos pedidos bloqueados" : "Revise e confirme"}</h2>
-                <p className="mt-1 text-[10px] text-koma-muted">{orderingBlocked ? "O restaurante não está aceitando um novo pedido para este contato neste momento." : "Confira contato, modalidade, itens e total antes do envio."}</p>
               </div>
-              <button type="button" disabled={isSubmitting} onClick={() => !isSubmitting && onClose()} className="flex h-11 w-11 min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-koma-muted transition hover:bg-koma-raised hover:text-koma-foreground disabled:cursor-wait disabled:opacity-35" id="btn-close-checkout" aria-label="Fechar revisão do pedido"><X className="h-5 w-5" /></button>
+              <div className="flex items-center gap-2 shrink-0">
+                {!orderingBlocked && (
+                  <button
+                    type="button"
+                    disabled={isSubmitting}
+                    onClick={onEditCart || onClose}
+                    className="inline-flex h-10 items-center gap-1 rounded-full border border-[var(--km-line)] bg-[var(--km-raised)] px-3 text-xs font-bold text-[var(--km-ink-2)] transition hover:border-[var(--km-accent-border)] hover:text-[var(--km-ink)] disabled:opacity-40 cursor-pointer"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>Editar</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => !isSubmitting && onClose()}
+                  className="flex h-10 w-10 min-h-[44px] min-w-[44px] items-center justify-center rounded-full border border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-ink-2)] transition hover:text-[var(--km-ink)] disabled:cursor-wait disabled:opacity-35 cursor-pointer"
+                  id="btn-close-checkout"
+                  aria-label="Fechar revisão do pedido"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
-
-            {!orderingBlocked && <div className="mt-4 grid grid-cols-3 gap-2 text-[9px] font-bold">
-              {["Sacola", checkoutFulfillmentLabel(deliveryMethod), "Revisão"].map((label, index) => (
-                <div key={label} className={index < 2 ? "flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.07] px-2 py-2 text-emerald-500" : "flex items-center justify-center gap-1.5 rounded-lg border border-emerald-500/40 bg-emerald-500/15 px-2 py-2 text-koma-foreground"}>
-                  {index < 2 ? <Check className="h-3 w-3" /> : <span className="grid h-4 w-4 place-items-center rounded-full bg-emerald-500 text-[8px] text-white">3</span>}{label}
-                </div>
-              ))}
-            </div>}
           </header>
         )}
 
-        <div className="flex-1 overflow-y-auto p-5 pb-8 sm:p-6 overscroll-contain no-scrollbar">
+        <div className="flex-1 overflow-y-auto p-5 pb-6 sm:p-6 overscroll-contain no-scrollbar">
           {createdOrder ? (
-            <div className="flex flex-col items-center justify-center py-7 text-center sm:py-10 animate-scale-up">
-              <div className="grid h-16 w-16 place-items-center rounded-2xl border border-emerald-500/30 bg-emerald-500/15 text-emerald-500"><CheckCircle2 className="h-9 w-9" /></div>
-              <span className="mt-5 text-[9px] font-black uppercase tracking-[0.16em] text-emerald-500">
+            <div className="flex flex-col items-center justify-center py-5 text-center sm:py-8 animate-scale-up">
+              <KomaOrderStatusAsset className="h-16 w-16" />
+              <span className="mt-4 rounded-full border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--km-accent-text)]">
                 {createdOrder.pagamento?.cobranca_online && createdOrder.pagamento.status !== "approved"
                   ? "Aguardando pagamento"
                   : isCreatedOrderScheduled
                     ? "Pedido agendado"
-                    : "Pedido recebido"}
+                    : "Pedido confirmado"}
               </span>
-              <h3 className="mt-1.5 font-display text-2xl font-black tracking-tight text-koma-foreground">Pedido #{createdOrder.numero_pedido}</h3>
-              <p className="mt-2 max-w-md text-xs leading-relaxed text-koma-muted">
+              <h3 className="mt-2 font-display text-2xl font-black tracking-tight text-[var(--km-ink)]">
+                Pedido #{createdOrder.numero_pedido}
+              </h3>
+              <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-[var(--km-muted)]">
                 {createdOrder.pagamento?.cobranca_online && createdOrder.pagamento.status !== "approved"
-                  ? (createdOrder.pagamento.confirmacao_manual ? "Pague o Pix abaixo. O restaurante conferirá o recebimento antes de liberar seu pedido." : "Pague o Pix abaixo. O pedido só aparecerá para o restaurante depois da confirmação automática.")
+                  ? (createdOrder.pagamento.confirmacao_manual
+                    ? "Pague o Pix abaixo. O restaurante conferirá o recebimento antes de liberar seu pedido."
+                    : "Pague o Pix abaixo. O pedido entra no preparo assim que o pagamento confirmar.")
                   : isCreatedOrderScheduled
-                    ? `Pedido reservado para ${createdScheduleLabel}. Ele entra na operação somente no horário escolhido.`
-                    : "Seu pedido entrou no painel do restaurante e está aguardando aceite. Você pode acompanhar o andamento neste mesmo cardápio."}
+                    ? `Reservado para ${createdScheduleLabel}. Ele entra na operação no horário escolhido.`
+                    : "Já enviamos para o restaurante. Acompanhe cada etapa ao vivo em Pedidos."}
               </p>
 
               {createdOrder.pagamento?.cobranca_online && createdOrder.pagamento.status !== "approved" && (
-                <div className="mt-5 w-full max-w-md rounded-2xl border border-emerald-500/25 bg-koma-card p-4">
-                  {!createdOrder.pagamento.qr_code_base64 && createdOrder.pagamento.qr_code && <QRCodeSVG value={createdOrder.pagamento.qr_code} size={208} level="M" marginSize={4} className="mx-auto" />}
+                <div className="mt-5 w-full max-w-md rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-card)] p-4">
+                  {!createdOrder.pagamento.qr_code_base64 && createdOrder.pagamento.qr_code && <QRCodeSVG value={createdOrder.pagamento.qr_code} size={208} level="M" marginSize={4} className="mx-auto rounded-xl bg-white p-2" />}
                   {createdOrder.pagamento.qr_code_base64 && <img className="mx-auto h-52 w-52 rounded-xl bg-white p-2" src={`data:image/png;base64,${createdOrder.pagamento.qr_code_base64}`} alt="QR Code Pix do pedido" />}
                   {createdOrder.pagamento.qr_code && <PixCopyCode code={createdOrder.pagamento.qr_code} />}
                   <DirectPixCustomerConfirm
@@ -711,180 +835,284 @@ export default function CardapioDigital({
                       } : current);
                     }}
                   />
-                  {createdOrder.pagamento.ticket_url && <a href={createdOrder.pagamento.ticket_url} target="_blank" rel="noreferrer" className="mt-2 flex h-11 w-full items-center justify-center rounded-xl border border-koma-border text-xs font-bold text-koma-foreground">Abrir pagamento</a>}
-                  <p className="mt-2 text-[10px] leading-relaxed text-koma-muted">{createdOrder.pagamento.confirmacao_manual ? "O restaurante confirmará o recebimento. Você pode acompanhar o pedido neste cardápio." : "A confirmação é automática. Você pode acompanhar o pedido neste cardápio."}</p>
+                  {createdOrder.pagamento.ticket_url && <a href={createdOrder.pagamento.ticket_url} target="_blank" rel="noreferrer" className="mt-2 flex h-11 w-full items-center justify-center rounded-xl border border-[var(--km-line)] bg-[var(--km-raised)] text-xs font-bold text-[var(--km-ink)]">Abrir pagamento</a>}
+                  <p className="mt-2 text-[11px] leading-relaxed text-[var(--km-muted)]">{createdOrder.pagamento.confirmacao_manual ? "O restaurante confirmará o recebimento. Você pode acompanhar o pedido neste cardápio." : "A confirmação é automática. Você pode acompanhar o pedido neste cardápio."}</p>
                 </div>
               )}
 
-              <div className="mt-5 grid w-full max-w-md gap-2 text-left sm:grid-cols-2">
-                <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">Modalidade</span><p className="mt-1 text-[11px] font-semibold leading-relaxed text-koma-foreground">{createdOrder.fulfillment === "delivery" ? `Entrega · ${createdOrder.delivery_address || ""}` : createdOrder.fulfillment === "dine_in" ? "Consumo no local" : "Retirada no balcão"}</p></div>
-                <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><span className="text-[9px] font-black uppercase tracking-wider text-koma-muted">Total</span><p className="mt-1 text-base font-black text-emerald-500">{formatPrice(createdOrder.total ?? estimatedTotal)}</p></div>
+              <div className="mt-5 grid w-full max-w-md gap-2.5 text-left sm:grid-cols-2">
+                <div className="rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-3.5">
+                  <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-[var(--km-muted)]">
+                    <FulfillmentIcon className="h-3.5 w-3.5 text-[var(--km-accent-text)]" aria-hidden="true" />
+                    <span>{checkoutFulfillmentLabel(createdOrder.fulfillment || deliveryMethod)}</span>
+                  </div>
+                  <p className="mt-1.5 text-xs font-semibold leading-relaxed text-[var(--km-ink)]">
+                    {createdOrder.fulfillment === "delivery" ? (createdOrder.delivery_address || "Entrega no endereço informado") : createdOrder.fulfillment === "dine_in" ? "Consumo no local" : "Retirada no balcão"}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-3.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-[var(--km-muted)]">Total</span>
+                  <p className="mt-1 font-display text-xl font-black text-[var(--km-accent-text)] tabular-nums">
+                    {formatPrice(createdOrder.total ?? estimatedTotal)}
+                  </p>
+                </div>
                 {isCreatedOrderScheduled && (
-                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-3.5 sm:col-span-2"><span className="text-[9px] font-black uppercase tracking-wider text-emerald-500">Agendado para</span><p className="mt-1 text-[11px] font-bold text-koma-foreground">{createdScheduleLabel}</p></div>
+                  <div className="rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] p-3.5 sm:col-span-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-[var(--km-accent-text)]">Agendado para</span>
+                    <p className="mt-1 text-xs font-bold text-[var(--km-ink)]">{createdScheduleLabel}</p>
+                  </div>
                 )}
               </div>
 
-              <div className="mt-6 w-full max-w-sm space-y-2">
-                {createdOrder.tracking_url ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleFinish();
-                      window.location.href = createdOrder.tracking_url!;
-                    }}
-                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600"
-                  >
-                    <CheckCircle2 className="h-4 w-4" /> Acompanhar pedido ao vivo
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleFinish}
-                    className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600"
-                  >
-                    <CheckCircle2 className="h-4 w-4" /> Acompanhar pedido
-                  </button>
-                )}
+              <div className="mt-6 w-full max-w-md space-y-2.5">
+                <button
+                  type="button"
+                  id="btn-track-created-order"
+                  onClick={() => handleFinish(true)}
+                  className="flex h-13 w-full items-center justify-center gap-2 rounded-full bg-[var(--km-accent)] px-5 text-xs font-black uppercase tracking-wider text-[var(--km-on-accent)] shadow-md transition hover:bg-[var(--km-accent-hover)] active:scale-[0.99] cursor-pointer"
+                >
+                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                  <span>Acompanhar pedido</span>
+                </button>
               </div>
+
               {!customerToken && onCreateAccount && (
-                <section className="k-account-invitation" aria-labelledby="post-purchase-account-title">
-                  <div className="k-account-invitation__heading">
-                    <h4 id="post-purchase-account-title">Peça de novo.<br /><span>Mais rápido.</span></h4>
-                    <img className="k-account-invitation__art" src="/brand/cashier/operator-access-v1.svg" width="80" height="93" alt="" aria-hidden="true" />
+                <section
+                  className="mt-5 w-full max-w-md rounded-3xl border border-[var(--km-line)] bg-[var(--km-card)] p-4 text-left shadow-sm"
+                  aria-labelledby="post-purchase-account-title"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <KomaAccountInviteAsset className="h-16 w-16 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <h4 id="post-purchase-account-title" className="font-display text-base font-black leading-tight text-[var(--km-ink)]">
+                        Peça em 1 toque da próxima vez
+                      </h4>
+                      <p className="mt-1 text-xs leading-relaxed text-[var(--km-muted)]">
+                        Crie sua conta grátis para salvar seu endereço, repetir pedidos e acompanhar tudo sem digitar novamente.
+                      </p>
+                      <button
+                        type="button"
+                        aria-label="Criar conta com meus dados"
+                        onClick={() => {
+                          handleFinish(false);
+                          onCreateAccount();
+                        }}
+                        className="mt-3 flex h-11 w-full items-center justify-between rounded-full bg-[var(--km-accent)] px-4 text-xs font-black text-[var(--km-on-accent)] transition hover:bg-[var(--km-accent-hover)] cursor-pointer"
+                      >
+                        <span>Criar conta grátis</span>
+                        <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <p className="mt-1.5 text-center text-[10px] text-[var(--km-muted)]">Opcional · leva menos de 1 minuto</p>
+                    </div>
                   </div>
-                  <p className="k-account-invitation__benefit">Seus dados salvos para a próxima.</p>
-                  <button type="button" aria-label="Criar conta com meus dados" onClick={() => { handleFinish(); onCreateAccount(); }}
-                    className="k-account-invitation__action">Criar conta <ArrowRight size={18} aria-hidden="true" /></button>
-                  <p className="k-account-invitation__optional">Cadastro opcional</p>
                 </section>
               )}
             </div>
           ) : orderingBlocked ? (
             <div className="mx-auto flex min-h-[360px] w-full max-w-md flex-col items-center justify-center py-8 text-center animate-scale-up">
-              <div className="grid h-16 w-16 place-items-center rounded-2xl border border-rose-500/25 bg-rose-500/10 text-rose-400"><AlertCircle className="h-9 w-9" /></div>
-              <h3 className="mt-5 font-display text-xl font-black tracking-tight text-koma-foreground">Não é possível enviar um novo pedido agora</h3>
-              <p className="mt-2 text-xs leading-relaxed text-koma-muted">O restaurante bloqueou temporariamente novos pedidos associados a este contato.</p>
-              <div className="mt-5 w-full rounded-2xl border border-koma-border bg-koma-card p-4 text-left">
+              <div className="grid h-16 w-16 place-items-center rounded-2xl border border-rose-500/25 bg-rose-500/10 text-rose-500 dark:text-rose-400">
+                <AlertCircle className="h-9 w-9" />
+              </div>
+              <h3 className="mt-5 font-display text-xl font-black tracking-tight text-[var(--km-ink)]">Não é possível enviar um novo pedido agora</h3>
+              <p className="mt-2 text-xs leading-relaxed text-[var(--km-muted)]">O restaurante bloqueou temporariamente novos pedidos associados a este contato.</p>
+              <div className="mt-5 w-full rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-4 text-left">
                 <div className="flex items-start gap-3">
-                  <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-500" />
-                  <p className="text-[10px] leading-relaxed text-koma-muted">Se um pedido anterior foi recusado, abra <strong className="text-koma-foreground">Meus Pedidos</strong> e consulte o acompanhamento daquele pedido. O motivo informado pelo restaurante fica disponível somente nesse acesso seguro.</p>
+                  <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--km-accent-text)]" />
+                  <p className="text-[11px] leading-relaxed text-[var(--km-muted)]">Se um pedido anterior foi recusado, abra <strong className="text-[var(--km-ink)]">Meus Pedidos</strong> e consulte o acompanhamento daquele pedido.</p>
                 </div>
               </div>
-              <button type="button" onClick={onClose} className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-koma-raised px-4 text-xs font-black uppercase tracking-wider text-koma-foreground transition hover:bg-koma-card"><ArrowLeft className="h-4 w-4" /> Voltar ao cardápio</button>
+              <button type="button" onClick={onClose} className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-full border border-[var(--km-line)] bg-[var(--km-raised)] px-4 text-xs font-black uppercase tracking-wider text-[var(--km-ink)] transition hover:border-[var(--km-accent-border)] cursor-pointer">
+                <ArrowLeft className="h-4 w-4" /> Voltar ao cardápio
+              </button>
             </div>
           ) : (
-            <div className="space-y-5">
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-koma-muted"><UserRound className="h-3.5 w-3.5 text-emerald-500" /> Contato</div><p className="mt-2 text-xs font-black text-koma-foreground">{customerName}</p><p className="mt-0.5 text-[10px] text-koma-muted">{customerPhone}</p></div>
-                <div className="rounded-2xl border border-koma-border bg-koma-card p-3.5"><div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-wider text-koma-muted"><MapPin className="h-3.5 w-3.5 text-emerald-500" /> {checkoutFulfillmentLabel(deliveryMethod)}</div><p className="mt-2 text-[11px] font-semibold leading-relaxed text-koma-foreground">{deliveryMethod === "delivery" ? address : deliveryMethod === "dine_in" ? activeBrand.address || "Consumo no estabelecimento" : activeBrand.address || "Retirada no balcão do restaurante"}</p></div>
-              </div>
+            <div className="space-y-3.5">
+              {/* Bloco 1: Seu pedido */}
+              <section className="rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-4">
+                <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-[var(--km-line-subtle)]">
+                  <div className="flex items-center gap-2.5">
+                    <KomaBagAsset className="h-7 w-7 shrink-0" />
+                    <h3 className="text-xs font-black text-[var(--km-ink)]">Seu pedido</h3>
+                  </div>
+                  <span className="rounded-full bg-[var(--km-raised)] px-2.5 py-0.5 text-[11px] font-bold text-[var(--km-muted)] tabular-nums">
+                    {totalItemsCount} {totalItemsCount === 1 ? "item" : "itens"}
+                  </span>
+                </div>
+                <div className="mt-3 space-y-2.5">
+                  {cart.map((item) => {
+                    let unitPrice = item.product.price;
+                    Object.values(item.selectedOptions).forEach((options) => options.forEach((option) => { unitPrice += option.extraPrice; }));
+                    return (
+                      <div key={item.id} className="flex items-start justify-between gap-3 text-xs">
+                        <div className="min-w-0">
+                          <span className="block font-bold text-[var(--km-ink)] leading-snug">
+                            <span className="text-[var(--km-accent-text)] font-black tabular-nums">{item.quantity}×</span> {item.product.name}
+                          </span>
+                          {item.promotionParts
+                            ? <div className="mt-1 space-y-1 text-[11px] text-[var(--km-muted)]">{item.promotionParts.map((part, index) => (
+                                <p key={index}><strong className="text-[var(--km-ink-2)]">{part.product.name}:</strong> {Object.values(part.selectedOptions).flat().map(opt => opt.name).join(', ') || 'Sem adicionais'}{part.notes ? ` · ${part.notes}` : ''}</p>
+                              ))}</div>
+                            : <OrderItemComposition item={cardapioCompositionSource(item)} className="mt-0.5 text-[11px] text-[var(--km-muted)]" />}
+                          {item.notes && <span className="mt-1 inline-block rounded-lg bg-[var(--km-raised)] px-2 py-0.5 text-[11px] leading-relaxed text-[var(--km-ink-2)]">Obs.: {item.notes}</span>}
+                        </div>
+                        <span className="shrink-0 font-bold text-[var(--km-ink)] tabular-nums">{formatPrice(unitPrice * item.quantity)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {/* Bloco 2: Entrega / Retirada */}
+              <section className="rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-4">
+                <div className="flex items-center gap-2.5 pb-2.5 border-b border-[var(--km-line-subtle)]">
+                  {deliveryMethod === "delivery" ? (
+                    <KomaDeliveryAsset className="h-7 w-7 shrink-0" />
+                  ) : deliveryMethod === "dine_in" ? (
+                    <KomaDineInAsset className="h-7 w-7 shrink-0" />
+                  ) : (
+                    <KomaPickupAsset className="h-7 w-7 shrink-0" />
+                  )}
+                  <h3 className="text-xs font-black text-[var(--km-ink)]">{checkoutFulfillmentLabel(deliveryMethod)}</h3>
+                </div>
+                <div className="mt-2.5 space-y-1.5 text-xs">
+                  <div className="flex items-start gap-2 text-[var(--km-ink)]">
+                    <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--km-muted)]" aria-hidden="true" />
+                    <p className="font-semibold leading-snug">
+                      {deliveryMethod === "delivery" ? address : deliveryMethod === "dine_in" ? activeBrand.address || "Consumo no estabelecimento" : activeBrand.address || "Retirada no balcão do restaurante"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-[11px] text-[var(--km-muted)]">
+                    <UserRound className="h-3.5 w-3.5 shrink-0 text-[var(--km-muted)]" aria-hidden="true" />
+                    <span className="truncate font-semibold text-[var(--km-ink-2)]">{customerName}</span>
+                    <span>·</span>
+                    <span className="tabular-nums">{customerPhone}</span>
+                  </div>
+                </div>
+              </section>
+
+              {/* Bloco 3: Pagamento */}
+              <section className="rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-4">
+                <div>
+                  {!paymentError && paymentMethodDetail ? (
+                    <CardapioPaymentSummary method={paymentMethodDetail} fulfillment={deliveryMethod} changeFor={trocoPara} isDirectPix={activeBrand.pixDirect === true} />
+                  ) : (
+                    <p role="alert" className="text-sm font-semibold leading-relaxed" style={{ color: "var(--km-alert-text)" }}>{paymentError} Volte à sacola para conferir.</p>
+                  )}
+                </div>
+                {availablePayments.length > 0 ? (
+                  <p className="mt-2.5 border-t border-[var(--km-line-subtle)] pt-2 text-[11px] text-[var(--km-muted)]">
+                    Formas disponíveis neste pedido: {availablePayments.map((method) => PAYMENT_LABELS[method]).join(" · ")}
+                  </p>
+                ) : (
+                  <p className="mt-2.5 text-xs font-semibold leading-relaxed" style={{ color: "var(--km-alert-text)" }}>O restaurante ainda não informou as formas aceitas no cardápio.</p>
+                )}
+              </section>
 
               {customerWhatsAppStatusEnabled && deliveryMethod !== "dine_in" && (
                 <label htmlFor="checkout-whatsapp-status-opt-in"
-                  className={`flex min-h-24 cursor-pointer items-start gap-3 rounded-2xl border-2 px-4 py-4 transition-colors focus-within:ring-2 focus-within:ring-emerald-500/60 sm:px-5 ${whatsappStatusOptIn
-                    ? 'border-emerald-500 bg-emerald-500/15'
-                    : 'border-emerald-500/50 bg-emerald-500/5 hover:bg-emerald-500/10'}`}>
+                  className={`flex min-h-16 cursor-pointer items-start gap-3 rounded-2xl border px-4 py-3 transition-colors ${whatsappStatusOptIn
+                    ? 'border-[var(--km-accent)] bg-[var(--km-accent-soft)]'
+                    : 'border-[var(--km-line)] bg-[var(--km-card)] hover:border-[var(--km-accent-border)]'}`}>
                   <input
                     id="checkout-whatsapp-status-opt-in"
                     type="checkbox"
                     checked={whatsappStatusOptIn}
                     onChange={(event) => setWhatsappStatusOptIn(event.target.checked)}
                     disabled={isSubmitting}
-                    className="mt-1 h-5 w-5 shrink-0 cursor-pointer accent-emerald-500"
+                    className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-[var(--km-accent)]"
                   />
-                  <span className="min-w-0 flex-1 text-xs leading-relaxed text-koma-foreground">
-                    <span className="flex items-center gap-2">
-                      <MessageCircle aria-hidden="true" className="h-5 w-5 shrink-0 text-emerald-500" />
-                      <strong className="text-sm font-black">Receba atualizações deste pedido pelo WhatsApp</strong>
+                  <span className="min-w-0 flex-1 text-xs leading-relaxed text-[var(--km-ink)]">
+                    <span className="flex items-center gap-1.5">
+                      <MessageCircle aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-[var(--km-accent-text)]" />
+                      <strong className="text-xs font-bold">Avisar andamento no WhatsApp</strong>
                     </span>
-                    <span className="mt-1.5 block text-xs text-koma-muted">
-                      Saiba quando o pedido for recebido, estiver pronto ou sair para entrega.
-                      É grátis e opcional, sem promoções. Você pode continuar acompanhando por aqui.
+                    <span className="mt-0.5 block text-[11px] text-[var(--km-muted)]">
+                      Grátis e opcional.
                     </span>
                   </span>
                 </label>
               )}
 
               {scheduledOrdersEnabled && (
-                <section className="rounded-2xl border border-koma-border bg-koma-card p-4">
-                  <div className="flex items-center gap-2"><CalendarClock className="h-4 w-4 text-emerald-500" /><h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">Quando preparar?</h3></div>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <button type="button" onClick={() => { setScheduleMode("now"); setScheduledFor(""); setErrorMessage(""); }} className={`h-11 rounded-xl border px-3 text-[10px] font-black ${scheduleMode === "now" ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-500" : "border-koma-border text-koma-muted"}`}>O quanto antes</button>
-                    <button type="button" onClick={() => { setScheduleMode("scheduled"); setErrorMessage(""); }} className={`h-11 rounded-xl border px-3 text-[10px] font-black ${scheduleMode === "scheduled" ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-500" : "border-koma-border text-koma-muted"}`}>Agendar</button>
+                <section className="rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-4">
+                  <div className="flex items-center gap-2">
+                    <CalendarClock className="h-4 w-4 text-[var(--km-accent-text)]" />
+                    <h3 className="text-xs font-black text-[var(--km-ink)]">Quando preparar?</h3>
+                  </div>
+                  <div className="mt-2.5 grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => { setScheduleMode("now"); setScheduledFor(""); setErrorMessage(""); }} className={`h-11 rounded-full border px-3 text-xs font-black transition cursor-pointer ${scheduleMode === "now" ? "border-[var(--km-accent)] bg-[var(--km-accent-soft)] text-[var(--km-accent-text)]" : "border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-muted)]"}`}>Agora</button>
+                    <button type="button" onClick={() => { setScheduleMode("scheduled"); setErrorMessage(""); }} className={`h-11 rounded-full border px-3 text-xs font-black transition cursor-pointer ${scheduleMode === "scheduled" ? "border-[var(--km-accent)] bg-[var(--km-accent-soft)] text-[var(--km-accent-text)]" : "border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-muted)]"}`}>Agendar</button>
                   </div>
                   {scheduleMode === "scheduled" && (
                     <div className="mt-3">
-                      <label htmlFor="scheduled-order-time" className="mb-1.5 block text-[9px] font-bold uppercase tracking-wider text-koma-muted">Data e horário</label>
-                      <input id="scheduled-order-time" type="datetime-local" min={scheduleMin} max={scheduleMax} value={scheduledFor} onChange={(event) => { setScheduledFor(event.target.value); setErrorMessage(""); }} className="h-11 w-full rounded-xl border border-koma-border bg-koma-panel px-3 text-xs font-semibold text-koma-foreground outline-none focus:border-emerald-500/50" />
-                      <p className="mt-2 text-[9px] leading-relaxed text-koma-subtle">Entre 30 minutos e 7 dias. O pedido fica fora da cozinha e do caixa operacional até o horário escolhido.</p>
-                      {schedulePaymentError && <p className="mt-2 text-[10px] font-bold text-amber-500">{schedulePaymentError}</p>}
+                      <label htmlFor="scheduled-order-time" className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-[var(--km-muted)]">Data e horário</label>
+                      <input id="scheduled-order-time" type="datetime-local" min={scheduleMin} max={scheduleMax} value={scheduledFor} onChange={(event) => { setScheduledFor(event.target.value); setErrorMessage(""); }} className="h-11 w-full rounded-xl border border-[var(--km-line)] bg-[var(--km-input)] px-3 text-xs font-semibold text-[var(--km-ink)] outline-none focus:border-[var(--km-focus)]" />
+                      <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--km-subtle)]">Entre 30 minutos e 7 dias.</p>
+                      {schedulePaymentError && <p className="mt-2 text-xs font-bold text-rose-500 dark:text-rose-300">{schedulePaymentError}</p>}
                     </div>
                   )}
                 </section>
               )}
 
-              <section>
-                <div className="mb-2.5 flex items-center justify-between"><h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">Itens do pedido</h3><button type="button" onClick={onEditCart || onClose} className="inline-flex items-center gap-1 text-[9px] font-bold text-emerald-500 hover:text-emerald-400"><ArrowLeft className="h-3 w-3" /> Editar sacola</button></div>
-                <div className="space-y-2">
-                  {cart.map((item) => {
-                    let unitPrice = item.product.price;
-                    Object.values(item.selectedOptions).forEach((options) => options.forEach((option) => { unitPrice += option.extraPrice; }));
-                    return <div key={item.id} className="flex items-start justify-between gap-3 rounded-xl border border-koma-border bg-koma-card p-3 text-xs"><div className="min-w-0"><span className="block font-black text-koma-foreground">{item.quantity}x {item.product.name}</span>{item.promotionParts
-  ? <div className="mt-1 space-y-1.5 text-koma-muted">{item.promotionParts.map((part, index) => (
-      <p key={index}><strong className="text-koma-foreground">{part.product.name}:</strong> {Object.values(part.selectedOptions).flat().map(opt => opt.name).join(', ') || 'Sem adicionais'}{part.notes ? ` · ${part.notes}` : ''}</p>
-    ))}</div>
-  : <OrderItemComposition item={cardapioCompositionSource(item)} className="mt-1 text-koma-muted" />}{item.notes && <span className="mt-1 block text-[10px] leading-relaxed text-amber-500">Obs.: {item.notes}</span>}</div><span className="shrink-0 font-black text-koma-foreground">{formatPrice(unitPrice * item.quantity)}</span></div>;
-                  })}
+              {/* Total em destaque */}
+              <section className="rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] p-4 space-y-1.5 text-xs">
+                <div className="flex justify-between text-[var(--km-muted)]">
+                  <span>Subtotal</span>
+                  <span className="tabular-nums font-semibold text-[var(--km-ink-2)]">{formatPrice(subtotal)}</span>
                 </div>
-              </section>
-
-              <section className="rounded-2xl border border-koma-border bg-koma-card p-4">
-                {!paymentError && paymentMethodDetail ? <CardapioPaymentSummary method={paymentMethodDetail} fulfillment={deliveryMethod} changeFor={trocoPara} isDirectPix={activeBrand.pixDirect === true} /> : <p role="alert" className="text-sm leading-relaxed text-amber-500">{paymentError} Volte à sacola para conferir.</p>}
-                {availablePayments.length > 0 ? <div className="mt-3 border-t border-koma-border pt-3"><p className="text-xs text-koma-muted">Formas disponíveis neste pedido</p><div className="mt-2 flex flex-wrap gap-1.5">{availablePayments.map((method) => <span key={method} className="rounded-lg border border-koma-border px-2.5 py-1.5 text-xs text-koma-secondary">{PAYMENT_LABELS[method]}</span>)}</div></div> : <p className="mt-3 text-xs leading-relaxed text-amber-500">O restaurante ainda não informou as formas aceitas no cardápio.</p>}
-              </section>
-
-              <section className="space-y-1.5 border-t border-koma-border pt-4 text-xs">
-                <div className="flex justify-between text-koma-muted"><span>Subtotal</span><span>{formatPrice(subtotal)}</span></div>
                 {deliveryMethod === "delivery" && (
-                  <div className="flex justify-between text-koma-muted">
-                    <span>Taxa de entrega estimada</span>
-                    <span className={deliveryFee === 0 ? "font-bold text-emerald-500" : undefined}>{deliveryFee === 0 ? "Grátis" : formatPrice(deliveryFee)}</span>
+                  <div className="flex justify-between text-[var(--km-muted)]">
+                    <span>Entrega</span>
+                    <span className={`tabular-nums font-semibold ${deliveryFee === 0 ? "text-emerald-600 dark:text-emerald-400 font-bold" : "text-[var(--km-ink-2)]"}`}>
+                      {deliveryFee === 0 ? "Grátis" : formatPrice(deliveryFee)}
+                    </span>
                   </div>
                 )}
                 {descontoCupom > 0 && (
-                  <div className="flex justify-between font-bold text-emerald-500">
+                  <div className="flex justify-between font-bold text-[var(--km-accent-text)]">
                     <span>Cupom{cupomCodigo ? ` (${cupomCodigo.trim().toUpperCase()})` : ""}</span>
-                    <span>- {formatPrice(descontoCupom)}</span>
+                    <span className="tabular-nums">- {formatPrice(descontoCupom)}</span>
                   </div>
                 )}
                 {descontoCashback > 0 && (
-                  <div className="flex justify-between font-bold text-amber-500">
-                    <span>Cashback resgatado</span>
-                    <span>- {formatPrice(descontoCashback)}</span>
+                  <div className="flex justify-between font-bold text-[var(--km-accent-text)]">
+                    <span>Cashback</span>
+                    <span className="tabular-nums">- {formatPrice(descontoCashback)}</span>
                   </div>
                 )}
-                <div className="flex justify-between border-t border-koma-border pt-2 text-sm font-black text-koma-foreground"><span>Total estimado</span><span className="text-base text-emerald-500">{formatPrice(estimatedTotal)}</span></div>
-                <p className="pt-1 text-[9px] leading-relaxed text-koma-subtle">O valor definitivo é confirmado pelo sistema do restaurante ao registrar o pedido.</p>
+                <div className="flex items-baseline justify-between border-t border-[var(--km-accent-border)] pt-2.5">
+                  <span className="text-sm font-black text-[var(--km-ink)]">Total</span>
+                  <span className="font-display text-2xl font-black text-[var(--km-accent-text)] tabular-nums">
+                    {formatPrice(estimatedTotal)}
+                  </span>
+                </div>
               </section>
-
             </div>
           )}
         </div>
 
         {!createdOrder && !orderingBlocked && (
-          <footer className="shrink-0 border-t border-koma-border bg-koma-panel p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-5">
-            {errorMessage && <div className="mb-3 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-400" role="alert" id="checkout-submit-error">
+          <footer className="shrink-0 border-t border-[var(--km-line-subtle)] bg-[var(--km-panel)] p-4 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-4">
+            {errorMessage && <div className="mb-3 rounded-2xl border border-rose-500/25 bg-rose-500/10 p-3 text-xs text-rose-500 dark:text-rose-300" role="alert" id="checkout-submit-error">
               <div className="flex items-start gap-2"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" /><div>
-                <p className="font-black">Não foi possível confirmar o pedido</p>
+                <p className="font-black">Não foi possível enviar o pedido</p>
                 <p className="mt-1 max-h-[15dvh] overflow-y-auto font-semibold">{errorMessage}</p>
-                {supportCode && <button type="button" className="mt-1 min-h-11 text-left text-koma-foreground underline underline-offset-4" onClick={async () => {
+                {supportCode && <button type="button" className="mt-1 min-h-11 text-left text-[var(--km-ink)] underline underline-offset-4 cursor-pointer" onClick={async () => {
                   try { await navigator.clipboard.writeText(supportCode); setSupportCopied(true); } catch { setSupportCopied(false); }
                 }} aria-label={`Copiar código de suporte ${supportCode}`}>{supportCopied ? `Copiado: ${supportCode}` : `Suporte: ${supportCode}`}</button>}
               </div></div>
-              {canCorrectSubmission && !requiresCartReview && <button type="button" onClick={onEditCart || onClose} className="mt-2 min-h-11 w-full rounded-lg border border-rose-500/30 px-3 font-bold">Voltar à sacola e corrigir</button>}
+              {canCorrectSubmission && !requiresCartReview && <button type="button" onClick={onEditCart || onClose} className="mt-2 min-h-11 w-full rounded-full border border-rose-500/30 px-3 font-bold cursor-pointer">Voltar à sacola e corrigir</button>}
             </div>}
-            <button type="button" onClick={requiresCartReview ? (onEditCart || onClose) : handlePlaceOrder} disabled={isSubmitting || cart.length === 0 || (!requiresCartReview && Boolean(paymentError || schedulePaymentError))} className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black uppercase tracking-wider text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-55" id="btn-place-order-final"><Send className="h-4 w-4" /><span>{isSubmitting ? "Enviando pedido…" : requiresCartReview ? "Revisar sacola" : paymentError || schedulePaymentError ? "Confira o pagamento" : errorMessage ? "Tentar novamente" : scheduleMode === "scheduled" ? "Agendar pedido" : "Fazer pedido"}</span></button>
-            <p className="mt-2 text-center text-[9px] leading-relaxed text-koma-subtle">{scheduleMode === "scheduled" ? "Agendados são enviados agora ao restaurante com a data e o horário escolhidos." : activeBrand.pixDirect === true ? "Pix próprio entra aguardando conferência do pagamento. Dinheiro e cartão entram direto e são cobrados pessoalmente." : "Pix só entra no painel após o pagamento. Dinheiro e cartão entram direto e são cobrados pessoalmente."}</p>
+            <button
+              type="button"
+              onClick={requiresCartReview ? (onEditCart || onClose) : handlePlaceOrder}
+              disabled={isSubmitting || cart.length === 0 || (!requiresCartReview && Boolean(paymentError || schedulePaymentError))}
+              className="flex h-13 w-full items-center justify-center gap-2 rounded-full bg-[var(--km-accent)] px-5 text-xs font-black uppercase tracking-wider text-[var(--km-on-accent)] shadow-md transition hover:bg-[var(--km-accent-hover)] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[var(--km-raised)] disabled:text-[var(--km-muted)] cursor-pointer"
+              id="btn-place-order-final"
+            >
+              <Send className="h-4 w-4" aria-hidden="true" />
+              <span>{isSubmitting ? "Enviando pedido…" : requiresCartReview ? "Revisar sacola" : paymentError || schedulePaymentError ? "Confira o pagamento" : errorMessage ? "Tentar novamente" : scheduleMode === "scheduled" ? "Agendar pedido" : "Enviar pedido"}</span>
+            </button>
           </footer>
         )}
       </div>

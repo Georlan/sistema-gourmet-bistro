@@ -18,25 +18,35 @@ import {
 import {
   AlertCircle,
   ArrowRight,
+  Banknote,
+  Bike,
   Check,
   CheckCircle2,
+  ChevronDown,
   Coins,
-  DollarSign,
+  CreditCard,
   MapPin,
   Mail,
   Minus,
-  Percent,
   Phone,
   Plus,
+  Search,
   ShoppingBag,
   Sparkles,
   Store,
   Ticket,
   Trash2,
-  Truck,
+  UserCheck,
   UserRound,
   X,
 } from "lucide-react";
+import {
+  KomaAccountInviteAsset,
+  KomaBagAsset,
+  KomaDeliveryAsset,
+  KomaDineInAsset,
+  KomaPickupAsset,
+} from "../v2/KomaVisualAssets";
 import { formatBrazilianPhone, normalizeBrazilianPhone } from "../customerSession";
 import { isValidCpf, isValidCnpj } from "../../legal/taxId";
 import { loadGuestCheckoutContact, saveGuestCheckoutContact } from "../guestCheckoutSession";
@@ -54,6 +64,7 @@ import {
   formatDeliveryAddressLegacy,
   getDeliveryAddressValidationError,
   parseDeliveryAddressLegacy,
+  updateDeliveryAddressGeographicField,
 } from "../../domain/deliveryAddress";
 import DeliveryAddressFields from "../../components/shared/DeliveryAddressFields";
 import { getDeliveryMinimumRemaining, getDeliveryQuote } from "../deliveryPresentation";
@@ -198,6 +209,9 @@ export default function CardapioCartDrawer({
     user?.address && !parseDeliveryAddressLegacy(user.address) ? user.address : null
   ));
   const [selectedBairro, setSelectedBairro] = useState(() => deliveryAddressDraft.bairro);
+  const [isBairroPickerOpen, setIsBairroPickerOpen] = useState(false);
+  const [bairroSearch, setBairroSearch] = useState("");
+  const trocoInputRef = useRef<HTMLInputElement | null>(null);
   const [guestName, setGuestName] = useState(() => user?.name || initialGuestContact?.name || "");
   const [guestPhone, setGuestPhone] = useState(() => formatBrazilianPhone(user?.phone || initialGuestContact?.phone || ""));
   const [guestEmail, setGuestEmail] = useState(() => user?.email || initialGuestContact?.email || "");
@@ -410,10 +424,19 @@ export default function CardapioCartDrawer({
 
   const deliveryQuote = getDeliveryQuote(brandConfig, subtotal, selectedBairro);
   const deliveryFee = deliveryMethod === "delivery" ? deliveryQuote.fee : 0;
-  const deliveryLabel = deliveryQuote.fee === 0 ? "Sem taxa de entrega" : `Taxa de ${formatPrice(deliveryQuote.fee)}`;
   const minimumOrder = brandConfig?.pedidoMinimo || 0;
   const remainingMinimum = deliveryMethod ? getDeliveryMinimumRemaining(brandConfig, subtotal, deliveryMethod) : 0;
   const freeDeliveryThreshold = brandConfig?.freteGratisValor || 0;
+  const neighborhoodFees = useMemo(() => brandConfig?.tabelaTaxasBairros || [], [brandConfig?.tabelaTaxasBairros]);
+  const filteredNeighborhoods = useMemo(() => {
+    const query = bairroSearch.trim().toLowerCase();
+    if (!query) return neighborhoodFees;
+    return neighborhoodFees.filter((item) => item.bairro.toLowerCase().includes(query));
+  }, [bairroSearch, neighborhoodFees]);
+  const selectedNeighborhoodItem = useMemo(
+    () => neighborhoodFees.find((item) => item.bairro.trim().toLowerCase() === selectedBairro.trim().toLowerCase()) || null,
+    [neighborhoodFees, selectedBairro],
+  );
 
   useEffect(() => {
     if (brandConfig && selectedFulfillment && selectedFulfillment !== deliveryMethod) {
@@ -565,28 +588,86 @@ export default function CardapioCartDrawer({
     accessibleName?: string;
     fullTitle: string;
     sectionId: string;
+    icon: React.ComponentType<{ className?: string }>;
   }
 
   const visibleSteps = useMemo(() => {
     const rawSteps: CartStepDefinition[] = [
-      { id: "items", label: "Itens", fullTitle: "Seu pedido", sectionId: "cart-items" },
-      { id: "delivery", label: "Receber", fullTitle: "Como quer receber?", sectionId: "cart-receive-methods" },
-      ...(showDiscounts ? [{ id: "discounts", label: "Descontos", accessibleName: "Cupom", fullTitle: "Descontos & Benefícios", sectionId: "cart-discounts" }] : []),
-      { id: "payment", label: "Pagamento", fullTitle: "Como quer pagar?", sectionId: "cart-payment-methods" },
-      { id: "contact", label: "Contato", fullTitle: "Seu contato", sectionId: "cart-identification" },
+      { id: "items", label: "Itens", fullTitle: "Seu pedido", sectionId: "cart-items", icon: ShoppingBag },
+      { id: "delivery", label: "Receber", fullTitle: "Como receber", sectionId: "cart-receive-methods", icon: Bike },
+      ...(showDiscounts ? [{ id: "discounts", label: "Cupom", accessibleName: "Cupom", fullTitle: "Descontos", sectionId: "cart-discounts", icon: Ticket }] : []),
+      { id: "payment", label: "Pagar", accessibleName: "Pagamento", fullTitle: "Como pagar", sectionId: "cart-payment-methods", icon: CreditCard },
+      { id: "contact", label: "Dados", accessibleName: "Contato", fullTitle: "Seus dados", sectionId: "cart-identification", icon: UserCheck },
     ];
 
     return rawSteps.map((step, index) => ({
       ...step,
       stepNumber: index + 1,
       chipLabel: `${index + 1}. ${step.label}`,
-      headingLabel: `${index + 1}. ${step.fullTitle}`,
+      headingLabel: step.fullTitle,
     }));
   }, [showDiscounts]);
 
   const currentStepIndex = visibleSteps.findIndex((s) => s.sectionId === activeSection);
   const nextStep = currentStepIndex >= 0 && currentStepIndex < visibleSteps.length - 1 ? visibleSteps[currentStepIndex + 1] : null;
   const nextSection = nextStep ? nextStep.sectionId : null;
+
+  const stepStatusMap = useMemo<Record<string, "done" | "pending" | "optional">>(() => {
+    const itemsDone = cart.length > 0 && cartCatalogDrift.size === 0;
+    const deliveryDone = Boolean(deliveryMethod)
+      && remainingMinimum <= 0
+      && (deliveryMethod !== "delivery" || Boolean(deliveryAddressDraftToSnapshot(deliveryAddressDraft)));
+    const discountsDone = Boolean(appliedCoupon || (useCashback && cashbackDiscount > 0));
+    const paymentDone = Boolean(paymentDetail)
+      && !paymentError
+      && !(paymentDetail === "dinheiro" && precisaTroco && (!trocoPara.trim() || !Number.isFinite(Number(trocoPara)) || trocoValorNum <= 0 || trocoValorNum < total));
+    const pixDocPending = paymentDetail === "pix"
+      && Boolean(brandConfig?.pixPayerDocumentRequired)
+      && !(isValidCpf(guestDocument) || isValidCnpj(guestDocument));
+    const pixEmailPending = paymentDetail === "pix"
+      && brandConfig?.pixDirect !== true
+      && (brandConfig?.pixPayerDocumentRequired
+        ? !isValidPixPayerEmail(guestEmail)
+        : !/^\S+@\S+\.\S+$/.test(guestEmail.trim()));
+    const contactDone = Boolean(user)
+      || (!accountRequired
+        && (recognizedExistingCustomer || customerName.trim().length >= 2)
+        && normalizeBrazilianPhone(customerPhone).length >= 10
+        && !pixDocPending
+        && !pixEmailPending);
+
+    return {
+      items: itemsDone ? "done" : "pending",
+      delivery: deliveryDone ? "done" : "pending",
+      discounts: discountsDone ? "done" : "optional",
+      payment: paymentDone ? "done" : "pending",
+      contact: contactDone ? "done" : "pending",
+    };
+  }, [
+    accountRequired,
+    appliedCoupon,
+    brandConfig?.pixDirect,
+    brandConfig?.pixPayerDocumentRequired,
+    cart.length,
+    cartCatalogDrift.size,
+    cashbackDiscount,
+    customerName,
+    customerPhone,
+    deliveryAddressDraft,
+    deliveryMethod,
+    guestDocument,
+    guestEmail,
+    paymentDetail,
+    paymentError,
+    precisaTroco,
+    recognizedExistingCustomer,
+    remainingMinimum,
+    total,
+    trocoPara,
+    trocoValorNum,
+    useCashback,
+    user,
+  ]);
 
   const sectionFocusFrame = useRef<number | null>(null);
   useEffect(() => () => {
@@ -810,32 +891,45 @@ export default function CardapioCartDrawer({
         if (event.target === event.currentTarget) onClose();
       }}
       // Above the sticky header (45), below authentication and checkout (50).
-      className="fixed inset-0 z-[46] flex items-end justify-end bg-black/75 backdrop-blur-sm sm:items-stretch animate-fade-in cursor-pointer"
+      className="fixed inset-0 z-[46] flex items-end justify-end pb-[86px] sm:pb-0 sm:items-stretch animate-fade-in cursor-pointer"
+      style={{ backgroundColor: "var(--km-overlay)" }}
       id="cart-overlay"
     >
       <div
-        className="koma-art-drawer-sheet flex max-h-[94vh] w-full flex-col overflow-hidden rounded-t-[32px] border border-white/10 shadow-2xl sm:h-full sm:max-h-none sm:max-w-md sm:rounded-none sm:rounded-l-[32px] sm:border-y-0 sm:border-r-0 animate-slide-left"
+        className="flex max-h-[calc(100dvh-100px)] w-full flex-col overflow-hidden rounded-t-[28px] border border-[var(--km-line)] bg-[var(--km-dialog)] text-[var(--km-ink)] shadow-2xl sm:h-full sm:max-h-none sm:max-w-md sm:rounded-none sm:rounded-l-[28px] sm:border-y-0 sm:border-r-0 animate-slide-left"
         id="cart-drawer-container"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Sua sacola"
         onClick={(event) => event.stopPropagation()}
       >
+        {/* Drag handle (mobile) */}
+        <div className="flex shrink-0 justify-center pt-3 pb-1 sm:hidden">
+          <div className="h-1 w-10 rounded-full bg-[var(--km-line-strong)]" />
+        </div>
+
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 py-4">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <div className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-500/15 text-emerald-400">
-                <ShoppingBag className="h-4 w-4" />
+        <div className="flex shrink-0 items-center justify-between border-b border-[var(--km-line-subtle)] px-5 pt-2 pb-4 sm:pt-5">
+          <div className="flex items-center gap-3 min-w-0">
+            <KomaBagAsset className="h-10 w-10 shrink-0" active={itemCount > 0} />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="font-display text-lg font-black tracking-tight text-[var(--km-ink)]">Sua sacola</h2>
+                {itemCount > 0 && (
+                  <span className="rounded-full bg-[var(--km-accent-soft)] border border-[var(--km-accent-border)] px-2 py-0.5 text-[11px] font-black text-[var(--km-accent-text)] tabular-nums">
+                    {itemCount}
+                  </span>
+                )}
               </div>
-              <h2 className="font-serif text-lg font-black tracking-tight text-koma-foreground">Sua sacola</h2>
-              {itemCount > 0 && (
-                <span className="rounded-full bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-black text-emerald-400">{itemCount}</span>
-              )}
+              <p className="text-[11px] text-[var(--km-muted)] truncate">
+                {itemCount > 0 ? "Revise os passos para concluir" : "Adicione itens do cardápio"}
+              </p>
             </div>
-            <p className="mt-1 text-[11px] text-koma-muted">Itens selecionados, entrega e finalização.</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="koma-art-glass-btn min-h-[44px] min-w-[44px]"
+            className="grid h-10 w-10 min-h-[44px] min-w-[44px] shrink-0 place-items-center rounded-full border border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-ink-2)] transition hover:text-[var(--km-ink)] cursor-pointer"
             aria-label="Fechar sacola"
             id="btn-close-cart"
           >
@@ -844,50 +938,104 @@ export default function CardapioCartDrawer({
         </div>
 
         {cart.length > 0 && (
-          <nav className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-white/10 px-4 py-2.5 no-scrollbar sm:px-5" aria-label="Partes da sacola">
-            {visibleSteps.map((step, index) => {
-              const isActive = activeSection === step.sectionId;
-              const isCompleted = currentStepIndex > index;
-              return (
-                <button
-                  key={step.sectionId}
-                  type="button"
-                  aria-label={step.accessibleName || step.label}
-                  aria-expanded={isActive}
-                  aria-controls={`${step.sectionId}-content`}
-                  onClick={() => navigateToStep(step.sectionId)}
-                  className={`koma-art-nav-pill-btn ${
-                    isActive ? "is-active" : isCompleted ? "is-completed" : "is-pending"
-                  }`}
-                >
-                  {isCompleted ? (
-                    <span className="flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      <span>{step.label}</span>
-                    </span>
-                  ) : (
-                    <span>{step.stepNumber}. {step.label}</span>
-                  )}
-                </button>
-              );
-            })}
+          <nav
+            className="shrink-0 border-b border-[var(--km-line-subtle)] bg-[var(--km-panel)] px-4 py-3 sm:px-5"
+            aria-label="Partes da sacola"
+          >
+            <div className="flex items-start justify-between">
+              {visibleSteps.map((step, index) => {
+                const isActive = activeSection === step.sectionId;
+                const status = stepStatusMap[step.id] ?? "optional";
+                const isDone = status === "done";
+                const isPending = status === "pending";
+                const StepIcon = step.icon;
+                const isLast = index === visibleSteps.length - 1;
+                return (
+                  <React.Fragment key={step.sectionId}>
+                    <button
+                      type="button"
+                      aria-label={step.accessibleName || step.label}
+                      aria-expanded={isActive}
+                      aria-controls={`${step.sectionId}-content`}
+                      onClick={() => navigateToStep(step.sectionId)}
+                      className="group relative flex flex-col items-center gap-1.5 min-w-[52px] cursor-pointer focus:outline-none"
+                    >
+                      <span
+                        className={`relative grid h-9 w-9 place-items-center rounded-full border transition-all ${
+                          isActive
+                            ? isDone
+                              ? "border-[var(--km-accent)] bg-[var(--km-accent)] text-[var(--km-on-accent)] ring-4 ring-[var(--km-accent-soft)] shadow-sm"
+                              : isPending
+                                ? "border-[var(--km-alert-dot)] bg-[var(--km-alert-dot)] text-[var(--km-on-alert)] ring-4 ring-[var(--km-alert-soft)] shadow-sm"
+                                : "border-[var(--km-accent)] bg-[var(--km-accent)] text-[var(--km-on-accent)] ring-4 ring-[var(--km-accent-soft)] shadow-sm"
+                            : isDone
+                              ? "border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] text-[var(--km-accent-text)]"
+                              : isPending
+                                ? "border-[var(--km-alert-border)] bg-[var(--km-alert-soft)] text-[var(--km-alert-text)]"
+                                : "border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-muted)] group-hover:border-[var(--km-line-strong)] group-hover:text-[var(--km-ink)]"
+                        }`}
+                      >
+                        {isDone ? (
+                          <Check className="h-4 w-4 stroke-[2.75]" aria-hidden="true" />
+                        ) : (
+                          <StepIcon className="h-4 w-4" aria-hidden="true" />
+                        )}
+                        {isPending && !isActive && (
+                          <span
+                            className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-[var(--km-alert-dot)] ring-2 ring-[var(--km-panel)]"
+                            aria-hidden="true"
+                          />
+                        )}
+                      </span>
+                      <span
+                        className={`text-[10px] leading-none transition-colors ${
+                          isActive
+                            ? isDone
+                              ? "font-black text-[var(--km-accent-text)]"
+                              : isPending
+                                ? "font-black text-[var(--km-alert-text)]"
+                                : "font-black text-[var(--km-accent-text)]"
+                            : isDone
+                              ? "font-bold text-[var(--km-accent-text)]"
+                              : isPending
+                                ? "font-bold text-[var(--km-alert-text)]"
+                                : "font-semibold text-[var(--km-muted)]"
+                        }`}
+                      >
+                        {step.label}
+                      </span>
+                    </button>
+                    {!isLast && (
+                      <div className="mt-[17px] flex-1 px-1" aria-hidden="true">
+                        <div className="h-[2px] w-full rounded-full bg-[var(--km-line)] overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${isDone ? "bg-[var(--km-accent)]" : "bg-[var(--km-alert-border)]"}`}
+                            style={{ width: isDone ? "100%" : isActive ? "35%" : "0%" }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
           </nav>
         )}
 
         {errorMessage && (
-          <div className="mx-4 mt-3 flex shrink-0 items-start gap-2.5 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-xs font-semibold text-rose-300 sm:mx-5" role="alert" id="cart-checkout-error">
+          <div className="mx-4 mt-3 flex shrink-0 items-start gap-2.5 rounded-2xl border border-rose-500/30 bg-rose-500/10 p-3.5 text-xs font-semibold text-rose-500 dark:text-rose-300 sm:mx-5" role="alert" id="cart-checkout-error">
             <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
             <span>{errorMessage}</span>
           </div>
         )}
 
         {draftRestoreIssues.length > 0 && (
-          <div className="mx-4 mt-3 flex shrink-0 items-start justify-between gap-2.5 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3.5 text-xs text-amber-200 sm:mx-5" role="status" id="cart-draft-restore-notice">
+          <div className="mx-4 mt-3 flex shrink-0 items-start justify-between gap-2.5 rounded-2xl border border-[var(--km-line)] bg-[var(--km-raised)] p-3.5 text-xs text-[var(--km-ink)] sm:mx-5" role="status" id="cart-draft-restore-notice">
             <div className="flex items-start gap-2 min-w-0">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--km-accent-text)]" aria-hidden="true" />
               <div className="min-w-0 space-y-1">
-                <p className="font-bold text-koma-foreground">Sua sacola foi atualizada com o cardápio atual</p>
-                <ul className="list-disc pl-4 space-y-0.5 text-[11px] leading-relaxed text-koma-muted">
+                <p className="font-bold text-[var(--km-ink)]">Sua sacola foi atualizada</p>
+                <ul className="list-disc pl-4 space-y-0.5 text-[11px] leading-relaxed text-[var(--km-muted)]">
                   {draftRestoreIssues.slice(0, 3).map((issue) => (
                     <li key={issue}>{issue}</li>
                   ))}
@@ -899,7 +1047,7 @@ export default function CardapioCartDrawer({
                 type="button"
                 onClick={onDismissDraftRestoreIssues}
                 aria-label="Dispensar aviso de atualização da sacola"
-                className="min-h-9 min-w-9 grid place-items-center rounded-lg text-koma-muted hover:text-koma-foreground shrink-0 cursor-pointer"
+                className="min-h-9 min-w-9 grid place-items-center rounded-lg text-[var(--km-muted)] hover:text-[var(--km-ink)] shrink-0 cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -909,29 +1057,20 @@ export default function CardapioCartDrawer({
 
         {cart.length === 0 ? (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-start p-6 text-center overflow-y-auto no-scrollbar">
-            {/* Cloche Illustration */}
             <div className="mt-6 flex flex-col items-center">
-              <div className="relative grid h-20 w-20 place-items-center rounded-3xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-400 shadow-lg shadow-emerald-950/30">
-                <svg className="w-10 h-10" viewBox="0 0 48 48" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M24 10v4" />
-                  <path d="M21 10a3 3 0 1 1 6 0" />
-                  <path d="M8 34c0-8.837 7.163-16 16-16s16 7.163 16 16H8z" />
-                  <line x1="6" y1="38" x2="42" y2="38" />
-                  <line x1="16" y1="28" x2="16.01" y2="28" strokeWidth="3" />
-                  <line x1="32" y1="28" x2="32.01" y2="28" strokeWidth="3" />
-                </svg>
-              </div>
-              <h3 className="mt-5 font-serif text-xl font-bold text-koma-foreground">Sua sacola está vazia</h3>
-              <p className="mt-1.5 max-w-[280px] text-xs leading-relaxed text-koma-muted">
-                Escolha suas delícias favoritas no cardápio para começar seu pedido gastronômico.
+              <KomaBagAsset className="h-20 w-20" />
+              <h3 className="mt-4 font-display text-xl font-black text-[var(--km-ink)]">Sua sacola está vazia</h3>
+              <p className="mt-1.5 max-w-[260px] text-xs leading-relaxed text-[var(--km-muted)]">
+                Escolha seus itens no cardápio para começar o pedido.
               </p>
             </div>
 
             {emptyCartSuggestions.length > 0 && (
-              <div className="mt-8 w-full text-left">
-                <div className="flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-emerald-400 mb-3">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Destaques da Casa</span>
+              <div className="mt-7 w-full text-left">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-[var(--km-accent-text)]">
+                    Destaques da Casa
+                  </span>
                 </div>
                 <div className="space-y-2.5">
                   {emptyCartSuggestions.map((prod) => {
@@ -943,30 +1082,30 @@ export default function CardapioCartDrawer({
                       return (
                         <div
                           key={prod.id}
-                          className="koma-art-cart-item-card"
+                          className="flex items-center justify-between gap-3 rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-3"
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             <img
                               src={getProductImageUrl(prod.image)}
                               alt={prod.name}
-                              className="koma-art-cart-thumb !w-13 !h-13"
+                              className="h-13 w-13 shrink-0 rounded-xl object-cover bg-[var(--km-raised)]"
                               onError={(e) => {
                                 e.currentTarget.onerror = null;
                                 e.currentTarget.src = LOCAL_PRODUCT_PLACEHOLDER;
                               }}
                             />
                             <div className="min-w-0">
-                              <h4 className="text-xs font-bold text-koma-foreground truncate">{prod.name}</h4>
-                              <span className="font-serif text-xs font-black text-emerald-400">{isGroupedProduct(prod) && prod.hasVariablePrice ? 'A partir de ' : ''}{formatPrice(prod.price)}</span>
+                              <h4 className="text-xs font-bold text-[var(--km-ink)] truncate">{prod.name}</h4>
+                              <span className="font-display text-xs font-black text-[var(--km-accent-text)] tabular-nums">{isGroupedProduct(prod) && prod.hasVariablePrice ? 'A partir de ' : ''}{formatPrice(prod.price)}</span>
                             </div>
                           </div>
                           <button
                             type="button"
                             onClick={() => handleSuggestedProductAction(prod)}
-                            className="flex items-center gap-1 px-3.5 py-2 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-black shrink-0 transition-all shadow-md shadow-emerald-950/30 cursor-pointer"
+                            className="flex items-center gap-1 px-3.5 py-2 rounded-full bg-[var(--km-accent)] hover:bg-[var(--km-accent-hover)] text-[var(--km-on-accent)] text-xs font-black shrink-0 transition cursor-pointer"
                           >
                             <Plus className="w-3.5 h-3.5" />
-                            <span>{isGroupedProduct(prod) ? "Escolher opção" : hasModifiers ? "Montar" : "Adicionar"}</span>
+                            <span>{isGroupedProduct(prod) ? "Opções" : hasModifiers ? "Montar" : "Adicionar"}</span>
                           </button>
                         </div>
                       );
@@ -978,9 +1117,9 @@ export default function CardapioCartDrawer({
             <button
               type="button"
               onClick={onClose}
-              className="mt-8 w-full rounded-full border border-white/15 bg-white/5 hover:bg-white/10 py-3.5 text-xs font-bold text-koma-foreground transition cursor-pointer"
+              className="mt-7 w-full rounded-full border border-[var(--km-line)] bg-[var(--km-raised)] hover:border-[var(--km-accent-border)] py-3.5 text-xs font-bold text-[var(--km-ink)] transition cursor-pointer"
             >
-              Explorar todo o cardápio
+              Ver cardápio
             </button>
           </div>
         ) : (
@@ -988,7 +1127,7 @@ export default function CardapioCartDrawer({
             <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-5 no-scrollbar">
               {/* Status Alert */}
               {!orderingEnabled && (
-                <div className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-[10px] font-semibold leading-relaxed text-amber-300">
+                <div className="flex items-start gap-2 rounded-2xl border border-rose-500/25 bg-rose-500/10 p-3 text-xs font-semibold leading-relaxed text-rose-500 dark:text-rose-300">
                   <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                   <span>{orderingMessage}</span>
                 </div>
@@ -996,21 +1135,21 @@ export default function CardapioCartDrawer({
 
               {/* Free Delivery Banner Progress */}
               {freeDeliveryThreshold > 0 && deliveryMethod === "delivery" && (
-                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs">
+                <div className="rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] p-3 text-xs">
                   {subtotal >= freeDeliveryThreshold ? (
-                    <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                      <Sparkles className="w-4 h-4 shrink-0" />
-                      <span>Parabéns! Você ganhou Frete Grátis neste pedido!</span>
+                    <div className="flex items-center gap-2 text-[var(--km-accent-text)] font-bold">
+                      <CheckCircle2 className="w-4 h-4 shrink-0" />
+                      <span>Frete grátis liberado neste pedido!</span>
                     </div>
                   ) : (
                     <div>
-                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs font-semibold text-koma-foreground mb-1.5">
-                        <span>Adicione mais <strong>{formatPrice(freeDeliveryThreshold - subtotal)}</strong></span>
-                        <span className="text-emerald-400 font-bold">Frete Grátis</span>
+                      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs font-semibold text-[var(--km-ink)] mb-1.5">
+                        <span>Faltam <strong className="tabular-nums">{formatPrice(freeDeliveryThreshold - subtotal)}</strong></span>
+                        <span className="text-[var(--km-accent-text)] font-bold">Frete grátis</span>
                       </div>
-                      <div className="w-full h-1.5 bg-koma-card rounded-full overflow-hidden">
+                      <div className="w-full h-1.5 bg-[var(--km-raised)] rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                          className="h-full bg-[var(--km-accent)] rounded-full transition-all duration-300"
                           style={{ width: `${Math.min(100, (subtotal / freeDeliveryThreshold) * 100)}%` }}
                         />
                       </div>
@@ -1028,12 +1167,12 @@ export default function CardapioCartDrawer({
                       onClick={() => navigateToStep("cart-items")}
                       aria-expanded={activeSection === "cart-items"}
                       aria-controls="cart-items-content"
-                      className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted"
+                      className="min-h-10 w-full text-left text-xs font-black uppercase tracking-wider text-[var(--km-muted)] cursor-pointer"
                     >
-                      {getStepHeading("cart-items", "1. Seu pedido")}
+                      {getStepHeading("cart-items", "Seu pedido")}
                     </button>
                   </h3>
-                  <span className="text-xs font-bold text-koma-subtle">{itemCount} {itemCount === 1 ? "item" : "itens"}</span>
+                  <span className="text-xs font-bold text-[var(--km-subtle)] tabular-nums">{itemCount} {itemCount === 1 ? "item" : "itens"}</span>
                 </div>
                 <div id="cart-items-content" hidden={activeSection !== "cart-items"}>
                 <div className="space-y-3">
@@ -1046,12 +1185,17 @@ export default function CardapioCartDrawer({
                     });
 
                     const itemDrift = cartCatalogDrift.get(item.id);
+                    const hasEditableComposition = Boolean(
+                      item.promotionId ||
+                      item.product.modifiers?.length ||
+                      item.product.modifierGroups?.length
+                    );
                     return (
-                      <div key={item.id} className="koma-art-cart-item-card" id={`cart-item-${item.id}`}>
+                      <div key={item.id} className="flex items-start gap-3 rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-3.5" id={`cart-item-${item.id}`}>
                         <img
                           src={getProductImageUrl(item.product.image)}
                           alt={item.product.name}
-                          className="koma-art-cart-thumb"
+                          className="h-16 w-16 shrink-0 rounded-xl object-cover bg-[var(--km-raised)]"
                           crossOrigin="anonymous"
                           referrerPolicy="no-referrer"
                           onError={(event) => {
@@ -1060,48 +1204,60 @@ export default function CardapioCartDrawer({
                           }}
                         />
                         <div className="min-w-0 flex-1">
-                          <h4 className="text-sm font-bold text-koma-foreground">{item.quantity}× {item.product.name}</h4>
+                          <h4 className="text-sm font-bold text-[var(--km-ink)] leading-snug">{item.quantity}× {item.product.name}</h4>
                           {item.promotionParts ? (
-                            <div className="mt-2 space-y-2 text-xs text-koma-muted">
+                            <div className="mt-2 space-y-2 text-xs text-[var(--km-muted)]">
                               {item.promotionParts.map((part, index) => (
-                                <div key={index} className="rounded-xl border border-white/10 p-2 bg-white/[0.02]">
-                                  <strong className="text-koma-foreground">{part.product.name}</strong>
+                                <div key={index} className="rounded-xl border border-[var(--km-line-subtle)] p-2 bg-[var(--km-panel)]">
+                                  <strong className="text-[var(--km-ink)]">{part.product.name}</strong>
                                   <p>{Object.values(part.selectedOptions).flat().map(option => option.name).join(', ') || 'Sem adicionais'}</p>
                                   {part.notes && <p>Obs.: {part.notes}</p>}
                                 </div>
                               ))}
                             </div>
-                          ) : <OrderItemComposition item={cardapioCompositionSource(item)} className="mt-1 text-koma-muted text-xs" />}
+                          ) : <OrderItemComposition item={cardapioCompositionSource(item)} className="mt-1 text-[var(--km-muted)] text-xs" />}
                           {itemDrift && (
                             <div
                               id={`cart-item-drift-${item.id}`}
                               role="status"
                               className={`mt-2 flex items-start gap-2 rounded-xl border p-2.5 text-[11px] font-semibold leading-relaxed ${
                                 itemDrift.canEdit
-                                  ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
-                                  : "border-rose-500/30 bg-rose-500/10 text-rose-300"
+                                  ? "border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] text-[var(--km-accent-text)]"
+                                  : "border-rose-500/30 bg-rose-500/10 text-rose-500 dark:text-rose-300"
                               }`}
                             >
                               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                               <span>{itemDrift.message}</span>
                             </div>
                           )}
-                          {onEditItem && (!itemDrift || itemDrift.canEdit) && <button type="button" onClick={() => onEditItem(item)} className="mt-2 min-h-11 text-xs font-bold text-emerald-400 hover:text-emerald-300" aria-label={`Editar montagem de ${item.product.name}`}>Editar montagem</button>}
-                          {onComposeAnother && (Boolean(item.promotionId) || Boolean(item.product.modifiers?.length || item.product.modifierGroups?.length)) && <button type="button" onClick={() => onComposeAnother(item)} className="mt-2 block min-h-11 text-xs font-bold text-emerald-400 hover:text-emerald-300" aria-label={`Montar outra diferente de ${item.product.name}`}>Montar outra diferente</button>}
-                          {item.notes && <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-amber-400">Obs.: {item.notes}</p>}
-                          {item.quantity > 1 && <p className="mt-1 text-xs text-koma-muted">{formatPrice(unitPrice)} cada · Mesma montagem</p>}
-                          <strong className="mt-2 block font-serif text-sm font-black text-emerald-400">{formatPrice(unitPrice * item.quantity)}</strong>
+                          {onEditItem && hasEditableComposition && (!itemDrift || itemDrift.canEdit) && (
+                            <button type="button" onClick={() => onEditItem(item)} className="mt-1.5 inline-flex min-h-9 items-center text-xs font-bold text-[var(--km-accent-text)] hover:underline cursor-pointer" aria-label={`Editar montagem de ${item.product.name}`}>
+                              Editar montagem
+                            </button>
+                          )}
+                          {onComposeAnother && hasEditableComposition && (
+                            <button type="button" onClick={() => onComposeAnother(item)} className="mt-1 block min-h-9 text-xs font-bold text-[var(--km-accent-text)] hover:underline cursor-pointer" aria-label={`Montar outra diferente de ${item.product.name}`}>
+                              Montar outra diferente
+                            </button>
+                          )}
+                          {item.notes && (
+                            <p className="mt-1.5 inline-block rounded-lg bg-[var(--km-raised)] px-2 py-0.5 line-clamp-2 text-[11px] leading-relaxed text-[var(--km-ink-2)]">
+                              Obs.: {item.notes}
+                            </p>
+                          )}
+                          {item.quantity > 1 && <p className="mt-1 text-[11px] text-[var(--km-muted)] tabular-nums">{formatPrice(unitPrice)} cada</p>}
+                          <strong className="mt-1.5 block font-display text-sm font-black text-[var(--km-accent-text)] tabular-nums">{formatPrice(unitPrice * item.quantity)}</strong>
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-2.5">
-                          <button type="button" onClick={() => onRemoveItem(item.id)} className="grid h-8 w-8 place-items-center rounded-xl text-koma-muted transition hover:bg-rose-500/10 hover:text-rose-400 cursor-pointer" aria-label={`Remover ${item.product.name}`}>
+                          <button type="button" onClick={() => onRemoveItem(item.id)} className="grid h-8 w-8 place-items-center rounded-xl text-[var(--km-muted)] transition hover:bg-rose-500/10 hover:text-rose-400 cursor-pointer" aria-label={`Remover ${item.product.name}`}>
                             <Trash2 className="h-4 w-4" />
                           </button>
-                          <div className="koma-art-stepper-pill">
-                            <button type="button" onClick={() => (onAdjustQty ? onAdjustQty(item.id, -1) : onUpdateQty(item.id, item.quantity - 1))} className="koma-art-stepper-btn !w-7 !h-7 hover:text-rose-400" aria-label={`Diminuir ${item.product.name}`}>
+                          <div className="flex items-center gap-1 rounded-full border border-[var(--km-line)] bg-[var(--km-raised)] p-0.5">
+                            <button type="button" onClick={() => (onAdjustQty ? onAdjustQty(item.id, -1) : onUpdateQty(item.id, item.quantity - 1))} className="grid h-7 w-7 place-items-center rounded-full text-[var(--km-ink-2)] transition hover:bg-[var(--km-card)] hover:text-rose-400 cursor-pointer" aria-label={`Diminuir ${item.product.name}`}>
                               <Minus className="h-3 w-3" />
                             </button>
-                            <span className="koma-art-stepper-val !min-w-[24px] !text-xs">{item.quantity}</span>
-                            <button type="button" onClick={() => (onAdjustQty ? onAdjustQty(item.id, 1) : onUpdateQty(item.id, item.quantity + 1))} className="koma-art-stepper-btn !w-7 !h-7 hover:text-emerald-400" aria-label={`Aumentar ${item.product.name}`}>
+                            <span className="min-w-[22px] text-center text-xs font-black text-[var(--km-ink)] tabular-nums">{item.quantity}</span>
+                            <button type="button" onClick={() => (onAdjustQty ? onAdjustQty(item.id, 1) : onUpdateQty(item.id, item.quantity + 1))} className="grid h-7 w-7 place-items-center rounded-full text-[var(--km-ink-2)] transition hover:bg-[var(--km-card)] hover:text-[var(--km-accent-text)] cursor-pointer" aria-label={`Aumentar ${item.product.name}`}>
                               <Plus className="h-3 w-3" />
                             </button>
                           </div>
@@ -1115,10 +1271,12 @@ export default function CardapioCartDrawer({
 
               {/* Upselling / Cross-selling Carousel */}
               {activeSection === "cart-items" && upsellSuggestions.length > 0 && onAddToCart && (
-                <section className="border-t border-white/10 pt-4" aria-label="Sugestões para acompanhar">
-                  <div className="flex items-center gap-1.5 mb-2.5">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.12em] text-koma-muted">{upsellHeading}</h3>
+                <section className="border-t border-[var(--km-line-subtle)] pt-4" aria-label="Sugestões para acompanhar">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="grid h-6 w-6 place-items-center rounded-lg bg-[var(--km-accent-soft)] text-[var(--km-accent-text)]">
+                      <Plus className="w-3.5 h-3.5" aria-hidden="true" />
+                    </span>
+                    <h3 className="text-[11px] font-black uppercase tracking-wider text-[var(--km-ink-2)]">{upsellHeading}</h3>
                   </div>
                   <div className="flex gap-2.5 overflow-x-auto pb-2 no-scrollbar">
                     {upsellSuggestions.map((prod) => {
@@ -1139,44 +1297,44 @@ export default function CardapioCartDrawer({
                         <div
                           key={prod.id}
                           id={`upsell-card-${prod.id}`}
-                          className="min-w-[145px] max-w-[145px] bg-white/[0.03] border border-white/10 rounded-2xl p-2.5 flex flex-col justify-between shrink-0"
+                          className="min-w-[144px] max-w-[144px] bg-[var(--km-card)] border border-[var(--km-line)] rounded-2xl p-2.5 flex flex-col justify-between shrink-0"
                         >
                           <img
                             src={getProductImageUrl(prod.image)}
                             alt={prod.name}
-                            className="h-18 w-full rounded-xl object-cover mb-2"
+                            className="h-18 w-full rounded-xl object-cover mb-2 bg-[var(--km-raised)]"
                             onError={(e) => {
                               e.currentTarget.onerror = null;
                               e.currentTarget.src = LOCAL_PRODUCT_PLACEHOLDER;
                             }}
                           />
                           <div>
-                            <h4 className="text-xs font-bold text-koma-foreground line-clamp-1">{prod.name}</h4>
-                            <span className="font-serif text-xs font-black text-emerald-400 block mt-0.5">{grouped && prod.hasVariablePrice ? 'A partir de ' : ''}{formatPrice(prod.price)}</span>
+                            <h4 className="text-xs font-bold text-[var(--km-ink)] line-clamp-1">{prod.name}</h4>
+                            <span className="font-display text-xs font-black text-[var(--km-accent-text)] block mt-0.5 tabular-nums">{grouped && prod.hasVariablePrice ? 'A partir de ' : ''}{formatPrice(prod.price)}</span>
                           </div>
 
                           {!isAvailable ? (
-                            <span className="mt-2.5 w-full py-1 px-2 text-center text-[10px] font-bold text-stone-500 bg-white/5 rounded-full">
+                            <span className="mt-2.5 w-full py-1 px-2 text-center text-[10px] font-bold text-[var(--km-muted)] bg-[var(--km-raised)] rounded-full">
                               Indisponível
                             </span>
                           ) : qty > 0 && !hasModifiers ? (
-                            <div className="mt-2.5 flex items-center justify-between w-full rounded-full bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-1">
+                            <div className="mt-2.5 flex items-center justify-between w-full rounded-full bg-[var(--km-accent-soft)] border border-[var(--km-accent-border)] px-1.5 py-1">
                               <button
                                 type="button"
                                 onClick={() => (onAdjustQty ? onAdjustQty(cartItem!.id, -1) : onUpdateQty(cartItem!.id, qty - 1))}
-                                className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-emerald-500/30 text-emerald-300 cursor-pointer"
+                                className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-[var(--km-card)] text-[var(--km-accent-text)] cursor-pointer"
                                 aria-label={`Diminuir ${prod.name}`}
                                 id={`btn-upsell-dec-${prod.id}`}
                               >
                                 <Minus className="w-3 h-3" />
                               </button>
-                              <span className="font-mono text-xs font-black text-emerald-300" id={`upsell-qty-${prod.id}`}>
+                              <span className="text-xs font-black text-[var(--km-accent-text)] tabular-nums" id={`upsell-qty-${prod.id}`}>
                                 {qty}
                               </span>
                               <button
                                 type="button"
                                 onClick={() => (onAdjustQty ? onAdjustQty(cartItem!.id, 1) : onUpdateQty(cartItem!.id, qty + 1))}
-                                className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-emerald-500/30 text-emerald-300 cursor-pointer"
+                                className="w-5 h-5 rounded-full flex items-center justify-center hover:bg-[var(--km-card)] text-[var(--km-accent-text)] cursor-pointer"
                                 aria-label={`Aumentar ${prod.name}`}
                                 id={`btn-upsell-inc-${prod.id}`}
                               >
@@ -1187,22 +1345,22 @@ export default function CardapioCartDrawer({
                             <button
                               type="button"
                               onClick={() => handleSuggestedProductAction(prod)}
-                              className="mt-2.5 w-full py-1.5 px-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 rounded-full text-[10px] font-black flex items-center justify-center gap-1 transition cursor-pointer"
+                              className="mt-2.5 w-full py-1.5 px-2 bg-[var(--km-accent-soft)] text-[var(--km-accent-text)] border border-[var(--km-accent-border)] rounded-full text-[10px] font-black flex items-center justify-center gap-1 transition cursor-pointer"
                               id={`btn-upsell-edit-${prod.id}`}
                               aria-label={`Montar outra ${prod.name}`}
                             >
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                              <span>{grouped ? "Escolher opção" : `Montar outra (${qty})`}</span>
+                              <span className="w-1.5 h-1.5 rounded-full bg-[var(--km-accent)] shrink-0" />
+                              <span>{grouped ? "Opções" : `Outra (${qty})`}</span>
                             </button>
                           ) : (
                             <button
                               type="button"
                               onClick={() => handleSuggestedProductAction(prod)}
-                              className="mt-2.5 w-full py-1.5 px-2 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 rounded-full text-[10px] font-black flex items-center justify-center gap-1 transition cursor-pointer"
+                              className="mt-2.5 w-full py-1.5 px-2 bg-[var(--km-accent-soft)] hover:bg-[var(--km-accent)] hover:text-[var(--km-on-accent)] text-[var(--km-accent-text)] border border-[var(--km-accent-border)] rounded-full text-[10px] font-black flex items-center justify-center gap-1 transition cursor-pointer"
                               id={`btn-upsell-add-${prod.id}`}
                               aria-label={`Adicionar ${prod.name}`}
                             >
-                              <Plus className="w-3 h-3" /> {grouped ? "Escolher opção" : hasModifiers ? "Montar" : "Adicionar"}
+                              <Plus className="w-3 h-3" /> {grouped ? "Opções" : hasModifiers ? "Montar" : "Adicionar"}
                             </button>
                           )}
                         </div>
@@ -1213,57 +1371,218 @@ export default function CardapioCartDrawer({
               )}
 
               {/* Section 2: Delivery Method & Address */}
-              <section className="border-t border-white/10 pt-5" id="cart-receive-methods" tabIndex={-1} aria-describedby={invalidField === "cart-receive-methods" ? "cart-checkout-error" : undefined}>
+              <section className="border-t border-[var(--km-line-subtle)] pt-4" id="cart-receive-methods" tabIndex={-1} aria-describedby={invalidField === "cart-receive-methods" ? "cart-checkout-error" : undefined}>
                 <h3>
                   <button
                     type="button"
                     onClick={() => navigateToStep("cart-receive-methods")}
                     aria-expanded={activeSection === "cart-receive-methods"}
                     aria-controls="cart-receive-methods-content"
-                    className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted"
+                    className="min-h-10 w-full text-left text-xs font-black uppercase tracking-wider text-[var(--km-muted)] cursor-pointer"
                   >
-                    {getStepHeading("cart-receive-methods", "2. Como quer receber?")}
+                    {getStepHeading("cart-receive-methods", "Como receber")}
                   </button>
                 </h3>
                 <div id="cart-receive-methods-content" hidden={activeSection !== "cart-receive-methods"}>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <button type="button" disabled={!pickupEnabled} aria-pressed={deliveryMethod === "pickup"} onClick={() => { if (pickupEnabled) setDeliveryMethod("pickup"); clearValidation("cart-receive-methods"); }} className={`koma-art-mode-card ${deliveryMethod === "pickup" ? "is-selected" : ""} disabled:cursor-not-allowed disabled:opacity-50`}>
-                    <span className="flex items-center justify-between gap-1"><ShoppingBag className={deliveryMethod === "pickup" ? "h-5 w-5 text-emerald-400" : "h-5 w-5 text-koma-muted"} />{deliveryMethod === "pickup" && <CheckCircle2 className="h-4 w-4 text-emerald-400" aria-hidden="true" />}</span>
-                    <strong className="mt-2 block text-xs font-black text-koma-foreground sm:text-sm">Retirada</strong>
-                    <span className="mt-1 block text-[10px] leading-relaxed text-koma-muted">{pickupEnabled ? "Buscar no restaurante" : "Indisponível no momento"}</span>
+                <div className="mt-2.5 grid grid-cols-3 gap-2.5">
+                  <button
+                    type="button"
+                    disabled={!pickupEnabled}
+                    aria-pressed={deliveryMethod === "pickup"}
+                    onClick={() => { if (pickupEnabled) setDeliveryMethod("pickup"); clearValidation("cart-receive-methods"); }}
+                    className={`relative flex min-h-[82px] flex-col items-center justify-center gap-1.5 rounded-2xl border p-3 text-center transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-45 ${
+                      deliveryMethod === "pickup"
+                        ? "border-[var(--km-accent)] bg-[var(--km-accent-soft)] text-[var(--km-ink)] ring-2 ring-[var(--km-accent-soft)]"
+                        : "border-[var(--km-line)] bg-[var(--km-card)] text-[var(--km-ink-2)] hover:border-[var(--km-line-strong)]"
+                    }`}
+                  >
+                    {deliveryMethod === "pickup" && (
+                      <CheckCircle2 className="absolute right-2 top-2 h-4 w-4 text-[var(--km-accent-text)]" aria-hidden="true" />
+                    )}
+                    <KomaPickupAsset className="h-10 w-10 shrink-0" />
+                    <strong className="text-xs font-black leading-tight text-[var(--km-ink)]">Retirada</strong>
+                    <span className="text-[10px] leading-tight text-[var(--km-muted)]">{pickupEnabled ? "No balcão" : "Indisponível"}</span>
                   </button>
-                  <button type="button" disabled={!dineInEnabled} aria-pressed={deliveryMethod === "dine_in"} onClick={() => { if (dineInEnabled) setDeliveryMethod("dine_in"); clearValidation("cart-receive-methods"); }} className={`koma-art-mode-card ${deliveryMethod === "dine_in" ? "is-selected" : ""} disabled:cursor-not-allowed disabled:opacity-50`}>
-                    <span className="flex items-center justify-between gap-1"><Store className={deliveryMethod === "dine_in" ? "h-5 w-5 text-emerald-400" : "h-5 w-5 text-koma-muted"} />{deliveryMethod === "dine_in" && <CheckCircle2 className="h-4 w-4 text-emerald-400" aria-hidden="true" />}</span>
-                    <strong className="mt-2 block text-xs font-black text-koma-foreground sm:text-sm">Consumo local</strong>
-                    <span className="mt-1 block text-[10px] leading-relaxed text-koma-muted">{dineInEnabled ? "Comer no restaurante" : "Indisponível no momento"}</span>
+
+                  <button
+                    type="button"
+                    disabled={!dineInEnabled}
+                    aria-pressed={deliveryMethod === "dine_in"}
+                    onClick={() => { if (dineInEnabled) setDeliveryMethod("dine_in"); clearValidation("cart-receive-methods"); }}
+                    className={`relative flex min-h-[82px] flex-col items-center justify-center gap-1.5 rounded-2xl border p-3 text-center transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-45 ${
+                      deliveryMethod === "dine_in"
+                        ? "border-[var(--km-accent)] bg-[var(--km-accent-soft)] text-[var(--km-ink)] ring-2 ring-[var(--km-accent-soft)]"
+                        : "border-[var(--km-line)] bg-[var(--km-card)] text-[var(--km-ink-2)] hover:border-[var(--km-line-strong)]"
+                    }`}
+                  >
+                    {deliveryMethod === "dine_in" && (
+                      <CheckCircle2 className="absolute right-2 top-2 h-4 w-4 text-[var(--km-accent-text)]" aria-hidden="true" />
+                    )}
+                    <KomaDineInAsset className="h-10 w-10 shrink-0" />
+                    <strong className="text-xs font-black leading-tight text-[var(--km-ink)]">No local</strong>
+                    <span className="text-[10px] leading-tight text-[var(--km-muted)]">{dineInEnabled ? "Na mesa" : "Indisponível"}</span>
                   </button>
-                  <button type="button" disabled={!deliveryEnabled} aria-pressed={deliveryMethod === "delivery"} onClick={() => { if (deliveryEnabled) setDeliveryMethod("delivery"); clearValidation("cart-receive-methods"); }} className={`koma-art-mode-card ${deliveryMethod === "delivery" ? "is-selected" : ""} disabled:cursor-not-allowed disabled:opacity-50`}>
-                    <span className="flex items-center justify-between gap-1"><Truck className={deliveryMethod === "delivery" ? "h-5 w-5 text-emerald-400" : "h-5 w-5 text-koma-muted"} />{deliveryMethod === "delivery" && <CheckCircle2 className="h-4 w-4 text-emerald-400" aria-hidden="true" />}</span>
-                    <strong className="mt-2 block text-xs font-black text-koma-foreground sm:text-sm">Entrega</strong>
-                    <span className="mt-1 block text-[10px] leading-relaxed text-koma-muted">{deliveryEnabled ? deliveryLabel : "Indisponível no momento"}</span>
+
+                  <button
+                    type="button"
+                    disabled={!deliveryEnabled}
+                    aria-pressed={deliveryMethod === "delivery"}
+                    onClick={() => { if (deliveryEnabled) setDeliveryMethod("delivery"); clearValidation("cart-receive-methods"); }}
+                    className={`relative flex min-h-[82px] flex-col items-center justify-center gap-1.5 rounded-2xl border p-3 text-center transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-45 ${
+                      deliveryMethod === "delivery"
+                        ? "border-[var(--km-accent)] bg-[var(--km-accent-soft)] text-[var(--km-ink)] ring-2 ring-[var(--km-accent-soft)]"
+                        : "border-[var(--km-line)] bg-[var(--km-card)] text-[var(--km-ink-2)] hover:border-[var(--km-line-strong)]"
+                    }`}
+                  >
+                    {deliveryMethod === "delivery" && (
+                      <CheckCircle2 className="absolute right-2 top-2 h-4 w-4 text-[var(--km-accent-text)]" aria-hidden="true" />
+                    )}
+                    <KomaDeliveryAsset className="h-10 w-10 shrink-0" />
+                    <strong className="text-xs font-black leading-tight text-[var(--km-ink)]">Entrega</strong>
+                    <span className="text-[10px] leading-tight text-[var(--km-muted)] truncate max-w-full">
+                      {deliveryEnabled ? (deliveryQuote.fee === 0 ? "Grátis" : formatPrice(deliveryQuote.fee)) : "Indisponível"}
+                    </span>
                   </button>
                 </div>
 
                 {deliveryMethod === "dine_in" && (
-                  <div className="mt-3 flex items-start gap-2.5 rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] p-3.5">
-                    <Store className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                  <div className="mt-3 flex items-start gap-2.5 rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] p-3.5">
+                    <Store className="mt-0.5 h-4 w-4 shrink-0 text-[var(--km-accent-text)]" />
                     <div className="min-w-0 text-xs leading-relaxed">
-                      <strong className="text-koma-foreground font-bold">Para consumir no local</strong>
-                      <p className="mt-1 text-koma-muted">Você pode pedir antes de chegar. O restaurante pode associar seu pedido a uma mesa depois.</p>
-                      {restaurantAddress && <p className="mt-1 break-words text-koma-subtle text-[11px]">{restaurantAddress}</p>}
+                      <strong className="text-[var(--km-ink)] font-bold">Consumo no local</strong>
+                      <p className="mt-0.5 text-[var(--km-muted)]">Peça agora e retire ou aguarde na mesa.</p>
+                      {restaurantAddress && <p className="mt-1 break-words text-[var(--km-subtle)] text-[11px]">{restaurantAddress}</p>}
                     </div>
                   </div>
                 )}
 
                 {deliveryMethod === "pickup" && restaurantAddress && (
-                  <div className="mt-3 flex items-start gap-2.5 rounded-2xl border border-white/10 bg-white/[0.03] p-3.5">
-                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-                    <div className="min-w-0 text-xs leading-relaxed"><strong className="text-koma-foreground font-bold">Local de retirada</strong><p className="mt-1 break-words text-koma-muted text-[11px]">{restaurantAddress}</p></div>
+                  <div className="mt-3 flex items-start gap-2.5 rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-3.5">
+                    <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[var(--km-accent-text)]" />
+                    <div className="min-w-0 text-xs leading-relaxed"><strong className="text-[var(--km-ink)] font-bold">Local de retirada</strong><p className="mt-0.5 break-words text-[var(--km-muted)] text-[11px]">{restaurantAddress}</p></div>
                   </div>
                 )}
 
                 {deliveryMethod === "delivery" && (
                   <div className="mt-3 space-y-3">
+                    {neighborhoodFees.length > 0 && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="block text-[10px] font-bold uppercase tracking-wider text-[var(--km-muted)]">
+                            Bairro para entrega
+                          </span>
+                          {selectedNeighborhoodItem && (
+                            <span className="rounded-full bg-[var(--km-accent-soft)] border border-[var(--km-accent-border)] px-2.5 py-0.5 text-[11px] font-black text-[var(--km-accent-text)] tabular-nums">
+                              {selectedNeighborhoodItem.taxa === 0 ? "Entrega grátis" : `Taxa ${formatPrice(selectedNeighborhoodItem.taxa)}`}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="relative">
+                          <MapPin className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--km-accent-text)]" aria-hidden="true" />
+                          <input
+                            type="text"
+                            id="input-search-bairro"
+                            autoComplete="address-level3"
+                            value={selectedBairro}
+                            onFocus={() => setIsBairroPickerOpen(true)}
+                            onChange={(event) => {
+                              const nextVal = event.target.value;
+                              const nextAddress = updateDeliveryAddressGeographicField(deliveryAddressDraft, "bairro", nextVal);
+                              setDeliveryAddressDraft(nextAddress);
+                              setSelectedBairro(nextVal);
+                              setBairroSearch(nextVal);
+                              const snapshot = deliveryAddressDraftToSnapshot(nextAddress);
+                              setAddress(snapshot ? formatDeliveryAddressLegacy(snapshot) : "");
+                              setLegacyAddressHint(null);
+                              setIsBairroPickerOpen(true);
+                              clearValidation("cart-receive-methods");
+                            }}
+                            placeholder="Digite seu bairro para ver a taxa..."
+                            aria-label="Bairro para entrega"
+                            aria-expanded={isBairroPickerOpen}
+                            className="h-12 w-full rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] pl-10 pr-20 text-sm font-semibold text-[var(--km-ink)] outline-none transition placeholder:text-[var(--km-subtle)] focus:border-[var(--km-focus)]"
+                          />
+                          <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                            {selectedBairro && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const nextAddress = updateDeliveryAddressGeographicField(deliveryAddressDraft, "bairro", "");
+                                  setDeliveryAddressDraft(nextAddress);
+                                  setSelectedBairro("");
+                                  setBairroSearch("");
+                                  const snapshot = deliveryAddressDraftToSnapshot(nextAddress);
+                                  setAddress(snapshot ? formatDeliveryAddressLegacy(snapshot) : "");
+                                  setIsBairroPickerOpen(true);
+                                }}
+                                aria-label="Limpar bairro"
+                                className="grid h-7 w-7 place-items-center rounded-full text-[var(--km-muted)] hover:bg-[var(--km-raised)] hover:text-[var(--km-ink)] cursor-pointer"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              id="btn-select-bairro"
+                              onClick={() => setIsBairroPickerOpen((open) => !open)}
+                              aria-label={isBairroPickerOpen ? "Fechar lista de bairros" : "Ver bairros atendidos"}
+                              className="grid h-7 w-7 place-items-center rounded-full text-[var(--km-muted)] hover:bg-[var(--km-raised)] hover:text-[var(--km-ink)] cursor-pointer"
+                            >
+                              <ChevronDown className={`h-4 w-4 transition-transform ${isBairroPickerOpen ? "rotate-180 text-[var(--km-accent-text)]" : ""}`} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {isBairroPickerOpen && (
+                          <div
+                            id="bairro-picker-panel"
+                            className="rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-2 shadow-lg"
+                          >
+                            <div className="max-h-48 overflow-y-auto flex flex-wrap gap-1.5 p-1">
+                              {filteredNeighborhoods.length === 0 ? (
+                                <p className="w-full py-2 text-center text-xs text-[var(--km-muted)]">
+                                  &ldquo;{selectedBairro}&rdquo; não está na lista — será usada a taxa padrão ({formatPrice(deliveryQuote.fee)}).
+                                </p>
+                              ) : (
+                                filteredNeighborhoods.map((item) => {
+                                  const isSelected = selectedBairro.trim().toLowerCase() === item.bairro.trim().toLowerCase();
+                                  return (
+                                    <button
+                                      key={item.bairro}
+                                      type="button"
+                                      onClick={() => {
+                                        const nextAddress = updateDeliveryAddressGeographicField(deliveryAddressDraft, "bairro", item.bairro);
+                                        setDeliveryAddressDraft(nextAddress);
+                                        setSelectedBairro(item.bairro);
+                                        setBairroSearch("");
+                                        const snapshot = deliveryAddressDraftToSnapshot(nextAddress);
+                                        setAddress(snapshot ? formatDeliveryAddressLegacy(snapshot) : "");
+                                        setLegacyAddressHint(null);
+                                        setIsBairroPickerOpen(false);
+                                        clearValidation("cart-receive-methods");
+                                      }}
+                                      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition cursor-pointer ${
+                                        isSelected
+                                          ? "border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] font-bold text-[var(--km-accent-text)]"
+                                          : "border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-ink-2)] hover:border-[var(--km-accent-border)] hover:text-[var(--km-ink)]"
+                                      }`}
+                                    >
+                                      {isSelected && <Check className="h-3 w-3 shrink-0 stroke-[2.75]" aria-hidden="true" />}
+                                      <span>{item.bairro}</span>
+                                      <span className="font-extrabold tabular-nums opacity-85">
+                                        {item.taxa === 0 ? "Grátis" : formatPrice(item.taxa)}
+                                      </span>
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     <DeliveryAddressFields
                       value={deliveryAddressDraft}
                       onChange={(nextAddress) => {
@@ -1274,21 +1593,19 @@ export default function CardapioCartDrawer({
                         setLegacyAddressHint(null);
                         clearValidation("delivery-address-logradouro");
                       }}
-                      neighborhoodOptions={(brandConfig?.tabelaTaxasBairros || []).map((item) => ({
-                        value: item.bairro,
-                        label: `${item.bairro} (${item.taxa === 0 ? "Grátis" : formatPrice(item.taxa)})`,
-                      }))}
+                      neighborhoodOptions={[]}
                       legacyHint={legacyAddressHint}
                       idPrefix="delivery-address"
+                      hideBairroField={neighborhoodFees.length > 0}
                     />
-                    <p className="break-words text-xs leading-relaxed text-koma-muted" aria-live="polite">
+                    <p className="break-words text-xs leading-relaxed text-[var(--km-muted)]" aria-live="polite">
                       {selectedBairro
                         ? (brandConfig?.tabelaTaxasBairros || []).some((item) => item.bairro.toLowerCase() === selectedBairro.trim().toLowerCase())
-                          ? `${selectedBairro}: taxa de ${formatPrice(deliveryQuote.fee)} incluída no resumo.`
-                          : `${selectedBairro}: taxa padrão de ${formatPrice(deliveryQuote.fee)} incluída no resumo.`
+                          ? `${selectedBairro}: taxa de ${formatPrice(deliveryQuote.fee)} incluída.`
+                          : `${selectedBairro}: taxa padrão de ${formatPrice(deliveryQuote.fee)} incluída.`
                         : deliveryQuote.fee === 0
                           ? "Sem taxa de entrega neste pedido."
-                          : `Taxa padrão de ${formatPrice(deliveryQuote.fee)} incluída no resumo.`}
+                          : `Taxa padrão de ${formatPrice(deliveryQuote.fee)} incluída.`}
                     </p>
                   </div>
                 )}
@@ -1296,34 +1613,34 @@ export default function CardapioCartDrawer({
               </section>
 
               {/* Section 3: Cupons & Descontos */}
-              {showDiscounts && <section className="border-t border-white/10 pt-5" id="cart-discounts" tabIndex={-1}>
+              {showDiscounts && <section className="border-t border-[var(--km-line-subtle)] pt-4" id="cart-discounts" tabIndex={-1}>
                 <h3>
                   <button
                     type="button"
                     onClick={() => navigateToStep("cart-discounts")}
                     aria-expanded={activeSection === "cart-discounts"}
                     aria-controls="cart-discounts-content"
-                    className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted"
+                    className="min-h-10 w-full text-left text-xs font-black uppercase tracking-wider text-[var(--km-muted)] cursor-pointer"
                   >
-                    {getStepHeading("cart-discounts", "3. Descontos & Benefícios")}
+                    {getStepHeading("cart-discounts", "Descontos")}
                   </button>
                 </h3>
                 <div id="cart-discounts-content" hidden={activeSection !== "cart-discounts"}>
 
                 {/* Coupon Box */}
                 {couponsEnabled && (appliedCoupon ? (
-                  <div className="flex items-center justify-between p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-xs">
+                  <div className="flex items-center justify-between p-3.5 bg-[var(--km-accent-soft)] border border-[var(--km-accent-border)] rounded-2xl text-xs">
                     <div className="flex items-center gap-2.5">
-                      <Ticket className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <Ticket className="w-4 h-4 text-[var(--km-accent-text)] shrink-0" />
                       <div>
-                        <span className="font-mono font-bold text-emerald-300">{appliedCoupon.codigo}</span>
-                        <p className="text-[10px] text-emerald-400/80 mt-0.5">{appliedCoupon.mensagem} (- {formatPrice(appliedCoupon.desconto)})</p>
+                        <span className="font-mono font-bold text-[var(--km-ink)]">{appliedCoupon.codigo}</span>
+                        <p className="text-[11px] text-[var(--km-accent-text)] mt-0.5">{appliedCoupon.mensagem} (- {formatPrice(appliedCoupon.desconto)})</p>
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={handleRemoveCoupon}
-                      className="p-1 text-koma-muted hover:text-rose-400 rounded-lg cursor-pointer"
+                      className="p-1 text-[var(--km-muted)] hover:text-rose-400 rounded-lg cursor-pointer"
                       title="Remover cupom"
                     >
                       <X className="w-4 h-4" />
@@ -1332,7 +1649,7 @@ export default function CardapioCartDrawer({
                 ) : (
                   <form onSubmit={handleApplyCoupon} className="flex gap-2">
                     <div className="relative flex-1">
-                      <Ticket className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-koma-muted" />
+                      <Ticket className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-[var(--km-muted)]" />
                       <input
                         type="text"
                         placeholder="Código do cupom..."
@@ -1344,32 +1661,32 @@ export default function CardapioCartDrawer({
                           if (!nextCode.trim()) setPendingCouponAfterPhone(false);
                         }}
                         aria-label="Código do cupom"
-                        className="min-h-12 w-full pl-10 pr-3 py-2 bg-white/[0.03] border border-white/10 rounded-2xl text-base sm:text-xs font-mono font-bold uppercase text-koma-foreground placeholder:normal-case placeholder:font-normal focus:outline-none focus:border-emerald-500 tracking-wider"
+                        className="min-h-12 w-full pl-10 pr-3 py-2 bg-[var(--km-input)] border border-[var(--km-line)] rounded-2xl text-base sm:text-xs font-mono font-bold uppercase text-[var(--km-ink)] placeholder:normal-case placeholder:font-normal placeholder:text-[var(--km-subtle)] focus:outline-none focus:border-[var(--km-focus)] tracking-wider"
                       />
                     </div>
                     <button
                       type="submit"
                       disabled={validatingCoupon || !couponCode.trim()}
-                      className="px-5 py-2 bg-white/5 hover:bg-emerald-500 hover:text-white border border-white/10 rounded-2xl text-xs font-bold text-koma-foreground transition-all disabled:opacity-40 cursor-pointer"
+                      className="px-5 py-2 bg-[var(--km-raised)] hover:bg-[var(--km-accent)] hover:text-[var(--km-on-accent)] border border-[var(--km-line)] rounded-2xl text-xs font-bold text-[var(--km-ink)] transition-all disabled:opacity-40 cursor-pointer"
                     >
                       {validatingCoupon ? "..." : "Aplicar"}
                     </button>
                   </form>
                 ))}
                 {couponsEnabled && couponError && (
-                  <p className="text-[10px] text-rose-400 font-semibold mt-1.5 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" /> {couponError}
+                  <p className="text-[11px] text-rose-500 dark:text-rose-300 font-semibold mt-1.5 flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5" /> {couponError}
                   </p>
                 )}
 
                 {/* Cashback Toggle (if user has balance) */}
                 {userCashbackBalance > 0 && (
-                  <div className="mt-3 p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl flex items-center justify-between">
+                  <div className="mt-3 p-3.5 bg-[var(--km-accent-soft)] border border-[var(--km-accent-border)] rounded-2xl flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <Coins className="w-4 h-4 text-amber-400 shrink-0" />
+                      <Coins className="w-4 h-4 text-[var(--km-accent-text)] shrink-0" />
                       <div>
-                        <span className="text-xs font-bold text-amber-300">Saldo de Cashback</span>
-                        <p className="text-[10px] text-koma-muted">Você tem {formatPrice(userCashbackBalance)} acumulados</p>
+                        <span className="text-xs font-bold text-[var(--km-ink)]">Saldo de Cashback</span>
+                        <p className="text-[11px] text-[var(--km-muted)] tabular-nums">Disponível: {formatPrice(userCashbackBalance)}</p>
                       </div>
                     </div>
                     <label className="flex items-center gap-2 cursor-pointer">
@@ -1377,9 +1694,9 @@ export default function CardapioCartDrawer({
                         type="checkbox"
                         checked={useCashback}
                         onChange={(e) => setUseCashback(e.target.checked)}
-                        className="rounded border-amber-500 text-amber-500 focus:ring-0"
+                        className="h-4 w-4 rounded accent-[var(--km-accent)]"
                       />
-                      <span className="text-xs font-bold text-amber-300">Usar</span>
+                      <span className="text-xs font-bold text-[var(--km-accent-text)]">Usar</span>
                     </label>
                   </div>
                 )}
@@ -1387,34 +1704,34 @@ export default function CardapioCartDrawer({
               </section>}
 
               {/* Section 4: Forma de Pagamento & Troco */}
-              <section className="border-t border-white/10 pt-5" id="cart-payment-methods" tabIndex={-1} aria-describedby={invalidField === "cart-payment-methods" ? "cart-checkout-error" : undefined}>
+              <section className="border-t border-[var(--km-line-subtle)] pt-4" id="cart-payment-methods" tabIndex={-1} aria-describedby={invalidField === "cart-payment-methods" ? "cart-checkout-error" : undefined}>
                 <h3>
                   <button
                     type="button"
                     onClick={() => navigateToStep("cart-payment-methods")}
                     aria-expanded={activeSection === "cart-payment-methods"}
                     aria-controls="cart-payment-methods-content"
-                    className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted"
+                    className="min-h-10 w-full text-left text-xs font-black uppercase tracking-wider text-[var(--km-muted)] cursor-pointer"
                   >
-                    {getStepHeading("cart-payment-methods", "Como quer pagar?")}
+                    {getStepHeading("cart-payment-methods", "Como pagar")}
                   </button>
                 </h3>
                 <div id="cart-payment-methods-content" hidden={activeSection !== "cart-payment-methods"}>
-                <p className="mt-2 mb-3 text-xs leading-relaxed text-koma-muted">{availablePayments.includes("pix") && "Pix é pago agora e só libera o pedido após confirmação. "}{availablePayments.some(method => method !== "pix") && <>Nas opções presenciais, você paga {deliveryMethod === "delivery" ? "na entrega" : deliveryMethod === "dine_in" ? "no restaurante" : "na retirada"}.</>}</p>
+                <p className="mt-1.5 mb-3 text-xs leading-relaxed text-[var(--km-muted)]">{availablePayments.includes("pix") && "Pix libera o pedido após confirmação. "}{availablePayments.some(method => method !== "pix") && <>Presencial: pague {deliveryMethod === "delivery" ? "na entrega" : deliveryMethod === "dine_in" ? "no restaurante" : "na retirada"}.</>}</p>
 
                 <CardapioPaymentOptions available={availablePayments} selected={paymentDetail} onSelect={selectPayment} />
 
                 {/* Troco Calculator for Dinheiro */}
                 {paymentDetail === "dinheiro" && (
-                  <div className="mt-3.5 p-3.5 bg-white/[0.03] border border-white/10 rounded-2xl space-y-2.5">
+                  <div className="mt-3.5 p-3.5 bg-[var(--km-card)] border border-[var(--km-line)] rounded-2xl space-y-2.5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-xs font-bold text-koma-foreground">Precisa de troco?</span>
+                      <span className="text-xs font-bold text-[var(--km-ink)]">Precisa de troco?</span>
                       <div className="flex gap-2">
                         <button
                           type="button"
                           aria-pressed={!precisaTroco}
                           onClick={() => setPrecisaTroco(false)}
-                          className={`min-h-10 min-w-11 px-3.5 py-1.5 rounded-full text-xs font-bold transition cursor-pointer ${!precisaTroco ? 'bg-emerald-500 text-white shadow-md shadow-emerald-950/30' : 'bg-white/5 border border-white/10 text-koma-muted'}`}
+                          className={`min-h-10 min-w-12 px-4 py-1.5 rounded-full text-xs font-bold transition cursor-pointer ${!precisaTroco ? 'bg-[var(--km-accent)] text-[var(--km-on-accent)]' : 'bg-[var(--km-raised)] border border-[var(--km-line)] text-[var(--km-muted)]'}`}
                         >
                           Não
                         </button>
@@ -1422,7 +1739,7 @@ export default function CardapioCartDrawer({
                           type="button"
                           aria-pressed={precisaTroco}
                           onClick={() => setPrecisaTroco(true)}
-                          className={`min-h-10 min-w-11 px-3.5 py-1.5 rounded-full text-xs font-bold transition cursor-pointer ${precisaTroco ? 'bg-emerald-500 text-white shadow-md shadow-emerald-950/30' : 'bg-white/5 border border-white/10 text-koma-muted'}`}
+                          className={`min-h-10 min-w-12 px-4 py-1.5 rounded-full text-xs font-bold transition cursor-pointer ${precisaTroco ? 'bg-[var(--km-accent)] text-[var(--km-on-accent)]' : 'bg-[var(--km-raised)] border border-[var(--km-line)] text-[var(--km-muted)]'}`}
                         >
                           Sim
                         </button>
@@ -1430,28 +1747,53 @@ export default function CardapioCartDrawer({
                     </div>
 
                     {precisaTroco && (
-                      <div className="space-y-2.5 pt-2.5 border-t border-white/10">
-                        <label htmlFor="payment-change-for" className="block text-xs font-semibold text-koma-foreground">Vai pagar com quanto?</label>
-                        <div className="flex gap-2">
-                          {[50, 100, 200].map((val) => (
-                            <button
-                              key={val}
-                              type="button"
-                              aria-pressed={trocoPara === String(val)}
-                              onClick={() => setTrocoPara(String(val))}
-                              className={`min-h-11 min-w-0 flex-1 py-2 rounded-xl border text-xs font-mono font-bold transition cursor-pointer ${
-                                trocoPara === String(val)
-                                  ? "border-emerald-500 bg-emerald-500/15 text-emerald-400"
-                                  : "border-white/10 bg-white/5 text-koma-muted hover:bg-white/10"
-                              }`}
-                            >
-                              R$ {val}
-                            </button>
-                          ))}
+                      <div className="space-y-2.5 pt-2.5 border-t border-[var(--km-line-subtle)]">
+                        <label htmlFor="payment-change-for" className="block text-xs font-semibold text-[var(--km-ink)]">Troco para qual cédula?</label>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {[20, 50, 100].map((val) => {
+                            const isPicked = trocoPara === String(val);
+                            return (
+                              <button
+                                key={val}
+                                type="button"
+                                aria-pressed={isPicked}
+                                onClick={() => {
+                                  setTrocoPara(String(val));
+                                  clearValidation("payment-change-for");
+                                }}
+                                className={`flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-2xl border px-2 py-2 text-xs font-black tabular-nums transition cursor-pointer ${
+                                  isPicked
+                                    ? "border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] text-[var(--km-accent-text)] ring-2 ring-[var(--km-accent-soft)]"
+                                    : "border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-ink)] hover:border-[var(--km-accent-border)]"
+                                }`}
+                              >
+                                <Banknote className={`h-3.5 w-3.5 ${isPicked ? "text-[var(--km-accent-text)]" : "text-[var(--km-muted)]"}`} aria-hidden="true" />
+                                <span>R$ {val}</span>
+                              </button>
+                            );
+                          })}
+                          <button
+                            type="button"
+                            aria-pressed={Boolean(trocoPara) && !["20", "50", "100"].includes(trocoPara)}
+                            onClick={() => {
+                              if (["20", "50", "100"].includes(trocoPara)) setTrocoPara("");
+                              clearValidation("payment-change-for");
+                              window.requestAnimationFrame(() => trocoInputRef.current?.focus());
+                            }}
+                            className={`flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-2xl border px-2 py-2 text-[11px] font-bold transition cursor-pointer ${
+                              Boolean(trocoPara) && !["20", "50", "100"].includes(trocoPara)
+                                ? "border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] text-[var(--km-accent-text)] ring-2 ring-[var(--km-accent-soft)]"
+                                : "border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-muted)] hover:border-[var(--km-accent-border)] hover:text-[var(--km-ink)]"
+                            }`}
+                          >
+                            <Coins className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>Outro valor</span>
+                          </button>
                         </div>
-                        <div className="relative mt-2">
-                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-koma-muted">R$</span>
+                        <div className="relative mt-1">
+                          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[var(--km-muted)]">R$</span>
                           <input
+                            ref={trocoInputRef}
                             type="number"
                             id="payment-change-for"
                             inputMode="decimal"
@@ -1461,13 +1803,13 @@ export default function CardapioCartDrawer({
                             onChange={(e) => { setTrocoPara(e.target.value); clearValidation("payment-change-for"); }}
                             aria-invalid={invalidField === "payment-change-for"}
                             aria-describedby={invalidField === "payment-change-for" ? "cart-checkout-error" : undefined}
-                            className={`min-h-12 w-full pl-10 pr-3 py-2 bg-white/[0.03] border rounded-2xl text-base font-mono font-bold text-koma-foreground outline-none focus:border-emerald-500 ${invalidField === "payment-change-for" ? "border-rose-500" : "border-white/10"}`}
+                            className={`min-h-12 w-full pl-10 pr-3 py-2 bg-[var(--km-input)] border rounded-2xl text-base font-bold tabular-nums text-[var(--km-ink)] outline-none focus:border-[var(--km-focus)] ${invalidField === "payment-change-for" ? "border-rose-500" : "border-[var(--km-line)]"}`}
                           />
                         </div>
                         {trocoCalculado > 0 && (
-                          <div className="flex justify-between text-xs pt-1 text-emerald-400 font-bold">
-                            <span>Troco estimado:</span>
-                            <span className="font-mono">{formatPrice(trocoCalculado)}</span>
+                          <div className="flex items-center justify-between rounded-xl bg-[var(--km-accent-soft)] px-3 py-2 text-xs font-bold text-[var(--km-accent-text)]">
+                            <span>Seu troco será</span>
+                            <span className="tabular-nums">{formatPrice(trocoCalculado)}</span>
                           </div>
                         )}
                       </div>
@@ -1478,38 +1820,38 @@ export default function CardapioCartDrawer({
               </section>
 
               {/* Section 5: Identification */}
-              <section className="border-t border-white/10 pt-5" id="cart-identification" tabIndex={-1}>
+              <section className="border-t border-[var(--km-line-subtle)] pt-4" id="cart-identification" tabIndex={-1}>
                 <h3>
                   <button
                     type="button"
                     onClick={() => navigateToStep("cart-identification")}
                     aria-expanded={activeSection === "cart-identification"}
                     aria-controls="cart-identification-content"
-                    className="min-h-11 w-full text-left text-xs font-black uppercase tracking-wider text-koma-muted"
+                    className="min-h-10 w-full text-left text-xs font-black uppercase tracking-wider text-[var(--km-muted)] cursor-pointer"
                   >
-                    {getStepHeading("cart-identification", "Seu contato")}
+                    {getStepHeading("cart-identification", "Seus dados")}
                   </button>
                 </h3>
                 <div id="cart-identification-content" hidden={activeSection !== "cart-identification"}>
                 {user ? (
-                  <div className="mt-3 flex items-start gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3.5">
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                  <div className="mt-3 flex items-start gap-3 rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] p-3.5">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--km-accent-text)]" />
                     <div>
-                      <p className="text-xs font-black text-koma-foreground">{user.name}</p>
-                      <p className="mt-0.5 text-[10px] text-koma-muted">{formatBrazilianPhone(user.phone || "")} · cliente identificado</p>
+                      <p className="text-xs font-black text-[var(--km-ink)]">{user.name}</p>
+                      <p className="mt-0.5 text-[11px] text-[var(--km-muted)]">{formatBrazilianPhone(user.phone || "")} · identificado</p>
                     </div>
                   </div>
                 ) : accountRequired ? (
-                  <div className="mt-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3.5">
-                    <p className="text-xs font-black text-koma-foreground">Conta necessária para pedir</p>
-                    <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">
-                      Entre ou crie sua conta. No cadastro novo, confirme o link enviado ao seu e-mail antes de continuar.
+                  <div className="mt-3 rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] p-3.5">
+                    <p className="text-xs font-black text-[var(--km-ink)]">Conta necessária para pedir</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-[var(--km-muted)]">
+                      Entre ou crie sua conta para continuar.
                     </p>
                     {onAuthClick && (
                       <button
                         type="button"
                         onClick={onAuthClick}
-                        className="mt-3 min-h-11 w-full rounded-full bg-emerald-500 px-4 text-xs font-black text-white transition hover:bg-emerald-600 cursor-pointer"
+                        className="mt-3 min-h-11 w-full rounded-full bg-[var(--km-accent)] px-4 text-xs font-black text-[var(--km-on-accent)] transition hover:bg-[var(--km-accent-hover)] cursor-pointer"
                       >
                         Entrar ou criar conta
                       </button>
@@ -1518,42 +1860,63 @@ export default function CardapioCartDrawer({
                 ) : (
                   <div className="mt-3 space-y-3">
                     <label className="block">
-                      <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Celular com DDD</span>
-                      <span className="relative block"><Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="tel" inputMode="numeric" autoComplete="tel" placeholder="(00) 00000-0000" value={guestPhone} onChange={(event) => { setGuestPhone(formatBrazilianPhone(event.target.value)); clearValidation("input-guest-phone"); }} aria-invalid={invalidField === "input-guest-phone"} aria-describedby={invalidField === "input-guest-phone" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-2xl border bg-white/[0.03] pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-stone-500 focus:border-emerald-500 ${invalidField === "input-guest-phone" ? "border-rose-500" : "border-white/10"}`} id="input-guest-phone" /></span>
+                      <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-[var(--km-muted)]">Celular com DDD</span>
+                      <span className="relative block"><Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--km-muted)]" /><input type="tel" inputMode="numeric" autoComplete="tel" placeholder="(00) 00000-0000" value={guestPhone} onChange={(event) => { setGuestPhone(formatBrazilianPhone(event.target.value)); clearValidation("input-guest-phone"); }} aria-invalid={invalidField === "input-guest-phone"} aria-describedby={invalidField === "input-guest-phone" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-2xl border bg-[var(--km-input)] pl-11 pr-4 text-sm text-[var(--km-ink)] outline-none transition placeholder:text-[var(--km-subtle)] focus:border-[var(--km-focus)] ${invalidField === "input-guest-phone" ? "border-rose-500" : "border-[var(--km-line)]"}`} id="input-guest-phone" /></span>
                     </label>
-                    <p className="text-xs leading-relaxed text-koma-muted">Usamos seu celular para identificar o pedido e permitir que o restaurante entre em contato se precisar.</p>
                     {customerRecognition === "checking" && (
-                      <p className="text-[10px] font-semibold text-koma-muted" role="status">Conferindo seu celular...</p>
+                      <p className="text-[11px] font-semibold text-[var(--km-muted)]" role="status">Conferindo seu celular...</p>
                     )}
                     {customerRecognition === "found" && (
-                      <div className="flex items-start gap-2.5 rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] px-3.5 py-2.5" role="status">
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
-                        <p className="text-[10px] font-semibold leading-relaxed text-emerald-300">Reconhecemos seu celular. Você pode continuar sem informar seu nome novamente.</p>
+                      <div className="flex items-start gap-2.5 rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] px-3.5 py-2.5" role="status">
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--km-accent-text)]" />
+                        <p className="text-[11px] font-semibold leading-relaxed text-[var(--km-accent-text)]">Celular reconhecido! Pode continuar direto.</p>
                       </div>
                     )}
                     {customerRecognition === "new" && (
-                      <p className="text-[10px] font-semibold leading-relaxed text-koma-muted" role="status">Primeiro pedido com este celular? Informe seu nome abaixo.</p>
+                      <p className="text-[11px] font-semibold leading-relaxed text-[var(--km-muted)]" role="status">Primeiro pedido com este número? Informe seu nome.</p>
                     )}
                     {customerRecognition !== "found" && (
                       <label className="block">
-                        <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">Seu nome</span>
-                        <span className="relative block"><UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="text" autoComplete="name" maxLength={100} placeholder="Como devemos chamar você?" value={guestName} onChange={(event) => { setGuestName(event.target.value); clearValidation("input-guest-name"); }} aria-invalid={invalidField === "input-guest-name"} aria-describedby={invalidField === "input-guest-name" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-2xl border bg-white/[0.03] pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-stone-500 focus:border-emerald-500 ${invalidField === "input-guest-name" ? "border-rose-500" : "border-white/10"}`} id="input-guest-name" /></span>
+                        <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-[var(--km-muted)]">Seu nome</span>
+                        <span className="relative block"><UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--km-muted)]" /><input type="text" autoComplete="name" maxLength={100} placeholder="Como devemos chamar você?" value={guestName} onChange={(event) => { setGuestName(event.target.value); clearValidation("input-guest-name"); }} aria-invalid={invalidField === "input-guest-name"} aria-describedby={invalidField === "input-guest-name" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-2xl border bg-[var(--km-input)] pl-11 pr-4 text-sm text-[var(--km-ink)] outline-none transition placeholder:text-[var(--km-subtle)] focus:border-[var(--km-focus)] ${invalidField === "input-guest-name" ? "border-rose-500" : "border-[var(--km-line)]"}`} id="input-guest-name" /></span>
                       </label>
                     )}
-                    {onAuthClick && <button type="button" onClick={onAuthClick} className="text-left text-xs font-semibold leading-relaxed text-koma-muted transition hover:text-emerald-400">{brandConfig?.benefits?.loyalty ? "Quer acompanhar seus benefícios? " : "Já tem cadastro? "}<strong className="text-emerald-400">Entrar na conta.</strong></button>}
-                    {couponsEnabled && pendingCouponAfterPhone && couponCode.trim() && !appliedCoupon && (
-                      <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3.5 text-xs" role="status" id="pending-coupon-phone-banner">
-                        <div className="flex items-start gap-2.5">
-                          <Ticket className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />
+                    {onAuthClick && (
+                      <div className="rounded-3xl border border-[var(--km-line)] bg-[var(--km-card)] p-4 shadow-sm">
+                        <div className="flex items-center gap-3.5">
+                          <KomaAccountInviteAsset className="h-14 w-14 shrink-0" />
                           <div className="min-w-0 flex-1">
-                            <p className="font-bold text-koma-foreground">Cupom {couponCode.trim().toUpperCase()} aguardando aplicação</p>
-                            <p className="mt-0.5 text-[11px] leading-relaxed text-koma-muted">
+                            <p className="text-xs font-extrabold leading-snug text-[var(--km-ink)]">
+                              Peça em 1 toque da próxima vez
+                            </p>
+                            <p className="mt-0.5 text-[11px] leading-snug text-[var(--km-muted)]">
+                              Salve seu endereço e repita pedidos sem digitar tudo de novo.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={onAuthClick}
+                              className="mt-2.5 inline-flex min-h-9 items-center gap-1.5 rounded-full bg-[var(--km-accent)] px-4 py-1.5 text-xs font-black text-[var(--km-on-accent)] transition hover:bg-[var(--km-accent-hover)] cursor-pointer"
+                            >
+                              <UserCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                              <span>Entrar ou criar conta</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {couponsEnabled && pendingCouponAfterPhone && couponCode.trim() && !appliedCoupon && (
+                      <div className="rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] p-3.5 text-xs" role="status" id="pending-coupon-phone-banner">
+                        <div className="flex items-start gap-2.5">
+                          <Ticket className="mt-0.5 h-4 w-4 shrink-0 text-[var(--km-accent-text)]" aria-hidden="true" />
+                          <div className="min-w-0 flex-1">
+                            <p className="font-bold text-[var(--km-ink)]">Cupom {couponCode.trim().toUpperCase()} aguardando aplicação</p>
+                            <p className="mt-0.5 text-[11px] leading-relaxed text-[var(--km-muted)]">
                               {isCompleteBrazilianPhone(guestPhone)
-                                ? "Seu celular já foi informado. Aplique o cupom agora antes de revisar o pedido."
+                                ? "Celular informado. Aplique o cupom antes de revisar."
                                 : "Preencha seu celular acima para aplicar o cupom."}
                             </p>
                             {couponError && (
-                              <p className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-rose-400">
+                              <p className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-rose-500 dark:text-rose-300">
                                 <AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> {couponError}
                               </p>
                             )}
@@ -1563,14 +1926,14 @@ export default function CardapioCartDrawer({
                                 disabled={validatingCoupon || !isCompleteBrazilianPhone(guestPhone)}
                                 onClick={() => void handleApplyCoupon()}
                                 id="btn-apply-pending-coupon"
-                                className="min-h-10 rounded-xl bg-emerald-500 px-3.5 py-2 text-xs font-black text-white transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+                                className="min-h-10 rounded-xl bg-[var(--km-accent)] px-3.5 py-2 text-xs font-black text-[var(--km-on-accent)] transition hover:bg-[var(--km-accent-hover)] disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
                               >
                                 {validatingCoupon ? "Validando..." : `Aplicar ${couponCode.trim().toUpperCase()}`}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setPendingCouponAfterPhone(false)}
-                                className="min-h-10 rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-koma-muted transition hover:text-koma-foreground cursor-pointer"
+                                className="min-h-10 rounded-xl border border-[var(--km-line)] px-3 py-2 text-xs font-semibold text-[var(--km-muted)] transition hover:text-[var(--km-ink)] cursor-pointer"
                               >
                                 Continuar sem cupom
                               </button>
@@ -1582,18 +1945,18 @@ export default function CardapioCartDrawer({
                   </div>
                 )}
                 {paymentDetail === "pix" && brandConfig?.pixPayerDocumentRequired && (
-                  <label className="mt-3 block text-xs text-koma-muted">CPF ou CNPJ do comprador
+                  <label className="mt-3 block text-xs text-[var(--km-muted)]">CPF ou CNPJ do comprador
                     <input id="input-customer-document" inputMode="numeric" autoComplete="off" maxLength={14}
                       value={guestDocument} onChange={event => { setGuestDocument(event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '')); clearValidation("input-customer-document"); }}
                       aria-invalid={invalidField === "input-customer-document"}
-                      className="mt-1 h-12 w-full rounded-2xl border border-white/10 bg-white/[0.03] px-4 text-sm text-koma-foreground outline-none focus:border-emerald-500" />
-                    <span className="mt-1 block">O PagBank exige o documento para emitir o Pix deste pedido.</span>
+                      className="mt-1 h-12 w-full rounded-2xl border border-[var(--km-line)] bg-[var(--km-input)] px-4 text-sm text-[var(--km-ink)] outline-none focus:border-[var(--km-focus)]" />
+                    <span className="mt-1 block text-[11px]">Necessário para emitir o Pix deste pedido.</span>
                   </label>
                 )}
                 {paymentDetail === "pix" && brandConfig?.pixDirect !== true && (
                   <label className="mt-3 block">
-                    <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-koma-muted">E-mail para o Pix</span>
-                    <span className="relative block"><Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-koma-muted" /><input type="email" autoComplete="email" maxLength={254} placeholder="voce@exemplo.com" value={guestEmail} onChange={(event) => { setGuestEmail(event.target.value); clearValidation("input-customer-email"); }} aria-invalid={invalidField === "input-customer-email"} aria-describedby={invalidField === "input-customer-email" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-2xl border bg-white/[0.03] pl-11 pr-4 text-sm text-koma-foreground outline-none transition placeholder:text-stone-500 focus:border-emerald-500 ${invalidField === "input-customer-email" ? "border-rose-500" : "border-white/10"}`} id="input-customer-email" /></span>
+                    <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-[var(--km-muted)]">E-mail para o Pix</span>
+                    <span className="relative block"><Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--km-muted)]" /><input type="email" autoComplete="email" maxLength={254} placeholder="voce@exemplo.com" value={guestEmail} onChange={(event) => { setGuestEmail(event.target.value); clearValidation("input-customer-email"); }} aria-invalid={invalidField === "input-customer-email"} aria-describedby={invalidField === "input-customer-email" ? "cart-checkout-error" : undefined} className={`h-12 w-full rounded-2xl border bg-[var(--km-input)] pl-11 pr-4 text-sm text-[var(--km-ink)] outline-none transition placeholder:text-[var(--km-subtle)] focus:border-[var(--km-focus)] ${invalidField === "input-customer-email" ? "border-rose-500" : "border-[var(--km-line)]"}`} id="input-customer-email" /></span>
                   </label>
                 )}
                 </div>
@@ -1602,43 +1965,45 @@ export default function CardapioCartDrawer({
             </div>
 
             {/* Footer Summary & Action */}
-            <div className="shrink-0 border-t border-white/10 bg-black/40 backdrop-blur-md p-4 sm:p-5">
+            <div className="shrink-0 border-t border-[var(--km-line-subtle)] bg-[var(--km-panel)] p-4 sm:p-5">
               <div className="space-y-1.5 text-xs">
-                <div className="flex justify-between text-koma-muted"><span>Subtotal</span><span>{formatPrice(subtotal)}</span></div>
+                <div className="flex justify-between text-[var(--km-muted)]"><span>Subtotal</span><span className="tabular-nums">{formatPrice(subtotal)}</span></div>
                 {deliveryMethod === "delivery" && (
-                  <div className="flex justify-between text-koma-muted">
+                  <div className="flex justify-between text-[var(--km-muted)]">
                     <span>Taxa de entrega</span>
-                    <span className={deliveryFee === 0 ? "text-emerald-400 font-bold" : ""}>
+                    <span className={`tabular-nums ${deliveryFee === 0 ? "text-[var(--km-accent-text)] font-bold" : ""}`}>
                       {deliveryFee === 0 ? "Grátis" : formatPrice(deliveryFee)}
                     </span>
                   </div>
                 )}
                 {couponDiscount > 0 && (
-                  <div className="flex justify-between text-emerald-400 font-bold">
+                  <div className="flex justify-between text-[var(--km-accent-text)] font-bold">
                     <span>Cupom ({appliedCoupon?.codigo})</span>
-                    <span>- {formatPrice(couponDiscount)}</span>
+                    <span className="tabular-nums">- {formatPrice(couponDiscount)}</span>
                   </div>
                 )}
                 {cashbackDiscount > 0 && (
-                  <div className="flex justify-between text-amber-400 font-bold">
+                  <div className="flex justify-between text-[var(--km-accent-text)] font-bold">
                     <span>Cashback resgatado</span>
-                    <span>- {formatPrice(cashbackDiscount)}</span>
+                    <span className="tabular-nums">- {formatPrice(cashbackDiscount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between border-t border-white/10 pt-2 text-sm font-black text-koma-foreground">
-                  <span>Total estimado</span>
-                  <span className="font-serif text-lg font-black text-emerald-400">{formatPrice(total)}</span>
+                <div className="flex justify-between border-t border-[var(--km-line-subtle)] pt-2 text-sm font-black text-[var(--km-ink)]">
+                  <span>Total</span>
+                  <span className="font-display text-lg font-black text-[var(--km-accent-text)] tabular-nums">{formatPrice(total)}</span>
                 </div>
               </div>
               {remainingMinimum > 0 && (
-                <p className="mt-2 text-xs leading-relaxed text-amber-400" role="status">Faltam <strong>{formatPrice(remainingMinimum)}</strong> em produtos para o pedido mínimo de {formatPrice(minimumOrder)}.</p>
+                <p className="mt-2.5 rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-xs font-semibold leading-relaxed text-rose-500 dark:text-rose-300" role="status">
+                  Faltam <strong className="tabular-nums">{formatPrice(remainingMinimum)}</strong> para o pedido mínimo ({formatPrice(minimumOrder)}).
+                </p>
               )}
               <button
                 type="button"
                 onClick={() => nextSection ? continueToSection(nextSection) : handleCheckout()}
                 disabled={!orderingEnabled || availablePayments.length === 0}
                 aria-label={!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : nextStep ? `Continuar para ${nextStep.label.toLowerCase()}` : "Revisar pedido"}
-                className="mt-4 koma-action-primary flex h-13 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-6 text-xs font-black uppercase tracking-wider text-white shadow-lg shadow-emerald-950/40 transition hover:from-emerald-400 hover:to-teal-400 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-stone-500 cursor-pointer"
+                className="mt-3.5 flex h-13 w-full items-center justify-center gap-2 rounded-full bg-[var(--km-accent)] px-6 text-xs font-black uppercase tracking-wider text-[var(--km-on-accent)] shadow-md transition hover:bg-[var(--km-accent-hover)] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[var(--km-raised)] disabled:text-[var(--km-muted)] cursor-pointer"
                 id="btn-confirm-order"
               >
                 <span>{!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : nextStep ? `Continuar para ${nextStep.label.toLowerCase()}` : "Revisar pedido"}</span>
