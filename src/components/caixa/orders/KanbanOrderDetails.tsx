@@ -57,6 +57,9 @@ export interface KanbanDetailOrder {
   readonly modalidade?: string;
   readonly tipo?: string;
   readonly total?: number;
+  readonly subtotal?: number;
+  readonly deliveryFee?: number;
+  readonly discountAmount?: number;
   readonly amountPaid?: number;
   readonly amountDue?: number;
   readonly deliveryStatus?: string;
@@ -125,6 +128,50 @@ type KanbanDetailItem = CompositionSource & {
   quantidade: number;
   sourceItems: KanbanDetailSourceItem[];
 };
+
+export interface OrderPriceBreakdown {
+  readonly totalUnits: number;
+  readonly itemsSubtotal: number;
+  readonly inferredDeliveryFee: number;
+  readonly discountAmount: number;
+  readonly total: number;
+}
+
+export function computeOrderPriceBreakdown(
+  order: KanbanDetailOrder | null | undefined,
+  isDelivery = false,
+): OrderPriceBreakdown {
+  const activeItems = (Array.isArray(order?.itens) ? order.itens : []).filter(
+    (item) => String(item?.status || '').toLowerCase() !== 'cancelado',
+  );
+  const sumOfItems = Math.round(
+    activeItems.reduce((sum, item) => sum + Number(item.preco_unit ?? item.preco ?? 0), 0) * 100,
+  ) / 100;
+  const itemsSubtotal = order?.subtotal != null && Number.isFinite(Number(order.subtotal)) && Number(order.subtotal) > 0
+    ? Math.round(Number(order.subtotal) * 100) / 100
+    : sumOfItems;
+  const total = Math.round(
+    Number(order?.total ?? (itemsSubtotal + Number(order?.deliveryFee || 0) - Number(order?.discountAmount || 0))) * 100,
+  ) / 100;
+  const explicitFee = Number(order?.deliveryFee || 0);
+  const explicitDiscount = Number(order?.discountAmount || 0);
+  const inferredDeliveryFee = explicitFee > 0
+    ? Math.round(explicitFee * 100) / 100
+    : isDelivery && total > itemsSubtotal + 0.009
+      ? Math.round((total - itemsSubtotal + explicitDiscount) * 100) / 100
+      : 0;
+  const discountAmount = explicitDiscount > 0
+    ? Math.round(explicitDiscount * 100) / 100
+    : Math.max(0, Math.round((itemsSubtotal + inferredDeliveryFee - total) * 100) / 100);
+
+  return {
+    totalUnits: activeItems.length,
+    itemsSubtotal,
+    inferredDeliveryFee,
+    discountAmount,
+    total,
+  };
+}
 
 function groupKanbanDetailItems(items: readonly KanbanDetailSourceItem[]): KanbanDetailItem[] {
   const grouped = new Map<string, KanbanDetailItem>();
@@ -209,12 +256,12 @@ export function KanbanOrderDetails({
   const selectedCourierName = selectedKanbanOrder.courierAssignment?.options.find(
     (courier) => String(courier.id) === selectedCourierId,
   )?.nome;
-  const selectedOrderTotal = selectedKanbanOrder
-    ? Number(selectedKanbanOrder.total ?? selectedKanbanOrder.itens?.reduce(
-      (sum: number, item: KanbanDetailSourceItem) => sum + Number(item.preco_unit || item.preco || 0),
-      0,
-    ) ?? 0)
-    : 0;
+  const priceBreakdown = computeOrderPriceBreakdown(selectedKanbanOrder, selectedIsDelivery);
+  const selectedOrderTotal = priceBreakdown.total;
+  const totalUnits = selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0);
+  const itemsSubtotal = priceBreakdown.itemsSubtotal;
+  const inferredDeliveryFee = priceBreakdown.inferredDeliveryFee;
+  const discountAmount = priceBreakdown.discountAmount;
   const selectedCanAdvanceDigital = selectedIsDigital && selectedIsReadyDelivery;
   const isGeneratedTableLabel = Number(selectedKanbanOrder.mesaId) > 0
     && new RegExp(`^mesa\\s*0*${Number(selectedKanbanOrder.mesaId)}$`, 'i').test(String(selectedKanbanOrder.identificador || '').trim());
@@ -355,16 +402,51 @@ export function KanbanOrderDetails({
               {selectedIsDelivery && selectedKanbanOrder.paymentMethod && /^(dinheiro|cartao|cartao_credito|cartao_debito)$/.test(selectedKanbanOrder.paymentMethod) && <CourierPaymentArtwork method={selectedKanbanOrder.paymentMethod === 'dinheiro' ? 'cash' : 'card'} />}
             </div>;
           })()}
-          <details className="kd-items-disclosure">
-            <summary><CashierDetailActionArt kind="items" /><span>Ver {selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0)} {selectedDetailItems.reduce((sum, item) => sum + item.quantidade, 0) === 1 ? 'item' : 'itens'}</span><span className="kd-items-chevron" aria-hidden="true">⌄</span></summary>
+          <div className="kd-price-breakdown" role="region" aria-label="Composição do total">
+            <div className="kd-price-breakdown__row">
+              <span>Itens ({totalUnits})</span>
+              <strong>{formatCurrency(itemsSubtotal)}</strong>
+            </div>
+            {(selectedIsDelivery || inferredDeliveryFee > 0) && (
+              <div className="kd-price-breakdown__row">
+                <span>Taxa de entrega</span>
+                <strong>{inferredDeliveryFee > 0 ? formatCurrency(inferredDeliveryFee) : 'Grátis'}</strong>
+              </div>
+            )}
+            {discountAmount > 0 && (
+              <div className="kd-price-breakdown__row is-discount">
+                <span>Desconto</span>
+                <strong>- {formatCurrency(discountAmount)}</strong>
+              </div>
+            )}
+            <div className="kd-price-breakdown__row is-total">
+              <span>Total do pedido</span>
+              <strong>{formatCurrency(selectedOrderTotal)}</strong>
+            </div>
+          </div>
+          <details className="kd-items-disclosure" open>
+            <summary><CashierDetailActionArt kind="items" /><span>Ver {totalUnits} {totalUnits === 1 ? 'item' : 'itens'}</span><span className="kd-items-chevron" aria-hidden="true">⌄</span></summary>
             {selectedKanbanOrder.tableContext && <TableOrderContext context={selectedKanbanOrder.tableContext} />}
             {(Boolean(selectedKanbanOrder.amountPaid) || ['approved', 'pending', 'pending_released'].includes(selectedKanbanOrder.onlinePaymentStatus || '')) && <p className="text-sm text-koma-muted py-2">Resolva a cobrança ou devolva o pagamento no Caixa antes de corrigir os itens.</p>}
             <div className="orders-detail-modal__items">
-              {selectedDetailItems.map((item, idx) => (
+              {selectedDetailItems.map((item, idx) => {
+                const lineTotal = Math.round(
+                  item.sourceItems.reduce((sum, s) => sum + Number(s.preco_unit ?? s.preco ?? 0), 0) * 100,
+                ) / 100;
+                const unitPrice = item.quantidade > 0 ? Math.round((lineTotal / item.quantidade) * 100) / 100 : 0;
+                return (
                 <div key={item.sourceItems[0]?.id || `${item.nome}-${idx}`} className="orders-detail-modal__item">
                   <span className="orders-detail-modal__quantity">{item.quantidade}×</span>
                   <div className="min-w-0 flex-1">
-                    <strong>{item.nome}</strong>
+                    <div className="orders-detail-modal__item-head">
+                      <strong>{item.nome}</strong>
+                      <div className="orders-detail-modal__item-price">
+                        <span className="orders-detail-modal__item-line-total">{formatCurrency(lineTotal)}</span>
+                        {item.quantidade > 1 && lineTotal > 0 && (
+                          <span className="orders-detail-modal__item-unit-price">{formatCurrency(unitPrice)} un.</span>
+                        )}
+                      </div>
+                    </div>
                     <OrderItemComposition item={item} className="orders-detail-modal__observation" />
                     {item.clienteNome !== 'Consumo Geral' && item.clienteNome.toLowerCase() !== 'balcão' && item.clienteNome !== 'Cliente identificado' && item.clienteNome.toLocaleLowerCase() !== selectedKanbanOrder.identificador?.toLocaleLowerCase() && (
                       <span className="orders-detail-modal__for">Para: {item.clienteNome}</span>
@@ -385,7 +467,8 @@ export function KanbanOrderDetails({
                     {item.status === 'preparando' ? 'Em preparo' : item.status === 'pronto' ? 'Pronto' : item.status}
                   </span>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </details>
         </div>
@@ -476,7 +559,7 @@ function KanbanDetailFrame({ close, children }: { close: () => void; children: R
   return <div onClick={event => { if (event.target === event.currentTarget) close(); }}
     className="fixed inset-0 bg-black/85 backdrop-blur-xs z-[80] flex items-center justify-center p-4 cursor-pointer">
     <div ref={dialog} role="dialog" aria-modal="true" aria-labelledby="kanban-detail-title"
-      className="orders-detail-modal w-full max-w-[44rem] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-3xl flex flex-col text-left relative animate-scale-in"
+      className="orders-detail-modal w-[min(96vw,82rem)] max-w-[82rem] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-3xl flex flex-col text-left relative animate-scale-in"
       onKeyDown={event => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); }
         if (event.key !== 'Tab') return;

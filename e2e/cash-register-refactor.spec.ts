@@ -42,7 +42,7 @@ for (const theme of ['dark','light']) for (const scale of [1,1.4]) {
 
 test('retira apenas a unidade escolhida e mantém o item após falha',async({page})=>{
  await page.goto('/e2e/fixtures/order-details-layout.html?grouped=1&fail=1');
- await page.locator('.kd-items-disclosure > summary').click();
+ await expect(page.locator('.kd-items-disclosure')).toHaveAttribute('open', '');
  await page.getByRole('button',{name:'Retirar item',exact:true}).click();
  expect(await page.evaluate(()=>(window as any).detailCalls)).toEqual([]);
  await page.getByRole('button',{name:'Manter item',exact:true}).click();
@@ -55,7 +55,7 @@ test('retira apenas a unidade escolhida e mantém o item após falha',async({pag
  await expect(page.locator('.orders-detail-modal__item')).toContainText('2×');
  expect(await page.evaluate(()=>(window as any).detailCalls)).toEqual([{action:'remove',id:'combo-2'}]);
  await page.goto('/e2e/fixtures/order-details-layout.html?grouped=1');
- await page.locator('.kd-items-disclosure > summary').click();
+ await expect(page.locator('.kd-items-disclosure')).toHaveAttribute('open', '');
  await page.getByRole('button',{name:'Retirar item',exact:true}).click();
  await page.getByRole('combobox',{name:'Unidade a retirar — Combo Bacon'}).selectOption('combo-2');
  await page.getByRole('button',{name:'Confirmar retirada'}).click();
@@ -67,7 +67,7 @@ test('pedido pago não oferece retirada direta',async({page})=>{
  await page.goto('/e2e/fixtures/order-details-layout.html?grouped=1&paid=1');
  await expect(page.getByRole('button',{name:'Retirar item',exact:true})).toHaveCount(0);
  await page.goto('/e2e/fixtures/order-details-layout.html?grouped=1&online=1');
- await page.locator('.kd-items-disclosure > summary').click();
+ await expect(page.locator('.kd-items-disclosure')).toHaveAttribute('open', '');
  await expect(page.getByRole('button',{name:'Retirar item',exact:true})).toHaveCount(0);
  await expect(page.getByText('Resolva a cobrança ou devolva o pagamento no Caixa antes de corrigir os itens.')).toBeVisible();
 });
@@ -83,7 +83,7 @@ test('caixa envia o ID exato e só fecha detalhe após confirmação do servidor
  await page.goto('/?view=caixa');
  await page.locator('.orders-card--salon').first().click();
  const dialog=page.getByRole('dialog');
- await dialog.getByText(/Ver \d+ ite(?:m|ns)/).click();
+ await expect(dialog.locator('.kd-items-disclosure')).toHaveAttribute('open', '');
  await dialog.getByRole('button',{name:'Retirar item',exact:true}).first().click();
  await dialog.getByRole('button',{name:'Confirmar retirada'}).click();
  await expect(dialog.getByRole('alert')).toContainText('Pagamento registrado');

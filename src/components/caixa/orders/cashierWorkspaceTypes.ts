@@ -8,6 +8,9 @@ export interface DeliveryOrderView {
   itens: string;
   detailItems?: readonly import("./KanbanOrderDetails").KanbanDetailSourceItem[];
   total: number;
+  subtotal?: number;
+  deliveryFee?: number;
+  discountAmount?: number;
   amountPaid?: number;
   amountDue?: number;
   canal: 'ifood' | 'site' | 'whats' | 'smartpos';
