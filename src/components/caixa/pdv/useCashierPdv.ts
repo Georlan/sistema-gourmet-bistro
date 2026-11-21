@@ -24,6 +24,7 @@ import { formatCompactCurrency } from '../cashierPresentation';
 import type { PromotionPartSelection } from '../../../cardapio/promotionComposition';
 import {
   extractPdvPromotionOrderFields,
+  extractPromotionsPayload,
   filterActivePdvPromotions,
   partSelectionToPdvCartFields,
   type PdvPromotion,
@@ -780,13 +781,16 @@ export function useCashierPdv({
       const res = await fetch(`${apiBaseUrl}/api/cardapio-digital/promocoes`, { headers: authHeaders });
       if (!res.ok) return;
       const data = await res.json();
-      if (Array.isArray(data)) {
-        setActivePromotions(filterActivePdvPromotions(data as PdvPromotion[]));
+      const { promotions, isValid } = extractPromotionsPayload(data);
+      if (!isValid) {
+        showToast('Não foi possível carregar as ofertas ativas do PDV.', 'info');
+        return;
       }
+      setActivePromotions(filterActivePdvPromotions(promotions));
     } catch {
       // Keep existing promotions if transient network failure occurs.
     }
-  }, [apiBaseUrl, authHeaders]);
+  }, [apiBaseUrl, authHeaders, showToast]);
 
   useEffect(() => {
     if (activeTab !== 'operacao' || activeSubTab !== 'balcao') return;
