@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import type { BrandConfig } from '../../../cardapio/CardapioTypes';
+import { getDeliveryQuote } from '../../../cardapio/deliveryPresentation';
 import type { PaymentMethod } from '../../../cardapio/paymentMethods';
 import type { CatalogCategory } from '../../../catalog/catalog';
+import { fetchCardapioDigitalConfig } from '../online-menu/cardapioDigitalConfigClient';
 import { getSellableProducts, isProductSellable } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import {
@@ -167,7 +170,70 @@ export function useCashierPdv({
   const [changeFor, setChangeFor] = useState('');
   const [pdvPaymentMethod, setPdvPaymentMethod] = useState<PaymentMethod | null>(null);
 
-  const [pdvDeliveryTaxa, setPdvDeliveryTaxa] = useState<number>(0);
+  const [pdvDeliveryConfig, setPdvDeliveryConfig] = useState<{
+    freteGratisValor: number;
+    tipoTaxaEntrega: string;
+    taxaEntregaPadrao: number;
+    tabelaTaxasBairros: Array<{ bairro: string; taxa: number }>;
+    tabelaTaxasKm?: BrandConfig['tabelaTaxasKm'];
+  } | null>(null);
+
+  const pdvItemsSubtotal = useMemo(
+    () => pdvCart.reduce((total, item) => total + pdvCartItemUnitPrice(item) * item.quantity, 0),
+    [pdvCart],
+  );
+
+  const pdvDeliveryQuote = useMemo(
+    () =>
+      pdvDeliveryConfig
+        ? getDeliveryQuote(pdvDeliveryConfig, pdvItemsSubtotal, pdvDeliveryAddressDraft.bairro)
+        : { fee: 0, awaitingNeighborhood: false },
+    [pdvDeliveryConfig, pdvItemsSubtotal, pdvDeliveryAddressDraft.bairro],
+  );
+
+  const pdvDeliveryFee = pdvOrderType === 'delivery' ? Number(pdvDeliveryQuote.fee || 0) : 0;
+
+  const pdvNeighborhoodOptions = useMemo(() => {
+    const rows = pdvDeliveryConfig?.tabelaTaxasBairros ?? [];
+    return rows
+      .filter((row) => row.bairro && row.bairro.trim())
+      .map((row) => ({
+        value: row.bairro.trim(),
+        label: `${row.bairro.trim()} (${formatCompactCurrency(Number(row.taxa || 0))})`,
+      }));
+  }, [pdvDeliveryConfig]);
+
+  useEffect(() => {
+    if (activeTab !== 'operacao' && activeSubTab !== 'balcao' && pdvOrderType !== 'delivery') return;
+    let cancelled = false;
+    const authorization = authHeaders.Authorization || '';
+    const restaurantHeader = authHeaders['X-Restaurant-Id'];
+    const restaurantId = restaurantHeader ? Number(restaurantHeader) || undefined : undefined;
+    fetchCardapioDigitalConfig<Record<string, any>>(apiBaseUrl, authorization, { restaurantId })
+      .then((data) => {
+        if (cancelled || !data || typeof data !== 'object') return;
+        const rawNeighborhoods = Array.isArray(data.tabela_taxas_bairros) ? data.tabela_taxas_bairros : [];
+        const tabelaTaxasBairros = rawNeighborhoods
+          .map((row: any) => ({
+            bairro: String(row?.bairro || '').trim(),
+            taxa: Number(row?.taxa || 0),
+          }))
+          .filter((row: { bairro: string; taxa: number }) => row.bairro.length > 0 && Number.isFinite(row.taxa) && row.taxa >= 0);
+        setPdvDeliveryConfig({
+          freteGratisValor: Number(data.frete_gratis_valor || 0),
+          tipoTaxaEntrega: String(data.tipo_taxa_entrega || (tabelaTaxasBairros.length > 0 ? 'bairro' : 'fixa')),
+          taxaEntregaPadrao: Number(data.taxa_entrega_fixa ?? data.taxa_entrega_padrao ?? 0),
+          tabelaTaxasBairros,
+          tabelaTaxasKm: Array.isArray(data.tabela_taxas_km) ? data.tabela_taxas_km : undefined,
+        });
+      })
+      .catch(() => {
+        // Falha transitória mantém configuração anterior; servidor valida no lançamento.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, activeSubTab, pdvOrderType, apiBaseUrl, authHeaders]);
 
   const [pdvTargetMesaId, setPdvTargetMesaId] = useState<number>(0);
 
@@ -182,6 +248,7 @@ export function useCashierPdv({
   useEffect(() => {
     if (previousAuthScopeRef.current !== authScopeKey) {
       previousAuthScopeRef.current = authScopeKey;
+      setPdvDeliveryConfig(null);
       setCustomerState(createEmptyCustomerState());
     }
   }, [authScopeKey]);
@@ -443,7 +510,7 @@ export function useCashierPdv({
     const deliveryAddressDraft = { ...pdvDeliveryAddressDraft };
     const deliveryAddressLegacyHint = pdvDeliveryAddressLegacyHint;
     const deliveryAddress = deliverySnapshot ? formatDeliveryAddressLegacy(deliverySnapshot) : '';
-    const deliveryTaxa = pdvDeliveryTaxa;
+    const deliveryTaxa = pdvDeliveryFee;
 
     setActiveTab('operacao');
     setActiveSubTab('pedidos');
@@ -505,7 +572,6 @@ export function useCashierPdv({
     setCustomerState(createEmptyCustomerState());
     setPdvCustomerCPF('');
     setPdvPaymentMethod(null);
-    setPdvDeliveryTaxa(0);
 
     try {
       const itemsList = cartItems.flatMap((item) =>
@@ -603,7 +669,6 @@ export function useCashierPdv({
           }),
         );
         setPdvPaymentMethod(paymentMethod);
-        setPdvDeliveryTaxa(deliveryTaxa);
       }
     } catch (err) {
       console.error(err);
@@ -621,15 +686,13 @@ export function useCashierPdv({
         }),
       );
       setPdvPaymentMethod(paymentMethod);
-      setPdvDeliveryTaxa(deliveryTaxa);
     } finally {
       isPdvSubmittingRef.current = false;
       setIsLoading(false);
     }
   };
 
-  const cartTotal = pdvCart.reduce((total, item) => total + pdvCartItemUnitPrice(item) * item.quantity,
-    pdvOrderType === 'delivery' ? pdvDeliveryTaxa : 0);
+  const cartTotal = pdvItemsSubtotal + pdvDeliveryFee;
   const sellableProducts = useMemo(() => {
     return getSellableProducts(dynamicMenu, cardapioAtivoId, cardapiosAtivosIds);
   }, [dynamicMenu, cardapioAtivoId, cardapiosAtivosIds]);
@@ -780,6 +843,9 @@ export function useCashierPdv({
     setPdvOrderType,
     allowedPdvOrderTypes,
     cartTotal,
+    pdvItemsSubtotal,
+    pdvDeliveryFee,
+    pdvNeighborhoodOptions,
     changeFor,
     setChangeFor,
     pdvPaymentMethod,

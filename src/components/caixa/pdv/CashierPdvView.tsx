@@ -91,7 +91,12 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     pdvOrderType,
     setPdvOrderType,
     allowedPdvOrderTypes,
-    cartTotal, changeFor, setChangeFor,
+    cartTotal,
+    pdvItemsSubtotal,
+    pdvDeliveryFee,
+    pdvNeighborhoodOptions,
+    changeFor,
+    setChangeFor,
     pdvPaymentMethod,
     setPdvPaymentMethod,
     pdvDeliveryAddressDraft,
@@ -850,6 +855,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                           <DeliveryAddressFields
                             value={pdvDeliveryAddressDraft}
                             onChange={handlePdvDeliveryAddressChange}
+                            neighborhoodOptions={pdvNeighborhoodOptions}
                             legacyHint={pdvDeliveryAddressLegacyHint || null}
                             compact
                             idPrefix="pdv-delivery-address"
@@ -907,9 +913,26 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                 </div>
 
                 <div className="cashier-pdv-cart__footer shrink-0 border-t border-koma-border bg-koma-panel p-3 shadow-[0_-10px_24px_rgba(0,0,0,0.12)]">
+                  {pdvOrderType === 'delivery' && (
+                    <div className="mb-1.5 space-y-1 text-xs text-koma-muted tabular-nums">
+                      <div className="flex items-center justify-between">
+                        <span>Subtotal</span>
+                        <span>{formatCurrency(pdvItemsSubtotal)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>
+                          Taxa de entrega
+                          {pdvDeliveryAddressDraft.bairro.trim() ? ` (${pdvDeliveryAddressDraft.bairro.trim()})` : ''}
+                        </span>
+                        <span className={pdvDeliveryFee === 0 ? 'font-semibold text-emerald-400' : 'text-koma-foreground'}>
+                          {pdvDeliveryFee === 0 ? 'Grátis' : formatCurrency(pdvDeliveryFee)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                   <div className="cashier-pdv-cart__total mb-2 flex items-center justify-between font-bold text-koma-foreground">
                     <span className="cashier-pdv-cart__footer-left">Total do pedido</span>
-                    <span className="cashier-pdv-cart__total-value"><strong>{formatCurrency(cartTotal)}</strong></span>
+                    <span className="cashier-pdv-cart__total-value tabular-nums"><strong>{formatCurrency(cartTotal)}</strong></span>
                   </div>
                   {cartHasUnavailableItems && (
                     <div

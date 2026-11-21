@@ -296,7 +296,7 @@ const createMockPdv = (overrides: Partial<ReturnType<typeof useCashierPdv>> = {}
   setConfiguringPromotion: () => {},
   loadPromotions: async () => {},
   addPromotionToCart: () => {},
-  cartTotal: 0, changeFor: '', setChangeFor: () => {},
+  cartTotal: 0, pdvItemsSubtotal: 0, pdvDeliveryFee: 0, pdvNeighborhoodOptions: [], changeFor: '', setChangeFor: () => {},
   openCounter: () => {},
   balcaoMobileView: 'carrinho',
   setBalcaoMobileView: () => {},

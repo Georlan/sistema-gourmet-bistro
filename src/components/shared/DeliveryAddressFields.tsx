@@ -91,8 +91,8 @@ export default function DeliveryAddressFields({
             </datalist>
           )}
         </label>
-        {neighborhoodOptions.length > 0 && !compact && (
-          <div className="flex flex-wrap gap-1.5 pt-0.5">
+        {neighborhoodOptions.length > 0 && (
+          <div className={compact ? 'flex max-h-28 flex-wrap gap-1 overflow-y-auto pt-0.5' : 'flex flex-wrap gap-1.5 pt-0.5'}>
             {neighborhoodOptions.map((option) => {
               const isSelected = value.bairro.trim().toLowerCase() === option.value.trim().toLowerCase();
               return (
