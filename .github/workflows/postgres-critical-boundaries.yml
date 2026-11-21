@@ -1,0 +1,318 @@
+name: PostgreSQL Critical Boundaries
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'backend/alembic/**'
+      - 'backend/app/*models*.py'
+      - 'backend/app/database.py'
+      - 'backend/app/main.py'
+      - 'backend/app/security.py'
+      - 'backend/app/permissions.py'
+      - 'backend/app/websocket_manager.py'
+      - 'backend/app/marmitaria_catalog.py'
+      - 'backend/app/application/orders/**'
+      - 'backend/app/services/**'
+      - 'backend/app/routes/**'
+      - 'backend/requirements*.txt'
+      - 'backend/requirements.lock'
+      - 'backend/tests/*postgres*.py'
+      - 'backend/tests/test_workers_multiprocess.py'
+      - 'backend/tests/test_operational_realtime_multiprocess.py'
+      - 'backend/tests/test_direct_pix.py'
+      - 'backend/tests/test_marmitaria_sizes.py'
+      - 'backend/tests/test_marmitaria_size_migration.py'
+      - 'backend/tests/test_crm_operational_evolution.py'
+      - '.github/workflows/postgres-critical-boundaries.yml'
+  schedule:
+    - cron: '45 5 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: postgres-boundaries-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-boundaries:
+    name: PostgreSQL critical boundaries
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: pg-ci-test-only-password
+          POSTGRES_DB: koma_pg_base
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d koma_pg_base"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      ENVIRONMENT: test
+      SECRET_KEY: postgres-critical-boundaries-ci-secret
+      ENCRYPTION_KEY: MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA=
+      KOMA_PUBLIC_API_URL: https://api.example.test
+      KOMA_PUBLIC_APP_URL: https://app.example.test
+      PYTHONPATH: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.13.15'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.lock
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install backend test dependencies
+        run: python -m pip install -r backend/requirements-dev.txt
+
+      - name: Detect affected PostgreSQL domains
+        id: pg_domains
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ] || [ -z "$BASE_SHA" ]; then
+            changed="__ALL__"
+          else
+            if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+              git fetch --no-tags --depth=1 origin "$BASE_SHA"
+            fi
+            changed="$(git diff --name-only "$BASE_SHA" HEAD)"
+          fi
+          python - "$changed" <<'PY' >> "$GITHUB_OUTPUT"
+          import re, sys
+
+          raw = sys.argv[1]
+          files = [] if raw == "__ALL__" else [f for f in raw.splitlines() if f.strip()]
+          full = raw == "__ALL__" or any(
+              re.search(r'^(backend/alembic/|backend/app/(models\.py|database\.py|main\.py)|backend/requirements)', f)
+              for f in files
+          )
+          ci_self = any(f == ".github/workflows/postgres-critical-boundaries.yml" for f in files)
+
+          patterns = {
+              "alembic": r'(backend/alembic/|backend/app/.*models\.py$)',
+              "security": r'(security|permissions|cearatech|whatsapp|meta_webhook|multistore|onboarding|team_invite)',
+              "payments": r'(direct_pix|saas_pix|online_payments|payment_item|caixa|orders/service|test_b1_cancel_payment_guard|test_critical_pdv_caixa_flow)',
+              "inventory": r'(inventory|estoque|orders/service|routes/orders|schemas\.py|test_b1_cancel_payment_guard)',
+              "orders": r'(atendimentos|transfer|online_order_control|web_adapter|orders/service|operational_models|test_online_order_reasoned_rejection)',
+              "crm": r'(crm|customer_crm)',
+              "chat": r'(order_chat|caixa_chat|order_tracking|order_rejection_notice|test_order_chat)',
+              "catalog": r'(marmitaria|modificadores|products|catalog_addons|linked_complements|product_image|storage_paths|cardapio_digital)',
+              "workers": r'(outbox|scheduled_orders|signup_notifications|routes/cardapio\.py|test_worker)',
+              "staff_push": r'(staff_push)',
+              "realtime": r'(websocket_manager|operational_realtime_bus|test_operational_realtime_multiprocess)',
+          }
+
+          for key, pat in patterns.items():
+              enabled = full or any(re.search(pat, f) for f in files) or (ci_self and key in {"alembic", "security"})
+              print(f"{key}={'true' if enabled else 'false'}")
+          PY
+
+      - name: Run Direct Pix PostgreSQL isolation (clean cluster role)
+        if: steps.pg_domains.outputs.payments == 'true'
+        env:
+          PGPASSWORD: pg-ci-test-only-password
+          DIRECT_PIX_TEST_POSTGRES_URL: postgresql+psycopg2://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_direct_pix_test
+        run: |
+          psql -h 127.0.0.1 -U postgres -d koma_pg_base -c "CREATE DATABASE koma_direct_pix_test;"
+          python -m pytest backend/tests/test_direct_pix.py -q -ra -x
+          psql -h 127.0.0.1 -U postgres -d koma_pg_base -c "DROP DATABASE IF EXISTS koma_direct_pix_test WITH (FORCE);"
+          psql -h 127.0.0.1 -U postgres -d koma_pg_base -c "DROP ROLE IF EXISTS koma_app;"
+
+      - name: Run CRM migration and tenant isolation on clean DB
+        if: steps.pg_domains.outputs.crm == 'true'
+        env:
+          PGPASSWORD: pg-ci-test-only-password
+          DATABASE_URL: sqlite:///./crm_ci_test.db
+          CRM_POSTGRES_TEST_URL: postgresql+psycopg2://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_crm_test
+        run: |
+          psql -h 127.0.0.1 -U postgres -d koma_pg_base -c "CREATE DATABASE koma_crm_test;"
+          python -m pytest \
+            backend/tests/test_crm_migration_postgres.py \
+            backend/tests/test_crm_contact_concurrency_postgres.py \
+            backend/tests/test_crm_whatsapp_consent_postgres.py \
+            backend/tests/test_crm_operational_evolution.py \
+            -q -ra -x
+          psql -h 127.0.0.1 -U postgres -d koma_pg_base -c "DO \$\$ BEGIN IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'koma_app') THEN ALTER ROLE koma_app NOLOGIN; END IF; END \$\$;"
+
+      - name: Prepare migrated PostgreSQL template and isolated suite DBs
+        env:
+          PGPASSWORD: pg-ci-test-only-password
+          BASE_PG_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_pg_migrated
+        run: |
+          set -euo pipefail
+          psql -h 127.0.0.1 -U postgres -d koma_pg_base <<'SQL'
+          CREATE ROLE anon;
+          CREATE ROLE authenticated;
+          CREATE DATABASE koma_pg_migrated;
+          SQL
+          DATABASE_URL="$BASE_PG_URL" MIGRATION_DATABASE_URL="$BASE_PG_URL" python -m alembic -c backend/alembic.ini upgrade head
+          psql -h 127.0.0.1 -U postgres -d koma_pg_migrated <<'SQL'
+          CREATE ROLE worker_test LOGIN PASSWORD 'pg-ci-test-only-password';
+          GRANT koma_app TO worker_test;
+          SQL
+          psql -h 127.0.0.1 -U postgres -d koma_pg_base <<'SQL'
+          CREATE DATABASE koma_security TEMPLATE koma_pg_migrated;
+          CREATE DATABASE koma_payments_test TEMPLATE koma_pg_migrated;
+          CREATE DATABASE koma_inventory_test TEMPLATE koma_pg_migrated;
+          CREATE DATABASE koma_orders_test TEMPLATE koma_pg_migrated;
+          CREATE DATABASE koma_catalog_test TEMPLATE koma_pg_migrated;
+          CREATE DATABASE koma_outbox_test TEMPLATE koma_pg_migrated;
+          CREATE DATABASE koma_workers_mp_test TEMPLATE koma_pg_migrated;
+          CREATE DATABASE koma_staff_test TEMPLATE koma_pg_migrated;
+          CREATE DATABASE koma_lineage_test TEMPLATE koma_pg_migrated;
+          CREATE DATABASE koma_transfer_test;
+          CREATE DATABASE koma_chat_test;
+          CREATE DATABASE koma_images_test;
+          CREATE DATABASE koma_realtime_test;
+          SQL
+
+      - name: Verify Alembic single head, lineage and downgrade/re-upgrade
+        if: steps.pg_domains.outputs.alembic == 'true'
+        env:
+          DATABASE_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_lineage_test
+          MIGRATION_DATABASE_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_lineage_test
+        run: |
+          set -euo pipefail
+          cd backend
+          heads_output="$(python -m alembic -c alembic.ini heads)"
+          printf '%s\n' "$heads_output"
+          test "$(printf '%s\n' "$heads_output" | grep -c '(head)')" -eq 1
+          expected_head="$(printf '%s\n' "$heads_output" | awk '/\(head\)/ {print $1}')"
+          test -n "$expected_head"
+
+          python -m alembic -c alembic.ini history > /tmp/alembic-history.txt
+          grep -F "n3c4d5e6f7a8 -> o4d5e6f7a8b9" /tmp/alembic-history.txt
+          grep -q "1c2d3e4f5a6b" /tmp/alembic-history.txt
+
+          python -m alembic -c alembic.ini downgrade l1a2b3c4d5e6
+          python -m alembic -c alembic.ini current | grep -F l1a2b3c4d5e6
+          python -m alembic -c alembic.ini upgrade head
+          python -m alembic -c alembic.ini current | grep -F "$expected_head"
+          cd ..
+          python scripts/check-team-invite-status.py
+
+      - name: Verify security tenant boundaries and RLS
+        if: steps.pg_domains.outputs.security == 'true'
+        env:
+          DATABASE_URL: sqlite:///./security-ci.db
+          MIGRATION_DATABASE_URL: sqlite:///./security-ci.db
+          KOMA_SECURITY_TEST_DATABASE_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_security
+        run: >-
+          python -m pytest -q -ra -x
+          backend/tests/test_cearatech_lead_authorization.py
+          backend/tests/test_whatsapp_webhook_replay_security.py
+          backend/tests/test_meta_webhook_and_otp.py
+          backend/tests/test_whatsapp_notification_postgres_security.py
+          backend/tests/test_multistore_postgres.py
+          backend/tests/test_whatsapp_central_postgres.py
+          backend/tests/test_whatsapp_opaque_postgres.py
+
+      - name: Verify payment item concurrency races
+        if: steps.pg_domains.outputs.payments == 'true'
+        env:
+          DATABASE_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_payments_test
+          MIGRATION_DATABASE_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_payments_test
+          KOMA_PYTEST_USE_EXTERNAL_DATABASE: 'true'
+        run: python -m pytest -q -ra -x backend/tests/test_payment_item_concurrency_postgres.py
+
+      - name: Verify inventory concurrency races
+        if: steps.pg_domains.outputs.inventory == 'true'
+        env:
+          DATABASE_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_inventory_test
+          MIGRATION_DATABASE_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_inventory_test
+          KOMA_PYTEST_USE_EXTERNAL_DATABASE: 'true'
+        run: python -m pytest -q -ra -x backend/tests/test_inventory_concurrency_postgres.py
+
+      - name: Verify online order concurrency and transfer deadlock prevention
+        if: steps.pg_domains.outputs.orders == 'true'
+        env:
+          DATABASE_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_orders_test
+          MIGRATION_DATABASE_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_orders_test
+          KOMA_PYTEST_USE_EXTERNAL_DATABASE: 'true'
+          KOMA_CONCURRENCY_DATABASE_URL: postgresql+psycopg2://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_transfer_test
+        run: |
+          python -m pytest -q -ra -x backend/tests/test_online_order_reasoned_rejection.py::test_concurrent_accept_and_reject_only_one_transition_wins
+          python -m pytest -q -ra -x backend/tests/test_transfer_postgres_concurrency.py backend/tests/test_transfer_database_conflicts.py
+
+      - name: Verify order chat PostgreSQL contracts
+        if: steps.pg_domains.outputs.chat == 'true'
+        env:
+          ORDER_CHAT_TEST_DATABASE_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_chat_test
+          DATABASE_URL: sqlite:///./order-chat-ci.db
+          MIGRATION_DATABASE_URL: sqlite:///./order-chat-ci.db
+        run: >-
+          python -m pytest -q -ra -x
+          backend/tests/test_order_chat_unit.py
+          backend/tests/test_order_chat_p0.py
+          backend/tests/test_order_chat_p0_postgres.py
+
+      - name: Verify Marmitaria catalog and product image retention
+        if: steps.pg_domains.outputs.catalog == 'true'
+        env:
+          DATABASE_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_catalog_test
+          MIGRATION_DATABASE_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_catalog_test
+          KOMA_PYTEST_USE_EXTERNAL_DATABASE: 'true'
+          KOMA_IMAGE_GC_TEST_DATABASE_URL: postgresql+psycopg2://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_images_test
+        run: |
+          python -m pytest -q -ra -x \
+            backend/tests/test_marmitaria_sizes.py \
+            backend/tests/test_marmitaria_size_migration.py \
+            backend/tests/test_modificadores.py::test_daily_menu_is_atomic_preserves_prices_and_syncs_linked_extras \
+            backend/tests/test_modificadores.py::test_stale_single_option_toggle_cannot_revert_another_session \
+            backend/tests/test_modificadores.py::test_stale_group_form_cannot_revert_daily_changes_or_archive_new_options \
+            backend/tests/test_modificadores.py::test_protein_toggle_does_not_touch_unrelated_sides_or_salads \
+            backend/tests/test_modificadores.py::test_atualizar_grupo_preserva_opcao_referenciada_por_pedido_historico \
+            backend/tests/test_modificadores.py::test_paid_complements_follow_source_and_preserve_existing_ids_prices
+          python -m pytest -q -ra -x \
+            backend/tests/test_product_image_worker.py \
+            backend/tests/test_product_image_lifecycle.py \
+            backend/tests/test_product_image_lifecycle_postgres.py \
+            backend/tests/test_product_image_asset_contract.py \
+            backend/tests/test_image_optimization.py \
+            backend/tests/test_cardapio_digital.py
+
+      - name: Verify outbox worker due discovery RLS and multiprocess claims
+        if: steps.pg_domains.outputs.workers == 'true'
+        env:
+          DATABASE_URL: postgresql://worker_test:pg-ci-test-only-password@127.0.0.1:5432/koma_outbox_test
+          KOMA_PYTEST_USE_EXTERNAL_DATABASE: 'true'
+          KOMA_WORKER_TEST_DATABASE_URL: postgresql+psycopg2://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_workers_mp_test
+        run: |
+          python -m pytest -q -ra -x \
+            backend/tests/test_b14_operational_smoke_postgres.py::test_outbox_multi_tenant_worker_rls_postgres_smoke \
+            backend/tests/test_worker_due_discovery_postgres.py
+          DATABASE_URL="$KOMA_WORKER_TEST_DATABASE_URL" MIGRATION_DATABASE_URL="$KOMA_WORKER_TEST_DATABASE_URL" \
+            python -m pytest -q -ra -x backend/tests/test_workers_multiprocess.py
+
+      - name: Verify staff push isolation
+        if: steps.pg_domains.outputs.staff_push == 'true'
+        env:
+          DATABASE_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_staff_test
+          STAFF_PUSH_TEST_DATABASE_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_staff_test
+        run: python -m pytest backend/tests/test_staff_push_postgres.py -q -ra -x
+
+      - name: Verify operational realtime multiprocess bus
+        if: steps.pg_domains.outputs.realtime == 'true'
+        env:
+          DATABASE_URL: sqlite:///./realtime-ci.db
+          MIGRATION_DATABASE_URL: sqlite:///./realtime-ci.db
+          KOMA_REALTIME_TEST_DATABASE_URL: postgresql+psycopg2://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_realtime_test
+        run: python -m pytest -q -ra -x backend/tests/test_operational_realtime_multiprocess.py
