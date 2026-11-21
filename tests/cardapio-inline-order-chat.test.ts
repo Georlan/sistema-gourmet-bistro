@@ -5,7 +5,9 @@ import test from 'node:test';
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
 const drawer = source('../src/cardapio/components/CardapioOrdersDrawer.tsx');
 const panel = source('../src/cardapio/components/CardapioOrderChatPanel.tsx');
-const header = source('../src/cardapio/components/CardapioHeader.tsx');
+const v2 = source('../src/cardapio/v2/MenuV2Experience.tsx');
+const dock = source('../src/cardapio/v2/MenuBottomDock.tsx');
+const svgAssets = source('../src/cardapio/v2/MenuSvgAssets.tsx');
 const customIcons = source('../src/cardapio/components/KomaPublicIcons.tsx');
 const chatPolish = source('../src/cardapio/cardapioChatPolish.css');
 const viewportSpec = source('../e2e/cardapio-chat-viewports.spec.ts');
@@ -36,21 +38,22 @@ test('fallback do chat nao gera polling com a aba oculta e reconcilia ao voltar'
   assert.match(panel, /document\.removeEventListener\("visibilitychange", handleFallbackVisibility\)/);
 });
 
-test('cabecalho deixa o retorno ao pedido e chat explicito', () => {
-  assert.match(header, /Pedido \/ Chat/);
-  assert.match(header, /Abrir acompanhamento e chat dos pedidos/);
+test('navegacao publica deixa o retorno ao pedido e chat explicito', () => {
+  assert.match(v2, /aria-label="Ver pedidos"/);
+  assert.match(v2, /onOrdersClick/);
+  assert.match(dock, /id: "orders", label: "Pedidos"/);
 });
 
-test('cabecalho publico usa a familia de icones originais do KOMA sem trocar a semantica da sacola', () => {
-  assert.match(header, /KomaSearchIcon/);
-  assert.match(header, /KomaLocationIcon/);
-  assert.match(header, /KomaInfoIcon/);
-  assert.match(header, /KomaShareIcon/);
-  assert.match(header, /KomaOrderChatIcon/);
-  assert.match(header, /KomaBagIcon/);
-  assert.match(header, /KomaUserIcon/);
-  assert.match(header, /KomaSocialCameraIcon/);
-  assert.doesNotMatch(header, /\b(?:Info|Instagram|MapPin|MessageCircle|Search|Share2|ShoppingBag|UserRound)\b[\s\S]*from "lucide-react"/);
+test('navegacao publica usa a familia de icones autorais do KOMA sem trocar a semantica da sacola', () => {
+  assert.match(v2, /MenuSearchGlyph/);
+  assert.match(v2, /MenuBagGlyph/);
+  assert.match(v2, /MenuCategoriesGlyph/);
+  assert.match(dock, /MenuHomeGlyph/);
+  assert.match(dock, /MenuOrdersGlyph/);
+  assert.match(dock, /MenuBagGlyph/);
+  assert.match(dock, /MenuAccountGlyph/);
+  assert.doesNotMatch(v2, /\b(?:MessageCircle|Search|ShoppingBag)\b[\s\S]*from "lucide-react"/);
+  assert.match(svgAssets, /stroke="currentColor"/);
   assert.match(customIcons, /stroke="currentColor"/);
   assert.match(customIcons, /var\(--color-brand-primary\)/);
 });

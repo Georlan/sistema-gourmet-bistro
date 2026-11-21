@@ -93,7 +93,7 @@ test.describe('B3.1 / B3.4 — descoberta mobile, feedback e acessibilidade', ()
     });
 
     await page.goto('/cardapio?restaurante_id=808&vitrine=artistic-total');
-    await expect(page.locator('#koma-artistic-canopy')).toBeVisible();
+    await expect(page.locator('#km-top')).toBeVisible();
 
     // 1. Banner com imagem quebrada deve recolher para não gerar faixa escura morta.
     await expect(page.locator('#brand-banner-hero')).toHaveCount(0);

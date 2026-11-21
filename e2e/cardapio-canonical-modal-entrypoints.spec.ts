@@ -131,9 +131,9 @@ test('Mais escolhidos e Destaques abrem exatamente o mesmo modal canônico do ca
   expect(popularSnapshot).toBe(traditionalSnapshot);
   await closeProductModal(page);
 
-  const highlights = page.locator('#cardapio-highlights-home');
-  await expect(highlights).toBeVisible();
-  await highlights.getByRole('listitem', { name: 'Abrir Pizza Margherita Especial' }).click();
+  const hero = page.locator('#koma-art-hero-showcase');
+  await expect(hero).toBeVisible();
+  await hero.getByRole('button', { name: 'Ver Pizza Margherita Especial' }).click();
   const highlightSnapshot = await modalSnapshot(page, 'Pizza Margherita Especial');
   expect(highlightSnapshot).toBe(traditionalSnapshot);
 });
@@ -149,13 +149,9 @@ test('Complete seu pedido abre o mesmo modal canônico do produto recomendado', 
   const traditionalSnapshot = await modalSnapshot(page, 'Vinho Tinto Sangiovese (Taça)');
   await closeProductModal(page);
 
-  const recommendations = page.locator('#cardapio-recommendations-home');
-  await expect(recommendations).toBeVisible();
-  await recommendations.getByRole('listitem', {
-    name: 'Abrir bebida Vinho Tinto Sangiovese (Taça)',
-  }).click();
-  const recommendationSnapshot = await modalSnapshot(page, 'Vinho Tinto Sangiovese (Taça)');
-  expect(recommendationSnapshot).toBe(traditionalSnapshot);
+  await page.locator('#product-card-201 button.km-product-card__hitbox').click();
+  const catalogSnapshot = await modalSnapshot(page, 'Vinho Tinto Sangiovese (Taça)');
+  expect(catalogSnapshot).toBe(traditionalSnapshot);
 });
 
 for (const mode of ['tipos', 'porcoes'] as const) {
@@ -205,7 +201,7 @@ test('editar montagem preserva quantidade e contato; cancelar não altera a saco
   await expect(modal.locator('#btn-add-to-cart-action')).toHaveAccessibleName(/Adicionar 3 × Quentinha G/);
   await modal.locator('#btn-add-to-cart-action').click();
   await expect(modal).toHaveCount(0);
-  if (!await page.locator('#cart-drawer-container').isVisible()) await page.locator('#btn-cart-header').click();
+  if (!await page.locator('#cart-drawer-container').isVisible()) await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
   const cart = page.locator('#cart-drawer-container');
   await cart.getByRole('button', { name: 'Contato', exact: true }).click();
   await cart.locator('#input-guest-name').fill('Cliente local');
@@ -255,7 +251,7 @@ test('montar outra diferente começa em uma unidade e mantém a montagem origina
   await modal.getByRole('checkbox', { name: 'Selecionar Frango', exact: true }).check();
   await modal.locator('#btn-qty-plus').click();
   await modal.locator('#btn-add-to-cart-action').click();
-  if (!await page.locator('#cart-drawer-container').isVisible()) await page.locator('#btn-cart-header').click();
+  if (!await page.locator('#cart-drawer-container').isVisible()) await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
   const cart = page.locator('#cart-drawer-container');
   await cart.getByRole('button', { name: 'Itens', exact: true }).click();
   await cart.getByRole('button', { name: 'Montar outra diferente de Quentinha P', exact: true }).click();
@@ -400,7 +396,7 @@ test('Voltar do Android fecha modal de produto e sacola sem sair do cardápio', 
   expect(page.url()).toBe(menuUrl);
   await expect(page.locator('#catalog-feed')).toBeVisible();
 
-  await page.locator('#btn-cart-header').click();
+  await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
   const cart = page.locator('#cart-drawer-container');
   await expect(cart).toBeVisible();
   await expect.poll(() => page.evaluate(() => Boolean(history.state?.__komaPublicMenuOverlay))).toBe(true);
@@ -436,7 +432,7 @@ test('Voltar da edição da quentinha preserva a sacola e depois fecha a sacola'
   await expect(modal).toHaveCount(0);
 
   const cart = page.locator('#cart-drawer-container');
-  if (!await cart.isVisible()) await page.locator('#btn-cart-header').click();
+  if (!await cart.isVisible()) await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
   await expect(cart).toBeVisible();
   await cart.getByRole('button', { name: 'Editar montagem de Quentinha G', exact: true }).click();
   await expect(modal).toBeVisible();

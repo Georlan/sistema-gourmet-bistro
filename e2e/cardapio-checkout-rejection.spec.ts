@@ -51,7 +51,7 @@ for (const rejection of [400, 404, 503, 'network', 'invalid'] as const) {
     const submit = page.locator('#btn-place-order-final');
     await submit.click();
     const error = page.locator('#checkout-submit-error');
-    await expect(error).toContainText('Não foi possível confirmar o pedido');
+    await expect(error).toContainText('Não foi possível enviar o pedido');
     await expect(error).not.toContainText('Código de suporte');
     const expectedCode = rejection === 'network' ? requestIds[0].slice(0, 12) : 'abc123def456';
     await expect(error).toContainText(`Suporte: ${expectedCode}`);
@@ -84,14 +84,14 @@ for (const rejection of [400, 404, 503, 'network', 'invalid'] as const) {
       await cart.getByRole('button', { name: '4. Seu contato', exact: true }).click();
       await cart.locator('#btn-confirm-order').click();
       await submit.click();
-      await expect(page.locator('#checkout-card')).toContainText('Pedido recebido');
+      await expect(page.locator('#checkout-card')).toContainText('Pedido confirmado');
       expect(quantities).toEqual([1, 2]);
       expect(keys[1]).not.toBe(keys[0]);
     } else {
       await expect(error.getByRole('button', { name: 'Voltar à sacola e corrigir' })).toHaveCount(0);
       await expect(page.getByText('Código de suporte:', { exact: false })).toHaveCount(0);
       await submit.click();
-      await expect(page.locator('#checkout-card')).toContainText('Pedido recebido');
+      await expect(page.locator('#checkout-card')).toContainText('Pedido confirmado');
       expect(keys).toHaveLength(2);
       expect(keys[1]).toBe(keys[0]);
       expect(requestIds[1]).not.toBe(requestIds[0]);

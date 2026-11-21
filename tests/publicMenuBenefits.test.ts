@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-const headerSource = readFileSync(
-  new URL('../src/cardapio/components/CardapioHeader.tsx', import.meta.url),
+const v2Source = readFileSync(
+  new URL('../src/cardapio/v2/MenuV2Experience.tsx', import.meta.url),
   'utf8',
 );
 const pageSource = readFileSync(
@@ -16,8 +16,8 @@ const benefitsSource = readFileSync(
 );
 
 test('public menu keeps benefits entry points for mobile and desktop', () => {
-  assert.match(headerSource, /id="btn-benefits-header"/);
-  assert.match(pageSource, /id="mobile-nav-benefits"/);
+  assert.match(v2Source, /id="btn-benefits-header"/);
+  assert.match(v2Source, /id="mobile-nav-benefits"/);
   assert.match(pageSource, /<CardapioBenefitsDrawer/);
 });
 

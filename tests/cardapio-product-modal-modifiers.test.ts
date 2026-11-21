@@ -53,10 +53,10 @@ test('CardapioProductModal - modificadores e adicionais visíveis e validação 
     'Deve informar qual escolha está faltando no modal',
   );
 
-  // 5. Botão de adicionar comunica a pendência e estiliza estado de aviso
+  // 5. Botão de adicionar comunica a pendência e estiliza estado de aviso adaptativo
   assert.match(
     modalSource,
-    /hasUnsatisfied[\s\S]*border-amber-500\/50[\s\S]*from-emerald-500/,
+    /hasUnsatisfied[\s\S]*--km-alert-border[\s\S]*--km-accent/,
     'Botão de ação deve distinguir visualmente quando há escolhas pendentes',
   );
 });

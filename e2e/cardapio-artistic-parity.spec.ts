@@ -25,14 +25,14 @@ test('destaque escolhido pelo restaurante substitui ranking sem alegar ser o mai
   await menu(page, payload => { payload.restaurante.destaque_cardapio_produto_id = '101'; });
   const hero = page.locator('#koma-art-hero-showcase');
   await expect(hero).toContainText('Pizza Margherita Especial');
-  await expect(hero).toContainText('DESTAQUE DA CASA');
-  await expect(hero).not.toContainText('Nº 1 MAIS PEDIDO');
+  await expect(hero).toContainText(/Destaque da casa/i);
+  await expect(hero).not.toContainText(/Nº 1 MAIS PEDIDO/i);
 });
 
 test('destaque indisponível retorna ao ranking automático', async ({ page }) => {
   await menu(page, payload => { payload.restaurante.destaque_cardapio_produto_id = 'inexistente'; });
   await expect(page.locator('#koma-art-hero-showcase')).toContainText('Vinho Tinto');
-  await expect(page.locator('#koma-art-hero-showcase')).toContainText('Nº 1 MAIS PEDIDO');
+  await expect(page.locator('#koma-art-hero-showcase')).toContainText(/Nº 1 mais pedido/i);
 });
 
 test('contato WhatsApp inclui DDI brasileiro no cabeçalho e nas informações da loja', async ({ page }) => {
@@ -58,7 +58,9 @@ test('sacola usa o mesmo card de família nativa, exige tamanho e conserva preç
     );
   });
   await page.locator('#btn-fast-add-301').click();
-  await page.locator('#btn-cart-header').click();
+  if (!await page.locator('#cart-drawer-container').isVisible()) {
+    await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
+  }
   const cart = page.locator('#cart-drawer-container');
   await expect(cart).toBeVisible();
   const family = cart.locator('#upsell-card-family-f-batatas');
@@ -82,7 +84,7 @@ test('logo da loja mantém avatar circular sem moldura branca no cabeçalho e no
     payload.restaurante.logo_url = `data:image/svg+xml,${encodeURIComponent(logoSvg)}`;
   });
 
-  const headerLogo = page.locator('.koma-art-brand-logo');
+  const headerLogo = page.locator('.km-store-avatar');
   await expect(headerLogo).toBeVisible();
   const headerStyle = await headerLogo.evaluate((element) => {
     const style = getComputedStyle(element);
@@ -134,9 +136,8 @@ test('batata tradicional usa um único card com tamanho obrigatório na categori
   const catalog = page.locator('[data-menu-category="Batatas Fritas"]');
   await expect(catalog.locator('[id^="product-card-"]')).toHaveCount(2);
   await expect(catalog.locator('#product-card-family-batata-tradicional')).toContainText('A partir de R$');
-  await expect(page.locator('#pairing-card-family-batata-tradicional')).toBeVisible();
 
-  await page.locator('#pairing-card-family-batata-tradicional').click();
+  await catalog.locator('#product-card-family-batata-tradicional').click();
   const modal = page.locator('#product-details-modal');
   await expect(modal).toContainText('Batata Frita Tradicional');
   await expect(modal.locator('#variant-btn-batata-p')).toContainText('Pequena · 200 g');
@@ -179,7 +180,7 @@ test('família nativa conserva um único card e envia o SKU real para a sacola a
   await expect(modal.locator('#btn-add-to-cart-action')).toContainText('R$ 8,00');
   await modal.locator('#btn-add-to-cart-action').click();
   if (!await page.locator('#cart-drawer-container').isVisible()) {
-    await page.locator('#btn-cart-header').click();
+    await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
   }
   const cart = page.locator('#cart-drawer-container');
   await expect(cart).toContainText('Pastel Médio de Queijo');
@@ -240,11 +241,11 @@ test('sacola vazia respeita os produtos escolhidos pelo restaurante', async ({ p
   await menu(page, payload => {
     payload.restaurante.recomendacoes_sacola_ids = ['301'];
   });
-  await page.locator('#btn-cart-header').click();
+  await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
   const cart = page.locator('#cart-drawer-container');
   await expect(cart).toBeVisible();
-  await expect(cart.locator('.koma-art-cart-item-card')).toHaveCount(1);
-  await expect(cart.locator('.koma-art-cart-item-card')).toContainText('Pizza de batata');
+  await expect(cart.locator('[data-empty-suggestion="true"]')).toHaveCount(1);
+  await expect(cart.locator('[data-empty-suggestion="true"]')).toContainText('Pizza de batata');
 });
 
 test('recomendação manual da sacola usa SKU escolhido em vez do motor automático',async({page})=>{
@@ -254,7 +255,7 @@ test('recomendação manual da sacola usa SKU escolhido em vez do motor automát
   });
   await page.locator('#btn-hero-fast-add-201').click();
   if (!await page.locator('#cart-drawer-container').isVisible()) {
-    await page.locator('#btn-cart-header').click();
+    await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
   }
   const cart = page.locator('#cart-drawer-container');
   await expect(cart).toBeVisible();
@@ -276,14 +277,10 @@ test('recomendação manual da sacola usa SKU escolhido em vez do motor automát
   expect(state.rankingRequests()).toBe(initialRequests);
  });
 
- test('adicionar mantém ordem das recomendações e sincroniza catálogo; detalhes aceitam teclado',async({page})=>{
+ test('adicionar mantém catálogo sincronizado e detalhes aceitam teclado',async({page})=>{
   await menu(page,p=>{p.produtos.push({id:202,nome:'Suco natural',preco:10,categoria_id:20,grupos_modificadores:[]});});
-  const before=await page.locator('[id^="pairing-card-"]').evaluateAll(es=>es.map(e=>e.id));
-  await page.locator('#btn-pairing-fast-add-202').click();
-  await expect(page.locator('#pairing-qty-202')).toHaveText('1');
+  await page.locator('#btn-fast-add-202').click();
   await expect(page.locator('#qty-202')).toHaveText('1');
-  expect(await page.locator('[id^="pairing-card-"]').evaluateAll(es=>es.map(e=>e.id))).toEqual(before);
-  await expect(page.locator('#cardapio-recommendations-home')).not.toContainText('Pizza de batata');
   await page.locator('#product-card-101').getByRole('button',{name:/ver detalhes/}).press('Enter');
   await expect(page.locator('#product-details-modal')).toBeVisible();
   await expect(page.locator('#product-details-modal')).toContainText('Catupiry');
@@ -297,7 +294,7 @@ test('recomendação manual da sacola usa SKU escolhido em vez do motor automát
   await expect(page.locator('#btn-hero-fast-add-201')).toBeVisible();
   await page.locator('#btn-hero-fast-add-201').evaluate(button=>{for(let i=0;i<10;i++)(button as HTMLButtonElement).click();});
   await expect(page.locator('#hero-qty-201')).toHaveText('10');
-  await page.locator('#btn-cart-header').click();
+  await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
   const cart=page.locator('#cart-drawer-container');
   await expect(cart).toBeVisible();
   await cart.getByRole('button',{name:'Aumentar Vinho Tinto Sangiovese (Taça)',exact:true}).first().evaluate(button=>{for(let i=0;i<10;i++)(button as HTMLButtonElement).click();});
@@ -320,7 +317,7 @@ test('recomendação manual da sacola usa SKU escolhido em vez do motor automát
   await modal.getByRole(mode==='tipos'?'checkbox':'button',{name:mode==='tipos'?'Selecionar Carne':'Adicionar uma unidade de Frango',exact:true}).click();
   await modal.locator('#btn-add-to-cart-action').click();
   await expect(modal).toHaveCount(0);
-  if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#btn-cart-header').click();
+  if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
   const cart=page.locator('#cart-drawer-container');
   await cart.getByRole('button',{name:'Editar montagem de Quentinha G',exact:true}).click();
   await expect(modal.locator('#btn-add-to-cart-action')).toHaveAccessibleName(/Salvar 1 × Quentinha G/);
@@ -333,7 +330,7 @@ test('recomendação manual da sacola usa SKU escolhido em vez do motor automát
   await menu(page,p=>{p.restaurante.beneficios={coupons:enabled,loyalty:enabled,cashback:enabled};});
   await expect(page.locator('#mobile-nav-benefits')).toHaveCount(enabled?1:0);
   await page.locator('#btn-fast-add-201').click();
-  if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#btn-cart-header').click();
+  if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
   const labels=await page.locator('#cart-drawer-container h3 > button[aria-controls]').allTextContents();
   const numbered=labels.map(s=>s.trim()).filter(s=>/^\d+\./.test(s));
   expect(numbered.length).toBeGreaterThan(0);
@@ -348,6 +345,7 @@ test('recomendação manual da sacola usa SKU escolhido em vez do motor automát
   await modal.getByRole('button',{name:/Continuar para/}).click();
   await modal.getByRole('button',{name:'Revisar promoção'}).click();
   await page.getByRole('button',{name:'Adicionar promoção',exact:true}).click();
+  if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
   await expect(page.locator('#cart-drawer-container')).toContainText('Pizza e vinho');
   await expect(page.locator('#cart-drawer-container')).toContainText(/R\$\s*65,00/);
  });
@@ -355,7 +353,7 @@ test('recomendação manual da sacola usa SKU escolhido em vez do motor automát
  test('pausa e pagamento removido atualizam sacola sem duplicar ações',async({page})=>{
   const state=await menu(page);
   await page.locator('#btn-fast-add-201').click();
-  await page.locator('#btn-cart-header').click();
+  if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
   state.payload.restaurante.aceitando_pedidos=false;
   state.payload.restaurante.motivo_indisponibilidade='Pausa de teste';
   // Retomar a aba usa o mesmo refresh do evento real e conserva a sacola.
@@ -383,7 +381,7 @@ test('busca canônica ignora acentos e informa ausência de resultados',async({p
 test('consumo local não exige mesa ou endereço e envia uma única vez',async({page})=>{
   const state=await menu(page,p=>{p.restaurante.taxa_entrega_padrao=7;p.restaurante.tipos_pedido_ativos=['delivery','retirada','consumo_local'];});
   await page.locator('#btn-fast-add-201').click();
-  if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#btn-cart-header').click();
+  if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
   const cart=page.locator('#cart-drawer-container');
   await cart.locator('#btn-confirm-order').click();
   await cart.getByRole('button',{name:/^Consumo local/}).click();
@@ -395,30 +393,29 @@ test('consumo local não exige mesa ou endereço e envia uma única vez',async({
   await cart.locator('#input-guest-phone').fill('85999999999');
   await cart.locator('#btn-confirm-order').click();
   await page.locator('#btn-place-order-final').click();
-  await expect(page.getByText('Pedido recebido',{exact:true})).toBeVisible();
+  await expect(page.locator('#checkout-card')).toContainText('Pedido confirmado');
   expect(state.orders).toHaveLength(1);
   expect(state.orders[0]).toMatchObject({tipo_pedido:'consumo_local',taxa_entrega:0});
   expect(state.orders[0].mesa_id).toBeUndefined();
 });
 
-test('ranking atrasado não remove recomendações após adicionar',async({page})=>{
+test('ranking atrasado não remove catálogo após adicionar',async({page})=>{
   let release!:()=>void;
   const gate=new Promise<void>(resolve=>{release=resolve;});
   await menu(page,p=>{p.produtos.push({id:202,nome:'Suco natural',preco:10,categoria_id:20,grupos_modificadores:[]});},gate);
-  const ids=await page.locator('[id^="pairing-card-"]').evaluateAll(es=>es.map(e=>e.id));
-  await page.locator('#btn-pairing-fast-add-202').click();
+  await page.locator('#btn-fast-add-202').click();
   release();
   await expect(page.locator('#koma-art-hero-showcase')).toContainText('Vinho Tinto');
-  expect(await page.locator('[id^="pairing-card-"]').evaluateAll(es=>es.map(e=>e.id))).toEqual(ids);
-  await expect(page.locator('#pairing-qty-202')).toHaveText('1');
+  await expect(page.locator('#qty-202')).toHaveText('1');
 });
 
-test('rota padrão usa o novo cardápio e mantém retorno explícito ao editorial',async({page})=>{
+test('rota padrão e query legada convergem para o cardápio universal V2',async({page})=>{
   await menu(page);
   await page.goto('/cardapio?restaurante_id=2');
   await expect(page.locator('#koma-artistic-canvas')).toBeVisible();
+  await expect(page.locator('#catalog-feed')).toBeVisible();
   await page.goto('/cardapio?restaurante_id=2&vitrine=editorial');
-  await expect(page.locator('#koma-artistic-canvas')).toHaveCount(0);
+  await expect(page.locator('#koma-artistic-canvas')).toBeVisible();
   await expect(page.locator('#catalog-feed')).toBeVisible();
 });
 
@@ -426,7 +423,7 @@ for (const firstField of ['phone','name'] as const) {
   test(`contato preserva os dois campos começando por ${firstField}`,async({page})=>{
     const state=await menu(page);
     await page.locator('#btn-fast-add-201').click();
-    if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#btn-cart-header').click();
+    if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
     const cart=page.locator('#cart-drawer-container');
     await cart.getByRole('button',{name:'Contato',exact:true}).click();
     for(const field of firstField==='phone'?['phone','name']:['name','phone']) {
@@ -441,7 +438,7 @@ for (const firstField of ['phone','name'] as const) {
     await cart.getByRole('button',{name:'Contato',exact:true}).click();
     await cart.locator('#btn-confirm-order').click();
     await page.locator('#btn-place-order-final').click();
-    await expect(page.getByText('Pedido recebido',{exact:true})).toBeVisible();
+    await expect(page.locator('#checkout-card')).toContainText('Pedido confirmado');
     expect(state.orders).toHaveLength(1);
     expect(state.orders[0]).toMatchObject({cliente_nome:'Cliente local',cliente_telefone:'85999999999'});
   });
@@ -450,7 +447,7 @@ for (const firstField of ['phone','name'] as const) {
 test('contato preserva foco quando a navegação chega atrasada',async({page})=>{
   await menu(page);
   await page.locator('#btn-fast-add-201').click();
-  if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#btn-cart-header').click();
+  if(!await page.locator('#cart-drawer-container').isVisible())await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
   await page.evaluate(()=>{
     const state=window as any;
     state.__komaFocusFrames=[];
@@ -472,13 +469,13 @@ test('contato preserva foco quando a navegação chega atrasada',async({page})=>
 
 test('categorias permanecem visíveis ao navegar pelo cardápio', async ({page}) => {
   await menu(page);
-  const nav = page.locator('#koma-art-category-nav');
-  await page.locator('#koma-art-catalog').scrollIntoViewIfNeeded();
+  const nav = page.locator('.km-sticky-nav');
+  await page.locator('#catalog-feed').scrollIntoViewIfNeeded();
   await expect.poll(async () => (await nav.boundingBox())?.y ?? -100).toBeGreaterThanOrEqual(-1);
   await expect.poll(async () => (await nav.boundingBox())?.y ?? 100).toBeLessThanOrEqual(2);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   await nav.getByRole('button', {name: 'Bebidas', exact: true}).click();
-  await expect.poll(async () => (await page.locator('#cat-bebidas').boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(50);
+  await expect.poll(async () => (await page.locator('#km-cat-bebidas').boundingBox())?.y ?? -1).toBeGreaterThanOrEqual(50);
 });
 
 for (const width of [320, 360, 390, 430]) {
@@ -490,8 +487,8 @@ for (const width of [320, 360, 390, 430]) {
         payload.produtos.push({ id: 500 + i, nome: `Produto ${i}`, preco: 10, categoria_id: 100 + i, grupos_modificadores: [] });
       }
     });
-    const nav = page.locator('#koma-art-category-nav');
-    const strip = nav.locator('.koma-art-category-scroll');
+    const nav = page.locator('.km-sticky-nav');
+    const strip = nav.locator('.km-cat-tabs');
     const target = page.locator('[data-menu-category="Categoria longa 4"]');
     await target.evaluate(el => window.scrollTo(0, window.scrollY + el.getBoundingClientRect().top - 120));
     const active = nav.getByRole('button', { name: 'Categoria longa 4', exact: true });

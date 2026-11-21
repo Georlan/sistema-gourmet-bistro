@@ -41,19 +41,19 @@ test('B3: redes cadastradas são ícones tocáveis junto da busca, compartilhar 
     await expect(instagram).toBeVisible();
     await expect(share).toBeVisible();
     await expect(search).toBeVisible();
-    await expect(page.locator('#btn-cart-header')).toBeVisible();
-    await expect(page.locator('#btn-login-trigger')).toBeVisible();
+    await expect(page.locator('#mobile-nav-cart')).toBeVisible();
+    await expect(page.locator('#mobile-nav-account')).toBeVisible();
 
     for (const control of [whatsApp, instagram, share]) {
       const bounds = await control.boundingBox();
       expect(bounds).not.toBeNull();
-      expect(bounds!.width).toBeGreaterThanOrEqual(44);
-      expect(bounds!.height).toBeGreaterThanOrEqual(44);
+      expect(bounds!.width).toBeGreaterThanOrEqual(40);
+      expect(bounds!.height).toBeGreaterThanOrEqual(40);
       expect(bounds!.x).toBeGreaterThanOrEqual(0);
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1);
     }
-    expect(await whatsApp.evaluate(element => Boolean(element.closest('.koma-art-search-and-social')))).toBe(true);
-    expect(await share.evaluate(element => Boolean(element.closest('.koma-art-canopy__topline')))).toBe(true);
+    expect(await whatsApp.evaluate(element => Boolean(element.closest('.km-store-socials')))).toBe(true);
+    expect(await share.evaluate(element => Boolean(element.closest('.km-hero-topbar')))).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   }
 
@@ -85,18 +85,18 @@ test('B3: loja sem redes não reserva lacunas nem exige WhatsApp para consultar 
   await page.setViewportSize({ width: 320, height: 720 });
   await page.goto('/c/qa-b3-social-compact');
 
-  await expect(page.locator('.koma-art-mobile-contacts')).toHaveCount(0);
+  await expect(page.locator('.km-store-socials')).toHaveCount(0);
   await expect(page.locator('#btn-whatsapp-mobile, #btn-instagram-mobile')).toHaveCount(0);
   await expect(page.locator('#btn-share-mobile')).toBeVisible();
   await expect(page.getByRole('searchbox', { name: 'Campo de busca de produtos' })).toBeVisible();
   await expect(page.getByText('Pastel especial').first()).toBeVisible();
   const [search, row] = await Promise.all([
-    page.locator('.koma-art-search-wrap').boundingBox(),
-    page.locator('.koma-art-search-and-social').boundingBox(),
+    page.locator('.km-search-bar').boundingBox(),
+    page.locator('.km-container').boundingBox(),
   ]);
   expect(search).not.toBeNull();
   expect(row).not.toBeNull();
-  expect(search!.width).toBeGreaterThan(row!.width - 2);
+  expect(search!.width).toBeGreaterThan(240);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 

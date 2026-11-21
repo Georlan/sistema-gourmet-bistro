@@ -96,6 +96,12 @@ test('CardapioDigitalSettingsPanel isola payload por seção para evitar sobresc
     logo_url: 'https://cdn.example/logo.png',
     banner_url: 'https://cdn.example/banner.png',
   });
+
+  const coloredMarcaPayload = buildSectionPersistedPayload({ ...snapshot, cor_primaria: '#EC4899' }, 'marca');
+  assert.equal(coloredMarcaPayload.cor_primaria, '#ec4899');
+
+  const pedidosPayload = buildSectionPersistedPayload(snapshot, 'pedidos');
+  assert.equal('cor_primaria' in pedidosPayload, false);
 });
 
 test('productMerchandising calcula preço efetivo, desconto e selos válidos', () => {

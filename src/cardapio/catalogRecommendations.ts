@@ -1,8 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import type { BrandConfig, Product } from '../CardapioTypes';
-import CatalogProductImage from './CatalogProductImage';
-
-const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+import type { Product } from './CardapioTypes';
 
 const normalize = (value: string) => value
   .normalize('NFD')
@@ -24,9 +20,10 @@ const UPSELL_MATCHER = /(^|\b)(porcao|porcoes|petisco|petiscos|fritas|batata|bat
 const BEBIDA_MATCHER = /(^|\b)(bebida|bebidas|drink|drinks|refrigerante|refrigerantes|suco|sucos|cerveja|cervejas|chopp|agua|aguas)(\b|$)/;
 const SOBREMESA_MATCHER = /(^|\b)(sobremesa|sobremesas|doce|doces|dessert|desserts|sorvete|sorvetes|milkshake|milk-shake|acai|brownie)(\b|$)/;
 
+/** Seleciona recomendações complementares exclusivamente a partir do catálogo público vigente. */
 export function buildCatalogRecommendations(
   products: Product[],
-  categories?: string[],
+  _categories?: string[],
   excludeProductIds?: string[] | Set<string>,
 ): Recommendation[] {
   const available = products.filter((product) => product.isAvailable !== false);
@@ -47,7 +44,6 @@ export function buildCatalogRecommendations(
       recs.push({ kind, label, product });
     };
 
-    // 1. Destaque / Produto Principal: burger, pizza, prato ou primeiro item da categoria inicial de comida
     const primaryProduct = available.find((product) => {
       if (filterExcluded && excluded.has(product.id)) return false;
       const cat = normalize(product.category || '');
@@ -62,7 +58,6 @@ export function buildCatalogRecommendations(
       addRecommendation(primaryProduct, 'destaque', 'Destaque');
     }
 
-    // 2. Combo
     const comboProduct = available.find((product) => {
       if (chosenIds.has(product.id)) return false;
       if (filterExcluded && excluded.has(product.id)) return false;
@@ -75,7 +70,6 @@ export function buildCatalogRecommendations(
       addRecommendation(comboProduct, 'combo', 'Combo');
     }
 
-    // 3. Upsell relevante / Acompanhamento / Porção
     const upsellProduct = available.find((product) => {
       if (chosenIds.has(product.id)) return false;
       if (filterExcluded && excluded.has(product.id)) return false;
@@ -87,7 +81,6 @@ export function buildCatalogRecommendations(
       addRecommendation(upsellProduct, 'upsell', 'Acompanhamento');
     }
 
-    // 4. Complemento para até 3 itens (priorizando itens de comida antes de bebidas/sobremesas)
     if (recs.length < 3) {
       for (const product of available) {
         if (recs.length >= 3) break;
@@ -100,7 +93,6 @@ export function buildCatalogRecommendations(
       }
     }
 
-    // 5. Último recurso se o cardápio não possuir itens suficientes de comida
     if (recs.length < 3) {
       for (const product of available) {
         if (recs.length >= 3) break;
@@ -127,67 +119,4 @@ export function buildCatalogRecommendations(
     return pickRecommendations(false);
   }
   return candidateRecs.length > 0 ? candidateRecs : pickRecommendations(false);
-}
-
-export function CardapioRecommendations({ brand }: { brand: BrandConfig }) {
-  const [excludedIds, setExcludedIds] = useState<string[] | undefined>(brand.popularProductIds);
-
-  useEffect(() => {
-    if (brand.popularProductIds && brand.popularProductIds.length > 0) {
-      setExcludedIds(brand.popularProductIds);
-    }
-    const handler = (event: Event) => {
-      const detail = (event as CustomEvent<string[]>).detail;
-      if (Array.isArray(detail)) {
-        setExcludedIds(detail);
-      }
-    };
-    window.addEventListener('koma:popular-products-loaded', handler);
-    return () => window.removeEventListener('koma:popular-products-loaded', handler);
-  }, [brand.popularProductIds]);
-
-  const recommendations = useMemo(
-    () => buildCatalogRecommendations(brand.products, brand.categories, excludedIds ?? brand.popularProductIds),
-    [brand.products, brand.categories, excludedIds, brand.popularProductIds],
-  );
-
-  if (recommendations.length === 0) return null;
-
-  const openProduct = (product: Product) => {
-    const target = document.getElementById(`product-card-${product.id}`);
-    const detailsTrigger = target?.querySelector<HTMLButtonElement>('.cardapio-product-card__details-hitbox');
-    if (detailsTrigger) {
-      detailsTrigger.click();
-      return;
-    }
-    target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
-
-  return (
-    <section aria-labelledby="cardapio-recommendations-title" className="cardapio-editorial-section w-full basis-full" id="cardapio-recommendations-home">
-      <div className="cardapio-showcase-header">
-        <h2 id="cardapio-recommendations-title" className="cardapio-showcase-heading">Combina com seu pedido</h2>
-        <span className="cardapio-showcase-badge">Seleção da casa</span>
-      </div>
-      <div className="cardapio-recommendation-list" role="list">
-        {recommendations.map(({ kind, label, product }) => (
-          <button
-            key={`${kind}-${product.id}`}
-            type="button"
-            role="listitem"
-            onClick={() => openProduct(product)}
-            className="cardapio-editorial-card"
-            aria-label={`Abrir ${label.toLowerCase()} ${product.name}`}
-          >
-            <span className="cardapio-editorial-card__content">
-              <span className="cardapio-editorial-card__label">{label}</span>
-              <strong className="cardapio-editorial-card__name">{product.name}</strong>
-              <span className="cardapio-editorial-card__price">{money(product.price)}</span>
-            </span>
-            <CatalogProductImage image={product.image} className="cardapio-editorial-card__image" />
-          </button>
-        ))}
-      </div>
-    </section>
-  );
 }

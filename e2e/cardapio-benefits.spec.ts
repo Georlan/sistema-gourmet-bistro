@@ -168,7 +168,7 @@ test('sem benefícios habilitados não mostra acesso nem cupom na sacola', async
   page.on('request', request => { if (request.url().includes('/cupons/')) benefitRequests++; });
   await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await expect(page.locator('#btn-benefits-header, #mobile-nav-benefits')).toHaveCount(0);
-  await page.locator('.cardapio-product-card__details-hitbox').first().click();
+  await page.locator('[id^="product-card-"] button.km-product-card__hitbox').first().click();
   await page.locator('#product-details-modal').getByRole('button', { name: /Adicionar/ }).click();
   if (!(await page.locator('#cart-drawer-container').isVisible())) {
     await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
@@ -196,7 +196,7 @@ async function prepareCouponCart(page: Page) {
   const cart = page.locator('#cart-drawer-container');
   await cart.getByRole('button', { name: 'Contato', exact: true }).click();
   await cart.locator('#input-guest-phone').fill('85999999999');
-  await cart.getByRole('button', { name: 'Cupom', exact: true }).click();
+  await cart.getByRole('button', { name: 'Descontos', exact: true }).click();
   return cart;
 }
 
@@ -204,7 +204,7 @@ async function chooseBenefitCoupon(page: Page, code: string) {
   await page.locator('#mobile-nav-benefits:visible, #btn-benefits-header:visible').first().click();
   const offers = page.locator('#cardapio-benefits-offers');
   await offers.locator('article').filter({ hasText: code }).getByRole('button', { name: 'Usar na sacola' }).click();
-  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Cupom', exact: true }).click();
+  await page.locator('#cart-drawer-container').getByRole('button', { name: 'Descontos', exact: true }).click();
 }
 
 test('trocar oferta externa limpa o cupom aplicado sem perder celular ou produtos', async ({ page }) => {

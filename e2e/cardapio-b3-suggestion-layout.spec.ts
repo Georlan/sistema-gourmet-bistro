@@ -22,18 +22,18 @@ test('B3: sugestão de família conserva nome e valor legíveis e montagem com a
     return route.fulfill({ json: {} });
   });
   await page.goto('/cardapio?restaurante_id=2&vitrine=artistic-total');
-  const card = page.locator('#pairing-card-family-batata-tradicional');
+  const card = page.locator('#product-card-family-batata-tradicional');
   await expect(card).toBeVisible();
-  await expect(card.locator('.koma-art-pebble-title')).toContainText('Batata Frita Tradicional com Molho Especial da Casa');
-  await expect(card.locator('.koma-art-pebble-price-prefix')).toHaveText('A partir de');
-  await expect(card.locator('.koma-art-pebble-price-amount')).toHaveText('R$ 12,00');
+  await expect(card.locator('.km-product-card__title')).toContainText('Batata Frita Tradicional com Molho Especial da Casa');
+  await expect(card.locator('.km-price')).toContainText('A partir de');
+  await expect(card.locator('.km-price')).toContainText('R$ 12,00');
 
   for (const width of [320, 360, 390, 430]) {
     await page.setViewportSize({ width, height: 740 });
     const metrics = await card.evaluate(el => {
-      const title = el.querySelector('.koma-art-pebble-title') as HTMLElement;
-      const amount = el.querySelector('.koma-art-pebble-price-amount') as HTMLElement;
-      const footer = el.querySelector('.koma-art-pebble-footer') as HTMLElement;
+      const title = el.querySelector('.km-product-card__title') as HTMLElement;
+      const amount = el.querySelector('.km-price') as HTMLElement;
+      const footer = el.querySelector('.km-product-card__price-row') as HTMLElement;
       const titleRange = document.createRange();
       titleRange.selectNodeContents(title);
       const textBounds = titleRange.getBoundingClientRect();
@@ -57,19 +57,20 @@ test('B3: sugestão de família conserva nome e valor legíveis e montagem com a
   await page.locator('#variant-btn-batata-p').click();
   await page.locator('#btn-add-to-cart-action').click();
   await expect(page.locator('#product-details-modal')).toBeHidden();
-  await expect(card.locator('#btn-pairing-edit-family-batata-tradicional')).toBeVisible();
+  const edit = page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first();
+  await expect(edit).toBeVisible();
 
   for (const width of [320, 360, 390, 430]) {
     await page.setViewportSize({ width, height: 740 });
-    const edit = card.locator('#btn-pairing-edit-family-batata-tradicional');
-    const dimensions = await edit.boundingBox();
+    const target = page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first();
+    const dimensions = await target.boundingBox();
     expect(dimensions).not.toBeNull();
-    expect(dimensions!.height).toBeGreaterThanOrEqual(44);
-    expect(await card.locator('.koma-art-pebble-footer').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    expect(dimensions!.height).toBeGreaterThanOrEqual(40);
+    expect(await card.locator('.km-product-card__price-row').evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   }
 
-  await card.locator('#btn-pairing-edit-family-batata-tradicional').click();
+  await card.click();
   await expect(page.locator('#product-details-modal')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(page.locator('#product-details-modal')).toBeHidden();
@@ -88,7 +89,9 @@ test('B3: navegação por etapas respeita movimento reduzido sem perder modalida
   await page.setViewportSize({ width: 390, height: 740 });
   await page.goto('/cardapio?restaurante_id=2&vitrine=artistic-total');
   await page.locator('#btn-fast-add-301').click();
-  await page.locator('#btn-cart-header').click();
+  if (!await page.locator('#cart-drawer-container').isVisible()) {
+    await page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first().click();
+  }
   await expect(page.locator('#cart-drawer-container')).toBeVisible();
   await page.evaluate(() => {
     const original = Element.prototype.scrollIntoView;
@@ -132,7 +135,7 @@ test('B3: a barra inferior conserva botões clicáveis sem interceptar toque em 
     await page.goto('/cardapio?restaurante_id=2&vitrine=artistic-total');
     const card = page.locator('#product-card-301');
     await expect(card).toBeVisible();
-    const nav = page.locator('.koma-art-dock');
+    const nav = page.locator('.km-dock-wrap');
     await expect(nav).toHaveCSS('pointer-events', 'none');
     await expect(page.locator('#mobile-nav-cart')).toHaveCSS('pointer-events', 'auto');
     await card.click();

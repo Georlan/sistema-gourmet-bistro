@@ -3,8 +3,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import CardapioPage from '../../src/cardapio/CardapioPage';
 import '../../src/index.css';
-import '../../src/cardapio/cardapioTone.css';
-import '../../src/cardapio/cardapioPublic.css';
+import '../../src/cardapio/v2/komaMenu.css';
 
 const deliveryScenario = new URLSearchParams(location.search).get('entrega');
 const paymentScenario = new URLSearchParams(location.search).get('pagamentos');

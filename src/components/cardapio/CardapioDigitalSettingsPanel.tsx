@@ -56,6 +56,7 @@ export type RestaurantConfigSnapshot = {
   frete_gratis_valor?: number;
   tipo_taxa_entrega?: 'fixa' | 'bairro';
   tabela_taxas_bairros?: BairroTaxaRow[];
+  cor_primaria?: string;
 };
 
 type StoreAppearanceConfig = {
@@ -68,9 +69,30 @@ type StoreAppearanceConfig = {
   status_override: string;
   logo_url: string;
   banner_url: string;
+  cor_primaria: string;
   socials: SocialConfig;
   horarios_funcionamento: HourRow[];
 };
+
+const BRAND_COLOR_PRESETS = [
+  { label: 'Verde KÔMA', hex: '#00b894' },
+  { label: 'Rosa', hex: '#ec4899' },
+  { label: 'Vermelho', hex: '#e11d48' },
+  { label: 'Azul', hex: '#2563eb' },
+  { label: 'Laranja', hex: '#ea580c' },
+  { label: 'Roxo', hex: '#7c3aed' },
+] as const;
+
+function normalizeConfigBrandColor(value: unknown, fallback = '#00b894'): string {
+  const raw = String(value || '').trim().replace(/^#/, '');
+  if (/^[0-9a-f]{3}$/i.test(raw)) {
+    return `#${raw[0]}${raw[0]}${raw[1]}${raw[1]}${raw[2]}${raw[2]}`.toLowerCase();
+  }
+  if (/^[0-9a-f]{6}$/i.test(raw)) {
+    return `#${raw.toLowerCase()}`;
+  }
+  return fallback;
+}
 
 interface CardapioDigitalSettingsPanelProps {
   apiBaseUrl: string;
@@ -167,6 +189,7 @@ function normalizeConfig(data: Record<string, any>): StoreAppearanceConfig {
     status_override: String(data?.status_override || 'Automático'),
     logo_url: String(data?.logo_url || ''),
     banner_url: String(data?.banner_url || ''),
+    cor_primaria: normalizeConfigBrandColor(data?.cor_primaria, KOMA_MENU_PRIMARY),
     socials: normalizeSocials(data?.socials),
     horarios_funcionamento: normalizeHours(data?.horarios_funcionamento),
   };
@@ -181,6 +204,7 @@ const emptyConfig: StoreAppearanceConfig = {
   status_override: 'Automático',
   logo_url: '',
   banner_url: '',
+  cor_primaria: KOMA_MENU_PRIMARY,
   socials: {},
   horarios_funcionamento: [],
 };
@@ -195,7 +219,7 @@ export function buildSectionPersistedPayload(
   section: CardapioDigitalSettingsSection,
 ): Record<string, unknown> {
   if (section === 'perfil') {
-    return {
+    const payload: Record<string, unknown> = {
       nome: config.nome.trim(),
       subtitulo: config.subtitulo.trim(),
       sobre_nos: config.sobre_nos.trim(),
@@ -203,13 +227,21 @@ export function buildSectionPersistedPayload(
       google_maps_url: config.google_maps_url.trim(),
       socials: config.socials,
     };
+    if (typeof config.cor_primaria === 'string' && config.cor_primaria.trim()) {
+      payload.cor_primaria = normalizeConfigBrandColor(config.cor_primaria, KOMA_MENU_PRIMARY);
+    }
+    return payload;
   }
 
   if (section === 'marca') {
-    return {
+    const payload: Record<string, unknown> = {
       logo_url: config.logo_url.trim(),
       banner_url: config.banner_url.trim(),
     };
+    if (typeof config.cor_primaria === 'string' && config.cor_primaria.trim()) {
+      payload.cor_primaria = normalizeConfigBrandColor(config.cor_primaria, KOMA_MENU_PRIMARY);
+    }
+    return payload;
   }
 
   return {
@@ -217,8 +249,6 @@ export function buildSectionPersistedPayload(
     horarios_funcionamento: config.horarios_funcionamento
       .map(({ days, hours }) => ({ days: days.trim(), hours: hours.trim() }))
       .filter((row) => row.days && row.hours),
-    cor_primaria: KOMA_MENU_PRIMARY,
-    cor_fundo: KOMA_MENU_BACKGROUND,
   };
 }
 
@@ -359,8 +389,8 @@ function PhonePreview({
                   <span
                     className="rounded-lg px-2.5 py-1 text-xs font-semibold"
                     style={{
-                      background: 'var(--kc-chrome-selected, var(--koma-action-bg))',
-                      color: 'var(--kc-chrome-on-selected, var(--koma-action-text))',
+                      background: config.cor_primaria || 'var(--kc-chrome-selected, var(--koma-action-bg))',
+                      color: '#ffffff',
                     }}
                   >
                     Destaques
@@ -789,6 +819,64 @@ export function CardapioDigitalSettingsPanel({
                   authHeaders={authHeaders}
                   onChange={(url) => updateAssetUrl('banner_url', url)}
                 />
+
+                <div className="rounded-xl border border-koma-border bg-koma-card p-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <FieldLabel>Cor principal do cardápio</FieldLabel>
+                      <p className="text-xs leading-relaxed text-koma-muted">
+                        Adapta botões, ilustrações e contrastes automáticos para a identidade da loja.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateConfig('cor_primaria', KOMA_MENU_PRIMARY)}
+                      className="min-h-9 rounded-lg border border-koma-border bg-koma-panel px-2.5 text-xs font-semibold text-koma-secondary transition hover:text-koma-foreground"
+                    >
+                      Restaurar padrão KÔMA
+                    </button>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {BRAND_COLOR_PRESETS.map((preset) => {
+                      const active = normalizeConfigBrandColor(config.cor_primaria) === preset.hex;
+                      return (
+                        <button
+                          key={preset.hex}
+                          type="button"
+                          onClick={() => updateConfig('cor_primaria', preset.hex)}
+                          aria-pressed={active}
+                          className={clsx(
+                            'inline-flex min-h-10 items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition',
+                            active
+                              ? 'border-koma-border-strong bg-koma-raised text-koma-foreground'
+                              : 'border-koma-border bg-koma-panel text-koma-secondary hover:text-koma-foreground',
+                          )}
+                        >
+                          <span
+                            className="h-4 w-4 rounded-full border border-white/20"
+                            style={{ backgroundColor: preset.hex }}
+                            aria-hidden="true"
+                          />
+                          <span>{preset.label}</span>
+                        </button>
+                      );
+                    })}
+
+                    <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-xl border border-koma-border bg-koma-input px-2.5 text-xs font-semibold text-koma-foreground">
+                      <input
+                        type="color"
+                        aria-label="Escolher cor personalizada do cardápio"
+                        value={normalizeConfigBrandColor(config.cor_primaria)}
+                        onChange={(event) => updateConfig('cor_primaria', event.target.value.toLowerCase())}
+                        className="h-6 w-6 cursor-pointer rounded border-0 bg-transparent p-0"
+                      />
+                      <span className="font-mono text-xs uppercase tabular-nums">
+                        {normalizeConfigBrandColor(config.cor_primaria)}
+                      </span>
+                    </label>
+                  </div>
+                </div>
               </div>
             </section>
           )}

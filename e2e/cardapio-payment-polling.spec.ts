@@ -57,7 +57,7 @@ test('checkout reconciles approval after hidden pause without resubmitting the o
   expect(statusReads).toBe(before);
   approved = true; // Simulates an authoritative approval while the customer is away.
   await page.evaluate(() => { (window as any).__testHidden = false; document.dispatchEvent(new Event('visibilitychange')); });
-  await expect(page.locator('#checkout-card')).toContainText('Pedido recebido');
+  await expect(page.locator('#checkout-card')).toContainText('Pedido confirmado');
   expect(submissions).toBe(1);
   const terminalReads = statusReads;
   await page.clock.runFor(30_000);

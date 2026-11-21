@@ -77,7 +77,7 @@ test('combo e quentinha avulsa enviam composição separada no checkout', async 
   await cart.locator('#input-guest-phone').fill('85999999999');
   await cart.locator('#btn-confirm-order').click();
   await page.locator('#btn-place-order-final').click();
-  await expect(page.locator('#checkout-card')).toContainText('Pedido recebido');
+  await expect(page.locator('#checkout-card')).toContainText('Pedido confirmado');
 });
 
 });

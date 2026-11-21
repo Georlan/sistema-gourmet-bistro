@@ -184,12 +184,45 @@ export default function CardapioAuthModal({
   };
 
   return createPortal(
-    <div className="k-customer-auth" id="auth-modal-overlay"
-      onClick={event => { if (event.target === event.currentTarget) onClose(); }}>
-      <div ref={dialogRef} tabIndex={-1} className="k-customer-auth__sheet" id="auth-modal-card"
-        role="dialog" aria-modal="true" aria-labelledby="auth-modal-title">
-        <header className="k-customer-auth__header">
-          <button id="auth-close" type="button" onClick={onClose} className="k-customer-auth__close" aria-label="Fechar">
+    <div
+      className="k-customer-auth"
+      id="auth-modal-overlay"
+      style={{ backgroundColor: "var(--km-overlay)" }}
+      onClick={event => { if (event.target === event.currentTarget) onClose(); }}
+    >
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        className="k-customer-auth__sheet"
+        id="auth-modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-title"
+        style={{
+          backgroundColor: "var(--km-dialog)",
+          color: "var(--km-ink)",
+          borderColor: "var(--km-line)",
+        }}
+      >
+        <header
+          className="k-customer-auth__header"
+          style={{
+            backgroundColor: "var(--km-accent-soft)",
+            borderColor: "var(--km-accent-border)",
+          }}
+        >
+          <button
+            id="auth-close"
+            type="button"
+            onClick={onClose}
+            className="k-customer-auth__close"
+            aria-label="Fechar"
+            style={{
+              backgroundColor: "var(--km-dialog)",
+              color: "var(--km-ink)",
+              borderColor: "var(--km-line)",
+            }}
+          >
             <X size={20} aria-hidden="true" />
           </button>
           <svg className="k-customer-auth__art" viewBox="0 0 100 100" fill="none" aria-hidden="true" focusable="false">

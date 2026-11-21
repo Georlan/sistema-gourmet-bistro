@@ -1,7 +1,7 @@
 import React from 'react';
 import { getProductImageUrl, LOCAL_PRODUCT_PLACEHOLDER } from '../CardapioTypes';
 
-/** A mesma imagem cadastrada em todas as vitrines, com fallback local. */
+/** A mesma imagem cadastrada em todas as vitrines, sem hooks para manter SSR e listas leves. */
 export default function CatalogProductImage({
   image,
   alt = '',
@@ -19,9 +19,12 @@ export default function CatalogProductImage({
   height?: number;
   sizes?: string;
 }) {
+  const resolvedSrc = getProductImageUrl(image || '');
+
   return (
     <img
-      src={getProductImageUrl(image || '')}
+      key={resolvedSrc}
+      src={resolvedSrc}
       alt={alt}
       className={className}
       loading={priority ? 'eager' : 'lazy'}
@@ -31,7 +34,7 @@ export default function CatalogProductImage({
       height={height}
       sizes={sizes}
       referrerPolicy="no-referrer"
-      onError={event => {
+      onError={(event) => {
         if (event.currentTarget.src !== LOCAL_PRODUCT_PLACEHOLDER) {
           event.currentTarget.src = LOCAL_PRODUCT_PLACEHOLDER;
         }
@@ -39,4 +42,3 @@ export default function CatalogProductImage({
     />
   );
 }
-

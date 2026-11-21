@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useState } from "react";
-import { Coins, LogOut, Mail, MapPin, Phone, ShieldCheck, User, X } from "lucide-react";
+import { Coins, LogOut, Mail, MapPin, Pencil, Phone, ShieldCheck, User, Wallet, X } from "lucide-react";
 import type { BrandConfig } from "../CardapioTypes";
 import { API_BASE_URL } from "../../config/api";
 import {
@@ -131,62 +131,89 @@ export default function CardapioUserProfileModal({
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4 animate-fade-in cursor-pointer"
+      className="fixed inset-0 z-50 flex items-end justify-center p-0 pb-[86px] sm:items-center sm:p-4 animate-fade-in cursor-pointer"
+      style={{ backgroundColor: "var(--km-overlay)" }}
       id="user-profile-overlay"
     >
-      <div className="relative w-full max-w-md rounded-3xl bg-koma-card border border-slate-800 p-6 shadow-2xl flex flex-col max-h-[90vh] text-koma-foreground animate-scale-up">
-        <div className="flex items-center justify-between border-b border-slate-800/60 pb-4 shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
+      <div
+        className="relative flex max-h-[calc(100dvh-100px)] w-full max-w-md flex-col rounded-t-[28px] border border-[var(--km-line)] bg-[var(--km-dialog)] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] text-[var(--km-ink)] shadow-2xl sm:max-h-[90vh] sm:rounded-3xl sm:p-6 animate-scale-up"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Minha conta"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-[var(--km-line-strong)] sm:hidden" />
+
+        <div className="flex items-center justify-between border-b border-[var(--km-line-subtle)] pb-4 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] text-[var(--km-accent-text)]">
               <User className="h-5 w-5" />
             </div>
-            <div>
-              <h2 className="font-display text-base font-black uppercase tracking-wide text-koma-foreground">Meu Perfil</h2>
-              <p className="text-[10px] text-koma-muted font-medium">Pedidos e pontos sincronizados</p>
+            <div className="min-w-0">
+              <h2 className="truncate font-display text-lg font-black tracking-tight text-[var(--km-ink)]">
+                {user ? user.name : "Minha conta"}
+              </h2>
+              <p className="text-[11px] font-medium text-[var(--km-muted)] truncate">
+                {user
+                  ? user.phoneVerified
+                    ? "Conta verificada"
+                    : "Dados sincronizados"
+                  : "Pedidos, endereços e benefícios"}
+              </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-11 w-11 items-center justify-center rounded-full bg-slate-800/50 hover:bg-slate-800 text-koma-subtle hover:text-koma-foreground transition"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-ink-2)] transition hover:text-[var(--km-ink)] cursor-pointer"
             aria-label="Fechar perfil"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto mt-4 space-y-5 pr-1 no-scrollbar text-xs">
+        <div className="flex-1 overflow-y-auto mt-4 space-y-4 pr-0.5 no-scrollbar text-xs">
           {!user ? (
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-center text-amber-600 dark:text-amber-300">
-              Confirme seu celular para acessar o perfil.
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] px-5 py-10 text-center">
+              <div className="grid h-16 w-16 place-items-center rounded-3xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] text-[var(--km-accent-text)]">
+                <ShieldCheck className="h-8 w-8" />
+              </div>
+              <h3 className="mt-4 font-display text-base font-black text-[var(--km-ink)]">
+                Entre com seu celular
+              </h3>
+              <p className="mt-1.5 max-w-[240px] text-xs leading-relaxed text-[var(--km-muted)]">
+                Confirme seu número para salvar endereços, acompanhar pedidos e acumular benefícios.
+              </p>
             </div>
           ) : isEditing ? (
             <form onSubmit={handleSubmit} className="space-y-4 animate-fade-in">
-              <div className="bg-gradient-to-br from-primary/10 to-transparent p-4 rounded-2xl border border-primary/10 text-center space-y-1.5">
-                <ShieldCheck className="h-6 w-6 text-primary mx-auto" />
-                <h3 className="font-display font-extrabold text-sm text-koma-foreground">Atualize seus dados</h3>
-                <p className="text-[11px] text-koma-subtle leading-relaxed">
+              <div className="rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] p-4 text-center space-y-1.5">
+                <ShieldCheck className="h-6 w-6 text-[var(--km-accent-text)] mx-auto" />
+                <h3 className="font-display font-extrabold text-sm text-[var(--km-ink)]">Atualize seus dados</h3>
+                <p className="text-[11px] text-[var(--km-ink-2)] leading-relaxed">
                   O celular é sua identidade. Para trocá-lo, saia e confirme o novo número.
                 </p>
               </div>
 
               <label className="block">
-                <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block mb-1">{user.phoneVerified ? "Celular verificado" : "Celular cadastrado"}</span>
+                <span className="text-[10px] font-bold text-[var(--km-muted)] uppercase tracking-wider block mb-1.5">
+                  {user.phoneVerified ? "Celular verificado" : "Celular cadastrado"}
+                </span>
                 <span className="relative block">
-                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-koma-muted" />
+                  <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--km-muted)]" />
                   <input
                     type="tel"
                     value={formatBrazilianPhone(user.phone)}
                     readOnly
-                    className="w-full rounded-xl border border-slate-800 bg-slate-950/50 py-2.5 pl-10 pr-4 text-xs text-koma-subtle cursor-not-allowed"
+                    className="w-full rounded-xl border border-[var(--km-line-subtle)] bg-[var(--km-panel)] py-3 pl-10 pr-4 text-xs text-[var(--km-muted)] cursor-not-allowed"
                   />
                 </span>
               </label>
 
               <label className="block">
-                <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block mb-1">Nome completo</span>
+                <span className="text-[10px] font-bold text-[var(--km-muted)] uppercase tracking-wider block mb-1.5">Nome completo</span>
                 <span className="relative block">
-                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-koma-muted" />
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--km-muted)]" />
                   <input
                     type="text"
                     required
@@ -194,116 +221,169 @@ export default function CardapioUserProfileModal({
                     autoComplete="name"
                     value={name}
                     onChange={(event) => setName(event.target.value)}
-                    className="w-full rounded-xl border border-slate-800 bg-slate-900/60 py-2.5 pl-10 pr-4 text-xs text-koma-foreground focus:border-primary outline-hidden transition"
+                    className="w-full rounded-xl border border-[var(--km-line)] bg-[var(--km-input)] py-3 pl-10 pr-4 text-xs text-[var(--km-ink)] focus:border-[var(--km-focus)] outline-hidden transition"
                   />
                 </span>
               </label>
 
               <label className="block">
-                <span className="text-[10px] font-bold text-koma-subtle uppercase tracking-wider block mb-1">Endereço principal</span>
+                <span className="text-[10px] font-bold text-[var(--km-muted)] uppercase tracking-wider block mb-1.5">Endereço principal</span>
                 <span className="relative block">
-                  <MapPin className="absolute left-3.5 top-3 h-4 w-4 text-koma-muted" />
+                  <MapPin className="absolute left-3.5 top-3 h-4 w-4 text-[var(--km-muted)]" />
                   <textarea
                     maxLength={300}
                     autoComplete="street-address"
                     value={address}
                     onChange={(event) => setAddress(event.target.value)}
                     rows={2}
-                    className="w-full rounded-xl border border-slate-800 bg-slate-900/60 py-2.5 pl-10 pr-4 text-xs text-koma-foreground focus:border-primary outline-hidden transition resize-none"
+                    placeholder="Rua, número, complemento, bairro..."
+                    className="w-full rounded-xl border border-[var(--km-line)] bg-[var(--km-input)] py-3 pl-10 pr-4 text-xs text-[var(--km-ink)] placeholder:text-[var(--km-subtle)] focus:border-[var(--km-focus)] outline-hidden transition resize-none"
                   />
                 </span>
               </label>
 
               {errorMessage && (
-                <p className="rounded-xl bg-red-500/10 border border-red-500/20 p-3 text-red-400 text-[11px] font-semibold">
+                <p
+                  className="rounded-xl border p-3 text-[11px] font-semibold"
+                  style={{
+                    background: "var(--koma-danger-bg)",
+                    borderColor: "var(--koma-danger-border)",
+                    color: "var(--koma-danger-text)",
+                  }}
+                >
                   {errorMessage}
                 </p>
               )}
-              <button
-                type="submit"
-                disabled={isSaving}
-                className="w-full rounded-xl bg-primary py-3 text-center text-xs font-black uppercase tracking-wider text-koma-foreground disabled:opacity-60"
-              >
-                {isSaving ? "Salvando..." : "Salvar Perfil"}
-              </button>
-            </form>
-          ) : (
-            <div className="space-y-5 animate-fade-in">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[9px] font-bold text-primary tracking-widest uppercase">{user.phoneVerified ? "Celular verificado" : "Celular cadastrado"}</span>
-                  <h3 className="font-display font-black text-sm text-koma-foreground">{user.name}</h3>
-                </div>
+
+              <div className="flex items-center gap-2.5 pt-1">
                 <button
                   type="button"
-                  onClick={handleLogout}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-[10px] text-red-400 font-extrabold uppercase border border-red-500/10 transition"
+                  onClick={() => {
+                    setIsEditing(false);
+                    setErrorMessage("");
+                    setName(user.name);
+                    setAddress(user.address);
+                  }}
+                  disabled={isSaving}
+                  className="min-h-11 flex-1 rounded-xl border border-[var(--km-line)] bg-[var(--km-raised)] text-center text-xs font-bold text-[var(--km-ink)] transition hover:opacity-90 disabled:opacity-60 cursor-pointer"
                 >
-                  <LogOut className="h-3 w-3" /> Sair
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="min-h-11 flex-[1.5] rounded-xl bg-[var(--km-accent)] py-3 text-center text-xs font-black uppercase tracking-wider text-[var(--km-on-accent)] transition hover:bg-[var(--km-accent-hover)] disabled:opacity-60 cursor-pointer"
+                >
+                  {isSaving ? "Salvando..." : "Salvar"}
                 </button>
               </div>
-
-              {benefits?.loyalty && <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-2xl border border-primary/15 bg-primary/5 p-3">
-                  <Coins className="h-4 w-4 text-primary mb-1" />
-                  <p className="text-[9px] uppercase text-koma-muted font-bold">Pontos</p>
-                  <p className="text-base font-black text-koma-foreground">{user.points}</p>
+            </form>
+          ) : (
+            <div className="space-y-4 animate-fade-in">
+              {benefits?.loyalty && (
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div className="rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] p-3.5">
+                    <div className="flex items-center gap-1.5 text-[var(--km-accent-text)]">
+                      <Coins className="h-4 w-4 shrink-0" />
+                      <span className="text-[10px] uppercase tracking-wider font-extrabold">Pontos</span>
+                    </div>
+                    <p className="mt-1.5 text-lg font-black text-[var(--km-ink)] tabular-nums">{user.points}</p>
+                  </div>
+                  <div className="rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-3.5">
+                    <div className="flex items-center gap-1.5 text-[var(--km-accent-text)]">
+                      <Wallet className="h-4 w-4 shrink-0" />
+                      <span className="text-[10px] uppercase tracking-wider font-extrabold">Cashback</span>
+                    </div>
+                    <p className="mt-1.5 text-lg font-black text-[var(--km-ink)] tabular-nums">
+                      {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(user.cashback)}
+                    </p>
+                  </div>
                 </div>
-                <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/5 p-3">
-                  <p className="text-[9px] uppercase text-koma-muted font-bold mt-5">Cashback</p>
-                  <p className="text-base font-black text-koma-foreground">
-                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(user.cashback)}
-                  </p>
-                </div>
-              </div>}
+              )}
 
-              <div className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 space-y-3">
+              <div className="rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2 border-b border-[var(--km-line-subtle)] pb-2.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-[var(--km-accent-text)]">
+                    Seus dados
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditing(true)}
+                    className="inline-flex items-center gap-1 rounded-lg border border-[var(--km-line)] bg-[var(--km-raised)] px-2.5 py-1 text-[11px] font-bold text-[var(--km-ink)] transition hover:border-[var(--km-accent-border)] cursor-pointer"
+                  >
+                    <Pencil className="h-3 w-3" /> Editar
+                  </button>
+                </div>
+
                 {user.email && (
                   <div className="flex items-start gap-3">
-                    <Mail className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                    <div>
-                      <p className="text-[9px] uppercase tracking-wider text-koma-muted font-bold">E-mail</p>
-                      <p className="text-xs text-koma-foreground">{user.email}</p>
+                    <Mail className="h-4 w-4 text-[var(--km-accent-text)] mt-0.5 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-[9px] uppercase tracking-wider text-[var(--km-muted)] font-bold">E-mail</p>
+                      <p className="text-xs text-[var(--km-ink)] truncate">{user.email}</p>
                     </div>
                   </div>
                 )}
                 <div className="flex items-start gap-3">
-                  <Phone className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                  <Phone className="h-4 w-4 text-[var(--km-accent-text)] mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-[9px] uppercase tracking-wider text-koma-muted font-bold">Celular</p>
-                    <p className="text-xs text-koma-foreground">{formatBrazilianPhone(user.phone)}</p>
+                    <p className="text-[9px] uppercase tracking-wider text-[var(--km-muted)] font-bold">
+                      {user.phoneVerified ? "Celular verificado" : "Celular"}
+                    </p>
+                    <p className="text-xs text-[var(--km-ink)] tabular-nums">{formatBrazilianPhone(user.phone)}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
-                  <MapPin className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                  <MapPin className="h-4 w-4 text-[var(--km-accent-text)] mt-0.5 shrink-0" />
                   <div>
-                    <p className="text-[9px] uppercase tracking-wider text-koma-muted font-bold">Endereço</p>
-                    <p className="text-xs text-koma-foreground leading-relaxed">{user.address || "Nenhum endereço salvo"}</p>
+                    <p className="text-[9px] uppercase tracking-wider text-[var(--km-muted)] font-bold">Endereço principal</p>
+                    <p className="text-xs text-[var(--km-ink)] leading-relaxed">
+                      {user.address || "Nenhum endereço salvo — toque em Editar para adicionar"}
+                    </p>
                   </div>
                 </div>
               </div>
 
               {customerToken && (
-                <CardapioCustomerOrderHistory
-                  customerToken={customerToken}
-                  onRepeatOrder={onRepeatOrder}
-                />
+                <div className="space-y-2">
+                  <CardapioCustomerOrderHistory
+                    customerToken={customerToken}
+                    onRepeatOrder={onRepeatOrder}
+                  />
+                </div>
               )}
 
-              {errorMessage && <p className="text-red-400 text-[11px]">{errorMessage}</p>}
+              {errorMessage && (
+                <p
+                  className="rounded-xl border p-3 text-[11px] font-semibold"
+                  style={{
+                    background: "var(--koma-danger-bg)",
+                    borderColor: "var(--koma-danger-border)",
+                    color: "var(--koma-danger-text)",
+                  }}
+                >
+                  {errorMessage}
+                </p>
+              )}
+
               <button
                 type="button"
-                onClick={() => setIsEditing(true)}
-                className="w-full rounded-xl bg-slate-800 hover:bg-slate-700 py-2.5 text-center text-[10px] font-bold uppercase tracking-wider text-koma-foreground transition"
+                onClick={handleLogout}
+                className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border py-2.5 text-xs font-extrabold uppercase tracking-wider transition hover:opacity-90 cursor-pointer"
+                style={{
+                  background: "var(--koma-danger-bg)",
+                  borderColor: "var(--koma-danger-border)",
+                  color: "var(--koma-danger-text)",
+                }}
               >
-                Editar Dados
+                <LogOut className="h-3.5 w-3.5" /> Trocar conta / Sair
               </button>
             </div>
           )}
         </div>
 
-        <div className="mt-4 pt-3 border-t border-slate-800/60 text-center shrink-0">
-          <p className="text-[9px] text-koma-muted leading-tight">
+        <div className="mt-4 pt-3 border-t border-[var(--km-line-subtle)] text-center shrink-0">
+          <p className="text-[10px] text-[var(--km-muted)] leading-tight">
             Alterações são sincronizadas com o cadastro do restaurante.
           </p>
         </div>

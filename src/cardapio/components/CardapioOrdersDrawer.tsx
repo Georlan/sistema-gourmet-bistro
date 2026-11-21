@@ -10,11 +10,16 @@ import { DirectPixCustomerConfirm } from "./DirectPixCustomerConfirm";
 import React from "react";
 import { QRCodeSVG } from "qrcode.react";
 import {
+  Bike,
+  Check,
   CheckCircle2,
+  ChefHat,
   Clock3,
   MessageCircle,
   Package,
+  PackageCheck,
   QrCode,
+  Receipt,
   RefreshCw,
   Trash2,
   X,
@@ -32,6 +37,7 @@ import {
   resolveOrderState,
 } from "../orderTracking";
 import CardapioOrderChatPanel from "./CardapioOrderChatPanel";
+import { KomaOrderStatusAsset } from "../v2/KomaVisualAssets";
 
 interface CardapioOrdersDrawerProps {
   restaurantId?: string | number | null;
@@ -435,6 +441,21 @@ export default function CardapioOrdersDrawer({
     }
   }, [openChat, orders, requestedPushOrder]);
 
+  React.useEffect(() => {
+    const handleOpenOrdersDrawer = (event: Event) => {
+      const detail = (event as CustomEvent<{ orderId?: string }>).detail;
+      if (detail?.orderId) {
+        onSelectOrder(detail.orderId);
+      }
+      setChatOrderId(null);
+      setFloatingOpen(true);
+    };
+    window.addEventListener("koma:open-orders-drawer", handleOpenOrdersDrawer);
+    return () => {
+      window.removeEventListener("koma:open-orders-drawer", handleOpenOrdersDrawer);
+    };
+  }, [onSelectOrder]);
+
   const openFloatingChat = React.useCallback(() => {
     if (preferredChatOrder) openChat(preferredChatOrder.id);
     setFloatingOpen(true);
@@ -468,7 +489,7 @@ export default function CardapioOrdersDrawer({
     return (
       <div
         className={clsx(
-          "fixed right-4 z-40 sm:right-6 transition-[opacity,transform] duration-300 pointer-events-auto",
+          "hidden sm:block fixed right-4 z-40 sm:right-6 transition-[opacity,transform] duration-300 pointer-events-auto",
           hasFloatingCart
             ? "bottom-[calc(6.75rem+env(safe-area-inset-bottom,0px))]"
             : "bottom-5 sm:bottom-6 pb-[env(safe-area-inset-bottom,0px)]"
@@ -485,8 +506,8 @@ export default function CardapioOrdersDrawer({
             }
           }}
           className={clsx(
-            "group relative flex min-h-12 items-center gap-2.5 rounded-full border border-emerald-500/40 bg-[#0d1612]/95 px-3.5 py-2 text-emerald-100 shadow-2xl backdrop-blur-md transition hover:-translate-y-0.5 hover:border-emerald-400 hover:bg-[#13261c] active:scale-95 cursor-pointer",
-            totalUnread > 0 ? "ring-4 ring-emerald-500/20" : ""
+            "group relative flex min-h-12 items-center gap-2.5 rounded-full border border-[var(--km-accent-border)] bg-[var(--km-dialog)] px-3.5 py-2 text-[var(--km-ink)] shadow-2xl transition hover:-translate-y-0.5 hover:border-[var(--km-accent)] active:scale-95 cursor-pointer",
+            totalUnread > 0 ? "ring-4 ring-[var(--km-accent-soft)]" : ""
           )}
           id="floating-order-chat-trigger"
           aria-label={totalUnread > 0
@@ -494,17 +515,17 @@ export default function CardapioOrdersDrawer({
             : displayOrder ? "Abrir chat do pedido" : "Abrir pedidos e chat"}
         >
           {totalUnread > 0 ? (
-            <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-emerald-400 px-1 text-[10px] font-black text-black shadow-lg animate-pulse">
+            <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-[var(--km-accent)] px-1 text-[10px] font-black text-[var(--km-on-accent)] shadow-lg animate-pulse">
               {totalUnread > 99 ? "99+" : totalUnread}
             </span>
           ) : (
             <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--km-accent)] opacity-75" />
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-[var(--km-accent)]" />
             </span>
           )}
           <span className={clsx(
-            "grid h-8 w-8 place-items-center rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 shrink-0",
+            "grid h-8 w-8 place-items-center rounded-full bg-[var(--km-accent-soft)] border border-[var(--km-accent-border)] text-[var(--km-accent-text)] shrink-0",
             totalUnread > 0 && "animate-pulse"
           )}>
             {isChatAvailable || !displayOrder ? <MessageCircle className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
@@ -513,21 +534,21 @@ export default function CardapioOrdersDrawer({
             {displayOrder ? (
               <>
                 <div className="flex items-center gap-1.5">
-                  <span className="block text-[9px] font-black uppercase tracking-wider text-emerald-400">
+                  <span className="block text-[9px] font-black uppercase tracking-wider text-[var(--km-accent-text)]">
                     Pedido #{displayOrder.numero_pedido}
                   </span>
-                  <strong className="text-[10px] font-black text-emerald-300">
+                  <strong className="text-[10px] font-black text-[var(--km-accent-text)]">
                     {totalUnread > 0 ? "Nova mensagem" : "Chat do pedido"}
                   </strong>
                 </div>
-                <span className="block text-[11px] font-bold text-white leading-tight">
-                  {statusText} · <small className="text-[9px] text-emerald-200/70 font-normal">Fale com o restaurante</small>
+                <span className="block text-[11px] font-bold text-[var(--km-ink)] leading-tight">
+                  {statusText} · <small className="text-[9px] text-[var(--km-muted)] font-normal">Fale com o restaurante</small>
                 </span>
               </>
             ) : (
               <>
-                <strong className="block text-[10px] font-black text-emerald-300">Pedidos & chat</strong>
-                <span className="block text-[11px] font-bold text-white leading-tight">
+                <strong className="block text-[10px] font-black text-[var(--km-accent-text)]">Pedidos & chat</strong>
+                <span className="block text-[11px] font-bold text-[var(--km-ink)] leading-tight">
                   Acompanhe seus pedidos
                 </span>
               </>
@@ -540,9 +561,14 @@ export default function CardapioOrdersDrawer({
 
   if (chatOrder) {
     return (
-      <div className="fixed inset-0 z-50 flex justify-end bg-black/75 backdrop-blur-sm transition-opacity" id="orders-drawer-backdrop" onClick={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}>
+      <div
+        className="fixed inset-0 z-50 flex justify-end pb-[86px] sm:pb-0 transition-opacity"
+        style={{ backgroundColor: "var(--km-overlay)" }}
+        id="orders-drawer-backdrop"
+        onClick={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}
+      >
         <div
-          className="flex h-full w-full max-w-md flex-col bg-koma-card text-koma-foreground shadow-2xl transition-transform duration-300"
+          className="flex h-full w-full max-w-md flex-col border-l border-[var(--km-line)] bg-[var(--km-dialog)] text-[var(--km-ink)] shadow-2xl transition-transform duration-300"
           role="dialog"
           aria-label={`Chat do Pedido #${chatOrder.numero_pedido}`}
           id="orders-drawer-panel"
@@ -562,35 +588,46 @@ export default function CardapioOrdersDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/75 backdrop-blur-sm transition-opacity" id="orders-drawer-backdrop" onClick={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-end pb-[86px] sm:items-stretch sm:pb-0 transition-opacity"
+      style={{ backgroundColor: "var(--km-overlay)" }}
+      id="orders-drawer-backdrop"
+      onClick={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}
+    >
       <div
-        className="flex h-full w-full max-w-md flex-col bg-koma-card text-koma-foreground shadow-2xl transition-transform duration-300"
+        className="flex max-h-[calc(100dvh-100px)] w-full flex-col overflow-hidden rounded-t-[28px] border border-[var(--km-line)] bg-[var(--km-dialog)] text-[var(--km-ink)] shadow-2xl transition-transform duration-300 sm:h-full sm:max-h-none sm:max-w-md sm:rounded-none sm:rounded-l-[28px] sm:border-y-0 sm:border-r-0"
         role="dialog"
         aria-label="Meus Pedidos"
         id="orders-drawer-panel"
       >
-        <div className="flex items-center justify-between border-b border-koma-border p-4 sm:p-5">
-          <div className="flex items-center gap-2.5">
-            <Package className="h-5 w-5 text-emerald-400" />
-            <div>
+        <div className="flex shrink-0 justify-center pt-3 pb-1 sm:hidden">
+          <div className="h-1 w-10 rounded-full bg-[var(--km-line-strong)]" />
+        </div>
+
+        <div className="flex items-center justify-between border-b border-[var(--km-line-subtle)] px-5 pt-2 pb-4 sm:pt-5">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] text-[var(--km-accent-text)]">
+              <Package className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-black text-koma-foreground">Meus Pedidos</h2>
+                <h2 className="font-display text-lg font-black tracking-tight text-[var(--km-ink)]">Pedidos</h2>
                 {totalUnread > 0 && (
-                  <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[9px] font-black text-black">
+                  <span className="rounded-full bg-[var(--km-accent)] px-2 py-0.5 text-[10px] font-black text-[var(--km-on-accent)]">
                     {totalUnread} {totalUnread === 1 ? "nova" : "novas"}
                   </span>
                 )}
               </div>
-              <p className="text-[10px] text-koma-muted">
+              <p className="text-[11px] text-[var(--km-muted)] truncate">
                 {totalUnread > 0
-                  ? "O restaurante respondeu. Abra a conversa destacada."
+                  ? "Nova mensagem do restaurante"
                   : activeOrders.length > 0
                     ? `${activeOrders.length} em andamento`
-                    : "Acompanhe seus pedidos e converse com o restaurante"}
+                    : "Acompanhe seus pedidos em tempo real"}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={() => {
@@ -598,16 +635,16 @@ export default function CardapioOrdersDrawer({
                 void refreshUnreadCounts();
               }}
               disabled={isRefreshing}
-              className="grid h-11 w-11 place-items-center rounded-xl border border-koma-border bg-koma-panel text-koma-secondary transition hover:text-white disabled:opacity-50"
+              className="grid h-10 w-10 place-items-center rounded-full border border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-ink-2)] transition hover:text-[var(--km-ink)] disabled:opacity-50 cursor-pointer"
               title="Atualizar status"
               aria-label="Atualizar status"
             >
-              <RefreshCw className={clsx("h-4 w-4", isRefreshing && "animate-spin text-emerald-400")} />
+              <RefreshCw className={clsx("h-4 w-4", isRefreshing && "animate-spin text-[var(--km-accent-text)]")} />
             </button>
             <button
               type="button"
               onClick={closeDrawer}
-              className="grid h-11 w-11 place-items-center rounded-xl border border-koma-border bg-koma-panel text-koma-secondary transition hover:text-white"
+              className="grid h-10 w-10 place-items-center rounded-full border border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-ink-2)] transition hover:text-[var(--km-ink)] cursor-pointer"
               title="Fechar"
               aria-label="Fechar"
             >
@@ -616,24 +653,24 @@ export default function CardapioOrdersDrawer({
           </div>
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5">
+        <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5 no-scrollbar">
           {orders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <div className="grid h-16 w-16 place-items-center rounded-2xl border border-koma-border bg-koma-panel text-koma-muted">
-                <MessageCircle className="h-8 w-8 opacity-40" />
-              </div>
-              <h3 className="mt-4 text-sm font-bold text-koma-foreground">Nenhum pedido por aqui ainda</h3>
-              <p className="mt-1.5 max-w-xs text-xs leading-relaxed text-koma-muted">
-                Quando você fizer um pedido, poderá acompanhar o status e conversar com o restaurante por aqui. Este atalho continua disponível mesmo sem login.
+            <div className="flex flex-col items-center justify-center py-14 text-center">
+              <KomaOrderStatusAsset className="h-20 w-20" />
+              <h3 className="mt-5 font-display text-lg font-black text-[var(--km-ink)]">Nenhum pedido por aqui ainda</h3>
+              <p className="mt-1.5 max-w-[260px] text-xs leading-relaxed text-[var(--km-muted)]">
+                Este atalho continua disponível mesmo sem login. Seus pedidos e atualizações aparecem aqui automaticamente.
               </p>
-              <button type="button" onClick={closeDrawer} className="mt-5 min-h-11 w-full max-w-xs rounded-xl bg-emerald-500 px-4 text-xs font-black text-white">Ver cardápio</button>
+              <button type="button" onClick={closeDrawer} className="mt-6 min-h-12 w-full max-w-xs rounded-full bg-[var(--km-accent)] px-5 text-xs font-black uppercase tracking-wider text-[var(--km-on-accent)] hover:bg-[var(--km-accent-hover)] transition cursor-pointer">
+                Explorar cardápio
+              </button>
             </div>
           ) : (
             <>
               {activeOrders.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-[var(--km-accent-text)]">
                       Em andamento ({activeOrders.length})
                     </span>
                   </div>
@@ -645,51 +682,67 @@ export default function CardapioOrdersDrawer({
                     const isSelected = selectedOrderId === order.id;
                     const unread = unreadFor(order.id);
 
+                    const getMilestoneIcon = (label: string, idx: number, totalSteps: number) => {
+                      const lower = label.toLowerCase();
+                      if (idx === 0 || lower.includes("receb")) return Receipt;
+                      if (lower.includes("entrega") || lower.includes("saiu")) return Bike;
+                      if (idx === totalSteps - 1 || lower.includes("conclu")) return PackageCheck;
+                      return ChefHat;
+                    };
+
+                    const getShortMilestoneLabel = (label: string) => {
+                      const lower = label.toLowerCase();
+                      if (lower.includes("pronto")) return "Pronto";
+                      if (lower.includes("saiu")) return "A caminho";
+                      return label;
+                    };
+
                     return (
                       <div
                         key={order.id}
                         className={clsx(
-                          "rounded-2xl border p-4 transition-all shadow-md",
+                          "rounded-2xl border p-4 transition-all",
                           unread > 0
-                            ? "border-emerald-400 bg-emerald-950/30 ring-1 ring-emerald-400/40"
+                            ? "border-[var(--km-accent)] bg-[var(--km-accent-soft)]"
                             : isSelected
-                              ? "border-emerald-500 bg-emerald-950/20 ring-1 ring-emerald-500/40"
-                              : "border-koma-border bg-koma-panel hover:border-emerald-500/30",
+                              ? "border-[var(--km-accent)] bg-[var(--km-card)] ring-2 ring-[var(--km-accent-soft)]"
+                              : "border-[var(--km-line)] bg-[var(--km-card)] hover:border-[var(--km-accent-border)]",
                         )}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-start gap-2.5">
-                            <div className={clsx(
-                              "grid h-9 w-9 shrink-0 place-items-center rounded-xl",
-                              unread > 0 ? "bg-emerald-400 text-black" : "bg-emerald-500/15 text-emerald-400",
-                            )}>
-                              {unread > 0 ? <MessageCircle className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
-                            </div>
+                            {unread > 0 ? (
+                              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-[var(--km-accent)] text-[var(--km-on-accent)]">
+                                <MessageCircle className="h-5 w-5" />
+                              </div>
+                            ) : (
+                              <KomaOrderStatusAsset className="h-11 w-11 shrink-0" />
+                            )}
                             <div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-xs font-black text-koma-foreground">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="font-display text-sm font-black text-[var(--km-ink)]">
                                   Pedido #{order.numero_pedido}
                                 </span>
-                                <span className="rounded-md bg-koma-raised px-1.5 py-0.5 text-[9px] font-bold text-koma-secondary">
+                                <span className="rounded-md bg-[var(--km-raised)] px-2 py-0.5 text-[10px] font-bold text-[var(--km-ink-2)]">
                                   {orderFulfillmentLabel(state.fulfillment)}
                                 </span>
                                 {unread > 0 && (
-                                  <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[8px] font-black uppercase tracking-wide text-black animate-pulse">
+                                  <span className="rounded-full bg-[var(--km-accent)] px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-[var(--km-on-accent)] animate-pulse">
                                     {unread} {unread === 1 ? "nova" : "novas"}
                                   </span>
                                 )}
                               </div>
-                              <span className="mt-0.5 block text-[11px] font-bold text-emerald-400">
+                              <span className="mt-0.5 block text-xs font-bold text-[var(--km-accent-text)]">
                                 {unread > 0 ? "O restaurante respondeu" : customerOrderLabel(state)}
                               </span>
                             </div>
                           </div>
 
-                          <div className="text-right">
-                            <span className="text-xs font-black text-koma-foreground">
+                          <div className="text-right tabular-nums shrink-0">
+                            <span className="font-display text-sm font-black text-[var(--km-ink)]">
                               {formatCurrency(order.total)}
                             </span>
-                            <span className="mt-0.5 block text-[9px] text-koma-muted">
+                            <span className="mt-0.5 block text-[10px] text-[var(--km-muted)]">
                               {formatTime(order.timestamp)}
                             </span>
                           </div>
@@ -697,77 +750,124 @@ export default function CardapioOrdersDrawer({
 
                         {!state.terminal && <DeliveryReceiptCode code={receiptByOrder[order.id]} />}
                         {Array.isArray(order.itens) && order.itens.length > 0 && (
-                          <div className="mt-2.5 space-y-0.5 border-t border-koma-border/60 pt-2 text-[10px] text-koma-muted">
+                          <div className="mt-3 space-y-1 border-t border-[var(--km-line-subtle)] pt-2.5 text-[11px] text-[var(--km-muted)]">
                             {order.itens.slice(0, 3).map((item, idx) => (
                               <div key={idx} className="truncate">
-                                • {item.quantidade}x {item.nome}
+                                <strong className="text-[var(--km-ink-2)]">{item.quantidade}×</strong> {item.nome}
                               </div>
                             ))}
                             {order.itens.length > 3 && (
-                              <span className="text-[9px] text-koma-subtle">
-                                + {order.itens.length - 3} itens adicionais
+                              <span className="text-[10px] text-[var(--km-subtle)]">
+                                + {order.itens.length - 3} {order.itens.length - 3 === 1 ? "item" : "itens"}
                               </span>
                             )}
                           </div>
                         )}
 
                         {!rejected && progress && (
-                          <div className={clsx(
-                            "mt-3 grid gap-1 border-t border-koma-border/60 pt-2.5",
-                            progress.labels.length === 4 ? "grid-cols-4" : "grid-cols-3",
-                          )}>
-                            {progress.labels.map((label, idx) => {
-                              const passed = progress.current >= idx + 1;
-                              return (
-                                <div key={label} className="text-center">
-                                  <div className={clsx("h-1 rounded-full", passed ? "bg-emerald-500" : "bg-koma-raised")} />
-                                  <span className={clsx("mt-1 block text-[10px] font-bold", passed ? "text-emerald-300" : "text-koma-subtle")}>{label}</span>
-                                </div>
-                              );
-                            })}
+                          <div className="mt-3.5 border-t border-[var(--km-line-subtle)] pt-3.5">
+                            <div className="flex items-start justify-between">
+                              {progress.labels.map((label, idx) => {
+                                const stepNum = idx + 1;
+                                const isDone = progress.current > stepNum;
+                                const isCurrent = progress.current === stepNum;
+                                const passed = progress.current >= stepNum;
+                                const MilestoneIcon = getMilestoneIcon(label, idx, progress.labels.length);
+                                const isLast = idx === progress.labels.length - 1;
+                                return (
+                                  <React.Fragment key={label}>
+                                    <div className="flex flex-col items-center gap-1.5 min-w-[54px]">
+                                      <span
+                                        className={clsx(
+                                          "grid h-8 w-8 place-items-center rounded-full border transition-all",
+                                          isCurrent
+                                            ? "border-[var(--km-accent)] bg-[var(--km-accent)] text-[var(--km-on-accent)] ring-4 ring-[var(--km-accent-soft)]"
+                                            : isDone
+                                              ? "border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] text-[var(--km-accent-text)]"
+                                              : "border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-muted)]",
+                                        )}
+                                      >
+                                        {isDone ? (
+                                          <Check className="h-3.5 w-3.5 stroke-[2.5]" aria-hidden="true" />
+                                        ) : (
+                                          <MilestoneIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                                        )}
+                                      </span>
+                                      <span
+                                        className={clsx(
+                                          "text-[10px] leading-tight text-center",
+                                          isCurrent
+                                            ? "font-black text-[var(--km-accent-text)]"
+                                            : passed
+                                              ? "font-bold text-[var(--km-ink)]"
+                                              : "font-medium text-[var(--km-subtle)]",
+                                        )}
+                                      >
+                                        {getShortMilestoneLabel(label)}
+                                      </span>
+                                    </div>
+                                    {!isLast && (
+                                      <div className="mt-[15px] flex-1 px-1" aria-hidden="true">
+                                        <div className="h-[2px] w-full rounded-full bg-[var(--km-line)] overflow-hidden">
+                                          <div
+                                            className="h-full rounded-full bg-[var(--km-accent)] transition-all duration-300"
+                                            style={{ width: progress.current > stepNum ? "100%" : "0%" }}
+                                          />
+                                        </div>
+                                      </div>
+                                    )}
+                                  </React.Fragment>
+                                );
+                              })}
+                            </div>
                           </div>
                         )}
 
                         {state.phase === "payment_pending" && (
-                          <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-left">
+                          <div className="mt-3 rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] p-3 text-left">
                             <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-1.5">
-                                <QrCode className="h-4 w-4 text-amber-400 shrink-0" />
-                                <span className="text-[11px] font-black text-amber-300">
+                              <div className="flex items-center gap-2 text-[var(--km-accent-text)]">
+                                <QrCode className="h-4 w-4 shrink-0" />
+                                <span className="text-xs font-black text-[var(--km-ink)]">
                                   {order.pagamento?.confirmacao_manual && order.pagamento?.cliente_informou_pagamento
                                     ? "Pagamento informado"
-                                    : "Aguardando pagamento Pix"}
+                                    : "Aguardando Pix"}
                                 </span>
                               </div>
                               {order.pagamento?.qr_code && (
                                 <button
                                   type="button"
                                   onClick={() => setPixModalOrder(order)}
-                                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 px-2.5 py-1 text-[10px] font-black text-white shadow transition"
+                                  className="inline-flex items-center gap-1 rounded-full bg-[var(--km-accent)] hover:bg-[var(--km-accent-hover)] px-3 py-1.5 text-[11px] font-black text-[var(--km-on-accent)] transition cursor-pointer"
                                 >
-                                  <QrCode className="h-3 w-3" />
+                                  <QrCode className="h-3.5 w-3.5" />
                                   Pagar Pix
                                 </button>
                               )}
                             </div>
-                            <p className="mt-1 text-[10px] text-amber-200/80 leading-relaxed">
+                            <p className="mt-1 text-[11px] text-[var(--km-muted)] leading-relaxed">
                               {order.pagamento?.confirmacao_manual && order.pagamento?.cliente_informou_pagamento
-                                ? "Pagamento informado. Aguardando confirmação do restaurante."
-                                : "O restaurante só começará o preparo após a confirmação do Pix."}
+                                ? "Aguardando confirmação do restaurante."
+                                : "O preparo inicia após a confirmação do Pix."}
                             </p>
                           </div>
                         )}
 
-                        <div className="mt-3 flex items-center justify-between border-t border-koma-border/60 pt-2.5">
+                        <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2 border-t border-[var(--km-line-subtle)] pt-3">
                           <div className="flex flex-wrap items-center gap-2">
-                            {state.phase === "payment_pending" && order.pagamento?.qr_code && (
+                            {(order.tracking_url || order.tracking_token) && state.can_chat && (
                               <button
                                 type="button"
-                                onClick={() => setPixModalOrder(order)}
-                                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 px-3 py-1.5 text-[10px] font-black text-white shadow-sm transition"
+                                onClick={() => openChat(order.id)}
+                                className={clsx(
+                                  "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-bold transition cursor-pointer",
+                                  unread > 0
+                                    ? "border-[var(--km-accent)] bg-[var(--km-accent)] text-[var(--km-on-accent)] shadow-sm"
+                                    : "border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] text-[var(--km-accent-text)] hover:border-[var(--km-accent)]",
+                                )}
                               >
-                                <QrCode className="h-3.5 w-3.5" />
-                                Pagar Pix
+                                <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                                <span>{unread > 0 ? `Ler ${unread === 1 ? "mensagem" : "mensagens"}` : "Falar com a loja"}</span>
                               </button>
                             )}
                             <button
@@ -777,30 +877,15 @@ export default function CardapioOrdersDrawer({
                                 closeDrawer();
                               }}
                               className={clsx(
-                                "rounded-xl px-3 py-1.5 text-[10px] font-black transition",
+                                "inline-flex min-h-9 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold transition cursor-pointer",
                                 isSelected
-                                  ? "bg-emerald-500 text-white"
-                                  : "border border-koma-border bg-koma-card text-koma-secondary hover:text-white",
+                                  ? "border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] text-[var(--km-accent-text)]"
+                                  : "border border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-ink-2)] hover:border-[var(--km-accent-border)] hover:text-[var(--km-ink)]",
                               )}
                             >
-                              {isSelected ? "Acompanhando no topo" : "Ver no topo"}
+                              {isSelected && <Check className="h-3.5 w-3.5 stroke-[2.5]" aria-hidden="true" />}
+                              <span>{isSelected ? "Fixado no topo" : "Fixar no topo"}</span>
                             </button>
-
-                            {(order.tracking_url || order.tracking_token) && state.can_chat && (
-                              <button
-                                type="button"
-                                onClick={() => openChat(order.id)}
-                                className={clsx(
-                                  "inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-[10px] font-black transition",
-                                  unread > 0
-                                    ? "border-emerald-300 bg-emerald-400 text-black hover:bg-emerald-300"
-                                    : "border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20",
-                                )}
-                              >
-                                <MessageCircle className="h-3.5 w-3.5" />
-                                {unread > 0 ? `Abrir ${unread === 1 ? "mensagem" : "mensagens"}` : "Chat & Status"}
-                              </button>
-                            )}
                           </div>
                         </div>
                       </div>
@@ -812,7 +897,7 @@ export default function CardapioOrdersDrawer({
               {finishedOrders.length > 0 && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-koma-muted">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-[var(--km-muted)]">
                       Histórico Recente ({finishedOrders.length})
                     </span>
                   </div>
@@ -820,7 +905,6 @@ export default function CardapioOrdersDrawer({
                   {finishedOrders.map((order) => {
                     const state = resolveOrderState(order);
                     const rejected = state.rejected;
-                    const isDelivery = state.fulfillment === "delivery";
                     const unread = unreadFor(order.id);
 
                     return (
@@ -829,53 +913,66 @@ export default function CardapioOrdersDrawer({
                         className={clsx(
                           "rounded-2xl border p-3.5 transition",
                           unread > 0
-                            ? "border-emerald-400/70 bg-emerald-950/25"
-                            : "border-koma-border/80 bg-koma-panel/60",
+                            ? "border-[var(--km-accent)] bg-[var(--km-accent-soft)]"
+                            : "border-[var(--km-line)] bg-[var(--km-panel)]",
                         )}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-start gap-2.5">
-                            <div className={clsx(
-                              "grid h-8 w-8 shrink-0 place-items-center rounded-xl",
-                              unread > 0
-                                ? "bg-emerald-400 text-black"
-                                : rejected
-                                  ? "bg-rose-500/15 text-rose-400"
-                                  : "bg-emerald-500/15 text-emerald-400",
-                            )}>
+                            <div
+                              className={clsx(
+                                "grid h-8 w-8 shrink-0 place-items-center rounded-xl",
+                                unread > 0
+                                  ? "bg-[var(--km-accent)] text-[var(--km-on-accent)]"
+                                  : rejected
+                                    ? ""
+                                    : "bg-[var(--km-accent-soft)] text-[var(--km-accent-text)]",
+                              )}
+                              style={
+                                unread === 0 && rejected
+                                  ? {
+                                      background: "var(--koma-danger-bg)",
+                                      color: "var(--koma-danger-text)",
+                                    }
+                                  : undefined
+                              }
+                            >
                               {unread > 0 ? <MessageCircle className="h-4 w-4" /> : rejected ? <XCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
                             </div>
                             <div>
                               <div className="flex flex-wrap items-center gap-1.5">
-                                <span className="text-xs font-black text-koma-foreground">
+                                <span className="text-xs font-black text-[var(--km-ink)]">
                                   Pedido #{order.numero_pedido}
                                 </span>
-                                <span className="rounded-md bg-koma-raised px-1.5 py-0.5 text-[8px] font-bold text-koma-muted">
+                                <span className="rounded-md bg-[var(--km-raised)] px-1.5 py-0.5 text-[8px] font-bold text-[var(--km-muted)]">
                                   {orderFulfillmentLabel(state.fulfillment)}
                                 </span>
                                 {unread > 0 && (
-                                  <span className="rounded-full bg-emerald-400 px-1.5 py-0.5 text-[8px] font-black text-black">
+                                  <span className="rounded-full bg-[var(--km-accent)] px-1.5 py-0.5 text-[8px] font-black text-[var(--km-on-accent)]">
                                     {unread} nova{unread > 1 ? "s" : ""}
                                   </span>
                                 )}
                               </div>
-                              <span className={clsx("mt-0.5 block text-[10px] font-bold", rejected ? "text-rose-400" : "text-emerald-400")}>
+                              <span
+                                className={clsx("mt-0.5 block text-[10px] font-bold", !rejected && "text-[var(--km-accent-text)]")}
+                                style={rejected ? { color: "var(--koma-danger-text)" } : undefined}
+                              >
                                 {unread > 0 ? "Nova resposta do restaurante" : customerOrderLabel(state)}
                               </span>
                             </div>
                           </div>
 
-                          <div className="flex flex-col items-end gap-1">
-                            <span className="text-xs font-bold text-koma-secondary">
+                          <div className="flex flex-col items-end gap-1 tabular-nums">
+                            <span className="text-xs font-bold text-[var(--km-ink-2)]">
                               {formatCurrency(order.total)}
                             </span>
-                            <span className="text-[9px] text-koma-subtle">
+                            <span className="text-[9px] text-[var(--km-subtle)]">
                               {formatTime(order.timestamp)}
                             </span>
                           </div>
                         </div>
 
-                        <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-koma-border/40 pt-2 text-[10px]">
+                        <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--km-line-subtle)] pt-2.5 text-xs">
                           <div className="flex flex-wrap items-center gap-2">
                             <button
                               type="button"
@@ -883,7 +980,7 @@ export default function CardapioOrdersDrawer({
                                 onSelectOrder(order.id);
                                 closeDrawer();
                               }}
-                              className="text-koma-muted hover:text-white"
+                              className="inline-flex min-h-9 items-center rounded-full border border-[var(--km-line)] bg-[var(--km-raised)] px-3 py-1 text-[11px] font-bold text-[var(--km-ink-2)] transition hover:border-[var(--km-accent-border)] hover:text-[var(--km-ink)] cursor-pointer"
                             >
                               Ver detalhes
                             </button>
@@ -892,25 +989,35 @@ export default function CardapioOrdersDrawer({
                                 type="button"
                                 onClick={() => openChat(order.id)}
                                 className={clsx(
-                                  "inline-flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 font-bold transition",
+                                  "inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-bold transition cursor-pointer",
                                   rejected
-                                    ? "border-rose-500/35 bg-rose-500/10 text-rose-300 hover:bg-rose-500/15 hover:text-rose-200"
+                                    ? ""
                                     : unread > 0
-                                      ? "border-emerald-400/35 bg-emerald-500/10 text-emerald-300"
-                                      : "border-transparent text-emerald-400 hover:border-emerald-500/30 hover:bg-emerald-500/10 hover:text-emerald-300",
+                                      ? "border-[var(--km-accent)] bg-[var(--km-accent)] text-[var(--km-on-accent)]"
+                                      : "border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] text-[var(--km-accent-text)] hover:border-[var(--km-accent)]",
                                 )}
+                                style={
+                                  rejected
+                                    ? {
+                                        background: "var(--koma-danger-bg)",
+                                        borderColor: "var(--koma-danger-border)",
+                                        color: "var(--koma-danger-text)",
+                                      }
+                                    : undefined
+                                }
                               >
-                                <MessageCircle className="h-3 w-3" /> {rejected ? "Ver motivo da recusa" : unread > 0 ? "Ler mensagem" : "Chat"}
+                                <MessageCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                                <span>{rejected ? "Ver motivo" : unread > 0 ? "Ler mensagem" : "Chat"}</span>
                               </button>
                             )}
                           </div>
                           <button
                             type="button"
                             onClick={() => onRemoveOrder(order.id)}
-                            className="flex items-center gap-1 text-koma-subtle hover:text-rose-400"
+                            className="inline-flex min-h-9 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold text-[var(--km-subtle)] transition hover:bg-rose-500/10 hover:text-rose-500 cursor-pointer"
                             title="Remover do histórico local"
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                             <span>Remover</span>
                           </button>
                         </div>
@@ -926,7 +1033,8 @@ export default function CardapioOrdersDrawer({
 
       {pixModalOrder && pixModalOrder.pagamento?.qr_code && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 z-[60] flex items-center justify-center p-4 transition-opacity"
+          style={{ backgroundColor: "var(--km-overlay)" }}
           id="pix-payment-modal-backdrop"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
@@ -935,21 +1043,21 @@ export default function CardapioOrdersDrawer({
           }}
         >
           <div
-            className="max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-3xl border border-koma-border bg-koma-card p-5 text-center shadow-2xl"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-sm overflow-y-auto rounded-3xl border border-[var(--km-line)] bg-[var(--km-dialog)] p-5 text-center text-[var(--km-ink)] shadow-2xl"
             role="dialog"
             aria-modal="true"
             aria-label={`Pagamento Pix do Pedido #${pixModalOrder.numero_pedido}`}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-koma-border/60">
+            <div className="flex items-center justify-between pb-3 border-b border-[var(--km-line-subtle)]">
               <div className="flex items-center gap-2">
-                <div className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-500/15 text-emerald-400">
+                <div className="grid h-8 w-8 place-items-center rounded-xl bg-[var(--km-accent-soft)] text-[var(--km-accent-text)]">
                   <QrCode className="h-4 w-4" />
                 </div>
                 <div className="text-left">
-                  <h3 className="text-xs font-black text-white">
+                  <h3 className="text-xs font-black text-[var(--km-ink)]">
                     Pagar Pedido #{pixModalOrder.numero_pedido}
                   </h3>
-                  <span className="text-[10px] text-koma-muted">Pagamento via Pix</span>
+                  <span className="text-[10px] text-[var(--km-muted)]">Pagamento via Pix</span>
                 </div>
               </div>
               <button
@@ -957,7 +1065,7 @@ export default function CardapioOrdersDrawer({
                 onClick={() => {
                   setPixModalOrder(null);
                 }}
-                className="grid h-8 w-8 place-items-center rounded-xl border border-koma-border text-koma-secondary hover:text-white"
+                className="grid h-8 w-8 place-items-center rounded-xl border border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-ink-2)] hover:text-[var(--km-ink)]"
                 aria-label="Fechar modal Pix"
               >
                 <X className="h-4 w-4" />
@@ -965,15 +1073,15 @@ export default function CardapioOrdersDrawer({
             </div>
 
             <div className="my-4">
-              <span className="text-xs font-bold text-koma-muted block">Valor total</span>
-              <span className="text-2xl font-black text-emerald-400 block mt-0.5">
+              <span className="text-xs font-bold text-[var(--km-muted)] block">Valor total</span>
+              <span className="text-2xl font-black text-[var(--km-accent-text)] block mt-0.5 tabular-nums">
                 {formatCurrency(pixModalOrder.total)}
               </span>
             </div>
 
             {!pixModalOrder.pagamento.qr_code_base64 && pixModalOrder.pagamento.qr_code && (
               <QRCodeSVG value={pixModalOrder.pagamento.qr_code} size={208} level="M" marginSize={4}
-                role="img" aria-label="QR Code Pix do pedido" className="mx-auto my-3" />
+                role="img" aria-label="QR Code Pix do pedido" className="mx-auto my-3 rounded-xl bg-white p-2" />
             )}
             {pixModalOrder.pagamento.qr_code_base64 && (
               <div className="mx-auto my-3 flex justify-center">
@@ -1004,13 +1112,13 @@ export default function CardapioOrdersDrawer({
                 href={pixModalOrder.pagamento.ticket_url}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-2 flex h-10 w-full items-center justify-center rounded-xl border border-koma-border text-xs font-bold text-koma-foreground hover:bg-koma-raised"
+                className="mt-2 flex h-10 w-full items-center justify-center rounded-xl border border-[var(--km-line)] bg-[var(--km-raised)] text-xs font-bold text-[var(--km-ink)] hover:bg-[var(--km-card)]"
               >
                 Abrir link do pagamento
               </a>
             )}
 
-            {!pixModalOrder.pagamento.confirmacao_manual && <p className="mt-3 text-xs text-koma-muted">A confirmação do pagamento é automática.</p>}
+            {!pixModalOrder.pagamento.confirmacao_manual && <p className="mt-3 text-xs text-[var(--km-muted)]">A confirmação do pagamento é automática.</p>}
           </div>
         </div>
       )}

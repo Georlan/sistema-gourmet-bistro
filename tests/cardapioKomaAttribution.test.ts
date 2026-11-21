@@ -22,12 +22,15 @@ test('attribution links point to the public KÔMA landing page with referral UTM
 });
 
 test('public menu footer exposes a subtle KÔMA lead entry without replacing restaurant ownership', () => {
-  const page = source('../src/cardapio/CardapioPage.tsx');
-  assert.match(page, /id="koma-powered-by-footer"/);
-  assert.match(page, /buildKomaAttributionUrl\("menu_footer", activeBrand\.id\)/);
-  assert.match(page, /Cardápio digital por <strong[^>]*>KÔMA<\/strong>/);
-  assert.match(page, /target="_blank"/);
-  assert.match(page, /Preços e disponibilidade atualizados pelo restaurante\./);
+  const v2 = source('../src/cardapio/v2/MenuV2Experience.tsx');
+  const modal = source('../src/cardapio/v2/MenuKomaPlatformModal.tsx');
+  assert.match(v2, /id="koma-powered-by-footer"/);
+  assert.match(v2, /buildKomaAttributionUrl\("menu_footer", activeBrand\.id\)/);
+  assert.match(v2, /Preços e disponibilidade atualizados pelo restaurante\./);
+  assert.match(v2, /<MenuKomaPlatformModal/);
+  assert.match(modal, /href=\{attributionUrl\}/);
+  assert.match(modal, /target="_blank"/);
+  assert.match(modal, /rel="noopener noreferrer"/);
 });
 
 test('store information drawer reuses the same KÔMA attribution funnel', () => {
