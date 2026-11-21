@@ -13,8 +13,31 @@ permissions:
   contents: read
 
 jobs:
+  schedule-gate:
+    name: Check recent main activity
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    outputs:
+      run: ${{ steps.activity.outputs.run }}
+    steps:
+      - name: Checkout main head
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Check for commits in last 26h
+        id: activity
+        run: |
+          if [ -n "$(git log -1 --since='26 hours ago' --format=%H)" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No new commits on main in the last 26 hours; skipping full backend suite."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
   full-backend:
     name: Full backend pytest
+    needs: [schedule-gate]
+    if: always() && !cancelled() && (needs.schedule-gate.result == 'skipped' || (needs.schedule-gate.result == 'success' && needs.schedule-gate.outputs.run == 'true'))
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
