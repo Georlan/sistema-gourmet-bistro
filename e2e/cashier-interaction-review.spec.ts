@@ -10,7 +10,7 @@ test('details use the shared typography, format time, keep focus and return with
   const dialog = page.getByRole('dialog', { name: /Mesa|Consumo/ });
   await expect(dialog).toBeVisible();
   await expect(page.getByRole('button', { name: 'Fechar detalhes', exact: true })).toBeFocused();
-  await dialog.locator('.kd-items-disclosure > summary').click();
+  await expect(dialog.locator('.kd-items-disclosure')).toHaveAttribute('open', '');
   for (const selector of ['.orders-detail-modal__eyebrow', '.orders-detail-modal__item-status']) {
     expect(await dialog.locator(selector).first().evaluate(el => getComputedStyle(el).fontFamily)).toContain('Inter');
   }
@@ -135,7 +135,7 @@ test('observation editor can close without saving and order actions stay visible
   await page.locator('.orders-card--salon').first().click();
   const dialog = page.locator('.orders-detail-modal');
   await expect(dialog.getByText('Mais opções', { exact: true })).toHaveCount(0);
-  await dialog.locator('.kd-items-disclosure > summary').click();
+  await expect(dialog.locator('.kd-items-disclosure')).toHaveAttribute('open', '');
   const edit = dialog.locator('.orders-detail-modal__edit').first();
   await edit.locator('summary').click();
   await expect(edit.locator('textarea')).toBeFocused();

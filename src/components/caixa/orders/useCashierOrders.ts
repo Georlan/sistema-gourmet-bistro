@@ -814,7 +814,8 @@ export function useCashierOrders({
           id: it.id,
           comandaId: fullComanda.id,
           nome: it.produto?.nome || it.nome || 'Item',
-          preco: it.preco_unit || it.preco || 0,
+          preco_unit: it.preco_unit ?? it.preco ?? 0,
+          preco: it.preco_unit ?? it.preco ?? 0,
           observacao: it.observacao || '',
           modificadores: it.modificadores || [],
           composicao_agrupada: Boolean(it.composicao_agrupada),
@@ -856,6 +857,11 @@ export function useCashierOrders({
       });
     };
 
+    const fullComandaDiscounts =
+      (Number((fullComanda as any)?.valor_desconto_cupom) || 0) +
+      (Number((fullComanda as any)?.valor_desconto_cashback) || 0) +
+      (Number(fullComanda?.discountTotal) || 0);
+
     setSelectedKanbanOrder({
       id: order.id,
       comandaId: order.id,
@@ -864,6 +870,9 @@ export function useCashierOrders({
       identificador: order.cliente,
       itens: itemsMapped,
       total: order.total,
+      subtotal: order.subtotal,
+      deliveryFee: Number((fullComanda as any)?.delivery_taxa ?? fullComanda?.deliveryTax ?? order.deliveryFee ?? 0),
+      discountAmount: order.discountAmount ?? fullComandaDiscounts,
       amountPaid: order.amountPaid,
       amountDue: order.amountDue,
       onlinePaymentStatus: order.onlinePaymentStatus,

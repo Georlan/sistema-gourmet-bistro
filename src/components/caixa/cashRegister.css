@@ -10,7 +10,7 @@
 .cash-register button:focus-visible, .cash-item-correction button:focus-visible, .cash-item-correction select:focus-visible { outline:2px solid var(--koma-accent); outline-offset:3px; }
 .cash-refund { display:inline-flex; align-items:center; gap:.4rem; padding:.35rem .6rem; border:1px solid var(--koma-border-default); border-radius:.6rem; font-size:.75rem; color:var(--koma-text-primary); }
 .cash-item-correction { margin-top:.5rem; font-size:.8125rem; }
-.cash-item-correction__open { display:inline-flex; align-items:center; gap:.4rem; min-height:36px; padding:.3rem .5rem; border:1px solid var(--koma-border-default); border-radius:.5rem; }
+.cash-item-correction__open { display:inline-flex; align-items:center; gap:.4rem; min-height:44px; padding:.3rem .65rem; border:1px solid var(--koma-border-default); border-radius:.5rem; }
 .cash-item-correction__confirm { padding:.75rem; border:1px solid var(--koma-border-default); border-radius:.75rem; background:var(--koma-surface-panel); }
 .cash-item-correction__confirm p { margin:.5rem 0; color:var(--koma-text-muted); }
 .cash-item-correction__confirm [role=alert] { color:var(--koma-danger, #d46172); }

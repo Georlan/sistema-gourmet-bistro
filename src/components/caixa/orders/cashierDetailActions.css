@@ -74,3 +74,25 @@
 .kd-payment__paid-symbol { display:grid; place-items:center; width:32px; height:32px; flex:0 0 32px; border:1px solid #c0ebd1; border-radius:50%; color:#eaffef; background:#245b45; }
 [data-koma-theme=light] .orders-detail-modal .kd-payment--paid { color:#163e2c; background:#c6e6d0; border-color:#83ad8e; box-shadow:inset 0 1px 0 #ffffffa0,0 3px 0 #7caa88; }
 [data-koma-theme=light] .orders-detail-modal .kd-payment--paid .kd-payment__copy>span { color:#315941; }
+
+.kd-price-breakdown { display:grid; gap:.35rem; padding:.65rem .85rem; border:1px solid var(--koma-border-default); border-radius:.8rem; background:var(--koma-surface-input); font-variant-numeric:tabular-nums; }
+.kd-price-breakdown__row { display:flex; align-items:center; justify-content:space-between; gap:.75rem; font-size:.76rem; color:var(--koma-text-secondary); }
+.kd-price-breakdown__row strong { color:var(--koma-text-primary); font-family:var(--koma-font-display); font-weight:700; }
+.kd-price-breakdown__row.is-discount strong { color:#10b981; }
+.kd-price-breakdown__row.is-total { margin-top:.15rem; padding-top:.45rem; border-top:1px dashed var(--koma-border-default); font-size:.84rem; font-weight:700; color:var(--koma-text-primary); }
+.kd-price-breakdown__row.is-total strong { color:var(--koma-accent-text); font-size:.94rem; }
+
+.orders-detail-modal__item-head { display:flex; align-items:baseline; justify-content:space-between; gap:.65rem; min-width:0; }
+.orders-detail-modal__item-head>strong { min-width:0; flex:1 1 auto; }
+.orders-detail-modal__item-price { display:flex; flex-direction:column; align-items:flex-end; flex:0 0 auto; font-variant-numeric:tabular-nums; text-align:right; }
+.orders-detail-modal__item-line-total { color:var(--koma-text-primary); font-family:var(--koma-font-display); font-size:.78rem; font-weight:800; line-height:1.2; }
+.orders-detail-modal__item-unit-price { color:var(--koma-text-muted); font-size:.62rem; font-weight:600; line-height:1.2; }
+
+@media (min-width: 960px) {
+  .orders-detail-modal { display:grid !important; grid-template-columns:minmax(22rem,28rem) minmax(0,1fr); grid-template-rows:auto minmax(0,1fr) auto; align-items:stretch; }
+  .orders-detail-modal>.orders-detail-modal__hero { grid-column:1 / -1; grid-row:1; }
+  .orders-detail-modal>.orders-detail-modal__body { grid-column:1 / -1; grid-row:2; display:grid !important; grid-template-columns:minmax(22rem,28rem) minmax(0,1fr); align-items:start; column-gap:1.25rem; row-gap:.65rem; overflow-y:auto; }
+  .orders-detail-modal>.orders-detail-modal__body>:not(.kd-items-disclosure) { grid-column:1; }
+  .orders-detail-modal>.orders-detail-modal__body>.kd-items-disclosure { grid-column:2; grid-row:1 / span 12; align-self:start; }
+  .orders-detail-modal>.kd-footer { grid-column:1 / -1; grid-row:3; border-top:1px solid var(--koma-border-default); background:var(--koma-surface-dialog); }
+}

@@ -3,11 +3,12 @@ import { mockCashierBackend, seedCashierSession } from './fixtures/cashier';
 import { openOperationalScenario, showStage } from './fixtures/operational';
 
 for (const type of ['Retirada', 'Delivery']) {
-  test(`${type} starts compact, opens items locally and prints the full order`, async ({ page }) => {
+  test(`${type} shows items and price breakdown immediately, toggles items locally and prints the full order`, async ({ page }) => {
     await mockCashierBackend(page); await seedCashierSession(page);
     const order = { id: 'compact-check', restaurante_id: 99001, numero_pedido: 91, tipo: type, mesa_id: null,
       identificador: 'Cliente compacto', fechada: false, valor_pago: 0, delivery_status: 'producao',
       delivery_endereco: 'Rua das Flores, 10 · Centro', delivery_forma_pagamento: 'cartao_credito',
+      delivery_taxa: type === 'Delivery' ? 5 : 0,
       criado_em: new Date().toISOString(), lancamentos: [{ id: 'launch-first', origem: 'cardapio' }, { id: 'launch-second', origem: 'cardapio' }],
       itens: [{ id: 'first-item', lancamento_id: 'launch-first', produto_id: '101', produto: { nome: 'Suco de laranja' }, preco_unit: 10, pago: false, status: 'preparando' },
         { id: 'second-item', lancamento_id: 'launch-second', produto_id: '102', produto: { nome: 'Batata crocante' }, preco_unit: 20, pago: false, status: 'preparando' }] };
@@ -20,14 +21,24 @@ for (const type of ['Retirada', 'Delivery']) {
     if (await stages.isVisible()) await stages.getByRole('tab', { name: type === 'Delivery' ? /Entregas/ : /Retiradas/ }).click();
     await page.locator('.orders-card--digital').filter({ hasText: 'Cliente compacto' }).click();
     const modal = page.locator('.orders-detail-modal');
-    await expect(modal.locator('.orders-detail-modal__items')).not.toBeVisible();
+    await expect(modal.locator('.orders-detail-modal__items')).toBeVisible();
     await expect.poll(() => modal.locator('.orders-detail-modal__number img').evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
     await expect(modal.getByText('Cartão de crédito', { exact: true })).toBeVisible();
-    if (type === 'Delivery') await expect(modal.getByText('Rua das Flores, 10 · Centro')).toBeVisible();
-    await modal.locator('.kd-items-disclosure > summary').click();
+    const breakdown = modal.getByRole('region', { name: 'Composição do total' });
+    await expect(breakdown).toContainText('Itens (2)');
+    await expect(breakdown).toContainText('R$ 30,00');
+    if (type === 'Delivery') {
+      await expect(modal.getByText('Rua das Flores, 10 · Centro')).toBeVisible();
+      await expect(breakdown).toContainText('Taxa de entrega');
+      await expect(breakdown).toContainText('R$ 5,00');
+      await expect(breakdown).toContainText('R$ 35,00');
+    }
     await expect(modal.getByText('Suco de laranja', { exact: true })).toBeVisible();
     await expect(modal.getByText('Batata crocante', { exact: true })).toBeVisible();
     await modal.locator('.kd-items-disclosure > summary').click();
+    await expect(modal.locator('.orders-detail-modal__items')).not.toBeVisible();
+    await modal.locator('.kd-items-disclosure > summary').click();
+    await expect(modal.locator('.orders-detail-modal__items')).toBeVisible();
     await modal.getByRole('button', { name: 'Reimprimir Total', exact: true }).click();
     await expect(modal).toHaveCount(0); expect(prints).toBe(1);
   });

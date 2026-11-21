@@ -17,7 +17,8 @@ for (const theme of ['dark', 'light']) {
     await expect.poll(() => dialog.locator('.orders-detail-modal__number img').evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
     const print = dialog.getByRole('button', { name: 'Reimprimir Total', exact: true });
     const cancel = dialog.getByRole('button', { name: 'Cancelar somente este pedido', exact: true });
-    await expect(dialog.locator('.orders-detail-modal__items')).not.toBeVisible();
+    await expect(dialog.locator('.orders-detail-modal__items')).toBeVisible();
+    await expect(dialog.getByRole('region', { name: 'Composição do total' })).toBeVisible();
     await expect(print).toBeVisible();
     await expect(cancel).toBeVisible();
     const printStyle = await print.evaluate(el => ({ foreground: getComputedStyle(el).color, background: getComputedStyle(el).backgroundColor }));
