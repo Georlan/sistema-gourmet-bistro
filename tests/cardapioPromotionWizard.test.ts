@@ -66,3 +66,14 @@ test('assistente reaproveita modal de montagem, não grava itens separados duran
   assert.match(modal, /selectionWithinRules/);
   assert.doesNotMatch(wizard, /fetch\(|API_BASE_URL|localStorage/);
 });
+
+test('slot com múltiplas unidades expõe alternância direta, navegação por unidade, cópia e início na unidade 1', () => {
+  const wizard = readFileSync(new URL('../src/cardapio/components/CardapioPromotionWizard.tsx', import.meta.url), 'utf8');
+  const modal = readFileSync(new URL('../src/cardapio/components/CardapioProductModal.tsx', import.meta.url), 'utf8');
+  assert.match(wizard, /Todas iguais \(\{currentSlotQty\}×\)/);
+  assert.match(wizard, /Escolher cada uma \(\{currentSlotQty\}\)/);
+  assert.match(wizard, /Copiar escolhas da #\{current\.unitIdx\} para a #\{current\.unitIdx \+ 1\}/);
+  assert.match(wizard, /const splitSlotForIndividualEditing = \(slotIdx: number\) => \{\s*jumpToSlotUnit\(slotIdx, 0, true\);/);
+  assert.match(modal, /compositionStep\.headerSlot/);
+  assert.match(modal, /compositionStep\.unitMultiplier/);
+});
