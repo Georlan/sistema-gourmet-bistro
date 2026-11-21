@@ -26,6 +26,22 @@ export interface PdvPromotionCartItemLike {
   promotionId?: string;
 }
 
+export function extractPromotionsPayload(data: unknown): {
+  promotions: PdvPromotion[];
+  isValid: boolean;
+} {
+  if (Array.isArray(data)) {
+    return { promotions: data as PdvPromotion[], isValid: true };
+  }
+  if (data && typeof data === 'object') {
+    const record = data as Record<string, unknown>;
+    if (Array.isArray(record.promocoes)) {
+      return { promotions: record.promocoes as PdvPromotion[], isValid: true };
+    }
+  }
+  return { promotions: [], isValid: false };
+}
+
 export function filterActivePdvPromotions(
   promotions: PdvPromotion[],
   nowMs: number = Date.now(),
