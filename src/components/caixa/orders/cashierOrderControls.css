@@ -260,11 +260,11 @@
   .cashier-shell--mobile-orders .orders-auto-accept__suffix {
     display: none;
   }
-  .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:not(:has(.orders-mobile-stages > :nth-child(3))) .orders-auto-accept__suffix {
+  .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:not(:has(.orders-mobile-stages > :nth-child(3))):not(:has(.orders-pix-conference)) .orders-auto-accept__suffix {
     display: inline;
   }
   @media (min-width: 420px) {
-    .cashier-shell--mobile-orders .orders-workspace .orders-toolbar .orders-auto-accept__suffix {
+    .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:not(:has(.orders-pix-conference)) .orders-auto-accept__suffix {
       display: inline;
     }
   }
@@ -282,19 +282,25 @@
   .cashier-shell--mobile-orders .orders-auto-accept input:checked + .orders-switch > span {
     transform: translateX(12px);
   }
-  .cashier-shell--mobile-orders .orders-workspace .orders-new-orders:not(.orders-pix-conference) {
+  .cashier-shell--mobile-orders .orders-workspace .orders-new-orders {
     position: relative;
     flex: 0 0 38px;
     width: 38px;
     min-height: 38px;
     height: 38px;
     padding: 3px;
+    justify-content: center;
   }
-  .cashier-shell--mobile-orders .orders-workspace .orders-new-orders:not(.orders-pix-conference) img {
+  .cashier-shell--mobile-orders .orders-workspace .orders-new-orders img {
     width: 26px;
     height: 26px;
   }
-  .cashier-shell--mobile-orders .orders-new-orders:not(.orders-pix-conference) > span:not(.orders-new-orders__count) {
+  .cashier-shell--mobile-orders .orders-workspace .orders-pix-conference svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+  .cashier-shell--mobile-orders .orders-new-orders > span:not(.orders-new-orders__count) {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -302,20 +308,54 @@
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  .cashier-shell--mobile-orders .orders-new-orders:not(.orders-pix-conference) .orders-new-orders__count {
+  .cashier-shell--mobile-orders .orders-new-orders .orders-new-orders__count {
     position: absolute;
-    top: -3px;
-    right: -3px;
+    top: -4px;
+    right: -4px;
     min-width: 18px;
     min-height: 18px;
+    height: 18px;
+    padding: 0 4px;
     font-size: .7rem;
   }
 
+  @media (max-width: 384px) {
+    .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-pix-conference):has(.orders-mobile-stages > :nth-child(3)) {
+      grid-template-columns: minmax(0, 1fr) 34px auto;
+      gap: 3px;
+      padding: 3px;
+    }
+    .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-pix-conference):has(.orders-mobile-stages > :nth-child(3)) .orders-mobile-stages {
+      gap: 3px;
+    }
+    .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-pix-conference):has(.orders-mobile-stages > :nth-child(3)) .orders-mobile-stages .orders-filter-button {
+      padding: 2px 4px;
+      gap: 2px;
+    }
+    .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-pix-conference):has(.orders-mobile-stages > :nth-child(3)) .orders-search:not(:focus-within):not(.has-query) {
+      width: 34px;
+    }
+    .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-pix-conference):has(.orders-mobile-stages > :nth-child(3)) .orders-toolbar__actions {
+      gap: 3px;
+    }
+    .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-pix-conference):has(.orders-mobile-stages > :nth-child(3)) .orders-new-orders {
+      flex: 0 0 34px;
+      width: 34px;
+    }
+    .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-pix-conference):has(.orders-mobile-stages > :nth-child(3)) .orders-auto-accept {
+      gap: 3px;
+      padding: 0;
+    }
+    .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-pix-conference):has(.orders-mobile-stages > :nth-child(3)) .orders-auto-accept__label {
+      font-size: .68rem;
+    }
+  }
+
   /* When search is active, keep stages + actions on row 1 and expand search on row 2. */
-  .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-search:is(:focus-within,.has-query)):not(:has(.orders-pix-conference)) {
+  .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-search:is(:focus-within,.has-query)) {
     grid-template-columns: minmax(0, 1fr) auto;
   }
-  .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-search:is(:focus-within,.has-query)):not(:has(.orders-pix-conference)) .orders-toolbar__actions {
+  .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-search:is(:focus-within,.has-query)) .orders-toolbar__actions {
     grid-column: 2;
     grid-row: 1;
   }
@@ -326,58 +366,6 @@
   .cashier-shell--mobile-orders .orders-workspace .orders-search:is(:focus-within,.has-query) .orders-search__input {
     min-height: 40px;
     height: 40px;
-  }
-
-  /* Two-row mode when manual Pix confirmation is present. */
-  .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-pix-conference) {
-    grid-template-columns: minmax(0, 1fr) 44px;
-    gap: 3px 6px;
-    padding: 3px 4px;
-  }
-  .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-pix-conference) .orders-mobile-stages .orders-filter-button {
-    min-height: 36px;
-    height: 36px;
-  }
-  .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-pix-conference) .orders-search:not(:focus-within):not(.has-query) {
-    width: 44px;
-  }
-  .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-pix-conference) .orders-search:not(:focus-within):not(.has-query) .orders-search__input {
-    min-height: 36px;
-    height: 36px;
-  }
-  .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-pix-conference) .orders-toolbar__actions {
-    grid-column: 1 / -1;
-    width: 100%;
-    justify-content: space-between;
-    gap: 8px;
-  }
-  .cashier-shell--mobile-orders .orders-toolbar__actions .orders-pix-conference {
-    position: relative;
-    flex: 0 0 auto;
-    min-height: 44px;
-    padding: 6px 8px;
-    gap: 4px;
-    font-size: .75rem;
-    white-space: nowrap;
-  }
-  .cashier-shell--mobile-orders .orders-toolbar__actions .orders-pix-conference .orders-new-orders__count {
-    position: static;
-    min-width: 20px;
-    min-height: 20px;
-    font-size: .75rem;
-  }
-  .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-pix-conference) .orders-auto-accept {
-    flex: 1 1 auto;
-    min-height: 44px;
-  }
-  .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-pix-conference) .orders-auto-accept__suffix {
-    display: inline;
-  }
-  .cashier-shell--mobile-orders .orders-workspace .orders-toolbar:has(.orders-pix-conference) .orders-new-orders:not(.orders-pix-conference) {
-    flex: 0 0 44px;
-    width: 44px;
-    min-height: 44px;
-    height: 44px;
   }
   .cashier-shell--mobile-orders .orders-search__result,
   .cashier-shell--mobile-orders .orders-queue-notice { grid-column: 1 / -1; }
