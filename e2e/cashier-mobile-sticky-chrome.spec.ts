@@ -11,7 +11,7 @@ async function openCashier(page: Page, theme: 'dark' | 'light') {
   await page.goto('/?view=caixa');
   await expect(page.locator('html')).toHaveAttribute('data-koma-theme', theme);
   await expect(page.locator('.cashier-topbar')).toBeVisible();
-  await expect(page.locator('.cashier-subnav')).toBeHidden();
+  await expect(page.locator('.cashier-subnav')).toBeVisible();
   await expect(page.locator('.orders-toolbar')).toBeVisible();
 }
 

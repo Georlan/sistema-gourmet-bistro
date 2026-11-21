@@ -13,7 +13,7 @@ for (const theme of ['dark', 'light']) {
     const toolbar = page.locator('.orders-toolbar');
     const pix = toolbar.getByRole('button', { name: /Conferir Pix/ });
     await expect(pix).toBeVisible();
-    await expect(page.locator('.cashier-subnav--sales')).toBeHidden();
+    await expect(page.locator('.cashier-subnav--sales')).toBeVisible();
     expect((await toolbar.boundingBox())!.height).toBeLessThanOrEqual(110);
     const actions = toolbar.locator('.orders-toolbar__actions');
     expect((await actions.boundingBox())!.height).toBeLessThanOrEqual(48);
