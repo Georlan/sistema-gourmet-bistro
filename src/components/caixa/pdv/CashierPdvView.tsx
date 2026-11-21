@@ -2,7 +2,10 @@ import clsx from 'clsx';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PAYMENT_LABELS, type PaymentMethod } from '../../../cardapio/paymentMethods';
 import { Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CreditCard, MapPin, Package, Plus, Search, ShoppingCart, Tag, Truck, UserRound, UtensilsCrossed, X } from 'lucide-react';
-const CardapioPromotionWizard = lazy(() => import('../../../cardapio/components/CardapioPromotionWizard'));
+import { FeatureErrorBoundary } from '../../shared/FeatureErrorBoundary';
+
+const loadCardapioPromotionWizard = () => import('../../../cardapio/components/CardapioPromotionWizard');
+const CardapioPromotionWizard = lazy(loadCardapioPromotionWizard);
 import { calculatePromotionRegularTotal, formatPromotionItemsSummary } from '../../../utils/promotionFormHelpers';
 import {
   findPromotionStepProducts,
@@ -145,6 +148,14 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     const timeout = window.setTimeout(() => setAddedNotice(null), 1500);
     return () => window.clearTimeout(timeout);
   }, [addedNotice]);
+
+  useEffect(() => {
+    if (activePromotions.length === 0) return;
+    const timer = window.setTimeout(() => {
+      void loadCardapioPromotionWizard().catch(() => null);
+    }, 150);
+    return () => window.clearTimeout(timer);
+  }, [activePromotions.length]);
 
   const handleLaunchPromotion = useCallback((promo: PdvPromotion) => {
     const simpleProduct = isSingleItemSimpleDiscountPromotion(promo, sellableProducts);
@@ -993,26 +1004,28 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
       />
 
       {configuringPromotion && (
-        <Suspense fallback={null}>
-          <CardapioPromotionWizard
-          key={configuringPromotion.id}
-          title={configuringPromotion.nome}
-          basePrice={configuringPromotion.preco}
-          restaurantId="pdv"
-          expectedStepCount={configuringPromotion.componentes.length}
-          brindeNome={configuringPromotion.brinde_nome}
-          slotQuantities={configuringPromotion.quantidades}
-          steps={findPromotionStepProducts(configuringPromotion, sellableProducts).map((product) => ({
-            product: toCardapioProduct(product),
-            label: product.nome,
-          }))}
-          onClose={() => setConfiguringPromotion(null)}
-          onConfirm={(parts) => {
-            addPromotionToCart(configuringPromotion, parts);
-            setConfiguringPromotion(null);
-          }}
-        />
-        </Suspense>
+        <FeatureErrorBoundary label="Montagem de oferta">
+          <Suspense fallback={null}>
+            <CardapioPromotionWizard
+              key={configuringPromotion.id}
+              title={configuringPromotion.nome}
+              basePrice={configuringPromotion.preco}
+              restaurantId="pdv"
+              expectedStepCount={configuringPromotion.componentes.length}
+              brindeNome={configuringPromotion.brinde_nome}
+              slotQuantities={configuringPromotion.quantidades}
+              steps={findPromotionStepProducts(configuringPromotion, sellableProducts).map((product) => ({
+                product: toCardapioProduct(product),
+                label: product.nome,
+              }))}
+              onClose={() => setConfiguringPromotion(null)}
+              onConfirm={(parts) => {
+                addPromotionToCart(configuringPromotion, parts);
+                setConfiguringPromotion(null);
+              }}
+            />
+          </Suspense>
+        </FeatureErrorBoundary>
       )}
 
       {configProduct && (

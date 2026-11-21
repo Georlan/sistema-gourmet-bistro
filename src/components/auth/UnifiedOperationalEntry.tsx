@@ -25,7 +25,8 @@ import { KomaLoading } from '../app/KomaLoading';
 import { OnboardingOperationalBoundary } from '../onboarding/OnboardingOperationalBoundary';
 import { OperationalLogin, type LoginRestaurantOption } from './OperationalLogin';
 
-const OperationalApp = React.lazy(() => import('../../App'));
+const loadOperationalApp = () => import('../../App');
+const OperationalApp = React.lazy(loadOperationalApp);
 
 function OperationalAppBridge({ portal }: { portal: OperationalPortal }) {
   return (
@@ -59,7 +60,13 @@ export default function UnifiedOperationalEntry() {
     const syncTheme = () => setTheme(readKomaTheme());
     window.addEventListener('storage', syncTheme);
     window.addEventListener(KOMA_THEME_CHANGED_EVENT, syncTheme);
+    // Warm the operational shell while thelogin screen is open so a deploy
+    // before submitting credentials does not fail on the post-login transition.
+    const warmTimer = window.setTimeout(() => {
+      void loadOperationalApp().catch(() => null);
+    }, 300);
     return () => {
+      window.clearTimeout(warmTimer);
       window.removeEventListener('storage', syncTheme);
       window.removeEventListener(KOMA_THEME_CHANGED_EVENT, syncTheme);
     };

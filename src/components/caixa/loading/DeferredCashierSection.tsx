@@ -27,18 +27,27 @@ export function DeferredCashierSection<P extends object>({ active, label, load, 
   useEffect(() => {
     if (visited) return;
     let prefetched = false;
+    const warmLoad = () => {
+      if (prefetched) return;
+      prefetched = true;
+      void load().catch(() => { prefetched = false; });
+    };
     const onIntent = (event: Event) => {
       const target = event.target instanceof Element ? event.target.closest('button') : null;
       if (!target || prefetched) return;
       const text = target.textContent?.trim().replace(/\s+\d+$/, '');
       const aliases: Record<string, string[]> = { Estoque: ['Estoque & compras'], 'Novo pedido': ['Novo pedido'] };
       if (text !== label && !aliases[label]?.includes(text || '')) return;
-      prefetched = true;
-      void load().catch(() => { prefetched = false; });
+      warmLoad();
     };
     document.addEventListener('pointerdown', onIntent, { passive: true });
     document.addEventListener('focusin', onIntent);
+    // Warm the lazy module chunk shortly after the cashier shell settles so a
+    // mid-operation deploy cannot orphan an unvisited tab's hashed chunk.
+    const warmDelayMs = label === 'Novo pedido' ? 120 : 900;
+    const warmTimer = window.setTimeout(warmLoad, warmDelayMs);
     return () => {
+      window.clearTimeout(warmTimer);
       document.removeEventListener('pointerdown', onIntent);
       document.removeEventListener('focusin', onIntent);
     };
