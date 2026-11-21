@@ -63,6 +63,8 @@ interface CardapioProductModalProps {
     actionLabel: string;
     stepLabel: string;
     onBack?: () => void;
+    unitMultiplier?: number;
+    headerSlot?: React.ReactNode;
   };
 }
 
@@ -251,6 +253,14 @@ export default function CardapioProductModal({
   }, [effectivePriceInfo.effectivePrice, selectedOptions]);
 
   const totalPrice = unitPrice * quantity;
+
+  const extrasPerUnit = useMemo(
+    () =>
+      Object.values(selectedOptions)
+        .flat()
+        .reduce((sum, option) => sum + (option.extraPrice || 0), 0),
+    [selectedOptions],
+  );
 
   const handleShare = async () => {
     const shareData = {
@@ -457,6 +467,9 @@ export default function CardapioProductModal({
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10" aria-hidden="true">
                 <div className="h-full rounded-full bg-emerald-500" style={{ width: `${(compositionStep.current / compositionStep.total) * 100}%` }} />
               </div>
+              {compositionStep.headerSlot && (
+                <div className="mt-3">{compositionStep.headerSlot}</div>
+              )}
             </div>
           )}
           <div className="flex items-start justify-between gap-4">
@@ -781,20 +794,28 @@ export default function CardapioProductModal({
 
         <div className="shrink-0 border-t border-white/10 bg-black/40 backdrop-blur-md px-4 pt-3.5 pb-[calc(0.85rem+env(safe-area-inset-bottom,0px))] sm:p-5 sm:px-6" data-testid="product-modal-footer">
           {compositionStep ? (
-            <div className="flex items-center gap-2">
-              {compositionStep.onBack && (
-                <button type="button" onClick={compositionStep.onBack} className="min-h-12 rounded-full border border-white/15 px-5 text-sm font-bold text-koma-foreground transition hover:bg-white/5">
-                  Voltar
-                </button>
+            <div>
+              {compositionStep.unitMultiplier && compositionStep.unitMultiplier > 1 && extrasPerUnit > 0 && (
+                <p className="mb-2 text-xs font-medium text-koma-secondary tabular-nums">
+                  Adicionais desta montagem: + {formatPrice(extrasPerUnit)} × {compositionStep.unitMultiplier} ={' '}
+                  <strong className="text-koma-foreground">+ {formatPrice(extrasPerUnit * compositionStep.unitMultiplier)}</strong>
+                </p>
               )}
-              <button
-                type="button"
-                onClick={handleAdd}
-                className="min-h-12 min-w-0 flex-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-6 text-sm font-black text-white hover:from-emerald-400 hover:to-teal-400 shadow-lg shadow-emerald-950/40 transition-all cursor-pointer"
-                aria-label={compositionStep.actionLabel}
-              >
-                {compositionStep.actionLabel}
-              </button>
+              <div className="flex items-center gap-2">
+                {compositionStep.onBack && (
+                  <button type="button" onClick={compositionStep.onBack} className="min-h-12 rounded-full border border-white/15 px-5 text-sm font-bold text-koma-foreground transition hover:bg-white/5">
+                    Voltar
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleAdd}
+                  className="min-h-12 min-w-0 flex-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-6 text-sm font-black text-white hover:from-emerald-400 hover:to-teal-400 shadow-lg shadow-emerald-950/40 transition-all cursor-pointer"
+                  aria-label={compositionStep.actionLabel}
+                >
+                  {compositionStep.actionLabel}
+                </button>
+              </div>
             </div>
           ) : (
           <>

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Copy, Gift, ShoppingBag, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, Check, CheckCircle2, Copy, Gift, ShoppingBag, SlidersHorizontal } from 'lucide-react';
 import {
   selectedPromotionExtras,
   type PromotionCompositionStep,
@@ -145,6 +145,7 @@ export default function CardapioPromotionWizard({
   }, [steps, quantities, repeatModes]);
 
   const [stepIndex, setStepIndex] = useState(0);
+  const [copyRevision, setCopyRevision] = useState(0);
   const review = stepIndex >= wizardFlow.length;
 
   const hasUnavailableProduct =
@@ -197,10 +198,12 @@ export default function CardapioPromotionWizard({
     setStepIndex(targetIndex);
   };
 
-  const applySameChoiceToSlot = (slotIdx: number) => {
+  const applySameChoiceToSlot = (slotIdx: number, preferredUnitIdx?: number) => {
     setSlotSelections((current) => {
       const next = current.map((units) => [...units]);
-      const template = next[slotIdx]?.find(Boolean) || null;
+      const preferred =
+        preferredUnitIdx !== undefined ? next[slotIdx]?.[preferredUnitIdx] : null;
+      const template = preferred || next[slotIdx]?.find(Boolean) || null;
       const qty = quantities[slotIdx] ?? 1;
       if (template) {
         next[slotIdx] = Array.from({ length: qty }, () => ({
@@ -211,10 +214,49 @@ export default function CardapioPromotionWizard({
       return next;
     });
     setRepeatModes((current) => current.map((mode, idx) => (idx === slotIdx ? true : mode)));
+    setCopyRevision((rev) => rev + 1);
+  };
+
+  const switchSlotMode = (slotIdx: number, repeatAll: boolean, currentUnitIdx = 0) => {
+    if (!repeatAll) {
+      jumpToSlotUnit(slotIdx, 0, true);
+      return;
+    }
+    applySameChoiceToSlot(slotIdx, currentUnitIdx);
+    let targetIndex = 0;
+    for (let s = 0; s < steps.length; s += 1) {
+      if (s === slotIdx) break;
+      const qty = quantities[s] ?? 1;
+      targetIndex += repeatModes[s] || qty === 1 ? 1 : qty;
+    }
+    setStepIndex(targetIndex);
+  };
+
+  const copyFromPreviousUnit = (slotIdx: number, unitIdx: number) => {
+    if (unitIdx <= 0) return;
+    const slotUnits = slotSelections[slotIdx] || [];
+    const source =
+      slotUnits[unitIdx - 1]
+      || [...slotUnits.slice(0, unitIdx)].reverse().find(Boolean)
+      || null;
+    if (!source) return;
+    setSlotSelections((current) => {
+      const next = current.map((units) => [...units]);
+      const qty = quantities[slotIdx] ?? 1;
+      if (!next[slotIdx]) {
+        next[slotIdx] = Array.from({ length: qty }, () => null);
+      }
+      next[slotIdx][unitIdx] = {
+        ...source,
+        selectedOptions: { ...source.selectedOptions },
+      };
+      return next;
+    });
+    setCopyRevision((rev) => rev + 1);
   };
 
   const splitSlotForIndividualEditing = (slotIdx: number) => {
-    setRepeatModes((current) => current.map((mode, idx) => (idx === slotIdx ? false : mode)));
+    jumpToSlotUnit(slotIdx, 0, true);
   };
 
   if (hasUnavailableProduct) {
@@ -249,11 +291,128 @@ export default function CardapioPromotionWizard({
 
   if (!review) {
     const current = wizardFlow[stepIndex];
-    const stored = slotSelections[current.slotIdx]?.[current.unitIdx] ?? null;
+    const currentSlotQty = quantities[current.slotIdx] ?? 1;
+    const currentSlotUnits = slotSelections[current.slotIdx] || [];
+    const stored = currentSlotUnits[current.unitIdx] ?? null;
+    const previousFilledUnit =
+      !current.repeatAll && current.unitIdx > 0
+        ? currentSlotUnits[current.unitIdx - 1]
+          || [...currentSlotUnits.slice(0, current.unitIdx)].reverse().find(Boolean)
+          || null
+        : null;
+
+    const multiUnitHeaderSlot = currentSlotQty > 1 ? (
+      <div
+        className="space-y-2.5 rounded-2xl border border-koma-border bg-koma-card p-3"
+        aria-label={`Modo de escolha para ${steps[current.slotIdx].label}`}
+      >
+        <div className="grid grid-cols-2 gap-2" role="group" aria-label="Como montar estas unidades">
+          <button
+            type="button"
+            aria-pressed={current.repeatAll}
+            onClick={() => switchSlotMode(current.slotIdx, true, current.unitIdx)}
+            className="min-h-11 rounded-xl border px-3 py-2 text-xs font-bold transition tabular-nums"
+            style={
+              current.repeatAll
+                ? {
+                    background: 'var(--koma-action-bg)',
+                    borderColor: 'var(--koma-action-bg)',
+                    color: 'var(--koma-action-text)',
+                  }
+                : {
+                    background: 'var(--koma-surface-panel)',
+                    borderColor: 'var(--koma-border-default)',
+                    color: 'var(--koma-text-secondary)',
+                  }
+            }
+          >
+            Todas iguais ({currentSlotQty}×)
+          </button>
+          <button
+            type="button"
+            aria-pressed={!current.repeatAll}
+            onClick={() => switchSlotMode(current.slotIdx, false, current.unitIdx)}
+            className="min-h-11 rounded-xl border px-3 py-2 text-xs font-bold transition tabular-nums"
+            style={
+              !current.repeatAll
+                ? {
+                    background: 'var(--koma-action-bg)',
+                    borderColor: 'var(--koma-action-bg)',
+                    color: 'var(--koma-action-text)',
+                  }
+                : {
+                    background: 'var(--koma-surface-panel)',
+                    borderColor: 'var(--koma-border-default)',
+                    color: 'var(--koma-text-secondary)',
+                  }
+            }
+          >
+            Escolher cada uma ({currentSlotQty})
+          </button>
+        </div>
+
+        {current.repeatAll ? (
+          <p className="text-xs leading-relaxed text-koma-muted">
+            Esta montagem será aplicada às <strong className="text-koma-foreground">{currentSlotQty} unidades</strong> de {steps[current.slotIdx].label}.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-1.5" role="navigation" aria-label="Selecionar unidade">
+              {Array.from({ length: currentSlotQty }, (_, unitIdx) => {
+                const isActive = unitIdx === current.unitIdx;
+                const isDone = Boolean(currentSlotUnits[unitIdx]);
+                return (
+                  <button
+                    key={unitIdx}
+                    type="button"
+                    aria-current={isActive ? 'step' : undefined}
+                    aria-label={`${steps[current.slotIdx].label} unidade ${unitIdx + 1} de ${currentSlotQty}${isDone ? ' (montada)' : ''}`}
+                    onClick={() => jumpToSlotUnit(current.slotIdx, unitIdx)}
+                    className="inline-flex min-h-11 min-w-11 flex-1 items-center justify-center gap-1 rounded-xl border px-2 text-xs font-bold transition tabular-nums"
+                    style={
+                      isActive
+                        ? {
+                            background: 'var(--koma-action-bg)',
+                            borderColor: 'var(--koma-action-bg)',
+                            color: 'var(--koma-action-text)',
+                          }
+                        : isDone
+                          ? {
+                              background: 'var(--koma-success-bg)',
+                              borderColor: 'var(--koma-success-border)',
+                              color: 'var(--koma-success-text)',
+                            }
+                          : {
+                              background: 'var(--koma-surface-panel)',
+                              borderColor: 'var(--koma-border-default)',
+                              color: 'var(--koma-text-secondary)',
+                            }
+                    }
+                  >
+                    {isDone && !isActive && <Check className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+                    <span>#{unitIdx + 1}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {previousFilledUnit && (
+              <button
+                type="button"
+                onClick={() => copyFromPreviousUnit(current.slotIdx, current.unitIdx)}
+                className="inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-koma-border bg-koma-panel px-3 text-xs font-bold text-koma-secondary transition hover:bg-koma-raised hover:text-koma-foreground"
+              >
+                <Copy className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                Copiar escolhas da #{current.unitIdx} para a #{current.unitIdx + 1}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    ) : undefined;
 
     return (
       <CardapioProductModal
-        key={`${stepIndex}-${current.slotIdx}-${current.unitIdx}-${current.product.id}`}
+        key={`${current.slotIdx}-${current.unitIdx}-${current.product.id}-${copyRevision}`}
         product={current.product}
         restaurantId={restaurantId}
         initialItem={
@@ -270,6 +429,8 @@ export default function CardapioPromotionWizard({
           current: stepIndex + 1,
           total: wizardFlow.length + 1,
           stepLabel: current.label,
+          unitMultiplier: current.repeatAll ? currentSlotQty : 1,
+          headerSlot: multiUnitHeaderSlot,
           actionLabel:
             stepIndex === wizardFlow.length - 1
               ? 'Revisar promoção'
