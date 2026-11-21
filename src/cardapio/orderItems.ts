@@ -43,9 +43,15 @@ export function buildCardapioOrderItems(
       cliente_nome: customerName,
     };
   };
-  return cart.flatMap((item) => item.promotionParts
-    ? item.promotionParts.map((part) => makeItem(part.product.id, 1, part.selectedOptions, part.notes))
-    : [makeItem(item.product.id, item.quantity, item.selectedOptions, item.notes)]);
+  return cart.flatMap((item) => {
+    if (!item.promotionParts) {
+      return [makeItem(item.product.id, item.quantity, item.selectedOptions, item.notes)];
+    }
+    const repeatCount = Math.max(1, Math.floor(item.quantity || 1));
+    return Array.from({ length: repeatCount }).flatMap(() =>
+      item.promotionParts!.map((part) => makeItem(part.product.id, 1, part.selectedOptions, part.notes)),
+    );
+  });
 }
 
 
@@ -66,9 +72,12 @@ export function buildCardapioPromotionItemIndices(cart: readonly CartItem[]): nu
   let offset = 0;
   const indices: number[] = [];
   for (const item of cart) {
-    const count = item.promotionParts?.length ?? 1;
+    const repeatCount = item.promotionParts ? Math.max(1, Math.floor(item.quantity || 1)) : 1;
+    const count = item.promotionParts ? item.promotionParts.length * repeatCount : 1;
     if (item.promotionId && item.promotionParts) {
-      indices.push(...item.promotionParts.map((_, index) => offset + index));
+      for (let i = 0; i < count; i += 1) {
+        indices.push(offset + i);
+      }
     }
     offset += count;
   }
