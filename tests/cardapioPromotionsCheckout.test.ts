@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { buildCardapioOrderItems } from '../src/cardapio/orderItems';
+import { buildCardapioOrderItems, buildCardapioPromotionItemIndices } from '../src/cardapio/orderItems';
 import type { Product } from '../src/cardapio/CardapioTypes';
 import type { CartItem } from '../src/cardapio/components/CardapioCartDrawer';
 
@@ -40,4 +40,35 @@ test('mais escolhidos têm prioridade sem remover a vitrine promocional', () => 
   assert.match(page, /promotionParts: parts/);
   const checkout = readFileSync(new URL('../src/cardapio/components/CardapioDigital.tsx', import.meta.url), 'utf8');
   assert.match(checkout, /promocao_id:/);
+});
+
+test('mesma promoção pode ser pedida mais de uma vez com quantidade ou montagens independentes', () => {
+  const g = product('g', 18);
+  const bf = product('promotion:bf', 10);
+  const first: CartItem = {
+    id: 'promotion:bf:1',
+    product: bf,
+    quantity: 2,
+    selectedOptions: {},
+    notes: '',
+    promotionId: 'bf',
+    promotionParts: [
+      { product: g, quantity: 1, notes: 'Primeira', selectedOptions: { prot: [{ id: 'calabresa', name: 'Calabresa', extraPrice: 0 }] } },
+    ],
+  };
+  const second: CartItem = {
+    id: 'promotion:bf:2',
+    product: bf,
+    quantity: 1,
+    selectedOptions: {},
+    notes: '',
+    promotionId: 'bf',
+    promotionParts: [
+      { product: g, quantity: 1, notes: 'Terceira', selectedOptions: { prot: [{ id: 'frango', name: 'Frango', extraPrice: 0 }] } },
+    ],
+  };
+  const items = buildCardapioOrderItems([first, second], 'Cliente QA');
+  assert.equal(items.length, 3);
+  assert.deepEqual(items.map((i) => i.modificador_ids), [['calabresa'], ['calabresa'], ['frango']]);
+  assert.deepEqual(buildCardapioPromotionItemIndices([first, second]), [0, 1, 2]);
 });
