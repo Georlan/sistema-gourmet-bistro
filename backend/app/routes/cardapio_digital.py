@@ -843,7 +843,7 @@ async def upload_promotion_asset(
             detail="O arquivo excede o limite máximo de 5 MB.",
         )
     extension = _validate_asset_content(content_type, content)
-    optimized = await _prepare_public_image(content, "product")
+    optimized = await _prepare_public_image(content, "products")
     content, content_type, extension = optimized.content, optimized.content_type, optimized.extension
 
     object_path = f"{rest_id}/promotion/{uuid.uuid4().hex}.{extension}"
