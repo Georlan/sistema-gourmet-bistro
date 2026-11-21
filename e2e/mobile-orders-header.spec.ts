@@ -6,18 +6,21 @@ for (const theme of ['dark', 'light']) {
     test.skip((test.info().project.use.viewport?.width ?? 1366) >= 768);
     await page.addInitScript(theme => localStorage.setItem('@koma:theme', theme), theme);
     await openOperationalScenario(page);
+    const toolbar = page.locator('.orders-toolbar');
+    const firstCard = page.locator('.orders-card:visible').first();
+    await expect(firstCard).toBeVisible();
+    expect((await toolbar.boundingBox())!.height).toBeLessThanOrEqual(54);
+    expect((await firstCard.boundingBox())!.y).toBeLessThan(195);
     await page.route('**/payments/direct-pix/pending', route => route.fulfill({ json: [
       { id: 'pix-header', order_number: '24', customer: 'Cliente teste', amount: '112.00' },
     ] }));
     await page.reload();
-    const toolbar = page.locator('.orders-toolbar');
     const pix = toolbar.getByRole('button', { name: /Conferir Pix/ });
     await expect(pix).toBeVisible();
     await expect(page.locator('.cashier-subnav--sales')).toBeVisible();
     expect((await toolbar.boundingBox())!.height).toBeLessThanOrEqual(110);
     const actions = toolbar.locator('.orders-toolbar__actions');
     expect((await actions.boundingBox())!.height).toBeLessThanOrEqual(48);
-    const firstCard = page.locator('.orders-card:visible').first();
     await expect(firstCard).toBeVisible();
     expect((await firstCard.boundingBox())!.y).toBeLessThan(240);
     for (const control of [pix, toolbar.getByRole('button', { name: /Novos pedidos/ }), toolbar.locator('.orders-auto-accept')]) {

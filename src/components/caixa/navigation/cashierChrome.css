@@ -655,9 +655,15 @@
   }
   .cashier-shell--mobile-orders .cashier-subnav--sales {
     min-height: 0;
-    padding: 2px 8px !important;
+    padding: 3px 6px !important;
+  }
+  .cashier-shell--mobile-orders .cashier-subnav--sales .cashier-subnav__scroll {
+    gap: 4px;
   }
   .cashier-shell--mobile-orders .cashier-subnav--sales .cashier-subnav__button {
+    flex: 1 1 auto;
+    justify-content: center;
+    text-align: center;
     min-height: 34px;
     padding: 3px 10px;
     font-size: .78rem;
