@@ -34,7 +34,7 @@ test('mobile orders filter keeps creation available through the bottom navigatio
   await seedCashierSession(page);
   await page.goto('/?view=caixa');
   const nav = page.getByRole('navigation', { name: 'Telas desta área' });
-  await expect(nav).toBeHidden();
+  await expect(nav).toBeVisible();
   const dock = page.getByRole('navigation', { name: 'Navegação móvel principal' });
   const filter = page.getByRole('tablist', { name: 'Filas de atendimento' }).getByRole('tab', { name: /^Entregas/ });
   await filter.click();

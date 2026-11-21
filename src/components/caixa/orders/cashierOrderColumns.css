@@ -152,11 +152,11 @@
 
 @media (max-width: 767px) {
   .cashier-shell--mobile-orders .orders-workspace .orders-column__header {
-    min-height: 44px;
-    grid-template-columns: 28px minmax(0, 1fr) auto;
-    padding: 4px 12px;
-    gap: 8px;
+    min-height: 38px;
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+    padding: 3px 10px;
+    gap: 6px;
   }
-  .cashier-shell--mobile-orders .orders-column__mark { width: 28px; height: 28px; }
-  .cashier-shell--mobile-orders .orders-column__mark svg { width: 24px; height: 24px; }
+  .cashier-shell--mobile-orders .orders-column__mark { width: 24px; height: 24px; }
+  .cashier-shell--mobile-orders .orders-column__mark svg { width: 20px; height: 20px; }
 }
