@@ -11,8 +11,8 @@ export interface OperationalSignal {
   is_diagnostic?: boolean;
 }
 
-const ROUTE_WORDS = new Set(('api caixa comandas itens lancamentos cardapio pedidos produtos categorias '
-  + 'clientes auth login logout refresh turno-atual resumo pagamentos pendentes fechar status '
+const ROUTE_WORDS = new Set(('api caixa comandas itens lancamentos cardapio cardapio-digital assets promotion pedidos produtos categorias '
+  + 'clientes fidelidade lookup auth login logout refresh turno-atual resumo pagamentos pendentes fechar status '
   + 'print-agents heartbeat jobs claim-batch register configuracoes restaurantes relatorios '
   + 'promocoes dashboard financeiro estoque motoboys entregadores mesas capabilities '
   + 'contracts payment-methods-v2 subscription billing setup pix select accept activate-free signups current print-jobs print impressao imprimir reimprimir recibo delivery deliveries entregas payments intents refunds simulator '
@@ -68,9 +68,22 @@ export function operationalArea(endpoint: string): 'printing' | 'payments' | 'or
   if (has('pagamentos', 'payments', 'billing', 'pix', 'intents', 'refunds')) return 'payments';
   if (has('motoboys', 'entregadores', 'delivery', 'deliveries', 'entregas')) return 'delivery';
   if (has('pedidos', 'comandas', 'mesas', 'lancamentos')) return 'orders';
-  if (has('cardapio', 'produtos', 'categorias')) return 'catalog';
+  if (has('cardapio', 'cardapio-digital', 'produtos', 'categorias', 'promocoes', 'promotion')) return 'catalog';
   if (has('auth', 'login', 'logout', 'refresh')) return 'auth';
   return 'other';
+}
+
+/** Filters unhandled Android WebView bridge teardown noise (e.g. Instagram in-app browser). */
+export function isKnownExternalWebViewNoise(event: { event?: string; properties?: Record<string, any> } | null | undefined): boolean {
+  if (!event || event.event !== '$exception') return false;
+  const props = event.properties;
+  if (!props || typeof props !== 'object') return false;
+  const values: unknown[] = Array.isArray(props.$exception_values) ? props.$exception_values : [];
+  const listValues: unknown[] = Array.isArray(props.$exception_list)
+    ? props.$exception_list.map((entry: any) => entry?.value)
+    : [];
+  const messages = [...values, ...listValues].filter((v): v is string => typeof v === 'string');
+  return messages.some(msg => msg.includes('Error invoking postMessage: Java object is gone'));
 }
 
 export function operationalEndpoint(input: string, apiOrigin: string, pageUrl: string): string | null {
