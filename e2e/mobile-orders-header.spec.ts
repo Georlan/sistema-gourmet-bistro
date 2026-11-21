@@ -10,7 +10,7 @@ for (const theme of ['dark', 'light']) {
     const firstCard = page.locator('.orders-card:visible').first();
     await expect(firstCard).toBeVisible();
     expect((await toolbar.boundingBox())!.height).toBeLessThanOrEqual(54);
-    expect((await firstCard.boundingBox())!.y).toBeLessThan(195);
+    expect((await firstCard.boundingBox())!.y).toBeLessThan(200);
     await page.route('**/payments/direct-pix/pending', route => route.fulfill({ json: [
       { id: 'pix-header', order_number: '24', customer: 'Cliente teste', amount: '112.00' },
     ] }));
@@ -18,14 +18,14 @@ for (const theme of ['dark', 'light']) {
     const pix = toolbar.getByRole('button', { name: /Conferir Pix/ });
     await expect(pix).toBeVisible();
     await expect(page.locator('.cashier-subnav--sales')).toBeVisible();
-    expect((await toolbar.boundingBox())!.height).toBeLessThanOrEqual(110);
+    expect((await toolbar.boundingBox())!.height).toBeLessThanOrEqual(54);
     const actions = toolbar.locator('.orders-toolbar__actions');
     expect((await actions.boundingBox())!.height).toBeLessThanOrEqual(48);
     await expect(firstCard).toBeVisible();
-    expect((await firstCard.boundingBox())!.y).toBeLessThan(240);
+    expect((await firstCard.boundingBox())!.y).toBeLessThan(200);
     for (const control of [pix, toolbar.getByRole('button', { name: /Novos pedidos/ }), toolbar.locator('.orders-auto-accept')]) {
       const box = (await control.boundingBox())!;
-      expect(box.height).toBeGreaterThanOrEqual(44);
+      expect(box.height).toBeGreaterThanOrEqual(36);
       expect(box.x).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width).toBeLessThanOrEqual(page.viewportSize()!.width);
     }

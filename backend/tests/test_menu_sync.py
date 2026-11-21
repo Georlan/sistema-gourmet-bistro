@@ -1,3 +1,4 @@
+import os
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
@@ -8,7 +9,12 @@ from app.models import Restaurante, Usuario, Produto, Categoria, Item, Comanda, 
 from app.security import get_password_hash
 from app.main import app
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test_menu_sync.db"
+_xdist_worker = os.getenv("PYTEST_XDIST_WORKER", "").strip()
+SQLALCHEMY_DATABASE_URL = (
+    f"sqlite:///./test_menu_sync_{_xdist_worker}.db"
+    if _xdist_worker
+    else "sqlite:///./test_menu_sync.db"
+)
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 
 @event.listens_for(engine, "connect")

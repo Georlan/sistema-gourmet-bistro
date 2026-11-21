@@ -51,16 +51,14 @@ import { DirectPixCustomerConfirm } from "./components/DirectPixCustomerConfirm"
 import MenuV2Experience from "./v2/MenuV2Experience";
 import { KomaLoading } from "../components/app/KomaLoading";
 
-const QRCodeSVG = React.lazy(() =>
-  import("qrcode.react").then((module) => ({ default: module.QRCodeSVG })),
-);
-const CardapioBenefitsDrawer = React.lazy(() => import("./components/CardapioBenefitsDrawer"));
-const CardapioPromotionWizard = React.lazy(() => import("./components/CardapioPromotionWizard"));
-const CardapioAuthModal = React.lazy(() => import("./components/CardapioAuthModal"));
-const CardapioUserProfileModal = React.lazy(() => import("./components/CardapioUserProfileModal"));
-const CardapioDigital = React.lazy(() => import("./components/CardapioDigital"));
-const CardapioStoreInfoDrawer = React.lazy(() => import("./components/CardapioStoreInfoDrawer"));
-const CardapioOrdersDrawer = React.lazy(() => import("./components/CardapioOrdersDrawer"));
+import { QRCodeSVG } from "qrcode.react";
+import CardapioBenefitsDrawer from "./components/CardapioBenefitsDrawer";
+import CardapioPromotionWizard from "./components/CardapioPromotionWizard";
+import CardapioAuthModal from "./components/CardapioAuthModal";
+import CardapioUserProfileModal from "./components/CardapioUserProfileModal";
+import CardapioDigital from "./components/CardapioDigital";
+import CardapioStoreInfoDrawer from "./components/CardapioStoreInfoDrawer";
+import CardapioOrdersDrawer from "./components/CardapioOrdersDrawer";
 import { API_BASE_URL, WS_BASE_URL } from "../config/api";
 import {
   CustomerProfile,

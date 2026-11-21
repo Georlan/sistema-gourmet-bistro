@@ -49,7 +49,7 @@ Anote imediatamente:
    git worktree add -b hotfix/<escopo-curto> /tmp/koma-hotfix origin/main
    cd /tmp/koma-hotfix
    ```
-   *(Durante a janela do hotfix S0, evite integrar outros PRs na `main`, pois `strict_required_status_checks_policy: true` exige branch atualizada e invalidaria o `Merge verdict` em execução.)*
+   *(O ruleset `Protect main branch` mantém `strict_required_status_checks_policy: false` para que PRs paralelos não caiam em loop de rebase `BEHIND`; prefira `gh pr merge --auto --squash --delete-branch` para integrar assim que o `Merge verdict` concluir.)*
 
 2. **Aplicar correção mínima + teste focal de regressão e validar localmente ANTES do push:**
    Faça apenas **1 push** quando tudo estiver validado localmente, evitando cancelamento e reexecução por `concurrency`:
@@ -68,15 +68,15 @@ Anote imediatamente:
 
 | Tipo de alteração | Checks disparados no PR | Tempo típico até verde |
 |---|---|---|
-| **Frontend / UI isolada (`src/...`)** | `Merge verdict` + `Browser Targeted Gate` (specs do módulo) + `Secret history scan` | **~2–3 min** |
-| **Backend rota / serviço SQLite (`backend/app/...`)** | `Merge verdict` (inclui `orders_payments_inventory` / `run` / `print` + testes alterados) + `Secret history scan` | **~2,5–3,5 min** |
-| **Persistência / RLS / Postgres (`models.py`, `alembic/`, serviços PG)** | `Merge verdict` (inclui fiscal PG se aplicável) + `PostgreSQL Critical Boundaries` (apenas domínios afetados) + `Secret history scan` | **~3–4 min** |
+| **Frontend / UI isolada (`src/...`)** | `Merge verdict` (Node cacheado, sem setup Python) + `Browser Targeted Gate` (até 4 specs com `--workers=4`) + `Secret history scan` | **~1–2 min** |
+| **Backend rota / serviço SQLite (`backend/app/...`)** | `Merge verdict` (venv Python cacheado, sem setup Node/Build + `orders_payments_inventory` / `run` / `print` + testes alterados) + `Secret history scan` | **~1–1,5 min** |
+| **Persistência / RLS / Postgres (`models.py`, `alembic/`, serviços PG)** | `Merge verdict` (venv cacheado) + `PostgreSQL Critical Boundaries` (venv cacheado + domínios afetados) + `Secret history scan` | **~2–3 min** |
 
-4. **Integrar com gates verdes:**
+4. **Integrar com auto-merge e limpeza automática de branch:**
    ```bash
-   gh pr merge --squash --delete-branch
+   gh pr merge --auto --squash --delete-branch
    ```
-   *(Preferir `--squash` para garantir `git revert` atômico caso seja necessário reverter.)*
+   *(Auto-merge e remoção automática da branch já estão ativos no repositório. Preferir `--squash` para garantir `git revert` atômico caso seja necessário reverter.)*
 
 ---
 
