@@ -1007,3 +1007,32 @@ def test_multiplas_instancias_da_mesma_promocao_aplicam_preco_por_instancia():
             promo_5g_1m,
             item_indices=tuple(range(7)),
         )
+
+
+def test_upload_promotion_asset_returns_public_url(monkeypatch):
+    import io
+    from PIL import Image
+    from unittest.mock import AsyncMock
+    from app.routes import cardapio_digital as cd_route
+
+    buf = io.BytesIO()
+    Image.new("RGB", (64, 64), "red").save(buf, format="JPEG")
+    buf.seek(0)
+
+    class _FakeResp:
+        status_code = 200
+        text = "{}"
+
+    monkeypatch.setattr(cd_route, "_supabase_storage_url", lambda: "https://fake.supabase.co")
+    monkeypatch.setattr(cd_route, "_supabase_storage_headers", lambda ct: {"Authorization": "Bearer test"})
+    monkeypatch.setattr(cd_route.httpx.AsyncClient, "post", AsyncMock(return_value=_FakeResp()))
+
+    res = client.post(
+        "/api/cardapio-digital/assets/promotion",
+        headers=_admin_headers(),
+        files={"file": ("promo.jpg", buf, "image/jpeg")},
+    )
+    assert res.status_code == 200, res.text
+    payload = res.json()
+    assert payload["url"].startswith("https://fake.supabase.co/storage/v1/object/public/cardapio-assets/910200/promotion/")
+    assert payload["url"].endswith(".webp")
