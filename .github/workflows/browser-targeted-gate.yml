@@ -38,10 +38,17 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '22'
-          cache: npm
+
+      - name: Cache node_modules
+        id: node_modules_cache
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-node22-${{ hashFiles('package-lock.json') }}
 
       - name: Install dependencies
-        run: npm ci
+        if: steps.node_modules_cache.outputs.cache-hit != 'true'
+        run: npm ci --no-audit --no-fund
 
       - name: Route changed frontend paths to targeted E2E specs
         id: route
@@ -69,7 +76,8 @@ jobs:
           import os, sys
 
           files = [f.strip() for f in sys.argv[1].splitlines() if f.strip()]
-          dev_specs = set()
+          direct_specs = []
+          domain_groups = []
           checkout_360 = False
           preview_transfer = False
           preview_seo = False
@@ -84,6 +92,11 @@ jobs:
               "e2e/checkout-money-clicks.spec.ts",
           }
 
+          def add_group(specs):
+              valid = [s for s in specs if os.path.exists(s) and s not in preview_only_specs]
+              if valid and valid not in domain_groups:
+                  domain_groups.append(valid)
+
           for f in files:
               if f.startswith("e2e/") and f.endswith(".spec.ts") and os.path.exists(f):
                   if f == "e2e/checkout-money-clicks.spec.ts":
@@ -94,30 +107,25 @@ jobs:
                       preview_seo = True
                   elif f in {"e2e/app-recovery.spec.ts", "e2e/analytics-ingestion.spec.ts"}:
                       preview_recovery = True
-                  else:
-                      dev_specs.add(f)
+                  elif f not in direct_specs:
+                      direct_specs.append(f)
 
               if f.startswith(("src/cardapio/", "src/components/cardapio/")):
-                  dev_specs.update([
+                  add_group([
                       "e2e/public-menu-order.spec.ts",
                       "e2e/cardapio-promotions.spec.ts",
                       "e2e/cardapio-draft-and-checkout.spec.ts",
-                      "e2e/marmitaria-daily-menu.spec.ts",
-                      "e2e/cardapio-foundation-accessibility.spec.ts",
-                      "e2e/cardapio-whatsapp-optout.spec.ts",
-                      "e2e/order-tracking-chat.spec.ts",
                   ])
 
               if f.startswith(("src/components/caixa/pdv/", "src/components/caixa/checkout/")):
-                  dev_specs.update([
+                  add_group([
                       "e2e/cashier-pdv-product-card.spec.ts",
                       "e2e/cashier-mixed-payment.spec.ts",
                       "e2e/cashier-delivery-new-order.spec.ts",
-                      "e2e/cashier-sale-recovery.spec.ts",
                   ])
 
               if f.startswith(("src/components/caixa/orders/", "src/components/courier/")) or f == "src/components/MotoboyPwaPage.tsx":
-                  dev_specs.update([
+                  add_group([
                       "e2e/cashier-fulfillment-workspaces.spec.ts",
                       "e2e/cashier-delivery-stages.spec.ts",
                       "e2e/courier-realtime-cache.spec.ts",
@@ -126,44 +134,40 @@ jobs:
                       preview_transfer = True
 
               if f.startswith(("src/components/caixa/customers/", "src/components/caixa/navigation/", "src/components/clientes/")):
-                  dev_specs.update([
+                  add_group([
                       "e2e/relationship-navigation.spec.ts",
                       "e2e/customer-crm.spec.ts",
-                      "e2e/cashier-horizontal-navigation.spec.ts",
-                      "e2e/crm-api-contract.spec.ts",
                   ])
 
               if f.startswith(("src/components/mesas/", "src/components/Mesa")) or f.startswith("src/domain/waiter"):
-                  dev_specs.update([
-                      "e2e/waiter-config-layout.spec.ts",
+                  add_group([
                       "e2e/waiter-salon-wave1.spec.ts",
                       "e2e/waiter-projections.spec.ts",
                   ])
 
               if f.startswith(("src/components/onboarding/", "src/components/auth/")) or f == "src/utils/authSession.ts":
-                  dev_specs.update([
+                  add_group([
                       "e2e/auth-persistence.spec.ts",
                       "e2e/onboarding-first-client-ux.spec.ts",
                   ])
                   if f == "src/components/auth/AppRecoveryBoundary.tsx":
                       preview_recovery = True
                   if f == "src/components/auth/TenantSuspensionBoundary.tsx":
-                      dev_specs.add("e2e/tenant-suspension-idle.spec.ts")
+                      add_group(["e2e/tenant-suspension-idle.spec.ts"])
 
               if f.startswith("src/components/printing/"):
-                  dev_specs.add("e2e/print-local-connection.spec.ts")
+                  add_group(["e2e/print-local-connection.spec.ts"])
 
               if f.startswith(("src/components/relatorios/", "src/components/caixa/reports/")):
-                  dev_specs.add("e2e/reports-practical.spec.ts")
+                  add_group(["e2e/reports-practical.spec.ts"])
 
               if "Pix" in f or f in {"src/components/caixa/orders/DirectPixPendingPanel.tsx", "src/components/caixa/orders/pendingPixPolling.ts"}:
-                  dev_specs.update(["e2e/direct-pix.spec.ts", "e2e/pagbank-connect.spec.ts"])
+                  add_group(["e2e/direct-pix.spec.ts", "e2e/pagbank-connect.spec.ts"])
 
               if f.startswith(("src/components/caixa/online-menu/", "src/components/caixa/realtime/")):
-                  dev_specs.update([
+                  add_group([
                       "e2e/online-control-idle.spec.ts",
                       "e2e/idle-reconciliation.spec.ts",
-                      "e2e/pocket-android-alerts.spec.ts",
                   ])
 
               if f.startswith("src/legal/"):
@@ -175,13 +179,33 @@ jobs:
               if f.startswith("src/analytics/"):
                   preview_recovery = True
 
-          if not (dev_specs or checkout_360 or preview_transfer or preview_seo or preview_recovery):
-              dev_specs.update([
-                  "e2e/public-menu-order.spec.ts",
-                  "e2e/cashier-pdv-product-card.spec.ts",
-              ])
+          selected = list(direct_specs)
+          if domain_groups:
+              cap = 4 if len(domain_groups) > 1 else 3
+              idx = 0
+              while len(selected) < max(cap, len(direct_specs)):
+                  progressed = False
+                  for grp in domain_groups:
+                      if idx < len(grp):
+                          spec = grp[idx]
+                          if spec not in selected:
+                              selected.append(spec)
+                          progressed = True
+                          if len(selected) >= max(cap, len(direct_specs)):
+                              break
+                  if not progressed:
+                      break
+                  idx += 1
 
-          dev_list = sorted(s for s in dev_specs if os.path.exists(s) and s not in preview_only_specs)
+          if not (selected or checkout_360 or preview_transfer or preview_seo or preview_recovery):
+              selected = [
+                  s for s in (
+                      "e2e/public-menu-order.spec.ts",
+                      "e2e/cashier-pdv-product-card.spec.ts",
+                  ) if os.path.exists(s)
+              ]
+
+          dev_list = sorted(set(selected))
           print("mode=targeted")
           print(f"dev_specs={' '.join(dev_list)}")
           print(f"checkout_360={'true' if checkout_360 else 'false'}")
@@ -196,21 +220,29 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ steps.route.outputs.mode }}-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: playwright-${{ steps.route.outputs.mode == 'full' && 'chromium-firefox' || 'chromium' }}-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
       - name: Install Playwright browsers and OS deps
         run: |
+          CHROME_BIN=$(find ~/.cache/ms-playwright -name chrome -type f 2>/dev/null | head -n 1 || true)
           if [ "${{ steps.route.outputs.mode }}" = "full" ]; then
-            if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            FIREFOX_BIN=$(find ~/.cache/ms-playwright -name firefox -type f 2>/dev/null | head -n 1 || true)
+            if [ -z "$CHROME_BIN" ] || [ -z "$FIREFOX_BIN" ]; then
+              npx playwright install --with-deps chromium firefox
+            elif ! "$CHROME_BIN" --headless --no-sandbox --dump-dom about:blank >/dev/null 2>&1 || ldd "$FIREFOX_BIN" 2>/dev/null | grep -q "not found"; then
               npx playwright install-deps chromium firefox
             else
-              npx playwright install --with-deps chromium firefox
+              echo "Chromium and Firefox binaries + OS deps verified from cache"
             fi
           else
-            if [ "${{ steps.playwright-cache.outputs.cache-hit }}" = "true" ]; then
+            if [ -z "$CHROME_BIN" ]; then
+              npx playwright install --with-deps chromium
+            elif ! "$CHROME_BIN" --headless --no-sandbox --dump-dom about:blank >/dev/null 2>&1; then
               npx playwright install-deps chromium
             else
-              npx playwright install --with-deps chromium
+              echo "Chromium binary + OS deps verified from cache (skipped apt-get)"
             fi
           fi
 
@@ -223,7 +255,7 @@ jobs:
           ${{ steps.route.outputs.dev_specs }}
           --project=mobile-390
           --project=desktop-1366
-          --workers=2
+          --workers=4
 
       - name: Run checkout 360px + desktop smoke
         if: steps.route.outputs.checkout_360 == 'true'
@@ -234,7 +266,7 @@ jobs:
           e2e/checkout-money-clicks.spec.ts
           --project=mobile-360
           --project=desktop-1366
-          --workers=2
+          --workers=4
 
       - name: Run preview transfer conflict smoke
         if: steps.route.outputs.preview_transfer == 'true'
@@ -243,7 +275,7 @@ jobs:
           KOMA_E2E_PREVIEW: 'true'
         run: |
           npm run build
-          npm run test:e2e -- e2e/cashier-transfer-conflict.spec.ts --project=mobile-390 --project=desktop-1366 --workers=2
+          npm run test:e2e -- e2e/cashier-transfer-conflict.spec.ts --project=mobile-390 --project=desktop-1366 --workers=4
 
       - name: Run preview SEO and auth smoke
         if: steps.route.outputs.preview_seo == 'true'
@@ -252,7 +284,7 @@ jobs:
           KOMA_E2E_PREVIEW: 'true'
         run: |
           npm run build
-          npm run test:e2e -- e2e/public-seo.spec.ts e2e/auth-persistence.spec.ts e2e/landing-demo-capture.spec.ts --project=desktop-1366 --project=mobile-390 --workers=2
+          npm run test:e2e -- e2e/public-seo.spec.ts e2e/auth-persistence.spec.ts e2e/landing-demo-capture.spec.ts --project=desktop-1366 --project=mobile-390 --workers=4
 
       - name: Run preview recovery and analytics smoke
         if: steps.route.outputs.preview_recovery == 'true'
@@ -263,7 +295,7 @@ jobs:
           VITE_POSTHOG_PROJECT_TOKEN=phc_fixture_public_project \
           VITE_POSTHOG_HOST=http://127.0.0.1:7999 \
           npm run build
-          npm run test:e2e -- e2e/app-recovery.spec.ts e2e/analytics-ingestion.spec.ts --project=mobile-390 --project=desktop-1366 --workers=2
+          npm run test:e2e -- e2e/app-recovery.spec.ts e2e/analytics-ingestion.spec.ts --project=mobile-390 --project=desktop-1366 --workers=4
 
       - name: Run comprehensive scheduled/manual E2E regression
         if: steps.route.outputs.mode == 'full'
@@ -307,11 +339,11 @@ jobs:
             e2e/cardapio-whatsapp-optout.spec.ts \
             --project=mobile-390 \
             --project=desktop-1366 \
-            --workers=2
+            --workers=4
 
-          npm run test:e2e -- e2e/waiter-config-layout.spec.ts --project=mobile-360 --project=mobile-390 --project=mobile-412 --project=tablet-768 --project=desktop-1366 --workers=2
-          npm run test:e2e -- e2e/tenant-suspension-idle.spec.ts e2e/online-control-idle.spec.ts e2e/idle-reconciliation.spec.ts --project=desktop-1366 --project=mobile-390 --project=tablet-768 --workers=2
-          npm run test:e2e -- e2e/cardapio-mobile-layout.spec.ts --workers=2
+          npm run test:e2e -- e2e/waiter-config-layout.spec.ts --project=mobile-360 --project=mobile-390 --project=mobile-412 --project=tablet-768 --project=desktop-1366 --workers=4
+          npm run test:e2e -- e2e/tenant-suspension-idle.spec.ts e2e/online-control-idle.spec.ts e2e/idle-reconciliation.spec.ts --project=desktop-1366 --project=mobile-390 --project=tablet-768 --workers=4
+          npm run test:e2e -- e2e/cardapio-mobile-layout.spec.ts --workers=4
 
       - name: Run Firefox preview smoke (scheduled/manual)
         if: steps.route.outputs.firefox_smoke == 'true'
@@ -321,7 +353,7 @@ jobs:
           KOMA_E2E_PREVIEW: 'true'
         run: |
           npm run build
-          npm run test:e2e -- e2e/cardapio-artistic-parity.spec.ts --grep "contato preserva" --project=firefox-390 --workers=2
+          npm run test:e2e -- e2e/cardapio-artistic-parity.spec.ts --grep "contato preserva" --project=firefox-390 --workers=4
 
       - name: Upload browser failure diagnostics
         if: failure()

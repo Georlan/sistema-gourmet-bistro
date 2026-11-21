@@ -82,8 +82,14 @@ def pytest_configure(config):
     # Check for production DB match
     for indicator in PROD_DB_INDICATORS:
         if indicator in raw_db_url or indicator in raw_sup_url:
-            # Override for test suite isolation
-            os.environ["DATABASE_URL"] = "sqlite:///./test_suite_isolated.db"
+            # Override for test suite isolation (worker-scoped under pytest-xdist)
+            xdist_worker = os.environ.get("PYTEST_XDIST_WORKER", "").strip()
+            isolated_db_url = (
+                f"sqlite:///./test_suite_isolated_{xdist_worker}.db"
+                if xdist_worker
+                else "sqlite:///./test_suite_isolated.db"
+            )
+            os.environ["DATABASE_URL"] = isolated_db_url
             os.environ["SUPABASE_URL"] = "https://mock-test-supabase.local"
             os.environ["SUPABASE_SERVICE_ROLE_KEY"] = "mock_test_service_role_key_12345"
             os.environ["VITE_SUPABASE_URL"] = "https://mock-test-supabase.local"
@@ -91,7 +97,7 @@ def pytest_configure(config):
             # Update app settings if already loaded
             try:
                 from app.config import settings
-                settings.DATABASE_URL = "sqlite:///./test_suite_isolated.db"
+                settings.DATABASE_URL = isolated_db_url
                 settings.SUPABASE_URL = "https://mock-test-supabase.local"
                 settings.SUPABASE_SERVICE_ROLE_KEY = "mock_test_service_role_key_12345"
             except Exception:

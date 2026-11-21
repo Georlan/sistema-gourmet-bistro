@@ -1,3 +1,4 @@
+import os
 from decimal import Decimal
 
 import pytest
@@ -10,7 +11,12 @@ from app.main import app
 from app.models import Restaurante, Usuario
 from app.security import get_password_hash
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./test_growth_economics_endpoint.db"
+_xdist_worker = os.getenv("PYTEST_XDIST_WORKER", "").strip()
+SQLALCHEMY_DATABASE_URL = (
+    f"sqlite:///./test_growth_economics_endpoint_{_xdist_worker}.db"
+    if _xdist_worker
+    else "sqlite:///./test_growth_economics_endpoint.db"
+)
 engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
