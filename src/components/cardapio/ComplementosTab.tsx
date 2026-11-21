@@ -39,6 +39,7 @@ interface ComplementosTabProps {
   authHeaders: Record<string, string>;
   produtos: Array<{ id: string; nome: string; preco: number; categoria_id?: string }>;
   onShowNotification?: (msg: string, type?: 'success' | 'error') => void;
+  onGroupsChanged?: () => void;
   marmitariaCadastro?: boolean;
 }
 
@@ -47,6 +48,7 @@ export default function ComplementosTab({
   authHeaders,
   produtos,
   onShowNotification,
+  onGroupsChanged,
   marmitariaCadastro = false,
 }: ComplementosTabProps) {
   const [grupos, setGrupos] = useState<GrupoModificador[]>([]);
@@ -347,6 +349,7 @@ export default function ComplementosTab({
         'success',
       );
       setIsModalOpen(false);
+      onGroupsChanged?.();
       await fetchCatalogBindings();
     } catch (err) {
       onShowNotification?.(
@@ -371,6 +374,7 @@ export default function ComplementosTab({
       }
       onShowNotification?.('Grupo excluído com sucesso.', 'success');
       setGrupos((prev) => prev.filter((group) => group.id !== id));
+      onGroupsChanged?.();
     } catch (err) {
       onShowNotification?.(
         err instanceof Error ? err.message : 'Erro ao excluir grupo.',
@@ -405,22 +409,101 @@ export default function ComplementosTab({
     return [...grupos].filter((group) => group.nome.toLocaleLowerCase('pt-BR').includes(query) || group.opcoes.some(option => option.nome.toLocaleLowerCase('pt-BR').includes(query))).sort((a, b) => Number(Boolean(a.grupo_origem_id)) - Number(Boolean(b.grupo_origem_id)) || a.nome.localeCompare(b.nome, 'pt-BR'));
   }, [grupos, search]);
 
+  // Reverse-usage lineage computed purely from already-loaded produtos, categorias, and grupos.
+  const groupUsageMap = useMemo(() => {
+    const childrenByParent = new Map<string, string[]>();
+    for (const category of categorias) {
+      if (!category.parent_id) continue;
+      const list = childrenByParent.get(category.parent_id) ?? [];
+      list.push(category.id);
+      childrenByParent.set(category.parent_id, list);
+    }
+
+    const productsById = new Map(produtos.map((product) => [String(product.id), product]));
+    const usage = new Map<string, { count: number; names: string[] }>();
+
+    for (const group of grupos) {
+      const matchedIds = new Set<string>();
+      for (const productId of group.produto_ids || []) {
+        if (productsById.has(String(productId))) {
+          matchedIds.add(String(productId));
+        }
+      }
+
+      const categoryIds = group.categoria_ids || [];
+      if (categoryIds.length > 0) {
+        const coveredCategories = new Set<string>(categoryIds.map(String));
+        if (group.incluir_subcategorias !== false) {
+          const queue = [...coveredCategories];
+          while (queue.length > 0) {
+            const current = queue.shift()!;
+            for (const childId of childrenByParent.get(current) ?? []) {
+              if (!coveredCategories.has(childId)) {
+                coveredCategories.add(childId);
+                queue.push(childId);
+              }
+            }
+          }
+        }
+        for (const product of produtos) {
+          if (product.categoria_id && coveredCategories.has(String(product.categoria_id))) {
+            matchedIds.add(String(product.id));
+          }
+        }
+      }
+
+      const names = Array.from(matchedIds)
+        .map((id) => productsById.get(id)?.nome)
+        .filter((name): name is string => Boolean(name))
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      usage.set(group.id, { count: names.length, names });
+    }
+
+    return usage;
+  }, [categorias, grupos, produtos]);
+
   return (
     <div className="space-y-6">
       {marmitariaCadastro && <div className="flex flex-wrap items-center gap-2" aria-label="Modo de edição dos complementos">
-        <button onClick={() => setDailyMode(true)} className={clsx('rounded-xl border px-4 py-2 text-sm font-bold', dailyMode ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-koma-border text-koma-muted')}>Cardápio do dia</button>
-        <button disabled={dailyPending} onClick={() => setDailyMode(false)} className={clsx('rounded-xl border px-4 py-2 text-sm font-bold disabled:opacity-40', !dailyMode ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'border-koma-border text-koma-muted')}>Cadastros</button>
+        <button
+          onClick={() => setDailyMode(true)}
+          className={clsx('min-h-11 rounded-xl border px-4 py-2 text-sm font-bold transition-colors', dailyMode ? 'border-transparent' : 'border-koma-border bg-koma-card text-koma-secondary hover:text-koma-foreground')}
+          style={dailyMode ? { background: 'var(--kc-chrome-selected, var(--koma-action-bg))', color: 'var(--kc-chrome-on-selected, var(--koma-action-text))' } : undefined}
+        >
+          Cardápio do dia
+        </button>
+        <button
+          disabled={dailyPending}
+          onClick={() => setDailyMode(false)}
+          className={clsx('min-h-11 rounded-xl border px-4 py-2 text-sm font-bold transition-colors disabled:opacity-40', !dailyMode ? 'border-transparent' : 'border-koma-border bg-koma-card text-koma-secondary hover:text-koma-foreground')}
+          style={!dailyMode ? { background: 'var(--kc-chrome-selected, var(--koma-action-bg))', color: 'var(--kc-chrome-on-selected, var(--koma-action-text))' } : undefined}
+        >
+          Cadastros
+        </button>
         {/* Reserve the notice's layout space so the first tap cannot shift
             unrelated options beneath the pointer on small screens. */}
         <span className={clsx('text-xs text-koma-muted', !dailyPending && 'invisible')} aria-hidden={!dailyPending}>Salve ou desfaça a seleção antes de abrir Cadastros.</span>
       </div>}
-      {catalogError && <div role="alert" className="rounded-2xl border border-rose-500/40 p-5 text-sm text-koma-foreground">Não foi possível conferir o cadastro atual. <button onClick={() => void fetchCatalogBindings()} className="underline">Tentar novamente</button></div>}
+      {catalogError && (
+        <div
+          role="alert"
+          className="rounded-2xl border p-5 text-sm text-koma-foreground"
+          style={{
+            background: 'var(--koma-danger-bg)',
+            borderColor: 'var(--koma-danger-border)',
+            color: 'var(--koma-danger-text)',
+          }}
+        >
+          Não foi possível conferir o cadastro atual.{' '}
+          <button onClick={() => void fetchCatalogBindings()} className="font-bold underline">Tentar novamente</button>
+        </div>
+      )}
       {marmitariaCadastro && dailyMode && !catalogError && (loading ? <p role="status" className="p-6 text-koma-muted">Carregando cardápio do dia…</p> : <CardapioDiarioEditor grupos={grupos} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onEditGroup={handleOpenModal} onDirtyChange={setDailyPending} onReload={fetchCatalogBindings} onSaved={async () => { onShowNotification?.('Cardápio do dia salvo.', 'success'); await fetchCatalogBindings(); }} />)}
       {(!marmitariaCadastro || !dailyMode) && !catalogError && <details open className="space-y-4">
         <summary className="cursor-pointer font-bold text-koma-foreground">Escolhas do produto e adicionais</summary>
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-koma-card border border-koma-border p-5 rounded-2xl">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-koma-panel border border-koma-border p-4 rounded-2xl">
         <div>
-          <div className="flex items-center gap-2 text-emerald-500 font-bold text-sm">
+          <div className="flex items-center gap-2 font-bold text-sm" style={{ color: 'var(--koma-success-text)', fontFamily: 'var(--koma-font-display)' }}>
             <Layers className="w-5 h-5" />
             <span>Personalizações dos produtos</span>
           </div>
@@ -439,13 +522,17 @@ export default function ComplementosTab({
               placeholder="Buscar grupo..."
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              className="pl-9 pr-3 py-2 bg-koma-raised border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500 w-44 sm:w-60"
+              className="min-h-11 pl-9 pr-3 py-2 bg-koma-input border border-koma-border rounded-xl text-sm text-koma-foreground placeholder:text-koma-muted focus:outline-none focus:border-koma-border-strong w-48 sm:w-64"
             />
           </div>
           <button
             type="button"
             onClick={() => handleOpenModal()}
-            className="koma-btn-primary inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl"
+            className="inline-flex min-h-11 items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl transition-colors"
+            style={{
+              background: 'var(--koma-action-bg)',
+              color: 'var(--koma-action-text)',
+            }}
           >
             <Plus className="w-4 h-4" />
             <span>Novo Grupo</span>
@@ -458,20 +545,26 @@ export default function ComplementosTab({
       ) : filteredGrupos.length === 0 ? (
         <div className="py-12 text-center bg-koma-card border border-koma-border rounded-2xl">
           <Layers className="w-10 h-10 mx-auto text-koma-muted opacity-40 mb-3" />
-          <h3 className="text-sm font-bold text-koma-foreground">Nenhuma escolha ou adicional cadastrado</h3>
+          <h3 className="text-sm font-bold text-koma-foreground" style={{ fontFamily: 'var(--koma-font-display)' }}>
+            Nenhuma escolha ou adicional cadastrado
+          </h3>
           <p className="text-xs text-koma-muted mt-1 max-w-md mx-auto">
             Cadastre os grupos e adicionais manualmente para manter o cardápio sob seu controle.
           </p>
         </div>
       ) : (
         <div className="columns-1 md:columns-2 xl:columns-3 gap-4">
-          {filteredGrupos.map((group) => (
+          {filteredGrupos.map((group) => {
+            const usage = groupUsageMap.get(group.id) ?? { count: 0, names: [] };
+            const previewNames = usage.names.slice(0, 3);
+            const extraCount = Math.max(0, usage.count - previewNames.length);
+            return (
             <div key={group.id} className="bg-koma-card border border-koma-border rounded-2xl mb-4 break-inside-avoid p-4 flex flex-col justify-between">
               <div>
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     {!marmitariaCadastro && (
-                      <p className="text-[11px] font-semibold text-koma-muted">
+                      <p className="text-xs font-semibold text-koma-muted">
                         {group.opcoes.some(option => Number(option.preco_adicional) > 0)
                           ? group.opcoes.every(option => Number(option.preco_adicional) > 0)
                             ? 'Adicionais pagos'
@@ -481,8 +574,13 @@ export default function ComplementosTab({
                         {group.min_selecoes > 0 ? 'Seleção obrigatória' : 'Seleção opcional'}
                       </p>
                     )}
-                    <h4 className="mt-1.5 font-black text-sm text-koma-foreground">{group.nome}</h4>
-                    <p className="text-[11px] text-koma-muted mt-0.5">
+                    <h4
+                      className="mt-1 font-bold text-sm text-koma-foreground"
+                      style={{ fontFamily: 'var(--koma-font-display)' }}
+                    >
+                      {group.nome}
+                    </h4>
+                    <p className="text-xs text-koma-muted mt-0.5 tabular-nums">
                       {marmitariaCadastro
                         ? <>{group.opcoes.length} {group.opcoes.length === 1 ? 'opção cadastrada' : 'opções cadastradas'}</>
                         : group.min_selecoes === 0
@@ -496,7 +594,7 @@ export default function ComplementosTab({
                     <button
                       type="button"
                       onClick={() => handleOpenModal(group)}
-                      className="p-1.5 text-koma-muted hover:text-koma-foreground rounded-lg hover:bg-koma-raised"
+                      className="grid min-h-11 min-w-11 place-items-center text-koma-muted hover:text-koma-foreground rounded-xl hover:bg-koma-raised transition-colors"
                       title="Editar"
                     >
                       <Edit3 className="w-4 h-4" />
@@ -504,7 +602,8 @@ export default function ComplementosTab({
                     <button
                       type="button"
                       onClick={() => handleDeleteGrupo(group.id)}
-                      className="p-1.5 text-koma-muted hover:text-rose-400 rounded-lg hover:bg-rose-500/10"
+                      className="grid min-h-11 min-w-11 place-items-center rounded-xl hover:bg-koma-raised transition-colors"
+                      style={{ color: 'var(--koma-danger-text)' }}
                       title="Excluir"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -512,43 +611,73 @@ export default function ComplementosTab({
                   </div>
                 </div>
 
-                {group.grupo_origem_id && <p className="mt-2 text-xs text-emerald-400">Sincronizado com {grupos.find(item => item.id === group.grupo_origem_id)?.nome || 'complementos'}. Altere a disponibilidade na origem.</p>}
+                {group.grupo_origem_id && (
+                  <p className="mt-2 text-xs font-medium" style={{ color: 'var(--koma-success-text)' }}>
+                    Sincronizado com {grupos.find(item => item.id === group.grupo_origem_id)?.nome || 'complementos'}. Altere a disponibilidade na origem.
+                  </p>
+                )}
                 <div className="mt-3 space-y-1.5">
                   {[...group.opcoes].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' })).map((option) => (
-                    <div key={option.id || option.nome} className="flex items-center justify-between text-xs bg-koma-raised/60 px-2.5 py-1.5 rounded-lg">
-                      <span className="text-koma-foreground font-medium">{option.nome}{option.ativo === false && <small className="ml-2 text-amber-500">Pausado</small>}</span>
-                      <span className="text-koma-muted font-mono font-semibold">
+                    <div key={option.id || option.nome} className="flex items-center justify-between gap-2 text-xs bg-koma-raised px-2.5 py-2 rounded-xl border border-koma-border">
+                      <span className="min-w-0 flex-1 text-koma-foreground font-medium">
+                        {option.nome}
+                        {option.ativo === false && (
+                          <small className="ml-2 text-xs font-semibold" style={{ color: 'var(--koma-warning-text)' }}>
+                            Pausado
+                          </small>
+                        )}
+                      </span>
+                      <span className="shrink-0 text-koma-muted font-semibold tabular-nums">
                         {option.preco_adicional > 0 ? `+ R$ ${Number(option.preco_adicional).toFixed(2).replace('.', ',')}` : 'Grátis'}
                       </span>
-                      {option.id && !option.opcao_origem_id && <button type="button" disabled={pendingOptionId !== null} onClick={() => void toggleOptionAvailability(option)} aria-label={`${option.ativo === false ? 'Reativar' : 'Pausar'} ${option.nome}`} className="ml-2 rounded border border-koma-border px-2 py-1 font-bold text-koma-secondary disabled:opacity-50">
-                        {pendingOptionId === option.id ? 'Salvando...' : option.ativo === false ? 'Reativar' : 'Pausar'}
-                      </button>}
+                      {option.id && !option.opcao_origem_id && (
+                        <button
+                          type="button"
+                          disabled={pendingOptionId !== null}
+                          onClick={() => void toggleOptionAvailability(option)}
+                          aria-label={`${option.ativo === false ? 'Reativar' : 'Pausar'} ${option.nome}`}
+                          className="ml-1 shrink-0 rounded-lg border border-koma-border bg-koma-card px-2.5 py-1 text-xs font-bold text-koma-secondary hover:text-koma-foreground disabled:opacity-50"
+                        >
+                          {pendingOptionId === option.id ? 'Salvando...' : option.ativo === false ? 'Reativar' : 'Pausar'}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
 
-              {marmitariaCadastro ? (
-                <div className="mt-4 pt-3 border-t border-koma-border/60 text-[11px] text-koma-muted">
-                  Confira limites e produtos vinculados em Editar. Nas quentinhas, configure os limites de cada tamanho em Produtos.
-                </div>
-              ) : (
-              <div className="mt-4 pt-3 border-t border-koma-border/60 text-[11px] text-koma-muted space-y-1">
-                <div className="flex justify-between gap-3">
-                  <span>Categorias:</span>
-                  <span className="font-bold text-koma-foreground">
-                    {(group.categoria_ids || []).length}
-                    {group.incluir_subcategorias !== false && (group.categoria_ids || []).length > 0 ? ' + subcategorias' : ''}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-3">
-                  <span>Produtos específicos:</span>
-                  <span className="font-bold text-koma-foreground">{group.produto_ids.length}</span>
-                </div>
+              <div className="mt-4 pt-3 border-t border-koma-border text-xs text-koma-muted space-y-1.5">
+                {usage.count > 0 ? (
+                  <p className="leading-relaxed">
+                    <strong className="font-semibold text-koma-foreground tabular-nums">
+                      Usado {usage.count} {usage.count === 1 ? 'vez' : 'vezes'}:
+                    </strong>{' '}
+                    <span className="text-koma-secondary">
+                      {previewNames.join(', ')}
+                      {extraCount > 0 ? ` +${extraCount}` : ''}
+                    </span>
+                  </p>
+                ) : (
+                  <p className="text-koma-muted">
+                    {marmitariaCadastro
+                      ? 'Confira limites e produtos vinculados em Editar. Nas quentinhas, configure os limites de cada tamanho em Produtos.'
+                      : 'Ainda não vinculado a nenhum produto.'}
+                  </p>
+                )}
+
+                {!marmitariaCadastro && (group.categoria_ids || []).length > 0 && (
+                  <div className="flex justify-between gap-3">
+                    <span>Categorias vinculadas:</span>
+                    <span className="font-semibold text-koma-foreground tabular-nums">
+                      {(group.categoria_ids || []).length}
+                      {group.incluir_subcategorias !== false ? ' + subcategorias' : ''}
+                    </span>
+                  </div>
+                )}
               </div>
-              )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -570,8 +699,8 @@ export default function ComplementosTab({
           className="fixed inset-0 m-auto w-[calc(100%_-_2rem)] max-w-2xl max-h-[calc(100dvh_-_2rem)] overflow-hidden rounded-2xl border border-koma-border bg-koma-panel p-0 text-koma-foreground shadow-2xl backdrop:bg-black/60">
           <div className="p-4 sm:p-6 space-y-5 max-h-[calc(100dvh_-_2rem)] flex flex-col">
             <div className="flex items-center justify-between border-b border-koma-border pb-3 shrink-0">
-              <h3 id={dialogTitleId} className="font-bold text-sm text-koma-foreground flex items-center gap-2">
-                <Layers className="w-4 h-4 text-emerald-500" />
+              <h3 id={dialogTitleId} className="font-bold text-sm text-koma-foreground flex items-center gap-2" style={{ fontFamily: 'var(--koma-font-display)' }}>
+                <Layers className="w-4 h-4" style={{ color: 'var(--koma-success-text)' }} />
                 {editingGrupo ? 'Editar Grupo de Complementos' : 'Novo Grupo de Complementos'}
               </h3>
               <button
@@ -596,25 +725,36 @@ export default function ComplementosTab({
                   placeholder="Ex: Queijos e Cremosos, Molhos, Ponto da Carne"
                   value={nome}
                   onChange={(event) => setNome(event.target.value)}
-                  className="w-full px-3 py-2 bg-koma-card border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500"
+                  className="min-h-11 w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-sm text-koma-foreground focus:outline-none focus:border-koma-border-strong"
                   required
                 />
               </div>
 
-              {marmitariaCadastro && <button type="button" aria-expanded={showGroupRules} onClick={() => setShowGroupRules(value => !value)} className="text-xs font-bold text-emerald-700 dark:text-emerald-300 underline">Limites e produtos vinculados</button>}
+              {marmitariaCadastro && (
+                <button
+                  type="button"
+                  aria-expanded={showGroupRules}
+                  onClick={() => setShowGroupRules(value => !value)}
+                  className="text-xs font-bold underline"
+                  style={{ color: 'var(--koma-success-text)' }}
+                >
+                  Limites e produtos vinculados
+                </button>
+              )}
               {marmitariaCadastro && showGroupRules && <p className="text-xs text-koma-muted">Para sabores e escolhas de outros produtos, defina os limites e vincule somente os produtos correspondentes. Nas quentinhas, os limites definidos em Produtos continuam valendo.</p>}
               {!marmitariaCadastro && (
-                <div className="rounded-xl border border-koma-border bg-koma-raised/30 p-3 space-y-3">
+                <div className="rounded-xl border border-koma-border bg-koma-card p-3 space-y-3">
                   <div>
                     <p className="text-xs font-bold text-koma-foreground">Como o cliente escolhe?</p>
-                    <p className="mt-1 text-[11px] text-koma-muted">Escolhas sem cobrança e adicionais pagos usam o mesmo cadastro. O preço de cada opção define se há acréscimo; a obrigatoriedade é outra regra.</p>
+                    <p className="mt-1 text-xs text-koma-muted">Escolhas sem cobrança e adicionais pagos usam o mesmo cadastro. O preço de cada opção define se há acréscimo; a obrigatoriedade é outra regra.</p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <button
                       type="button"
                       aria-pressed={tipo === 'opcional' && minSelecoes === '0' && maxSelecoes === '1'}
                       onClick={() => { setTipo('opcional'); setMinSelecoes('0'); setMaxSelecoes('1'); setShowAdvancedRules(false); }}
-                      className={clsx('min-h-11 rounded-lg border px-3 py-2 text-left text-xs font-bold', tipo === 'opcional' && minSelecoes === '0' && maxSelecoes === '1' ? 'border-emerald-500 text-koma-foreground' : 'border-koma-border text-koma-muted')}
+                      className={clsx('min-h-11 rounded-xl border px-3 py-2 text-left text-xs font-bold transition-colors', tipo === 'opcional' && minSelecoes === '0' && maxSelecoes === '1' ? 'border-transparent' : 'border-koma-border bg-koma-panel text-koma-muted hover:text-koma-foreground')}
+                      style={tipo === 'opcional' && minSelecoes === '0' && maxSelecoes === '1' ? { background: 'var(--kc-chrome-selected, var(--koma-action-bg))', color: 'var(--kc-chrome-on-selected, var(--koma-action-text))' } : undefined}
                     >
                       Opcional · até uma escolha
                     </button>
@@ -622,12 +762,13 @@ export default function ComplementosTab({
                       type="button"
                       aria-pressed={tipo === 'obrigatorio' && minSelecoes === '1' && maxSelecoes === '1'}
                       onClick={() => { setTipo('obrigatorio'); setMinSelecoes('1'); setMaxSelecoes('1'); setShowAdvancedRules(false); }}
-                      className={clsx('min-h-11 rounded-lg border px-3 py-2 text-left text-xs font-bold', tipo === 'obrigatorio' && minSelecoes === '1' && maxSelecoes === '1' ? 'border-emerald-500 text-koma-foreground' : 'border-koma-border text-koma-muted')}
+                      className={clsx('min-h-11 rounded-xl border px-3 py-2 text-left text-xs font-bold transition-colors', tipo === 'obrigatorio' && minSelecoes === '1' && maxSelecoes === '1' ? 'border-transparent' : 'border-koma-border bg-koma-panel text-koma-muted hover:text-koma-foreground')}
+                      style={tipo === 'obrigatorio' && minSelecoes === '1' && maxSelecoes === '1' ? { background: 'var(--kc-chrome-selected, var(--koma-action-bg))', color: 'var(--kc-chrome-on-selected, var(--koma-action-text))' } : undefined}
                     >
                       Obrigatória · escolha uma
                     </button>
                   </div>
-                  <button type="button" className="text-[11px] font-semibold text-koma-secondary underline" aria-expanded={showAdvancedRules} onClick={() => setShowAdvancedRules(value => !value)}>
+                  <button type="button" className="text-xs font-semibold text-koma-secondary underline" aria-expanded={showAdvancedRules} onClick={() => setShowAdvancedRules(value => !value)}>
                     {showAdvancedRules ? 'Ocultar regras avançadas' : 'Permitir múltiplas escolhas (avançado)'}
                   </button>
                 </div>
@@ -639,7 +780,7 @@ export default function ComplementosTab({
                     aria-label="Tipo de seleção do grupo"
                     value={tipo}
                     onChange={(event) => setTipo(event.target.value as typeof tipo)}
-                    className="w-full px-3 py-2 bg-koma-card border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500"
+                    className="min-h-11 w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-koma-border-strong"
                   >
                     <option value="opcional">Opcional</option>
                     <option value="obrigatorio">Obrigatório</option>
@@ -654,7 +795,7 @@ export default function ComplementosTab({
                     min="0"
                     value={minSelecoes}
                     onChange={(event) => setMinSelecoes(event.target.value)}
-                    className="w-full px-3 py-2 bg-koma-card border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500 font-mono"
+                    className="min-h-11 w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground tabular-nums focus:outline-none focus:border-koma-border-strong"
                     required
                   />
                 </div>
@@ -666,31 +807,55 @@ export default function ComplementosTab({
                     min="1"
                     value={maxSelecoes}
                     onChange={(event) => setMaxSelecoes(event.target.value)}
-                    className="w-full px-3 py-2 bg-koma-card border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-emerald-500 font-mono"
+                    className="min-h-11 w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground tabular-nums focus:outline-none focus:border-koma-border-strong"
                     required
                   />
                 </div>
               </div>
 
               {marmitariaCadastro && !showGroupRules && (
-                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-[11px] text-koma-muted">
+                <div
+                  className="rounded-xl border p-3 text-xs"
+                  style={{
+                    background: 'var(--koma-success-bg)',
+                    borderColor: 'var(--koma-success-border)',
+                    color: 'var(--koma-text-secondary)',
+                  }}
+                >
                   Para quentinhas, configure o mínimo e o máximo em cada tamanho na aba Produtos. Para outros produtos, abra Limites e produtos vinculados.
                 </div>
               )}
-              {marmitariaCadastro && <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3">
+              {marmitariaCadastro && <div
+                className="space-y-3 rounded-xl border p-3"
+                style={{
+                  background: 'var(--koma-success-bg)',
+                  borderColor: 'var(--koma-success-border)',
+                }}
+              >
                 <h4 className="text-sm font-bold text-koma-foreground">Adicionar em {nome || 'novo grupo'}</h4>
                 <label className="block text-xs text-koma-muted">Nome da nova opção
-                  <input aria-label="Nome da nova opção" placeholder="Ex.: Costela cozida" value={newOptionName} disabled={saving} onChange={event => { setNewOptionName(event.target.value); setNewOptionError(''); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); handleAddOpcao(); } }} className="mt-1 w-full rounded-lg border border-koma-border bg-koma-card px-3 py-2 text-sm text-koma-foreground" />
+                  <input aria-label="Nome da nova opção" placeholder="Ex.: Costela cozida" value={newOptionName} disabled={saving} onChange={event => { setNewOptionName(event.target.value); setNewOptionError(''); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); handleAddOpcao(); } }} className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3 py-2 text-sm text-koma-foreground" />
                 </label>
                 <div className="flex items-end gap-3">
                   <label className="min-w-0 flex-1 text-xs text-koma-muted">Valor desta opção (R$)
-                    <input aria-label="Valor da nova opção" type="number" min="0" step="0.01" value={newOptionPrice} disabled={saving} onChange={event => { setNewOptionPrice(event.target.value); setNewOptionError(''); }} className="mt-1 w-full rounded-lg border border-koma-border bg-koma-card px-3 py-2 text-sm text-koma-foreground" />
+                    <input aria-label="Valor da nova opção" type="number" min="0" step="0.01" value={newOptionPrice} disabled={saving} onChange={event => { setNewOptionPrice(event.target.value); setNewOptionError(''); }} className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3 py-2 text-sm text-koma-foreground tabular-nums" />
                   </label>
-                  <button type="button" onClick={handleAddOpcao} disabled={saving || !newOptionName.trim()} className="koma-btn-primary shrink-0 rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-50">Adicionar à lista</button>
+                  <button
+                    type="button"
+                    onClick={handleAddOpcao}
+                    disabled={saving || !newOptionName.trim()}
+                    className="min-h-11 shrink-0 rounded-xl px-3.5 py-2 text-xs font-bold disabled:opacity-50"
+                    style={{
+                      background: 'var(--koma-action-bg)',
+                      color: 'var(--koma-action-text)',
+                    }}
+                  >
+                    Adicionar à lista
+                  </button>
                 </div>
                 <p className="text-xs text-koma-muted">Zero significa sem cobrança nesta opção. As alterações só entram no cardápio ao salvar o grupo.</p>
                 {editingGrupo && grupos.some(group => group.grupo_origem_id === editingGrupo.id) && <p className="text-xs text-koma-muted">O adicional pago será criado automaticamente com o preço configurado no grupo de adicionais.</p>}
-                {newOptionError && <p role="alert" className="text-xs text-rose-400">{newOptionError}</p>}
+                {newOptionError && <p role="alert" className="text-xs font-semibold" style={{ color: 'var(--koma-danger-text)' }}>{newOptionError}</p>}
               </div>}
               <div className="space-y-2 pt-2 border-t border-koma-border">
                 <div className="flex items-center justify-between">
@@ -698,13 +863,14 @@ export default function ComplementosTab({
                   {!marmitariaCadastro && <button
                     type="button"
                     onClick={handleAddOpcao}
-                    className="text-xs font-bold text-emerald-400 hover:text-emerald-300 inline-flex items-center gap-1"
+                    className="text-xs font-bold inline-flex items-center gap-1"
+                    style={{ color: 'var(--koma-success-text)' }}
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Adicionar Opção</span>
                   </button>}
                 </div>
-                <label className="block text-xs text-koma-muted">Buscar opção neste grupo<input aria-label="Buscar opção neste grupo" value={optionSearch} onChange={event => setOptionSearch(event.target.value)} placeholder="Ex.: costela" className="mt-1 w-full rounded-lg border border-koma-border bg-koma-raised px-3 py-2 text-sm text-koma-foreground" /></label>
+                <label className="block text-xs text-koma-muted">Buscar opção neste grupo<input aria-label="Buscar opção neste grupo" value={optionSearch} onChange={event => setOptionSearch(event.target.value)} placeholder="Ex.: costela" className="mt-1 min-h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3 py-2 text-sm text-koma-foreground" /></label>
                 <p className="text-xs text-koma-muted">R$ 0 = escolha incluída no preço (como mal passado). Um valor maior que zero = adicional cobrado. Remover preserva pedidos antigos.</p>
                 <div className="space-y-2">
                   {opcoes.map((option, index) => ({ option, index })).filter(({ option }) => !option.nome || option.nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').includes(optionSearch.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR'))).map(({ option, index }) => (
@@ -717,25 +883,26 @@ export default function ComplementosTab({
                         placeholder="Nome da opção (ex: Bacon Crocante)"
                         value={option.nome}
                         onChange={(event) => handleOpcaoChange(index, 'nome', event.target.value)}
-                        className="min-w-0 flex-1 px-2.5 py-1.5 bg-koma-raised border border-koma-border rounded-lg text-xs text-koma-foreground focus:outline-none focus:border-emerald-500"
+                        className="min-h-10 min-w-0 flex-1 px-2.5 py-1.5 bg-koma-input border border-koma-border rounded-lg text-xs text-koma-foreground focus:outline-none focus:border-koma-border-strong"
                         required
                       />
-                      <div className="w-20 shrink-0 relative">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] text-koma-muted">R$</span>
+                      <div className="w-24 shrink-0 relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-koma-muted">R$</span>
                         <input
                           type="number"
                           step="0.01"
                           min="0"
                           value={option.preco_adicional}
                           onChange={(event) => handleOpcaoChange(index, 'preco_adicional', event.target.value)}
-                          className="w-full pl-7 pr-2 py-1.5 bg-koma-raised border border-koma-border rounded-lg text-xs text-koma-foreground focus:outline-none focus:border-emerald-500 font-mono"
+                          className="min-h-10 w-full pl-8 pr-2 py-1.5 bg-koma-input border border-koma-border rounded-lg text-xs text-koma-foreground tabular-nums focus:outline-none focus:border-koma-border-strong"
                         />
                       </div>
                       {!option.opcao_origem_id && (
                         <button
                           type="button"
                           onClick={() => handleRemoveOpcao(index)}
-                          className="p-1.5 text-koma-muted hover:text-rose-400 rounded-lg"
+                          className="grid min-h-10 min-w-10 place-items-center rounded-lg hover:bg-koma-raised"
+                          style={{ color: 'var(--koma-danger-text)' }}
                           aria-label="Remover opção"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -751,15 +918,15 @@ export default function ComplementosTab({
                   <summary className="cursor-pointer text-xs font-bold text-koma-foreground">Configuração dos adicionais pagos</summary>
                   <p className="text-xs text-koma-muted">Use esta configuração no grupo de adicionais para acompanhar outro grupo. Para cadastrar uma proteína, basta adicionar seu nome acima.</p>
                   <label className="block text-xs font-bold text-koma-muted" htmlFor="complement-source">Sincronizar adicionais com</label>
-                  <select id="complement-source" value={grupoOrigemId} onChange={event => setGrupoOrigemId(event.target.value)} className="w-full rounded-lg bg-koma-card border border-koma-border p-2 text-sm">
+                  <select id="complement-source" value={grupoOrigemId} onChange={event => setGrupoOrigemId(event.target.value)} className="min-h-11 w-full rounded-xl bg-koma-input border border-koma-border p-2 text-sm text-koma-foreground">
                     <option value="">Cadastro independente</option>
                     {grupos.filter(group => group.id !== editingGrupo?.id && !group.grupo_origem_id).map(group => <option key={group.id} value={group.id}>{group.nome}</option>)}
                   </select>
                   {grupoOrigemId && <>
                     <p className="text-xs text-koma-muted">Nome e disponibilidade acompanham o grupo escolhido. Os preços existentes são mantidos.</p>
                     <div className="grid grid-cols-2 gap-3">
-                      <label className="text-xs">Novos adicionais (R$)<input aria-label="Preço de novos adicionais" type="number" min="0.01" step="0.01" required value={precoNovoAdicional} onChange={event => setPrecoNovoAdicional(event.target.value)} className="mt-1 w-full rounded-lg bg-koma-card border border-koma-border p-2" /></label>
-                      <label className="text-xs">Novos ovos (R$)<input aria-label="Preço de novos ovos" type="number" min="0.01" step="0.01" required value={precoNovoOvo} onChange={event => setPrecoNovoOvo(event.target.value)} className="mt-1 w-full rounded-lg bg-koma-card border border-koma-border p-2" /></label>
+                      <label className="text-xs">Novos adicionais (R$)<input aria-label="Preço de novos adicionais" type="number" min="0.01" step="0.01" required value={precoNovoAdicional} onChange={event => setPrecoNovoAdicional(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl bg-koma-input border border-koma-border p-2 tabular-nums" /></label>
+                      <label className="text-xs">Novos ovos (R$)<input aria-label="Preço de novos ovos" type="number" min="0.01" step="0.01" required value={precoNovoOvo} onChange={event => setPrecoNovoOvo(event.target.value)} className="mt-1 min-h-11 w-full rounded-xl bg-koma-input border border-koma-border p-2 tabular-nums" /></label>
                     </div>
                   </>}
                 </details>
@@ -768,13 +935,13 @@ export default function ComplementosTab({
               <div className={marmitariaCadastro && !showGroupRules ? 'hidden' : 'space-y-2 pt-2 border-t border-koma-border'}>
                 <div>
                   <label className="text-xs font-bold text-koma-muted">Vincular por Categoria</label>
-                  <p className="text-[11px] text-koma-subtle mt-0.5">
+                  <p className="text-xs text-koma-subtle mt-0.5">
                     É a opção recomendada: um vínculo em “Hambúrgueres” pode valer para Bovinos, Suínos e Frango.
                   </p>
                 </div>
 
                 {orderedCategories.length === 0 ? (
-                  <div className="text-[11px] text-koma-muted bg-koma-card border border-koma-border rounded-xl p-3">
+                  <div className="text-xs text-koma-muted bg-koma-card border border-koma-border rounded-xl p-3">
                     Nenhuma categoria disponível.
                   </div>
                 ) : (
@@ -788,17 +955,34 @@ export default function ComplementosTab({
                           type="button"
                           onClick={() => toggleCategorySelection(category.id)}
                           className={clsx(
-                            'flex items-center gap-2 p-2 rounded-lg text-left text-xs transition border',
+                            'flex min-h-10 items-center gap-2 p-2 rounded-lg text-left text-xs transition border',
                             selected
-                              ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold'
-                              : 'bg-koma-raised/50 border-transparent text-koma-muted hover:text-koma-foreground',
+                              ? 'font-bold'
+                              : 'bg-koma-raised border-transparent text-koma-muted hover:text-koma-foreground',
                           )}
-                          style={{ paddingLeft: `${8 + depth * 16}px` }}
+                          style={{
+                            paddingLeft: `${8 + depth * 16}px`,
+                            ...(selected
+                              ? {
+                                  background: 'var(--koma-success-bg)',
+                                  borderColor: 'var(--koma-success-border)',
+                                  color: 'var(--koma-success-text)',
+                                }
+                              : {}),
+                          }}
                         >
-                          <span className={clsx(
-                            'w-4 h-4 rounded flex items-center justify-center border text-[10px] shrink-0',
-                            selected ? 'bg-emerald-500 text-black border-emerald-500' : 'border-koma-border',
-                          )}>
+                          <span
+                            className="w-4 h-4 rounded flex items-center justify-center border shrink-0"
+                            style={
+                              selected
+                                ? {
+                                    background: 'var(--koma-action-bg)',
+                                    borderColor: 'var(--koma-action-bg)',
+                                    color: 'var(--koma-action-text)',
+                                  }
+                                : { borderColor: 'var(--koma-border-strong)' }
+                            }
+                          >
                             {selected && <Check className="w-3 h-3 stroke-[3]" />}
                           </span>
                           <span className="truncate">{depth > 0 ? '↳ ' : ''}{category.nome}</span>
@@ -808,7 +992,7 @@ export default function ComplementosTab({
                   </div>
                 )}
 
-                <label className="flex items-center gap-2 text-[11px] text-koma-muted cursor-pointer bg-koma-raised/40 border border-koma-border rounded-xl px-3 py-2">
+                <label className="flex items-center gap-2 text-xs text-koma-muted cursor-pointer bg-koma-raised border border-koma-border rounded-xl px-3 py-2">
                   <input
                     type="checkbox"
                     checked={includeSubcategories}
@@ -824,12 +1008,12 @@ export default function ComplementosTab({
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <label className="text-xs font-bold text-koma-muted">Produtos específicos</label>
-                    <p className="text-[11px] text-koma-subtle mt-0.5">Use para exceções, sem substituir o vínculo por categoria.</p>
+                    <p className="text-xs text-koma-subtle mt-0.5">Use para exceções, sem substituir o vínculo por categoria.</p>
                   </div>
                   <button
                     type="button"
                     onClick={handleSelectAllProducts}
-                    className="text-[11px] font-bold text-koma-muted hover:text-koma-foreground shrink-0"
+                    className="text-xs font-bold text-koma-muted hover:text-koma-foreground shrink-0"
                   >
                     {selectedProductIds.length === produtos.length && produtos.length > 0 ? 'Desmarcar todos' : 'Selecionar todos'}
                   </button>
@@ -845,16 +1029,33 @@ export default function ComplementosTab({
                         aria-pressed={selected}
                         onClick={() => toggleProductSelection(product.id)}
                         className={clsx(
-                          'flex items-center gap-2 p-2 rounded-lg text-left text-xs transition border',
+                          'flex min-h-10 items-center gap-2 p-2 rounded-lg text-left text-xs transition border',
                           selected
-                            ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-400 font-bold'
-                            : 'bg-koma-raised/50 border-transparent text-koma-muted hover:text-koma-foreground',
+                            ? 'font-bold'
+                            : 'bg-koma-raised border-transparent text-koma-muted hover:text-koma-foreground',
                         )}
+                        style={
+                          selected
+                            ? {
+                                background: 'var(--koma-success-bg)',
+                                borderColor: 'var(--koma-success-border)',
+                                color: 'var(--koma-success-text)',
+                              }
+                            : undefined
+                        }
                       >
-                        <span className={clsx(
-                          'w-4 h-4 rounded flex items-center justify-center border text-[10px] shrink-0',
-                          selected ? 'bg-emerald-500 text-black border-emerald-500' : 'border-koma-border',
-                        )}>
+                        <span
+                          className="w-4 h-4 rounded flex items-center justify-center border shrink-0"
+                          style={
+                            selected
+                              ? {
+                                  background: 'var(--koma-action-bg)',
+                                  borderColor: 'var(--koma-action-bg)',
+                                  color: 'var(--koma-action-text)',
+                                }
+                              : { borderColor: 'var(--koma-border-strong)' }
+                          }
+                        >
                           {selected && <Check className="w-3 h-3 stroke-[3]" />}
                         </span>
                         <span className="truncate">{product.nome}</span>

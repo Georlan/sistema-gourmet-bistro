@@ -1,6 +1,7 @@
 import clsx from 'clsx';
 import { memo } from 'react';
 import { Info, ListChecks, Plus } from 'lucide-react';
+import { getEffectiveProductPrice } from '../../../domain/productMerchandising';
 import type { Product } from '../../../types';
 import { formatCurrency } from '../cashierPresentation';
 import { pdvProductNeedsRequiredChoices } from './pdvProductChoices';
@@ -37,6 +38,7 @@ function CashierPdvProductCardView({
   const { code, name } = splitProductLabel(product.nome);
   const hasDetails = Boolean(product.descricao || code);
   const needsChoices = pdvProductNeedsRequiredChoices(product);
+  const price = getEffectiveProductPrice(Number(product.preco) || 0, product.preco_promocional);
   const productId = String(product.id);
   const detailsId = `pdv-product-details-${productId}`;
 
@@ -72,7 +74,16 @@ function CashierPdvProductCardView({
           </div>
         </div>
         <div className="cashier-pdv-product-actions">
-          <span className="cashier-pdv-product-card__price">{formatCurrency(Number(product.preco) || 0)}</span>
+          <div className="flex flex-col leading-tight tabular-nums">
+            {price.hasDiscount && price.originalPrice !== null && (
+              <span className="text-[11px] font-medium line-through text-koma-muted tabular-nums">
+                De {formatCurrency(price.originalPrice)}
+              </span>
+            )}
+            <span className="cashier-pdv-product-card__price tabular-nums">
+              {formatCurrency(price.effectivePrice)}
+            </span>
+          </div>
           <button
             type="button"
             className="cashier-pdv-product-card__add"

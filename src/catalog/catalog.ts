@@ -156,12 +156,12 @@ export function normalizeCatalogSnapshot(payload: unknown): CatalogSnapshot {
   };
 }
 
-export function isProductSellable<T extends { ativo?: boolean; cardapio_id?: string | null }>(
+export function isProductSellable<T extends { ativo?: boolean; cardapio_id?: string | null; somente_promocao?: boolean }>(
   product: T | null | undefined,
   activeCardapioId?: string | null,
   activeIds?: string[],
 ): boolean {
-  if (!product || product.ativo === false) return false;
+  if (!product || product.ativo === false || product.somente_promocao === true) return false;
   const ids = (activeIds?.length ? activeIds : activeCardapioId ? [activeCardapioId] : [])
     .filter((id): id is string => Boolean(id && typeof id === 'string' && id.trim()));
   if (ids.length > 0) {
@@ -172,7 +172,7 @@ export function isProductSellable<T extends { ativo?: boolean; cardapio_id?: str
   return true;
 }
 
-export function getSellableProducts<T extends { ativo?: boolean; cardapio_id?: string | null }>(
+export function getSellableProducts<T extends { ativo?: boolean; cardapio_id?: string | null; somente_promocao?: boolean }>(
   products: T[],
   activeCardapioId?: string | null,
   activeIds?: string[],

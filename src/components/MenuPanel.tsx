@@ -28,6 +28,7 @@ import {
   changeModifierQuantitySelection,
   modifierGroupSelectionValid,
 } from '../domain/modifierQuantity';
+import { getEffectiveProductPrice } from '../domain/productMerchandising';
 import type { AppSettings, DraftItem, Order, Product } from '../types';
 import ModifierPicker from './shared/ModifierPicker';
 
@@ -87,6 +88,10 @@ const productModifierGroups = (product: Product | null): CatalogModifierGroup[] 
 
 export const productRequiresConfiguration = (product: Product): boolean =>
   productModifierGroups(product).some((group) => Number(group.min_selecoes || 0) > 0);
+
+export const resolveWaiterProductPrice = (
+  product: Pick<Product, 'preco' | 'preco_promocional'>,
+) => getEffectiveProductPrice(Number(product.preco) || 0, product.preco_promocional);
 
 const modifierSelectionsFor = (
   groups: CatalogModifierGroup[],
@@ -336,7 +341,10 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     [currentGroups, selectedModifierIds],
   );
   const modifierTotal = selectedModifierOptions.reduce((sum, option) => sum + option.preco, 0);
-  const configUnitTotal = Number(selectedProductToConfigure?.preco || 0) + modifierTotal;
+  const selectedProductPrice = selectedProductToConfigure
+    ? resolveWaiterProductPrice(selectedProductToConfigure)
+    : null;
+  const configUnitTotal = (selectedProductPrice?.effectivePrice ?? 0) + modifierTotal;
   const modifierSelectionValid = currentGroups.every((group) =>
     modifierGroupSelectionValid(group, selectedModifierIds));
 
@@ -405,10 +413,11 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
   const handleConfirmAdd = () => {
     if (isSubmitting || !selectedProductToConfigure || !modifierSelectionValid) return;
+    const effectiveBasePrice = resolveWaiterProductPrice(selectedProductToConfigure).effectivePrice;
     const modifierMeta = {
       modificadorIds: [...selectedModifierIds],
       modificadoresSelecionados: selectedModifierOptions,
-      precoBase: Number(selectedProductToConfigure.preco),
+      precoBase: effectiveBasePrice,
     };
 
     if (editingDraftItemId) {
@@ -421,6 +430,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     } else {
       const decoratedProduct = {
         ...selectedProductToConfigure,
+        preco: effectiveBasePrice,
         __selectedModifierIds: modifierMeta.modificadorIds,
         __selectedModifiers: modifierMeta.modificadoresSelecionados,
         __selectedModifierTotal: modifierTotal,
@@ -460,7 +470,13 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
       onUpdateDraftItem(compatibleDraft.id, { quantidade: (compatibleDraft.quantidade || 1) + 1 });
       return;
     }
-    onAddToDraft(product, 1, '', defaultClient);
+    const effectivePrice = resolveWaiterProductPrice(product).effectivePrice;
+    onAddToDraft(
+      effectivePrice === Number(product.preco) ? product : { ...product, preco: effectivePrice },
+      1,
+      '',
+      defaultClient,
+    );
   };
 
   const handleQuickIncrement = (product: Product) => {
@@ -733,12 +749,20 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                   <span className="text-[9px] text-koma-muted">somente consulta</span>
                 </div>
                 <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 sm:gap-4">
-                  {unavailableSearchMatches.map((product) => (
+                  {unavailableSearchMatches.map((product) => {
+                    const price = resolveWaiterProductPrice(product);
+                    const unavailableLabel = (product as ProductWithModifiers).ativo === false
+                      ? 'Esgotado'
+                      : product.somente_promocao === true
+                        ? 'Somente promoção'
+                        : 'Cardápio inativo';
+                    return (
                     <article key={product.id} id={`unavailable-product-${product.id}`} aria-disabled="true" className="flex flex-col justify-between rounded-2xl border border-dashed border-koma-border bg-koma-card/50 p-3 opacity-80 sm:p-4">
-                      <div className="space-y-2"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><h4 className="font-serif text-sm font-bold text-koma-secondary">{product.nome}</h4><span className="mt-1 inline-flex rounded-md border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-rose-400">{(product as ProductWithModifiers).ativo === false ? 'Esgotado' : 'Cardápio inativo'}</span></div><span className="whitespace-nowrap font-mono text-xs font-bold text-koma-muted">R$ {money(Number(product.preco))}</span></div>{product.descricao && <p className="line-clamp-2 text-[11px] leading-relaxed text-koma-muted">{product.descricao}</p>}</div>
+                      <div className="space-y-2"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><h4 className="font-serif text-sm font-bold text-koma-secondary">{product.nome}</h4><span className="mt-1 inline-flex rounded-md border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider text-rose-400">{unavailableLabel}</span></div><span className="whitespace-nowrap font-mono text-xs font-bold text-koma-muted tabular-nums">R$ {money(price.effectivePrice)}</span></div>{product.descricao && <p className="line-clamp-2 text-[11px] leading-relaxed text-koma-muted">{product.descricao}</p>}</div>
                       <p className="mt-3 border-t border-koma-border/60 pt-2 text-[10px] font-semibold text-koma-muted">Indisponível para lançamento</p>
                     </article>
-                  ))}
+                    );
+                  })}
                 </div>
               </section>
             )}
@@ -763,6 +787,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                       const quickCount = requiredConfig ? 0 : standardQuickDrafts.get(product.id)?.quantity || 0;
                       const allProductCount = draftItems.filter((item) => item.produtoId === product.id).reduce((sum, item) => sum + (item.quantidade || 1), 0);
                       const currentCount = standardQuickEntry ? quickCount : allProductCount;
+                      const price = resolveWaiterProductPrice(product);
                       return (
                         <article
                           key={product.id}
@@ -782,7 +807,16 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
                               {settings.exibirImagens && product.imagem && <div className="w-full h-32 rounded-xl overflow-hidden border border-koma-border bg-koma-raised"><img src={product.imagem} alt={product.nome} loading="lazy" decoding="async" className="w-full h-full object-cover" referrerPolicy="no-referrer" /></div>}
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0"><h4 className="font-serif font-bold text-sm text-koma-foreground">{product.nome}</h4>{groups.length > 0 && <span className={`mt-1 inline-flex px-1.5 py-0.5 rounded border text-[9px] font-bold ${requiredConfig ? 'bg-cyan-500/10 border-cyan-500/25 text-cyan-300' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'}`}>{requiredConfig ? 'Escolhas obrigatórias' : `Personalizável${recommendedCount > 0 ? ` · ${recommendedCount} recomendados` : ''}`}</span>}</div>
-                                <span className="font-mono text-xs font-bold text-emerald-400 whitespace-nowrap">R$ {money(Number(product.preco))}</span>
+                                <div className="flex flex-col items-end shrink-0 leading-tight tabular-nums">
+                                  {price.hasDiscount && price.originalPrice !== null && (
+                                    <span className="text-[11px] font-medium line-through text-koma-muted whitespace-nowrap tabular-nums">
+                                      De R$ {money(price.originalPrice)}
+                                    </span>
+                                  )}
+                                  <span className="font-mono text-xs font-bold text-emerald-400 whitespace-nowrap tabular-nums">
+                                    R$ {money(price.effectivePrice)}
+                                  </span>
+                                </div>
                               </div>
                               {settings.exibirDescricoes && product.descricao && <p className="text-[11px] text-koma-subtle leading-relaxed line-clamp-2">{product.descricao}</p>}
                               <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-koma-muted transition group-hover:text-emerald-400">
@@ -872,7 +906,7 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
 
             <div className="flex items-center justify-between gap-3">
               <div><span className="block text-[10px] uppercase font-bold text-koma-muted mb-1">Quantidade</span><div className="flex items-center bg-koma-input border border-koma-border rounded-xl p-1"><button type="button" disabled={isSubmitting} onClick={() => setConfigQty((value) => Math.max(1, value - 1))} className="p-2 text-koma-muted hover:text-rose-400 disabled:opacity-40"><Minus size={14} /></button><span className="px-4 font-mono text-sm font-bold text-koma-foreground">{configQty}</span><button type="button" disabled={isSubmitting} onClick={() => setConfigQty((value) => value + 1)} className="p-2 text-koma-muted hover:text-emerald-400 disabled:opacity-40"><Plus size={14} /></button></div></div>
-              <div className="text-right"><span className="block text-[10px] uppercase font-bold text-koma-muted">Total configurado</span><span className="font-mono text-lg font-bold text-emerald-400">R$ {money(configUnitTotal * configQty)}</span>{modifierTotal > 0 && <span className="block text-[9px] text-koma-subtle">+ R$ {money(modifierTotal)} por unidade</span>}</div>
+              <div className="text-right tabular-nums"><span className="block text-[10px] uppercase font-bold text-koma-muted">Total configurado</span>{selectedProductPrice?.hasDiscount && selectedProductPrice.originalPrice !== null && <span className="block text-xs font-medium line-through text-koma-muted tabular-nums">De R$ {money((selectedProductPrice.originalPrice + modifierTotal) * configQty)}</span>}<span className="font-mono text-lg font-bold text-emerald-400 tabular-nums">R$ {money(configUnitTotal * configQty)}</span>{modifierTotal > 0 && <span className="block text-[9px] text-koma-subtle">+ R$ {money(modifierTotal)} por unidade</span>}</div>
             </div>
 
             {currentGroups.length > 0 && <div className="space-y-3 border-t border-koma-border pt-4"><div><h5 className="text-xs font-bold text-koma-foreground">Complementos</h5><p className="text-[10px] text-koma-muted">{currentGroups.some(group => group.modo_selecao) ? 'Siga os limites de porções ou tipos definidos para cada grupo.' : 'Ajuste quantidades; o limite do grupo conta tipos diferentes.'}</p></div><ModifierPicker key={`${selectedProductToConfigure.id}-${editingDraftItemId || 'new'}`} groups={currentGroups} selectedIds={selectedModifierIds} onQuantityChange={changeModifierQuantity} /></div>}

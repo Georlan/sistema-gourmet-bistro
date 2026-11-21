@@ -247,7 +247,7 @@ export function CardapioCategoriasTab({
     <div className="w-full space-y-4 pb-8 text-left animate-fade-in" aria-labelledby="catalog-categories-heading">
       <h1 id="catalog-categories-heading" className="sr-only">{hasPrinting ? 'Preparo e impressão do cardápio' : 'Preparo do cardápio'}</h1>
 
-      <section className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label={hasPrinting ? 'Rotas de impressão' : 'Rotas de preparo'}>
+      <section className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4" aria-label={hasPrinting ? 'Rotas de impressão' : 'Rotas de preparo'}>
         {filterCards.map((card) => {
           const Icon = card.icon;
           const active = destinationFilter === card.value;
@@ -259,24 +259,50 @@ export function CardapioCategoriasTab({
               onClick={() => setDestinationFilter(card.value)}
               aria-pressed={active}
               className={clsx(
-                'flex min-h-24 items-start gap-3 rounded-2xl border p-4 text-left shadow-sm transition',
+                'flex min-h-24 items-start gap-3 rounded-2xl border p-4 text-left transition',
                 active
-                  ? 'border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500/20 dark:border-emerald-500/45 dark:bg-emerald-500/10'
-                  : 'border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/40 dark:border-white/10 dark:bg-[#111713] dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/5',
+                  ? 'border-transparent'
+                  : 'border-koma-border bg-koma-card hover:border-koma-border-strong hover:bg-koma-raised',
               )}
-            >
-              <span className={clsx(
-                'grid h-10 w-10 shrink-0 place-items-center rounded-xl border',
+              style={
                 active
-                  ? 'border-emerald-300 bg-white text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300'
-                  : 'border-slate-200 bg-slate-100 text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-400',
-              )}>
+                  ? {
+                      background: 'var(--koma-success-bg)',
+                      borderColor: 'var(--koma-success-border)',
+                    }
+                  : undefined
+              }
+            >
+              <span
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border"
+                style={
+                  active
+                    ? {
+                        background: 'var(--koma-surface-card)',
+                        borderColor: 'var(--koma-success-border)',
+                        color: 'var(--koma-success-text)',
+                      }
+                    : {
+                        background: 'var(--koma-surface-raised)',
+                        borderColor: 'var(--koma-border-default)',
+                        color: 'var(--koma-text-secondary)',
+                      }
+                }
+              >
                 <Icon size={18} />
               </span>
               <span className="min-w-0">
-                <span className="block font-black text-slate-950 dark:text-white">{card.label}</span>
-                <span className="mt-1 block text-xs leading-4 text-slate-600 dark:text-slate-400">{card.description}</span>
-                <span className="mt-2 block font-mono text-[10px] font-black uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                <span
+                  className="block text-sm font-bold text-koma-foreground"
+                  style={{ fontFamily: 'var(--koma-font-display)' }}
+                >
+                  {card.label}
+                </span>
+                <span className="mt-1 block text-xs leading-4 text-koma-secondary">{card.description}</span>
+                <span
+                  className="mt-2 block text-xs font-bold tabular-nums"
+                  style={{ color: 'var(--koma-success-text)' }}
+                >
                   {stats.categories} categoria{stats.categories === 1 ? '' : 's'} · {stats.products} produto{stats.products === 1 ? '' : 's'}
                 </span>
               </span>
@@ -285,32 +311,47 @@ export function CardapioCategoriasTab({
         })}
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-[#111713]" aria-label="Ferramentas de impressão">
+      <section className="rounded-2xl border border-koma-border bg-koma-panel p-3" aria-label="Ferramentas de impressão">
         <div className="flex flex-col gap-3 md:flex-row md:items-center">
           <label className="relative min-w-0 flex-1">
-            <Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            <Search size={17} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-koma-muted" />
             <input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Buscar categoria..."
               aria-label="Buscar categorias"
-              className="h-11 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-10 text-sm text-slate-950 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-white/15 dark:bg-black/20 dark:text-white"
+              className="h-11 w-full rounded-xl border border-koma-border bg-koma-input pl-10 pr-10 text-sm text-koma-foreground placeholder:text-koma-muted outline-none transition focus:border-koma-border-strong"
             />
             {search && (
-              <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-950 dark:hover:text-white">
+              <button type="button" onClick={() => setSearch('')} aria-label="Limpar busca" className="absolute right-3 top-1/2 -translate-y-1/2 text-koma-muted hover:text-koma-foreground">
                 <X size={15} />
               </button>
             )}
           </label>
-          <button type="button" onClick={handleOpenCreate} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-emerald-500 bg-emerald-500 px-4 text-xs font-black text-emerald-950 transition hover:bg-emerald-400">
+          <button
+            type="button"
+            onClick={handleOpenCreate}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-xs font-bold transition"
+            style={{
+              background: 'var(--koma-action-bg)',
+              color: 'var(--koma-action-text)',
+            }}
+          >
             <Plus size={16} /> Nova categoria
           </button>
         </div>
       </section>
 
       {orphanProducts > 0 && (
-        <section className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-500/25 dark:bg-rose-950/20 dark:text-rose-300">
+        <section
+          className="rounded-2xl border px-4 py-3 text-sm"
+          style={{
+            background: 'var(--koma-danger-bg)',
+            borderColor: 'var(--koma-danger-border)',
+            color: 'var(--koma-danger-text)',
+          }}
+        >
           <strong>{orphanProducts} {orphanProducts === 1 ? 'produto está' : 'produtos estão'} sem categoria.</strong>{' '}
           Organize {orphanProducts === 1 ? 'esse item' : 'esses itens'} para garantir a impressão correta.
         </section>
@@ -328,10 +369,10 @@ export function CardapioCategoriasTab({
       ) : (
         <section>
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
-            <p className="text-xs font-bold text-slate-600 dark:text-slate-400">
+            <p className="text-xs font-bold text-koma-secondary tabular-nums">
               {filteredCategories.length} de {apiCategorias.length} categorias
             </p>
-            <p className="text-xs text-slate-500">Troque a impressão diretamente em cada cartão.</p>
+            <p className="text-xs text-koma-muted">Troque a impressão diretamente em cada cartão.</p>
           </div>
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-3" aria-label="Categorias e impressão">
             {filteredCategories.map((category, index) => {
@@ -341,27 +382,44 @@ export function CardapioCategoriasTab({
               const productCount = productCountByCategory.get(String(category.id)) || 0;
               const pending = pendingRouteCategoryId === String(category.id);
               return (
-                <article key={category.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-emerald-300 dark:border-white/10 dark:bg-[#111713] dark:hover:border-emerald-500/30">
+                <article key={category.id} className="rounded-2xl border border-koma-border bg-koma-card p-4 transition hover:border-koma-border-strong">
                   <div className="flex items-start gap-3">
-                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300">
+                    <span
+                      className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border"
+                      style={{
+                        background: 'var(--koma-success-bg)',
+                        borderColor: 'var(--koma-success-border)',
+                        color: 'var(--koma-success-text)',
+                      }}
+                    >
                       <DestinationIcon size={18} />
                     </span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <span
-                          className="inline-block rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[10px] font-black text-slate-600 dark:bg-white/10 dark:text-slate-300"
+                          className="inline-block rounded-md border border-koma-border bg-koma-raised px-1.5 py-0.5 text-xs font-bold text-koma-secondary tabular-nums"
                           title={`Posição #${index + 1}${category.ordem_exibicao != null ? ` (ordem: ${category.ordem_exibicao})` : ''}`}
                         >
                           #{index + 1}
                         </span>
-                        <h2 className="truncate text-sm font-black text-slate-950 dark:text-white">{category.nome}</h2>
+                        <h2
+                          className="truncate text-sm font-bold text-koma-foreground"
+                          style={{ fontFamily: 'var(--koma-font-display)' }}
+                        >
+                          {category.nome}
+                        </h2>
                       </div>
                       {productCount > 0 && onManageProducts ? (
-                        <button type="button" onClick={() => onManageProducts(String(category.id))} className="mt-1 text-xs font-bold text-emerald-700 hover:underline dark:text-emerald-300">
+                        <button
+                          type="button"
+                          onClick={() => onManageProducts(String(category.id))}
+                          className="mt-1 text-xs font-bold hover:underline tabular-nums"
+                          style={{ color: 'var(--koma-success-text)' }}
+                        >
                           Ver {productCount} {productCount === 1 ? 'produto' : 'produtos'}
                         </button>
                       ) : (
-                        <p className="mt-1 text-xs font-bold text-slate-500">Categoria vazia</p>
+                        <p className="mt-1 text-xs font-semibold text-koma-muted">Categoria vazia</p>
                       )}
                     </div>
                     <div className="flex items-center gap-1">
@@ -371,9 +429,9 @@ export function CardapioCategoriasTab({
                         disabled={index === 0 || reorderingId !== null}
                         aria-label={`Mover ${category.nome} para cima`}
                         title="Mover para cima"
-                        className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-emerald-300 hover:text-emerald-700 disabled:pointer-events-none disabled:opacity-30 dark:border-white/10 dark:text-slate-400 dark:hover:border-emerald-500/40 dark:hover:text-emerald-300"
+                        className="grid min-h-11 min-w-11 place-items-center rounded-xl border border-koma-border bg-koma-panel text-koma-secondary transition hover:border-koma-border-strong hover:text-koma-foreground disabled:pointer-events-none disabled:opacity-30"
                       >
-                        <ArrowUp size={14} />
+                        <ArrowUp size={15} />
                       </button>
                       <button
                         type="button"
@@ -381,32 +439,37 @@ export function CardapioCategoriasTab({
                         disabled={index === filteredCategories.length - 1 || reorderingId !== null}
                         aria-label={`Mover ${category.nome} para baixo`}
                         title="Mover para baixo"
-                        className="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-slate-600 transition hover:border-emerald-300 hover:text-emerald-700 disabled:pointer-events-none disabled:opacity-30 dark:border-white/10 dark:text-slate-400 dark:hover:border-emerald-500/40 dark:hover:text-emerald-300"
+                        className="grid min-h-11 min-w-11 place-items-center rounded-xl border border-koma-border bg-koma-panel text-koma-secondary transition hover:border-koma-border-strong hover:text-koma-foreground disabled:pointer-events-none disabled:opacity-30"
                       >
-                        <ArrowDown size={14} />
+                        <ArrowDown size={15} />
                       </button>
                     </div>
                     <button
                       type="button"
                       onClick={() => { setEditingCategory(category); setModalOpen(true); }}
-                      className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-xs font-black text-slate-700 transition hover:border-emerald-300 hover:text-emerald-700 dark:border-white/10 dark:text-slate-300 dark:hover:border-emerald-500/40 dark:hover:text-emerald-300"
+                      className="inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-raised px-3 text-xs font-bold text-koma-foreground transition hover:bg-koma-panel"
                     >
                       <Edit3 size={14} /> Editar
                     </button>
                     <details className="relative shrink-0">
-                      <summary className="grid h-9 w-9 cursor-pointer list-none place-items-center rounded-lg border border-slate-200 text-slate-500 hover:border-slate-400 hover:text-slate-950 dark:border-white/10 dark:hover:text-white" aria-label={`Mais ações para ${category.nome}`}>
-                        <MoreHorizontal size={15} />
+                      <summary className="grid min-h-11 min-w-11 cursor-pointer list-none place-items-center rounded-xl border border-koma-border bg-koma-panel text-koma-muted hover:border-koma-border-strong hover:text-koma-foreground" aria-label={`Mais ações para ${category.nome}`}>
+                        <MoreHorizontal size={16} />
                       </summary>
-                      <div className="absolute right-0 z-20 mt-2 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#17201a]">
-                        <button type="button" onClick={() => { setDeletingCategory(category); setDeleteModalOpen(true); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-rose-700 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-500/10">
+                      <div className="absolute right-0 z-20 mt-2 w-44 rounded-xl border border-koma-border bg-koma-dialog p-1.5 shadow-xl">
+                        <button
+                          type="button"
+                          onClick={() => { setDeletingCategory(category); setDeleteModalOpen(true); }}
+                          className="flex min-h-11 w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold hover:bg-koma-raised"
+                          style={{ color: 'var(--koma-danger-text)' }}
+                        >
                           <Trash2 size={14} /> Excluir categoria
                         </button>
                       </div>
                     </details>
                   </div>
 
-                  <div className="mt-4 border-t border-slate-200 pt-3 dark:border-white/10">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  <div className="mt-4 border-t border-koma-border pt-3">
+                    <p className="text-xs font-bold uppercase tracking-wider text-koma-muted">
                       Onde imprimir este grupo?
                     </p>
                     <div
@@ -429,15 +492,23 @@ export function CardapioCategoriasTab({
                             aria-label={`${route === 'NENHUM' && !hasPrinting ? 'Sem preparo' : routeMeta.label} para ${category.nome}`}
                             title={routeMeta.description}
                             className={clsx(
-                              'relative flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-center text-[11px] font-black leading-tight outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-wait disabled:opacity-55 dark:focus-visible:ring-offset-[#111713]',
+                              'relative flex min-h-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-2 text-center text-xs font-bold leading-tight outline-none transition disabled:cursor-wait disabled:opacity-55',
                               selected
-                                ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-600/20 dark:border-emerald-400 dark:bg-emerald-500/20 dark:text-emerald-200'
-                                : 'border-slate-300 bg-slate-50 text-slate-700 hover:border-emerald-400 hover:bg-emerald-50 hover:text-emerald-800 dark:border-white/15 dark:bg-black/20 dark:text-slate-300 dark:hover:border-emerald-500/45 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-200',
+                                ? 'border-transparent'
+                                : 'border-koma-border bg-koma-panel text-koma-secondary hover:border-koma-border-strong hover:bg-koma-raised hover:text-koma-foreground',
                             )}
+                            style={
+                              selected
+                                ? {
+                                    background: 'var(--kc-chrome-selected, var(--koma-action-bg))',
+                                    color: 'var(--kc-chrome-on-selected, var(--koma-action-text))',
+                                  }
+                                : undefined
+                            }
                           >
                             {selected && (
-                              <span className="absolute right-1.5 top-1.5 grid h-4 w-4 place-items-center rounded-full bg-white/20" aria-hidden="true">
-                                <Check size={10} strokeWidth={3} />
+                              <span className="absolute right-1.5 top-1.5 grid h-4 w-4 place-items-center rounded-full" aria-hidden="true">
+                                <Check size={12} strokeWidth={3} />
                               </span>
                             )}
                             <RouteIcon size={17} aria-hidden="true" />
@@ -446,7 +517,7 @@ export function CardapioCategoriasTab({
                         );
                       })}
                     </div>
-                    <p className="mt-2 min-h-4 text-xs text-slate-500 dark:text-slate-500" aria-live="polite">
+                    <p className="mt-2 min-h-4 text-xs text-koma-muted" aria-live="polite">
                       {pending ? 'Salvando alteração...' : meta.description}
                     </p>
                   </div>

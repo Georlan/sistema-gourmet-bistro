@@ -67,6 +67,8 @@ export default function CashierOnlineMenu({
       ? 'pedidos'
       : activeSection;
   const blocksDetailsRef = useRef<HTMLDetailsElement | null>(null);
+  const [capacityOpen, setCapacityOpen] = useState(false);
+  const [blocksOpen, setBlocksOpen] = useState(activeSection === 'bloqueios');
   const [visitedSections, setVisitedSections] = useState<OnlineMenuSection[]>([activeKey]);
   useEffect(() => {
     setVisitedSections(previous => previous.includes(activeKey) ? previous : [...previous, activeKey]);
@@ -74,6 +76,7 @@ export default function CashierOnlineMenu({
 
   useEffect(() => {
     if (activeSection !== 'bloqueios') return;
+    setBlocksOpen(true);
     const node = blocksDetailsRef.current;
     if (!node) return;
     node.open = true;
@@ -125,7 +128,11 @@ export default function CashierOnlineMenu({
           publicMenuUrl={publicMenuUrl}
         />
 
-        <details className="group rounded-2xl border border-koma-border bg-koma-panel">
+        <details
+          open={capacityOpen}
+          onToggle={(event) => setCapacityOpen(event.currentTarget.open)}
+          className="group rounded-2xl border border-koma-border bg-koma-panel"
+        >
           <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-5">
             <div>
               <strong
@@ -143,14 +150,17 @@ export default function CashierOnlineMenu({
               className="shrink-0 text-koma-muted transition-transform duration-200 group-open:rotate-180"
             />
           </summary>
-          <div className="border-t border-koma-border px-4 py-4 sm:px-5">
-            <OnlineOrderCapacitySettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
-          </div>
+          {capacityOpen && (
+            <div className="border-t border-koma-border px-4 py-4 sm:px-5">
+              <OnlineOrderCapacitySettings apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+            </div>
+          )}
         </details>
 
         <details
           ref={blocksDetailsRef}
-          open={activeSection === 'bloqueios'}
+          open={blocksOpen}
+          onToggle={(event) => setBlocksOpen(event.currentTarget.open)}
           className="group rounded-2xl border border-koma-border bg-koma-panel"
         >
           <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 px-4 py-4 sm:px-5">
@@ -170,9 +180,11 @@ export default function CashierOnlineMenu({
               className="shrink-0 text-koma-muted transition-transform duration-200 group-open:rotate-180"
             />
           </summary>
-          <div className="border-t border-koma-border px-4 py-4 sm:px-5">
-            <OnlineOrderCustomerBlocks apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
-          </div>
+          {blocksOpen && (
+            <div className="border-t border-koma-border px-4 py-4 sm:px-5">
+              <OnlineOrderCustomerBlocks apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+            </div>
+          )}
         </details>
       </div>
   );

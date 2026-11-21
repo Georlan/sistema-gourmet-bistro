@@ -1,4 +1,5 @@
 import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
+import { fetchCaixaConfiguracoes, invalidateCaixaConfiguracoesCache } from '../../../utils/caixaConfigClient';
 import clsx from 'clsx';
 import { AlertCircle, CheckCircle2, ExternalLink, Loader2, MapPin, Plus, Save, Trash2, Truck } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -70,7 +71,7 @@ function persistedPayload(config: DeliveryConfig) {
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <span className="mb-1.5 block text-[10px] font-extrabold uppercase tracking-[0.12em] text-koma-muted">
+    <span className="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.08em] text-koma-muted">
       {children}
     </span>
   );
@@ -94,10 +95,11 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
   const loadConfig = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`${apiBaseUrl}/caixa/configuracoes`, { headers: authHeaders, cache: 'no-store' });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.detail || 'Não foi possível carregar as regras de entrega.');
-      const next = normalizeConfig(data as Record<string, unknown>);
+      const result = await fetchCaixaConfiguracoes(apiBaseUrl, authHeaders);
+      if (!result.ok || !result.data) {
+        throw new Error('Não foi possível carregar as regras de entrega.');
+      }
+      const next = normalizeConfig(result.data as Record<string, unknown>);
       setConfig(next);
       setSavedSnapshot(JSON.stringify(persistedPayload(next)));
     } catch (error) {
@@ -130,6 +132,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || 'Não foi possível salvar as regras de entrega.');
+      invalidateCaixaConfiguracoesCache();
       const next = normalizeConfig(data as Record<string, unknown>);
       setConfig(next);
       setSavedSnapshot(JSON.stringify(persistedPayload(next)));
@@ -158,7 +161,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-base font-black text-koma-foreground">Entrega</h2>
             <span className={clsx(
-              'rounded-full border px-2 py-0.5 text-[9px] font-black',
+              'rounded-full border px-2 py-0.5 text-xs font-black',
               config.delivery_ativo
                 ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                 : 'border-koma-border bg-koma-card text-koma-muted'
@@ -166,7 +169,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
               {config.delivery_ativo ? 'Ativa' : 'Pausada'}
             </span>
           </div>
-          <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-koma-muted">
             Defina onde entregar e quanto cobrar.
           </p>
         </div>
@@ -175,7 +178,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
             href={publicMenuUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-3 text-[10px] font-black text-koma-secondary transition hover:border-emerald-500/40 hover:text-emerald-600"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-3 text-xs font-black text-koma-secondary transition hover:border-emerald-500/40 hover:text-emerald-600"
           >
             <ExternalLink size={13} /> Ver cardápio
           </a>
@@ -190,7 +193,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
             </div>
             <div>
               <h3 className="text-sm font-black text-koma-foreground">Aceitar pedidos para entrega</h3>
-              <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
+              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-koma-muted">
                 Ative ou pause o recebimento de delivery no cardápio online.
               </p>
             </div>
@@ -201,7 +204,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
             aria-checked={config.delivery_ativo}
             onClick={() => setConfig((current) => ({ ...current, delivery_ativo: !current.delivery_ativo }))}
             className={clsx(
-              'inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-[10px] font-black transition',
+              'inline-flex min-w-28 items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-black transition',
               config.delivery_ativo
                 ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                 : 'border-koma-border bg-koma-raised text-koma-muted',
@@ -220,7 +223,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
           </div>
           <div>
             <h3 className="text-sm font-black text-koma-foreground">Taxas de Entrega por Bairro</h3>
-            <p className="mt-1 max-w-2xl text-[10px] leading-relaxed text-koma-muted">
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-koma-muted">
               Configure a taxa padrão para outros bairros e cadastre taxas específicas para os bairros atendidos.
             </p>
           </div>
@@ -239,7 +242,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
               className="h-10 w-full rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-mono text-koma-foreground outline-none focus:border-emerald-500/60"
               placeholder="0,00"
             />
-            <span className="mt-1.5 block text-[9px] leading-relaxed text-koma-muted">
+            <span className="mt-1.5 block text-xs leading-relaxed text-koma-muted">
               Cobrada caso o cliente não informe o bairro ou digite um bairro não listado abaixo. Garante que nenhum pedido seja travado.
             </span>
           </label>
@@ -250,7 +253,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
           <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h4 className="text-xs font-black text-koma-foreground">Bairros com taxa diferenciada</h4>
-              <p className="mt-1 text-[9px] leading-relaxed text-koma-muted">
+              <p className="mt-1 text-xs leading-relaxed text-koma-muted">
                 Cadastre os bairros atendidos com valores específicos. O cliente poderá selecioná-los em 1 clique no cardápio.
               </p>
             </div>
@@ -260,7 +263,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
                 ...current,
                 tabela_taxas_bairros: [...current.tabela_taxas_bairros, { id: `bairro-${Date.now()}`, bairro: '', taxa: 0 }],
               }))}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-[10px] font-black text-emerald-700 transition hover:bg-emerald-500/15 dark:text-emerald-300"
+              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-500/15 dark:text-emerald-300"
             >
               <Plus size={13} /> Adicionar bairro
             </button>
@@ -269,7 +272,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
           {config.tabela_taxas_bairros.length === 0 ? (
             <div className="rounded-xl border border-dashed border-koma-border bg-koma-card/50 p-4 text-center">
               <p className="text-xs text-koma-muted">Nenhum bairro cadastrado no momento.</p>
-              <p className="mt-1 text-[10px] text-koma-muted/80">Todos os pedidos usarão a taxa padrão configurada acima.</p>
+              <p className="mt-1 text-xs text-koma-muted/80">Todos os pedidos usarão a taxa padrão configurada acima.</p>
             </div>
           ) : (
             <div className="space-y-2.5">
@@ -320,7 +323,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
       <section className="rounded-2xl border border-koma-border bg-koma-panel p-4 sm:p-5">
         <div className="mb-4">
           <h3 className="text-sm font-black text-koma-foreground">Pedido mínimo e frete grátis</h3>
-          <p className="mt-1 text-[10px] leading-relaxed text-koma-muted">Deixe em zero para não aplicar valor mínimo ou faixa de frete grátis.</p>
+          <p className="mt-1 text-xs leading-relaxed text-koma-muted">Deixe em zero para não aplicar valor mínimo ou faixa de frete grátis.</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -335,7 +338,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
                 className="h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3.5 text-sm font-mono text-koma-foreground outline-none focus:border-emerald-500/60"
                 placeholder="0,00"
               />
-              <span className="mt-1 block text-[9px] text-koma-muted">
+              <span className="mt-1 block text-xs text-koma-muted">
                 {config.pedido_minimo_retirada ? 'Valor mínimo para entrega e retirada no balcão.' : 'Valor mínimo do pedido para delivery.'}
               </span>
             </label>
@@ -346,7 +349,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
                 onChange={(event) => setConfig((current) => ({ ...current, pedido_minimo_retirada: event.target.checked }))}
                 className="h-4 w-4 rounded border-koma-border bg-koma-input text-emerald-600 focus:ring-emerald-500/60"
               />
-              <span className="text-[11px] font-bold text-koma-foreground">
+              <span className="text-xs font-bold text-koma-foreground">
                 Exigir valor mínimo também para retirada no balcão
               </span>
             </label>
@@ -362,7 +365,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
               className="h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3.5 text-sm font-mono text-koma-foreground outline-none focus:border-emerald-500/60"
               placeholder="0,00"
             />
-            <span className="mt-1 block text-[9px] text-koma-muted">Pedidos que atingirem este valor terão entrega grátis.</span>
+            <span className="mt-1 block text-xs text-koma-muted">Pedidos que atingirem este valor terão entrega grátis.</span>
           </label>
         </div>
       </section>
@@ -370,11 +373,11 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
       {(feedback || hasUnsavedChanges) && (
         <div className="flex flex-col gap-2 rounded-2xl border border-koma-border bg-koma-panel p-3 sm:flex-row sm:items-center sm:justify-end">
           {feedback ? (
-            <span className={clsx('mr-auto inline-flex items-center gap-1.5 text-[10px] font-bold', feedback.type === 'success' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300')}>
+            <span className={clsx('mr-auto inline-flex items-center gap-1.5 text-xs font-bold', feedback.type === 'success' ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300')}>
               {feedback.type === 'success' ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}{feedback.text}
             </span>
           ) : (
-            <span className="mr-auto text-[10px] font-semibold text-amber-700 dark:text-amber-300">
+            <span className="mr-auto text-xs font-semibold text-amber-700 dark:text-amber-300">
               Alterações ainda não publicadas.
             </span>
           )}
@@ -383,7 +386,7 @@ export function OnlineMenuDeliverySettings({ apiBaseUrl, authHeaders, publicMenu
               type="button"
               disabled={isSaving}
               onClick={() => void save()}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-4 text-[10px] font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:cursor-wait disabled:opacity-70"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-emerald-500/45 bg-emerald-500/15 px-4 text-xs font-black uppercase tracking-wider text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300 disabled:cursor-wait disabled:opacity-70"
             >
               {isSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
               {isSaving ? 'Publicando…' : 'Salvar e publicar'}
