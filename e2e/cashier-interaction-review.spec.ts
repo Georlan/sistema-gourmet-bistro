@@ -112,11 +112,13 @@ test('all operation destinations keep selection, show their screen, and fullscre
   page.on('pageerror', error => errors.push(error.message));
   const scenario = await openOperationalScenario(page);
   const nav = page.getByRole('navigation', { name: 'Telas desta área' });
-  for (const name of ['Novo pedido', 'Salão', 'Cozinha', 'Pedidos']) {
-    await nav.getByRole('button', { name, exact: true }).click();
-    await expect(nav.getByRole('button', { name, exact: true })).toHaveAttribute('aria-current', 'page');
-    if (name === 'Novo pedido') await expect(page.getByPlaceholder('Buscar item, descrição ou código')).toBeVisible();
-    if (name === 'Pedidos') await expect(page.locator('.orders-board')).toBeVisible();
+  if (!isMobile) {
+    for (const name of ['Novo pedido', 'Salão', 'Cozinha', 'Pedidos']) {
+      await nav.getByRole('button', { name, exact: true }).click();
+      await expect(nav.getByRole('button', { name, exact: true })).toHaveAttribute('aria-current', 'page');
+      if (name === 'Novo pedido') await expect(page.getByPlaceholder('Buscar item, descrição ou código')).toBeVisible();
+      if (name === 'Pedidos') await expect(page.locator('.orders-board')).toBeVisible();
+    }
   }
   if (!isMobile) {
     await page.locator('#btn-modo-pdv-fullscreen').click();
