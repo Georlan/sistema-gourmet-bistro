@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSignalBudget, observeOperationalFetch, operationalEndpoint, operationalArea, type OperationalSignal } from '../src/analytics/operational';
+import {
+  createSignalBudget,
+  isKnownExternalWebViewNoise,
+  observeOperationalFetch,
+  operationalEndpoint,
+  operationalArea,
+  type OperationalSignal,
+} from '../src/analytics/operational';
 
 test('endpoint telemetry removes identifiers, tokens, query strings and third party URLs', () => {
   assert.equal(operationalEndpoint('/api/comandas/private-name/status?token=secret', 'https://api.test', 'https://api.test/'), '/api/comandas/:id/status');
@@ -73,11 +80,51 @@ test('shared API signals separate printing, payments, orders and deliveries with
     ['/api/print-agents/private/jobs', 'printing'], ['/api/comandas/private/reimprimir', 'printing'],
     ['/api/comandas/private/pagamentos', 'payments'], ['/api/contracts/private/billing/setup', 'payments'],
     ['/cardapio/pedidos', 'orders'], ['/api/entregadores/private', 'delivery'],
-    ['/api/produtos/private', 'catalog'], ['/auth/login', 'auth'], ['/something/private', 'other'],
+    ['/api/produtos/private', 'catalog'], ['/api/cardapio-digital/assets/promotion', 'catalog'],
+    ['/auth/login', 'auth'], ['/something/private', 'other'],
   ]) {
     const endpoint = operationalEndpoint(`https://api.test${path}?token=secret`, 'https://api.test', 'https://app.test/')!;
     assert.equal(operationalArea(endpoint), area);
     assert.equal(endpoint.includes('private'), false);
     assert.equal(endpoint.includes('secret'), false);
   }
+  assert.equal(
+    operationalEndpoint('https://api.test/api/cardapio-digital/assets/promotion', 'https://api.test', 'https://app.test/'),
+    '/api/cardapio-digital/assets/promotion',
+  );
+  assert.equal(
+    operationalEndpoint('https://api.test/fidelidade/clientes/lookup?telefone=85999999999', 'https://api.test', 'https://app.test/'),
+    '/fidelidade/clientes/lookup',
+  );
+});
+
+test('isKnownExternalWebViewNoise drops Android WebView Java object is gone exceptions only', () => {
+  assert.equal(
+    isKnownExternalWebViewNoise({
+      event: '$exception',
+      properties: { $exception_values: ['Error invoking postMessage: Java object is gone'] },
+    }),
+    true,
+  );
+  assert.equal(
+    isKnownExternalWebViewNoise({
+      event: '$exception',
+      properties: { $exception_list: [{ value: 'Error invoking postMessage: Java object is gone' }] },
+    }),
+    true,
+  );
+  assert.equal(
+    isKnownExternalWebViewNoise({
+      event: '$exception',
+      properties: { $exception_values: ['TypeError: Importing a module script failed.'] },
+    }),
+    false,
+  );
+  assert.equal(
+    isKnownExternalWebViewNoise({
+      event: 'public_checkout_result',
+      properties: { $exception_values: ['Error invoking postMessage: Java object is gone'] },
+    }),
+    false,
+  );
 });
