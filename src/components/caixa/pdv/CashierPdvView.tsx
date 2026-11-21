@@ -1,7 +1,15 @@
 import clsx from 'clsx';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PAYMENT_LABELS, type PaymentMethod } from '../../../cardapio/paymentMethods';
-import { Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CreditCard, MapPin, Package, Search, ShoppingCart, Truck, UserRound, UtensilsCrossed, X } from 'lucide-react';
+import { Check, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CreditCard, MapPin, Package, Plus, Search, ShoppingCart, Tag, Truck, UserRound, UtensilsCrossed, X } from 'lucide-react';
+const CardapioPromotionWizard = lazy(() => import('../../../cardapio/components/CardapioPromotionWizard'));
+import { calculatePromotionRegularTotal, formatPromotionItemsSummary } from '../../../utils/promotionFormHelpers';
+import {
+  findPromotionStepProducts,
+  isSingleItemSimpleDiscountPromotion,
+  toCardapioProduct,
+  type PdvPromotion,
+} from './pdvPromotions';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import {
@@ -59,6 +67,10 @@ interface Props {
 
 export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, pdvTableOptions, pdv }: Props) {
   const {
+    activePromotions,
+    configuringPromotion,
+    setConfiguringPromotion,
+    addPromotionToCart,
     balcaoMobileView,
     setBalcaoMobileView,
     pdvProductDetailId,
@@ -133,6 +145,24 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     const timeout = window.setTimeout(() => setAddedNotice(null), 1500);
     return () => window.clearTimeout(timeout);
   }, [addedNotice]);
+
+  const handleLaunchPromotion = useCallback((promo: PdvPromotion) => {
+    const simpleProduct = isSingleItemSimpleDiscountPromotion(promo, sellableProducts);
+    if (simpleProduct) {
+      addPromotionToCart(promo, [{
+        product: toCardapioProduct(simpleProduct),
+        quantity: 1,
+        selectedOptions: {},
+        notes: '',
+      }]);
+      return;
+    }
+    setConfiguringPromotion(promo);
+  }, [addPromotionToCart, sellableProducts, setConfiguringPromotion]);
+
+  const showOffersStrip = activePromotions.length > 0 && (
+    pdvSelectedCategory === '__ofertas__' || (pdvSelectedCategory === 'todos' && !pdvSearch.trim())
+  );
 
   const deliveryAddressDisclosureRef = useRef<HTMLDetailsElement | null>(null);
 
@@ -448,6 +478,20 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                     >
                       Todos <span className={"ml-1 opacity-75"}>{sellableProducts.length}</span>
                     </button>
+                    {activePromotions.length > 0 && (
+                      <button
+                        type="button"
+                        aria-pressed={pdvSelectedCategory === '__ofertas__'}
+                        onClick={() => {
+                          setPdvSelectedCategory('__ofertas__');
+                          setPdvProductDetailId(null);
+                        }}
+                        className="cashier-pdv-category inline-flex h-8 items-center gap-1 rounded-lg border px-3 text-[10px] font-bold whitespace-nowrap cursor-pointer transition-colors"
+                      >
+                        <Tag size={12} />
+                        Ofertas <span className="ml-0.5 tabular-nums opacity-75">{activePromotions.length}</span>
+                      </button>
+                    )}
                     {pdvCategories.map((catObj) => (
                       <button
                         key={catObj.id || catObj.nome}
@@ -478,7 +522,64 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
               </div>
 
               <div className={"cashier-pdv-product-scroll flex-1 min-h-0 overflow-y-auto pr-1 overscroll-contain"}>
-                {filteredProducts.length > 0 ? (
+                {showOffersStrip && (
+                  <div className="mb-3 space-y-2" data-testid="pdv-active-offers">
+                    <div className="flex items-center justify-between">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-koma-muted">
+                        <Tag size={13} />
+                        Ofertas ativas
+                      </span>
+                      <span className="text-[11px] font-semibold tabular-nums text-koma-muted">
+                        {activePromotions.length} {activePromotions.length === 1 ? 'oferta' : 'ofertas'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {activePromotions.map((promo) => {
+                        const slotProducts = findPromotionStepProducts(promo, sellableProducts).map((product, idx) => ({
+                          nome: product.nome,
+                          preco: Number(product.preco || 0),
+                          qty: promo.quantidades?.[idx] ?? 1,
+                        }));
+                        const summary = formatPromotionItemsSummary(slotProducts, promo.brinde_nome);
+                        const regularTotal = calculatePromotionRegularTotal(slotProducts);
+                        return (
+                          <div
+                            key={promo.id}
+                            className="flex flex-col justify-between gap-2 rounded-xl border border-koma-border bg-koma-panel p-3"
+                          >
+                            <div className="min-w-0 space-y-1">
+                              <p className="truncate text-xs font-bold text-koma-foreground">{promo.nome}</p>
+                              {summary && (
+                                <p className="line-clamp-2 text-[11px] text-koma-muted">{summary}</p>
+                              )}
+                            </div>
+                            <div className="flex items-center justify-between gap-2 pt-1">
+                              <div className="flex items-baseline gap-1.5 tabular-nums">
+                                {regularTotal > promo.preco && (
+                                  <span className="text-[11px] text-koma-muted line-through">
+                                    De {formatCurrency(regularTotal)}
+                                  </span>
+                                )}
+                                <span className="text-sm font-black text-koma-accent">
+                                  Por {formatCurrency(promo.preco)}
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleLaunchPromotion(promo)}
+                                className="inline-flex min-h-11 items-center gap-1 rounded-lg bg-koma-accent px-3 text-xs font-bold text-koma-on-accent transition-opacity hover:opacity-90"
+                              >
+                                <Plus size={14} />
+                                Lançar oferta
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {pdvSelectedCategory === '__ofertas__' ? null : filteredProducts.length > 0 ? (
                   <div
                     className="cashier-pdv-product-grid"
                   >
@@ -890,6 +991,29 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
         onOpenChange={setTablePickerOpen}
         onSelect={setPdvTargetMesaId}
       />
+
+      {configuringPromotion && (
+        <Suspense fallback={null}>
+          <CardapioPromotionWizard
+          key={configuringPromotion.id}
+          title={configuringPromotion.nome}
+          basePrice={configuringPromotion.preco}
+          restaurantId="pdv"
+          expectedStepCount={configuringPromotion.componentes.length}
+          brindeNome={configuringPromotion.brinde_nome}
+          slotQuantities={configuringPromotion.quantidades}
+          steps={findPromotionStepProducts(configuringPromotion, sellableProducts).map((product) => ({
+            product: toCardapioProduct(product),
+            label: product.nome,
+          }))}
+          onClose={() => setConfiguringPromotion(null)}
+          onConfirm={(parts) => {
+            addPromotionToCart(configuringPromotion, parts);
+            setConfiguringPromotion(null);
+          }}
+        />
+        </Suspense>
+      )}
 
       {configProduct && (
         <CashierPdvConfigurator

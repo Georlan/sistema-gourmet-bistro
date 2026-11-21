@@ -859,6 +859,83 @@ def test_promotion_imagem_url_persisted_and_exposed():
     assert upd.json()["imagem_url"] is None
 
 
+def test_e2e_pdv_pedidos_applies_compre_ganhe_and_desconto_item(universal_promo_catalog):
+    headers = _admin_headers()
+
+    # 1. Compre 5, ganhe 1 via POST /pedidos/ (PDV)
+    cg_res = client.post(
+        "/api/cardapio-digital/promocoes",
+        headers=headers,
+        json={
+            "nome": "PDV Compre 5 Ganhe 1",
+            "descricao": "5 burgers + 1 refri por R$ 100",
+            "tipo": "compre_ganhe",
+            "preco": 100.0,
+            "componentes": [["univ-burger"], ["univ-refri"]],
+            "quantidades": [5, 1],
+            "ativo": True,
+        },
+    )
+    assert cg_res.status_code == 201, cg_res.text
+    cg_id = cg_res.json()["id"]
+
+    pdv_cg_res = client.post(
+        "/comandas/venda-direta",
+        headers=headers,
+        json={
+            "tipo": "Retirada",
+            "identificador": "PDV Promo CG",
+            "delivery_telefone": "11999998888",
+            "promocao_id": cg_id,
+            "promocao_preco_esperado": 100.0,
+            "promocao_item_indices": [0, 1, 2, 3, 4, 5],
+            "itens": [
+                {"produto_id": "univ-burger"} for _ in range(5)
+            ] + [
+                {"produto_id": "univ-refri"},
+            ],
+        },
+    )
+    assert pdv_cg_res.status_code in (200, 201), pdv_cg_res.text
+    cg_items = pdv_cg_res.json()["itens"]
+    assert len(cg_items) == 6
+    assert round(sum(float(i["preco_unit"]) for i in cg_items), 2) == 100.0
+
+    # 2. Desconto em item via POST /pedidos/ (PDV)
+    disc_res = client.post(
+        "/api/cardapio-digital/promocoes",
+        headers=headers,
+        json={
+            "nome": "PDV Desconto Burger",
+            "descricao": "Burger por R$ 19,90",
+            "tipo": "desconto_item",
+            "preco": 19.9,
+            "componentes": [["univ-burger"]],
+            "ativo": True,
+        },
+    )
+    assert disc_res.status_code == 201, disc_res.text
+    disc_id = disc_res.json()["id"]
+
+    pdv_disc_res = client.post(
+        "/comandas/venda-direta",
+        headers=headers,
+        json={
+            "tipo": "Retirada",
+            "identificador": "PDV Promo Desc",
+            "delivery_telefone": "11999998888",
+            "promocao_id": disc_id,
+            "promocao_preco_esperado": 19.9,
+            "promocao_item_indices": [0],
+            "itens": [
+                {"produto_id": "univ-burger", "quantidade": 1},
+            ],
+        },
+    )
+    assert pdv_disc_res.status_code in (200, 201), pdv_disc_res.text
+    disc_items = pdv_disc_res.json()["itens"]
+    assert len(disc_items) == 1
+    assert round(sum(float(i["preco_unit"]) for i in disc_items), 2) == 19.9
 def test_multiplas_instancias_da_mesma_promocao_aplicam_preco_por_instancia():
     promo_bf = {
         "id": "promo-bf",
