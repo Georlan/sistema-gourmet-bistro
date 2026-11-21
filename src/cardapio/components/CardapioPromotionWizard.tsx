@@ -522,7 +522,8 @@ export default function CardapioPromotionWizard({
             disabled={!complete}
             onClick={() => {
               if (complete) {
-                onConfirm(flatParts.filter((part): part is PromotionPartSelection => Boolean(part)));
+                const parts = flatParts.filter((part): part is PromotionPartSelection => Boolean(part));
+                onConfirm(parts);
               }
             }}
             className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl px-3 text-sm font-bold disabled:opacity-50"
