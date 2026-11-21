@@ -1106,11 +1106,24 @@ export default function CardapioPage() {
       category: "Promoções", image: parts[0]?.product.image || "",
       isAvailable: true,
     };
-    setCart(current => [...current.filter(item => !item.promotionId), {
-      id: `promotion:${campaign.id}`, product: virtualProduct, quantity: 1,
-      selectedOptions: options, notes: "", promotionId: campaign.id,
+    const itemId = editingPromotionItem?.id
+      || `promotion:${campaign.id}:${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const nextItem: CartItem = {
+      id: itemId,
+      product: virtualProduct,
+      quantity: editingPromotionItem?.quantity ?? 1,
+      selectedOptions: options,
+      notes: "",
+      promotionId: campaign.id,
       promotionParts: parts,
-    }]);
+    };
+    setCart((current) => {
+      if (editingPromotionItem) {
+        return current.map((item) => (item.id === editingPromotionItem.id ? nextItem : item));
+      }
+      const compatible = current.filter((item) => !item.promotionId || item.promotionId === campaign.id);
+      return [...compatible, nextItem];
+    });
     setSelectedPromotion(null);
     setEditingPromotionItem(null);
     setPromotionModalOrigin(null);
@@ -1706,7 +1719,7 @@ export default function CardapioPage() {
       {selectedPromotion && (
         <React.Suspense fallback={null}>
           <CardapioPromotionWizard
-            key={selectedPromotion.id}
+            key={`${selectedPromotion.id}-${editingPromotionItem?.id ?? 'new'}`}
             title={selectedPromotion.nome}
             basePrice={selectedPromotion.preco}
             restaurantId={activeBrand.id}
@@ -1769,6 +1782,12 @@ export default function CardapioPage() {
               openProductModal(product, "cart", { editingItem: item });
             }}
             onComposeAnother={item => {
+              if (item.promotionId) {
+                const promotion = activeBrand.promotions?.find(offer => offer.id === item.promotionId);
+                if (promotion) { openPromotionModal(promotion, "cart", { closeCart: true }); }
+                else showNotification("A promoção não está mais disponível.");
+                return;
+              }
               const product = activeBrand.products.find(candidate => candidate.id === item.product.id);
               if (!product || product.isAvailable === false) { showNotification("Este produto não está mais disponível para montagem."); return; }
               openProductModal(product, "cart");

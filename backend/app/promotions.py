@@ -168,9 +168,9 @@ def _item_integer_quantity(item: Any) -> int:
     return int(qty)
 
 
-def _promotion_item_indices(
+def _promotion_item_instances(
     validated: ValidatedOrderInput, promotion: dict, item_indices: tuple[int, ...] | None = None,
-) -> list[int]:
+) -> list[list[int]]:
     parts = promotion.get("componentes") or []
     quantities = normalize_promotion_quantities(promotion)
     if quantities is None:
@@ -179,32 +179,35 @@ def _promotion_item_indices(
     if item_indices is not None:
         if (
             len(item_indices) < len(parts)
-            or len(item_indices) > sum(quantities)
             or len(set(item_indices)) != len(item_indices)
             or any(type(i) is not int or i < 0 or i >= len(items) for i in item_indices)
         ):
             raise OrderValidationError("Composição de promoção inválida.")
+        instances: list[list[int]] = []
         cursor = 0
-        for slot, required_qty in zip(parts, quantities):
-            allowed = {str(pid) for pid in slot}
-            acc = 0
-            while cursor < len(item_indices) and acc < required_qty:
-                idx = item_indices[cursor]
-                item = items[idx]
-                if str(item.product_id) not in allowed:
-                    break
-                acc += _item_integer_quantity(item)
-                cursor += 1
-            if acc != required_qty:
-                msg = (
-                    "Monte uma unidade de cada item da promoção."
-                    if required_qty == 1
-                    else "Monte a quantidade exata de cada item da promoção."
-                )
-                raise OrderValidationError(msg)
-        if cursor != len(item_indices):
+        while cursor < len(item_indices):
+            instance_start = cursor
+            for slot, required_qty in zip(parts, quantities):
+                allowed = {str(pid) for pid in slot}
+                acc = 0
+                while cursor < len(item_indices) and acc < required_qty:
+                    idx = item_indices[cursor]
+                    item = items[idx]
+                    if str(item.product_id) not in allowed:
+                        break
+                    acc += _item_integer_quantity(item)
+                    cursor += 1
+                if acc != required_qty:
+                    msg = (
+                        "Monte uma unidade de cada item da promoção."
+                        if required_qty == 1
+                        else "Monte a quantidade exata de cada item da promoção."
+                    )
+                    raise OrderValidationError(msg)
+            instances.append(list(item_indices[instance_start:cursor]))
+        if not instances or cursor != len(item_indices):
             raise OrderValidationError("Composição de promoção inválida.")
-        return list(item_indices)
+        return instances
 
     selected: list[int] = []
     used: set[int] = set()
@@ -227,7 +230,17 @@ def _promotion_item_indices(
         used.update(matches)
         selected.extend(matches)
 
-    return selected
+    return [selected]
+
+
+def _promotion_item_indices(
+    validated: ValidatedOrderInput, promotion: dict, item_indices: tuple[int, ...] | None = None,
+) -> list[int]:
+    return [
+        idx
+        for instance in _promotion_item_instances(validated, promotion, item_indices)
+        for idx in instance
+    ]
 
 
 def validate_exclusive_promotion_parts(
@@ -265,95 +278,98 @@ def apply_promotion_to_validated(
     if promotion_status(promotion) != "ativa" or not is_valid_promotion_structure(promotion):
         raise OrderValidationError("Promoção indisponível.")
     items = list(validated.items)
-    selected = _promotion_item_indices(validated, promotion, item_indices)
-
-    base_total = sum(
-        (items[index].base_price * items[index].quantity for index in selected),
-        Decimal("0.00"),
-    ).quantize(Decimal("0.01"))
+    instances = _promotion_item_instances(validated, promotion, item_indices)
     promo_price = money(promotion["preco"])
     if expected_price is not None and money(expected_price) != promo_price:
         raise OrderValidationError("O preço desta oferta mudou. Atualize o cardápio e revise a promoção antes de confirmar.")
-    if promo_price > base_total:
-        # Preço próprio da oferta: atribuir a diferença a um componente real.
-        # Preferir exclusivo mantém a referência histórica das quentinhas.
-        surcharge_cents = _to_cents(promo_price - base_total)
-        eligible = [index for index in selected
-                    if str(items[index].product_id) in (exclusive_ids or set())]
-        eligible_single = [index for index in eligible if _item_integer_quantity(items[index]) == 1]
-        selected_single = [index for index in selected if _item_integer_quantity(items[index]) == 1]
-        if eligible_single:
-            target = eligible_single[0]
-        elif eligible:
-            target = eligible[0]
-        elif selected_single:
-            target = selected_single[0]
-        else:
-            target = selected[0]
-        target_item = items[target]
-        qty = _item_integer_quantity(target_item)
-        base_cents = _to_cents(target_item.base_price)
-        per_unit_cents, rem_cents = divmod(surcharge_cents, qty)
-        if rem_cents == 0:
-            items[target] = replace(
-                target_item,
-                base_price=_from_cents(base_cents + per_unit_cents),
-            )
-        else:
-            items[target] = replace(
-                target_item,
-                quantity=Decimal(qty - rem_cents),
-                base_price=_from_cents(base_cents + per_unit_cents),
-            )
-            items.append(
-                replace(
-                    target_item,
-                    quantity=Decimal(rem_cents),
-                    base_price=_from_cents(base_cents + per_unit_cents + 1),
-                )
-            )
-    elif promo_price < base_total:
-        # Distribuição determinística entre componentes, nunca preço unitário negativo
-        # e sempre com precisão exata em centavos.
-        remainder_cents = _to_cents(base_total - promo_price)
-        for index in selected:
-            if remainder_cents == 0:
-                break
-            item = items[index]
-            qty = _item_integer_quantity(item)
-            base_cents = _to_cents(item.base_price)
-            line_cents = base_cents * qty
-            apply_cents = min(remainder_cents, line_cents)
-            if apply_cents == 0:
-                continue
-            per_unit_cents, rem_cents = divmod(apply_cents, qty)
+
+    gift_name = normalize_gift_name(promotion.get("brinde_nome"))
+    is_compre_ganhe = normalize_promotion_type(promotion) == "compre_ganhe"
+
+    for selected in instances:
+        base_total = sum(
+            (items[index].base_price * items[index].quantity for index in selected),
+            Decimal("0.00"),
+        ).quantize(Decimal("0.01"))
+        if promo_price > base_total:
+            # Preço próprio da oferta: atribuir a diferença a um componente real.
+            # Preferir exclusivo mantém a referência histórica das quentinhas.
+            surcharge_cents = _to_cents(promo_price - base_total)
+            eligible = [index for index in selected
+                        if str(items[index].product_id) in (exclusive_ids or set())]
+            eligible_single = [index for index in eligible if _item_integer_quantity(items[index]) == 1]
+            selected_single = [index for index in selected if _item_integer_quantity(items[index]) == 1]
+            if eligible_single:
+                target = eligible_single[0]
+            elif eligible:
+                target = eligible[0]
+            elif selected_single:
+                target = selected_single[0]
+            else:
+                target = selected[0]
+            target_item = items[target]
+            qty = _item_integer_quantity(target_item)
+            base_cents = _to_cents(target_item.base_price)
+            per_unit_cents, rem_cents = divmod(surcharge_cents, qty)
             if rem_cents == 0:
-                items[index] = replace(
-                    item,
-                    base_price=_from_cents(base_cents - per_unit_cents),
+                items[target] = replace(
+                    target_item,
+                    base_price=_from_cents(base_cents + per_unit_cents),
                 )
             else:
-                items[index] = replace(
-                    item,
+                items[target] = replace(
+                    target_item,
                     quantity=Decimal(qty - rem_cents),
-                    base_price=_from_cents(base_cents - per_unit_cents),
+                    base_price=_from_cents(base_cents + per_unit_cents),
                 )
                 items.append(
                     replace(
-                        item,
+                        target_item,
                         quantity=Decimal(rem_cents),
-                        base_price=_from_cents(base_cents - per_unit_cents - 1),
+                        base_price=_from_cents(base_cents + per_unit_cents + 1),
                     )
                 )
-            remainder_cents -= apply_cents
-        if remainder_cents:
-            raise OrderValidationError("Preço promocional inválido.")
+        elif promo_price < base_total:
+            # Distribuição determinística entre componentes, nunca preço unitário negativo
+            # e sempre com precisão exata em centavos.
+            remainder_cents = _to_cents(base_total - promo_price)
+            for index in selected:
+                if remainder_cents == 0:
+                    break
+                item = items[index]
+                qty = _item_integer_quantity(item)
+                base_cents = _to_cents(item.base_price)
+                line_cents = base_cents * qty
+                apply_cents = min(remainder_cents, line_cents)
+                if apply_cents == 0:
+                    continue
+                per_unit_cents, rem_cents = divmod(apply_cents, qty)
+                if rem_cents == 0:
+                    items[index] = replace(
+                        item,
+                        base_price=_from_cents(base_cents - per_unit_cents),
+                    )
+                else:
+                    items[index] = replace(
+                        item,
+                        quantity=Decimal(qty - rem_cents),
+                        base_price=_from_cents(base_cents - per_unit_cents),
+                    )
+                    items.append(
+                        replace(
+                            item,
+                            quantity=Decimal(rem_cents),
+                            base_price=_from_cents(base_cents - per_unit_cents - 1),
+                        )
+                    )
+                remainder_cents -= apply_cents
+            if remainder_cents:
+                raise OrderValidationError("Preço promocional inválido.")
 
-    gift_name = normalize_gift_name(promotion.get("brinde_nome"))
-    if gift_name and normalize_promotion_type(promotion) == "compre_ganhe":
-        primary = selected[0]
-        items[primary] = replace(
-            items[primary],
-            notes=_append_gift_note(items[primary].notes, gift_name),
-        )
+        if gift_name and is_compre_ganhe:
+            primary = selected[0]
+            items[primary] = replace(
+                items[primary],
+                notes=_append_gift_note(items[primary].notes, gift_name),
+            )
     return replace(validated, items=tuple(items))
