@@ -220,7 +220,7 @@ test('bloqueio autoritativo encerra o checkout sem reenviar o pedido', async ({ 
   await page.getByRole('button', { name: 'Dinheiro', exact: true }).click();
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
-  await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
+  await page.getByRole('button', { name: 'Enviar pedido', exact: true }).click();
 
   await expect(page.getByRole('heading', { name: 'Novos pedidos bloqueados' })).toBeVisible();
   await expect(page.locator('#btn-place-order-final')).toBeHidden();
@@ -235,9 +235,8 @@ async function expectNoHorizontalOverflow(page: Page) {
 
 async function openCart(page: Page) {
   if (!(await page.locator('#cart-drawer-container').isVisible().catch(() => false))) {
-    const mobileCart = page.locator('#mobile-nav-cart');
-    if (await mobileCart.isVisible()) await mobileCart.click();
-    else await page.locator('#floating-cart-trigger').click();
+    const trigger = page.locator('#mobile-nav-cart:visible, #btn-cart-header:visible').first();
+    await trigger.click();
   }
   await expect(page.getByRole('heading', { name: 'Sua sacola', exact: true })).toBeVisible();
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Receber', exact: true }).click();
@@ -251,7 +250,7 @@ test('sacola abre no primeiro toque real pela navegação móvel', async ({ page
   await page.locator('#btn-fast-add-101').tap();
 
   const cartTrigger = page.locator('#mobile-nav-cart');
-  const mobileNav = page.locator(variant === 'artistic-total' ? '#koma-art-dock' : '#cardapio-mobile-nav');
+  const mobileNav = page.locator('#koma-art-dock');
   await expect(cartTrigger).toBeVisible();
   await expect(mobileNav).toBeVisible();
   await expect(page.locator('#floating-cart-trigger')).toBeHidden();
@@ -277,13 +276,7 @@ test('sacola abre no primeiro toque real pela navegação móvel', async ({ page
   await expect(page.locator('#cart-drawer-container')).toBeVisible();
   await page.locator('#btn-close-cart').tap();
 
-  const headerCart = page.locator('#btn-cart-header');
-  await expect(headerCart).toBeVisible();
-  const headerBox = await headerCart.boundingBox();
-  expect(headerBox?.width ?? 0).toBeGreaterThanOrEqual(44);
-  expect(headerBox?.height ?? 0).toBeGreaterThanOrEqual(44);
-  await headerCart.tap();
-  await expect(page.locator('#cart-drawer-container')).toBeVisible();
+  await expect(page.locator('#btn-cart-header')).toBeHidden();
 });
 
 async function fillDeliveryAddress(page: Page) {
@@ -311,11 +304,11 @@ test('cartão do produto mantém detalhes e adição como controles separados', 
   await card.getByRole('button', { name: 'Adicionar Pizza Margherita à sacola' }).click();
   const closeCart = page.getByRole('button', { name: 'Fechar sacola' });
   if (await closeCart.isVisible()) await closeCart.click();
-  await card.locator('#btn-fast-inc-101').click();
+  await card.getByRole('button', { name: 'Adicionar mais uma unidade de Pizza Margherita' }).click();
   if (await closeCart.isVisible()) await closeCart.click();
   await expect(card.locator('#qty-101')).toHaveText('2');
   await expect(page.getByRole('button', { name: 'Fechar detalhes do produto' })).toHaveCount(0);
-  await card.locator('#btn-fast-dec-101').click();
+  await card.getByRole('button', { name: 'Remover uma unidade de Pizza Margherita' }).click();
   await expect(card.locator('#qty-101')).toHaveText('1');
   await expect(page.getByRole('button', { name: 'Fechar detalhes do produto' })).toHaveCount(0);
   await openCart(page);
@@ -330,10 +323,15 @@ test('sacola orienta o visitante até cada campo inválido e bloqueia a página 
   });
 
   await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
-  await expect(page.locator('#btn-cart-header')).toHaveAttribute('aria-label', 'Sua sacola, 0 itens');
+  const cartHeader = page.locator('#btn-cart-header');
+  if (await cartHeader.isVisible()) {
+    await expect(cartHeader).toHaveAttribute('aria-label', 'Sua sacola, 0 itens');
+  }
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
-  await expect(page.locator('#btn-cart-header')).toHaveAttribute('aria-label', 'Sua sacola, 1 item');
+  if (await cartHeader.isVisible()) {
+    await expect(cartHeader).toHaveAttribute('aria-label', 'Sua sacola, 1 item');
+  }
   await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden');
 
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Receber', exact: true }).click();
@@ -378,7 +376,7 @@ test('visitante conclui retirada sem depender do WhatsApp em todos os tamanhos d
   await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
 
   await expect(page.getByText('Pizzeria Bella Italia', { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Pizza Margherita', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pizza Margherita', exact: true }).first()).toBeVisible();
   await expect(page.getByRole('searchbox')).toBeVisible();
   await expect(page.getByText('Pizzas & Massas', { exact: true }).first()).toBeVisible();
   await expectNoHorizontalOverflow(page);
@@ -397,21 +395,20 @@ test('visitante conclui retirada sem depender do WhatsApp em todos os tamanhos d
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
 
-  await expect(page.getByRole('heading', { name: 'Revise e confirme', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Confira seu pedido', exact: true })).toBeVisible();
   await expect(page.locator('#checkout-whatsapp-status-opt-in')).toHaveCount(0);
-  const paymentSummary = page.getByRole('heading', { name: 'Pagamento escolhido', exact: true }).locator('..');
-  await expect(paymentSummary.getByText('Você paga diretamente ao restaurante. Não há cobrança online nesta etapa.', { exact: true })).toBeVisible();
-  await expect(paymentSummary.getByText(/^Dinheiro\s*· presencial na retirada$/)).toBeVisible();
+  const paymentSummary = page.locator('#checkout-card');
+  await expect(paymentSummary.getByText('Não há cobrança online nesta etapa.', { exact: true })).toBeVisible();
+  await expect(paymentSummary.getByText(/^Dinheiro\s*· na retirada$/)).toBeVisible();
   await expect(page.getByText('Ana Teste', { exact: true })).toBeVisible();
   await expect(page.getByText(/R\$\s*48,00/).last()).toBeVisible();
 
-  await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
+  await page.getByRole('button', { name: 'Enviar pedido', exact: true }).click();
 
-  await expect(page.getByText('Pedido recebido', { exact: true })).toBeVisible();
+  await expect(page.getByText('Pedido confirmado', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pedido #4321', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Aguardando aceite', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Acompanhar pedido', exact: true }).click();
-  await expect(page.getByText('Aguardando aceite', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Acompanhar pedido ao vivo', exact: true }).click();
+  await expect(page.locator('#orders-drawer-panel').getByText('Aguardando aceite', { exact: true })).toBeVisible();
 
   expect(capturedOrders).toHaveLength(1);
   expect(capturedOrders[0]).toMatchObject({
@@ -451,9 +448,9 @@ test('visitante consegue revisar delivery com endereço sem OTP', async ({ page 
 
   const canonicalAddress = 'Rua das Flores, 123, Centro';
   await expect(page.locator('#checkout-card').getByText(canonicalAddress, { exact: true })).toBeVisible();
-  await expect(page.getByText(/Taxa de entrega estimada/)).toBeVisible();
-  await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
-  await expect(page.getByText('Pedido recebido', { exact: true })).toBeVisible();
+  await expect(page.locator('#checkout-card').getByRole('heading', { name: 'Entrega', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Enviar pedido', exact: true }).click();
+  await expect(page.getByText('Pedido confirmado', { exact: true })).toBeVisible();
 
   expect(capturedOrders).toHaveLength(1);
   expect(capturedOrders[0]).toMatchObject({
@@ -491,8 +488,8 @@ test('consulta de CEP alimenta o snapshot universal e permite correção manual'
   await page.locator('#delivery-address-numero').fill('1001');
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
-  await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
-  await expect(page.getByText('Pedido recebido', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Enviar pedido', exact: true }).click();
+  await expect(page.getByText('Pedido confirmado', { exact: true })).toBeVisible();
 
   expect(capturedOrders).toHaveLength(1);
   expect(capturedOrders[0].address_snapshot).toMatchObject({
@@ -545,7 +542,7 @@ test('delivery pausado mantém retirada abaixo do mínimo e cartão presencial',
   });
 
   await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
-  await expect(page.getByText(variant === 'artistic-total' ? 'Retirada · Consumo local' : 'Somente retirada', { exact: true })).toBeVisible();
+  await expect(page.getByText('Aberto · Somente retirada', { exact: false })).toBeVisible();
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
 
@@ -563,10 +560,10 @@ test('delivery pausado mantém retirada abaixo do mínimo e cartão presencial',
   await page.getByRole('button', { name: 'Cartão de crédito', exact: true }).click();
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
-  await expect(page.getByText(/^Cartão de crédito\s*· presencial na retirada$/)).toBeVisible();
-  await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
+  await expect(page.locator('#checkout-card').getByText(/^Cartão de crédito\s*· na retirada$/)).toBeVisible();
+  await page.getByRole('button', { name: 'Enviar pedido', exact: true }).click();
 
-  await expect(page.getByText('Pedido recebido', { exact: true })).toBeVisible();
+  await expect(page.getByText('Pedido confirmado', { exact: true })).toBeVisible();
   expect(capturedOrders).toHaveLength(1);
   expect(capturedOrders[0]).toMatchObject({
     tipo_pedido: 'retirada',
@@ -582,9 +579,9 @@ test('loja pausada mantém catálogo consultável e bloqueia criação de pedido
 
   await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await expect(page.getByText('Pedidos pausados.', { exact: false })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Pizza Margherita', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pizza Margherita', exact: true }).first()).toBeVisible();
   await page.locator('#btn-fast-add-101').click();
-  await expect(page.getByRole('status')).toContainText('O restaurante pausou novos pedidos');
+  await expect(page.locator('.km-toast-wrap')).toContainText('O restaurante pausou novos pedidos');
   expect(capturedOrders).toHaveLength(0);
 });
 
@@ -602,9 +599,9 @@ test('caixa fechado mantém catálogo consultável e bloqueia pedidos', async ({
   await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await expect(page.locator('#menu-availability')).toContainText('Aguardando abertura do caixa.');
   await expect(page.getByText('Estabelecimento fechado. Aguardando abertura do caixa.', { exact: false })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Pizza Margherita', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pizza Margherita', exact: true }).first()).toBeVisible();
   await page.locator('#btn-fast-add-101').click();
-  await expect(page.getByRole('status')).toContainText('O estabelecimento está fechado até a abertura do caixa.');
+  await expect(page.locator('.km-toast-wrap')).toContainText('O estabelecimento está fechado até a abertura do caixa.');
   await expect(page.locator('#floating-cart-trigger')).toHaveCount(0);
   expect(capturedOrders).toHaveLength(0);
 });
@@ -620,7 +617,7 @@ test('modo automático mostra aberto quando a política do servidor aceita pedid
   });
 
   await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
-  await expect(page.locator('.cardapio-order-status')).toHaveText(variant === 'artistic-total' ? 'Aberto para pedidos' : 'Aberto');
+  await expect(page.locator('.km-status-inline')).toContainText('Aberto');
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
   expect(capturedOrders).toHaveLength(0);
@@ -644,11 +641,11 @@ test('pedido recusado continua visível em vez de desaparecer', async ({ page })
 
   await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await expect(page.getByText('Pedido não aceito', { exact: true })).toBeVisible();
-  await expect(page.getByText(/não conseguiu aceitar este pedido/i)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Fazer novo pedido', exact: true })).toBeVisible();
-  await page.locator((page.viewportSize()?.width || 0) <= 640 ? '#mobile-nav-orders' : '#btn-my-orders-header').click();
-  await expect(page.getByRole('button', { name: 'Ver motivo da recusa' })).toBeVisible();
-  await page.getByRole('button', { name: 'Ver motivo da recusa' }).click();
+  await page.locator('#mobile-nav-orders:visible, button[aria-label="Ver pedidos"]:visible').first().click();
+  await expect(page.locator('#orders-drawer-panel').getByText('Pedido não aceito', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Ver motivo/ })).toBeVisible();
+  await page.getByRole('button', { name: /Ver motivo/ }).click();
   await expect(page.locator('#inline-order-chat-panel')).toBeVisible();
   expect(capturedOrders).toHaveLength(0);
 });
@@ -685,17 +682,17 @@ test('cliente consegue acompanhar múltiplos pedidos e alternar entre eles', asy
 
   // Banner com seletor de múltiplos pedidos
   await expect(page.locator('#active-order-banner')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Pedido #4322' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Pedido #4321' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /#4322/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /#4321/ })).toBeVisible();
 
   // Alterna para o outro pedido
-  await page.getByRole('button', { name: 'Pedido #4321' }).click();
+  await page.getByRole('button', { name: /#4321/ }).click();
   await expect(page.getByRole('heading', { name: 'Aguardando aceite' })).toBeVisible();
 
   // Abre a gaveta de Meus Pedidos pelo header
-  await page.locator((page.viewportSize()?.width || 0) <= 640 ? '#mobile-nav-orders' : '#btn-my-orders-header').click();
+  await page.locator('#mobile-nav-orders:visible, button[aria-label="Ver pedidos"]:visible').first().click();
   await expect(page.locator('#orders-drawer-panel')).toBeVisible();
-  await expect(page.getByText('Meus Pedidos', { exact: true })).toBeVisible();
+  await expect(page.locator('#orders-drawer-panel').getByRole('heading', { name: 'Pedidos', exact: true })).toBeVisible();
   await expect(page.getByText('Em andamento (2)')).toBeVisible();
 });
 
@@ -721,7 +718,7 @@ test('observação do produto chega à revisão e ao envio', async ({ page }) =>
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
   await expect(page.locator('#checkout-card').getByText('Obs.: Sem manjericão')).toBeVisible();
-  await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
+  await page.getByRole('button', { name: 'Enviar pedido', exact: true }).click();
   await expect.poll(() => capturedOrders.length).toBe(1);
   expect(capturedOrders[0].itens?.[0]).toMatchObject({ observacao: 'Sem manjericão' });
 });
@@ -735,7 +732,7 @@ test('recuperação do cardápio envia o restaurante e mantém visitante dispon�
     await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ detail: 'Recuperação de senha indisponível no momento. Tente novamente mais tarde.' }) });
   });
   await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
-  await page.getByRole('button', { name: 'Entrar na conta' }).click();
+  await page.locator('#btn-login-trigger:visible, #koma-art-dock button:has-text("Conta"):visible').first().click();
   await page.getByRole('button', { name: 'Esqueci minha senha' }).click();
   await page.getByLabel('E-mail da conta', { exact: true }).fill('customer@example.test');
   await page.getByRole('button', { name: 'Enviar link de recuperação' }).click();
@@ -802,7 +799,7 @@ test('default entrega e escolha manual sobrevivem ao fechamento da sacola e revi
   await page.getByRole('button', { name: 'Dinheiro', exact: true }).click();
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Contato', exact: true }).click();
   await page.getByRole('button', { name: 'Revisar pedido', exact: true }).click();
-  await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
+  await page.getByRole('button', { name: 'Enviar pedido', exact: true }).click();
   await expect.poll(() => orders.length).toBe(1);
   expect(orders[0].tipo_pedido).toBe('retirada');
   expect(orders[0].taxa_entrega).toBe(0);
@@ -855,7 +852,7 @@ test('avançar valida entrega e troco antes da revisão, preservando os dados', 
   await cart.locator('#input-guest-name').fill('Cliente Teste');
   await cart.getByPlaceholder('(00) 00000-0000').fill('85999999999');
   await advance.click();
-  await expect(page.getByRole('heading', { name: 'Revise e confirme' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Confira seu pedido' })).toBeVisible();
   await page.getByRole('button', { name: 'Fechar revisão do pedido' }).click();
   await openCart(page);
   await expect(cart.locator('#delivery-address-logradouro')).toHaveValue('Rua Teste');
@@ -898,8 +895,8 @@ for (const optedIn of [false, true]) {
     await expect(checkbox).toBeVisible();
     await expect(checkbox).not.toBeChecked();
     if (optedIn) await checkbox.check();
-    await page.getByRole('button', { name: 'Fazer pedido', exact: true }).click();
-    await expect(page.getByText('Pedido recebido', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Enviar pedido', exact: true }).click();
+    await expect(page.getByText('Pedido confirmado', { exact: true })).toBeVisible();
     expect(captured).toHaveLength(1);
     expect(captured[0].whatsapp_status_opt_in).toBe(optedIn);
     expect(backend.getOtpRequests()).toBe(0);

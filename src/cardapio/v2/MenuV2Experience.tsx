@@ -482,7 +482,7 @@ export default function MenuV2Experience({
   return (
     <MotionConfig reducedMotion="user">
     <div
-      className="km-root"
+      className={`km-root${cartCount > 0 && !hasOpenOverlay ? " km-root--with-bag" : ""}`}
       id="koma-artistic-canvas"
       data-koma-theme={themeMode}
       style={themeTokens.vars as React.CSSProperties}

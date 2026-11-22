@@ -18,9 +18,13 @@
   background: var(--km-page);
   color: var(--km-ink);
   font-family: var(--koma-font-body, "Inter", ui-sans-serif, system-ui, sans-serif);
-  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  padding-bottom: calc(116px + env(safe-area-inset-bottom));
   -webkit-font-smoothing: antialiased;
   overflow-x: clip;
+}
+
+.km-root--with-bag {
+  padding-bottom: calc(156px + env(safe-area-inset-bottom));
 }
 
 .km-root * {
@@ -1076,7 +1080,8 @@
     display: none;
   }
 
-  .km-root {
+  .km-root,
+  .km-root--with-bag {
     padding-bottom: 36px;
   }
 }
@@ -1393,7 +1398,7 @@
 
 /* ── Footer KÔMA Attribution Card (Official Wordmark) ──────────────────── */
 .km-footer {
-  padding: 12px 0 8px;
+  padding: 12px 0 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1790,7 +1795,6 @@
 
 /* ── Unified Theme Bridge for Drawers & Modals (.koma-art-*) ────────────── */
 #store-info-drawer,
-.koma-art-drawer-sheet,
 .koma-art-store-sheet {
   background: var(--km-dialog) !important;
   background-color: var(--km-dialog) !important;
@@ -1802,25 +1806,6 @@
 
 #store-info-drawer > div:first-child :is(h2, p, span) {
   color: #ffffff !important;
-}
-
-.koma-art-cart-item-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px;
-  background: var(--km-card);
-  border: 1px solid var(--km-line);
-  border-radius: 18px;
-}
-
-.koma-art-cart-thumb {
-  width: 64px;
-  height: 64px;
-  border-radius: 12px;
-  object-fit: cover;
-  flex-shrink: 0;
-  background: var(--km-raised);
 }
 
 .koma-art-stepper-pill {

@@ -59,4 +59,43 @@ test('CardapioProductModal - modificadores e adicionais visíveis e validação 
     /hasUnsatisfied[\s\S]*--km-alert-border[\s\S]*--km-accent/,
     'Botão de ação deve distinguir visualmente quando há escolhas pendentes',
   );
+
+  // 6. Hierarquia de camadas (Imagem 8): sem sticky -top- no header do grupo, sem z-10 no wrapper de stepper, z-20/z-0 explícitos
+  assert.doesNotMatch(
+    modalSource,
+    /sticky\s+-top-/,
+    'Cabeçalho de grupo de modificadores não deve usar sticky -top- que colide com steppers durante a rolagem',
+  );
+  assert.doesNotMatch(
+    modalSource,
+    /z-10[^"\n]*koma-art-stepper-pill/,
+    'Wrapper de .koma-art-stepper-pill não deve usar z-10',
+  );
+  assert.match(
+    modalSource,
+    /className="shrink-0 relative z-20[^"]*"[\s\S]*data-testid="modifier-steps-bar"/,
+    'Barra de etapas deve ficar em camada z-20 acima do container rolável',
+  );
+  assert.match(
+    modalSource,
+    /className="relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-pt-3[^"]*" data-testid="product-modal-scroll"/,
+    'Container rolável do modal deve ficar em camada z-0 com scroll-pt-3',
+  );
+  assert.match(
+    modalSource,
+    /className="shrink-0 relative z-20[^"]*" data-testid="product-modal-footer"/,
+    'Footer do modal deve ficar em camada z-20 acima do container rolável',
+  );
+
+  // 7. Destaque de grupo obrigatório e feedback (Imagem 7): tokens --km-alert-* sem rose-500 hardcoded
+  assert.doesNotMatch(
+    modalSource,
+    /border-rose-|bg-rose-|ring-rose-|rose-500/,
+    'Destaques de grupo obrigatório, variante e feedback devem usar tokens --km-alert-* sem classes rose-* hardcoded',
+  );
+  assert.match(
+    modalSource,
+    /isHighlighted[\s\S]*rounded-2xl border p-3\.5 overflow-hidden[\s\S]*var\(--km-alert-soft\)[\s\S]*var\(--km-alert-border\)[\s\S]*var\(--km-alert-dot\)/,
+    'Grupo destacado deve formar container único coeso com tokens --km-alert-*',
+  );
 });

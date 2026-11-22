@@ -338,3 +338,59 @@ test('6. Primitivas KomaActionPrimitives: KomaPrimaryAction, KomaQuantityControl
   assert.match(radioHtml, /aria-checked="true"/);
   assert.match(radioHtml, /is-selected/);
 });
+
+test('7. Sacola: alternar de entrega para retirada zera a taxa de entrega imediatamente e respeita safe-area', () => {
+  const brandWithDeliveryFee: BrandConfig = {
+    ...baseBrand,
+    deliveryEnabled: true,
+    taxaEntregaPadrao: 12,
+    activeOrderTypes: ['delivery', 'retirada'],
+  };
+
+  const cartItems = [
+    {
+      id: 'item-1',
+      product: baseBrand.products[0], // R$ 65,00
+      quantity: 1,
+      selectedOptions: {},
+      notes: '',
+    },
+  ];
+
+  const deliveryHtml = renderToStaticMarkup(
+    createElement(CardapioCartDrawer, {
+      cart: cartItems,
+      restaurantId: '999',
+      brandConfig: brandWithDeliveryFee,
+      initialFulfillment: 'delivery',
+      user: null,
+      onClose() {},
+      onUpdateQty() {},
+      onRemoveItem() {},
+      onPlaceOrder() {},
+    })
+  );
+
+  assert.doesNotMatch(deliveryHtml, /pb-\[86px\]/);
+  assert.match(deliveryHtml, /env\(safe-area-inset-bottom,0px\)/);
+  assert.match(deliveryHtml, /Taxa de entrega/);
+  assert.match(deliveryHtml, /R\$\s*12,00/);
+  assert.match(deliveryHtml, /Total estimado[\s\S]*R\$\s*77,00/);
+
+  const pickupHtml = renderToStaticMarkup(
+    createElement(CardapioCartDrawer, {
+      cart: cartItems,
+      restaurantId: '999',
+      brandConfig: brandWithDeliveryFee,
+      initialFulfillment: 'pickup',
+      user: null,
+      onClose() {},
+      onUpdateQty() {},
+      onRemoveItem() {},
+      onPlaceOrder() {},
+    })
+  );
+
+  assert.doesNotMatch(pickupHtml, /Taxa de entrega/);
+  assert.match(pickupHtml, /Total estimado[\s\S]*R\$\s*65,00/);
+});

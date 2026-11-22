@@ -891,12 +891,12 @@ export default function CardapioCartDrawer({
         if (event.target === event.currentTarget) onClose();
       }}
       // Above the sticky header (45), below authentication and checkout (50).
-      className="fixed inset-0 z-[46] flex items-end justify-end pb-[86px] sm:pb-0 sm:items-stretch animate-fade-in cursor-pointer"
+      className="fixed inset-0 z-[46] flex items-end justify-end sm:items-stretch animate-fade-in cursor-pointer"
       style={{ backgroundColor: "var(--km-overlay)" }}
       id="cart-overlay"
     >
       <div
-        className="flex max-h-[calc(100dvh-100px)] w-full flex-col overflow-hidden rounded-t-[28px] border border-[var(--km-line)] bg-[var(--km-dialog)] text-[var(--km-ink)] shadow-2xl sm:h-full sm:max-h-none sm:max-w-md sm:rounded-none sm:rounded-l-[28px] sm:border-y-0 sm:border-r-0 animate-slide-left"
+        className="flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-[28px] border border-[var(--km-line)] bg-[var(--km-dialog)] text-[var(--km-ink)] shadow-2xl sm:h-full sm:max-h-none sm:max-w-md sm:rounded-none sm:rounded-l-[28px] sm:border-y-0 sm:border-r-0 animate-slide-left"
         id="cart-drawer-container"
         role="dialog"
         aria-modal="true"
@@ -1056,7 +1056,7 @@ export default function CardapioCartDrawer({
         )}
 
         {cart.length === 0 ? (
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-start p-6 text-center overflow-y-auto no-scrollbar">
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-start p-6 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] text-center overflow-y-auto overscroll-contain no-scrollbar">
             <div className="mt-6 flex flex-col items-center">
               <KomaBagAsset className="h-20 w-20" />
               <h3 className="mt-4 font-display text-xl font-black text-[var(--km-ink)]">Sua sacola está vazia</h3>
@@ -1125,7 +1125,7 @@ export default function CardapioCartDrawer({
           </div>
         ) : (
           <>
-            <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4 sm:p-5 no-scrollbar">
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 pt-3.5 pb-6 sm:p-5 no-scrollbar">
               {/* Status Alert */}
               {!orderingEnabled && (
                 <div className="flex items-start gap-2 rounded-2xl border border-rose-500/25 bg-rose-500/10 p-3 text-xs font-semibold leading-relaxed text-rose-500 dark:text-rose-300">
@@ -1970,8 +1970,8 @@ export default function CardapioCartDrawer({
             </div>
 
             {/* Footer Summary & Action */}
-            <div className="shrink-0 border-t border-[var(--km-line-subtle)] bg-[var(--km-panel)] p-4 sm:p-5">
-              <div className="space-y-1.5 text-xs">
+            <div className="shrink-0 border-t border-[var(--km-line-subtle)] bg-[var(--km-panel)] px-4 pt-3 pb-[calc(0.9rem+env(safe-area-inset-bottom,0px))] sm:p-5">
+              <div className="space-y-1 text-xs">
                 <div className="flex justify-between text-[var(--km-muted)]"><span>Subtotal</span><span className="tabular-nums">{formatPrice(subtotal)}</span></div>
                 {deliveryMethod === "delivery" && (
                   <div className="flex justify-between text-[var(--km-muted)]">
@@ -2008,7 +2008,7 @@ export default function CardapioCartDrawer({
                 onClick={() => nextSection ? continueToSection(nextSection) : handleCheckout()}
                 disabled={!orderingEnabled || availablePayments.length === 0}
                 aria-label={!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : nextStep ? `Continuar para ${nextStep.label.toLowerCase()}` : "Revisar pedido"}
-                className="mt-3.5 flex h-13 w-full items-center justify-center gap-2 rounded-full bg-[var(--km-accent)] px-6 text-xs font-black uppercase tracking-wider text-[var(--km-on-accent)] shadow-md transition hover:bg-[var(--km-accent-hover)] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[var(--km-raised)] disabled:text-[var(--km-muted)] cursor-pointer"
+                className="mt-2.5 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[var(--km-accent)] px-6 text-xs font-black uppercase tracking-wider text-[var(--km-on-accent)] shadow-md transition hover:bg-[var(--km-accent-hover)] active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-[var(--km-raised)] disabled:text-[var(--km-muted)] cursor-pointer"
                 id="btn-confirm-order"
               >
                 <span>{!orderingEnabled ? "Pedidos pausados" : availablePayments.length === 0 ? "Pagamento indisponível" : nextStep ? `Continuar para ${nextStep.label.toLowerCase()}` : "Revisar pedido"}</span>
