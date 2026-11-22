@@ -239,8 +239,8 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   await consumer.getByRole('button',{name:'Copiar código Pix',exact:true}).click();
   await expect(consumer.getByRole('button',{name:'Código Pix copiado',exact:true})).toBeVisible();
   expect(await consumer.evaluate(() => (window as any).__copiedPix)).toBe('test-only-journey-do-not-pay');
-  await consumer.getByRole('button',{name:'Acompanhar pedido',exact:true}).click();
-  await consumer.getByRole('button',{name:'Pagar Pix',exact:true}).click();
+  await consumer.getByRole('button',{name:'Acompanhar pedido ao vivo',exact:true}).click();
+  await consumer.locator('#orders-drawer-panel').getByRole('button',{name:'Pagar Pix',exact:true}).first().click();
   const pix=consumer.getByRole('dialog',{name:'Pagamento Pix do Pedido #47'});
   await expect(pix.locator('svg[role="img"]')).toBeVisible();
   await consumer.evaluate(() => {
@@ -256,7 +256,12 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   await expect(receiptLink).toBeVisible();
   await expect(pix).not.toContainText('A confirmação do pagamento é automática');
   await consumer.getByRole('button',{name:'Fechar modal Pix',exact:true}).click();
-  await consumer.locator((consumer.viewportSize()?.width||0)<=640 ? '#mobile-nav-orders' : '#floating-order-chat-trigger').click();
+  const openOrdersDrawer = async () => {
+    if (!(await consumer.locator('#orders-drawer-panel').isVisible())) {
+      await consumer.locator('#mobile-nav-orders:visible, button[aria-label="Ver pedidos"]:visible').first().click();
+    }
+  };
+  await openOrdersDrawer();
   await consumer.locator('#orders-drawer-panel').getByRole('button',{name:'Pagar Pix',exact:true}).first().click();
   const reopened=consumer.locator('#pix-payment-modal-backdrop');
   await expect(reopened.locator('svg[role="img"]')).toBeVisible();
@@ -267,9 +272,9 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   expect(customerReported).toBe(true);
   await test.info().attach('pix-reaberto-manual',{body:await consumer.screenshot(),contentType:'image/png'});
   await consumer.reload();
-  const ordersButtonAfterReport=(consumer.viewportSize()?.width||0)<=640 ? '#mobile-nav-orders' : '#floating-order-chat-trigger';
-  await consumer.locator(ordersButtonAfterReport).click();
-  await expect(consumer.locator('#orders-drawer-panel').getByText('Pagamento informado. Aguardando confirmação do restaurante.')).toBeVisible();
+  await openOrdersDrawer();
+  await expect(consumer.locator('#orders-drawer-panel').getByText('Pagamento informado', { exact: true })).toBeVisible();
+  await expect(consumer.locator('#orders-drawer-panel').getByText('Aguardando confirmação do restaurante.', { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.locator('.orders-board')).toBeVisible();
   await page.getByRole('button',{name:/Conferir Pix/}).click();
@@ -283,8 +288,7 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   await pending.getByRole('button',{name:'Fechar conferência Pix'}).click();
   await expect(pending).toBeHidden();
   await consumer.reload();
-  const ordersButton=(consumer.viewportSize()?.width||0)<=640 ? '#mobile-nav-orders' : '#floating-order-chat-trigger';
-  await consumer.locator(ordersButton).click();
+  await openOrdersDrawer();
   await expect(consumer.getByText('Aguardando aceite',{exact:true}).first()).toBeVisible();
   await expect(consumer.getByRole('button',{name:'Pagar Pix',exact:true})).toHaveCount(0);
   expect(confirmations).toBe(1);
