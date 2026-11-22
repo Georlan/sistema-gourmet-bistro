@@ -28,7 +28,7 @@ interface CaixaTurnoAtualTabProps {
   onOpenSangriaModal: () => void;
   onOpenSuprimentoModal: () => void;
   onOpenNovoTurnoModal?: () => void;
-  onOpenFinancialPending?: () => void;
+  onNavigateToPaymentIntegrations?: () => void;
   onRefundSuccess?: () => Promise<void> | void;
 }
 
@@ -136,7 +136,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
   onOpenSangriaModal,
   onOpenSuprimentoModal,
   onOpenNovoTurnoModal,
-  onOpenFinancialPending,
+  onNavigateToPaymentIntegrations,
   onRefundSuccess,
 }) => {
   const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
@@ -217,23 +217,23 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
           },
         ]
       : []),
-    ...(currentShiftPixPendingCount > 0 && onOpenFinancialPending
+    ...(currentShiftPixPendingCount > 0 && onNavigateToPaymentIntegrations
       ? [
           {
             title: 'Pendências de Pix do turno',
             description: `${currentShiftPixPendingCount} tentativa(s) fora da cozinha · ${formatCurrency(Number(turnoResumo?.pendencias_financeiras_turno_atual_total ?? 0))} em revisão (não soma no recebido).`,
-            action: 'Revisar pendências',
-            onClick: onOpenFinancialPending,
+            action: 'Ver em Integrações',
+            onClick: onNavigateToPaymentIntegrations,
           },
         ]
       : []),
-    ...(previousShiftPixPendingCount > 0 && onOpenFinancialPending
+    ...(previousShiftPixPendingCount > 0 && onNavigateToPaymentIntegrations
       ? [
           {
             title: 'Pendências de Pix de turnos anteriores',
             description: `${previousShiftPixPendingCount} registro(s) histórico(s) em revisão (${formatCurrency(totalPixPendingAmount)} no total geral) bloqueando troca de método.`,
-            action: 'Revisar pendências',
-            onClick: onOpenFinancialPending,
+            action: 'Ver em Integrações',
+            onClick: onNavigateToPaymentIntegrations,
           },
         ]
       : []),

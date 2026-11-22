@@ -35,7 +35,7 @@ interface CaixaFechamentoTabProps {
   onOpenNovoTurnoModal?: () => void;
   onNavigateToPendingPayments?: () => void;
   onNavigateToOpenComandas?: () => void;
-  onOpenFinancialPending?: () => void;
+  onNavigateToPaymentIntegrations?: () => void;
   hasPrinting?: boolean;
   restaurantName?: string;
 }
@@ -134,7 +134,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
   onOpenNovoTurnoModal,
   onNavigateToPendingPayments,
   onNavigateToOpenComandas,
-  onOpenFinancialPending,
+  onNavigateToPaymentIntegrations,
   hasPrinting = true,
   restaurantName = 'KÔMA',
 }) => {
@@ -578,8 +578,8 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
             </div>
             <h3 className="mt-3 text-sm font-bold text-koma-foreground">Pendências de Pix do turno</h3>
             <p className="mt-1 text-xs text-koma-secondary">{formatMoney(currentShiftPixPendingTotal)} em revisão (não contabilizado como recebido). Pedidos não aprovados ficam fora da cozinha até revisão.</p>
-            {onOpenFinancialPending && (
-              <button type="button" onClick={onOpenFinancialPending} className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-xs font-bold text-koma-warning-text hover:text-koma-foreground">Revisar pendências <ArrowRight size={13} /></button>
+            {onNavigateToPaymentIntegrations && (
+              <button type="button" onClick={onNavigateToPaymentIntegrations} className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-xs font-bold text-koma-warning-text hover:text-koma-foreground">Ver em Integrações <ArrowRight size={13} /></button>
             )}
           </div>}
 
@@ -590,8 +590,8 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
             </div>
             <h3 className="mt-3 text-sm font-bold text-koma-foreground">Pendências de turnos anteriores</h3>
             <p className="mt-1 text-xs text-koma-muted">{formatMoney(totalPixPendingAmount)} em revisão histórica (não pertence às contas deste turno, mas bloqueia troca de Pix).</p>
-            {onOpenFinancialPending && (
-              <button type="button" onClick={onOpenFinancialPending} className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 hover:text-koma-foreground">Revisar pendências <ArrowRight size={13} /></button>
+            {onNavigateToPaymentIntegrations && (
+              <button type="button" onClick={onNavigateToPaymentIntegrations} className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 hover:text-koma-foreground">Ver em Integrações <ArrowRight size={13} /></button>
             )}
           </div>}
         </div>
