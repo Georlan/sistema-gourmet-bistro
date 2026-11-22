@@ -1,0 +1,273 @@
+/* KÔMA Cardápio Digital v2 — Variable Promotions Showcase (0 / 1 / 2 / 3+) */
+
+.km-promo-showcase {
+  position: relative;
+  margin: 0 -16px;
+  padding: 30px 16px 20px;
+  overflow: hidden;
+}
+
+.km-promo-arc-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.km-promo-showcase__inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.km-promo-showcase__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.km-promo-showcase__title {
+  font-family: var(--koma-font-display, "Space Grotesk", sans-serif);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin: 0;
+  color: var(--km-header-ink);
+}
+
+.km-promo-showcase__count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--km-header-ink) 86%, transparent);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.km-promo-track {
+  padding: 16px 2px 6px;
+  min-width: 0;
+}
+
+.km-promo-track--single {
+  display: block;
+  width: 100%;
+}
+
+.km-promo-track--pair,
+.km-promo-track--carousel {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 2px;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.km-promo-track--pair::-webkit-scrollbar,
+.km-promo-track--carousel::-webkit-scrollbar {
+  display: none;
+}
+
+.km-promo-card {
+  position: relative;
+  background: var(--km-card);
+  border: 1px solid var(--km-line);
+  border-radius: 22px;
+  overflow: visible;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  text-align: left;
+  padding: 14px 12px 12px;
+  gap: 10px;
+  color: var(--km-ink);
+  box-shadow: var(--km-shadow-tactile);
+  transition:
+    transform 0.18s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.18s ease;
+}
+
+.km-promo-card:hover {
+  border-color: var(--km-accent-border);
+}
+
+.km-promo-card:focus-visible {
+  outline: 2px solid var(--km-focus);
+  outline-offset: 2px;
+}
+
+.km-promo-card:active {
+  transform: translateY(1px) scale(0.985);
+}
+
+.km-promo-card--single {
+  width: 100%;
+  min-width: 0;
+}
+
+.km-promo-card--pair {
+  flex: 0 0 min(78%, 272px);
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+.km-promo-card--carousel {
+  flex: 0 0 clamp(228px, 72vw, 264px);
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+.km-promo-tag {
+  position: absolute;
+  top: -11px;
+  left: 14px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--km-badge-pastel-bg, var(--km-accent-soft));
+  border: 1px solid var(--km-page);
+  color: var(--km-badge-pastel-ink, var(--km-accent-text));
+  box-shadow: var(--km-shadow-card);
+  font-family: var(--koma-font-display, "Space Grotesk", sans-serif);
+  font-size: 0.625rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.km-promo-card__media {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border-radius: 14px;
+  background: var(--km-raised);
+  border: 1px solid var(--km-line-subtle);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.km-promo-card--single .km-promo-card__media {
+  max-height: 210px;
+}
+
+.km-promo-card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}
+
+.km-promo-card__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.km-promo-card__title {
+  font-family: var(--koma-font-display, "Space Grotesk", sans-serif);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0;
+  color: var(--km-ink);
+  overflow-wrap: break-word;
+}
+
+.km-promo-card__desc {
+  font-size: 0.75rem;
+  color: var(--km-muted);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+}
+
+.km-promo-card__footer {
+  margin-top: auto;
+  padding-top: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.km-promo-card__price {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--km-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.km-promo-card__cta {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--km-cta-dark);
+  color: var(--km-cta-dark-ink);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@media (min-width: 520px) {
+  .km-promo-card--single {
+    display: grid;
+    grid-template-columns: minmax(176px, 236px) minmax(0, 1fr);
+    align-items: stretch;
+    gap: 16px;
+    padding: 16px 16px 14px 14px;
+  }
+
+  .km-promo-card--single .km-promo-card__media {
+    height: 100%;
+    min-height: 144px;
+    max-height: none;
+    aspect-ratio: 4 / 3;
+  }
+
+  .km-promo-card--single .km-promo-card__body {
+    padding-top: 4px;
+    gap: 8px;
+  }
+
+  .km-promo-card--single .km-promo-card__title {
+    font-size: 1.0625rem;
+  }
+}
+
+@media (min-width: 560px) {
+  .km-promo-track--pair {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: 14px;
+    overflow-x: visible;
+    scroll-snap-type: none;
+  }
+
+  .km-promo-card--pair {
+    flex: initial;
+    width: 100%;
+  }
+}
+
+@media (min-width: 768px) {
+  .km-promo-card--carousel {
+    flex: 0 0 252px;
+  }
+}

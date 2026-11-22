@@ -25,10 +25,32 @@ export function registerPopularProductsAlias(
   const cleanId = String(restaurantId || '').trim();
   const cleanSlug = String(slug || '').trim();
   if (!cleanId || !cleanSlug) return;
-  aliasKeys.set(
-    buildKey(apiBaseUrl, 'id', cleanId),
-    buildKey(apiBaseUrl, 'slug', cleanSlug),
-  );
+  const idKey = buildKey(apiBaseUrl, 'id', cleanId);
+  const slugKey = buildKey(apiBaseUrl, 'slug', cleanSlug);
+  aliasKeys.set(idKey, slugKey);
+
+  const cachedById = recentResults.get(idKey);
+  if (cachedById && !recentResults.has(slugKey)) {
+    recentResults.set(slugKey, cachedById);
+  }
+
+  const inFlightById = inFlightRequests.get(idKey);
+  if (inFlightById && !inFlightRequests.has(slugKey)) {
+    const mirroredFlight = inFlightById
+      .then((ids) => {
+        const latestCached = recentResults.get(idKey);
+        if (latestCached && !recentResults.has(slugKey)) {
+          recentResults.set(slugKey, latestCached);
+        }
+        return ids;
+      })
+      .finally(() => {
+        if (inFlightRequests.get(slugKey) === mirroredFlight) {
+          inFlightRequests.delete(slugKey);
+        }
+      });
+    inFlightRequests.set(slugKey, mirroredFlight);
+  }
 }
 
 export function clearPopularProductsCache(): void {

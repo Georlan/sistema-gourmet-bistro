@@ -310,10 +310,13 @@ export function mergeLocalOrderSnapshots(local: StoredOrder[], current: StoredOr
   return local.map((order) => {
     if (order.delivery_receipt_code !== undefined || order.fechado || resolveOrderState(order).terminal) return order;
     const token = trackingTokenFromOrder(order);
-    if (!token) return order;
+    const legacyKey = token ? "" : String(order.idempotency_key || "").trim();
+    if (!token && !legacyKey) return order;
     const previous = current.find((item) => item.id === order.id
       && item.restaurante_id === order.restaurante_id
-      && trackingTokenFromOrder(item) === token
+      && (token
+        ? trackingTokenFromOrder(item) === token
+        : String(item.idempotency_key || "").trim() === legacyKey)
       && !item.fechado && !resolveOrderState(item).terminal);
     return previous?.delivery_receipt_code ? { ...order, delivery_receipt_code: previous.delivery_receipt_code } : order;
   });
@@ -350,11 +353,28 @@ function minimalPersistedOrder(order: StoredOrder, now = Date.now()): StoredOrde
 }
 
 function getSessionOrderStorage(): Storage | null {
-  return typeof sessionStorage !== "undefined" ? sessionStorage : null;
+  try {
+    return typeof sessionStorage !== "undefined" ? sessionStorage : null;
+  } catch {
+    return null;
+  }
 }
 
 function getLegacyDurableStorage(): Storage | null {
-  return typeof localStorage !== "undefined" ? localStorage : null;
+  try {
+    return typeof localStorage !== "undefined" ? localStorage : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeStorageGetItem(storage: Storage | null, key: string): string | null {
+  if (!storage) return null;
+  try {
+    return storage.getItem(key);
+  } catch {
+    return null;
+  }
 }
 
 function removeDurableOrderCopies(): void {
@@ -430,17 +450,17 @@ export function loadStoredOrders(restaurantId?: number): StoredOrder[] {
   const session = getSessionOrderStorage();
   const durable = getLegacyDurableStorage();
 
-  const sessionList = safeParseJson<StoredOrder[]>(session?.getItem(ACTIVE_ORDERS_STORAGE_KEY) || null);
+  const sessionList = safeParseJson<StoredOrder[]>(safeStorageGetItem(session, ACTIVE_ORDERS_STORAGE_KEY));
   if (Array.isArray(sessionList)) sessionList.forEach(accept);
 
-  const sessionLegacy = safeParseJson<StoredOrder>(session?.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY) || null);
+  const sessionLegacy = safeParseJson<StoredOrder>(safeStorageGetItem(session, LEGACY_ACTIVE_ORDER_STORAGE_KEY));
   if (sessionLegacy && !ordersMap.has(String(sessionLegacy.id || ""))) accept(sessionLegacy);
 
   // Compatibilidade de migração: lê localStorage uma única vez, sanitiza e move.
-  const durableList = safeParseJson<StoredOrder[]>(durable?.getItem(ACTIVE_ORDERS_STORAGE_KEY) || null);
+  const durableList = safeParseJson<StoredOrder[]>(safeStorageGetItem(durable, ACTIVE_ORDERS_STORAGE_KEY));
   if (Array.isArray(durableList)) durableList.forEach(accept);
 
-  const durableLegacy = safeParseJson<StoredOrder>(durable?.getItem(LEGACY_ACTIVE_ORDER_STORAGE_KEY) || null);
+  const durableLegacy = safeParseJson<StoredOrder>(safeStorageGetItem(durable, LEGACY_ACTIVE_ORDER_STORAGE_KEY));
   if (durableLegacy && !ordersMap.has(String(durableLegacy.id || ""))) accept(durableLegacy);
 
   const allOrders = Array.from(ordersMap.values()).sort(

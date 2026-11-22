@@ -120,7 +120,17 @@ export default function CardapioOrdersDrawer({
   );
   const chatOrderIdRef = React.useRef<string | null>(null);
   const seenRealtimeMessageIdsRef = React.useRef<Set<string>>(new Set());
+  const prevIsOpenRef = React.useRef(isOpen);
   const drawerOpen = isOpen || floatingOpen;
+
+  React.useEffect(() => {
+    if (prevIsOpenRef.current && !isOpen) {
+      setFloatingOpen(false);
+      setChatOrderId(null);
+      setPixModalOrder(null);
+    }
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen]);
 
   const ordersWithChat = React.useMemo(
     () => orders.filter((order) => Boolean(resolveTrackingToken(order))),
@@ -568,7 +578,7 @@ export default function CardapioOrdersDrawer({
         onClick={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}
       >
         <div
-          className="flex h-full w-full max-w-md flex-col border-l border-[var(--km-line)] bg-[var(--km-dialog)] pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] text-[var(--km-ink)] shadow-2xl transition-transform duration-300 sm:pb-0"
+          className="flex h-full w-full max-w-md flex-col border-l border-[var(--km-line)] bg-[var(--km-dialog)] pb-[calc(90px+env(safe-area-inset-bottom,0px))] text-[var(--km-ink)] shadow-2xl transition-transform duration-300 md:pb-5"
           role="dialog"
           aria-label={`Chat do Pedido #${chatOrder.numero_pedido}`}
           id="orders-drawer-panel"
@@ -653,7 +663,7 @@ export default function CardapioOrdersDrawer({
           </div>
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto p-4 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] sm:p-5 no-scrollbar">
+        <div className="flex-1 space-y-5 overflow-y-auto px-4 pt-4 pb-[calc(90px+env(safe-area-inset-bottom,0px))] sm:px-5 sm:pt-5 md:pb-5 no-scrollbar">
           {orders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center">
               <KomaOrderStatusAsset className="h-20 w-20" />
@@ -1033,7 +1043,7 @@ export default function CardapioOrdersDrawer({
 
       {pixModalOrder && pixModalOrder.pagamento?.qr_code && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-4 transition-opacity"
+          className="fixed inset-0 z-[75] flex items-center justify-center p-4 transition-opacity"
           style={{ backgroundColor: "var(--km-overlay)" }}
           id="pix-payment-modal-backdrop"
           onClick={(e) => {

@@ -726,7 +726,7 @@ export default function CardapioDigital({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center overflow-hidden p-0 sm:items-center sm:p-4 animate-fade-in"
+      className="fixed inset-0 z-[70] flex items-end justify-center overflow-hidden p-0 sm:items-center sm:p-4 animate-fade-in"
       style={{ backgroundColor: "var(--km-overlay)" }}
       id="cardapio-checkout-overlay"
     >

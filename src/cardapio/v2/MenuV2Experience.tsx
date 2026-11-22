@@ -11,21 +11,18 @@ import {
   Moon,
   Phone,
   Plus,
-  RefreshCw,
   Share2,
   Sun,
-  Tag,
   X,
 } from "lucide-react";
 import {
   BrandConfig,
   CatalogPromotion,
+  LOCAL_BANNER_PLACEHOLDER,
   LOCAL_LOGO_PLACEHOLDER,
-  LOCAL_PRODUCT_PLACEHOLDER,
   Product,
 } from "../CardapioTypes";
 import type { CustomerProfile } from "../customerSession";
-import { DeliveryReceiptCode } from "../components/DeliveryReceiptCode";
 import { API_BASE_URL } from "../../config/api";
 import { smartSearchMatch } from "../../domain";
 import { useActivePromotions } from "../useActivePromotions";
@@ -45,7 +42,6 @@ import {
   orderFulfillmentLabel,
   type OrderStateContract,
   type StoredOrder,
-  resolveOrderState,
 } from "../orderTracking";
 import {
   buildMenuThemeTokens,
@@ -61,13 +57,14 @@ import CatalogProductImage from "../components/CatalogProductImage";
 import {
   MenuBagGlyph,
   MenuCategoriesGlyph,
-  MenuPromoArcBackdrop,
   MenuSearchGlyph,
   MenuTopWaveBackdrop,
 } from "./MenuSvgAssets";
 import { KOMA_SPRING_BUBBLE, KOMA_SPRING_NAV } from "./motionTokens";
+import MenuActiveOrderCard from "./MenuActiveOrderCard";
 import MenuBottomDock from "./MenuBottomDock";
 import MenuProductCard, { formatMenuPrice } from "./MenuProductCard";
+import MenuPromotionsShowcase from "./MenuPromotionsShowcase";
 import MenuSearchOverlay from "./MenuSearchOverlay";
 import MenuKomaPlatformModal from "./MenuKomaPlatformModal";
 import "./komaMenu.css";
@@ -89,6 +86,7 @@ export interface MenuV2ExperienceProps {
   onOrdersClick?: () => void;
   activeOrdersCount?: number;
   hasOpenOverlay?: boolean;
+  dockHidden?: boolean;
   onPromotionSelect?: (promotion: CatalogPromotion) => void;
   user?: CustomerProfile | null;
   onAuthClick?: () => void;
@@ -141,6 +139,7 @@ export default function MenuV2Experience({
   onOrdersClick,
   activeOrdersCount = 0,
   hasOpenOverlay = false,
+  dockHidden,
   onPromotionSelect,
   user,
   onAuthClick,
@@ -165,6 +164,13 @@ export default function MenuV2Experience({
   const [isPlatformModalOpen, setIsPlatformModalOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [bannerFailed, setBannerFailed] = useState(false);
+  const linkCopiedTimerRef = useRef<number | null>(null);
+  const manualScrollTimerRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (linkCopiedTimerRef.current !== null) window.clearTimeout(linkCopiedTimerRef.current);
+    if (manualScrollTimerRef.current !== null) window.clearTimeout(manualScrollTimerRef.current);
+  }, []);
 
   useEffect(() => {
     setBannerFailed(false);
@@ -268,7 +274,11 @@ export default function MenuV2Experience({
       await navigator.clipboard.writeText(url);
       setLinkCopied(true);
       onNotify?.("Link do cardápio copiado!");
-      window.setTimeout(() => setLinkCopied(false), 2000);
+      if (linkCopiedTimerRef.current !== null) window.clearTimeout(linkCopiedTimerRef.current);
+      linkCopiedTimerRef.current = window.setTimeout(() => {
+        linkCopiedTimerRef.current = null;
+        setLinkCopied(false);
+      }, 2000);
     } catch {
       // Ignore clipboard failure
     }
@@ -437,7 +447,9 @@ export default function MenuV2Experience({
         const el = document.getElementById(targetId) || document.getElementById("km-top");
         el?.scrollIntoView({ behavior: "smooth", block: "start" });
       });
-      window.setTimeout(() => {
+      if (manualScrollTimerRef.current !== null) window.clearTimeout(manualScrollTimerRef.current);
+      manualScrollTimerRef.current = window.setTimeout(() => {
+        manualScrollTimerRef.current = null;
         isManualScrollRef.current = false;
       }, 650);
     },
@@ -477,7 +489,12 @@ export default function MenuV2Experience({
     [activeBrand.id],
   );
 
-  const showBanner = Boolean(activeBrand.bannerImage && !bannerFailed);
+  const showBanner = Boolean(
+    activeBrand.hasCustomBanner
+    && activeBrand.bannerImage
+    && activeBrand.bannerImage !== LOCAL_BANNER_PLACEHOLDER
+    && !bannerFailed,
+  );
 
   return (
     <MotionConfig reducedMotion="user">
@@ -795,94 +812,20 @@ export default function MenuV2Experience({
 
         {/* Active Order Banner */}
         {activeOrder && activeState && (
-          <section id="active-order-banner" className="km-order-banner flex-col items-stretch" aria-label="Pedido em andamento">
-            {storedOrders.length > 1 && onSelectOrderId && (
-              <div className="flex flex-wrap items-center gap-1.5 border-b border-[var(--km-line-subtle)] pb-2 mb-2">
-                {storedOrders.map((ord) => {
-                  const selected = ord.id === activeOrder.id;
-                  const ordActive = !resolveOrderState(ord).terminal;
-                  return (
-                    <button
-                      key={ord.id}
-                      type="button"
-                      onClick={() => onSelectOrderId(ord.id)}
-                      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold transition cursor-pointer ${
-                        selected
-                          ? "bg-[var(--km-accent)] text-[var(--km-on-accent)]"
-                          : "border border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-ink-2)]"
-                      }`}
-                    >
-                      <span>#{ord.numero_pedido}</span>
-                      {ordActive && (
-                        <span
-                          className={`h-1.5 w-1.5 rounded-full ${selected ? "bg-white" : "bg-[var(--km-accent)]"}`}
-                          aria-hidden="true"
-                        />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div className="km-order-banner__eyebrow">
-                  {activeOrder.numero_pedido ? `Pedido #${activeOrder.numero_pedido}` : "Acompanhamento"}
-                </div>
-                <h2 className="km-order-banner__title km-tabular">
-                  {customerOrderLabel(activeState)}
-                </h2>
-                {activeState.phase === "payment_pending" && (
-                  <div className="km-order-banner__desc font-semibold">
-                    Primeiro: confirme o Pix
-                  </div>
-                )}
-                <div className="km-order-banner__desc km-tabular">
-                  {orderFulfillmentLabel(activeState.fulfillment)}
-                  {activeOrder.total > 0 ? ` · Total: ${formatMenuPrice(activeOrder.total)}` : ""}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
-                {activeState.phase === "payment_pending" && activeOrder.pagamento?.qr_code && onPayPixClick ? (
-                  <button type="button" className="km-pill-cta cursor-pointer" onClick={() => onPayPixClick(activeOrder)}>
-                    Pagar Pix
-                  </button>
-                ) : null}
-                {!activeState.terminal && onRefreshOrders && (
-                  <button
-                    type="button"
-                    disabled={isRefreshingOrders}
-                    onClick={onRefreshOrders}
-                    aria-label="Atualizar status do pedido"
-                    className="inline-flex h-9 items-center gap-1.5 rounded-full border border-[var(--km-line)] bg-[var(--km-raised)] px-3 text-xs font-bold text-[var(--km-ink)] transition disabled:opacity-50 cursor-pointer"
-                  >
-                    <RefreshCw size={13} className={isRefreshingOrders ? "animate-spin" : ""} aria-hidden="true" />
-                    <span>Atualizar</span>
-                  </button>
-                )}
-                {activeState.terminal && onClearTrackedOrder ? (
-                  <button
-                    type="button"
-                    className="km-pill-cta cursor-pointer"
-                    onClick={() => onClearTrackedOrder(activeOrder.id)}
-                  >
-                    Fazer novo pedido
-                  </button>
-                ) : (
-                  onOrdersClick && (
-                    <button type="button" className="km-pill-cta cursor-pointer" onClick={onOrdersClick}>
-                      Ver pedido
-                    </button>
-                  )
-                )}
-              </div>
-            </div>
-            {!activeState.terminal && activeOrder.delivery_receipt_code && (
-              <div className="mt-2">
-                <DeliveryReceiptCode code={activeOrder.delivery_receipt_code} />
-              </div>
-            )}
-          </section>
+          <MenuActiveOrderCard
+            id="active-order-banner"
+            activeOrder={activeOrder}
+            activeState={activeState}
+            statusLabel={customerOrderLabel(activeState)}
+            fulfillmentLabel={orderFulfillmentLabel(activeState.fulfillment)}
+            storedOrders={storedOrders}
+            isRefreshingOrders={isRefreshingOrders}
+            onSelectOrderId={onSelectOrderId}
+            onPayPixClick={onPayPixClick}
+            onRefreshOrders={onRefreshOrders}
+            onClearTrackedOrder={onClearTrackedOrder}
+            onOrdersClick={onOrdersClick}
+          />
         )}
 
         {/* Sticky Category Underline Tabs + Quick Sheet */}
@@ -1033,59 +976,14 @@ export default function MenuV2Experience({
           );
         })()}
 
-        {/* Curved Promo Showcase (Tag OUTSIDE image!) */}
-        {activePromotions.length > 0 && (
-          <section className="km-promo-showcase" id="cardapio-promotions-home">
-            <MenuPromoArcBackdrop className="km-promo-arc-svg" />
-            <div className="km-promo-showcase__inner" id="km-highlights">
-              <div className="km-section__head">
-                <h2 className="km-promo-showcase__title">Promoções da Casa</h2>
-                <span className="km-promo-showcase__count">{activePromotions.length} ofertas</span>
-              </div>
-
-              <div className="km-carousel">
-                {activePromotions.map((promo: CatalogPromotion) => {
-                  const fallbackComponentImage = promo.componentes
-                    ?.flat()
-                    .map((id) => promotionCatalogProducts.find((candidate) => String(candidate.id) === String(id))?.image)
-                    .find((image) => image && image !== LOCAL_PRODUCT_PLACEHOLDER);
-                  const offerImage = promo.imagem_url || fallbackComponentImage;
-
-                  return (
-                    <button
-                      key={promo.id}
-                      type="button"
-                      className="km-promo-card"
-                      aria-label={`Montar promoção ${promo.nome} por ${formatMenuPrice(promo.preco)}`}
-                      onClick={() => onPromotionSelect?.(promo)}
-                    >
-                      <span className="km-promo-tag">
-                        <Tag size={11} aria-hidden="true" />
-                        {promo.tipo === "compre_ganhe" ? "Compre e ganhe" : "Oferta especial"}
-                      </span>
-
-                      <div className="km-promo-card__media">
-                        <CatalogProductImage
-                          image={offerImage}
-                          alt={promo.nome}
-                          priority
-                        />
-                      </div>
-
-                      <h3 className="km-promo-card__title">{promo.nome}</h3>
-                      {promo.descricao && <p className="km-promo-card__desc">{promo.descricao}</p>}
-
-                      <div className="km-promo-card__footer">
-                        <span className="km-price">{formatMenuPrice(promo.preco)}</span>
-                        <span className="km-cta-mini">Aproveitar</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </section>
-        )}
+        {/* Curved Variable Promo Showcase (0 / 1 / 2 / 3+) */}
+        <MenuPromotionsShowcase
+          id="cardapio-promotions-home"
+          promotions={activePromotions}
+          promotionCatalogProducts={promotionCatalogProducts}
+          formatPrice={formatMenuPrice}
+          onPromotionSelect={onPromotionSelect}
+        />
 
         {/* Destaques 2-Column Editorial Grid */}
         {!searchQuery.trim() && highlightProducts.length > 0 && (
@@ -1261,7 +1159,7 @@ export default function MenuV2Experience({
         activeOrdersCount={activeOrdersCount}
         userFirstName={user?.name ? user.name.split(" ")[0] : null}
         userFullName={user?.name || null}
-        hidden={Boolean(hasOpenOverlay)}
+        hidden={Boolean(dockHidden ?? hasOpenOverlay)}
         onNavigate={(tab) => {
           if (onDockNavigate) {
             onDockNavigate(tab);
