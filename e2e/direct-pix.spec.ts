@@ -221,7 +221,7 @@ test('Pix manual já existente mantém QR reaberto e confirmação única',async
   await consumer.locator('#input-guest-phone').fill('85999999999');
   await expect(consumer.locator('#input-customer-email')).toHaveCount(0);
   await consumer.getByRole('button',{name:'Revisar pedido',exact:true}).click();
-  await consumer.getByRole('button',{name:'Fazer pedido',exact:true}).click();
+  await consumer.getByRole('button',{name:'Enviar pedido',exact:true}).click();
   await expect(consumer.getByText('Aguardando pagamento',{exact:true}).first()).toBeVisible();
   await expect(consumer.getByText('O restaurante conferirá o recebimento',{exact:false})).toBeVisible();
   const manualNotice=consumer.getByTestId('direct-pix-customer-confirm');
