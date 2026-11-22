@@ -84,6 +84,7 @@ function buildSummary(items: PendingItem[], activeReceiver: 'pagbank' | 'direct_
 
 for (const theme of ['dark', 'light'] as const) {
   test(`central de pendências resolve bloqueio de desconexão e libera Pix próprio (${theme})`, async ({ page }) => {
+    test.setTimeout(90_000); // CI shared runners may bootstrap the authenticated cashier more slowly.
     await mockCashierBackend(page);
     await seedCashierSession(page);
     await page.addInitScript(selectedTheme => {
@@ -384,7 +385,7 @@ for (const theme of ['dark', 'light'] as const) {
 
     await page.goto('/?view=caixa&pagbank=cancelled');
     const pagbankCard = page.getByRole('region', { name: 'PagBank', exact: true });
-    await expect(pagbankCard.getByText('Conectado', { exact: true })).toBeVisible();
+    await expect(pagbankCard.getByText('Conectado', { exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('PagBank — confirmação automática')).toBeVisible();
 
     // Try disconnecting while 3 items block it -> structured 409 + exact blocking order references
@@ -443,6 +444,7 @@ for (const theme of ['dark', 'light'] as const) {
   });
 
   test(`fechamento distingue contas operacionais abertas de pendências de Pix do turno e anteriores (${theme})`, async ({ page }) => {
+    test.setTimeout(90_000); // CI shared runners may bootstrap the authenticated cashier more slowly.
     await mockCashierBackend(page);
     await seedCashierSession(page);
     await page.addInitScript(selectedTheme => {
@@ -546,15 +548,62 @@ for (const theme of ['dark', 'light'] as const) {
     );
 
     await page.goto('/?view=caixa');
-    await expect(page.getByText('Contas ainda abertas')).toBeVisible();
+    await expect(page.getByText('Contas ainda abertas')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('Pendências de Pix do turno')).toBeVisible();
     await expect(page.getByText('Pendências de turnos anteriores')).toBeVisible();
     await expect(page.getByText(/não contabilizado como recebido/)).toBeVisible();
 
-    await page.getByRole('button', { name: 'Revisar pendências' }).first().click();
+    await page.getByRole('button', { name: 'Ver em Integrações' }).first().click();
+    await expect(page.getByRole('heading', { name: 'Pagamentos online' })).toBeVisible();
+    // A revisão acontece exclusivamente em Integrações, não em um modal do Caixa.
+    await expect(page.getByRole('dialog', { name: 'Central de pendências financeiras' })).toHaveCount(0);
+    await page.getByRole('button', { name: /Central de pendências/ }).first().click();
     const dialog = page.getByRole('dialog', { name: 'Central de pendências financeiras' });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByTestId('pending-review-item-102')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+  });
+}
+
+for (const theme of ['dark', 'light'] as const) {
+  test(`Vendas mantém apenas conferência de Pix manual (${theme})`, async ({ page }) => {
+    test.setTimeout(90_000); // CI shared runners may bootstrap the authenticated cashier more slowly.
+    await mockCashierBackend(page);
+    await seedCashierSession(page);
+    await page.addInitScript(selectedTheme => {
+      localStorage.setItem('@koma:theme', selectedTheme);
+      sessionStorage.setItem('koma_active_tab', 'operacao');
+      sessionStorage.setItem('koma_active_subtab', 'pedidos');
+    }, theme);
+    await page.route('**/caixa/turno-atual/resumo', route => route.fulfill({
+      json: {
+        turno_id: 43, status: 'aberto', operador_id: 'caixa-e2e', operador_nome: 'Caixa E2E',
+        aberto_em: '2026-11-22T12:00:00Z', tempo_aberto_minutos: 45, turno_esquecido: false,
+        saldo_inicial: 100, total_vendas: 0, total_dinheiro: 0, total_pix: 0, total_cartao: 0,
+        total_sangrias: 0, total_suprimentos: 0, saldo_esperado_dinheiro: 100,
+        total_pedidos_pagos: 0, comandas_abertas_count: 0,
+        pendencias_financeiras_count: 2, pendencias_financeiras_turno_atual_count: 2,
+        pendencias_financeiras_anteriores_count: 0, pendencias_financeiras_total: 10.5,
+        pendencias_financeiras_turno_atual_total: 10.5,
+        atividades_recentes: [], ultima_movimentacao: null,
+        resumo_dia: { total_vendas: 0, pedidos_pagos: 0 },
+      },
+    }));
+    await page.route('**/payments/direct-pix/pending', route => route.fulfill({
+      json: [{
+        id: 'manual-pix-47', order_number: '47', customer: 'Cliente teste',
+        amount: '10.00', status: 'aguardando_aprovacao_pix',
+      }],
+    }));
+
+    await page.goto('/?view=caixa');
+    const conferir = page.getByRole('button', { name: /Conferir Pix/ });
+    await expect(conferir).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole('button', { name: /Revisar Pix/ })).toHaveCount(0);
+    await conferir.click();
+    const dialog = page.getByRole('dialog', { name: /Pix manual/ });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(/Conferir pedido #47/)).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Central de pendências financeiras' })).toHaveCount(0);
   });
 }
