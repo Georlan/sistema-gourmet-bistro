@@ -20,8 +20,7 @@
 - Preservar alterações de outras tarefas. Integrar somente após revisão, checks obrigatórios verdes e autorização de merge.
 - Testar mudanças de comportamento; distinguir observado, alvo, bug confirmado, intenção, hipótese e não determinado.
 - Não corrigir uma diferença visual como bug sem evidência. Mudanças de produto exigem escopo aprovado.
-- `npm run lint`, `npm run test:unit`, `npm run build` (1× ao concluir a alteração, evitando loops repetidos); backend focal: `python -m pytest <testes_afetados> -n 4 -q -ra` (a suíte completa fica para o CI noturno).
-- Browser focal: `KOMA_E2E_PORT=4283 npm run test:e2e -- <spec_afetado> --project=mobile-390 --project=desktop-1366 --workers=4` (usar todos os 9 viewports apenas em mudanças de layout/CSS global). Manter fontes congeladas durante a execução; não reutilizar servidor de outra tarefa.
+- **Validação rápida padrão pré-PR:** `npm run focus:check` (detecta arquivos alterados e roda automaticamente apenas o necessário: `lint`/`test:unit`/`build` 1× se tocou frontend e `pytest <testes_afetados> -n 4` se tocou backend; adicione `-- --e2e` para rodar os specs Playwright focais com `--project=mobile-390 --project=desktop-1366 --workers=4`). Usar todos os 9 viewports apenas em mudanças de layout/CSS global. Manter fontes congeladas durante a execução; não reutilizar servidor de outra tarefa.
 
 ## Interfaces
 
