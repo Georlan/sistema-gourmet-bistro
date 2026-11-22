@@ -87,18 +87,9 @@ def _agendar_notificacao_whatsapp_status(
 
 # ----------------- READ ENDPOINTS -----------------
 
-def _operational_online_payment_filter():
-    """Garante que pedidos originados com cobrança Pix online só aparecem no Caixa após aprovação."""
-    return or_(
-        Comanda.online_payment_status.in_(("approved", "pending_released")),
-        and_(
-            Comanda.online_payment_status.is_(None),
-            or_(
-                Comanda.delivery_forma_pagamento.is_(None),
-                Comanda.delivery_forma_pagamento != "pix",
-            ),
-        ),
-    )
+from ..services.cash_reconciliation import (
+    operational_online_payment_filter as _operational_online_payment_filter,
+)
 
 
 @router.get("/", response_model=List[ComandaResponse])

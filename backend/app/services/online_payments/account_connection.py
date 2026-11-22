@@ -15,6 +15,17 @@ from .oauth import MercadoPagoOAuthTokens
 class MercadoPagoAccountConnectionError(RuntimeError):
     """Raised when a connected seller account cannot be persisted safely."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_code: str | None = None,
+        blocking_detail: dict[str, object] | None = None,
+    ):
+        super().__init__(message)
+        self.error_code = error_code
+        self.blocking_detail = blocking_detail
+
 
 def receiver_connection_status(db: Session, *, restaurant_id: int, provider: str) -> dict[str, object]:
     providers = [row[0] for row in db.query(RestaurantPaymentAccount.provider).filter(
@@ -34,9 +45,22 @@ def ensure_receiver_available(db: Session, *, restaurant_id: int, provider: str)
     # All receiver writers and order creation lock this same tenant row. Recheck
     # at completion, even if the OAuth link was issued before another connection.
     db.query(Restaurante).filter(Restaurante.id == restaurant_id).with_for_update().one()
-    if receiver_connection_status(db, restaurant_id=restaurant_id, provider=provider)['connection_blocked']:
+    status_info = receiver_connection_status(db, restaurant_id=restaurant_id, provider=provider)
+    if status_info['connection_blocked']:
+        from .pending_review import build_blocking_detail
+
+        message = 'Desconecte o recebedor atual antes de conectar outro banco. Só é permitido um recebedor por restaurante.'
+        detail = build_blocking_detail(
+            db,
+            restaurant_id=restaurant_id,
+            code='RECEIVER_ALREADY_ACTIVE',
+            message=message,
+        )
+        detail['active_provider'] = status_info.get('receiver_provider')
         raise MercadoPagoAccountConnectionError(
-            'Desconecte o recebedor atual antes de conectar outro banco. Só é permitido um recebedor por restaurante.'
+            message,
+            error_code='RECEIVER_ALREADY_ACTIVE',
+            blocking_detail=detail,
         )
 
 
@@ -83,7 +107,20 @@ def guard_receiver_change(db: Session, *, restaurant_id: int, provider: str,
     if changing and db.query(OnlinePaymentIntent.id).filter(
         OnlinePaymentIntent.restaurante_id == restaurant_id,
         OnlinePaymentIntent.status.in_(('created', 'pending', 'error'))).first():
-        raise MercadoPagoAccountConnectionError('Resolva os Pix pendentes ou incertos antes de trocar a conta de recebimento.')
+        from .pending_review import build_blocking_detail
+
+        message = 'Resolva os Pix pendentes ou incertos antes de trocar a conta de recebimento.'
+        detail = build_blocking_detail(
+            db,
+            restaurant_id=restaurant_id,
+            code='RECEIVER_SWITCH_BLOCKED',
+            message=message,
+        )
+        raise MercadoPagoAccountConnectionError(
+            message,
+            error_code='RECEIVER_SWITCH_BLOCKED',
+            blocking_detail=detail,
+        )
 
 
 def is_marketplace_owner_account(provider_user_id: str | None) -> bool:

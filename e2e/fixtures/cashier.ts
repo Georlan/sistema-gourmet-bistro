@@ -257,6 +257,35 @@ async function mockCashierBackend(page: Page) {
         provider_user_id: 'mp-test-operator',
         token_expires_at: null,
       };
+    } else if (pathname === '/payments/pending-review') {
+      body = {
+        summary: {
+          blocking_count: 0,
+          blocking_total_amount: '0.00',
+          current_shift_id: null,
+          current_shift_blocking_count: 0,
+          current_shift_blocking_total_amount: '0.00',
+          previous_shift_blocking_count: 0,
+          previous_shift_blocking_total_amount: '0.00',
+          by_situation: {
+            awaiting_payment: 0,
+            creation_failed: 0,
+            uncertain: 0,
+            provider_query_failed: 0,
+          },
+          by_provider: {
+            pagbank: 0,
+            mercado_pago: 0,
+            direct_pix: 0,
+          },
+          can_disconnect_pagbank: true,
+          can_disconnect_mercado_pago: true,
+          can_switch_receiver: true,
+          active_receiver: 'mercado_pago',
+        },
+        items: [],
+        history_items: [],
+      };
     } else if (pathname === '/api/print-agents/monitor' || pathname === '/printing/monitors/overview') {
       body = {
         generated_at: new Date().toISOString(),

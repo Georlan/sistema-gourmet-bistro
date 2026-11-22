@@ -16,7 +16,7 @@ from .oauth import api_url
 logger = logging.getLogger(__name__)
 
 
-def _failure_reference(response: httpx.Response) -> str:
+def _failure_metadata(response: httpx.Response) -> tuple[str, dict[str, str | None]]:
     """Keep only provider identifiers, never arbitrary response text or PII."""
     request_id = next((response.headers.get(key) for key in
                        ('x-request-id', 'x-amzn-requestid', 'x-amz-apigw-id')
@@ -47,15 +47,43 @@ def _failure_reference(response: httpx.Response) -> str:
     logger.warning('PagBank API failure status=%s provider_code=%s provider_parameter=%s provider_request_id=%s',
                    response.status_code, code or 'unavailable', parameter or 'unavailable',
                    request_id or 'unavailable')
-    return ''.join((f' Código: {code}.' if code else '', f' Referência PagBank: {request_id}.' if request_id else ''))
+    reference = ''.join((f' Código: {code}.' if code else '', f' Referência PagBank: {request_id}.' if request_id else ''))
+    metadata = {
+        'provider_code': code or None,
+        'provider_parameter': parameter or None,
+        'provider_request_id': request_id or None,
+    }
+    return reference, metadata
+
+
+def _failure_reference(response: httpx.Response) -> str:
+    return _failure_metadata(response)[0]
 
 
 class PagBankError(MercadoPagoError):
     """Compatible with existing payment-boundary error handling."""
 
-    def __init__(self, message: str, *, reason: str | None = None,
-                 status_code: int | None = None, retryable: bool = False):
-        super().__init__(message, status_code=status_code, retryable=retryable)
+    def __init__(
+        self,
+        message: str,
+        *,
+        reason: str | None = None,
+        status_code: int | None = None,
+        retryable: bool = False,
+        error_stage: str | None = None,
+        provider_code: str | None = None,
+        provider_parameter: str | None = None,
+        provider_request_id: str | None = None,
+    ):
+        super().__init__(
+            message,
+            status_code=status_code,
+            retryable=retryable,
+            error_stage=error_stage,
+            provider_code=provider_code,
+            provider_parameter=provider_parameter,
+            provider_request_id=provider_request_id,
+        )
         self.reason = reason
 
 
@@ -87,7 +115,7 @@ def _customer_email_rejected(response: httpx.Response) -> bool:
 def cents(amount: Decimal) -> int:
     value = Decimal(str(amount))
     if not value.is_finite() or value <= 0 or value * 100 != (value * 100).to_integral_value():
-        raise PagBankError('Valor Pix inválido.')
+        raise PagBankError('Valor Pix inválido.', error_stage='create_preflight')
     return int(value * 100)
 
 
@@ -97,15 +125,36 @@ def identifier(value: str, prefix='ORDE') -> str:
     return value
 
 
+_EMAIL_LOCAL_PATTERN = re.compile(r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+")
+_EMAIL_DOMAIN_LABEL_PATTERN = re.compile(r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?')
+_EMAIL_TLD_PATTERN = re.compile(r'[A-Za-z]{2,24}')
+
+
 def valid_order_payer_email(value: str | None) -> bool:
     """Validate the documented PagBank Order customer.email contract without logging PII."""
     if not isinstance(value, str):
         return False
     email = value.strip()
-    return (
-        6 <= len(email) <= 255
-        and re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]{2,}', email) is not None
-    )
+    if not (6 <= len(email) <= 255) or not email.isascii():
+        return False
+    if any(ch.isspace() or ord(ch) < 32 for ch in email) or email.count('@') != 1:
+        return False
+    local, domain = email.split('@', 1)
+    if (
+        not local
+        or len(local) > 64
+        or local.startswith('.')
+        or local.endswith('.')
+        or '..' in local
+        or _EMAIL_LOCAL_PATTERN.fullmatch(local) is None
+    ):
+        return False
+    if not domain or len(domain) > 253 or '..' in domain or '.' not in domain:
+        return False
+    labels = domain.split('.')
+    if any(_EMAIL_DOMAIN_LABEL_PATTERN.fullmatch(label) is None for label in labels):
+        return False
+    return _EMAIL_TLD_PATTERN.fullmatch(labels[-1]) is not None
 
 
 class PagBankProvider:
@@ -116,25 +165,55 @@ class PagBankProvider:
                                    timeout=settings.ONLINE_PAYMENT_REQUEST_TIMEOUT_SECONDS)
 
     def _request(self, method, path, **kwargs):
+        is_order_create = method == 'POST' and path == '/orders'
         try:
             response = self._client.request(method, path, **kwargs)
-            reference = _failure_reference(response) if response.is_error else ''
-            if method == 'POST' and path == '/orders' and _customer_email_rejected(response):
+            reference, meta = (
+                _failure_metadata(response)
+                if response.is_error
+                else ('', {'provider_code': None, 'provider_parameter': None, 'provider_request_id': None})
+            )
+            if is_order_create and _customer_email_rejected(response):
                 raise PagBankError(
-                    'E-mail do comprador rejeitado pelo PagBank.',
-                    reason='customer_email_rejected', status_code=400,
+                    'E-mail do comprador rejeitado pelo PagBank.' + reference,
+                    reason='customer_email_rejected',
+                    status_code=400,
+                    error_stage='create_refused',
+                    provider_code=meta['provider_code'] or '40002',
+                    provider_parameter='customer.email',
+                    provider_request_id=meta['provider_request_id'],
                 )
             if response.status_code == 403:
-                raise PagBankError('PagBank recusou a criação/consulta da cobrança (HTTP 403). Verifique a liberação da API Order/Pix e as permissões da aplicação e da conta conectada.' + reference, status_code=403)
+                raise PagBankError(
+                    'PagBank recusou a criação/consulta da cobrança (HTTP 403). Verifique a liberação da API Order/Pix e as permissões da aplicação e da conta conectada.' + reference,
+                    status_code=403,
+                    error_stage='create_refused' if is_order_create else 'reconcile_failed',
+                    **meta,
+                )
             if response.is_error:
-                raise PagBankError(f'PagBank recusou a operação (HTTP {response.status_code}).' + reference,
-                                   status_code=response.status_code, retryable=response.status_code >= 500 or response.status_code in {408, 429})
+                retryable = response.status_code >= 500 or response.status_code in {408, 429}
+                stage = (
+                    ('create_uncertain' if retryable else 'create_refused')
+                    if is_order_create
+                    else 'reconcile_failed'
+                )
+                raise PagBankError(
+                    f'PagBank recusou a operação (HTTP {response.status_code}).' + reference,
+                    status_code=response.status_code,
+                    retryable=retryable,
+                    error_stage=stage,
+                    **meta,
+                )
             data = response.json()
             if not isinstance(data, dict):
                 raise ValueError()
             return data
         except (httpx.HTTPError, ValueError) as exc:
-            raise PagBankError('Resposta PagBank indisponível ou inválida.', retryable=True) from exc
+            raise PagBankError(
+                'Resposta PagBank indisponível ou inválida.',
+                retryable=True,
+                error_stage='create_uncertain' if is_order_create else 'reconcile_failed',
+            ) from exc
 
     @staticmethod
     def _map(data):
@@ -161,12 +240,12 @@ class PagBankProvider:
     def create_pix(self, *, amount, marketplace_fee, payer_email, external_reference, idempotency_key,
                    notification_url, expires_at, payer_name=None, payer_tax_id=None):
         if marketplace_fee != 0:
-            raise PagBankError('PagBank no KÔMA não cobra taxa de plataforma.')
+            raise PagBankError('PagBank no KÔMA não cobra taxa de plataforma.', error_stage='create_preflight')
         if not payer_name or not (is_valid_cpf(payer_tax_id) or is_valid_cnpj(payer_tax_id)):
-            raise PagBankError('Informe nome e CPF/CNPJ do comprador para gerar o Pix PagBank.')
+            raise PagBankError('Informe nome e CPF/CNPJ do comprador para gerar o Pix PagBank.', error_stage='create_preflight')
         # Defense in depth: do not send malformed email to the provider or log buyer PII.
         if not valid_order_payer_email(payer_email):
-            raise PagBankError('Informe um e-mail válido para gerar o Pix PagBank.')
+            raise PagBankError('Informe um e-mail válido para gerar o Pix PagBank.', error_stage='create_preflight')
         # Validation trims surrounding whitespace; send the same canonical value.
         payer_email = payer_email.strip()
         expiration_date = expires_at.astimezone(datetime.timezone.utc).isoformat(timespec='seconds').replace('+00:00', 'Z')
@@ -180,7 +259,7 @@ class PagBankProvider:
         })
         payment = self._map(data)
         if payment.status == 'pending' and not payment.qr_code:
-            raise PagBankError('PagBank não retornou o código Pix.', retryable=True)
+            raise PagBankError('PagBank não retornou o código Pix.', retryable=True, error_stage='create_uncertain')
         return payment
 
     def get_payment(self, external_payment_id):

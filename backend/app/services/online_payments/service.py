@@ -400,10 +400,15 @@ class OnlinePaymentService:
         *,
         intent: OnlinePaymentIntent,
         comanda: Comanda,
+        usuario_id: str | None = None,
     ) -> None:
         """Encerra pedido nunca publicado após estado terminal sem recebimento."""
         if intent.status not in UNPAID_TERMINAL_STATUSES or comanda.fechada:
             return
+
+        from ..inventory import estornar_estoque_dos_itens
+
+        estornar_estoque_dos_itens(db, comanda.itens, usuario_id=usuario_id)
 
         lancamentos = db.query(Lancamento).filter(
             Lancamento.restaurante_id == intent.restaurante_id,
@@ -737,13 +742,88 @@ class OnlinePaymentService:
             return settled_intent
         except Exception as exc:
             db.rollback()
+            from ...online_order_control_models import OnlineOrderOperationalAudit
+            from .pagbank.provider import PagBankError
+            from .pending_review import format_intent_error, log_payment_event
+
             persisted = db.query(OnlinePaymentIntent).filter(
                 OnlinePaymentIntent.restaurante_id == intent.restaurante_id,
                 OnlinePaymentIntent.id == intent.id,
             ).first()
             if persisted is not None:
-                persisted.status = "error"
-                persisted.last_error = str(exc)[:1000]
+                persisted.last_error = format_intent_error(exc)
+                error_stage = getattr(exc, "error_stage", None)
+                auto_close_refusal = (
+                    getattr(persisted, "external_payment_id", None) is None
+                    and getattr(persisted, "qr_code", None) is None
+                    and getattr(persisted, "comanda_id", None) is not None
+                    and (
+                        error_stage == "create_preflight"
+                        or (
+                            isinstance(exc, PagBankError)
+                            and exc.reason == "customer_email_rejected"
+                            and exc.status_code == 400
+                        )
+                    )
+                )
+                if auto_close_refusal:
+                    locked_comanda = db.query(Comanda).filter(
+                        Comanda.restaurante_id == persisted.restaurante_id,
+                        Comanda.id == persisted.comanda_id,
+                    ).with_for_update().first()
+                    previous_status = persisted.status
+                    persisted.status = "cancelled"
+                    if locked_comanda is not None and not locked_comanda.fechada:
+                        locked_comanda.online_payment_status = "cancelled"
+                        cls._finalize_unpaid_order_in_session(
+                            db,
+                            intent=persisted,
+                            comanda=locked_comanda,
+                        )
+                    db.add(
+                        OnlineOrderOperationalAudit(
+                            restaurante_id=persisted.restaurante_id,
+                            actor_user_id=None,
+                            action="online_payment_creation_refused_auto_closed",
+                            reason="Criação recusada de forma definitiva antes da emissão da cobrança.",
+                            before_data={
+                                "intent_id": persisted.id,
+                                "comanda_id": persisted.comanda_id,
+                                "provider": persisted.provider,
+                                "intent_status": previous_status,
+                                "error_stage": error_stage,
+                            },
+                            after_data={
+                                "intent_id": persisted.id,
+                                "comanda_id": persisted.comanda_id,
+                                "provider": persisted.provider,
+                                "intent_status": persisted.status,
+                                "evidence_code": (
+                                    "pagbank_customer_email_rejected"
+                                    if isinstance(exc, PagBankError)
+                                    and exc.reason == "customer_email_rejected"
+                                    else "preflight_validation_rejected"
+                                ),
+                            },
+                        )
+                    )
+                else:
+                    persisted.status = "error"
+
+                log_payment_event(
+                    "online_payment_creation_failed",
+                    level=logging.WARNING,
+                    tenant_id=persisted.restaurante_id,
+                    intent_id=persisted.id,
+                    comanda_id=getattr(persisted, "comanda_id", None),
+                    provider=persisted.provider,
+                    error_stage=error_stage,
+                    http_status=getattr(exc, "status_code", None),
+                    provider_code=getattr(exc, "provider_code", None),
+                    provider_parameter=getattr(exc, "provider_parameter", None),
+                    provider_request_id=getattr(exc, "provider_request_id", None),
+                    outcome="auto_closed" if auto_close_refusal else "marked_error",
+                )
                 db.commit()
             raise
 
@@ -987,30 +1067,11 @@ class OnlinePaymentService:
             if current_time < close_grace_at:
                 continue
 
-            if intent.status in {"created", "error"} and not intent.external_payment_id:
-                locked_intent = db.query(OnlinePaymentIntent).filter(
-                    OnlinePaymentIntent.restaurante_id == restaurant_id,
-                    OnlinePaymentIntent.id == intent.id,
-                ).with_for_update().one()
-                comanda = db.query(Comanda).filter(
-                    Comanda.restaurante_id == restaurant_id,
-                    Comanda.id == locked_intent.comanda_id,
-                ).with_for_update().one()
-                locked_intent.status = "cancelled"
-                comanda.online_payment_status = "cancelled"
-                cls._finalize_unpaid_order_in_session(
-                    db,
-                    intent=locked_intent,
-                    comanda=comanda,
-                )
-                db.commit()
-                continue
-
             if intent.provider == "direct_pix":
                 raise OnlinePaymentConfigurationError(
                     "Confira os Pix diretos pendentes no extrato e confirme ou cancele os pedidos antes de fechar o caixa."
                 )
-            if intent.external_payment_id:
+            if intent.external_payment_id and intent.provider == "mercado_pago":
                 account = cls.account_for_intent(db, intent)
                 cls.cancel_provider_payment(
                     db,
@@ -1019,6 +1080,7 @@ class OnlinePaymentService:
                 )
                 continue
 
-            raise OnlinePaymentConfigurationError(
-                "Pix pendente sem identificação externa não pode ser encerrado com segurança."
-            )
+            # Never simulate cancellation or expiry by elapsed time when an
+            # intent lacks external confirmation; leave unresolved so shift close
+            # returns HTTP 409 directing the operator to the Financial Pending Center.
+            continue

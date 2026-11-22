@@ -2,6 +2,7 @@ import { PaymentConnectionCard, type ReceiverCoordinationProps } from './Payment
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { authFetch, authRequestErrorMessage } from '../../../utils/authRequest';
 import { forgetPagBankState, matchesPagBankState, rememberPagBankState } from '../../../utils/pagbankOAuthState';
+import { parsePaymentBlockError, type PaymentBlockError } from '../payments/paymentPendingClient';
 
 interface Props extends ReceiverCoordinationProps {
   apiBaseUrl: string;
@@ -31,11 +32,12 @@ const disconnectedStatus: PaymentAccountStatus = {
   token_expires_at: null,
 };
 
-export function PagBankConnectionCard({ apiBaseUrl, authHeaders, connectBlockedReason, refreshKey, onStatusChange, onBusyChange, onConnectionChange }: Props) {
+export function PagBankConnectionCard({ apiBaseUrl, authHeaders, connectBlockedReason, refreshKey, onStatusChange, onBusyChange, onConnectionChange, onOpenPendingReview }: Props) {
   const [account, setAccount] = useState<PaymentAccountStatus>(disconnectedStatus);
   const [isLoading, setIsLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [blockDetail, setBlockDetail] = useState<PaymentBlockError | null>(null);
   const completionStarted = useRef(false);
   const setConnecting = useCallback((value: boolean) => {
     setIsConnecting(value);
@@ -44,6 +46,7 @@ export function PagBankConnectionCard({ apiBaseUrl, authHeaders, connectBlockedR
 
   const loadStatus = useCallback(async () => {
     setIsLoading(true);
+    setBlockDetail(null);
     onStatusChange?.(null);
     try {
       const response = await authFetch(`${apiBaseUrl}/payments/pagbank/status`, {
@@ -144,6 +147,7 @@ export function PagBankConnectionCard({ apiBaseUrl, authHeaders, connectBlockedR
     if (connectBlockedReason) return;
     setConnecting(true);
     setFeedback(null);
+    setBlockDetail(null);
     try {
       const response = await authFetch(`${apiBaseUrl}/payments/pagbank/connect`, {
         headers: authHeaders,
@@ -151,7 +155,9 @@ export function PagBankConnectionCard({ apiBaseUrl, authHeaders, connectBlockedR
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload.detail || 'Não foi possível iniciar a conexão com PagBank.');
+        const parsed = parsePaymentBlockError(payload.detail, 'Não foi possível iniciar a conexão com PagBank.');
+        setBlockDetail(parsed.blockingCount > 0 ? parsed : null);
+        throw new Error(parsed.message);
       }
       if (typeof payload.authorization_url !== 'string' || !payload.authorization_url) {
         throw new Error('O backend não retornou a autorização do PagBank.');
@@ -176,10 +182,16 @@ export function PagBankConnectionCard({ apiBaseUrl, authHeaders, connectBlockedR
 
   const disconnect = async () => {
     setConnecting(true);
+    setBlockDetail(null);
     try {
       const response = await authFetch(`${apiBaseUrl}/payments/pagbank/disconnect`, { method: 'POST', headers: authHeaders });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.detail || 'Não foi possível desconectar o PagBank.');
+      if (!response.ok) {
+        const parsed = parsePaymentBlockError(payload.detail, 'Não foi possível desconectar o PagBank.');
+        setBlockDetail(parsed.blockingCount > 0 ? parsed : null);
+        throw new Error(parsed.message);
+      }
+      setBlockDetail(null);
       setFeedback({ type: 'info', text: 'PagBank desconectado. Novos Pix não serão gerados nessa conta.' });
       await loadStatus();
       onConnectionChange?.();
@@ -193,7 +205,8 @@ export function PagBankConnectionCard({ apiBaseUrl, authHeaders, connectBlockedR
   return <PaymentConnectionCard name="PagBank" headingId="pagbank-heading" connected={account.connected}
     loading={isLoading} busy={isConnecting} available={account.configured === true}
     connectBlockedReason={connectBlockedReason}
-    onConnect={() => void connect()} onRefresh={() => void loadStatus()} onDisconnect={() => void disconnect()} feedback={feedback}>
+    onConnect={() => void connect()} onRefresh={() => void loadStatus()} onDisconnect={() => void disconnect()} feedback={feedback}
+    blockDetail={blockDetail} onOpenPendingReview={onOpenPendingReview}>
     {!isLoading && !account.configured && <p className="mt-3 text-xs text-koma-muted">A conexão estará disponível em breve.</p>}
     {!isLoading && account.configured && account.environment === 'sandbox' && <p className="mt-3 text-xs text-amber-600 dark:text-amber-300">Ambiente de testes: esta conexão não recebe dinheiro real.</p>}
   </PaymentConnectionCard>;

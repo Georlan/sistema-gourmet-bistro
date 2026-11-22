@@ -16,7 +16,7 @@ from ..security import require_permission
 from ..services.cash_reconciliation import (
     RefundDomainError,
     cash_shift_totals,
-    count_open_commands,
+    count_operational_open_commands,
     money,
     refund_payload,
 )
@@ -288,11 +288,11 @@ def fechar_turno_reconciliado(
         Pagamento.turno_id == shift.id,
         Pagamento.status == "pendente",
     ).count())
-    open_commands = count_open_commands(db, rest_id)
+    open_commands = count_operational_open_commands(db, rest_id)
     if unresolved_online or pending or open_commands:
         parts = []
         if unresolved_online:
-            parts.append(f"{unresolved_online} Pix online aguardando confirmação ou cancelamento")
+            parts.append(f"{unresolved_online} Pix online aguardando confirmação ou cancelamento no turno")
         if pending:
             parts.append(f"{pending} pagamento(s) aguardando confirmação")
         if open_commands:

@@ -28,6 +28,7 @@ interface CaixaTurnoAtualTabProps {
   onOpenSangriaModal: () => void;
   onOpenSuprimentoModal: () => void;
   onOpenNovoTurnoModal?: () => void;
+  onOpenFinancialPending?: () => void;
   onRefundSuccess?: () => Promise<void> | void;
 }
 
@@ -135,6 +136,7 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
   onOpenSangriaModal,
   onOpenSuprimentoModal,
   onOpenNovoTurnoModal,
+  onOpenFinancialPending,
   onRefundSuccess,
 }) => {
   const [refundPaymentId, setRefundPaymentId] = useState<string | null>(null);
@@ -188,6 +190,53 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
       help: `${formatCurrency(turnoResumo.total_pix)} Pix · ${formatCurrency(turnoResumo.total_cartao)} cartões`,
       icon: WalletCards,
     },
+  ];
+
+  const currentShiftPixPendingCount = turnoResumo?.pendencias_financeiras_turno_atual_count ?? 0;
+  const previousShiftPixPendingCount = turnoResumo?.pendencias_financeiras_anteriores_count ?? 0;
+  const totalPixPendingAmount = Number(turnoResumo?.pendencias_financeiras_total ?? 0);
+
+  const notices = [
+    ...(isTurnoEsquecido
+      ? [
+          {
+            title: 'Turno aberto há mais de 24 horas',
+            description: 'Confira os valores e encerre o turno anterior antes de continuar.',
+            action: 'Conferir e fechar caixa',
+            onClick: onNavigateToFechamento,
+          },
+        ]
+      : []),
+    ...(pendingPaymentsCount > 0
+      ? [
+          {
+            title: 'Há pagamentos para confirmar',
+            description: `${pendingPaymentsCount} ${pendingPaymentsCount === 1 ? 'pagamento' : 'pagamentos'} · ${formatCurrency(pendingPaymentsTotal)} para conferir.`,
+            action: 'Conferir pagamentos',
+            onClick: onNavigateToPendingPayments,
+          },
+        ]
+      : []),
+    ...(currentShiftPixPendingCount > 0 && onOpenFinancialPending
+      ? [
+          {
+            title: 'Pendências de Pix do turno',
+            description: `${currentShiftPixPendingCount} tentativa(s) fora da cozinha · ${formatCurrency(Number(turnoResumo?.pendencias_financeiras_turno_atual_total ?? 0))} em revisão (não soma no recebido).`,
+            action: 'Revisar pendências',
+            onClick: onOpenFinancialPending,
+          },
+        ]
+      : []),
+    ...(previousShiftPixPendingCount > 0 && onOpenFinancialPending
+      ? [
+          {
+            title: 'Pendências de Pix de turnos anteriores',
+            description: `${previousShiftPixPendingCount} registro(s) histórico(s) em revisão (${formatCurrency(totalPixPendingAmount)} no total geral) bloqueando troca de método.`,
+            action: 'Revisar pendências',
+            onClick: onOpenFinancialPending,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -265,19 +314,12 @@ export const CaixaTurnoAtualTab: React.FC<CaixaTurnoAtualTabProps> = ({
             </dl>
           </article>
 
-          {[
-            ...(isTurnoEsquecido ? [{ title: 'Turno aberto há mais de 24 horas',
-              description: 'Confira os valores e encerre o turno anterior antes de continuar.',
-              action: 'Conferir e fechar caixa', onClick: onNavigateToFechamento }] : []),
-            ...(pendingPaymentsCount > 0 ? [{ title: 'Há pagamentos para confirmar',
-              description: `${pendingPaymentsCount} ${pendingPaymentsCount === 1 ? 'pagamento' : 'pagamentos'} · ${formatCurrency(pendingPaymentsTotal)} para conferir.`,
-              action: 'Conferir pagamentos', onClick: onNavigateToPendingPayments }] : []),
-          ].map(notice => <article key={notice.title} className="rounded-[18px] border border-koma-border bg-koma-card p-4">
+          {notices.map(notice => <article key={notice.title} className="rounded-[18px] border border-koma-border bg-koma-card p-4">
             <div className="flex items-start gap-3">
               <AlertCircle size={17} className="mt-0.5 shrink-0 text-koma-subtle" />
               <div><h3 className="text-sm font-bold text-koma-foreground">{notice.title}</h3>
                 <p className="mt-1 text-xs text-koma-muted">{notice.description}</p>
-                <button type="button" onClick={notice.onClick} className="mt-2 text-sm font-bold text-emerald-800 dark:text-emerald-300">{notice.action}</button>
+                <button type="button" onClick={notice.onClick} className="mt-2 inline-flex min-h-11 items-center text-sm font-bold text-emerald-800 dark:text-emerald-300">{notice.action}</button>
               </div>
             </div>
           </article>)}

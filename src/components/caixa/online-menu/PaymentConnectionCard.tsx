@@ -1,5 +1,7 @@
 import { CheckCircle2, ExternalLink, Landmark, Loader2, RefreshCw } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { formatCurrency } from '../cashierPresentation';
+import type { PaymentBlockError } from '../payments/paymentPendingClient';
 
 export type PaymentProvider = 'pagbank' | 'mercado_pago';
 export type ReceiverConnectionStatus = {
@@ -13,6 +15,7 @@ export type ReceiverCoordinationProps = {
   onStatusChange?: (status: ReceiverConnectionStatus | null) => void;
   onBusyChange?: (busy: boolean) => void;
   onConnectionChange?: () => void;
+  onOpenPendingReview?: () => void;
 };
 
 type Props = {
@@ -21,10 +24,27 @@ type Props = {
   onDisconnect?: () => void; children?: ReactNode;
   connectBlockedReason?: string | null;
   feedback: { type: 'success' | 'error' | 'info'; text: string } | null;
+  blockDetail?: PaymentBlockError | null;
+  onOpenPendingReview?: () => void;
 };
 
 /** Shared presentation only: each provider owns its authorization and account state. */
-export function PaymentConnectionCard({ name, headingId, connected, loading, busy, available = true, onConnect, onRefresh, onDisconnect, children, feedback, connectBlockedReason }: Props) {
+export function PaymentConnectionCard({
+  name,
+  headingId,
+  connected,
+  loading,
+  busy,
+  available = true,
+  onConnect,
+  onRefresh,
+  onDisconnect,
+  children,
+  feedback,
+  connectBlockedReason,
+  blockDetail,
+  onOpenPendingReview,
+}: Props) {
   return <section aria-labelledby={headingId} className={`min-w-0 rounded-2xl border bg-koma-panel p-5 ${connected ? 'border-emerald-500/50' : 'border-koma-border'}`}>
     <div className="flex items-center gap-3">
       <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl ${name === 'PagBank' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-sky-500/10 text-sky-500'}`}><Landmark size={24}/></div>
@@ -47,6 +67,35 @@ export function PaymentConnectionCard({ name, headingId, connected, loading, bus
       {connected && onDisconnect && <button type="button" onClick={onDisconnect} disabled={busy || loading} className="min-h-11 rounded-xl border border-koma-border px-3 text-sm text-koma-muted disabled:opacity-50">Desconectar</button>}
     </div>
     {connectBlockedReason && <p className="mt-3 text-xs text-koma-muted">{connectBlockedReason}</p>}
-    {feedback && <p role="status" className={`mt-3 rounded-xl px-3 py-2 text-sm ${feedback.type === 'error' ? 'bg-rose-500/10 text-rose-600 dark:text-rose-300' : feedback.type === 'success' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' : 'bg-koma-raised text-koma-muted'}`}>{feedback.text}</p>}
+    {feedback && <p role="status" className={`mt-3 rounded-xl px-3 py-2 text-sm ${feedback.type === 'error' ? 'bg-koma-danger-bg text-koma-danger-text' : feedback.type === 'success' ? 'bg-koma-success-bg text-koma-success-text' : 'bg-koma-raised text-koma-muted'}`}>{feedback.text}</p>}
+    {blockDetail && blockDetail.blockingCount > 0 && (
+      <div className="mt-3 space-y-2 rounded-xl border border-koma-warning-border bg-koma-warning-bg p-3 text-xs text-koma-foreground">
+        <p className="font-semibold">
+          {blockDetail.blockingCount} {blockDetail.blockingCount === 1 ? 'pendência bloqueia' : 'pendências bloqueiam'} a operação
+          {blockDetail.blockingTotalAmount ? ` (${formatCurrency(Number(blockDetail.blockingTotalAmount))} em revisão)` : ''}
+        </p>
+        {blockDetail.blockingItems.length > 0 && (
+          <ul className="space-y-1 text-koma-secondary">
+            {blockDetail.blockingItems.slice(0, 4).map(item => (
+              <li key={item.id}>
+                Pedido #{item.order_number ?? item.comanda_id.slice(0, 8)} · {formatCurrency(Number(item.amount))} · {item.situation_label}
+              </li>
+            ))}
+            {blockDetail.blockingItems.length > 4 && (
+              <li className="text-koma-muted">+{blockDetail.blockingItems.length - 4} outro(s) pedido(s)</li>
+            )}
+          </ul>
+        )}
+        {onOpenPendingReview && (
+          <button
+            type="button"
+            onClick={onOpenPendingReview}
+            className="min-h-11 rounded-xl border border-koma-border bg-koma-card px-3 text-xs font-bold text-koma-foreground hover:bg-koma-raised"
+          >
+            Revisar pendências
+          </button>
+        )}
+      </div>
+    )}
   </section>;
 }

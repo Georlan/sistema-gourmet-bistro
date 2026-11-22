@@ -80,13 +80,9 @@ import { resolvePairingDisplay } from "../resolvePairingDisplay";
 import { isGroupedProduct } from "../catalogGrouping";
 import { inspectCartAgainstLiveCatalog } from "../cartCatalogConsistency";
 import { KomaPrimaryAction } from "./KomaActionPrimitives";
+import { isValidPixPayerEmail } from "../../components/caixa/payments/paymentPendingClient";
 
-/** PagBank Order requires a valid payer email of at least 6 characters; this checkout caps input at 254. */
-export function isValidPixPayerEmail(value: string): boolean {
-  const email = value.trim();
-  return email.length >= 6 && email.length <= 254
-    && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
-}
+export { isValidPixPayerEmail };
 
 export interface CartItem {
   id: string;

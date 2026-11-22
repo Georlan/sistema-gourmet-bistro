@@ -10,7 +10,8 @@ import logging
 import re
 from ..database import get_db, require_tenant_id
 from ..services.restaurant_profile import apply_restaurant_profile_update
-from ..services.cash_reconciliation import cash_shift_totals, count_open_commands as _comandas_abertas_count
+from ..services.cash_reconciliation import cash_shift_totals, count_operational_open_commands as _comandas_abertas_count
+from ..services.online_payments.pending_review import shift_financial_pending_metrics
 from ..services.cash_activity import recent_cash_activities as _atividades_recentes_turno
 from ..services.order_financials import has_operational_fulfillment, open_balance, payable_total
 from ..models import (
@@ -330,6 +331,11 @@ def obter_resumo_turno_atual(
         .first()
     )
     if not turno_row:
+        pending_metrics = shift_financial_pending_metrics(
+            db,
+            restaurant_id=rest_id,
+            current_shift_id=None,
+        )
         return CaixaTurnoResumoResponse(
             turno_id=None,
             status="sem_turno",
@@ -347,6 +353,11 @@ def obter_resumo_turno_atual(
             saldo_esperado_dinheiro=0.0,
             total_pedidos_pagos=0,
             comandas_abertas_count=_comandas_abertas_count(db, rest_id),
+            pendencias_financeiras_count=pending_metrics["pendencias_financeiras_count"],
+            pendencias_financeiras_turno_atual_count=pending_metrics["pendencias_financeiras_turno_atual_count"],
+            pendencias_financeiras_anteriores_count=pending_metrics["pendencias_financeiras_anteriores_count"],
+            pendencias_financeiras_total=float(pending_metrics["pendencias_financeiras_total"]),
+            pendencias_financeiras_turno_atual_total=float(pending_metrics["pendencias_financeiras_turno_atual_total"]),
             atividades_recentes=[],
             ultima_movimentacao=None,
             resumo_dia=None
@@ -375,6 +386,11 @@ def obter_resumo_turno_atual(
             "operador_nome": ultima_atividade_caixa["operador_nome"] or operador_nome,
         }
 
+    pending_metrics = shift_financial_pending_metrics(
+        db,
+        restaurant_id=rest_id,
+        current_shift_id=turno.id,
+    )
     return CaixaTurnoResumoResponse(
         turno_id=turno.id,
         status="aberto",
@@ -393,6 +409,11 @@ def obter_resumo_turno_atual(
         saldo_esperado_dinheiro=totals["saldo_esperado_dinheiro"],
         total_pedidos_pagos=totals["total_pedidos_pagos"],
         comandas_abertas_count=_comandas_abertas_count(db, rest_id),
+        pendencias_financeiras_count=pending_metrics["pendencias_financeiras_count"],
+        pendencias_financeiras_turno_atual_count=pending_metrics["pendencias_financeiras_turno_atual_count"],
+        pendencias_financeiras_anteriores_count=pending_metrics["pendencias_financeiras_anteriores_count"],
+        pendencias_financeiras_total=float(pending_metrics["pendencias_financeiras_total"]),
+        pendencias_financeiras_turno_atual_total=float(pending_metrics["pendencias_financeiras_turno_atual_total"]),
         atividades_recentes=atividades_recentes,
         ultima_movimentacao=ult_mov,
         resumo_dia={
