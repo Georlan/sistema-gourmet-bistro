@@ -1,6 +1,7 @@
 import { type CatalogModifierGroup, isProductSellable } from '../catalog/catalog';
 import type { DraftItem, OrderItem, Product } from '../types';
 import { modifierGroupSelectionValid } from './modifierQuantity';
+import { getEffectiveProductPrice } from './productMerchandising';
 
 export type RepeatConfiguration = {
   productId: string;
@@ -58,11 +59,12 @@ export function planWaiterRepeat(
     return { id, nome: option.nome, preco: Number(option.preco_adicional || 0) };
   });
   const extra = modifiers.reduce((sum, modifier) => sum + modifier.preco, 0);
-  const unitPrice = Number(product.preco) + extra;
+  const effectiveBase = getEffectiveProductPrice(Number(product.preco), product.preco_promocional).effectivePrice;
+  const unitPrice = effectiveBase + extra;
   if (!Number.isFinite(unitPrice) || unitPrice < 0) return { kind: 'unavailable', reason: 'Confira este produto no cardápio' };
   return {
     kind: 'quick', client: configuration.clienteNome, observation: configuration.observacao, unitPrice,
-    product: { ...product, __selectedModifierIds: selectedIds, __selectedModifiers: modifiers, __selectedModifierTotal: extra },
+    product: { ...product, preco: effectiveBase, __selectedModifierIds: selectedIds, __selectedModifiers: modifiers, __selectedModifierTotal: extra },
   };
 }
 

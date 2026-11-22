@@ -1,4 +1,5 @@
 import { selectionWithinRules, type ModifierQuantityRules } from '../domain/modifierQuantity';
+import { getEffectiveProductPrice } from '../domain/productMerchandising';
 import type { CatalogPromotion, Product } from './CardapioTypes';
 import type { CartItem } from './components/CardapioCartDrawer';
 
@@ -15,6 +16,7 @@ type PublicProduct = {
   id?: unknown;
   ativo?: boolean;
   preco?: unknown;
+  preco_promocional?: number | null;
   grupos_modificadores?: PublicGroup[];
 };
 type PublicPromotion = {
@@ -112,9 +114,17 @@ export function findOutdatedCartProducts(
     productName: string,
     originalPrice: number,
     selected: CartItem['selectedOptions'],
+    useEffectivePrice: boolean,
   ) => {
     const fresh = byId.get(productId);
-    if (!fresh || fresh.ativo === false || !Number.isFinite(Number(fresh.preco)) || money(fresh.preco) !== money(originalPrice)) {
+    if (!fresh || fresh.ativo === false || !Number.isFinite(Number(fresh.preco))) {
+      outdated.add(productName);
+      return;
+    }
+    const freshComparablePrice = useEffectivePrice
+      ? getEffectiveProductPrice(Number(fresh.preco), fresh.preco_promocional).effectivePrice
+      : Number(fresh.preco);
+    if (money(freshComparablePrice) !== money(originalPrice)) {
       outdated.add(productName);
       return;
     }
@@ -153,10 +163,14 @@ export function findOutdatedCartProducts(
     }
     if (item.promotionParts) {
       for (const part of item.promotionParts) {
-        checkItem(part.product.id, part.product.name, part.product.price, part.selectedOptions);
+        checkItem(part.product.id, part.product.name, part.product.price, part.selectedOptions, false);
       }
     } else {
-      checkItem(item.product.id, item.product.name, item.product.price, item.selectedOptions);
+      const itemEffectivePrice = getEffectiveProductPrice(
+        item.product.price,
+        item.product.promotionalPrice,
+      ).effectivePrice;
+      checkItem(item.product.id, item.product.name, itemEffectivePrice, item.selectedOptions, true);
     }
   }
   return [...outdated];
@@ -314,12 +328,14 @@ export function inspectCartAgainstLiveCatalog(
       continue;
     }
 
-    if (money(live.price) !== money(item.product.price)) {
+    const liveEffectivePrice = getEffectiveProductPrice(live.price, live.promotionalPrice).effectivePrice;
+    const itemEffectivePrice = getEffectiveProductPrice(item.product.price, item.product.promotionalPrice).effectivePrice;
+    if (money(liveEffectivePrice) !== money(itemEffectivePrice)) {
       drifts.set(item.id, {
         itemId: item.id,
         productName: item.product.name,
         reason: 'price_changed',
-        message: `Preço atualizado para ${formatBrl(live.price)} no cardápio atual. Toque em Editar montagem para confirmar.`,
+        message: `Preço atualizado para ${formatBrl(liveEffectivePrice)} no cardápio atual. Toque em Editar montagem para confirmar.`,
         canEdit: true,
       });
     }

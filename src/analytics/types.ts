@@ -28,6 +28,12 @@ export interface PublicCartItemAddedProps {
   product_name: string;
   category?: string;
   price: number;
+  regular_price?: number;
+  effective_price?: number;
+  pricing_mode?: 'campaign' | 'direct_promo' | 'regular';
+  promotion_id?: string | null;
+  source_surface?: string;
+  parts_count?: number;
   quantity: number;
   total_price: number;
   options_count: number;
@@ -58,6 +64,14 @@ export interface PublicOrderSubmittedProps {
   is_scheduled: boolean;
   has_coupon: boolean;
   has_cashback: boolean;
+  promotion_id?: string | null;
+  promotion_item_count?: number;
+  has_direct_promo_item?: boolean;
+  pricing_mode?: 'campaign' | 'direct_promo' | 'mixed' | 'regular';
+  displayed_subtotal?: number;
+  expected_total?: number;
+  authoritative_total?: number;
+  price_divergence_cents?: number;
 }
 
 export interface AnalyticsEventMap {

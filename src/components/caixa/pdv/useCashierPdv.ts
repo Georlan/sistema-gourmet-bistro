@@ -23,10 +23,15 @@ import type { CaixaPanelProps, CashierNotice, CashierTab } from '../cashierContr
 import { formatCompactCurrency } from '../cashierPresentation';
 import type { PromotionPartSelection } from '../../../cardapio/promotionComposition';
 import {
+  allocatePdvOptimisticItemPrices,
+  calculatePdvCartPricing,
   extractPdvPromotionOrderFields,
   extractPromotionsPayload,
   filterActivePdvPromotions,
+  findConflictingPdvPromotion,
+  getNextPdvPromotionTransition,
   partSelectionToPdvCartFields,
+  removePdvPromotionInstanceAt,
   type PdvPromotion,
 } from './pdvPromotions';
 import {
@@ -58,6 +63,9 @@ export type PdvCartItem = {
   modifierIds?: string[];
   modifiers?: PdvModifierSelection[];
   promotionId?: string;
+  promotionInstanceId?: string;
+  promotionName?: string;
+  promotionPrice?: number;
 };
 
 export const pdvCartItemUnitPrice = (item: PdvCartItem) =>
@@ -116,7 +124,15 @@ export function useCashierPdv({
   const [pdvSelectedCategory, setPdvSelectedCategory] = useState<string>('todos');
 
   const [pdvCart, setPdvCart] = useState<PdvCartItem[]>([]);
-  const [activePromotions, setActivePromotions] = useState<PdvPromotion[]>([]);
+  const pdvCartRef = React.useRef(pdvCart);
+  pdvCartRef.current = pdvCart;
+  const promoInstanceSeqRef = React.useRef(0);
+  const [rawPromotions, setRawPromotions] = useState<PdvPromotion[]>([]);
+  const [promotionClockMs, setPromotionClockMs] = useState(() => Date.now());
+  const activePromotions = useMemo(
+    () => filterActivePdvPromotions(rawPromotions, promotionClockMs),
+    [rawPromotions, promotionClockMs],
+  );
   const [configuringPromotion, setConfiguringPromotion] = useState<PdvPromotion | null>(null);
 
   const [customerState, setCustomerState] = useState<CustomerSessionState>(createEmptyCustomerState);
@@ -180,8 +196,8 @@ export function useCashierPdv({
   } | null>(null);
 
   const pdvItemsSubtotal = useMemo(
-    () => pdvCart.reduce((total, item) => total + pdvCartItemUnitPrice(item) * item.quantity, 0),
-    [pdvCart],
+    () => calculatePdvCartPricing(pdvCart, activePromotions).itemsSubtotal,
+    [pdvCart, activePromotions],
   );
 
   const pdvDeliveryQuote = useMemo(
@@ -204,37 +220,44 @@ export function useCashierPdv({
       }));
   }, [pdvDeliveryConfig]);
 
-  useEffect(() => {
-    if (activeTab !== 'operacao' && activeSubTab !== 'balcao' && pdvOrderType !== 'delivery') return;
-    let cancelled = false;
+  const loadPdvDeliveryConfig = useCallback(async (force = false, signal?: AbortSignal) => {
     const authorization = authHeaders.Authorization || '';
     const restaurantHeader = authHeaders['X-Restaurant-Id'];
     const restaurantId = restaurantHeader ? Number(restaurantHeader) || undefined : undefined;
-    fetchCardapioDigitalConfig<Record<string, any>>(apiBaseUrl, authorization, { restaurantId })
-      .then((data) => {
-        if (cancelled || !data || typeof data !== 'object') return;
-        const rawNeighborhoods = Array.isArray(data.tabela_taxas_bairros) ? data.tabela_taxas_bairros : [];
-        const tabelaTaxasBairros = rawNeighborhoods
-          .map((row: any) => ({
-            bairro: String(row?.bairro || '').trim(),
-            taxa: Number(row?.taxa || 0),
-          }))
-          .filter((row: { bairro: string; taxa: number }) => row.bairro.length > 0 && Number.isFinite(row.taxa) && row.taxa >= 0);
-        setPdvDeliveryConfig({
-          freteGratisValor: Number(data.frete_gratis_valor || 0),
-          tipoTaxaEntrega: String(data.tipo_taxa_entrega || (tabelaTaxasBairros.length > 0 ? 'bairro' : 'fixa')),
-          taxaEntregaPadrao: Number(data.taxa_entrega_fixa ?? data.taxa_entrega_padrao ?? 0),
-          tabelaTaxasBairros,
-          tabelaTaxasKm: Array.isArray(data.tabela_taxas_km) ? data.tabela_taxas_km : undefined,
-        });
-      })
-      .catch(() => {
-        // Falha transitória mantém configuração anterior; servidor valida no lançamento.
+    try {
+      const data = await fetchCardapioDigitalConfig<Record<string, any>>(apiBaseUrl, authorization, {
+        restaurantId,
+        force,
+        signal,
       });
+      if (signal?.aborted || !data || typeof data !== 'object') return;
+      const rawNeighborhoods = Array.isArray(data.tabela_taxas_bairros) ? data.tabela_taxas_bairros : [];
+      const tabelaTaxasBairros = rawNeighborhoods
+        .map((row: any) => ({
+          bairro: String(row?.bairro || '').trim(),
+          taxa: Number(row?.taxa || 0),
+        }))
+        .filter((row: { bairro: string; taxa: number }) => row.bairro.length > 0 && Number.isFinite(row.taxa) && row.taxa >= 0);
+      setPdvDeliveryConfig({
+        freteGratisValor: Number(data.frete_gratis_valor || 0),
+        tipoTaxaEntrega: String(data.tipo_taxa_entrega || (tabelaTaxasBairros.length > 0 ? 'bairro' : 'fixa')),
+        taxaEntregaPadrao: Number(data.taxa_entrega_fixa ?? data.taxa_entrega_padrao ?? 0),
+        tabelaTaxasBairros,
+        tabelaTaxasKm: Array.isArray(data.tabela_taxas_km) ? data.tabela_taxas_km : undefined,
+      });
+    } catch {
+      // Falha transitória mantém configuração anterior; servidor valida no lançamento.
+    }
+  }, [apiBaseUrl, authHeaders]);
+
+  useEffect(() => {
+    if (activeTab !== 'operacao' && activeSubTab !== 'balcao' && pdvOrderType !== 'delivery') return;
+    const controller = new AbortController();
+    void loadPdvDeliveryConfig(false, controller.signal);
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [activeTab, activeSubTab, pdvOrderType, apiBaseUrl, authHeaders]);
+  }, [activeTab, activeSubTab, pdvOrderType, loadPdvDeliveryConfig]);
 
   const [pdvTargetMesaId, setPdvTargetMesaId] = useState<number>(0);
 
@@ -386,7 +409,8 @@ export function useCashierPdv({
   const handlePdvAddToCart = useCallback((product: Product) => {
     setPdvCart((prev) => {
       const idx = prev.findIndex((item) =>
-        item.product.id === product.id
+        !item.promotionId
+        && item.product.id === product.id
         && item.client === 'Balcão'
         && !item.obs
         && (item.modifierIds || []).length === 0,
@@ -400,17 +424,39 @@ export function useCashierPdv({
     });
   }, []);
 
-  const handlePdvUpdateCartQty = (idx: number, delta: number) => {
+  const handlePdvUpdateCartQty = useCallback((idx: number, delta: number) => {
+    const target = pdvCartRef.current[idx];
+    if (!target) return;
+    if (target.promotionId) {
+      if (delta > 0) {
+        showToast(
+          `Para adicionar outra unidade de "${target.promotionName || 'oferta'}", use "Lançar oferta" no card da promoção.`,
+          'info',
+        );
+        return;
+      }
+      setPdvCart((prev) => removePdvPromotionInstanceAt(prev, idx).nextCart);
+      showToast(`Oferta "${target.promotionName || 'Promoção'}" removida do pedido.`, 'info');
+      return;
+    }
     setPdvCart((prev) => {
       const copy = [...prev];
+      if (!copy[idx]) return prev;
       copy[idx] = { ...copy[idx], quantity: Math.max(1, copy[idx].quantity + delta) };
       return copy;
     });
-  };
+  }, [showToast]);
 
-  const handlePdvRemoveCartItem = (idx: number) => {
+  const handlePdvRemoveCartItem = useCallback((idx: number) => {
+    const target = pdvCartRef.current[idx];
+    if (!target) return;
+    if (target.promotionId) {
+      setPdvCart((prev) => removePdvPromotionInstanceAt(prev, idx).nextCart);
+      showToast(`Oferta "${target.promotionName || 'Promoção'}" removida do pedido.`, 'info');
+      return;
+    }
     setPdvCart((prev) => prev.filter((_, i) => i !== idx));
-  };
+  }, [showToast]);
 
   const cartUnavailableItemNames = useMemo(() => {
     const names = new Set<string>();
@@ -529,17 +575,22 @@ export function useCashierPdv({
       const now = Date.now();
       const tempId = `temp-${now}`;
       optimisticTempId = tempId;
+      const allocatedPrices = allocatePdvOptimisticItemPrices(cartItems, activePromotions);
+      let flatCursor = 0;
       const tempItems = cartItems.flatMap((item, idx) =>
-        Array.from({ length: item.quantity }, (_, qtyIdx) => ({
-          id: `temp-item-${idx}-${qtyIdx}-${now}`,
-          produtoId: item.product.id,
-          nome: item.product.nome,
-          preco: pdvCartItemUnitPrice(item),
-          observacao: item.obs || '',
-          clienteNome: customerName || 'Consumo Geral',
-          status: 'preparando' as const,
-          lancamentoId: `temp-l-${now}`,
-        })),
+        Array.from({ length: item.quantity }, (_, qtyIdx) => {
+          const allocatedPrice = allocatedPrices[flatCursor++] ?? pdvCartItemUnitPrice(item);
+          return {
+            id: `temp-item-${idx}-${qtyIdx}-${now}`,
+            produtoId: item.product.id,
+            nome: item.product.nome,
+            preco: allocatedPrice,
+            observacao: item.obs || '',
+            clienteNome: customerName || 'Consumo Geral',
+            status: 'preparando' as const,
+            lancamentoId: `temp-l-${now}`,
+          };
+        }),
       );
 
       const optimisticOrder = {
@@ -609,7 +660,7 @@ export function useCashierPdv({
         delivery_forma_pagamento: orderType === 'dine_in' ? undefined : paymentMethod || undefined,
         delivery_troco_para: cashTender,
         onboarding_test: onboardingTest,
-        ...extractPdvPromotionOrderFields(cartItems),
+        ...extractPdvPromotionOrderFields(cartItems, activePromotions),
         itens: itemsList,
       };
       const saleFingerprint = JSON.stringify(salePayload);
@@ -705,7 +756,6 @@ export function useCashierPdv({
 
   const pdvMenuInsights = useMemo(() => {
     const itemCount = pdvCart.reduce((total, item) => total + item.quantity, 0);
-    const cartTotal = pdvCart.reduce((total, item) => total + pdvCartItemUnitPrice(item) * item.quantity, 0);
     const destination =
       pdvOrderType === 'delivery'
         ? 'Delivery'
@@ -717,10 +767,10 @@ export function useCashierPdv({
     return {
       destination,
       itemCount,
-      total: formatCompactCurrency(cartTotal),
+      total: formatCompactCurrency(pdvItemsSubtotal),
       pausedCount: Math.max(0, dynamicMenu.length - sellableProducts.length),
     };
-  }, [dynamicMenu.length, pdvCart, pdvOrderType, pdvTargetMesaId, sellableProducts.length]);
+  }, [dynamicMenu.length, pdvCart, pdvItemsSubtotal, pdvOrderType, pdvTargetMesaId, sellableProducts.length]);
 
   const filteredProducts = useMemo(
     () =>
@@ -778,7 +828,10 @@ export function useCashierPdv({
 
   const loadPromotions = useCallback(async () => {
     try {
-      const res = await fetch(`${apiBaseUrl}/api/cardapio-digital/promocoes`, { headers: authHeaders });
+      const res = await fetch(`${apiBaseUrl}/api/cardapio-digital/promocoes`, {
+        headers: authHeaders,
+        cache: 'no-store',
+      });
       if (!res.ok) return;
       const data = await res.json();
       const { promotions, isValid } = extractPromotionsPayload(data);
@@ -786,7 +839,8 @@ export function useCashierPdv({
         showToast('Não foi possível carregar as ofertas ativas do PDV.', 'info');
         return;
       }
-      setActivePromotions(filterActivePdvPromotions(promotions));
+      setRawPromotions(promotions);
+      setPromotionClockMs(Date.now());
     } catch {
       // Keep existing promotions if transient network failure occurs.
     }
@@ -797,7 +851,57 @@ export function useCashierPdv({
     void loadPromotions();
   }, [activeTab, activeSubTab, loadPromotions]);
 
+  useEffect(() => {
+    const now = Date.now();
+    const transition = getNextPdvPromotionTransition(rawPromotions, now);
+    if (!transition) return;
+    const delay = Math.min(Math.max(transition.nextAtMs - now + 1, 1), 2_147_483_647);
+    const timer = window.setTimeout(() => {
+      setPromotionClockMs(Date.now());
+      if (transition.isStartBoundary && (activeTab === 'operacao' || activeSubTab === 'balcao')) {
+        void loadPromotions();
+      }
+    }, delay);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [rawPromotions, promotionClockMs, activeTab, activeSubTab, loadPromotions]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleConfigUpdated = () => {
+      if (activeTab === 'operacao' || activeSubTab === 'balcao' || pdvOrderType === 'delivery') {
+        void loadPdvDeliveryConfig(true);
+      }
+      if (activeTab === 'operacao' || activeSubTab === 'balcao') {
+        void loadPromotions();
+      }
+    };
+    const handleCatalogUpdated = () => {
+      if (activeTab === 'operacao' || activeSubTab === 'balcao') {
+        void loadPromotions();
+      }
+    };
+    window.addEventListener('koma_cardapio_config_updated', handleConfigUpdated);
+    window.addEventListener('koma_catalog_updated', handleCatalogUpdated);
+    return () => {
+      window.removeEventListener('koma_cardapio_config_updated', handleConfigUpdated);
+      window.removeEventListener('koma_catalog_updated', handleCatalogUpdated);
+    };
+  }, [activeTab, activeSubTab, pdvOrderType, loadPdvDeliveryConfig, loadPromotions]);
+
   const addPromotionToCart = useCallback((promo: PdvPromotion, parts: PromotionPartSelection[]) => {
+    const conflict = findConflictingPdvPromotion(pdvCartRef.current, promo.id);
+    if (conflict) {
+      showToast(
+        `Este pedido já possui a oferta "${conflict.promotionName || 'ativa'}". Remova-a antes de adicionar outra campanha.`,
+        'info',
+      );
+      return;
+    }
+
+    promoInstanceSeqRef.current += 1;
+    const promotionInstanceId = `${promo.id}:${Date.now()}:${promoInstanceSeqRef.current}`;
     const newItems: PdvCartItem[] = [];
     for (const part of parts) {
       const fields = partSelectionToPdvCartFields(part);
@@ -811,10 +915,16 @@ export function useCashierPdv({
         modifierIds: fields.modifierIds,
         modifiers: fields.modifiers,
         promotionId: promo.id,
+        promotionInstanceId,
+        promotionName: promo.nome,
+        promotionPrice: Number(promo.preco),
       });
     }
     if (newItems.length > 0) {
-      setPdvCart((prev) => [...prev, ...newItems]);
+      setPdvCart((prev) => {
+        if (findConflictingPdvPromotion(prev, promo.id)) return prev;
+        return [...prev, ...newItems];
+      });
       showToast(`Oferta "${promo.nome}" adicionada ao carrinho.`, 'success');
     }
   }, [dynamicMenu, pdvCustomerName, showToast]);

@@ -144,3 +144,37 @@ test('inspectCartAgainstLiveCatalog distinguishes price change, rule change, and
   assert.equal(drifts.get('c2')?.reason, 'unavailable');
   assert.equal(drifts.get('c2')?.canEdit, false);
 });
+
+test('changes in preco_promocional for standalone items are detected by both checkout check and live catalog inspection', () => {
+  const promoCart = [{
+    id: 'q-g--',
+    product: { id: 'q-g', name: 'Quentinha G', price: 14, promotionalPrice: 10 },
+    quantity: 1,
+    selectedOptions: {},
+    notes: '',
+  }] as unknown as CartItem[];
+
+  assert.deepEqual(findOutdatedCartProducts(promoCart, {
+    produtos: [{ id: 'q-g', nome: 'Quentinha G', preco: 14, preco_promocional: 10, ativo: true, grupos_modificadores: [] }],
+  }), []);
+
+  assert.deepEqual(findOutdatedCartProducts(promoCart, {
+    produtos: [{ id: 'q-g', nome: 'Quentinha G', preco: 14, preco_promocional: 12, ativo: true, grupos_modificadores: [] }],
+  }), ['Quentinha G']);
+
+  assert.deepEqual(findOutdatedCartProducts(promoCart, {
+    produtos: [{ id: 'q-g', nome: 'Quentinha G', preco: 14, preco_promocional: null, ativo: true, grupos_modificadores: [] }],
+  }), ['Quentinha G']);
+
+  const liveDrifts = inspectCartAgainstLiveCatalog(promoCart, [
+    { id: 'q-g', name: 'Quentinha G', price: 14, promotionalPrice: 12, description: '', category: 'Quentinhas', image: '', isAvailable: true, modifierGroups: [] },
+  ]);
+  assert.equal(liveDrifts.get('q-g--')?.reason, 'price_changed');
+  assert.match(liveDrifts.get('q-g--')?.message || '', /12,00/);
+
+  const clearedDrifts = inspectCartAgainstLiveCatalog(promoCart, [
+    { id: 'q-g', name: 'Quentinha G', price: 14, promotionalPrice: null, description: '', category: 'Quentinhas', image: '', isAvailable: true, modifierGroups: [] },
+  ]);
+  assert.equal(clearedDrifts.get('q-g--')?.reason, 'price_changed');
+  assert.match(clearedDrifts.get('q-g--')?.message || '', /14,00/);
+});

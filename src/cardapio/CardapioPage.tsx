@@ -89,6 +89,7 @@ import {
 } from "./cartDraftStorage";
 import { isLocalOpenStoreSimulation, isLocalOrderSimulation } from "./devSimulation";
 import { trackAnalyticsEvent } from "../analytics";
+import { getCardapioCartItemLineTotal, getCardapioCartSubtotal } from "./cartPricing";
 
 const KOMA_PRIMARY = "#00b894";
 const KOMA_BACKGROUND = "#090a0f";
@@ -1045,6 +1046,7 @@ export default function CardapioPage() {
     selectedOptions: Record<string, ProductOption[]> = {},
     notes: string = "",
     revealCart = true,
+    sourceSurface?: string,
   ) => {
     if (!cartAssemblyEnabled) {
       setNotice(`${orderingMessage} Você ainda pode consultar os produtos.`);
@@ -1077,21 +1079,34 @@ export default function CardapioPage() {
     setCartAnnouncement(`${quantity} ${quantity === 1 ? "unidade incluída" : "unidades incluídas"}: ${product.name}`);
 
     const optionsCount = Object.values(selectedOptions).reduce((acc, list) => acc + list.length, 0);
-    const baseUnitPrice = getEffectiveProductPrice(product.price, product.promotionalPrice).effectivePrice;
+    const priceInfo = getEffectiveProductPrice(product.price, product.promotionalPrice);
+    const regularPrice = Number.isFinite(Number(product.price)) && Number(product.price) >= 0 ? Number(product.price) : 0;
+    const baseUnitPrice = priceInfo.effectivePrice;
     let unitPrice = baseUnitPrice;
     Object.values(selectedOptions).forEach((list) => {
       list.forEach((opt) => {
         unitPrice += (opt.extraPrice || 0);
       });
     });
+    const resolvedSurface = sourceSurface
+      ?? (selectedProduct
+        ? (productModalOrigin?.surface === "cart" ? "cart" : "product_modal")
+        : isCartOpen
+          ? "cart_upsell"
+          : "catalog");
     trackAnalyticsEvent('public_cart_item_added', {
       restaurant_id: activeBrand?.id || '',
       product_id: product.id,
       product_name: product.name,
       category: product.category,
       price: baseUnitPrice,
+      regular_price: regularPrice,
+      effective_price: baseUnitPrice,
+      pricing_mode: priceInfo.hasDiscount ? 'direct_promo' : 'regular',
+      promotion_id: null,
+      source_surface: resolvedSurface,
       quantity,
-      total_price: unitPrice * quantity,
+      total_price: Math.round(unitPrice * quantity * 100) / 100,
       options_count: optionsCount,
     });
 
@@ -1125,6 +1140,7 @@ export default function CardapioPage() {
       promotionId: campaign.id,
       promotionParts: parts,
     };
+    const isEditingExistingPromo = Boolean(editingPromotionItem);
     setCart((current) => {
       if (editingPromotionItem) {
         return current.map((item) => (item.id === editingPromotionItem.id ? nextItem : item));
@@ -1132,6 +1148,25 @@ export default function CardapioPage() {
       const compatible = current.filter((item) => !item.promotionId || item.promotionId === campaign.id);
       return [...compatible, nextItem];
     });
+    if (!isEditingExistingPromo) {
+      const promoOptionsCount = Object.values(options).reduce((acc, list) => acc + list.length, 0);
+      const promoSourceSurface = promotionModalOrigin?.surface === "cart" ? "cart" : "promotion_wizard";
+      trackAnalyticsEvent('public_cart_item_added', {
+        restaurant_id: activeBrand.id,
+        product_id: virtualProduct.id,
+        product_name: virtualProduct.name,
+        category: virtualProduct.category,
+        price: campaign.preco,
+        effective_price: campaign.preco,
+        pricing_mode: 'campaign',
+        promotion_id: campaign.id,
+        source_surface: promoSourceSurface,
+        parts_count: parts.length,
+        quantity: nextItem.quantity,
+        total_price: getCardapioCartItemLineTotal(nextItem),
+        options_count: promoOptionsCount,
+      });
+    }
     setSelectedPromotion(null);
     setEditingPromotionItem(null);
     setPromotionModalOrigin(null);
@@ -1182,11 +1217,7 @@ export default function CardapioPage() {
   );
 
   const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
-  const cartTotal = cart.reduce((total, item) => {
-    let unit = getEffectiveProductPrice(item.product.price, item.product.promotionalPrice).effectivePrice;
-    Object.values(item.selectedOptions).forEach((options) => options.forEach((option) => { unit += option.extraPrice; }));
-    return total + unit * item.quantity;
-  }, 0);
+  const cartTotal = useMemo(() => getCardapioCartSubtotal(cart), [cart]);
 
   const handleLoginSuccess = (profile: CustomerProfile, token: string) => {
     setUser(profile);

@@ -52,3 +52,29 @@ test('PDV cart line distinguishes unavailable products without changing the item
   assert.equal(sample.quantity, 2);
   assert.equal(sample.obs, 'sem molho');
 });
+
+test('PDV cart line indicates offer membership without displaying misleading standalone unit price', () => {
+  const promoLine: PdvCartItem = {
+    product: { id: 'q-g', nome: 'Quentinha G', preco: 14 } as PdvCartItem['product'],
+    quantity: 1,
+    obs: '',
+    client: 'Balcão',
+    promotionId: 'promo-bf',
+    promotionInstanceId: 'inst-1',
+    promotionName: 'Black Friday G',
+    promotionPrice: 10,
+    modifiers: [{ id: 'ovo', nome: 'Ovo', preco: 2 }],
+  };
+
+  const withExtra = render(promoLine);
+  assert.match(withExtra, /Quentinha G/);
+  assert.match(withExtra, /Oferta: Black Friday G/);
+  assert.match(withExtra, /\+ R\$\s*2,00 adic\./);
+  assert.doesNotMatch(withExtra, /14,00 \/ un\./);
+  assert.doesNotMatch(withExtra, /16,00/);
+
+  const noExtra = render({ ...promoLine, modifiers: [] });
+  assert.match(noExtra, /Oferta: Black Friday G/);
+  assert.match(noExtra, /Incluso na oferta/);
+  assert.doesNotMatch(noExtra, /14,00/);
+});
