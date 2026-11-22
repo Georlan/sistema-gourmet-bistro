@@ -8,12 +8,14 @@ const loadCardapioPromotionWizard = () => import('../../../cardapio/components/C
 const CardapioPromotionWizard = lazy(loadCardapioPromotionWizard);
 import { calculatePromotionRegularTotal, formatPromotionItemsSummary } from '../../../utils/promotionFormHelpers';
 import {
+  findConflictingPdvPromotion,
   findPromotionStepProducts,
   isSingleItemSimpleDiscountPromotion,
   toCardapioProduct,
   type PdvPromotion,
 } from './pdvPromotions';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
+import { getEffectiveProductPrice } from '../../../domain/productMerchandising';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import {
   changeModifierQuantitySelection,
@@ -24,7 +26,7 @@ import { aplicarMascaraTelefoneInput } from '../../../utils/phonePresentation';
 import DeliveryAddressFields from '../../shared/DeliveryAddressFields';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import { formatCurrency } from '../cashierPresentation';
-import { type PdvModifierSelection, type PdvOrderType, type useCashierPdv } from './useCashierPdv';
+import { type PdvCartItem, type PdvModifierSelection, type PdvOrderType, type useCashierPdv } from './useCashierPdv';
 import { usePdvCategoryNavigation } from './usePdvCategoryNavigation';
 import { CashierPdvProductCard } from './CashierPdvProductCard';
 import { pdvProductNeedsRequiredChoices } from './pdvProductChoices';
@@ -158,6 +160,10 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
   }, [activePromotions.length]);
 
   const handleLaunchPromotion = useCallback((promo: PdvPromotion) => {
+    if (findConflictingPdvPromotion(pdvCart, promo.id)) {
+      addPromotionToCart(promo, []);
+      return;
+    }
     const simpleProduct = isSingleItemSimpleDiscountPromotion(promo, sellableProducts);
     if (simpleProduct) {
       addPromotionToCart(promo, [{
@@ -169,7 +175,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
       return;
     }
     setConfiguringPromotion(promo);
-  }, [addPromotionToCart, sellableProducts, setConfiguringPromotion]);
+  }, [addPromotionToCart, pdvCart, sellableProducts, setConfiguringPromotion]);
 
   const showOffersStrip = activePromotions.length > 0 && (
     pdvSelectedCategory === '__ofertas__' || (pdvSelectedCategory === 'todos' && !pdvSearch.trim())
@@ -204,7 +210,10 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     [configGroups, configModifierIds],
   );
   const configModifierTotal = configModifiers.reduce((sum, modifier) => sum + Number(modifier.preco || 0), 0);
-  const configUnitTotal = Number(configProduct?.preco || 0) + configModifierTotal;
+  const configBasePrice = configProduct
+    ? getEffectiveProductPrice(Number(configProduct.preco || 0), configProduct.preco_promocional).effectivePrice
+    : 0;
+  const configUnitTotal = configBasePrice + configModifierTotal;
   const configValid = configGroups.every((group) => modifierGroupSelectionValid(group, configModifierIds));
 
   const closeConfig = () => {
@@ -270,22 +279,30 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
 
   const saveConfiguredItem = () => {
     if (!configProduct || !configValid) return;
-    const nextItem = {
+    const existingItem = configCartIndex === null ? null : pdvCart[configCartIndex];
+    const nextItem: PdvCartItem = {
       product: configProduct,
-      quantity: configQty,
+      quantity: existingItem?.promotionId ? existingItem.quantity : configQty,
       obs: configObs.trim(),
-      client: configCartIndex === null ? 'Balcão' : pdvCart[configCartIndex]?.client || 'Balcão',
+      client: configCartIndex === null ? 'Balcão' : existingItem?.client || 'Balcão',
       modifierIds: [...configModifierIds],
       modifiers: configModifiers,
+      ...(existingItem?.promotionId ? {
+        promotionId: existingItem.promotionId,
+        promotionInstanceId: existingItem.promotionInstanceId,
+        promotionName: existingItem.promotionName,
+        promotionPrice: existingItem.promotionPrice,
+      } : {}),
     };
 
     setPdvCart((current) => {
       if (configCartIndex !== null) {
         return current.map((item, index) => index === configCartIndex ? nextItem : item);
       }
-      if (!nextItem.obs && nextItem.modifierIds.length === 0) {
+      if (!nextItem.obs && (nextItem.modifierIds || []).length === 0) {
         const cleanIndex = current.findIndex((item) =>
-          item.product.id === configProduct.id
+          !item.promotionId
+          && item.product.id === configProduct.id
           && !item.obs
           && (item.modifierIds || []).length === 0
           && item.client === 'Balcão',
@@ -655,7 +672,7 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
                               <div className="flex items-start justify-between gap-1.5">
                                 <h4 className="font-bold text-xs text-koma-secondary truncate">{p.nome}</h4>
                                 <span className="whitespace-nowrap font-mono text-[10px] text-koma-muted">
-                                  {formatCurrency(Number(p.preco) || 0)}
+                                  {formatCurrency(getEffectiveProductPrice(Number(p.preco) || 0, p.preco_promocional).effectivePrice)}
                                 </span>
                               </div>
                               <span className="inline-flex rounded-md border border-rose-500/25 bg-rose-500/10 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider text-rose-400">

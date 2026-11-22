@@ -37,6 +37,7 @@ import {
   type CatalogDisplayItem,
 } from "../catalogGrouping";
 import { resolveCatalogDisplayProduct } from "../resolvePairingDisplay";
+import { getCatalogDisplayEffectivePrice } from "../cartPricing";
 import { getCatalogHighlights } from "../catalogHighlights";
 import { getFulfillmentAvailability } from "../fulfillment";
 import { buildWhatsAppContactUrl } from "../../config/whatsappUtils";
@@ -938,6 +939,15 @@ export default function MenuV2Experience({
         {!searchQuery.trim() && heroProduct && (() => {
           const heroIsConfigurable = isGroupedProduct(heroProduct) || Boolean(heroProduct.modifierGroups?.length || heroProduct.modifiers?.length);
           const heroQty = getDisplayItemCartQty(heroProduct);
+          const heroPrice = getCatalogDisplayEffectivePrice(heroProduct);
+          const formattedHeroEffective = formatMenuPrice(heroPrice.effectivePrice);
+          const heroDisplayPrice = heroPrice.isFromPrice
+            ? `A partir de ${formattedHeroEffective}`
+            : formattedHeroEffective;
+          const heroOriginalPrice =
+            heroPrice.hasDiscount && heroPrice.originalPrice != null
+              ? formatMenuPrice(heroPrice.originalPrice)
+              : null;
           return (
           <section
             id="koma-art-hero-showcase"
@@ -953,7 +963,10 @@ export default function MenuV2Experience({
                 <p className="km-hero-showcase__desc">{heroProduct.description}</p>
               )}
               <div className="mt-2.5 flex items-center gap-3">
-                <span className="km-price">{formatMenuPrice(heroProduct.price)}</span>
+                <div className="flex flex-wrap items-baseline gap-1.5">
+                  <span className="km-price">{heroDisplayPrice}</span>
+                  {heroOriginalPrice && <span className="km-price--strike">{heroOriginalPrice}</span>}
+                </div>
                 {!heroIsConfigurable && heroQty > 0 ? (
                   <div className="km-qty-control">
                     <button

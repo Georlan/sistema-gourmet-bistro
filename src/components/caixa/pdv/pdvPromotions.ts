@@ -1,4 +1,4 @@
-import type { Product as CardapioProduct, ProductModifier } from '../../../cardapio/CardapioTypes';
+import type { Product as CardapioProduct, ModifierGroup } from '../../../cardapio/CardapioTypes';
 import type { PromotionPartSelection } from '../../../cardapio/promotionComposition';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import { getEffectiveProductPrice } from '../../../domain/productMerchandising';
@@ -22,8 +22,46 @@ export interface PdvPromotion {
 }
 
 export interface PdvPromotionCartItemLike {
+  product?: Pick<Product, 'preco' | 'preco_promocional'>;
   quantity: number;
+  modifiers?: Array<{ preco: number }>;
   promotionId?: string;
+  promotionInstanceId?: string;
+  promotionName?: string;
+  promotionPrice?: number;
+}
+
+export interface PdvCartPricingSummary {
+  itemsSubtotal: number;
+  regularSubtotal: number;
+  promotionsSubtotal: number;
+  promotionInstanceCount: number;
+}
+
+function toCents(value: unknown): number {
+  const num = Number(value);
+  return Number.isFinite(num) && num >= 0 ? Math.round(num * 100) : 0;
+}
+
+function resolveItemPromotionPrice(
+  promotionId: string,
+  itemPromoPrice: number | undefined,
+  activePromotions: readonly PdvPromotion[],
+): number | null {
+  const live = activePromotions.find((promo) => String(promo.id) === String(promotionId));
+  if (live && Number.isFinite(Number(live.preco)) && Number(live.preco) >= 0) {
+    return Number(live.preco);
+  }
+  if (itemPromoPrice !== undefined && Number.isFinite(Number(itemPromoPrice)) && Number(itemPromoPrice) >= 0) {
+    return Number(itemPromoPrice);
+  }
+  return null;
+}
+
+function promotionInstanceKey(item: PdvPromotionCartItemLike): string {
+  return item.promotionInstanceId
+    ? `${item.promotionId}::${item.promotionInstanceId}`
+    : `${item.promotionId}::__default__`;
 }
 
 export function extractPromotionsPayload(data: unknown): {
@@ -47,25 +85,255 @@ export function filterActivePdvPromotions(
   nowMs: number = Date.now(),
 ): PdvPromotion[] {
   return promotions.filter((promo) => {
-    if (promo.status) {
-      return promo.status === 'ativa';
-    }
+    if (promo.status === 'pausada' || promo.status === 'encerrada') return false;
     if (promo.ativo === false) return false;
     const startMs = promo.inicio_em ? Date.parse(promo.inicio_em) : NaN;
-    if (Number.isFinite(startMs) && nowMs < startMs) return false;
     const endMs = promo.fim_em ? Date.parse(promo.fim_em) : NaN;
-    if (Number.isFinite(endMs) && nowMs > endMs) return false;
+    if (Number.isFinite(startMs) && Number.isFinite(endMs) && endMs <= startMs) return false;
+    if (Number.isFinite(startMs) && nowMs < startMs) return false;
+    if (Number.isFinite(endMs) && nowMs >= endMs) return false;
+    if (promo.status === 'agendada' && !Number.isFinite(startMs)) return false;
     return true;
   });
 }
 
+export function getNextPdvPromotionTransition(
+  promotions: readonly PdvPromotion[],
+  nowMs: number = Date.now(),
+): { nextAtMs: number; isStartBoundary: boolean } | null {
+  let nextAtMs = Number.POSITIVE_INFINITY;
+  let isStartBoundary = false;
+
+  for (const promo of promotions) {
+    if (promo.ativo === false || promo.status === 'pausada' || promo.status === 'encerrada') {
+      continue;
+    }
+    const startMs = promo.inicio_em ? Date.parse(promo.inicio_em) : NaN;
+    const endMs = promo.fim_em ? Date.parse(promo.fim_em) : NaN;
+    if (Number.isFinite(startMs) && Number.isFinite(endMs) && endMs <= startMs) {
+      continue;
+    }
+    if (Number.isFinite(startMs) && startMs > nowMs && startMs < nextAtMs) {
+      nextAtMs = startMs;
+      isStartBoundary = true;
+    }
+    if (Number.isFinite(endMs) && endMs > nowMs && endMs < nextAtMs) {
+      nextAtMs = endMs;
+      isStartBoundary = false;
+    }
+  }
+
+  return Number.isFinite(nextAtMs) ? { nextAtMs, isStartBoundary } : null;
+}
+
+/**
+ * Computes canonical PDV cart pricing: each promotion instance is charged at
+ * `promo.preco` once per instance plus paid modifiers on its parts, while
+ * regular items use `getEffectiveProductPrice` plus modifiers.
+ */
+export function calculatePdvCartPricing(
+  cartItems: readonly PdvPromotionCartItemLike[],
+  activePromotions: readonly PdvPromotion[] = [],
+): PdvCartPricingSummary {
+  let regularCents = 0;
+  let promotionsCents = 0;
+
+  const instances = new Map<string, { promotionId: string; items: PdvPromotionCartItemLike[] }>();
+
+  for (const item of cartItems) {
+    const qty = Math.max(0, Number(item.quantity || 0));
+    if (qty <= 0) continue;
+
+    if (item.promotionId) {
+      const key = promotionInstanceKey(item);
+      const group = instances.get(key);
+      if (group) {
+        group.items.push(item);
+      } else {
+        instances.set(key, { promotionId: item.promotionId, items: [item] });
+      }
+      continue;
+    }
+
+    const base = getEffectiveProductPrice(
+      Number(item.product?.preco || 0),
+      item.product?.preco_promocional,
+    ).effectivePrice;
+    const mods = (item.modifiers || []).reduce((sum, mod) => sum + Number(mod.preco || 0), 0);
+    regularCents += Math.round((base + mods) * qty * 100);
+  }
+
+  for (const group of instances.values()) {
+    const itemPromoPrice = group.items.find((item) => item.promotionPrice !== undefined)?.promotionPrice;
+    const resolvedPromoPrice = resolveItemPromotionPrice(
+      group.promotionId,
+      itemPromoPrice,
+      activePromotions,
+    );
+
+    const instanceBaseCents = resolvedPromoPrice !== null
+      ? toCents(resolvedPromoPrice)
+      : group.items.reduce((sum, item) => {
+          const qty = Math.max(0, Number(item.quantity || 0));
+          const base = getEffectiveProductPrice(
+            Number(item.product?.preco || 0),
+            item.product?.preco_promocional,
+          ).effectivePrice;
+          return sum + Math.round(base * qty * 100);
+        }, 0);
+
+    const instanceModsCents = group.items.reduce((sum, item) => {
+      const qty = Math.max(0, Number(item.quantity || 0));
+      const mods = (item.modifiers || []).reduce((mSum, mod) => mSum + Number(mod.preco || 0), 0);
+      return sum + Math.round(mods * qty * 100);
+    }, 0);
+
+    promotionsCents += instanceBaseCents + instanceModsCents;
+  }
+
+  return {
+    itemsSubtotal: (regularCents + promotionsCents) / 100,
+    regularSubtotal: regularCents / 100,
+    promotionsSubtotal: promotionsCents / 100,
+    promotionInstanceCount: instances.size,
+  };
+}
+
+/**
+ * Allocates exact unit prices for flattened optimistic Kanban `tempItems` so
+ * their sum matches `calculatePdvCartPricing(cartItems, activePromotions).itemsSubtotal`
+ * to the cent.
+ */
+export function allocatePdvOptimisticItemPrices(
+  cartItems: readonly PdvPromotionCartItemLike[],
+  activePromotions: readonly PdvPromotion[] = [],
+): number[] {
+  type FlattenedUnit = {
+    regularCents: number;
+    modsCents: number;
+    promotionId?: string;
+    promotionPrice?: number;
+    instanceKey?: string;
+  };
+
+  const units: FlattenedUnit[] = [];
+  const instanceUnitIndices = new Map<string, number[]>();
+
+  for (const item of cartItems) {
+    const qty = Math.max(0, Math.trunc(Number(item.quantity || 0)));
+    if (qty <= 0) continue;
+
+    const regularCents = toCents(
+      getEffectiveProductPrice(
+        Number(item.product?.preco || 0),
+        item.product?.preco_promocional,
+      ).effectivePrice,
+    );
+    const modsCents = (item.modifiers || []).reduce((sum, mod) => sum + toCents(mod.preco), 0);
+    const key = item.promotionId ? promotionInstanceKey(item) : undefined;
+
+    for (let i = 0; i < qty; i += 1) {
+      const flatIdx = units.length;
+      units.push({
+        regularCents,
+        modsCents,
+        promotionId: item.promotionId,
+        promotionPrice: item.promotionPrice,
+        instanceKey: key,
+      });
+      if (key) {
+        const list = instanceUnitIndices.get(key) || [];
+        list.push(flatIdx);
+        instanceUnitIndices.set(key, list);
+      }
+    }
+  }
+
+  const allocated = units.map((unit) => (unit.regularCents + unit.modsCents) / 100);
+
+  for (const unitIndices of instanceUnitIndices.values()) {
+    const first = units[unitIndices[0]];
+    const itemPromoPrice = unitIndices
+      .map((idx) => units[idx].promotionPrice)
+      .find((price) => price !== undefined);
+    const resolvedPrice = first.promotionId
+      ? resolveItemPromotionPrice(first.promotionId, itemPromoPrice, activePromotions)
+      : null;
+
+    if (resolvedPrice === null) continue;
+
+    const targetBaseCents = toCents(resolvedPrice);
+    const baseSumCents = unitIndices.reduce((sum, idx) => sum + units[idx].regularCents, 0);
+    const basePerUnit = unitIndices.map((idx) => {
+      if (baseSumCents > 0) {
+        return Math.floor((targetBaseCents * units[idx].regularCents) / baseSumCents);
+      }
+      return Math.floor(targetBaseCents / unitIndices.length);
+    });
+
+    const remainder = targetBaseCents - basePerUnit.reduce((sum, val) => sum + val, 0);
+    for (let r = 0; r < remainder; r += 1) {
+      basePerUnit[r % unitIndices.length] += 1;
+    }
+
+    unitIndices.forEach((flatIdx, pos) => {
+      allocated[flatIdx] = (basePerUnit[pos] + units[flatIdx].modsCents) / 100;
+    });
+  }
+
+  return allocated;
+}
+
+export function findConflictingPdvPromotion(
+  cartItems: readonly PdvPromotionCartItemLike[],
+  nextPromoId: string,
+): { promotionId: string; promotionName?: string } | null {
+  const conflict = cartItems.find(
+    (item) => Boolean(item.promotionId) && String(item.promotionId) !== String(nextPromoId),
+  );
+  if (!conflict || !conflict.promotionId) return null;
+  return {
+    promotionId: conflict.promotionId,
+    promotionName: conflict.promotionName,
+  };
+}
+
+export function removePdvPromotionInstanceAt<T extends PdvPromotionCartItemLike>(
+  cartItems: readonly T[],
+  index: number,
+): { nextCart: T[]; removedPromoName: string | null } {
+  const target = cartItems[index];
+  if (!target) {
+    return { nextCart: [...cartItems], removedPromoName: null };
+  }
+  if (!target.promotionId) {
+    return {
+      nextCart: cartItems.filter((_, i) => i !== index),
+      removedPromoName: null,
+    };
+  }
+  const nextCart = target.promotionInstanceId
+    ? cartItems.filter(
+        (item) =>
+          !(item.promotionId === target.promotionId && item.promotionInstanceId === target.promotionInstanceId),
+      )
+    : cartItems.filter((item) => item.promotionId !== target.promotionId);
+  return {
+    nextCart,
+    removedPromoName: target.promotionName || 'Promoção',
+  };
+}
+
 export function extractPdvPromotionOrderFields(
   cartItems: PdvPromotionCartItemLike[],
+  activePromotions: readonly PdvPromotion[] = [],
 ): {
   promocao_id: string | undefined;
   promocao_item_indices: number[] | undefined;
+  promocao_preco_esperado?: number;
 } {
-  const firstPromoId = cartItems.find((item) => Boolean(item.promotionId))?.promotionId;
+  const firstPromoItem = cartItems.find((item) => Boolean(item.promotionId));
+  const firstPromoId = firstPromoItem?.promotionId;
   if (!firstPromoId) {
     return { promocao_id: undefined, promocao_item_indices: undefined };
   }
@@ -84,6 +352,19 @@ export function extractPdvPromotionOrderFields(
 
   if (indices.length === 0) {
     return { promocao_id: undefined, promocao_item_indices: undefined };
+  }
+
+  const unitPromoPrice = resolveItemPromotionPrice(
+    firstPromoId,
+    firstPromoItem?.promotionPrice,
+    activePromotions,
+  );
+  if (unitPromoPrice !== null) {
+    return {
+      promocao_id: firstPromoId,
+      promocao_item_indices: indices,
+      promocao_preco_esperado: Math.round(unitPromoPrice * 100) / 100,
+    };
   }
 
   return {
@@ -119,22 +400,21 @@ export function isSingleItemSimpleDiscountPromotion(
 type ProductWithModifiers = Product & { grupos_modificadores?: CatalogModifierGroup[] };
 
 export function toCardapioProduct(product: Product): CardapioProduct {
-  const groups = ((product as ProductWithModifiers).grupos_modificadores || []).map<ProductModifier>((group) => {
+  const modifierGroups = ((product as ProductWithModifiers).grupos_modificadores || []).map<ModifierGroup>((group) => {
     const min = group.min_selecoes ?? 0;
     const max = group.max_selecoes ?? 1;
     return {
       id: group.id,
-      title: group.nome,
       name: group.nome,
-      min,
-      max,
+      minSelection: min,
       maxSelection: max,
-      required: min > 0,
+      selectionMode: group.modo_selecao === 'porcoes' || group.modo_selecao === 'tipos' ? group.modo_selecao : undefined,
+      type: group.tipo === 'obrigatorio' || group.tipo === 'meio_a_meio' ? group.tipo : (min > 0 ? 'obrigatorio' : 'opcional'),
       options: (group.opcoes || []).map((opt) => ({
         id: opt.id,
         name: opt.nome,
         extraPrice: Number(opt.preco_adicional || 0),
-        isAvailable: opt.ativo !== false,
+        active: opt.ativo !== false,
       })),
     };
   });
@@ -148,7 +428,8 @@ export function toCardapioProduct(product: Product): CardapioProduct {
     image: product.imagem || '',
     category: product.categoria || 'Cardápio',
     isAvailable: product.ativo !== false,
-    modifiers: groups,
+    modifiers: [],
+    modifierGroups,
   };
 }
 

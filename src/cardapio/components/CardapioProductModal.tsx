@@ -38,6 +38,7 @@ import {
   LOCAL_PRODUCT_PLACEHOLDER,
 } from "../CardapioTypes";
 import { isGroupedProduct, type GroupedDisplayProduct } from "../catalogGrouping";
+import { getCatalogDisplayEffectivePrice } from "../cartPricing";
 import { trackAnalyticsEvent } from "../../analytics";
 import { isMarmitariaSaladGroup } from "../../domain/marmitariaSalad";
 import { containModalFocus } from "../../utils/modalFocus";
@@ -320,18 +321,22 @@ export default function CardapioProductModal({
     // Famílias visuais não são produtos reais: aguardar a escolha do SKU.
     if (reportedViewRef.current || needsVariantSelection) return;
     reportedViewRef.current = true;
+    const effectiveViewedPrice = getEffectiveProductPrice(
+      effectiveProduct.price,
+      effectiveProduct.promotionalPrice,
+    ).effectivePrice;
     trackAnalyticsEvent('public_product_viewed', {
       restaurant_id: restaurantId || '',
       product_id: effectiveProduct.id,
       product_name: effectiveProduct.name,
       category: effectiveProduct.category,
-      price: effectiveProduct.price,
+      price: effectiveViewedPrice,
       has_modifiers: Boolean(
         (effectiveProduct.modifiers && effectiveProduct.modifiers.length > 0)
         || (effectiveProduct.modifierGroups && effectiveProduct.modifierGroups.length > 0)
       ),
     });
-  }, [effectiveProduct.id, restaurantId, needsVariantSelection]);
+  }, [effectiveProduct.id, effectiveProduct.name, effectiveProduct.category, effectiveProduct.price, effectiveProduct.promotionalPrice, effectiveProduct.modifiers, effectiveProduct.modifierGroups, restaurantId, needsVariantSelection]);
 
   const galleryImages = useMemo(() => {
     const rawList =
@@ -520,8 +525,10 @@ export default function CardapioProductModal({
   }, [effectiveActiveModifierId]);
 
   const effectivePriceInfo = useMemo(
-    () => getEffectiveProductPrice(effectiveProduct.price, effectiveProduct.promotionalPrice),
-    [effectiveProduct.price, effectiveProduct.promotionalPrice],
+    () => (needsVariantSelection
+      ? getCatalogDisplayEffectivePrice(product)
+      : getEffectiveProductPrice(effectiveProduct.price, effectiveProduct.promotionalPrice)),
+    [effectiveProduct.price, effectiveProduct.promotionalPrice, needsVariantSelection, product],
   );
 
   const unitPrice = useMemo(() => {
@@ -897,7 +904,7 @@ export default function CardapioProductModal({
             <div className="shrink-0 text-right tabular-nums">
               {!compositionStep && !needsVariantSelection && effectivePriceInfo.hasDiscount && effectivePriceInfo.originalPrice != null && (
                 <span className="block text-xs text-[var(--km-muted)] line-through">
-                  De {formatPrice(effectivePriceInfo.originalPrice)}
+                  De {formatPrice(effectivePriceInfo.originalPrice + extrasPerUnit)}
                 </span>
               )}
               <strong className="block font-serif text-lg font-black text-[var(--km-accent-text)] sm:text-xl">
@@ -957,6 +964,12 @@ export default function CardapioProductModal({
                 {product.variants.map((v) => {
                   const isSelected = v.id === selectedVariantId;
                   const isAvail = v.isAvailable;
+                  const variantPriceInfo = getEffectiveProductPrice(v.product.price, v.product.promotionalPrice);
+                  const mandatoryExtraOffset = Math.max(0, v.price - variantPriceInfo.effectivePrice);
+                  const variantOriginalPrice =
+                    variantPriceInfo.hasDiscount && variantPriceInfo.originalPrice != null
+                      ? variantPriceInfo.originalPrice + mandatoryExtraOffset
+                      : null;
                   return (
                     <button
                       key={v.id}
@@ -985,9 +998,16 @@ export default function CardapioProductModal({
                         )}
                       </div>
                       <div className="flex shrink-0 items-center gap-2.5">
-                        <strong className={`text-xs font-black tabular-nums ${isSelected ? "text-[var(--km-accent-text)]" : "text-[var(--km-muted)]"}`}>
-                          {formatPrice(v.price)}
-                        </strong>
+                        <div className="flex flex-col items-end leading-tight tabular-nums">
+                          {variantOriginalPrice != null && (
+                            <span className="text-[10px] font-medium text-[var(--km-muted)] line-through">
+                              {formatPrice(variantOriginalPrice)}
+                            </span>
+                          )}
+                          <strong className={`text-xs font-black tabular-nums ${isSelected ? "text-[var(--km-accent-text)]" : "text-[var(--km-muted)]"}`}>
+                            {formatPrice(v.price)}
+                          </strong>
+                        </div>
                         <span
                           className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors ${
                             isSelected

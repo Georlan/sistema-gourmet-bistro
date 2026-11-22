@@ -41,7 +41,9 @@ export function CashierPdvCartLine({
 }: CashierPdvCartLineProps) {
   const presets = getProductPresets(item.product);
   const selectedPresets = item.obs.split(',').map((part) => part.trim().toLowerCase());
+  const isPromotionItem = Boolean(item.promotionId);
   const unitPrice = pdvCartItemUnitPrice(item);
+  const modifiersExtra = (item.modifiers || []).reduce((sum, modifier) => sum + Number(modifier.preco || 0), 0) * item.quantity;
   const modifiers = summarizeModifiers(item.modifiers || []);
 
   return (
@@ -49,7 +51,13 @@ export function CashierPdvCartLine({
       <div className="cashier-pdv-cart__line-heading">
         <div className="cashier-pdv-cart__line-name">
           <strong>{item.product.nome}</strong>
-          <span className="cashier-pdv-cart__unit-price">{formatCurrency(unitPrice)} / un.</span>
+          {isPromotionItem ? (
+            <span className="cashier-pdv-cart__unit-price" data-testid="pdv-cart-line-promo-badge">
+              Oferta: {item.promotionName || 'Promoção'}
+            </span>
+          ) : (
+            <span className="cashier-pdv-cart__unit-price">{formatCurrency(unitPrice)} / un.</span>
+          )}
         </div>
         <div className="cashier-pdv-cart__line-tools">
           <button
@@ -64,7 +72,7 @@ export function CashierPdvCartLine({
           <button
             type="button"
             aria-label={`Remover ${item.product.nome}`}
-            title="Remover item"
+            title={isPromotionItem ? 'Remover oferta completa' : 'Remover item'}
             onClick={() => onRemove(index)}
             className="cashier-pdv-cart__item-action cashier-pdv-cart__item-action--danger"
           >
@@ -106,7 +114,11 @@ export function CashierPdvCartLine({
             <Plus size={16} aria-hidden="true" />
           </button>
         </div>
-        <strong className="cashier-pdv-cart__line-total">{formatCurrency(unitPrice * item.quantity)}</strong>
+        <strong className="cashier-pdv-cart__line-total">
+          {isPromotionItem
+            ? (modifiersExtra > 0 ? `+ ${formatCurrency(modifiersExtra)} adic.` : 'Incluso na oferta')
+            : formatCurrency(unitPrice * item.quantity)}
+        </strong>
       </div>
       <details className="cashier-pdv-cart__notes">
         <summary>

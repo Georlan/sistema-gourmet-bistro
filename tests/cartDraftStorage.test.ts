@@ -172,3 +172,54 @@ test('loadCartDraft discards expired or corrupt payloads safely', () => {
   assert.equal(loadCartDraft('2', now), null);
   assert.equal(store.has('koma_cart_draft:2'), false);
 });
+
+test('cartDraftStorage persists and compares effective promotionalPrice for standalone items', () => {
+  const discountedProduct: Product = {
+    ...sampleProduct,
+    id: 'q-g',
+    name: 'Quentinha G',
+    price: 14,
+    promotionalPrice: 10,
+    modifierGroups: [],
+  };
+  const draft = serializeCartDraft('6', [
+    {
+      id: 'q-g--',
+      product: discountedProduct,
+      quantity: 1,
+      selectedOptions: {},
+      notes: '',
+    },
+  ]);
+
+  assert.equal(draft.items[0].savedProductPriceCents, 1000);
+
+  const unchanged = restoreCartDraftFromCatalog(draft, {
+    id: '6',
+    products: [discountedProduct],
+    promotions: [],
+    promotionProducts: [],
+  });
+  assert.equal(unchanged.items.length, 1);
+  assert.deepEqual(unchanged.issues, []);
+
+  const repriced = restoreCartDraftFromCatalog(draft, {
+    id: '6',
+    products: [{ ...discountedProduct, promotionalPrice: 12 }],
+    promotions: [],
+    promotionProducts: [],
+  });
+  assert.equal(repriced.items.length, 1);
+  assert.equal(repriced.items[0].product.promotionalPrice, 12);
+  assert.ok(repriced.issues.some((msg) => msg.includes('preço de Quentinha G foi atualizado')));
+
+  const promoEnded = restoreCartDraftFromCatalog(draft, {
+    id: '6',
+    products: [{ ...discountedProduct, promotionalPrice: null }],
+    promotions: [],
+    promotionProducts: [],
+  });
+  assert.equal(promoEnded.items.length, 1);
+  assert.equal(promoEnded.items[0].product.promotionalPrice, null);
+  assert.ok(promoEnded.issues.some((msg) => msg.includes('preço de Quentinha G foi atualizado')));
+});

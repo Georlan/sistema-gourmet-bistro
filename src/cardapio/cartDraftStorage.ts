@@ -3,6 +3,7 @@ import {
   selectionCount,
   type ModifierQuantityRules,
 } from "../domain/modifierQuantity";
+import { getEffectiveProductPrice } from "../domain/productMerchandising";
 import type { BrandConfig, Product, ProductOption } from "./CardapioTypes";
 import type { CardapioFulfillment, CartItem } from "./components/CardapioCartDrawer";
 import type { PromotionPartSelection } from "./promotionComposition";
@@ -81,13 +82,17 @@ export function serializeCartDraft(
 ): StoredCartDraft {
   const items: StoredCartDraftItem[] = cart.map((item) => {
     const { selectedOptionIds, savedOptionPricesCents } = serializeSelectedOptions(item.selectedOptions);
+    const isPromotionItem = Boolean(item.promotionId && Array.isArray(item.promotionParts));
+    const savedBasePrice = isPromotionItem
+      ? item.product.price
+      : getEffectiveProductPrice(item.product.price, item.product.promotionalPrice).effectivePrice;
     const base: StoredCartDraftItem = {
       productId: String(item.product.id),
       productNameHint: String(item.product.name || "").slice(0, 80),
       quantity: Math.max(1, Math.min(99, Math.trunc(Number(item.quantity) || 1))),
       selectedOptionIds,
       notes: String(item.notes || "").slice(0, 240),
-      savedProductPriceCents: toCents(item.product.price),
+      savedProductPriceCents: toCents(savedBasePrice),
       savedOptionPricesCents,
     };
     if (item.promotionId && Array.isArray(item.promotionParts)) {
@@ -415,9 +420,12 @@ export function restoreCartDraftFromCatalog(
       continue;
     }
 
+    const liveEffectivePriceCents = toCents(
+      getEffectiveProductPrice(liveProduct.price, liveProduct.promotionalPrice).effectivePrice,
+    );
     if (
       Number.isFinite(storedItem.savedProductPriceCents)
-      && toCents(liveProduct.price) !== storedItem.savedProductPriceCents
+      && liveEffectivePriceCents !== storedItem.savedProductPriceCents
     ) {
       issues.push(`O preço de ${liveProduct.name} foi atualizado no cardápio.`);
     }

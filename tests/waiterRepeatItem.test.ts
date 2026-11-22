@@ -45,3 +45,22 @@ test('junta somente linhas com cliente, composição, observação e preço exat
     assert.equal(findRepeatedDraft([{ ...draft, ...changed }], plan), undefined);
   }
 });
+
+test('repetição aplica preco_promocional efetivo do catálogo atual + adicionais', () => {
+  const promoProduct = { ...product([group]), preco: 14, preco_promocional: 10 } as Product;
+  const withExtra = {
+    ...item,
+    modificadores: [{ id: 'ice', nome: 'Gelo', preco: 1 }],
+  };
+  const plan = planWaiterRepeat(withExtra, promoProduct);
+  assert.equal(plan.kind, 'quick');
+  if (plan.kind !== 'quick') return;
+  assert.equal(plan.unitPrice, 12); // 10 efetivo + 2 atual do adicional
+  assert.equal(plan.product.preco, 10); // garante persistência no rascunho operacional com base efetiva
+
+  const invalidPromo = { ...product(), preco: 14, preco_promocional: 18 } as Product;
+  const fallbackPlan = planWaiterRepeat(item, invalidPromo);
+  assert.equal(fallbackPlan.kind, 'quick');
+  if (fallbackPlan.kind !== 'quick') return;
+  assert.equal(fallbackPlan.unitPrice, 14);
+});

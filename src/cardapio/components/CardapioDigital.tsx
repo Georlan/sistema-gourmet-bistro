@@ -39,7 +39,9 @@ import { authRequestErrorMessage } from "../../utils/authRequest";
 import { formatCardapioApiError } from "../orderApiErrors";
 import { saveStoredOrder } from "../orderTracking";
 import { buildCardapioOrderItems, buildCardapioPromotionItemIndices } from "../orderItems";
+import { getCardapioCartItemLineTotal, getCardapioCartSubtotal } from "../cartPricing";
 import { findOutdatedCartProducts } from "../cartCatalogConsistency";
+import { getEffectiveProductPrice } from "../../domain/productMerchandising";
 import { isOrderingBlockConflict } from "../orderingBlockUi";
 import CardapioPaymentSummary from "./CardapioPaymentSummary";
 import {
@@ -216,15 +218,7 @@ export default function CardapioDigital({
   const idempotencyKeyRef = useRef<string>("");
   const idempotencyFingerprintRef = useRef<string | null>(null);
 
-  const subtotal = useMemo(() => cart.reduce((acc, item) => {
-    let unitPrice = item.product.price;
-    Object.values(item.selectedOptions).forEach((options) => {
-      options.forEach((option) => {
-        unitPrice += option.extraPrice;
-      });
-    });
-    return acc + unitPrice * item.quantity;
-  }, 0), [cart]);
+  const subtotal = useMemo(() => getCardapioCartSubtotal(cart), [cart]);
 
   const estimatedTotal = Math.max(0, subtotal + deliveryFee - descontoCupom - descontoCashback);
   const availablePayments = useMemo(
@@ -630,6 +624,27 @@ export default function CardapioDigital({
       }
 
       clearPendingSubmission(idempotencyKey);
+      const hasCampaignItem = cart.some((item) => Boolean(item.promotionId));
+      const hasDirectPromoItem = cart.some(
+        (item) => !item.promotionId && getEffectiveProductPrice(item.product.price, item.product.promotionalPrice).hasDiscount,
+      );
+      const hasRegularItem = cart.some(
+        (item) => !item.promotionId && !getEffectiveProductPrice(item.product.price, item.product.promotionalPrice).hasDiscount,
+      );
+      const pricingMode: 'campaign' | 'direct_promo' | 'mixed' | 'regular' =
+        hasCampaignItem && (hasDirectPromoItem || hasRegularItem)
+          ? 'mixed'
+          : hasCampaignItem
+            ? 'campaign'
+            : hasDirectPromoItem && hasRegularItem
+              ? 'mixed'
+              : hasDirectPromoItem
+                ? 'direct_promo'
+                : 'regular';
+      const displayedSubtotal = Math.round(subtotal * 100) / 100;
+      const expectedTotalRounded = Math.round(estimatedTotal * 100) / 100;
+      const authoritativeTotalRounded = Math.round(orderTotal * 100) / 100;
+      const priceDivergenceCents = Math.round((authoritativeTotalRounded - expectedTotalRounded) * 100);
       trackAnalyticsEvent('public_order_submitted', {
         restaurant_id: targetRestauranteId,
         comanda_id: comandaId,
@@ -642,6 +657,14 @@ export default function CardapioDigital({
         is_scheduled: Boolean(confirmedSchedule),
         has_coupon: Boolean(cupomCodigo),
         has_cashback: Boolean(usarCashback),
+        promotion_id: orderRequest.promocao_id || null,
+        promotion_item_count: orderRequest.promocao_item_indices?.length || 0,
+        has_direct_promo_item: hasDirectPromoItem,
+        pricing_mode: pricingMode,
+        displayed_subtotal: displayedSubtotal,
+        expected_total: expectedTotalRounded,
+        authoritative_total: authoritativeTotalRounded,
+        price_divergence_cents: priceDivergenceCents,
       });
       const createdPayload: CreatedOrder = {
         comanda_id: comandaId,
@@ -940,8 +963,7 @@ export default function CardapioDigital({
                 </div>
                 <div className="mt-3 space-y-2.5">
                   {cart.map((item) => {
-                    let unitPrice = item.product.price;
-                    Object.values(item.selectedOptions).forEach((options) => options.forEach((option) => { unitPrice += option.extraPrice; }));
+                    const lineTotal = getCardapioCartItemLineTotal(item);
                     return (
                       <div key={item.id} className="flex items-start justify-between gap-3 text-xs">
                         <div className="min-w-0">
@@ -955,7 +977,7 @@ export default function CardapioDigital({
                             : <OrderItemComposition item={cardapioCompositionSource(item)} className="mt-0.5 text-[11px] text-[var(--km-muted)]" />}
                           {item.notes && <span className="mt-1 inline-block rounded-lg bg-[var(--km-raised)] px-2 py-0.5 text-[11px] leading-relaxed text-[var(--km-ink-2)]">Obs.: {item.notes}</span>}
                         </div>
-                        <span className="shrink-0 font-bold text-[var(--km-ink)] tabular-nums">{formatPrice(unitPrice * item.quantity)}</span>
+                        <span className="shrink-0 font-bold text-[var(--km-ink)] tabular-nums">{formatPrice(lineTotal)}</span>
                       </div>
                     );
                   })}

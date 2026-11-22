@@ -1,16 +1,23 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import CashierPdvView from '../src/components/caixa/pdv/CashierPdvView';
 import {
+  allocatePdvOptimisticItemPrices,
+  calculatePdvCartPricing,
   extractPdvPromotionOrderFields,
   extractPromotionsPayload,
   filterActivePdvPromotions,
+  findConflictingPdvPromotion,
+  getNextPdvPromotionTransition,
   isSingleItemSimpleDiscountPromotion,
+  removePdvPromotionInstanceAt,
+  toCardapioProduct,
   type PdvPromotion,
 } from '../src/components/caixa/pdv/pdvPromotions';
-import type { useCashierPdv } from '../src/components/caixa/pdv/useCashierPdv';
+import type { PdvCartItem, useCashierPdv } from '../src/components/caixa/pdv/useCashierPdv';
 import { EMPTY_DELIVERY_ADDRESS } from '../src/domain/deliveryAddress';
 import type { Product } from '../src/types';
 
@@ -249,4 +256,209 @@ test('CashierPdvView renders Ofertas filter and both promotion cards from backen
   assert.match(html, /data-testid="pdv-active-offers"/);
   assert.match(html, /Quentinha G · Black Friday/);
   assert.match(html, /Compre 5 Quentinhas G e ganhe 1 M/);
+});
+
+test('calculatePdvCartPricing charges campaign price once per instance plus paid modifiers and allocates optimistic prices exactly', () => {
+  const prodG: Product = {
+    id: 'prod-g',
+    nome: 'Quentinha G',
+    categoria: 'Marmitas',
+    descricao: '',
+    preco: 14,
+    ativo: true,
+  };
+  const prodM: Product = {
+    id: 'prod-m',
+    nome: 'Quentinha M',
+    categoria: 'Marmitas',
+    descricao: '',
+    preco: 10,
+    ativo: true,
+  };
+  const prodSuco: Product = {
+    id: 'prod-suco',
+    nome: 'Suco',
+    categoria: 'Bebidas',
+    descricao: '',
+    preco: 8,
+    preco_promocional: 6,
+    ativo: true,
+  };
+  const activePromos: PdvPromotion[] = [
+    {
+      id: 'promo-bf',
+      nome: 'Black Friday G',
+      preco: 10,
+      tipo: 'desconto_item',
+      componentes: [['prod-g']],
+      quantidades: [1],
+      ativo: true,
+      status: 'ativa',
+    },
+    {
+      id: 'promo-combo',
+      nome: 'Combo 2G + 1M',
+      preco: 25,
+      tipo: 'combo',
+      componentes: [['prod-g'], ['prod-m']],
+      quantidades: [2, 1],
+      ativo: true,
+      status: 'ativa',
+    },
+  ];
+
+  // Instance 1 + Instance 2 of Black Friday G (one with paid modifier), plus direct promo Suco
+  const bfItems: PdvCartItem[] = [
+    {
+      product: prodG,
+      quantity: 1,
+      obs: '',
+      client: 'Balcão',
+      modifiers: [{ id: 'ovo', nome: 'Ovo', preco: 2 }],
+      promotionId: 'promo-bf',
+      promotionInstanceId: 'inst-1',
+      promotionName: 'Black Friday G',
+      promotionPrice: 10,
+    },
+    {
+      product: prodG,
+      quantity: 1,
+      obs: '',
+      client: 'Balcão',
+      modifiers: [],
+      promotionId: 'promo-bf',
+      promotionInstanceId: 'inst-2',
+      promotionName: 'Black Friday G',
+      promotionPrice: 10,
+    },
+    {
+      product: prodSuco,
+      quantity: 2,
+      obs: '',
+      client: 'Balcão',
+      modifiers: [],
+    },
+  ];
+
+  const pricing = calculatePdvCartPricing(bfItems, activePromos);
+  assert.deepEqual(pricing, {
+    itemsSubtotal: 34, // (10 + 2) + 10 + 2*6
+    regularSubtotal: 12,
+    promotionsSubtotal: 22,
+    promotionInstanceCount: 2,
+  });
+
+  const allocated = allocatePdvOptimisticItemPrices(bfItems, activePromos);
+  assert.deepEqual(allocated, [12, 10, 6, 6]);
+  assert.equal(allocated.reduce((a, b) => a + b, 0), pricing.itemsSubtotal);
+
+  const fields = extractPdvPromotionOrderFields(bfItems, activePromos);
+  assert.deepEqual(fields, {
+    promocao_id: 'promo-bf',
+    promocao_item_indices: [0, 1],
+    promocao_preco_esperado: 10, // unitary price of 1 instance for backend validation
+  });
+
+  // 3-part combo with odd division (R$ 10,00 across 3 parts -> 3.34 + 3.33 + 3.33)
+  const oddPromo: PdvPromotion = {
+    id: 'promo-odd',
+    nome: 'Trio 10',
+    preco: 10,
+    componentes: [['prod-g'], ['prod-g'], ['prod-m']],
+    ativo: true,
+    status: 'ativa',
+  };
+  const oddComboItems: PdvCartItem[] = [
+    { product: prodG, quantity: 1, obs: '', client: 'Balcão', promotionId: 'promo-odd', promotionInstanceId: 'o1', promotionPrice: 10 },
+    { product: prodG, quantity: 1, obs: '', client: 'Balcão', promotionId: 'promo-odd', promotionInstanceId: 'o1', promotionPrice: 10 },
+    { product: prodM, quantity: 1, obs: '', client: 'Balcão', promotionId: 'promo-odd', promotionInstanceId: 'o1', promotionPrice: 10 },
+  ];
+  const oddAllocated = allocatePdvOptimisticItemPrices(oddComboItems, [oddPromo]);
+  assert.equal(Math.round(oddAllocated.reduce((a, b) => a + b, 0) * 100), 1000);
+});
+
+test('PDV promotion guards block second distinct campaign and remove promotion instances atomically', () => {
+  const prodG: Product = { id: 'g', nome: 'Quentinha G', categoria: 'M', descricao: '', preco: 14, ativo: true };
+  const prodM: Product = { id: 'm', nome: 'Quentinha M', categoria: 'M', descricao: '', preco: 10, ativo: true };
+
+  const cart: PdvCartItem[] = [
+    { product: prodG, quantity: 1, obs: '', client: 'Balcão', promotionId: 'combo-1', promotionInstanceId: 'i1', promotionName: 'Combo 1', promotionPrice: 20 },
+    { product: prodM, quantity: 1, obs: '', client: 'Balcão', promotionId: 'combo-1', promotionInstanceId: 'i1', promotionName: 'Combo 1', promotionPrice: 20 },
+    { product: prodG, quantity: 1, obs: '', client: 'Balcão', promotionId: 'combo-1', promotionInstanceId: 'i2', promotionName: 'Combo 1', promotionPrice: 20 },
+    { product: prodM, quantity: 1, obs: '', client: 'Balcão', promotionId: 'combo-1', promotionInstanceId: 'i2', promotionName: 'Combo 1', promotionPrice: 20 },
+    { product: prodM, quantity: 2, obs: '', client: 'Balcão' },
+  ];
+
+  assert.equal(findConflictingPdvPromotion(cart, 'combo-1'), null);
+  assert.deepEqual(findConflictingPdvPromotion(cart, 'combo-2'), {
+    promotionId: 'combo-1',
+    promotionName: 'Combo 1',
+  });
+
+  const removed = removePdvPromotionInstanceAt(cart, 1);
+  assert.equal(removed.removedPromoName, 'Combo 1');
+  assert.equal(removed.nextCart.length, 3);
+  assert.deepEqual(removed.nextCart.map((i) => i.promotionInstanceId || 'regular'), ['i2', 'i2', 'regular']);
+});
+
+test('filterActivePdvPromotions and transition helper enforce inicio_em/fim_em boundaries even with status', () => {
+  const start = '2026-11-22T12:00:00Z';
+  const end = '2026-11-22T14:00:00Z';
+  const promos: PdvPromotion[] = [
+    { id: 'sched', nome: 'Agendada', preco: 10, componentes: [['g']], ativo: true, status: 'agendada', inicio_em: start, fim_em: end },
+    { id: 'exp', nome: 'Expirando', preco: 12, componentes: [['g']], ativo: true, status: 'ativa', fim_em: '2026-11-22T11:30:00Z' },
+  ];
+
+  const t1 = Date.parse('2026-11-22T11:00:00Z');
+  assert.deepEqual(filterActivePdvPromotions(promos, t1).map((p) => p.id), ['exp']);
+  assert.deepEqual(getNextPdvPromotionTransition(promos, t1), {
+    nextAtMs: Date.parse('2026-11-22T11:30:00Z'),
+    isStartBoundary: false,
+  });
+
+  const t2 = Date.parse('2026-11-22T12:00:00Z');
+  assert.deepEqual(filterActivePdvPromotions(promos, t2).map((p) => p.id), ['sched']);
+
+  const t3 = Date.parse('2026-11-22T14:00:00Z');
+  assert.deepEqual(filterActivePdvPromotions(promos, t3), []);
+});
+
+test('toCardapioProduct preserves modifierGroups minSelection, selectionMode, and effective price; PDV hook wires sync events', () => {
+  const mapped = toCardapioProduct({
+    id: 'g',
+    nome: 'Quentinha G',
+    categoria: 'Marmitas',
+    descricao: '',
+    preco: 14,
+    preco_promocional: 10,
+    ativo: true,
+    grupos_modificadores: [
+      {
+        id: 'prot',
+        nome: 'Proteínas',
+        min_selecoes: 2,
+        max_selecoes: 2,
+        modo_selecao: 'porcoes',
+        tipo: 'obrigatorio',
+        opcoes: [
+          { id: 'o1', grupo_id: 'prot', nome: 'Frango', preco_adicional: 0, ativo: true },
+          { id: 'o2', grupo_id: 'prot', nome: 'Pausado', preco_adicional: 0, ativo: false },
+        ],
+      },
+    ],
+  } as Product & { grupos_modificadores: any[] });
+
+  assert.equal(mapped.price, 10);
+  assert.equal(mapped.modifierGroups?.[0]?.minSelection, 2);
+  assert.equal(mapped.modifierGroups?.[0]?.selectionMode, 'porcoes');
+  assert.equal(mapped.modifierGroups?.[0]?.options[1]?.active, false);
+
+  const pdvHook = readFileSync(new URL('../src/components/caixa/pdv/useCashierPdv.ts', import.meta.url), 'utf8');
+  const pdvView = readFileSync(new URL('../src/components/caixa/pdv/CashierPdvView.tsx', import.meta.url), 'utf8');
+  assert.match(pdvHook, /koma_cardapio_config_updated/);
+  assert.match(pdvHook, /koma_catalog_updated/);
+  assert.match(pdvHook, /force,/);
+  assert.match(pdvHook, /getNextPdvPromotionTransition/);
+  assert.match(pdvView, /getEffectiveProductPrice/);
+  assert.match(pdvView, /!item\.promotionId/);
 });

@@ -4,7 +4,12 @@
  */
 
 import { getFulfillmentAvailability, resolveFulfillmentSelection, type CardapioFulfillment } from "../fulfillment";
-import { getEffectiveProductPrice } from "../../domain/productMerchandising";
+import {
+  getCardapioCartItemLineTotal,
+  getCardapioCartItemUnitPrice,
+  getCardapioCartSubtotal,
+  getCatalogDisplayEffectivePrice,
+} from "../cartPricing";
 import { OrderItemComposition } from "../../components/shared/OrderItemComposition";
 import { cardapioCompositionSource } from "../orderItems";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -395,15 +400,7 @@ export default function CardapioCartDrawer({
   }, [address, guestEmail, guestName, guestPhone, hydratedGuestRestaurantId, restaurantId, user]);
 
   // Subtotal calculation
-  const subtotal = useMemo(() => cart.reduce((acc, item) => {
-    let itemPrice = getEffectiveProductPrice(item.product.price, item.product.promotionalPrice).effectivePrice;
-    Object.values(item.selectedOptions).forEach((opts) => {
-      opts.forEach((option) => {
-        itemPrice += option.extraPrice;
-      });
-    });
-    return acc + itemPrice * item.quantity;
-  }, 0), [cart]);
+  const subtotal = useMemo(() => getCardapioCartSubtotal(cart), [cart]);
 
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const cartCatalogDrift = useMemo(
@@ -1079,6 +1076,7 @@ export default function CardapioCartDrawer({
                         (prod.modifierGroups && prod.modifierGroups.length > 0) ||
                         (prod.modifiers && prod.modifiers.length > 0)
                       );
+                      const prodPrice = getCatalogDisplayEffectivePrice(prod);
                       return (
                         <div
                           key={prod.id}
@@ -1097,7 +1095,16 @@ export default function CardapioCartDrawer({
                             />
                             <div className="min-w-0">
                               <h4 className="text-xs font-bold text-[var(--km-ink)] truncate">{prod.name}</h4>
-                              <span className="font-display text-xs font-black text-[var(--km-accent-text)] tabular-nums">{isGroupedProduct(prod) && prod.hasVariablePrice ? 'A partir de ' : ''}{formatPrice(prod.price)}</span>
+                              <div className="flex flex-wrap items-baseline gap-1.5">
+                                <span className="font-display text-xs font-black text-[var(--km-accent-text)] tabular-nums">
+                                  {prodPrice.isFromPrice ? 'A partir de ' : ''}{formatPrice(prodPrice.effectivePrice)}
+                                </span>
+                                {prodPrice.hasDiscount && prodPrice.originalPrice != null && (
+                                  <span className="text-[11px] text-[var(--km-muted)] line-through tabular-nums">
+                                    {formatPrice(prodPrice.originalPrice)}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                           <button
@@ -1178,12 +1185,8 @@ export default function CardapioCartDrawer({
                 <div id="cart-items-content" hidden={activeSection !== "cart-items"}>
                 <div className="space-y-3">
                   {cart.map((item) => {
-                    let unitPrice = getEffectiveProductPrice(item.product.price, item.product.promotionalPrice).effectivePrice;
-                    Object.values(item.selectedOptions).forEach((opts) => {
-                      opts.forEach((option) => {
-                        unitPrice += option.extraPrice;
-                      });
-                    });
+                    const unitPrice = getCardapioCartItemUnitPrice(item);
+                    const lineTotal = getCardapioCartItemLineTotal(item);
 
                     const itemDrift = cartCatalogDrift.get(item.id);
                     const hasEditableComposition = Boolean(
@@ -1247,7 +1250,7 @@ export default function CardapioCartDrawer({
                             </p>
                           )}
                           {item.quantity > 1 && <p className="mt-1 text-[11px] text-[var(--km-muted)] tabular-nums">{formatPrice(unitPrice)} cada</p>}
-                          <strong className="mt-1.5 block font-display text-sm font-black text-[var(--km-accent-text)] tabular-nums">{formatPrice(unitPrice * item.quantity)}</strong>
+                          <strong className="mt-1.5 block font-display text-sm font-black text-[var(--km-accent-text)] tabular-nums">{formatPrice(lineTotal)}</strong>
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-2.5">
                           <button type="button" onClick={() => onRemoveItem(item.id)} className="grid h-8 w-8 place-items-center rounded-xl text-[var(--km-muted)] transition hover:bg-rose-500/10 hover:text-rose-400 cursor-pointer" aria-label={`Remover ${item.product.name}`}>
@@ -1293,6 +1296,7 @@ export default function CardapioCartDrawer({
                         (prod.modifiers && prod.modifiers.length > 0)
                       );
                       const isAvailable = prod.isAvailable !== false;
+                      const prodPrice = getCatalogDisplayEffectivePrice(prod);
 
                       return (
                         <div
@@ -1311,7 +1315,16 @@ export default function CardapioCartDrawer({
                           />
                           <div>
                             <h4 className="text-xs font-bold text-[var(--km-ink)] line-clamp-1">{prod.name}</h4>
-                            <span className="font-display text-xs font-black text-[var(--km-accent-text)] block mt-0.5 tabular-nums">{grouped && prod.hasVariablePrice ? 'A partir de ' : ''}{formatPrice(prod.price)}</span>
+                            <div className="mt-0.5 flex flex-wrap items-baseline gap-1">
+                              <span className="font-display text-xs font-black text-[var(--km-accent-text)] tabular-nums">
+                                {prodPrice.isFromPrice ? 'A partir de ' : ''}{formatPrice(prodPrice.effectivePrice)}
+                              </span>
+                              {prodPrice.hasDiscount && prodPrice.originalPrice != null && (
+                                <span className="text-[10px] text-[var(--km-muted)] line-through tabular-nums">
+                                  {formatPrice(prodPrice.originalPrice)}
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           {!isAvailable ? (
