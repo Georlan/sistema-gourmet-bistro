@@ -10,6 +10,9 @@ export type MenuThemeMode = 'dark' | 'light';
 
 export const KOMA_DEFAULT_BRAND_HEX = '#05c49d';
 
+const MENU_THEME_CACHE_LIMIT = 64;
+const menuThemeCache = new Map<string, MenuThemeTokens>();
+
 export interface MenuThemeTokens {
   mode: MenuThemeMode;
   brandHex: string;
@@ -163,14 +166,97 @@ function ensureMinContrast(
   direction: 'lighter' | 'darker',
 ): string {
   let l = lightnessStart;
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 40; i++) {
     const candidate = oklchToHex(l, chroma, hue);
     if (getContrastRatio(candidate, againstHex) >= minRatio) {
       return candidate;
     }
-    l = direction === 'darker' ? Math.max(0.12, l - 0.03) : Math.min(0.96, l + 0.025);
+    l = direction === 'darker' ? Math.max(0.12, l - 0.015) : Math.min(0.96, l + 0.015);
   }
   return oklchToHex(l, chroma, hue);
+}
+
+/** Ensures a color meets `minRatio` contrast against two reference backgrounds simultaneously. */
+function ensureMinContrastPair(
+  lightnessStart: number,
+  chroma: number,
+  hue: number,
+  againstHexA: string,
+  againstHexB: string,
+  minRatio: number,
+  direction: 'lighter' | 'darker',
+): string {
+  let l = lightnessStart;
+  for (let i = 0; i < 40; i++) {
+    const candidate = oklchToHex(l, chroma, hue);
+    if (
+      getContrastRatio(candidate, againstHexA) >= minRatio &&
+      getContrastRatio(candidate, againstHexB) >= minRatio
+    ) {
+      return candidate;
+    }
+    l = direction === 'darker' ? Math.max(0.12, l - 0.015) : Math.min(0.96, l + 0.015);
+  }
+  return oklchToHex(l, chroma, hue);
+}
+
+/** Resolves `--km-accent`, `--km-accent-hover`, and adaptive `--km-on-accent` preserving pastel/earthy/vibrant character. */
+function resolveAdaptiveAccent(
+  parsedLightness: number,
+  accentChroma: number,
+  accentHue: number,
+  deepHue: number,
+  isAchromatic: boolean,
+  mode: MenuThemeMode,
+): { accent: string; accentHover: string; onAccent: string } {
+  const minL = mode === 'dark' ? 0.49 : 0.22;
+  const maxL = mode === 'dark' ? 0.84 : 0.815;
+  const baseL = Math.min(maxL, Math.max(minL, parsedLightness));
+  const darkOnAccent = oklchToHex(
+    0.16,
+    isAchromatic ? 0 : Math.min(0.05, accentChroma * 0.34),
+    deepHue,
+  );
+  const lightOnAccent = '#ffffff';
+
+  const preferDarkInk =
+    parsedLightness >= 0.675 ||
+    (parsedLightness >= 0.61 && accentChroma <= 0.125) ||
+    (accentHue >= 68 && accentHue <= 185 && parsedLightness >= 0.62);
+
+  if (!preferDarkInk) {
+    const onAccent = lightOnAccent;
+    let l = baseL;
+    for (let i = 0; i < 40; i++) {
+      const candidate = oklchToHex(l, accentChroma, accentHue);
+      if (getContrastRatio(candidate, onAccent) >= 4.65) break;
+      l = Math.max(0.16, l - 0.012);
+    }
+    const accent = oklchToHex(l, accentChroma, accentHue);
+    const hoverTarget = mode === 'dark' ? Math.min(0.68, l + 0.045) : Math.max(0.15, l - 0.055);
+    const hoverCandidate = oklchToHex(hoverTarget, accentChroma, accentHue);
+    const accentHover =
+      getContrastRatio(hoverCandidate, onAccent) >= 4.55
+        ? hoverCandidate
+        : ensureMinContrast(hoverTarget, accentChroma, accentHue, onAccent, 4.65, 'darker');
+    return { accent, accentHover, onAccent };
+  }
+
+  const onAccent = darkOnAccent;
+  let l = baseL;
+  for (let i = 0; i < 32; i++) {
+    const candidate = oklchToHex(l, accentChroma, accentHue);
+    if (getContrastRatio(candidate, onAccent) >= 4.75) break;
+    l = Math.min(maxL, l + 0.012);
+  }
+  const accent = oklchToHex(l, accentChroma, accentHue);
+  const hoverTarget = mode === 'dark' ? Math.min(0.89, l + 0.045) : Math.max(minL, l - 0.045);
+  const hoverCandidate = oklchToHex(hoverTarget, accentChroma, accentHue);
+  const accentHover =
+    getContrastRatio(hoverCandidate, onAccent) >= 4.55
+      ? hoverCandidate
+      : ensureMinContrast(hoverTarget, accentChroma, accentHue, onAccent, 4.75, 'lighter');
+  return { accent, accentHover, onAccent };
 }
 
 function normalizeHue(h: number): number {
@@ -179,12 +265,9 @@ function normalizeHue(h: number): number {
 }
 
 /**
- * Generates an artistic two-tone OKLCH hue pairing from a single brand hue:
- * - Mint green -> deep petrol teal
- * - Sky/royal blue -> deep navy indigo
- * - Soft pink/rose -> deep berry wine
- * - Crimson -> deep bordeaux
- * - Amber/gold -> warm espresso/terracotta
+ * Generates an artistic two-tone OKLCH hue pairing from a single brand hue,
+ * keeping `accentHue` faithful to the chosen brand color while shifting
+ * `deepHue` and `artDomeHue` smoothly for organic illustrations and deep headers.
  */
 function computeArtisticHuePair(
   hue: number,
@@ -194,48 +277,47 @@ function computeArtisticHuePair(
     return { accentHue: hue, deepHue: hue, artDomeHue: hue };
   }
 
-  // Warm amber / yellow / orange: pair with warm terracotta/espresso deep tone
+  // Warm amber / yellow / orange: keep warm terracotta/espresso without crossing into crimson
   if (hue >= 35 && hue <= 115) {
     return {
-      accentHue: normalizeHue(hue + 2),
-      deepHue: normalizeHue(hue - 22),
+      accentHue: hue,
+      deepHue: normalizeHue(hue - 12),
       artDomeHue: normalizeHue(hue + 10),
     };
   }
 
-  // Green / mint / emerald: pair bright mint with deep petrol teal
+  // Green / mint / sage / emerald: pair with deep petrol teal
   if (hue > 115 && hue <= 195) {
     return {
-      accentHue: normalizeHue(hue - 4),
+      accentHue: hue,
       deepHue: normalizeHue(hue + 18),
       artDomeHue: normalizeHue(hue - 10),
     };
   }
 
-  // Cyan / blue: pair luminous sky/azure with deep navy indigo
+  // Cyan / blue: pair with deep navy indigo
   if (hue > 195 && hue <= 275) {
     return {
-      accentHue: normalizeHue(hue - 8),
-      deepHue: normalizeHue(hue + 14),
-      artDomeHue: normalizeHue(hue - 14),
-    };
-  }
-
-  // Purple / violet: pair soft lavender-violet with deep plum
-  if (hue > 275 && hue <= 325) {
-    return {
-      accentHue: normalizeHue(hue - 6),
-      deepHue: normalizeHue(hue + 14),
+      accentHue: hue,
+      deepHue: normalizeHue(hue + 12),
       artDomeHue: normalizeHue(hue - 12),
     };
   }
 
-  // Pink / magenta / crimson: pair lively rose/pink with deep berry wine
-  const deepShift = hue < 35 ? -14 : -12;
+  // Purple / violet / lavender: pair with deep plum
+  if (hue > 275 && hue <= 325) {
+    return {
+      accentHue: hue,
+      deepHue: normalizeHue(hue + 12),
+      artDomeHue: normalizeHue(hue - 10),
+    };
+  }
+
+  // Pink / rose / coral / crimson: pair with deep berry wine
   return {
-    accentHue: normalizeHue(hue + 2),
-    deepHue: normalizeHue(hue + deepShift),
-    artDomeHue: normalizeHue(hue + 12),
+    accentHue: hue,
+    deepHue: normalizeHue(hue - 10),
+    artDomeHue: normalizeHue(hue + 10),
   };
 }
 
@@ -244,42 +326,73 @@ export function buildMenuThemeTokens(
   mode: MenuThemeMode = 'dark',
 ): MenuThemeTokens {
   const brandHex = normalizeHexColor(rawBrandHex);
+  const cacheKey = `${brandHex}|${mode}`;
+  const cached = menuThemeCache.get(cacheKey);
+  if (cached) {
+    menuThemeCache.delete(cacheKey);
+    menuThemeCache.set(cacheKey, cached);
+    return cached;
+  }
+
   const parsed = rgbToOklch(hexToRgb(brandHex));
   const isAchromatic = parsed.c < 0.02;
   const hue = isAchromatic ? 168 : parsed.h;
   const { accentHue, deepHue, artDomeHue } = computeArtisticHuePair(hue, isAchromatic);
-  const accentChroma = isAchromatic ? 0 : Math.min(0.18, Math.max(0.118, parsed.c));
+  const accentChroma = isAchromatic ? 0 : Math.min(0.21, Math.max(0.028, parsed.c));
   const isWarmHue = hue >= 35 && hue <= 115;
-  // Adaptive opposite/alert hue: coral-red for cool/green brands; warm amber-gold for pink/red brands
+  // Adaptive opposite/alert hue: coral-red for cool/green brands; warm amber-gold for pink/red/orange brands
   const isWarmOrPinkBrand = !isAchromatic && (hue <= 45 || hue > 315);
-  const alertHue = isWarmOrPinkBrand ? 76 : 22;
+  const alertHueBase = isWarmOrPinkBrand ? 76 : 22;
   const alertChroma = isWarmOrPinkBrand ? 0.135 : 0.148;
 
+  const { accent, accentHover, onAccent } = resolveAdaptiveAccent(
+    parsed.l,
+    accentChroma,
+    accentHue,
+    deepHue,
+    isAchromatic,
+    mode,
+  );
+
+  let result: MenuThemeTokens;
+
   if (mode === 'light') {
-    const surfaceChroma = isAchromatic ? 0 : isWarmHue ? 0.009 : 0.012;
-    const page = oklchToHex(0.976, surfaceChroma, deepHue);
-    const canvas = oklchToHex(0.956, surfaceChroma * 1.15, deepHue);
-    const shell = oklchToHex(0.982, surfaceChroma * 0.65, deepHue);
+    const surfaceChroma = isAchromatic
+      ? 0
+      : isWarmHue
+        ? Math.min(0.010, accentChroma * 0.065)
+        : Math.min(0.014, Math.max(0.004, accentChroma * 0.09));
+    // Clear hierarchy in light mode: canvas (0.948) < page (0.972) < card (#ffffff)
+    const page = oklchToHex(0.972, surfaceChroma, deepHue);
+    const canvas = oklchToHex(0.948, surfaceChroma * 1.25, deepHue);
+    const shell = oklchToHex(0.984, surfaceChroma * 0.6, deepHue);
     const panel = '#ffffff';
     const card = '#ffffff';
-    const surfaceSoft = oklchToHex(0.946, isAchromatic ? 0 : 0.022, accentHue);
-    const raised = oklchToHex(0.926, surfaceChroma * 1.45, deepHue);
+    const surfaceSoft = oklchToHex(0.942, isAchromatic ? 0 : Math.min(0.026, accentChroma * 0.18), accentHue);
+    const raised = oklchToHex(0.922, surfaceChroma * 1.45, deepHue);
     const input = '#ffffff';
     const dialog = oklchToHex(0.968, surfaceChroma * 0.75, deepHue);
 
-    const onAccent = '#ffffff';
-    const accent = ensureMinContrast(0.51, accentChroma, accentHue, onAccent, 4.7, 'darker');
-    const accentHover = ensureMinContrast(0.44, accentChroma, accentHue, onAccent, 5.4, 'darker');
-    const accentText = ensureMinContrast(
-      0.42,
-      Math.min(0.145, accentChroma * 0.88),
-      deepHue,
+    const accentSoft = oklchToHex(
+      0.944,
+      isAchromatic ? 0 : Math.min(0.040, Math.max(0.008, accentChroma * 0.34)),
+      accentHue,
+    );
+    const accentBorder = oklchToHex(
+      0.80,
+      isAchromatic ? 0 : Math.min(0.085, Math.max(0.016, accentChroma * 0.52)),
+      accentHue,
+    );
+    const accentTextStart = parsed.l >= 0.74 ? 0.45 : 0.40;
+    const accentText = ensureMinContrastPair(
+      accentTextStart,
+      isAchromatic ? 0 : Math.min(0.165, accentChroma * 0.90),
+      accentHue,
       card,
-      4.8,
+      accentSoft,
+      4.75,
       'darker',
     );
-    const accentSoft = oklchToHex(0.944, isAchromatic ? 0 : 0.032, accentHue);
-    const accentBorder = oklchToHex(0.80, isAchromatic ? 0 : 0.068, accentHue);
 
     const headerDeep = ensureMinContrast(
       0.30,
@@ -293,25 +406,41 @@ export function buildMenuThemeTokens(
     const artField = oklchToHex(0.41, isAchromatic ? 0 : Math.min(0.115, accentChroma * 0.72), deepHue);
     const artDome = oklchToHex(0.77, isAchromatic ? 0 : Math.min(0.115, accentChroma * 0.72), artDomeHue);
     const artMid = oklchToHex(0.88, isAchromatic ? 0 : Math.min(0.085, accentChroma * 0.56), accentHue);
-    const artPaper = oklchToHex(0.96, isAchromatic ? 0 : 0.024, accentHue);
+    const artPaper = oklchToHex(0.96, isAchromatic ? 0 : Math.min(0.026, accentChroma * 0.24), accentHue);
     const artInk = oklchToHex(0.32, isAchromatic ? 0 : Math.min(0.07, accentChroma * 0.45), deepHue);
-    const badgePastelBg = oklchToHex(0.91, isAchromatic ? 0 : Math.min(0.075, accentChroma * 0.48), accentHue);
-    const badgePastelInk = oklchToHex(0.28, isAchromatic ? 0 : Math.min(0.075, accentChroma * 0.48), deepHue);
-    const alertSoft = oklchToHex(0.945, alertChroma * 0.25, alertHue);
-    const alertBorder = oklchToHex(0.80, alertChroma * 0.55, alertHue);
-    const alertText = ensureMinContrast(0.45, alertChroma * 0.95, alertHue, card, 4.8, 'darker');
+    const badgeChroma = isAchromatic ? 0 : Math.min(0.085, Math.max(0.014, accentChroma * 0.50));
+    const badgePastelBg = oklchToHex(0.91, badgeChroma, accentHue);
+    const badgePastelInk = ensureMinContrast(0.28, badgeChroma, deepHue, badgePastelBg, 5.2, 'darker');
+
+    const alertSoft = oklchToHex(0.945, alertChroma * 0.25, alertHueBase);
+    const alertBorder = oklchToHex(0.80, alertChroma * 0.55, alertHueBase);
+    let alertHue = alertHueBase;
+    let alertText = ensureMinContrastPair(0.45, alertChroma * 0.95, alertHue, card, alertSoft, 4.8, 'darker');
     const onAlert = '#ffffff';
-    const alertDot = ensureMinContrast(0.54, alertChroma, alertHue, onAlert, 4.5, 'darker');
+    let alertDot = ensureMinContrast(0.54, alertChroma, alertHue, onAlert, 4.6, 'darker');
+    if (alertDot === accent || alertText === accentText) {
+      alertHue = normalizeHue(alertHueBase + 35);
+      alertText = ensureMinContrastPair(0.45, alertChroma * 0.95, alertHue, card, alertSoft, 4.8, 'darker');
+      alertDot = ensureMinContrast(0.54, alertChroma, alertHue, onAlert, 4.6, 'darker');
+    }
 
-    const ink = oklchToHex(0.18, isAchromatic ? 0 : 0.016, deepHue);
-    const ink2 = oklchToHex(0.32, isAchromatic ? 0 : 0.018, deepHue);
-    const muted = ensureMinContrast(0.48, isAchromatic ? 0 : 0.016, deepHue, card, 4.8, 'darker');
-    const subtle = oklchToHex(0.56, isAchromatic ? 0 : 0.014, deepHue);
+    const ink = oklchToHex(0.18, isAchromatic ? 0 : Math.min(0.016, accentChroma * 0.12), deepHue);
+    const ink2 = oklchToHex(0.32, isAchromatic ? 0 : Math.min(0.018, accentChroma * 0.14), deepHue);
+    const muted = ensureMinContrast(
+      0.48,
+      isAchromatic ? 0 : Math.min(0.016, accentChroma * 0.12),
+      deepHue,
+      card,
+      4.8,
+      'darker',
+    );
+    const subtle = oklchToHex(0.56, isAchromatic ? 0 : Math.min(0.014, accentChroma * 0.10), deepHue);
 
-    const ctaDark = oklchToHex(0.19, isAchromatic ? 0 : 0.032, deepHue);
+    const ctaDark = oklchToHex(0.19, isAchromatic ? 0 : Math.min(0.032, accentChroma * 0.22), deepHue);
     const ctaDarkInk = '#ffffff';
+    const focus = getContrastRatio(accent, card) >= 3.2 ? accent : accentText;
 
-    return {
+    result = {
       mode,
       brandHex,
       hue,
@@ -340,7 +469,7 @@ export function buildMenuThemeTokens(
         '--km-accent-text': accentText,
         '--km-accent-soft': accentSoft,
         '--km-accent-border': accentBorder,
-        '--km-focus': accent,
+        '--km-focus': focus,
         '--km-cta-dark': ctaDark,
         '--km-cta-dark-ink': ctaDarkInk,
         '--km-header-deep': headerDeep,
@@ -363,114 +492,150 @@ export function buildMenuThemeTokens(
         '--km-shadow-cta': '0 8px 20px -6px rgba(17, 24, 21, 0.22)',
       },
     };
+  } else {
+    // Rich two-tone Dark mode: deep harmonic surfaces (deepHue) + faithful adaptive accent (accentHue)
+    const surfaceChroma = isAchromatic
+      ? 0
+      : isWarmHue
+        ? Math.min(0.022, accentChroma * 0.16)
+        : Math.min(0.034, Math.max(0.008, accentChroma * 0.24));
+    const page = oklchToHex(0.215, surfaceChroma * 0.9, deepHue);
+    const canvas = oklchToHex(0.185, surfaceChroma * 0.9, deepHue);
+    const shell = oklchToHex(0.24, surfaceChroma * 0.95, deepHue);
+    const panel = oklchToHex(0.265, surfaceChroma, deepHue);
+    const card = oklchToHex(0.29, surfaceChroma * 1.02, deepHue);
+    const surfaceSoft = oklchToHex(0.32, surfaceChroma * 1.08, deepHue);
+    const raised = oklchToHex(0.345, surfaceChroma * 1.12, deepHue);
+    const input = oklchToHex(0.245, surfaceChroma * 0.95, deepHue);
+    const dialog = oklchToHex(0.26, surfaceChroma, deepHue);
+
+    const accentSoft = oklchToHex(
+      0.28,
+      isAchromatic ? 0 : Math.min(0.055, Math.max(0.010, accentChroma * 0.35)),
+      accentHue,
+    );
+    const accentBorder = oklchToHex(
+      0.47,
+      isAchromatic ? 0 : Math.min(0.11, Math.max(0.018, accentChroma * 0.54)),
+      accentHue,
+    );
+    const accentTextStart = parsed.l >= 0.74 ? 0.86 : 0.79;
+    const accentText = ensureMinContrastPair(
+      accentTextStart,
+      isAchromatic ? 0 : Math.min(0.145, accentChroma * 0.85),
+      accentHue,
+      card,
+      accentSoft,
+      5.2,
+      'lighter',
+    );
+
+    const headerDeep = ensureMinContrast(
+      0.27,
+      isAchromatic ? 0 : Math.min(0.095, accentChroma * 0.62),
+      deepHue,
+      '#ffffff',
+      8.5,
+      'darker',
+    );
+    const headerInk = '#ffffff';
+    const artField = oklchToHex(0.38, isAchromatic ? 0 : Math.min(0.11, accentChroma * 0.7), deepHue);
+    const artDome = oklchToHex(0.79, isAchromatic ? 0 : Math.min(0.115, accentChroma * 0.72), artDomeHue);
+    const artMid = oklchToHex(0.86, isAchromatic ? 0 : Math.min(0.085, accentChroma * 0.54), accentHue);
+    const artPaper = oklchToHex(0.94, isAchromatic ? 0 : Math.min(0.032, accentChroma * 0.28), accentHue);
+    const artInk = oklchToHex(0.31, isAchromatic ? 0 : Math.min(0.068, accentChroma * 0.44), deepHue);
+    const badgeChroma = isAchromatic ? 0 : Math.min(0.085, Math.max(0.014, accentChroma * 0.50));
+    const badgePastelBg = oklchToHex(0.90, badgeChroma, accentHue);
+    const badgePastelInk = ensureMinContrast(0.27, badgeChroma, deepHue, badgePastelBg, 5.2, 'darker');
+
+    const alertSoft = oklchToHex(0.275, alertChroma * 0.34, alertHueBase);
+    const alertBorder = oklchToHex(0.52, alertChroma * 0.65, alertHueBase);
+    let alertHue = alertHueBase;
+    let alertText = ensureMinContrastPair(0.82, alertChroma * 0.85, alertHue, card, alertSoft, 5.2, 'lighter');
+    const onAlert = oklchToHex(0.16, alertChroma * 0.30, alertHue);
+    let alertDot = ensureMinContrast(0.72, alertChroma * 0.95, alertHue, onAlert, 4.8, 'lighter');
+    if (alertDot === accent || alertText === accentText) {
+      alertHue = normalizeHue(alertHueBase + 35);
+      alertText = ensureMinContrastPair(0.82, alertChroma * 0.85, alertHue, card, alertSoft, 5.2, 'lighter');
+      alertDot = ensureMinContrast(0.72, alertChroma * 0.95, alertHue, onAlert, 4.8, 'lighter');
+    }
+
+    const ctaDark = '#ffffff';
+    const ctaDarkInk = oklchToHex(0.18, isAchromatic ? 0 : Math.min(0.024, accentChroma * 0.18), deepHue);
+
+    const ink = '#f7faf8';
+    const ink2 = oklchToHex(0.91, isAchromatic ? 0 : Math.min(0.012, accentChroma * 0.10), deepHue);
+    const muted = ensureMinContrast(
+      0.74,
+      isAchromatic ? 0 : Math.min(0.016, accentChroma * 0.12),
+      deepHue,
+      card,
+      4.8,
+      'lighter',
+    );
+    const subtle = oklchToHex(0.62, isAchromatic ? 0 : Math.min(0.016, accentChroma * 0.12), deepHue);
+    const focus = getContrastRatio(accent, card) >= 3.2 ? accent : accentText;
+
+    result = {
+      mode,
+      brandHex,
+      hue,
+      isAchromatic,
+      vars: {
+        '--km-page': page,
+        '--km-canvas': canvas,
+        '--km-shell': shell,
+        '--km-panel': panel,
+        '--km-card': card,
+        '--km-surface-soft': surfaceSoft,
+        '--km-raised': raised,
+        '--km-input': input,
+        '--km-dialog': dialog,
+        '--km-overlay': 'rgba(0, 0, 0, 0.78)',
+        '--km-ink': ink,
+        '--km-ink-2': ink2,
+        '--km-muted': muted,
+        '--km-subtle': subtle,
+        '--km-line': oklchToHex(0.45, surfaceChroma * 1.1, deepHue),
+        '--km-line-subtle': 'rgba(255, 255, 255, 0.09)',
+        '--km-line-strong': oklchToHex(0.56, surfaceChroma * 1.2, deepHue),
+        '--km-accent': accent,
+        '--km-accent-hover': accentHover,
+        '--km-on-accent': onAccent,
+        '--km-accent-text': accentText,
+        '--km-accent-soft': accentSoft,
+        '--km-accent-border': accentBorder,
+        '--km-focus': focus,
+        '--km-cta-dark': ctaDark,
+        '--km-cta-dark-ink': ctaDarkInk,
+        '--km-header-deep': headerDeep,
+        '--km-header-ink': headerInk,
+        '--km-art-field': artField,
+        '--km-art-dome': artDome,
+        '--km-art-mid': artMid,
+        '--km-art-paper': artPaper,
+        '--km-art-ink': artInk,
+        '--km-art-line': headerDeep,
+        '--km-badge-pastel-bg': badgePastelBg,
+        '--km-badge-pastel-ink': badgePastelInk,
+        '--km-alert-soft': alertSoft,
+        '--km-alert-border': alertBorder,
+        '--km-alert-text': alertText,
+        '--km-alert-dot': alertDot,
+        '--km-on-alert': onAlert,
+        '--km-shadow-card': '0 10px 24px -10px rgba(0, 0, 0, 0.45)',
+        '--km-shadow-tactile': '0 2px 0 rgba(0, 0, 0, 0.22)',
+        '--km-shadow-cta': '0 10px 24px -8px rgba(0, 0, 0, 0.48)',
+      },
+    };
   }
 
-  // Rich two-tone Dark mode: deep harmonic surfaces (deepHue) + luminous artistic accent (accentHue)
-  const surfaceChroma = isAchromatic ? 0 : isWarmHue ? 0.020 : 0.034;
-  const page = oklchToHex(0.215, surfaceChroma * 0.9, deepHue);
-  const canvas = oklchToHex(0.185, surfaceChroma * 0.9, deepHue);
-  const shell = oklchToHex(0.24, surfaceChroma * 0.95, deepHue);
-  const panel = oklchToHex(0.265, surfaceChroma, deepHue);
-  const card = oklchToHex(0.29, surfaceChroma * 1.02, deepHue);
-  const surfaceSoft = oklchToHex(0.32, surfaceChroma * 1.08, deepHue);
-  const raised = oklchToHex(0.345, surfaceChroma * 1.12, deepHue);
-  const input = oklchToHex(0.245, surfaceChroma * 0.95, deepHue);
-  const dialog = oklchToHex(0.26, surfaceChroma, deepHue);
-
-  const onAccent = oklchToHex(0.16, isAchromatic ? 0 : Math.min(0.055, accentChroma * 0.34), deepHue);
-  const accent = ensureMinContrast(0.75, accentChroma, accentHue, onAccent, 5.4, 'lighter');
-  const accentHover = ensureMinContrast(0.80, accentChroma * 0.92, accentHue, onAccent, 6.0, 'lighter');
-  const accentText = ensureMinContrast(
-    0.85,
-    Math.min(0.115, accentChroma * 0.72),
-    accentHue,
-    card,
-    5.6,
-    'lighter',
-  );
-  const accentSoft = oklchToHex(0.28, isAchromatic ? 0 : Math.min(0.055, accentChroma * 0.35), accentHue);
-  const accentBorder = oklchToHex(0.47, isAchromatic ? 0 : Math.min(0.09, accentChroma * 0.54), accentHue);
-
-  const headerDeep = ensureMinContrast(
-    0.27,
-    isAchromatic ? 0 : Math.min(0.095, accentChroma * 0.62),
-    deepHue,
-    '#ffffff',
-    8.5,
-    'darker',
-  );
-  const headerInk = '#ffffff';
-  const artField = oklchToHex(0.38, isAchromatic ? 0 : Math.min(0.11, accentChroma * 0.7), deepHue);
-  const artDome = oklchToHex(0.79, isAchromatic ? 0 : Math.min(0.115, accentChroma * 0.72), artDomeHue);
-  const artMid = oklchToHex(0.86, isAchromatic ? 0 : Math.min(0.085, accentChroma * 0.54), accentHue);
-  const artPaper = oklchToHex(0.94, isAchromatic ? 0 : 0.032, accentHue);
-  const artInk = oklchToHex(0.31, isAchromatic ? 0 : Math.min(0.068, accentChroma * 0.44), deepHue);
-  const badgePastelBg = oklchToHex(0.90, isAchromatic ? 0 : Math.min(0.075, accentChroma * 0.48), accentHue);
-  const badgePastelInk = oklchToHex(0.27, isAchromatic ? 0 : Math.min(0.075, accentChroma * 0.48), deepHue);
-  const alertSoft = oklchToHex(0.275, alertChroma * 0.34, alertHue);
-  const alertBorder = oklchToHex(0.52, alertChroma * 0.65, alertHue);
-  const alertText = ensureMinContrast(0.82, alertChroma * 0.85, alertHue, card, 5.2, 'lighter');
-  const onAlert = oklchToHex(0.16, alertChroma * 0.30, alertHue);
-  const alertDot = ensureMinContrast(0.72, alertChroma * 0.95, alertHue, onAlert, 4.8, 'lighter');
-
-  const ctaDark = '#ffffff';
-  const ctaDarkInk = oklchToHex(0.18, isAchromatic ? 0 : 0.024, deepHue);
-
-  const ink = '#f7faf8';
-  const ink2 = oklchToHex(0.91, isAchromatic ? 0 : 0.012, deepHue);
-  const muted = ensureMinContrast(0.74, isAchromatic ? 0 : 0.016, deepHue, card, 4.8, 'lighter');
-  const subtle = oklchToHex(0.62, isAchromatic ? 0 : 0.016, deepHue);
-
-  return {
-    mode,
-    brandHex,
-    hue,
-    isAchromatic,
-    vars: {
-      '--km-page': page,
-      '--km-canvas': canvas,
-      '--km-shell': shell,
-      '--km-panel': panel,
-      '--km-card': card,
-      '--km-surface-soft': surfaceSoft,
-      '--km-raised': raised,
-      '--km-input': input,
-      '--km-dialog': dialog,
-      '--km-overlay': 'rgba(0, 0, 0, 0.78)',
-      '--km-ink': ink,
-      '--km-ink-2': ink2,
-      '--km-muted': muted,
-      '--km-subtle': subtle,
-      '--km-line': oklchToHex(0.45, surfaceChroma * 1.1, deepHue),
-      '--km-line-subtle': 'rgba(220, 245, 232, 0.10)',
-      '--km-line-strong': oklchToHex(0.56, surfaceChroma * 1.2, deepHue),
-      '--km-accent': accent,
-      '--km-accent-hover': accentHover,
-      '--km-on-accent': onAccent,
-      '--km-accent-text': accentText,
-      '--km-accent-soft': accentSoft,
-      '--km-accent-border': accentBorder,
-      '--km-focus': accentText,
-      '--km-cta-dark': ctaDark,
-      '--km-cta-dark-ink': ctaDarkInk,
-      '--km-header-deep': headerDeep,
-      '--km-header-ink': headerInk,
-      '--km-art-field': artField,
-      '--km-art-dome': artDome,
-      '--km-art-mid': artMid,
-      '--km-art-paper': artPaper,
-      '--km-art-ink': artInk,
-      '--km-art-line': headerDeep,
-      '--km-badge-pastel-bg': badgePastelBg,
-      '--km-badge-pastel-ink': badgePastelInk,
-      '--km-alert-soft': alertSoft,
-      '--km-alert-border': alertBorder,
-      '--km-alert-text': alertText,
-      '--km-alert-dot': alertDot,
-      '--km-on-alert': onAlert,
-      '--km-shadow-card': '0 10px 24px -10px rgba(0, 0, 0, 0.45)',
-      '--km-shadow-tactile': '0 2px 0 rgba(0, 0, 0, 0.22)',
-      '--km-shadow-cta': '0 10px 24px -8px rgba(0, 0, 0, 0.48)',
-    },
-  };
+  if (menuThemeCache.size >= MENU_THEME_CACHE_LIMIT) {
+    const oldestKey = menuThemeCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      menuThemeCache.delete(oldestKey);
+    }
+  }
+  menuThemeCache.set(cacheKey, result);
+  return result;
 }

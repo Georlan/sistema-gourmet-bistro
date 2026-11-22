@@ -1,3 +1,55 @@
-.k-delivery-receipt{display:grid;gap:6px;margin:12px 0;padding:16px;border:1px solid var(--koma-accent-border);border-radius:16px;background:var(--koma-accent-soft);color:var(--koma-text-primary)}
-.k-delivery-receipt>span{font-size:13px;font-weight:600}.k-delivery-receipt strong{font:700 30px/1.2 var(--koma-font-display);letter-spacing:.15em;font-variant-numeric:tabular-nums}.k-delivery-receipt small{font-size:12px;line-height:1.5;color:var(--koma-text-secondary)}
-.k-delivery-receipt--compact{grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:4px 12px;flex-shrink:0;margin:8px 16px;padding:12px}.k-delivery-receipt--compact strong{font-size:25px}.k-delivery-receipt--compact small{grid-column:1/-1;font-size:11px}
+.k-delivery-receipt {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  padding: 16px;
+  border-width: 1px;
+  border-style: solid;
+  border-color: var(--km-accent-border, var(--koma-accent-border));
+  border-radius: 16px;
+  background: var(--km-accent-soft, var(--koma-accent-soft));
+  color: var(--km-ink, var(--koma-text-primary));
+}
+
+.k-delivery-receipt > span {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.k-delivery-receipt strong {
+  font: 700 30px/1.2 var(--koma-font-display, "Space Grotesk", sans-serif);
+  letter-spacing: 0.15em;
+  font-variant-numeric: tabular-nums;
+  color: var(--km-accent-text, var(--koma-accent-text, inherit));
+}
+
+.k-delivery-receipt small {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--km-muted, var(--koma-text-secondary));
+}
+
+.k-delivery-receipt--compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 12px;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+}
+
+.k-delivery-receipt--compact > span {
+  font-size: 12px;
+}
+
+.k-delivery-receipt--compact strong {
+  font-size: 23px;
+  line-height: 1.1;
+}
+
+.k-delivery-receipt--compact small {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  line-height: 1.35;
+}

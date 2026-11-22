@@ -7,32 +7,50 @@ const cart = source('../src/cardapio/components/CardapioCartDrawer.tsx');
 const menuV2 = source('../src/cardapio/v2/MenuV2Experience.tsx');
 const css = source('../src/cardapio/v2/komaMenu.css');
 const ordersDrawer = source('../src/cardapio/components/CardapioOrdersDrawer.tsx');
+const profileModal = source('../src/cardapio/components/CardapioUserProfileModal.tsx');
+const authModal = source('../src/cardapio/components/CardapioAuthModal.tsx');
 
-test('sacola fica acima da navegação sticky sem cobrir identificação ou checkout', () => {
+test('sacola e abas ficam abaixo do dock permanente (z-60), e modais bloqueantes ficam acima (>=70)', () => {
   const stickyNavLayer = Number(css.match(/\.km-sticky-nav\s*\{[^}]*z-index:\s*(\d+)/)?.[1]);
   const dockLayer = Number(css.match(/\.km-dock-wrap\s*\{[^}]*z-index:\s*(\d+)/)?.[1]);
   const cartLayer = Number(cart.match(/className="fixed inset-0 z-\[(\d+)\]/)?.[1]);
+  const ordersLayer = Number(ordersDrawer.match(/className="fixed inset-0 z-(\d+)/)?.[1]);
+  const profileLayer = Number(profileModal.match(/className="fixed inset-0 z-(\d+)/)?.[1]);
+  const authLayer = Number(authModal.match(/zIndex:\s*(\d+)/)?.[1]);
   assert.ok(Number.isFinite(stickyNavLayer) && Number.isFinite(dockLayer) && Number.isFinite(cartLayer));
+  assert.equal(dockLayer, 60, 'dock permanente deve ficar em z-index 60');
   assert.ok(cartLayer > stickyNavLayer, 'sacola deve ficar acima das categorias sticky');
+  assert.ok(cartLayer < dockLayer, 'sacola deve ficar abaixo do dock permanente');
+  assert.ok(ordersLayer < dockLayer, 'pedidos deve ficar abaixo do dock permanente');
+  assert.ok(profileLayer < dockLayer, 'perfil deve ficar abaixo do dock permanente');
+  assert.ok(authLayer < dockLayer, 'login deve ficar abaixo do dock permanente');
+  assert.doesNotMatch(authModal, /createPortal\(/, 'auth modal não pode aplicar inert em #root bloqueando o dock');
 
-  for (const overlay of ['CardapioAuthModal', 'CardapioDigital']) {
+  for (const overlay of ['CardapioDigital', 'CardapioProductModal', 'CardapioPromotionWizard', 'CardapioStoreInfoDrawer', 'CardapioBenefitsDrawer']) {
     const content = source(`../src/cardapio/components/${overlay}.tsx`);
-    const layer = overlay === 'CardapioAuthModal'
-      ? Number(source('../src/components/auth/authPresentation.css').match(/\.k-customer-auth\s*\{[^}]*z-index:\s*(\d+)/)?.[1])
-      : Number(content.match(/className="fixed inset-0 z-(\d+)/)?.[1]);
-    if (overlay === 'CardapioAuthModal') assert.match(content, /createPortal\(/);
+    const layer = Number(content.match(/fixed inset-0 z-\[(\d+)\]/)?.[1]);
+    assert.ok(Number.isFinite(layer), `${overlay} deve definir z-[>=70]`);
     assert.ok(cartLayer < layer, `${overlay} deve ficar acima da sacola`);
-    assert.ok(dockLayer < layer, `${overlay} deve ficar acima da dock`);
+    assert.ok(dockLayer < layer, `${overlay} deve ficar acima do dock`);
   }
+
+  const page = source('../src/cardapio/CardapioPage.tsx');
+  assert.match(page, /isTabSheetOpen\s*=\s*Boolean\(/);
+  assert.match(page, /isBlockingModalOpen\s*=\s*Boolean\(/);
+  assert.match(page, /dockHidden=\{isBlockingModalOpen\}/);
+  assert.match(page, /id="page-pix-payment-modal-backdrop"[\s\S]*?z-\[75\]|z-\[75\][^>]*id="page-pix-payment-modal-backdrop"/);
 });
 
-test('sacola móvel acompanha a altura disponível e mantém rolagem interna flexível', () => {
+test('sacola móvel acompanha a altura disponível, reserva espaço opaco acima do dock em <768px e libera em md:', () => {
   assert.doesNotMatch(cart, /pb-\[86px\]/);
   assert.match(cart, /max-h-\[94dvh\]/);
   assert.equal((cart.match(/min-h-0[^"\n]*overflow-y-auto/g) ?? []).length, 2);
   assert.match(cart, /className="flex shrink-0 items-center justify-between/);
-  assert.match(cart, /className="shrink-0 border-t[^"\n]*env\(safe-area-inset-bottom,0px\)/);
-  assert.match(cart, /pb-\[calc\(1\.25rem\+env\(safe-area-inset-bottom,0px\)\)\]/);
+  assert.match(cart, /className="shrink-0 border-t[^"\n]*pb-\[calc\(86px\+env\(safe-area-inset-bottom,0px\)\)\][^"\n]*md:pb-5/);
+  assert.match(cart, /pb-\[calc\(94px\+env\(safe-area-inset-bottom,0px\)\)\] md:pb-6/);
+  assert.match(ordersDrawer, /pb-\[calc\(90px\+env\(safe-area-inset-bottom,0px\)\)\][^"\n]*md:pb-5/);
+  assert.match(profileModal, /pb-\[calc\(90px\+env\(safe-area-inset-bottom,0px\)\)\][^"\n]*md:pb-6/);
+  assert.match(authModal, /pb-\[calc\(88px\+env\(safe-area-inset-bottom,0px\)\)\]!\s*md:pb-6!/);
 });
 
 test('confirmação do pedido usa grid-cols-2 no mobile e safe-area no container rolável', () => {

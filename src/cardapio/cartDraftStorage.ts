@@ -379,15 +379,30 @@ export function restoreCartDraftFromCatalog(
         image: rebuiltParts[0]?.product.image || "",
         isAvailable: true,
       };
-      restored.set(`promotion:${campaign.id}`, {
-        id: `promotion:${campaign.id}`,
-        product: virtualProduct,
-        quantity: 1,
-        selectedOptions: options,
-        notes: "",
-        promotionId: campaign.id,
-        promotionParts: rebuiltParts,
-      });
+      const partsSignature = rebuiltParts
+        .map((part) => {
+          const optIds = Object.values(part.selectedOptions)
+            .flatMap((list) => list.map((opt) => opt.id))
+            .sort()
+            .join(",");
+          return `${part.product.id}:${optIds}:${part.notes}`;
+        })
+        .join("|");
+      const promoItemId = `promotion:${campaign.id}:${partsSignature}`;
+      const existingPromo = restored.get(promoItemId);
+      if (existingPromo) {
+        existingPromo.quantity = Math.min(99, existingPromo.quantity + quantity);
+      } else {
+        restored.set(promoItemId, {
+          id: promoItemId,
+          product: virtualProduct,
+          quantity,
+          selectedOptions: options,
+          notes: "",
+          promotionId: campaign.id,
+          promotionParts: rebuiltParts,
+        });
+      }
       continue;
     }
 

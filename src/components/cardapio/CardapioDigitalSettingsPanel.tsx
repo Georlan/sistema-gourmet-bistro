@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import clsx from 'clsx';
 import { CardapioAssetUploader } from '../CardapioAssetUploader';
+import { buildMenuThemeTokens } from '../../cardapio/theme/komaMenuTheme';
 
 export type CardapioDigitalSettingsSection = 'perfil' | 'pedidos' | 'marca';
 
@@ -74,13 +75,26 @@ type StoreAppearanceConfig = {
   horarios_funcionamento: HourRow[];
 };
 
-const BRAND_COLOR_PRESETS = [
+export const BRAND_COLOR_PRESETS = [
   { label: 'Verde KÔMA', hex: '#00b894' },
-  { label: 'Rosa', hex: '#ec4899' },
-  { label: 'Vermelho', hex: '#e11d48' },
-  { label: 'Azul', hex: '#2563eb' },
-  { label: 'Laranja', hex: '#ea580c' },
+  { label: 'Menta', hex: '#34d399' },
+  { label: 'Verde-sálvia', hex: '#6b9080' },
+  { label: 'Verde-escuro', hex: '#15803d' },
+  { label: 'Rosa-bebê', hex: '#f4a7c1' },
+  { label: 'Rosa antigo', hex: '#c47c8e' },
+  { label: 'Rosa vibrante', hex: '#ec4899' },
+  { label: 'Lavanda', hex: '#c4b5fd' },
+  { label: 'Lilás', hex: '#a855f7' },
   { label: 'Roxo', hex: '#7c3aed' },
+  { label: 'Azul-claro', hex: '#38bdf8' },
+  { label: 'Azul', hex: '#2563eb' },
+  { label: 'Azul-petróleo', hex: '#0f766e' },
+  { label: 'Coral', hex: '#fb7185' },
+  { label: 'Terracota', hex: '#c26d4a' },
+  { label: 'Laranja', hex: '#ea580c' },
+  { label: 'Vermelho', hex: '#e11d48' },
+  { label: 'Amarelo suave', hex: '#eab308' },
+  { label: 'Grafite neutro', hex: '#475569' },
 ] as const;
 
 function normalizeConfigBrandColor(value: unknown, fallback = '#00b894'): string {
@@ -284,6 +298,7 @@ function PhonePreview({
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() || '')
     .join('') || 'KM';
+  const previewTheme = buildMenuThemeTokens(config.cor_primaria, 'light');
 
   return (
     <aside aria-label="Prévia da identidade do cardápio" className={clsx('xl:sticky xl:top-4', compact && 'order-first xl:order-last')}>
@@ -388,8 +403,8 @@ function PhonePreview({
                   <span
                     className="rounded-lg px-2.5 py-1 text-xs font-semibold"
                     style={{
-                      background: config.cor_primaria || 'var(--kc-chrome-selected, var(--koma-action-bg))',
-                      color: '#ffffff',
+                      background: previewTheme.vars['--km-accent'],
+                      color: previewTheme.vars['--km-on-accent'],
                     }}
                   >
                     Destaques
@@ -846,14 +861,14 @@ export function CardapioDigitalSettingsPanel({
                           onClick={() => updateConfig('cor_primaria', preset.hex)}
                           aria-pressed={active}
                           className={clsx(
-                            'inline-flex min-h-10 items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition',
+                            'inline-flex min-h-11 items-center gap-2 rounded-xl border px-3 text-xs font-semibold transition',
                             active
                               ? 'border-koma-border-strong bg-koma-raised text-koma-foreground'
                               : 'border-koma-border bg-koma-panel text-koma-secondary hover:text-koma-foreground',
                           )}
                         >
                           <span
-                            className="h-4 w-4 rounded-full border border-white/20"
+                            className="h-4 w-4 shrink-0 rounded-full border border-koma-border-strong"
                             style={{ backgroundColor: preset.hex }}
                             aria-hidden="true"
                           />
@@ -862,7 +877,7 @@ export function CardapioDigitalSettingsPanel({
                       );
                     })}
 
-                    <label className="inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-xl border border-koma-border bg-koma-input px-2.5 text-xs font-semibold text-koma-foreground">
+                    <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-koma-border bg-koma-input px-2.5 text-xs font-semibold text-koma-foreground">
                       <input
                         type="color"
                         aria-label="Escolher cor personalizada do cardápio"

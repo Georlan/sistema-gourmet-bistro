@@ -1,0 +1,294 @@
+/* KÔMA Cardápio Digital v2 — Compact Active Order Banner (100% --km-* tokens) */
+
+.km-order-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--km-accent-border);
+  background: var(--km-surface-soft);
+  color: var(--km-ink);
+  animation: km-order-card-in 0.22s ease both;
+}
+
+.km-order-card :where(button):focus-visible {
+  outline: 2px solid var(--km-focus);
+  outline-offset: 2px;
+}
+
+.km-order-card--alert {
+  border-color: var(--km-alert-border);
+  background: var(--km-alert-soft);
+}
+
+@keyframes km-order-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.km-order-card__switcher {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--km-line-subtle);
+}
+
+.km-order-card__switcher::-webkit-scrollbar {
+  display: none;
+}
+
+.km-order-card__switch-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--km-line);
+  background: var(--km-card);
+  color: var(--km-ink-2);
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.km-order-card__switch-btn.is-selected {
+  border-color: var(--km-accent);
+  background: var(--km-accent);
+  color: var(--km-on-accent);
+}
+
+.km-order-card__switch-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--km-accent);
+}
+
+.km-order-card__switch-dot.is-selected {
+  background: var(--km-on-accent);
+}
+
+.km-order-card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.km-order-card__summary {
+  flex: 1 1 170px;
+  min-width: 0;
+}
+
+.km-order-card__eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--km-accent-text);
+}
+
+.km-order-card--alert .km-order-card__eyebrow {
+  color: var(--km-alert-text);
+}
+
+.km-order-card__title {
+  margin: 2px 0;
+  font-family: var(--koma-font-display, "Space Grotesk", sans-serif);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--km-ink);
+}
+
+.km-order-card__meta {
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--km-muted);
+}
+
+.km-order-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.km-order-card__refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--km-line);
+  background: var(--km-card);
+  color: var(--km-ink);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.16s ease, opacity 0.16s ease;
+}
+
+.km-order-card__refresh:hover:not(:disabled) {
+  background: var(--km-raised);
+}
+
+.km-order-card__refresh:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.km-order-card__spin {
+  animation: km-order-card-spin 0.85s linear infinite;
+}
+
+@keyframes km-order-card-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.km-order-card__cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 0;
+  background: var(--km-accent);
+  color: var(--km-on-accent);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.16s ease, transform 0.14s ease;
+}
+
+.km-order-card__cta:hover {
+  background: var(--km-accent-hover);
+}
+
+.km-order-card__cta:active {
+  transform: scale(0.97);
+}
+
+.km-order-card__progress {
+  width: 100%;
+}
+
+.km-order-card__track {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.km-order-card__step {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.km-order-card__step-bar {
+  display: block;
+  width: 100%;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--km-line-strong);
+  transition: background-color 0.2s ease;
+}
+
+.km-order-card__step--done .km-order-card__step-bar,
+.km-order-card__step--active .km-order-card__step-bar {
+  background: var(--km-accent);
+}
+
+.km-order-card__step-label {
+  display: block;
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  font-weight: 500;
+  color: var(--km-muted);
+  overflow-wrap: break-word;
+}
+
+.km-order-card__step--done .km-order-card__step-label {
+  color: var(--km-ink-2);
+  font-weight: 600;
+}
+
+.km-order-card__step--active .km-order-card__step-label {
+  color: var(--km-accent-text);
+  font-weight: 700;
+}
+
+.km-order-card__hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--km-ink-2);
+}
+
+.km-order-card__hint--alert {
+  color: var(--km-alert-text);
+}
+
+.km-order-card__receipt {
+  margin-top: 2px;
+}
+
+@media (min-width: 480px) {
+  .km-order-card {
+    padding: 14px 16px;
+    border-radius: 22px;
+  }
+
+  .km-order-card__cta,
+  .km-order-card__refresh {
+    min-height: 38px;
+  }
+}
+
+@media (max-width: 390px) {
+  .km-order-card__step-label {
+    font-size: 0.65625rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .km-order-card,
+  .km-order-card__switch-btn,
+  .km-order-card__refresh,
+  .km-order-card__cta,
+  .km-order-card__step-bar {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .km-order-card__spin {
+    animation: none !important;
+  }
+}

@@ -1,5 +1,5 @@
 import React from "react";
-import { motion } from "motion/react";
+import { MotionConfig, motion } from "motion/react";
 import NumberFlow from "@number-flow/react";
 import {
   MenuAccountGlyph,
@@ -59,75 +59,77 @@ function MenuBottomDock({
   };
 
   return (
-    <div className="km-dock-wrap">
-      <nav className="km-dock" id="koma-art-dock" aria-label="Navegação rápida">
-        {TABS.map((tab) => {
-          const isActive = activeTab === tab.id;
-          const badge =
-            tab.id === "bag"
-              ? cartCount
-              : tab.id === "orders"
-                ? activeOrdersCount
-                : 0;
+    <MotionConfig reducedMotion="user">
+      <div className="km-dock-wrap">
+        <nav className="km-dock" id="koma-art-dock" aria-label="Navegação rápida">
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.id;
+            const badge =
+              tab.id === "bag"
+                ? cartCount
+                : tab.id === "orders"
+                  ? activeOrdersCount
+                  : 0;
 
-          return (
-            <motion.button
-              key={tab.id}
-              type="button"
-              id={tab.domId}
-              className={`km-dock__btn ${isActive ? "is-active" : ""}`}
-              aria-current={isActive ? "page" : undefined}
-              aria-label={tab.id === "account" ? (userFullName || "Minha conta") : undefined}
-              whileTap={{ scale: 0.94 }}
-              transition={KOMA_SPRING_BUBBLE}
-              onClick={() => onNavigate(tab.id)}
-            >
-              {isActive && (
-                <motion.span
-                  layoutId="km-dock-ink"
-                  className="km-dock__ink"
-                  transition={KOMA_SPRING_BUBBLE}
-                  aria-hidden="true"
-                >
-                  <span key={activeTab} className="km-dock__ink-drop" />
-                </motion.span>
-              )}
-
-              <motion.span
-                className="km-dock__icon-wrap"
-                animate={isActive ? { scale: 1.06, y: -1 } : { scale: 1, y: 0 }}
+            return (
+              <motion.button
+                key={tab.id}
+                type="button"
+                id={tab.domId}
+                className={`km-dock__btn ${isActive ? "is-active" : ""}`}
+                aria-current={isActive ? "page" : undefined}
+                aria-label={tab.id === "account" ? (userFullName || "Minha conta") : undefined}
+                whileTap={{ scale: 0.94 }}
                 transition={KOMA_SPRING_BUBBLE}
+                onClick={() => onNavigate(tab.id)}
               >
-                {renderGlyph(tab.id)}
-                {badge > 0 && (
-                  <span className="km-dock__badge" aria-label={`${badge} itens`}>
-                    {canUseNumberFlow ? <NumberFlow value={badge} /> : badge}
-                  </span>
+                {isActive && (
+                  <motion.span
+                    layoutId="km-dock-ink"
+                    className="km-dock__ink"
+                    transition={KOMA_SPRING_BUBBLE}
+                    aria-hidden="true"
+                  >
+                    <span key={activeTab} className="km-dock__ink-drop" />
+                  </motion.span>
                 )}
-              </motion.span>
 
-              <span className="km-dock__label km-tabular">
-                {tab.id === "bag" && cartCount > 0 ? (
-                  canUseNumberFlow ? (
-                    <NumberFlow
-                      value={cartTotal}
-                      format={{ style: "currency", currency: "BRL" }}
-                      locales="pt-BR"
-                    />
+                <motion.span
+                  className="km-dock__icon-wrap"
+                  animate={isActive ? { scale: 1.06, y: -1 } : { scale: 1, y: 0 }}
+                  transition={KOMA_SPRING_BUBBLE}
+                >
+                  {renderGlyph(tab.id)}
+                  {badge > 0 && (
+                    <span className="km-dock__badge" aria-label={`${badge} itens`}>
+                      {canUseNumberFlow ? <NumberFlow value={badge} /> : badge}
+                    </span>
+                  )}
+                </motion.span>
+
+                <span className="km-dock__label km-tabular">
+                  {tab.id === "bag" && cartCount > 0 ? (
+                    canUseNumberFlow ? (
+                      <NumberFlow
+                        value={cartTotal}
+                        format={{ style: "currency", currency: "BRL" }}
+                        locales="pt-BR"
+                      />
+                    ) : (
+                      brlFormatter.format(cartTotal)
+                    )
+                  ) : tab.id === "account" && userFirstName ? (
+                    userFirstName
                   ) : (
-                    brlFormatter.format(cartTotal)
-                  )
-                ) : tab.id === "account" && userFirstName ? (
-                  userFirstName
-                ) : (
-                  tab.label
-                )}
-              </span>
-            </motion.button>
-          );
-        })}
-      </nav>
-    </div>
+                    tab.label
+                  )}
+                </span>
+              </motion.button>
+            );
+          })}
+        </nav>
+      </div>
+    </MotionConfig>
   );
 }
 
