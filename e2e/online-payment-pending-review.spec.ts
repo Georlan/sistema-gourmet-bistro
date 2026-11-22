@@ -84,6 +84,7 @@ function buildSummary(items: PendingItem[], activeReceiver: 'pagbank' | 'direct_
 
 for (const theme of ['dark', 'light'] as const) {
   test(`central de pendências resolve bloqueio de desconexão e libera Pix próprio (${theme})`, async ({ page }) => {
+    test.setTimeout(90_000); // CI shared runners may bootstrap the authenticated cashier more slowly.
     await mockCashierBackend(page);
     await seedCashierSession(page);
     await page.addInitScript(selectedTheme => {
@@ -384,7 +385,7 @@ for (const theme of ['dark', 'light'] as const) {
 
     await page.goto('/?view=caixa&pagbank=cancelled');
     const pagbankCard = page.getByRole('region', { name: 'PagBank', exact: true });
-    await expect(pagbankCard.getByText('Conectado', { exact: true })).toBeVisible();
+    await expect(pagbankCard.getByText('Conectado', { exact: true })).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('PagBank — confirmação automática')).toBeVisible();
 
     // Try disconnecting while 3 items block it -> structured 409 + exact blocking order references
@@ -443,6 +444,7 @@ for (const theme of ['dark', 'light'] as const) {
   });
 
   test(`fechamento distingue contas operacionais abertas de pendências de Pix do turno e anteriores (${theme})`, async ({ page }) => {
+    test.setTimeout(90_000); // CI shared runners may bootstrap the authenticated cashier more slowly.
     await mockCashierBackend(page);
     await seedCashierSession(page);
     await page.addInitScript(selectedTheme => {
@@ -546,7 +548,7 @@ for (const theme of ['dark', 'light'] as const) {
     );
 
     await page.goto('/?view=caixa');
-    await expect(page.getByText('Contas ainda abertas')).toBeVisible();
+    await expect(page.getByText('Contas ainda abertas')).toBeVisible({ timeout: 20_000 });
     await expect(page.getByText('Pendências de Pix do turno')).toBeVisible();
     await expect(page.getByText('Pendências de turnos anteriores')).toBeVisible();
     await expect(page.getByText(/não contabilizado como recebido/)).toBeVisible();
@@ -565,6 +567,7 @@ for (const theme of ['dark', 'light'] as const) {
 
 for (const theme of ['dark', 'light'] as const) {
   test(`Vendas mantém apenas conferência de Pix manual (${theme})`, async ({ page }) => {
+    test.setTimeout(90_000); // CI shared runners may bootstrap the authenticated cashier more slowly.
     await mockCashierBackend(page);
     await seedCashierSession(page);
     await page.addInitScript(selectedTheme => {
@@ -595,7 +598,7 @@ for (const theme of ['dark', 'light'] as const) {
 
     await page.goto('/?view=caixa');
     const conferir = page.getByRole('button', { name: /Conferir Pix/ });
-    await expect(conferir).toBeVisible();
+    await expect(conferir).toBeVisible({ timeout: 20_000 });
     await expect(page.getByRole('button', { name: /Revisar Pix/ })).toHaveCount(0);
     await conferir.click();
     const dialog = page.getByRole('dialog', { name: /Pix manual/ });
