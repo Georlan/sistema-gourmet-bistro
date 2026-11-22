@@ -27,6 +27,7 @@ import {
   changeSelectionQuantity,
   modifierOptionQuantity,
   selectionCount,
+  selectionTypeCount,
   selectionWithinRules,
   type ModifierQuantityRules,
 } from "../../domain/modifierQuantity";
@@ -83,6 +84,100 @@ const rulesForModifier = (modifier: QuantityModifier): ModifierQuantityRules => 
   selectionMode: modifier.selectionMode,
 });
 
+export interface ModifierCounterPresentation {
+  label: string;
+  ariaLabel: string;
+  hintSuffix: string;
+}
+
+export function formatModifierCounter(params: {
+  selectedTypes: number;
+  totalUnits: number;
+  max: number;
+  selectionMode?: "porcoes" | "tipos";
+  freeGarnishes?: boolean;
+}): ModifierCounterPresentation {
+  const { selectedTypes, totalUnits, max, selectionMode, freeGarnishes = false } = params;
+  if (freeGarnishes) {
+    return {
+      label: totalUnits > 0 ? `${totalUnits}` : "Livre",
+      ariaLabel: totalUnits > 0
+        ? `${totalUnits} selecionado${totalUnits === 1 ? "" : "s"} (escolha livre)`
+        : "Escolha livre",
+      hintSuffix: "",
+    };
+  }
+  if (selectionMode === "porcoes") {
+    return {
+      label: `${totalUnits}/${max}`,
+      ariaLabel: `${totalUnits} de ${max} ${max === 1 ? "porção selecionada" : "porções selecionadas"}`,
+      hintSuffix: max > 1 ? " · Pode repetir" : "",
+    };
+  }
+  if (selectionMode === "tipos" || max === 1) {
+    return {
+      label: `${selectedTypes}/${max}`,
+      ariaLabel: `${selectedTypes} de ${max} ${max === 1 ? "escolha selecionada" : "tipos selecionados"}`,
+      hintSuffix: "",
+    };
+  }
+  // Modo padrão com max > 1: o limite vale para tipos diferentes, com repetição livre por item.
+  return {
+    label: totalUnits > selectedTypes ? `${selectedTypes}/${max} · ${totalUnits} un.` : `${selectedTypes}/${max}`,
+    ariaLabel: totalUnits > selectedTypes
+      ? `${selectedTypes} de ${max} tipos diferentes selecionados, ${totalUnits} unidades no total (repetição livre por item)`
+      : `${selectedTypes} de ${max} tipos diferentes selecionados (repetição livre por item)`,
+    hintSuffix: " tipos · Repetição livre",
+  };
+}
+
+export interface ScrollSpyGroupMetric {
+  id: string;
+  top: number;
+  bottom: number;
+  height: number;
+}
+
+export function resolveScrollSpyActiveModifierId(params: {
+  groups: readonly ScrollSpyGroupMetric[];
+  containerTop: number;
+  containerBottom: number;
+  scrollTop: number;
+  scrollHeight: number;
+  clientHeight: number;
+}): string | null {
+  const { groups, containerTop, containerBottom, scrollTop, scrollHeight, clientHeight } = params;
+  if (groups.length === 0) return null;
+
+  const topAnchor = containerTop + 56;
+  let candidateId: string | null = null;
+  let firstVisibleId: string | null = null;
+
+  for (const group of groups) {
+    if (group.height <= 0) continue;
+    if (firstVisibleId === null) {
+      firstVisibleId = group.id;
+    }
+    if (group.top <= topAnchor) {
+      candidateId = group.id;
+    }
+  }
+
+  const isScrolledToBottom = scrollHeight > clientHeight + 4
+    && scrollTop + clientHeight >= scrollHeight - 4;
+  if (isScrolledToBottom) {
+    for (let idx = groups.length - 1; idx >= 0; idx--) {
+      const group = groups[idx];
+      if (group.height > 0 && group.bottom > containerTop && group.top < containerBottom) {
+        candidateId = group.id;
+        break;
+      }
+    }
+  }
+
+  return candidateId ?? firstVisibleId ?? groups[0]?.id ?? null;
+}
+
 export default function CardapioProductModal({
   product,
   initialItem,
@@ -137,9 +232,17 @@ export default function CardapioProductModal({
   } : (product as Product);
 
   const groupRefs = useRef(new Map<string, HTMLElement>());
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const stepPillRefs = useRef(new Map<string, HTMLButtonElement>());
   const variantRef = useRef<HTMLDivElement>(null);
-  const highlightTimerRef = useRef<number | null>(null);
-  const [highlightedGroupId, setHighlightedGroupId] = useState<string | null>(null);
+  const navFocusTimerRef = useRef<number | null>(null);
+  const errorTimerRef = useRef<number | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
+  const scrollTargetRef = useRef<{ id: string; expiresAt: number; prevTop: number | null } | null>(null);
+  const prevActiveStepIdRef = useRef<string | null>(null);
+  const [navFocusedGroupId, setNavFocusedGroupId] = useState<string | null>(null);
+  const [errorGroupId, setErrorGroupId] = useState<string | null>(null);
+  const [activeModifierId, setActiveModifierId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, ProductOption[]>>({});
   const [notes, setNotes] = useState("");
@@ -152,28 +255,62 @@ export default function CardapioProductModal({
   const [draftIdentity, setDraftIdentity] = useState<{ productId: Product['id']; restaurantId: typeof restaurantId; initialItem: typeof initialItem } | null>(null);
   useEffect(() => { draftOptionsRef.current = selectedOptions; }, [selectedOptions]);
   useEffect(() => () => {
-    if (highlightTimerRef.current !== null) {
-      window.clearTimeout(highlightTimerRef.current);
+    if (navFocusTimerRef.current !== null) {
+      window.clearTimeout(navFocusTimerRef.current);
+    }
+    if (errorTimerRef.current !== null) {
+      window.clearTimeout(errorTimerRef.current);
+    }
+    if (toastTimerRef.current !== null) {
+      window.clearTimeout(toastTimerRef.current);
     }
   }, []);
 
-  const triggerHighlight = (groupId: string) => {
-    setHighlightedGroupId(groupId);
-    if (highlightTimerRef.current !== null) {
-      window.clearTimeout(highlightTimerRef.current);
+  const triggerNavFocus = (groupId: string) => {
+    setNavFocusedGroupId(groupId);
+    if (navFocusTimerRef.current !== null) {
+      window.clearTimeout(navFocusTimerRef.current);
     }
-    highlightTimerRef.current = window.setTimeout(() => {
-      setHighlightedGroupId((current) => (current === groupId ? null : current));
-      highlightTimerRef.current = null;
-    }, 1800);
+    navFocusTimerRef.current = window.setTimeout(() => {
+      setNavFocusedGroupId((current) => (current === groupId ? null : current));
+      navFocusTimerRef.current = null;
+    }, 1600);
   };
 
-  const scrollToModifierGroup = (groupId: string, highlight = false) => {
+  const triggerErrorFocus = (groupId: string) => {
+    setNavFocusedGroupId((current) => (current === groupId ? null : current));
+    setErrorGroupId(groupId);
+    if (errorTimerRef.current !== null) {
+      window.clearTimeout(errorTimerRef.current);
+    }
+    errorTimerRef.current = window.setTimeout(() => {
+      setErrorGroupId((current) => (current === groupId ? null : current));
+      errorTimerRef.current = null;
+    }, 2200);
+  };
+
+  const scrollToModifierGroup = (groupId: string, mode: "navigate" | "error" = "navigate") => {
     setExpandedExtras((current) => (current[groupId] ? current : { ...current, [groupId]: true }));
-    if (highlight) triggerHighlight(groupId);
+    setActiveModifierId(groupId);
+    scrollTargetRef.current = {
+      id: groupId,
+      expiresAt: performance.now() + 700,
+      prevTop: scrollContainerRef.current?.scrollTop ?? null,
+    };
+    const pill = stepPillRefs.current.get(groupId);
+    if (pill && typeof pill.scrollIntoView === "function") {
+      pill.scrollIntoView({ inline: "nearest", block: "nearest" });
+    }
+    if (mode === "error") {
+      triggerErrorFocus(groupId);
+    } else {
+      triggerNavFocus(groupId);
+    }
     window.requestAnimationFrame(() => {
       const group = groupRefs.current.get(groupId);
-      group?.scrollIntoView({ block: "start", behavior: "smooth" });
+      const reducedMotion = typeof window.matchMedia === "function"
+        && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      group?.scrollIntoView({ block: "start", behavior: reducedMotion ? "auto" : "smooth" });
       group?.focus({ preventScroll: true });
     });
   };
@@ -255,6 +392,8 @@ export default function CardapioProductModal({
       setQuantity(initialItem?.quantity || 1);
       setNotes(initialItem?.notes || "");
       setCurrentImgIndex(0);
+      setNavFocusedGroupId(null);
+      setErrorGroupId(null);
       const defaultExpanded: Record<string, boolean> = {};
       allModifiers.forEach((m) => {
         if (shouldExpandModifierByDefault(m, allModifiers.length)) {
@@ -268,6 +407,117 @@ export default function CardapioProductModal({
       setDraftIdentity({ productId: effectiveProduct.id, restaurantId, initialItem });
     }
   }, [allModifiers, effectiveProduct, initialItem, restaurantId, draftIdentity]);
+
+  const effectiveActiveModifierId = useMemo(() => {
+    if (allModifiers.length === 0) return null;
+    if (activeModifierId && allModifiers.some((m) => m.id === activeModifierId)) {
+      return activeModifierId;
+    }
+    return allModifiers[0].id;
+  }, [activeModifierId, allModifiers]);
+
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container || allModifiers.length === 0) {
+      setActiveModifierId(null);
+      return;
+    }
+
+    let rafId: number | null = null;
+
+    const detectActiveModifier = () => {
+      rafId = null;
+      const currentContainer = scrollContainerRef.current;
+      if (!currentContainer || allModifiers.length === 0) return;
+
+      const pendingTarget = scrollTargetRef.current;
+      if (pendingTarget) {
+        const now = performance.now();
+        const targetEl = groupRefs.current.get(pendingTarget.id);
+        if (now < pendingTarget.expiresAt && targetEl) {
+          const cRect = currentContainer.getBoundingClientRect();
+          const tRect = targetEl.getBoundingClientRect();
+          const targetRelTop = tRect.top - cRect.top;
+          const currentScrollTop = currentContainer.scrollTop;
+          const prevTop = pendingTarget.prevTop;
+          pendingTarget.prevTop = currentScrollTop;
+
+          const isMovingAway = prevTop !== null && (
+            (targetRelTop > 36 && currentScrollTop < prevTop - 2)
+            || (targetRelTop < 0 && currentScrollTop > prevTop + 2)
+          );
+          const arrived = Math.abs(targetRelTop - 24) <= 28;
+          if (!arrived && !isMovingAway) {
+            setActiveModifierId((current) => (current === pendingTarget.id ? current : pendingTarget.id));
+            return;
+          }
+        }
+        scrollTargetRef.current = null;
+      }
+
+      const containerRect = currentContainer.getBoundingClientRect();
+      const metrics: ScrollSpyGroupMetric[] = [];
+      for (const modifier of allModifiers) {
+        const el = groupRefs.current.get(modifier.id);
+        if (!el) continue;
+        const rect = el.getBoundingClientRect();
+        metrics.push({
+          id: modifier.id,
+          top: rect.top,
+          bottom: rect.bottom,
+          height: rect.height,
+        });
+      }
+
+      const nextActiveId = resolveScrollSpyActiveModifierId({
+        groups: metrics,
+        containerTop: containerRect.top,
+        containerBottom: containerRect.bottom,
+        scrollTop: currentContainer.scrollTop,
+        scrollHeight: currentContainer.scrollHeight,
+        clientHeight: currentContainer.clientHeight,
+      });
+      setActiveModifierId((current) => (current === nextActiveId ? current : nextActiveId));
+    };
+
+    detectActiveModifier();
+
+    const handleScroll = () => {
+      if (rafId !== null) return;
+      rafId = window.requestAnimationFrame(detectActiveModifier);
+    };
+
+    const clearScrollTarget = () => {
+      scrollTargetRef.current = null;
+    };
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    container.addEventListener("wheel", clearScrollTarget, { passive: true });
+    container.addEventListener("touchstart", clearScrollTarget, { passive: true });
+    container.addEventListener("pointerdown", clearScrollTarget, { passive: true });
+    container.addEventListener("scrollend", clearScrollTarget, { passive: true });
+
+    return () => {
+      container.removeEventListener("scroll", handleScroll);
+      container.removeEventListener("wheel", clearScrollTarget);
+      container.removeEventListener("touchstart", clearScrollTarget);
+      container.removeEventListener("pointerdown", clearScrollTarget);
+      container.removeEventListener("scrollend", clearScrollTarget);
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+    };
+  }, [allModifiers]);
+
+  useEffect(() => {
+    const prev = prevActiveStepIdRef.current;
+    prevActiveStepIdRef.current = effectiveActiveModifierId;
+    if (!effectiveActiveModifierId || !prev || prev === effectiveActiveModifierId) return;
+    const pill = stepPillRefs.current.get(effectiveActiveModifierId);
+    if (pill && typeof pill.scrollIntoView === "function") {
+      pill.scrollIntoView({ inline: "nearest", block: "nearest" });
+    }
+  }, [effectiveActiveModifierId]);
 
   const effectivePriceInfo = useMemo(
     () => getEffectiveProductPrice(effectiveProduct.price, effectiveProduct.promotionalPrice),
@@ -313,7 +563,13 @@ export default function CardapioProductModal({
     try {
       await navigator.clipboard.writeText(window.location.href);
       setShowToast(true);
-      window.setTimeout(() => setShowToast(false), 2200);
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+      toastTimerRef.current = window.setTimeout(() => {
+        setShowToast(false);
+        toastTimerRef.current = null;
+      }, 2200);
     } catch {
       // O produto continua acessível pelo cardápio mesmo sem clipboard.
     }
@@ -325,8 +581,11 @@ export default function CardapioProductModal({
     delta: -1 | 1,
   ) => {
     setFeedback("");
-    if (highlightedGroupId === modifier.id) {
-      setHighlightedGroupId(null);
+    if (errorGroupId === modifier.id) {
+      setErrorGroupId(null);
+    }
+    if (navFocusedGroupId === modifier.id) {
+      setNavFocusedGroupId(null);
     }
     const currentSelections = selectedOptions[modifier.id] || [];
     const currentIds = currentSelections.map((selected) => selected.id);
@@ -380,13 +639,13 @@ export default function CardapioProductModal({
       setFeedback(isSizeVariant
         ? 'Escolha o tamanho antes de adicionar.'
         : 'Escolha o sabor antes de adicionar.');
-      triggerHighlight("__variant__");
+      triggerErrorFocus("__variant__");
       variantRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
       return;
     }
     if (unsatisfiedModifiers.length > 0) {
       setFeedback(`Confira as escolhas em ${unsatisfiedModifiers.map((m) => m.title).join(", ")} antes de ${compositionStep ? "continuar" : initialItem ? "salvar" : "adicionar"}.`);
-      scrollToModifierGroup(unsatisfiedModifiers[0].id, true);
+      scrollToModifierGroup(unsatisfiedModifiers[0].id, "error");
       return;
     }
 
@@ -422,7 +681,7 @@ export default function CardapioProductModal({
       >
         <div className="absolute top-2.5 left-1/2 -translate-x-1/2 z-20 h-1.5 w-12 rounded-full bg-[var(--km-line-strong)] sm:hidden" />
 
-        <div className={`koma-art-modal-hero relative z-10 w-full shrink-0 overflow-hidden bg-[var(--km-panel)] ${allModifiers.length > 0 ? "h-36 sm:h-44" : "h-52 sm:h-64"}`}>
+        <div className={`koma-art-modal-hero relative z-10 w-full shrink-0 overflow-hidden bg-[var(--km-panel)] ${allModifiers.length > 0 ? "h-28 sm:h-40" : "h-52 sm:h-64"}`}>
           <img
             src={getProductImageUrl(galleryImages[currentImgIndex] || effectiveProduct.image)}
             alt={effectiveProduct.name}
@@ -504,7 +763,7 @@ export default function CardapioProductModal({
         {allModifiers.length > 0 && (
           <nav
             aria-label="Etapas da montagem"
-            className="shrink-0 relative z-20 flex items-center gap-2 overflow-x-auto border-b border-[var(--km-line-subtle)] bg-[var(--km-dialog)] px-4 py-2.5 sm:px-6 no-scrollbar"
+            className="shrink-0 relative z-20 flex items-center gap-2 overflow-x-auto overflow-y-hidden border-b border-[var(--km-line-subtle)] bg-[var(--km-dialog)] px-4 py-2.5 sm:px-6 no-scrollbar"
             data-testid="modifier-steps-bar"
           >
             {allModifiers.map((modifier) => {
@@ -516,20 +775,25 @@ export default function CardapioProductModal({
               const missingCount = Math.max(0, (rules.minSelection || 0) - selectedTotal);
               const isComplete = modifier.required ? satisfied : selections.length > 0;
               const isPendingRequired = modifier.required && !satisfied;
+              const isActiveStep = effectiveActiveModifierId === modifier.id;
 
               const statusStyle: React.CSSProperties | undefined = isComplete
                 ? {
                     backgroundColor: "var(--km-accent-soft)",
-                    borderColor: "var(--km-accent-border)",
+                    borderColor: isActiveStep ? "var(--km-accent)" : "var(--km-accent-border)",
                     color: "var(--km-accent-text)",
                   }
                 : isPendingRequired
                   ? {
                       backgroundColor: "var(--km-alert-soft)",
-                      borderColor: "var(--km-alert-border)",
+                      borderColor: isActiveStep ? "var(--km-accent)" : "var(--km-alert-border)",
                       color: "var(--km-alert-text)",
                     }
-                  : undefined;
+                  : isActiveStep
+                    ? {
+                        borderColor: "var(--km-accent)",
+                      }
+                    : undefined;
 
               const stepAriaLabel = isComplete
                 ? `${modifier.title}: concluído`
@@ -540,14 +804,24 @@ export default function CardapioProductModal({
               return (
                 <button
                   key={modifier.id}
+                  ref={(node) => {
+                    if (node) stepPillRefs.current.set(modifier.id, node);
+                    else stepPillRefs.current.delete(modifier.id);
+                  }}
                   type="button"
-                  onClick={() => scrollToModifierGroup(modifier.id, true)}
+                  onClick={() => scrollToModifierGroup(modifier.id, "navigate")}
                   aria-label={stepAriaLabel}
+                  aria-current={isActiveStep ? "step" : undefined}
+                  data-step-active={isActiveStep ? "true" : "false"}
                   data-step-state={isComplete ? "complete" : isPendingRequired ? "pending" : "optional"}
                   style={statusStyle}
                   className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold transition-all cursor-pointer active:scale-[0.98] ${
+                    isActiveStep ? "ring-2 ring-[var(--km-accent)] ring-offset-1 ring-offset-[var(--km-dialog)]" : ""
+                  } ${
                     !isComplete && !isPendingRequired
-                      ? "border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-muted)] hover:border-[var(--km-line-strong)] hover:text-[var(--km-ink)]"
+                      ? isActiveStep
+                        ? "border-[var(--km-accent)] bg-[var(--km-raised)] text-[var(--km-ink)]"
+                        : "border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-muted)] hover:border-[var(--km-line-strong)] hover:text-[var(--km-ink)]"
                       : "hover:opacity-90"
                   }`}
                 >
@@ -572,7 +846,11 @@ export default function CardapioProductModal({
           </nav>
         )}
 
-        <div className="relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-pt-3 px-4 pt-4 pb-10 sm:px-6 sm:pt-5 sm:pb-10 no-scrollbar" data-testid="product-modal-scroll">
+        <div
+          ref={scrollContainerRef}
+          className="relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-pt-3 px-4 pt-4 pb-10 sm:px-6 sm:pt-5 sm:pb-10 no-scrollbar"
+          data-testid="product-modal-scroll"
+        >
           {compositionStep && (
             <div className="mb-3" aria-label={`Etapa ${compositionStep.current} de ${compositionStep.total}`}>
               <p className="text-xs font-bold text-[var(--km-accent-text)]">
@@ -638,12 +916,12 @@ export default function CardapioProductModal({
             <div
               ref={variantRef}
               className={`mt-4 rounded-2xl border p-3.5 transition-all ${
-                highlightedGroupId === "__variant__"
+                errorGroupId === "__variant__"
                   ? ""
                   : "border-[var(--km-line)] bg-[var(--km-panel)]"
               }`}
               style={
-                highlightedGroupId === "__variant__"
+                errorGroupId === "__variant__"
                   ? {
                       backgroundColor: "var(--km-alert-soft)",
                       borderColor: "var(--km-alert-border)",
@@ -689,7 +967,7 @@ export default function CardapioProductModal({
                         setSelectedVariantId(v.id);
                         setSelectedOptions({});
                         setFeedback("");
-                        if (highlightedGroupId === "__variant__") setHighlightedGroupId(null);
+                        if (errorGroupId === "__variant__") setErrorGroupId(null);
                       }}
                       className={`flex min-h-[52px] flex-row items-center justify-between gap-3 rounded-2xl border px-3.5 py-2.5 text-left transition-all cursor-pointer ${
                         isSelected
@@ -734,7 +1012,8 @@ export default function CardapioProductModal({
                 const selections = selectedOptions[modifier.id] || [];
                 const selectedIds = selections.map((selection) => selection.id);
                 const rules = rulesForModifier(modifier);
-                const selectedTypes = selectionCount(rules, selectedIds);
+                const selectedTypes = selectionTypeCount(rules, selectedIds);
+                const totalUnits = selections.length;
                 const max = Math.max(1, Number(modifier.maxSelection || 1));
                 const freeGarnishes = product.marmitaria === true
                   && modifier.title.normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase() === "guarnicoes"
@@ -749,8 +1028,16 @@ export default function CardapioProductModal({
                     : min > 0
                       ? `Escolha ${min} a ${max}`
                       : `Escolha até ${max}`;
+                const counterPresentation = formatModifierCounter({
+                  selectedTypes,
+                  totalUnits,
+                  max,
+                  selectionMode: modifier.selectionMode,
+                  freeGarnishes,
+                });
                 const simpleSelection = modifier.selectionMode === "tipos" || max === 1;
                 const complete = modifier.required && selectionWithinRules(rules, selectedIds);
+                const showCounter = max > 1 || (modifier.required && !complete);
                 const collapsible = min === 0 && modifier.options.length > 0;
                 const expanded = !collapsible || expandedExtras[modifier.id] === true;
                 const surcharge = selections.reduce((total, option) => total + option.extraPrice, 0);
@@ -763,21 +1050,25 @@ export default function CardapioProductModal({
                       option.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().includes(normalizedQuery),
                     )
                   : modifier.options;
-                const isHighlighted = highlightedGroupId === modifier.id;
+                const isErrorFocused = errorGroupId === modifier.id;
+                const isNavFocused = !isErrorFocused && navFocusedGroupId === modifier.id;
 
                 return (
                   <section
                     key={modifier.id}
                     tabIndex={-1}
                     aria-label={modifier.title}
+                    data-focus-state={isErrorFocused ? "error" : isNavFocused ? "navigate" : "idle"}
                     ref={node => { if (node) groupRefs.current.set(modifier.id, node); else groupRefs.current.delete(modifier.id); }}
-                    className={`scroll-mt-3 transition-all ${
-                      isHighlighted
+                    className={`scroll-mt-3 focus:outline-none transition-all ${
+                      isErrorFocused
                         ? "rounded-2xl border p-3.5 overflow-hidden"
-                        : ""
+                        : isNavFocused
+                          ? "rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] p-3.5 overflow-hidden"
+                          : ""
                     }`}
                     style={
-                      isHighlighted
+                      isErrorFocused
                         ? {
                             backgroundColor: "var(--km-alert-soft)",
                             borderColor: "var(--km-alert-border)",
@@ -798,12 +1089,14 @@ export default function CardapioProductModal({
                       className={`flex w-full items-center justify-between gap-3 text-left ${
                         collapsible && !expanded
                           ? "rounded-2xl border border-[var(--km-line)] bg-[var(--km-panel)] p-3.5 transition hover:border-[var(--km-accent-border)] cursor-pointer"
-                          : isHighlighted
+                          : isErrorFocused
                             ? "bg-transparent pb-2.5 border-b" + (collapsible ? " cursor-pointer" : "")
-                            : "py-2.5 border-b border-[var(--km-line-subtle)]" + (collapsible ? " cursor-pointer" : "")
+                            : isNavFocused
+                              ? "bg-transparent pb-2.5 border-b border-[var(--km-accent-border)]" + (collapsible ? " cursor-pointer" : "")
+                              : "py-2.5 border-b border-[var(--km-line-subtle)]" + (collapsible ? " cursor-pointer" : "")
                       }`}
                       style={
-                        !(collapsible && !expanded) && isHighlighted
+                        !(collapsible && !expanded) && isErrorFocused
                           ? { borderColor: "color-mix(in srgb, var(--km-alert-border) 38%, transparent)" }
                           : undefined
                       }
@@ -821,22 +1114,22 @@ export default function CardapioProductModal({
                         )}
                         <p className="mt-0.5 text-xs font-medium text-[var(--km-muted)]">
                           {instruction}
-                          {modifier.selectionMode === "porcoes" && max > 1 && " · Pode repetir"}
+                          {counterPresentation.hintSuffix}
                         </p>
                       </div>
                       <div className="flex shrink-0 items-center gap-1.5">
                         {collapsible && <ChevronDown aria-hidden="true" className={`h-4 w-4 shrink-0 text-[var(--km-muted)] transition-transform ${expanded ? "rotate-180" : ""}`} />}
-                        {(max > 1 || modifier.required) && !complete && (
+                        {showCounter && (
                           <span
-                            className={`rounded-full border px-2 py-0.5 text-[11px] font-extrabold tabular-nums ${
-                              selectedTypes > 0
+                            aria-label={counterPresentation.ariaLabel}
+                            data-testid={`modifier-counter-${modifier.id}`}
+                            className={`rounded-full border px-2 py-0.5 text-[11px] font-extrabold tabular-nums whitespace-nowrap ${
+                              totalUnits > 0
                                 ? "border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] text-[var(--km-accent-text)]"
                                 : "border-[var(--km-line)] bg-[var(--km-raised)] text-[var(--km-ink-2)]"
                             }`}
                           >
-                            {freeGarnishes
-                              ? (selectedTypes > 0 ? `${selectedTypes}` : "Livre")
-                              : `${selectedTypes}/${max}`}
+                            {counterPresentation.label}
                           </span>
                         )}
                         <span
@@ -907,6 +1200,8 @@ export default function CardapioProductModal({
                                 // Estado derivado das escolhas reais: não adiciona um complemento fictício.
                                 setSelectedOptions(current => ({ ...current, [modifier.id]: [] }));
                                 setFeedback("");
+                                if (errorGroupId === modifier.id) setErrorGroupId(null);
+                                if (navFocusedGroupId === modifier.id) setNavFocusedGroupId(null);
                               }}
                               className="peer absolute inset-0 z-10 m-0 h-full w-full cursor-pointer opacity-0"
                             />
@@ -999,7 +1294,7 @@ export default function CardapioProductModal({
                                 type="button"
                                 onClick={() => handleOptionQuantity(modifier, option, -1)}
                                 disabled={optionQuantity <= 0}
-                                className="koma-art-stepper-btn hover:text-rose-400 disabled:opacity-35"
+                                className="koma-art-stepper-btn hover:text-[var(--km-alert-text)] disabled:opacity-35"
                                 aria-label={`Remover uma unidade de ${option.name}`}
                               >
                                 <Minus className="h-4 w-4" />

@@ -5,7 +5,6 @@ import { PasswordRecoveryHelp } from "../../components/auth/PasswordRecoveryHelp
  */
 
 import React, { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { containModalFocus } from "../../utils/modalFocus";
 import { PasswordInput } from "../../components/auth/PasswordInput";
 import "../../components/auth/authPresentation.css";
@@ -183,17 +182,17 @@ export default function CardapioAuthModal({
     }
   };
 
-  return createPortal(
+  return (
     <div
-      className="k-customer-auth"
+      className="k-customer-auth z-50! max-md:items-end! max-md:p-0! md:items-center! md:p-5!"
       id="auth-modal-overlay"
-      style={{ backgroundColor: "var(--km-overlay)" }}
+      style={{ backgroundColor: "var(--km-overlay)", zIndex: 50 }}
       onClick={event => { if (event.target === event.currentTarget) onClose(); }}
     >
       <div
         ref={dialogRef}
         tabIndex={-1}
-        className="k-customer-auth__sheet"
+        className="k-customer-auth__sheet max-md:max-h-[calc(100dvh-12px)]! max-md:rounded-t-[28px]! max-md:rounded-b-none! pb-[calc(88px+env(safe-area-inset-bottom,0px))]! md:pb-6!"
         id="auth-modal-card"
         role="dialog"
         aria-modal="true"
@@ -294,6 +293,6 @@ export default function CardapioAuthModal({
           {accountRequired ? 'Voltar ao cardápio' : 'Continuar como visitante'}
         </button>
       </div>
-    </div>, document.body,
+    </div>
   );
 }

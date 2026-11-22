@@ -164,6 +164,10 @@ export default function CardapioPage() {
     }, 1800);
   }, []);
 
+  useEffect(() => () => {
+    if (noticeTimerRef.current) clearTimeout(noticeTimerRef.current);
+  }, []);
+
   const openProductModal = useCallback((
     product: Product | GroupedDisplayProduct,
     surface: "catalog" | "cart",
@@ -244,15 +248,15 @@ export default function CardapioPage() {
     return activeOrders[0] || storedOrders[0] || null;
   }, [storedOrders, selectedOrderId, activeOrders]);
 
-  const checkActiveOrders = useCallback(async (restaurantId: number) => {
-    const currentOrders = storedOrdersRef.current;
+  const checkActiveOrders = useCallback(async (restaurantId: number, seedOrders?: StoredOrder[]) => {
+    const currentOrders = seedOrders ?? storedOrdersRef.current;
     const simulatedOrders = currentOrders.filter((order) => String(order.id).toLowerCase().startsWith("sim-"));
     const realOrders = currentOrders.filter((order) => !String(order.id).toLowerCase().startsWith("sim-"));
     if (realOrders.length === 0) return;
     try {
       setIsRefreshingOrders(true);
       const updated = await refreshAllStoredOrders(restaurantId, API_BASE_URL, realOrders);
-      setStoredOrders([...simulatedOrders, ...updated]);
+      setStoredOrders((current) => mergeLocalOrderSnapshots([...simulatedOrders, ...updated], current));
     } catch (error) {
       console.warn("Erro ao consultar status dos pedidos:", error);
     } finally {
@@ -538,7 +542,7 @@ export default function CardapioPage() {
         if (stored.some((order) => (
           !order.tracking_token && !resolveOrderState(order).terminal
         ))) {
-          void checkActiveOrders(rid);
+          void checkActiveOrders(rid, stored);
         }
 
         // sessionStorage some ao fechar a aba. Reidrata em segundo plano os
@@ -546,7 +550,32 @@ export default function CardapioPage() {
         // acompanhamento/chat sem aumentar o payload público do cardápio.
         if (!background) {
           void restoreDurableStoredOrders(rid)
-            .then((restored) => setStoredOrders(current => mergeLocalOrderSnapshots(restored, current)))
+            .then((restored) => {
+              setStoredOrders((current) => {
+                const merged = mergeLocalOrderSnapshots(restored, current);
+                const currentByKey = new Map(
+                  current.map((item) => [`${item.restaurante_id}:${item.id}`, item] as const),
+                );
+                const next = merged.map((order) => {
+                  const existing = currentByKey.get(`${order.restaurante_id}:${order.id}`);
+                  if (!existing) return order;
+                  return {
+                    ...order,
+                    ...existing,
+                    delivery_receipt_code: existing.delivery_receipt_code !== undefined
+                      ? existing.delivery_receipt_code
+                      : order.delivery_receipt_code,
+                    tracking_token: existing.tracking_token || order.tracking_token,
+                    tracking_url: existing.tracking_url || order.tracking_url,
+                  };
+                });
+                const mergedKeys = new Set(next.map((order) => `${order.restaurante_id}:${order.id}`));
+                const onlyInCurrent = current.filter(
+                  (item) => !mergedKeys.has(`${item.restaurante_id}:${item.id}`),
+                );
+                return onlyInCurrent.length > 0 ? [...onlyInCurrent, ...next] : next;
+              });
+            })
             .catch((resumeError) => {
               console.warn("Falha ao retomar pedidos salvos neste navegador:", resumeError);
             });
@@ -751,18 +780,39 @@ export default function CardapioPage() {
     document.body.style.color = "#ffffff";
   }, [activeBrand]);
 
-  const hasOpenOverlay = Boolean(
+  const isTabSheetOpen = Boolean(
+    isCartOpen
+    || isOrdersDrawerOpen
+    || isAuthOpen
+    || isProfileOpen,
+  );
+  const isBlockingModalOpen = Boolean(
     selectedProduct
     || selectedPromotion
-    || pixModalOrder
-    || isCartOpen
-    || isAuthOpen
     || isCheckoutOpen
+    || pixModalOrder
     || isStoreInfoOpen
-    || isProfileOpen
-    || isOrdersDrawerOpen
     || isBenefitsOpen,
   );
+  const hasOpenOverlay = isTabSheetOpen || isBlockingModalOpen;
+
+  useEffect(() => {
+    const handleOpenOrdersDrawer = (event: Event) => {
+      const detail = (event as CustomEvent<{ orderId?: string }>).detail;
+      if (detail?.orderId) setSelectedOrderId(detail.orderId);
+      setIsCartOpen(false);
+      setIsCheckoutOpen(false);
+      setCheckoutRequest(null);
+      setIsAuthOpen(false);
+      setIsProfileOpen(false);
+      setIsStoreInfoOpen(false);
+      setIsBenefitsOpen(false);
+      setPixModalOrder(null);
+      setIsOrdersDrawerOpen(true);
+    };
+    window.addEventListener("koma:open-orders-drawer", handleOpenOrdersDrawer);
+    return () => window.removeEventListener("koma:open-orders-drawer", handleOpenOrdersDrawer);
+  }, []);
 
   // Uma entrada no histórico protege o cliente de sair do cardápio ao usar
   // Voltar no Android/Chrome enquanto uma interface sobreposta está aberta.
@@ -1353,6 +1403,7 @@ export default function CardapioPage() {
         onOrdersClick={handleOpenOrdersDrawer}
         activeOrdersCount={activeOrders.length}
         hasOpenOverlay={hasOpenOverlay}
+        dockHidden={isBlockingModalOpen}
         onPromotionSelect={(offer) => {
           openPromotionModal(offer, "catalog");
         }}
@@ -1382,19 +1433,36 @@ export default function CardapioPage() {
                 : "home"
         }
         onDockNavigate={(tab) => {
-          setIsCartOpen(tab === "bag");
-          setIsOrdersDrawerOpen(tab === "orders");
-          if (tab === "account") {
+          setSelectedProduct(null);
+          setEditingCartItem(null);
+          setProductModalOrigin(null);
+          setSelectedPromotion(null);
+          setEditingPromotionItem(null);
+          setPromotionModalOrigin(null);
+          setIsCheckoutOpen(false);
+          setCheckoutRequest(null);
+          setIsStoreInfoOpen(false);
+          setIsBenefitsOpen(false);
+          setPixModalOrder(null);
+          if (tab !== "bag") {
+            setCouponToApply("");
+          }
+
+          setIsCartOpen(false);
+          setIsOrdersDrawerOpen(false);
+          setIsAuthOpen(false);
+          setIsProfileOpen(false);
+
+          if (tab === "bag") {
+            setIsCartOpen(true);
+          } else if (tab === "orders") {
+            setIsOrdersDrawerOpen(true);
+          } else if (tab === "account") {
             if (user) {
               setIsProfileOpen(true);
-              setIsAuthOpen(false);
             } else {
               setIsAuthOpen(true);
-              setIsProfileOpen(false);
             }
-          } else {
-            setIsAuthOpen(false);
-            setIsProfileOpen(false);
           }
         }}
       />
@@ -1656,7 +1724,7 @@ export default function CardapioPage() {
 
       {pixModalOrder && pixModalOrder.pagamento?.qr_code && (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 z-[75] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm transition-opacity"
           id="page-pix-payment-modal-backdrop"
           onClick={(e) => {
             if (e.target === e.currentTarget) {

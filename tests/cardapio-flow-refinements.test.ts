@@ -204,7 +204,7 @@ test('3. Numeração de etapas na sacola: com cupons/benefícios segue 1 a 5 seq
   assert.match(html, /5\. Seu contato/);
 });
 
-test('4. Dock da vitrine V2: exibe total na sacola e oculta quando hasOpenOverlay é true', () => {
+test('4. Dock da vitrine V2: permanece montado com dockHidden={false} nas 4 abas e oculta com dockHidden={true}', () => {
   // Cenário sem overlay: dock deve estar presente com o total formatado
   const htmlWithoutOverlay = renderToStaticMarkup(
     createElement(MenuV2Experience, {
@@ -222,14 +222,64 @@ test('4. Dock da vitrine V2: exibe total na sacola e oculta quando hasOpenOverla
       cartTotal: 103,
       onStoreInfoClick() {},
       hasOpenOverlay: false,
+      dockHidden: false,
     })
   );
 
   assert.match(htmlWithoutOverlay, /id="koma-art-dock"/);
   assert.match(htmlWithoutOverlay, /Ver sacola[\s\S]*R\$\s*103,00|R\$\s*103,00/);
 
-  // Cenário com overlay aberto (modal, revisão final): dock DEVE ser ocultado
-  const htmlWithOverlay = renderToStaticMarkup(
+  // Cenário com aba aberta (hasOpenOverlay: true, dockHidden: false): dock permanece montado, FAB oculto
+  for (const activeDockTab of ['home', 'orders', 'bag', 'account'] as const) {
+    const htmlWithTabSheet = renderToStaticMarkup(
+      createElement(MenuV2Experience, {
+        activeBrand: baseBrand,
+        searchQuery: '',
+        setSearchQuery() {},
+        selectedCategory: '',
+        onSelectCategory() {},
+        onSelectProduct() {},
+        onFastAdd() {},
+        onFastRemove() {},
+        getProductCartQuantity: () => 0,
+        onCartToggle() {},
+        cartCount: 2,
+        cartTotal: 103,
+        onStoreInfoClick() {},
+        hasOpenOverlay: activeDockTab !== 'home',
+        dockHidden: false,
+        activeDockTab,
+      })
+    );
+
+    assert.match(htmlWithTabSheet, /id="koma-art-dock"/);
+  }
+
+  // Cenário com modal bloqueante aberto (dockHidden: true): dock DEVE ser ocultado
+  const htmlWithBlockingModal = renderToStaticMarkup(
+    createElement(MenuV2Experience, {
+      activeBrand: baseBrand,
+      searchQuery: '',
+      setSearchQuery() {},
+      selectedCategory: '',
+      onSelectCategory() {},
+      onSelectProduct() {},
+      onFastAdd() {},
+      onFastRemove() {},
+      getProductCartQuantity: () => 0,
+      onCartToggle() {},
+      cartCount: 2,
+      cartTotal: 103,
+      onStoreInfoClick() {},
+      hasOpenOverlay: true,
+      dockHidden: true,
+    })
+  );
+
+  assert.doesNotMatch(htmlWithBlockingModal, /id="koma-art-dock"/);
+
+  // Retrocompatibilidade: quando dockHidden é omitido, hasOpenOverlay: true oculta o dock
+  const htmlLegacyOverlay = renderToStaticMarkup(
     createElement(MenuV2Experience, {
       activeBrand: baseBrand,
       searchQuery: '',
@@ -248,7 +298,7 @@ test('4. Dock da vitrine V2: exibe total na sacola e oculta quando hasOpenOverla
     })
   );
 
-  assert.doesNotMatch(htmlWithOverlay, /id="koma-art-dock"/);
+  assert.doesNotMatch(htmlLegacyOverlay, /id="koma-art-dock"/);
 });
 
 test('5. Hero da vitrine V2: exibe Nº 1 mais pedido apenas se validado por ranking real', () => {
@@ -372,7 +422,8 @@ test('7. Sacola: alternar de entrega para retirada zera a taxa de entrega imedia
   );
 
   assert.doesNotMatch(deliveryHtml, /pb-\[86px\]/);
-  assert.match(deliveryHtml, /env\(safe-area-inset-bottom,0px\)/);
+  assert.match(deliveryHtml, /pb-\[calc\(86px\+env\(safe-area-inset-bottom,0px\)\)\]/);
+  assert.match(deliveryHtml, /md:pb-5/);
   assert.match(deliveryHtml, /Taxa de entrega/);
   assert.match(deliveryHtml, /R\$\s*12,00/);
   assert.match(deliveryHtml, /Total estimado[\s\S]*R\$\s*77,00/);
@@ -393,4 +444,121 @@ test('7. Sacola: alternar de entrega para retirada zera a taxa de entrega imedia
 
   assert.doesNotMatch(pickupHtml, /Taxa de entrega/);
   assert.match(pickupHtml, /Total estimado[\s\S]*R\$\s*65,00/);
+});
+
+test('8. MenuV2Experience conecta MenuActiveOrderCard e MenuPromotionsShowcase preservando contratos', async () => {
+  const { fallbackOrderState } = await import('../src/cardapio/orderTracking');
+  const acceptedState = fallbackOrderState('aceito', 'Delivery');
+  const activeOrder = {
+    id: 'ord-accepted-1',
+    numero_pedido: 77,
+    timestamp: Date.now(),
+    restaurante_id: 999,
+    tipo: 'Delivery',
+    total: 65,
+    idempotency_key: '',
+    status: 'aceito',
+    state: acceptedState,
+    delivery_receipt_code: '4821',
+  };
+
+  const brandWithOnePromo: BrandConfig = {
+    ...baseBrand,
+    promotions: [
+      {
+        id: 'promo-1',
+        nome: 'Combo Especial',
+        descricao: 'Filé com bebida',
+        preco: 59,
+        componentes: [['p-hero'], ['p-simple']],
+      },
+    ],
+  };
+
+  const html = renderToStaticMarkup(
+    createElement(MenuV2Experience, {
+      activeBrand: brandWithOnePromo,
+      searchQuery: '',
+      setSearchQuery() {},
+      selectedCategory: '',
+      onSelectCategory() {},
+      onSelectProduct() {},
+      onFastAdd() {},
+      onFastRemove() {},
+      getProductCartQuantity: () => 0,
+      onCartToggle() {},
+      cartCount: 0,
+      onStoreInfoClick() {},
+      hasOpenOverlay: false,
+      dockHidden: false,
+      activeOrder,
+      activeState: acceptedState,
+      storedOrders: [activeOrder],
+    })
+  );
+
+  assert.match(html, /id="active-order-banner"/);
+  assert.match(html, /Aceito · aguardando preparo/);
+  assert.match(html, /Aceito pela loja · próximo: preparo/);
+  assert.match(html, /data-progress-current="1"/);
+  assert.match(html, /4821/);
+  assert.match(html, /id="cardapio-promotions-home"/);
+  assert.match(html, /data-promo-layout="single"/);
+  assert.match(html, /1 oferta/);
+});
+
+test('9. Hero usa MenuTopWaveBackdrop temático quando não há banner customizado (mesmo com placeholder)', async () => {
+  const { LOCAL_BANNER_PLACEHOLDER } = await import('../src/cardapio/CardapioTypes');
+
+  const htmlWithoutCustomBanner = renderToStaticMarkup(
+    createElement(MenuV2Experience, {
+      activeBrand: {
+        ...baseBrand,
+        bannerImage: LOCAL_BANNER_PLACEHOLDER,
+        hasCustomBanner: false,
+      },
+      searchQuery: '',
+      setSearchQuery() {},
+      selectedCategory: '',
+      onSelectCategory() {},
+      onSelectProduct() {},
+      onFastAdd() {},
+      onFastRemove() {},
+      getProductCartQuantity: () => 0,
+      onCartToggle() {},
+      cartCount: 0,
+      onStoreInfoClick() {},
+      hasOpenOverlay: false,
+    })
+  );
+
+  assert.match(htmlWithoutCustomBanner, /km-hero-wave-svg/);
+  assert.doesNotMatch(htmlWithoutCustomBanner, /id="brand-banner-hero"/);
+  assert.doesNotMatch(htmlWithoutCustomBanner, /km-hero-banner-bg/);
+
+  const htmlWithCustomBanner = renderToStaticMarkup(
+    createElement(MenuV2Experience, {
+      activeBrand: {
+        ...baseBrand,
+        bannerImage: 'https://cdn.example.com/banner.jpg',
+        hasCustomBanner: true,
+      },
+      searchQuery: '',
+      setSearchQuery() {},
+      selectedCategory: '',
+      onSelectCategory() {},
+      onSelectProduct() {},
+      onFastAdd() {},
+      onFastRemove() {},
+      getProductCartQuantity: () => 0,
+      onCartToggle() {},
+      cartCount: 0,
+      onStoreInfoClick() {},
+      hasOpenOverlay: false,
+    })
+  );
+
+  assert.match(htmlWithCustomBanner, /id="brand-banner-hero"/);
+  assert.match(htmlWithCustomBanner, /km-hero-banner-bg/);
+  assert.doesNotMatch(htmlWithCustomBanner, /km-hero-wave-svg/);
 });
