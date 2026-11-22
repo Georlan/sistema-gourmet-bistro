@@ -453,7 +453,7 @@ test.describe('Acompanhamento de Pedido e Chat em Tempo Real', () => {
       await expect(ordersTrigger).toBeVisible();
       await ordersTrigger.click();
       await reopened.locator('#orders-drawer-panel')
-        .getByRole('button', { name: /Abrir mensagem|Chat & Status/ })
+        .getByRole('button', { name: /Abrir mensagem|Chat & Status|Ler mensagem|Falar com a loja/ })
         .first()
         .click();
     } else {

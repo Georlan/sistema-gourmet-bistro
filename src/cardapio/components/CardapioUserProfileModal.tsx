@@ -131,12 +131,12 @@ export default function CardapioUserProfileModal({
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
-      className="fixed inset-0 z-50 flex items-end justify-center p-0 pb-[86px] sm:items-center sm:p-4 animate-fade-in cursor-pointer"
+      className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4 animate-fade-in cursor-pointer"
       style={{ backgroundColor: "var(--km-overlay)" }}
       id="user-profile-overlay"
     >
       <div
-        className="relative flex max-h-[calc(100dvh-100px)] w-full max-w-md flex-col rounded-t-[28px] border border-[var(--km-line)] bg-[var(--km-dialog)] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] text-[var(--km-ink)] shadow-2xl sm:max-h-[90vh] sm:rounded-3xl sm:p-6 animate-scale-up"
+        className="relative flex max-h-[92dvh] w-full max-w-md flex-col rounded-t-[28px] border border-[var(--km-line)] bg-[var(--km-dialog)] p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] text-[var(--km-ink)] shadow-2xl sm:max-h-[90vh] sm:rounded-3xl sm:p-6 animate-scale-up"
         role="dialog"
         aria-modal="true"
         aria-label="Minha conta"

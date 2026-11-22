@@ -27,10 +27,19 @@ test('sacola fica acima da navegação sticky sem cobrir identificação ou chec
 });
 
 test('sacola móvel acompanha a altura disponível e mantém rolagem interna flexível', () => {
-  assert.match(cart, /max-h-\[calc\(100dvh-100px\)\]/);
+  assert.doesNotMatch(cart, /pb-\[86px\]/);
+  assert.match(cart, /max-h-\[94dvh\]/);
   assert.equal((cart.match(/min-h-0[^"\n]*overflow-y-auto/g) ?? []).length, 2);
   assert.match(cart, /className="flex shrink-0 items-center justify-between/);
-  assert.match(cart, /className="shrink-0 border-t/);
+  assert.match(cart, /className="shrink-0 border-t[^"\n]*env\(safe-area-inset-bottom,0px\)/);
+  assert.match(cart, /pb-\[calc\(1\.25rem\+env\(safe-area-inset-bottom,0px\)\)\]/);
+});
+
+test('confirmação do pedido usa grid-cols-2 no mobile e safe-area no container rolável', () => {
+  const digital = source('../src/cardapio/components/CardapioDigital.tsx');
+  assert.match(digital, /createdOrder \? "h-auto max-h-\[94dvh\]" : "h-\[calc\(100dvh-16px\)\] max-h-\[calc\(100dvh-16px\)\]"/);
+  assert.match(digital, /pb-\[calc\(1\.25rem\+env\(safe-area-inset-bottom,0px\)\)\]/);
+  assert.match(digital, /className="mt-3\.5 grid w-full max-w-md grid-cols-2 gap-2\.5 text-left"/);
 });
 
 test('fechar continua sendo um botão nomeado com alvo de toque de 44px', () => {

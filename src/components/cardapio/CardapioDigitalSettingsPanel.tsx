@@ -106,7 +106,6 @@ interface CardapioDigitalSettingsPanelProps {
 }
 
 const KOMA_MENU_PRIMARY = '#00b894';
-const KOMA_MENU_BACKGROUND = '#090a0f';
 
 const keyToDays: Record<string, string> = {
   segunda_a_sexta: 'Segunda a Sexta',

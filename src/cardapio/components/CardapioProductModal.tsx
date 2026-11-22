@@ -422,7 +422,7 @@ export default function CardapioProductModal({
       >
         <div className="absolute top-2.5 left-1/2 -translate-x-1/2 z-20 h-1.5 w-12 rounded-full bg-[var(--km-line-strong)] sm:hidden" />
 
-        <div className={`koma-art-modal-hero relative w-full shrink-0 overflow-hidden bg-[var(--km-panel)] ${allModifiers.length > 0 ? "h-36 sm:h-44" : "h-52 sm:h-64"}`}>
+        <div className={`koma-art-modal-hero relative z-10 w-full shrink-0 overflow-hidden bg-[var(--km-panel)] ${allModifiers.length > 0 ? "h-36 sm:h-44" : "h-52 sm:h-64"}`}>
           <img
             src={getProductImageUrl(galleryImages[currentImgIndex] || effectiveProduct.image)}
             alt={effectiveProduct.name}
@@ -504,7 +504,7 @@ export default function CardapioProductModal({
         {allModifiers.length > 0 && (
           <nav
             aria-label="Etapas da montagem"
-            className="shrink-0 z-30 flex items-center gap-2 overflow-x-auto border-b border-[var(--km-line-subtle)] bg-[var(--km-dialog)] px-4 py-2.5 sm:px-6 no-scrollbar"
+            className="shrink-0 relative z-20 flex items-center gap-2 overflow-x-auto border-b border-[var(--km-line-subtle)] bg-[var(--km-dialog)] px-4 py-2.5 sm:px-6 no-scrollbar"
             data-testid="modifier-steps-bar"
           >
             {allModifiers.map((modifier) => {
@@ -572,7 +572,7 @@ export default function CardapioProductModal({
           </nav>
         )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-4 pb-10 sm:px-6 sm:pt-5 sm:pb-10 no-scrollbar" data-testid="product-modal-scroll">
+        <div className="relative z-0 min-h-0 flex-1 overflow-y-auto overscroll-contain scroll-pt-3 px-4 pt-4 pb-10 sm:px-6 sm:pt-5 sm:pb-10 no-scrollbar" data-testid="product-modal-scroll">
           {compositionStep && (
             <div className="mb-3" aria-label={`Etapa ${compositionStep.current} de ${compositionStep.total}`}>
               <p className="text-xs font-bold text-[var(--km-accent-text)]">
@@ -639,9 +639,18 @@ export default function CardapioProductModal({
               ref={variantRef}
               className={`mt-4 rounded-2xl border p-3.5 transition-all ${
                 highlightedGroupId === "__variant__"
-                  ? "border-rose-400 bg-rose-50/50 ring-2 ring-rose-500/40 dark:border-rose-500/50 dark:bg-rose-500/10"
+                  ? ""
                   : "border-[var(--km-line)] bg-[var(--km-panel)]"
               }`}
+              style={
+                highlightedGroupId === "__variant__"
+                  ? {
+                      backgroundColor: "var(--km-alert-soft)",
+                      borderColor: "var(--km-alert-border)",
+                      boxShadow: "0 0 0 2px var(--km-alert-dot)",
+                    }
+                  : undefined
+              }
               id="modal-variants-selector"
             >
               <div className="mb-2.5 flex items-center justify-between gap-2">
@@ -762,11 +771,20 @@ export default function CardapioProductModal({
                     tabIndex={-1}
                     aria-label={modifier.title}
                     ref={node => { if (node) groupRefs.current.set(modifier.id, node); else groupRefs.current.delete(modifier.id); }}
-                    className={`scroll-mt-4 transition-all ${
+                    className={`scroll-mt-3 transition-all ${
                       isHighlighted
-                        ? "-mx-2 rounded-2xl bg-rose-50/50 p-2 ring-2 ring-rose-500/45 dark:bg-rose-500/10"
+                        ? "rounded-2xl border p-3.5 overflow-hidden"
                         : ""
                     }`}
+                    style={
+                      isHighlighted
+                        ? {
+                            backgroundColor: "var(--km-alert-soft)",
+                            borderColor: "var(--km-alert-border)",
+                            boxShadow: "0 0 0 2px var(--km-alert-dot)",
+                          }
+                        : undefined
+                    }
                   >
                     <Heading
                       {...(collapsible
@@ -780,8 +798,15 @@ export default function CardapioProductModal({
                       className={`flex w-full items-center justify-between gap-3 text-left ${
                         collapsible && !expanded
                           ? "rounded-2xl border border-[var(--km-line)] bg-[var(--km-panel)] p-3.5 transition hover:border-[var(--km-accent-border)] cursor-pointer"
-                          : "sticky -top-4 sm:-top-5 z-10 -mx-4 px-4 sm:-mx-6 sm:px-6 py-2.5 bg-[var(--km-dialog)] border-b border-[var(--km-line-subtle)]" + (collapsible ? " cursor-pointer" : "")
+                          : isHighlighted
+                            ? "bg-transparent pb-2.5 border-b" + (collapsible ? " cursor-pointer" : "")
+                            : "py-2.5 border-b border-[var(--km-line-subtle)]" + (collapsible ? " cursor-pointer" : "")
                       }`}
+                      style={
+                        !(collapsible && !expanded) && isHighlighted
+                          ? { borderColor: "color-mix(in srgb, var(--km-alert-border) 38%, transparent)" }
+                          : undefined
+                      }
                     >
                       <div className="min-w-0">
                         <h3 className="text-sm font-black text-[var(--km-ink)]">
@@ -969,7 +994,7 @@ export default function CardapioProductModal({
                                 </span>
                               </span>
                             ) : (
-                            <span className="relative z-10 flex shrink-0 items-center koma-art-stepper-pill">
+                            <span className={`${optionalSalad && !simpleSelection ? "relative z-[1] " : ""}flex shrink-0 items-center koma-art-stepper-pill`}>
                               <button
                                 type="button"
                                 onClick={() => handleOptionQuantity(modifier, option, -1)}
@@ -1018,7 +1043,12 @@ export default function CardapioProductModal({
 
           {feedback && (
             <div
-              className="mt-4 flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 p-3.5 text-xs font-semibold leading-relaxed text-rose-700 dark:border-rose-500/30 dark:bg-rose-500/12 dark:text-rose-300"
+              className="mt-4 flex items-start gap-2 rounded-2xl border p-3.5 text-xs font-semibold leading-relaxed"
+              style={{
+                backgroundColor: "var(--km-alert-soft)",
+                borderColor: "var(--km-alert-border)",
+                color: "var(--km-alert-text)",
+              }}
               role="alert"
             >
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -1027,7 +1057,7 @@ export default function CardapioProductModal({
           )}
         </div>
 
-        <div className="shrink-0 border-t border-[var(--km-line-subtle)] bg-[var(--km-panel)] px-4 pt-3.5 pb-[calc(0.85rem+env(safe-area-inset-bottom,0px))] sm:p-5 sm:px-6" data-testid="product-modal-footer">
+        <div className="shrink-0 relative z-20 border-t border-[var(--km-line-subtle)] bg-[var(--km-panel)] px-4 pt-3.5 pb-[calc(0.85rem+env(safe-area-inset-bottom,0px))] sm:p-5 sm:px-6" data-testid="product-modal-footer">
           {compositionStep ? (
             <div>
               {compositionStep.unitMultiplier && compositionStep.unitMultiplier > 1 && extrasPerUnit > 0 && (

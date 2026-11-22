@@ -731,7 +731,7 @@ export default function CardapioDigital({
       id="cardapio-checkout-overlay"
     >
       <div
-        className="relative flex h-[calc(100dvh-24px)] max-h-[calc(100dvh-24px)] sm:h-auto sm:max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-[28px] border border-[var(--km-line)] bg-[var(--km-dialog)] text-[var(--km-ink)] shadow-2xl sm:rounded-[28px] animate-scale-up"
+        className={`relative flex ${createdOrder ? "h-auto max-h-[94dvh]" : "h-[calc(100dvh-16px)] max-h-[calc(100dvh-16px)]"} sm:h-auto sm:max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-t-[28px] border border-[var(--km-line)] bg-[var(--km-dialog)] text-[var(--km-ink)] shadow-2xl sm:rounded-[28px] animate-scale-up`}
         id="checkout-card"
       >
         {!createdOrder && (
@@ -790,21 +790,21 @@ export default function CardapioDigital({
           </header>
         )}
 
-        <div className="flex-1 overflow-y-auto p-5 pb-6 sm:p-6 overscroll-contain no-scrollbar">
+        <div className="flex-1 overflow-y-auto p-5 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] sm:p-6 overscroll-contain no-scrollbar">
           {createdOrder ? (
-            <div className="flex flex-col items-center justify-center py-5 text-center sm:py-8 animate-scale-up">
-              <KomaOrderStatusAsset className="h-16 w-16" />
-              <span className="mt-4 rounded-full border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--km-accent-text)]">
+            <div className="flex flex-col items-center justify-center py-2 text-center sm:py-5 animate-scale-up">
+              <KomaOrderStatusAsset className="h-12 w-12" />
+              <span className="mt-2.5 rounded-full border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] px-3 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-[var(--km-accent-text)]">
                 {createdOrder.pagamento?.cobranca_online && createdOrder.pagamento.status !== "approved"
                   ? "Aguardando pagamento"
                   : isCreatedOrderScheduled
                     ? "Pedido agendado"
                     : "Pedido confirmado"}
               </span>
-              <h3 className="mt-2 font-display text-2xl font-black tracking-tight text-[var(--km-ink)]">
+              <h3 className="mt-1.5 font-display text-2xl font-black tracking-tight text-[var(--km-ink)]">
                 Pedido #{createdOrder.numero_pedido}
               </h3>
-              <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-[var(--km-muted)]">
+              <p className="mt-1 max-w-sm text-xs leading-relaxed text-[var(--km-muted)]">
                 {createdOrder.pagamento?.cobranca_online && createdOrder.pagamento.status !== "approved"
                   ? (createdOrder.pagamento.confirmacao_manual
                     ? "Pague o Pix abaixo. O restaurante conferirá o recebimento antes de liberar seu pedido."
@@ -840,36 +840,36 @@ export default function CardapioDigital({
                 </div>
               )}
 
-              <div className="mt-5 grid w-full max-w-md gap-2.5 text-left sm:grid-cols-2">
-                <div className="rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-3.5">
+              <div className="mt-3.5 grid w-full max-w-md grid-cols-2 gap-2.5 text-left">
+                <div className="min-w-0 rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-3">
                   <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-[var(--km-muted)]">
-                    <FulfillmentIcon className="h-3.5 w-3.5 text-[var(--km-accent-text)]" aria-hidden="true" />
-                    <span>{checkoutFulfillmentLabel(createdOrder.fulfillment || deliveryMethod)}</span>
+                    <FulfillmentIcon className="h-3.5 w-3.5 shrink-0 text-[var(--km-accent-text)]" aria-hidden="true" />
+                    <span className="truncate">{checkoutFulfillmentLabel(createdOrder.fulfillment || deliveryMethod)}</span>
                   </div>
-                  <p className="mt-1.5 text-xs font-semibold leading-relaxed text-[var(--km-ink)]">
+                  <p className="mt-1 text-xs font-semibold leading-snug text-[var(--km-ink)] break-words">
                     {createdOrder.fulfillment === "delivery" ? (createdOrder.delivery_address || "Entrega no endereço informado") : createdOrder.fulfillment === "dine_in" ? "Consumo no local" : "Retirada no balcão"}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-3.5">
+                <div className="min-w-0 rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-3">
                   <span className="text-[10px] font-black uppercase tracking-wider text-[var(--km-muted)]">Total</span>
-                  <p className="mt-1 font-display text-xl font-black text-[var(--km-accent-text)] tabular-nums">
+                  <p className="mt-1 font-display text-lg font-black text-[var(--km-accent-text)] tabular-nums sm:text-xl">
                     {formatPrice(createdOrder.total ?? estimatedTotal)}
                   </p>
                 </div>
                 {isCreatedOrderScheduled && (
-                  <div className="rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] p-3.5 sm:col-span-2">
+                  <div className="col-span-2 min-w-0 rounded-2xl border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] p-3">
                     <span className="text-[10px] font-black uppercase tracking-wider text-[var(--km-accent-text)]">Agendado para</span>
                     <p className="mt-1 text-xs font-bold text-[var(--km-ink)]">{createdScheduleLabel}</p>
                   </div>
                 )}
               </div>
 
-              <div className="mt-6 w-full max-w-md space-y-2.5">
+              <div className="mt-3.5 w-full max-w-md space-y-2.5">
                 <button
                   type="button"
                   id="btn-track-created-order"
                   onClick={() => handleFinish(true)}
-                  className="flex h-13 w-full items-center justify-center gap-2 rounded-full bg-[var(--km-accent)] px-5 text-xs font-black uppercase tracking-wider text-[var(--km-on-accent)] shadow-md transition hover:bg-[var(--km-accent-hover)] active:scale-[0.99] cursor-pointer"
+                  className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-[var(--km-accent)] px-5 text-xs font-black uppercase tracking-wider text-[var(--km-on-accent)] shadow-md transition hover:bg-[var(--km-accent-hover)] active:scale-[0.99] cursor-pointer"
                 >
                   <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                   <span>Acompanhar pedido ao vivo</span>
@@ -878,17 +878,17 @@ export default function CardapioDigital({
 
               {!customerToken && onCreateAccount && (
                 <section
-                  className="mt-5 w-full max-w-md rounded-3xl border border-[var(--km-line)] bg-[var(--km-card)] p-4 text-left shadow-sm"
+                  className="mt-3 w-full max-w-md rounded-2xl border border-[var(--km-line)] bg-[var(--km-card)] p-3 text-left shadow-sm"
                   aria-labelledby="post-purchase-account-title"
                 >
-                  <div className="flex items-center gap-3.5">
-                    <KomaAccountInviteAsset className="h-16 w-16 shrink-0" />
+                  <div className="flex items-center gap-3">
+                    <KomaAccountInviteAsset className="h-12 w-12 shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <h4 id="post-purchase-account-title" className="font-display text-base font-black leading-tight text-[var(--km-ink)]">
+                      <h4 id="post-purchase-account-title" className="font-display text-sm font-black leading-tight text-[var(--km-ink)] sm:text-base">
                         Peça em 1 toque da próxima vez
                       </h4>
-                      <p className="mt-1 text-xs leading-relaxed text-[var(--km-muted)]">
-                        Crie sua conta grátis para salvar seu endereço, repetir pedidos e acompanhar tudo sem digitar novamente.
+                      <p className="mt-0.5 text-xs leading-snug text-[var(--km-muted)]">
+                        Salve seu endereço e repita pedidos sem digitar tudo de novo.
                       </p>
                       <button
                         type="button"
@@ -897,12 +897,12 @@ export default function CardapioDigital({
                           handleFinish(false);
                           onCreateAccount();
                         }}
-                        className="mt-3 flex h-11 w-full items-center justify-between rounded-full bg-[var(--km-accent)] px-4 text-xs font-black text-[var(--km-on-accent)] transition hover:bg-[var(--km-accent-hover)] cursor-pointer"
+                        className="mt-2 flex h-10 w-full items-center justify-between rounded-full bg-[var(--km-accent)] px-4 text-xs font-black text-[var(--km-on-accent)] transition hover:bg-[var(--km-accent-hover)] cursor-pointer"
                       >
                         <span>Criar conta grátis</span>
                         <ArrowRight className="h-4 w-4" aria-hidden="true" />
                       </button>
-                      <p className="mt-1.5 text-center text-[10px] text-[var(--km-muted)]">Opcional · leva menos de 1 minuto</p>
+                      <p className="mt-1 text-center text-[10px] text-[var(--km-muted)]">Opcional · leva menos de 1 minuto</p>
                     </div>
                   </div>
                 </section>

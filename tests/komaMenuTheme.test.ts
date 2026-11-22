@@ -9,10 +9,13 @@ import {
 
 const SAMPLE_BRAND_COLORS = [
   { name: 'KÔMA Green (default)', hex: KOMA_DEFAULT_BRAND_HEX },
-  { name: 'Pink / Magenta', hex: '#ec4899' },
-  { name: 'Crimson Red', hex: '#e11d48' },
+  { name: 'Verde KÔMA (preset)', hex: '#00b894' },
+  { name: 'Laranja (D8 Burger preset)', hex: '#ea580c' },
+  { name: 'Rosa (preset)', hex: '#ec4899' },
+  { name: 'Vermelho (preset)', hex: '#e11d48' },
+  { name: 'Azul (preset)', hex: '#2563eb' },
+  { name: 'Roxo (preset)', hex: '#7c3aed' },
   { name: 'Amber / Yellow', hex: '#f59e0b' },
-  { name: 'Royal Blue', hex: '#2563eb' },
   { name: 'Purple', hex: '#8b5cf6' },
   { name: 'Neutral Gray', hex: '#64748b' },
 ];
@@ -30,6 +33,8 @@ for (const sample of SAMPLE_BRAND_COLORS) {
       const ctaDarkContrast = getContrastRatio(vars['--km-cta-dark-ink'], vars['--km-cta-dark']);
       const headerContrast = getContrastRatio(vars['--km-header-ink'], vars['--km-header-deep']);
       const alertTextContrast = getContrastRatio(vars['--km-alert-text'], vars['--km-card']);
+      const alertTextOnSoftContrast = getContrastRatio(vars['--km-alert-text'], vars['--km-alert-soft']);
+      const accentTextOnSoftContrast = getContrastRatio(vars['--km-accent-text'], vars['--km-accent-soft']);
       const onAlertContrast = getContrastRatio(vars['--km-on-alert'], vars['--km-alert-dot']);
       const badgePastelContrast = getContrastRatio(vars['--km-badge-pastel-ink'], vars['--km-badge-pastel-bg']);
 
@@ -37,11 +42,15 @@ for (const sample of SAMPLE_BRAND_COLORS) {
       assert.ok(mutedOnCard >= 4.5, `${sample.name} (${mode}) muted/card contrast ${mutedOnCard.toFixed(2)} < 4.5`);
       assert.ok(onAccentContrast >= 4.5, `${sample.name} (${mode}) onAccent/accent contrast ${onAccentContrast.toFixed(2)} < 4.5`);
       assert.ok(accentTextOnCard >= 4.5, `${sample.name} (${mode}) accentText/card contrast ${accentTextOnCard.toFixed(2)} < 4.5`);
+      assert.ok(accentTextOnSoftContrast >= 4.5, `${sample.name} (${mode}) accentText/accentSoft contrast ${accentTextOnSoftContrast.toFixed(2)} < 4.5`);
       assert.ok(ctaDarkContrast >= 7.0, `${sample.name} (${mode}) ctaDark contrast ${ctaDarkContrast.toFixed(2)} < 7.0`);
       assert.ok(headerContrast >= 7.0, `${sample.name} (${mode}) header contrast ${headerContrast.toFixed(2)} < 7.0`);
       assert.ok(alertTextContrast >= 4.5, `${sample.name} (${mode}) alertText/card contrast ${alertTextContrast.toFixed(2)} < 4.5`);
+      assert.ok(alertTextOnSoftContrast >= 4.5, `${sample.name} (${mode}) alertText/alertSoft contrast ${alertTextOnSoftContrast.toFixed(2)} < 4.5`);
       assert.ok(onAlertContrast >= 4.5, `${sample.name} (${mode}) onAlert/alertDot contrast ${onAlertContrast.toFixed(2)} < 4.5`);
       assert.ok(badgePastelContrast >= 4.5, `${sample.name} (${mode}) badgePastel contrast ${badgePastelContrast.toFixed(2)} < 4.5`);
+      assert.notEqual(vars['--km-accent'], vars['--km-alert-dot'], `${sample.name} (${mode}) accent and alert-dot must stay distinct`);
+      assert.notEqual(vars['--km-accent-text'], vars['--km-alert-text'], `${sample.name} (${mode}) accent-text and alert-text must stay distinct`);
       assert.ok(Boolean(vars['--km-surface-soft']), `${sample.name} (${mode}) missing --km-surface-soft`);
       assert.ok(Boolean(vars['--km-art-mid']) && Boolean(vars['--km-art-ink']), `${sample.name} (${mode}) missing art tokens`);
 

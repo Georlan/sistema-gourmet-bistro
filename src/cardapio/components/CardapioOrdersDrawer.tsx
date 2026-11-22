@@ -562,13 +562,13 @@ export default function CardapioOrdersDrawer({
   if (chatOrder) {
     return (
       <div
-        className="fixed inset-0 z-50 flex justify-end pb-[86px] sm:pb-0 transition-opacity"
+        className="fixed inset-0 z-50 flex justify-end transition-opacity"
         style={{ backgroundColor: "var(--km-overlay)" }}
         id="orders-drawer-backdrop"
         onClick={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}
       >
         <div
-          className="flex h-full w-full max-w-md flex-col border-l border-[var(--km-line)] bg-[var(--km-dialog)] text-[var(--km-ink)] shadow-2xl transition-transform duration-300"
+          className="flex h-full w-full max-w-md flex-col border-l border-[var(--km-line)] bg-[var(--km-dialog)] pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] text-[var(--km-ink)] shadow-2xl transition-transform duration-300 sm:pb-0"
           role="dialog"
           aria-label={`Chat do Pedido #${chatOrder.numero_pedido}`}
           id="orders-drawer-panel"
@@ -589,13 +589,13 @@ export default function CardapioOrdersDrawer({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-end pb-[86px] sm:items-stretch sm:pb-0 transition-opacity"
+      className="fixed inset-0 z-50 flex items-end justify-end sm:items-stretch transition-opacity"
       style={{ backgroundColor: "var(--km-overlay)" }}
       id="orders-drawer-backdrop"
       onClick={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}
     >
       <div
-        className="flex max-h-[calc(100dvh-100px)] w-full flex-col overflow-hidden rounded-t-[28px] border border-[var(--km-line)] bg-[var(--km-dialog)] text-[var(--km-ink)] shadow-2xl transition-transform duration-300 sm:h-full sm:max-h-none sm:max-w-md sm:rounded-none sm:rounded-l-[28px] sm:border-y-0 sm:border-r-0"
+        className="flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-[28px] border border-[var(--km-line)] bg-[var(--km-dialog)] text-[var(--km-ink)] shadow-2xl transition-transform duration-300 sm:h-full sm:max-h-none sm:max-w-md sm:rounded-none sm:rounded-l-[28px] sm:border-y-0 sm:border-r-0"
         role="dialog"
         aria-label="Meus Pedidos"
         id="orders-drawer-panel"
@@ -618,12 +618,12 @@ export default function CardapioOrdersDrawer({
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-[var(--km-muted)] truncate">
+              <p className="text-[11px] leading-snug text-[var(--km-muted)]">
                 {totalUnread > 0
                   ? "Nova mensagem do restaurante"
                   : activeOrders.length > 0
                     ? `${activeOrders.length} em andamento`
-                    : "Acompanhe seus pedidos em tempo real"}
+                    : "Acompanhe em tempo real"}
               </p>
             </div>
           </div>
@@ -653,15 +653,15 @@ export default function CardapioOrdersDrawer({
           </div>
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto p-4 sm:p-5 no-scrollbar">
+        <div className="flex-1 space-y-5 overflow-y-auto p-4 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] sm:p-5 no-scrollbar">
           {orders.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-14 text-center">
+            <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center">
               <KomaOrderStatusAsset className="h-20 w-20" />
-              <h3 className="mt-5 font-display text-lg font-black text-[var(--km-ink)]">Nenhum pedido por aqui ainda</h3>
+              <h3 className="mt-4 font-display text-lg font-black text-[var(--km-ink)]">Nenhum pedido por aqui ainda</h3>
               <p className="mt-1.5 max-w-[260px] text-xs leading-relaxed text-[var(--km-muted)]">
                 Este atalho continua disponível mesmo sem login. Seus pedidos e atualizações aparecem aqui automaticamente.
               </p>
-              <button type="button" onClick={closeDrawer} className="mt-6 min-h-12 w-full max-w-xs rounded-full bg-[var(--km-accent)] px-5 text-xs font-black uppercase tracking-wider text-[var(--km-on-accent)] hover:bg-[var(--km-accent-hover)] transition cursor-pointer">
+              <button type="button" onClick={closeDrawer} className="mt-5 min-h-12 w-full max-w-xs rounded-full bg-[var(--km-accent)] px-5 text-xs font-black uppercase tracking-wider text-[var(--km-on-accent)] hover:bg-[var(--km-accent-hover)] transition cursor-pointer">
                 Explorar cardápio
               </button>
             </div>
