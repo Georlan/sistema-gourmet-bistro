@@ -35,8 +35,18 @@ export function useOnlineOrderAutoAcceptPolicy({
     };
 
     void load();
+    const handleControlUpdated = () => {
+      invalidateOnlineOrdersControlCache();
+      void load();
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('koma_online_order_control_updated', handleControlUpdated);
+    }
     return () => {
       cancelled = true;
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('koma_online_order_control_updated', handleControlUpdated);
+      }
     };
   }, [apiBaseUrl, authHeaders.Authorization]);
 

@@ -3,11 +3,43 @@ type CacheEntry = {
   data: unknown;
 };
 
+export interface CardapioDigitalConfigCacheStats {
+  hits: number;
+  misses: number;
+  invalidations: number;
+}
+
+export const CARDAPIO_DIGITAL_CONFIG_UPDATED_EVENT = 'koma_cardapio_config_updated';
 export const CARDAPIO_DIGITAL_CONFIG_TTL_MS = 30_000;
 const RECENT_TTL_MS = CARDAPIO_DIGITAL_CONFIG_TTL_MS;
 const inFlightRequests = new Map<string, Promise<unknown>>();
 const recentResponses = new Map<string, CacheEntry>();
 let lastScopeKey: string | null = null;
+const cacheStats: CardapioDigitalConfigCacheStats = {
+  hits: 0,
+  misses: 0,
+  invalidations: 0,
+};
+
+function emitCardapioDigitalConfigUpdated(): void {
+  if (
+    typeof window !== 'undefined'
+    && typeof window.dispatchEvent === 'function'
+    && typeof Event === 'function'
+  ) {
+    window.dispatchEvent(new Event(CARDAPIO_DIGITAL_CONFIG_UPDATED_EVENT));
+  }
+}
+
+export function getCardapioDigitalConfigCacheStats(): CardapioDigitalConfigCacheStats {
+  return { ...cacheStats };
+}
+
+export function resetCardapioDigitalConfigCacheStats(): void {
+  cacheStats.hits = 0;
+  cacheStats.misses = 0;
+  cacheStats.invalidations = 0;
+}
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -46,6 +78,8 @@ export function invalidateCardapioDigitalConfigCache(): void {
   inFlightRequests.clear();
   recentResponses.clear();
   lastScopeKey = null;
+  cacheStats.invalidations += 1;
+  emitCardapioDigitalConfigUpdated();
 }
 
 export function updateCardapioDigitalConfigCache<T = Record<string, unknown>>(
@@ -70,6 +104,7 @@ export function updateCardapioDigitalConfigCache<T = Record<string, unknown>>(
       data: mergeCachedData(existing?.data, third),
     });
     lastScopeKey = key;
+    emitCardapioDigitalConfigUpdated();
     return;
   }
 
@@ -80,6 +115,7 @@ export function updateCardapioDigitalConfigCache<T = Record<string, unknown>>(
     expiresAt: now + RECENT_TTL_MS,
     data: mergeCachedData(existing?.data, first),
   });
+  emitCardapioDigitalConfigUpdated();
 }
 
 export async function fetchCardapioDigitalConfig<T = Record<string, unknown>>(
@@ -96,13 +132,17 @@ export async function fetchCardapioDigitalConfig<T = Record<string, unknown>>(
   } else {
     const cached = recentResponses.get(key);
     if (cached && cached.expiresAt > now) {
+      cacheStats.hits += 1;
       lastScopeKey = key;
       return cached.data as T;
     }
   }
 
   let flight = inFlightRequests.get(key);
-  if (!flight) {
+  if (flight) {
+    cacheStats.hits += 1;
+  } else {
+    cacheStats.misses += 1;
     flight = (async () => {
       const response = await fetch(url, {
         headers: { Authorization: authorization },

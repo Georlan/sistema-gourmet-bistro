@@ -1,6 +1,7 @@
 import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 
 import { MAX_IMAGE_UPLOAD_SOURCE_BYTES, prepareImageUpload } from '../../../utils/imageUpload';
+import { buildMultipartUploadHeaders } from '../../../utils/multipartUpload';
 import { CheckCircle2, Image as ImageIcon, Plus, RefreshCw, Trash2, Upload, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CatalogCategory } from '../../../catalog/catalog';
@@ -1045,15 +1046,13 @@ export default function CashierCatalog({
                     })));
                     const firstSkuId = family.variantes?.[0]?.produto_id;
                     if (firstSkuId && (preparedImage || prodFormImageRemoveRequested)) {
-                      const uploadHeaders = { ...authHeaders };
-                      delete uploadHeaders['Content-Type'];
                       const formData = new FormData();
                       if (preparedImage) formData.append('file', preparedImage);
                       const imageResponse = await fetch(
                         `${apiBaseUrl}/api/cardapio-digital/assets/product/${encodeURIComponent(firstSkuId)}`,
                         {
                           method: preparedImage ? 'POST' : 'DELETE',
-                          headers: uploadHeaders,
+                          headers: buildMultipartUploadHeaders(authHeaders),
                           ...(preparedImage ? { body: formData } : {}),
                         },
                       );
@@ -1139,13 +1138,11 @@ export default function CashierCatalog({
                   if (preparedImage) {
                     const formData = new FormData();
                     formData.append('file', preparedImage);
-                    const uploadHeaders = { ...authHeaders };
-                    delete uploadHeaders['Content-Type'];
                     const imageResponse = await fetch(
                       `${apiBaseUrl}/api/cardapio-digital/assets/product/${encodeURIComponent(savedProductId)}`,
                       {
                         method: 'POST',
-                        headers: uploadHeaders,
+                        headers: buildMultipartUploadHeaders(authHeaders),
                         body: formData,
                       },
                     );

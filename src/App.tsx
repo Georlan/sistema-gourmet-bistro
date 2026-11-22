@@ -6,6 +6,8 @@
 
 import { snapshotFetch } from './utils/snapshotFetch';
 import { fetchCaixaConfiguracoes } from './utils/caixaConfigClient';
+import { invalidateCardapioDigitalConfigCache } from './components/caixa/online-menu/cardapioDigitalConfigClient';
+import { invalidateOnlineOrdersControlCache } from './components/caixa/online-menu/onlineOrdersControlClient';
 import { SlidersHorizontal } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useOperationalCatalog } from './components/app/data/useOperationalCatalog';
@@ -868,11 +870,15 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           // Catalog updates can be missed while this socket is disconnected.
           // Reuse the existing shared catalog owner; never create a second cache.
           scheduleRealtimeRefresh({ catalog: true });
+          invalidateCardapioDigitalConfigCache();
+          invalidateOnlineOrdersControlCache();
           fetchConfig(true);
           fetchTables();
           fetchOrdersFromAPI();
           if (isManagementRole(activeRole)) fetchPagamentosPendentes();
           fetchTurnoResumo();
+          window.dispatchEvent(new Event('koma_catalog_updated'));
+          window.dispatchEvent(new Event('koma_online_order_control_updated'));
           window.dispatchEvent(new Event('koma_orders_updated'));
         }
         // Reconcilia visões gerenciais após quedas silenciosas de conexão.
@@ -916,11 +922,14 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           }
           if (eventName === "catalog_updated") {
             scheduleRealtimeRefresh({ catalog: true });
+            window.dispatchEvent(new Event('koma_catalog_updated'));
             window.dispatchEvent(new Event('koma_reports_updated'));
           }
           if (eventName === "config_updated" || eventName === "CONFIG_UPDATE") {
             scheduleRealtimeRefresh({ config: true });
+            invalidateCardapioDigitalConfigCache();
             if (data.source === "online_order_control") {
+              invalidateOnlineOrdersControlCache();
               window.dispatchEvent(new Event('koma_online_order_control_updated'));
             }
           }
@@ -930,6 +939,10 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
             window.dispatchEvent(new Event('koma_reports_updated'));
           }
           if (eventName === "tables_updated" || eventName === "TABLE_UPDATED") {
+            if (data.source === "online_order_control") {
+              invalidateOnlineOrdersControlCache();
+              window.dispatchEvent(new Event('koma_online_order_control_updated'));
+            }
             const detailType = String(data.detail?.type || '');
             const isLayoutChange = detailType === 'layout_mesa_atualizado';
             const isComandaOpened = detailType === 'comanda_aberta';

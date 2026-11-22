@@ -10,7 +10,7 @@ import { OrderItemComposition } from '../../shared/OrderItemComposition';
 import { itemCompositionSignature, type CompositionSource } from '../../../domain/orderItemComposition';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { AlertTriangle, Search, MapPin, Check, Smartphone, Clock } from 'lucide-react';
+import { AlertTriangle, Bell, Check, CheckCircle2, Clock, MapPin, Search, Smartphone } from 'lucide-react';
 import type { OrderItem } from '../../../types';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import { trapOverlayTab } from '../../shared/trapOverlayTab';
@@ -1068,7 +1068,7 @@ export function CaixaOrdersWorkspaceView({
           onClick={() => setIsDrawerOpen(false)}
         >
           {/* Backdrop */}
-          <div className={"absolute inset-0 bg-black/60 backdrop-blur-sm"} />
+          <div className={"absolute inset-0 bg-black/60"} />
           {/* Drawer panel */}
           <div
             className={"orders-pending-drawer relative ml-auto h-full w-full max-w-sm bg-koma-panel border-l border-koma-border flex flex-col shadow-2xl"} role="dialog" aria-modal="true" aria-label="Novos pedidos"
@@ -1082,7 +1082,9 @@ export function CaixaOrdersWorkspaceView({
             <div className={"flex items-center justify-between px-5 py-4 border-b border-koma-border shrink-0"}>
               <div>
                 <h2 className="orders-pending-title">Novos pedidos</h2>
-                <p className="orders-pending-subtitle">Confira e aceite</p>
+                <p className="orders-pending-subtitle">
+                  {autoAccept && deliveryOrders.length === 0 ? 'Aceite automático ativo' : 'Confira e aceite'}
+                </p>
               </div>
               <button
                 type="button"
@@ -1095,10 +1097,28 @@ export function CaixaOrdersWorkspaceView({
             {/* Drawer body */}
             <div className={"flex-1 overflow-y-auto p-4 space-y-3"}>
               {deliveryOrders.length === 0 ? (
-                <div className={"flex flex-col items-center justify-center h-40 text-koma-muted text-[11px] italic"}>
-                  <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className={"mb-3 opacity-40"}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
-                  Nenhum pedido pendente
-                </div>
+                autoAccept ? (
+                  <div
+                    data-testid="orders-pending-autoaccept-notice"
+                    className="flex flex-col items-center justify-center rounded-2xl border p-5 text-center space-y-2.5"
+                    style={{
+                      background: 'var(--koma-accent-soft)',
+                      borderColor: 'var(--koma-accent-border)',
+                      color: 'var(--koma-text-primary)',
+                    }}
+                  >
+                    <CheckCircle2 size={28} style={{ color: 'var(--koma-accent-text)' }} aria-hidden="true" />
+                    <p className="text-sm font-bold">Aceite automático ativo</p>
+                    <p className="text-xs leading-relaxed text-koma-secondary">
+                      Pedidos online confirmados entram diretamente nas filas operacionais (Entregas, Retiradas ou Mesas), sem aguardar aceite manual aqui.
+                    </p>
+                  </div>
+                ) : (
+                  <div className={"flex flex-col items-center justify-center h-40 text-koma-muted text-xs"}>
+                    <Bell size={28} className={"mb-3 opacity-50"} aria-hidden="true" />
+                    Nenhum pedido pendente
+                  </div>
+                )
               ) : (
                 deliveryOrders.map((order) => (
                   <div key={order.id} className={"orders-pending-card p-4 rounded-xl space-y-3"}>
