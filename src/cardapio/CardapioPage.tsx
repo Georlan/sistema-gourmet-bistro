@@ -1724,7 +1724,8 @@ export default function CardapioPage() {
 
       {pixModalOrder && pixModalOrder.pagamento?.qr_code && (
         <div
-          className="fixed inset-0 z-[75] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm transition-opacity"
+          className="fixed inset-0 z-[75] flex items-center justify-center p-4 transition-opacity"
+          style={{ backgroundColor: "var(--km-overlay)" }}
           id="page-pix-payment-modal-backdrop"
           onClick={(e) => {
             if (e.target === e.currentTarget) {

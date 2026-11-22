@@ -87,47 +87,7 @@ export const KomaSecondaryAction = React.forwardRef<HTMLButtonElement, KomaSecon
 KomaSecondaryAction.displayName = 'KomaSecondaryAction';
 
 /* ========================================================
-   3. KomaIconAction (Botão de Ícone com Alvo de 44x44px)
-   ======================================================== */
-export interface KomaIconActionProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  icon: React.ReactNode;
-  label: string;
-  badge?: number | string;
-  variant?: 'glass' | 'solid' | 'subtle';
-}
-
-export const KomaIconAction = React.forwardRef<HTMLButtonElement, KomaIconActionProps>(
-  ({ icon, label, badge, variant = 'glass', disabled, className = '', ...props }, ref) => {
-    const variantClasses = {
-      glass: 'koma-art-glass-btn',
-      solid: 'bg-emerald-500 text-white hover:bg-emerald-400 active:scale-95 shadow-md',
-      subtle: 'border border-white/10 bg-white/5 text-koma-muted hover:text-koma-foreground hover:bg-white/10 active:scale-95',
-    }[variant];
-
-    return (
-      <button
-        ref={ref}
-        type="button"
-        aria-label={label}
-        title={label}
-        disabled={disabled}
-        className={`relative grid h-11 w-11 place-items-center rounded-full transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 disabled:cursor-not-allowed disabled:opacity-40 ${variantClasses} ${className}`}
-        {...props}
-      >
-        {icon}
-        {badge !== undefined && (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-emerald-500 px-1 font-mono text-[9px] font-black text-black ring-2 ring-black">
-            {badge}
-          </span>
-        )}
-      </button>
-    );
-  }
-);
-KomaIconAction.displayName = 'KomaIconAction';
-
-/* ========================================================
-   4. KomaQuantityControl (Controle de Quantidade Ergonômico)
+   3. KomaQuantityControl (Controle de Quantidade Ergonômico)
    ======================================================== */
 export interface KomaQuantityControlProps {
   quantity: number;

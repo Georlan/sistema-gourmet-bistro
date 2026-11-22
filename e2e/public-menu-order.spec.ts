@@ -542,7 +542,8 @@ test('delivery pausado mantém retirada abaixo do mínimo e cartão presencial',
   });
 
   await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
-  await expect(page.getByText('Aberto · Somente retirada', { exact: false })).toBeVisible();
+  await expect(page.locator('.km-status-inline')).toContainText('Aberto');
+  await expect(page.locator('.km-store-modalities')).toContainText('Somente retirada');
   await page.locator('#btn-fast-add-101').click();
   await openCart(page);
 
