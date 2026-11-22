@@ -6,6 +6,7 @@ import { EstoqueHistoricoTab } from '../../estoque/EstoqueHistoricoTab';
 import { FichaTecnicaModal } from '../../estoque/FichaTecnicaModal';
 import { MovimentacaoEstoqueModal } from '../../estoque/MovimentacaoEstoqueModal';
 import type { CashierNotice } from '../cashierContracts';
+import { buildMultipartUploadHeaders } from '../../../utils/multipartUpload';
 import { useCashierInventoryData } from './useCashierInventoryData';
 
 type BoundaryProps = Pick<
@@ -57,7 +58,7 @@ export function useCashierInventoryOperations({
     try {
       const res = await fetch(`${apiBaseUrl}/estoque/importar-xml`, {
         method: 'POST',
-        headers: authHeaders,
+        headers: buildMultipartUploadHeaders(authHeaders),
         body: formData,
       });
       const json = await res.json();

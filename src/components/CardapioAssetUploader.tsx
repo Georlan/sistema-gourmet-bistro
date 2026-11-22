@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Image as ImageIcon, Loader2, RefreshCw, Trash2, Upload } from 'lucide-react';
 import clsx from 'clsx';
 import { MAX_IMAGE_UPLOAD_SOURCE_BYTES, prepareImageUpload } from '../utils/imageUpload';
+import { buildMultipartUploadHeaders } from '../utils/multipartUpload';
 
 type AssetType = 'logo' | 'banner';
 const ACCEPTED_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
@@ -47,11 +48,9 @@ export function CardapioAssetUploader({
       const prepared = await prepareImageUpload(file, type);
       formData.append('file', prepared);
       setMessage('Enviando imagem…');
-      const headers = { ...authHeaders };
-      delete headers['Content-Type'];
       const response = await fetch(`${apiBaseUrl}/api/cardapio-digital/assets/${type}`, {
         method: 'POST',
-        headers,
+        headers: buildMultipartUploadHeaders(authHeaders),
         body: formData,
       });
       const data = await response.json().catch(() => ({}));

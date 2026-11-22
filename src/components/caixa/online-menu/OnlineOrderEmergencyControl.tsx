@@ -114,11 +114,12 @@ export function OnlineOrderEmergencyControl({ mobile = false, isWsConnected = fa
     let hintTimer: number | null = null;
     const refresh = () => {
       if (document.visibilityState !== 'visible') return;
+      if (hintTimer === null) invalidateOnlineOrdersControlCache();
       if (hintTimer !== null) window.clearTimeout(hintTimer);
       hintTimer = window.setTimeout(() => {
         hintTimer = null;
         if (loadFlightRef.current) dirtyRef.current = true;
-        else void loadStatus(true);
+        else void loadStatus(false);
       }, 100);
     };
     const onOrdersUpdated = (event: Event) => {

@@ -472,6 +472,12 @@ export function useCashierOrders({
       const res = await fetch(`${apiBaseUrl}/comandas/delivery/ativos`, { headers: authHeaders });
       if (res.ok) {
         const data = await res.json();
+        if (!Array.isArray(data)) {
+          if (requestId === deliveryOrdersRequestRef.current) {
+            setDeliveryOrdersLoadState('error');
+          }
+          return;
+        }
         const pendingData = data.filter(isPendingDeliveryComanda);
         if (requestId !== deliveryOrdersRequestRef.current) return;
         const mapped = data
@@ -576,6 +582,10 @@ export function useCashierOrders({
       }
       const data = await res.json();
       if (requestId !== motoboysRequestRef.current) return;
+      if (!Array.isArray(data)) {
+        setMotoboysLoadState((current) => current === 'loaded' ? current : 'error');
+        return;
+      }
       setMotoboys(data);
       setMotoboysLoadState('loaded');
     } catch (err) {
