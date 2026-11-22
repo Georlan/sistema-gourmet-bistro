@@ -165,7 +165,7 @@ def mercado_pago_connect(
         )
     except MercadoPagoAccountConnectionError as exc:
         db.rollback()
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail=exc.blocking_detail or str(exc)) from exc
     except MercadoPagoOAuthConfigurationError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -189,7 +189,24 @@ def mercado_pago_disconnect(
             OnlinePaymentIntent.restaurante_id == rest_id,
             OnlinePaymentIntent.provider == 'mercado_pago',
             OnlinePaymentIntent.status.in_(('created', 'pending', 'error'))).first():
-            raise HTTPException(409, 'Resolva os Pix pendentes ou incertos antes de desconectar.')
+            from ..services.online_payments.pending_review import build_blocking_detail, log_payment_event
+
+            detail = build_blocking_detail(
+                db,
+                restaurant_id=rest_id,
+                code='PAYMENT_DISCONNECT_BLOCKED',
+                message='Resolva os Pix pendentes ou incertos antes de desconectar.',
+                provider='mercado_pago',
+            )
+            log_payment_event(
+                'payment_disconnect_blocked',
+                tenant_id=rest_id,
+                provider='mercado_pago',
+                blocking_count=detail['blocking_count'],
+                actor_user_id=str(current_user.id),
+                code='PAYMENT_DISCONNECT_BLOCKED',
+            )
+            raise HTTPException(status_code=409, detail=detail)
         # Stop new charges; retain the seller credentials for historical refunds
         # and reconciliation. This does not revoke consent in the bank account.
         account.status = 'disconnected'

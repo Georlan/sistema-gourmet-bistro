@@ -223,7 +223,7 @@ def save_settings(payload: PixConfiguration, db: Session = Depends(get_db), user
         if payload.enabled:
             enable_menu_pix(db, restaurant_id=rest_id)
     except MercadoPagoAccountConnectionError as exc:
-        raise HTTPException(409, str(exc)) from exc
+        raise HTTPException(409, detail=exc.blocking_detail or str(exc)) from exc
     if payload.enabled:
         from ..models import RestaurantPaymentAccount
         db.query(RestaurantPaymentAccount).filter(RestaurantPaymentAccount.restaurante_id == rest_id,
@@ -393,9 +393,38 @@ def cancel_pending(intent_id: str, payload: PendingCancellation, db: Session = D
     order = db.query(Comanda).filter(Comanda.restaurante_id == rest_id,Comanda.id == intent.comanda_id).with_for_update().one()
     if order.online_payment_status == 'pending_released' and str(order.delivery_status or '').lower() not in {'pendente', 'analise'}:
         raise HTTPException(409, 'Pedido já em produção: regularize pela operação antes de cancelar o Pix.')
+    previous_intent_status = intent.status
+    previous_payment_status = order.online_payment_status
     intent.status = 'cancelled'
     order.online_payment_status = 'cancelled'
-    OnlinePaymentService._finalize_unpaid_order_in_session(db,intent=intent,comanda=order)
+    OnlinePaymentService._finalize_unpaid_order_in_session(
+        db,
+        intent=intent,
+        comanda=order,
+        usuario_id=str(user.id),
+    )
+    db.add(OnlineOrderOperationalAudit(
+        restaurante_id=rest_id,
+        actor_user_id=str(user.id),
+        action='direct_pix_cancelled_after_review',
+        reason='Cancelamento manual de Pix próprio após conferência sem recebimento no extrato.',
+        before_data={
+            'intent_id': str(intent.id),
+            'comanda_id': str(order.id),
+            'order_number': order.numero_pedido,
+            'intent_status': previous_intent_status,
+            'online_payment_status': previous_payment_status,
+        },
+        after_data={
+            'intent_id': str(intent.id),
+            'comanda_id': str(order.id),
+            'order_number': order.numero_pedido,
+            'intent_status': intent.status,
+            'online_payment_status': order.online_payment_status,
+            'evidence_code': 'direct_pix_statement_checked_no_receipt',
+        },
+    ))
+    queue_order_tracking_refresh(db, rest_id, str(order.id))
     manager.queue_committed_broadcast(db,{'event':'tables_updated'},rest_id)
     db.commit()
     return {'status':'cancelled','message':'Cancelamento no KÔMA não invalida o QR no banco. Confira eventuais recebimentos tardios.'}

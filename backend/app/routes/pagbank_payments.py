@@ -67,7 +67,7 @@ def connect(request: Request, response: Response, db: Session = Depends(get_db),
         raise HTTPException(503, str(exc)) from exc
     except MercadoPagoAccountConnectionError as exc:
         db.rollback()
-        raise HTTPException(409, str(exc)) from exc
+        raise HTTPException(409, detail=exc.blocking_detail or str(exc)) from exc
     response.headers['Cache-Control'] = 'no-store'
     return {'authorization_url': url}
 
@@ -162,7 +162,7 @@ def complete(payload: AuthorizationCompletion, db: Session = Depends(get_db),
         raise HTTPException(409, 'Conta PagBank já vinculada a outro restaurante.') from exc
     except MercadoPagoAccountConnectionError as exc:
         db.rollback()
-        raise HTTPException(409, str(exc)) from exc
+        raise HTTPException(409, detail=exc.blocking_detail or str(exc)) from exc
     return {'status': 'connected', 'environment': environment}
 
 
@@ -171,18 +171,46 @@ def reconciliation_queue(db: Session = Depends(get_db),
                          user: Usuario = Depends(require_permission('configuracoes:administrar'))):
     """Operator recovery queue; never discloses credentials or buyer documents."""
     rid = require_tenant_id()
+    from ..services.online_payments.pending_review import _classify_intents_batch
+
     intents = db.query(OnlinePaymentIntent).filter(
         OnlinePaymentIntent.restaurante_id == rid,
         OnlinePaymentIntent.provider == 'pagbank',
         ((OnlinePaymentIntent.status.in_(('created', 'pending', 'error')))
          | OnlinePaymentIntent.last_error.isnot(None)),
     ).order_by(OnlinePaymentIntent.created_at).limit(100).all()
-    return {'items': [{'id': row.id, 'comanda_id': row.comanda_id, 'status': row.status,
-                       'expires_at': row.expires_at, 'last_attempt_at': row.reconciliation_attempted_at,
-                       'last_error': row.last_error,
-                       'requires_review': bool(row.last_error or (row.expires_at and
-                           (row.expires_at.replace(tzinfo=datetime.timezone.utc) if row.expires_at.tzinfo is None else row.expires_at)
-                           < datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=15)))} for row in intents]}
+    classified_by_id = {
+        item['id']: item
+        for item in _classify_intents_batch(
+            db, restaurant_id=rid, intents=intents, current_shift_id=None
+        )
+    }
+    items = []
+    for row in intents:
+        extra = classified_by_id.get(row.id, {})
+        items.append({
+            'id': row.id,
+            'comanda_id': row.comanda_id,
+            'order_number': extra.get('order_number'),
+            'amount': extra.get('amount'),
+            'status': row.status,
+            'situation': extra.get('situation'),
+            'situation_label': extra.get('situation_label'),
+            'reason_title': extra.get('reason_title'),
+            'reason_detail': extra.get('reason_detail'),
+            'can_reconcile': bool(extra.get('can_reconcile')),
+            'can_close_creation_failure': bool(extra.get('can_close_creation_failure')),
+            'requires_manual_escalation': bool(extra.get('requires_manual_escalation')),
+            'provider_code': extra.get('provider_code'),
+            'provider_request_id': extra.get('provider_request_id'),
+            'expires_at': row.expires_at,
+            'last_attempt_at': row.reconciliation_attempted_at,
+            'last_error': row.last_error,
+            'requires_review': bool(row.last_error or (row.expires_at and
+                (row.expires_at.replace(tzinfo=datetime.timezone.utc) if row.expires_at.tzinfo is None else row.expires_at)
+                < datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=15))),
+        })
+    return {'items': items}
 
 
 @router.post('/pagbank/reconciliation/{intent_id}')
@@ -224,7 +252,25 @@ def disconnect(db: Session = Depends(get_db), user: Usuario = Depends(require_pe
     if account and account.status == 'active':
         if db.query(OnlinePaymentIntent.id).filter(OnlinePaymentIntent.restaurante_id == rid,
             OnlinePaymentIntent.provider == 'pagbank', OnlinePaymentIntent.status.in_(('created', 'pending', 'error'))).first():
-            raise HTTPException(409, 'Resolva os Pix pendentes antes de desconectar.')
+            from ..services.online_payments.pending_review import build_blocking_detail, log_payment_event
+
+            detail = build_blocking_detail(
+                db,
+                restaurant_id=rid,
+                code='PAYMENT_DISCONNECT_BLOCKED',
+                message='Resolva os Pix pendentes antes de desconectar.',
+                provider='pagbank',
+            )
+            log_payment_event(
+                'payment_disconnect_blocked',
+                level=logging.WARNING,
+                tenant_id=rid,
+                provider='pagbank',
+                blocking_count=detail['blocking_count'],
+                actor_user_id=str(user.id),
+                code='PAYMENT_DISCONNECT_BLOCKED',
+            )
+            raise HTTPException(409, detail=detail)
         # Disconnect new sales locally. Historical intents still depend on this
         # exact seller's credentials for reconciliation and refunds.
         account.status = 'disconnected'

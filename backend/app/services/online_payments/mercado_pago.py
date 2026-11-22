@@ -21,10 +21,21 @@ class MercadoPagoError(RuntimeError):
         *,
         status_code: int | None = None,
         retryable: bool = False,
+        error_stage: str | None = None,
+        provider_code: str | None = None,
+        provider_parameter: str | None = None,
+        provider_request_id: str | None = None,
     ):
         super().__init__(message)
         self.status_code = status_code
         self.retryable = retryable
+        self.error_stage = error_stage
+        self.provider_code = provider_code
+        self.provider_parameter = provider_parameter
+        self.provider_request_id = provider_request_id
+
+
+_SAFE_REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,80}\Z")
 
 
 _PAYMENT_ID_PATTERN = re.compile(r"[0-9]{1,30}\Z")
@@ -67,7 +78,14 @@ def _sanitize_provider_text(value: object) -> str | None:
     return text[:180]
 
 
-def _provider_error_message(response: httpx.Response, action: str) -> str:
+def _safe_request_id(response: httpx.Response) -> str | None:
+    candidate = (response.headers.get("x-request-id") or "").strip()
+    if candidate and _SAFE_REQUEST_ID_PATTERN.fullmatch(candidate):
+        return candidate
+    return None
+
+
+def _provider_error_details(response: httpx.Response, action: str) -> tuple[str, str | None, str | None]:
     provider_message = None
     cause_codes: list[str] = []
     try:
@@ -99,10 +117,19 @@ def _provider_error_message(response: httpx.Response, action: str) -> str:
         suffix += f": {provider_message}"
     if cause_codes:
         suffix += f" [cause={','.join(cause_codes)}]"
-    return f"Mercado Pago recusou {action}{suffix}."
+    return f"Mercado Pago recusou {action}{suffix}.", (cause_codes[0] if cause_codes else None), _safe_request_id(response)
 
 
-def _provider_transport_error(action: str, exc: httpx.RequestError) -> MercadoPagoError:
+def _provider_error_message(response: httpx.Response, action: str) -> str:
+    return _provider_error_details(response, action)[0]
+
+
+def _provider_transport_error(
+    action: str,
+    exc: httpx.RequestError,
+    *,
+    error_stage: str | None = None,
+) -> MercadoPagoError:
     logger.warning(
         "Mercado Pago indisponível durante %s (%s).",
         action,
@@ -111,6 +138,7 @@ def _provider_transport_error(action: str, exc: httpx.RequestError) -> MercadoPa
     return MercadoPagoError(
         f"Mercado Pago ficou indisponível durante {action}.",
         retryable=True,
+        error_stage=error_stage,
     )
 
 
@@ -186,14 +214,26 @@ class MercadoPagoProvider:
                 json=body,
             )
         except httpx.RequestError as exc:
-            raise _provider_transport_error("a criação do Pix", exc) from exc
+            raise _provider_transport_error(
+                "a criação do Pix",
+                exc,
+                error_stage="create_uncertain",
+            ) from exc
         if response.status_code >= 400:
-            message = _provider_error_message(response, "a criação do Pix")
+            message, provider_code, request_id = _provider_error_details(
+                response,
+                "a criação do Pix",
+            )
             logger.warning("%s", message)
+            retryable = response.status_code >= 500 or response.status_code in {408, 409, 429}
+            refusal = response.status_code in {400, 401, 403, 422}
             raise MercadoPagoError(
                 message,
                 status_code=response.status_code,
-                retryable=response.status_code >= 500 or response.status_code in {408, 409, 429},
+                retryable=retryable,
+                error_stage="create_refused" if refusal else "create_uncertain",
+                provider_code=provider_code,
+                provider_request_id=request_id,
             )
         return self._map(response.json())
 
@@ -202,12 +242,18 @@ class MercadoPagoProvider:
         try:
             response = self._client.get(f"/v1/payments/{payment_id:d}")
         except httpx.RequestError as exc:
-            raise _provider_transport_error("a consulta do pagamento", exc) from exc
+            raise _provider_transport_error(
+                "a consulta do pagamento",
+                exc,
+                error_stage="reconcile_failed",
+            ) from exc
         if response.status_code >= 400:
             raise MercadoPagoError(
                 f"Mercado Pago não confirmou o pagamento ({response.status_code}).",
                 status_code=response.status_code,
                 retryable=response.status_code >= 500 or response.status_code in {408, 409, 429},
+                error_stage="reconcile_failed",
+                provider_request_id=_safe_request_id(response),
             )
         return self._map(response.json())
 

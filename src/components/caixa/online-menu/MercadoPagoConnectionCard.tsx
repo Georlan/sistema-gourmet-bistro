@@ -1,6 +1,7 @@
 import { PaymentConnectionCard, type ReceiverCoordinationProps } from './PaymentConnectionCard';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { authFetch, authRequestErrorMessage } from '../../../utils/authRequest';
+import { parsePaymentBlockError, type PaymentBlockError } from '../payments/paymentPendingClient';
 
 interface Props extends ReceiverCoordinationProps {
   apiBaseUrl: string;
@@ -28,11 +29,12 @@ const disconnectedStatus: PaymentAccountStatus = {
   token_expires_at: null,
 };
 
-export function MercadoPagoConnectionCard({ apiBaseUrl, authHeaders, connectBlockedReason, refreshKey, onStatusChange, onBusyChange, onConnectionChange }: Props) {
+export function MercadoPagoConnectionCard({ apiBaseUrl, authHeaders, connectBlockedReason, refreshKey, onStatusChange, onBusyChange, onConnectionChange, onOpenPendingReview }: Props) {
   const [account, setAccount] = useState<PaymentAccountStatus>(disconnectedStatus);
   const [isLoading, setIsLoading] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
+  const [blockDetail, setBlockDetail] = useState<PaymentBlockError | null>(null);
   const statusError = useRef<string | null>(null);
   const setConnecting = useCallback((value: boolean) => {
     setIsConnecting(value);
@@ -41,6 +43,7 @@ export function MercadoPagoConnectionCard({ apiBaseUrl, authHeaders, connectBloc
 
   const loadStatus = useCallback(async () => {
     setIsLoading(true);
+    setBlockDetail(null);
     onStatusChange?.(null);
     try {
       const response = await authFetch(`${apiBaseUrl}/payments/mercado-pago/status`, {
@@ -125,6 +128,7 @@ export function MercadoPagoConnectionCard({ apiBaseUrl, authHeaders, connectBloc
     if (connectBlockedReason) return;
     setConnecting(true);
     setFeedback(null);
+    setBlockDetail(null);
     try {
       const response = await authFetch(`${apiBaseUrl}/payments/mercado-pago/connect`, {
         headers: authHeaders,
@@ -132,7 +136,9 @@ export function MercadoPagoConnectionCard({ apiBaseUrl, authHeaders, connectBloc
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload.detail || 'Não foi possível iniciar a conexão com Mercado Pago.');
+        const parsed = parsePaymentBlockError(payload.detail, 'Não foi possível iniciar a conexão com Mercado Pago.');
+        setBlockDetail(parsed.blockingCount > 0 ? parsed : null);
+        throw new Error(parsed.message);
       }
       if (typeof payload.authorization_url !== 'string' || !payload.authorization_url) {
         throw new Error('O backend não retornou a autorização do Mercado Pago.');
@@ -154,10 +160,16 @@ export function MercadoPagoConnectionCard({ apiBaseUrl, authHeaders, connectBloc
 
   const disconnect = async () => {
     setConnecting(true);
+    setBlockDetail(null);
     try {
       const response = await authFetch(`${apiBaseUrl}/payments/mercado-pago/disconnect`, { method: 'POST', headers: authHeaders });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(payload.detail || 'Não foi possível desconectar o Mercado Pago.');
+      if (!response.ok) {
+        const parsed = parsePaymentBlockError(payload.detail, 'Não foi possível desconectar o Mercado Pago.');
+        setBlockDetail(parsed.blockingCount > 0 ? parsed : null);
+        throw new Error(parsed.message);
+      }
+      setBlockDetail(null);
       setFeedback({ type: 'info', text: 'Mercado Pago desconectado. Novos Pix não serão gerados nessa conta.' });
       await loadStatus();
       onConnectionChange?.();
@@ -169,7 +181,8 @@ export function MercadoPagoConnectionCard({ apiBaseUrl, authHeaders, connectBloc
   };
 
   return <PaymentConnectionCard name="Mercado Pago" headingId="mercado-pago-heading" connected={account.connected}
-    loading={isLoading} busy={isConnecting} connectBlockedReason={connectBlockedReason} onConnect={() => void connect()} onRefresh={() => void loadStatus()} onDisconnect={() => void disconnect()} feedback={feedback}>
+    loading={isLoading} busy={isConnecting} connectBlockedReason={connectBlockedReason} onConnect={() => void connect()} onRefresh={() => void loadStatus()} onDisconnect={() => void disconnect()} feedback={feedback}
+    blockDetail={blockDetail} onOpenPendingReview={onOpenPendingReview}>
     {account.status === 'error' && <p className="mt-3 text-xs text-rose-600 dark:text-rose-300">Conecte a conta própria do restaurante.</p>}
   </PaymentConnectionCard>;
 }

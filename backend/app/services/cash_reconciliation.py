@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Iterable, Sequence
 
-from sqlalchemy import case, func, true
+from sqlalchemy import and_, case, func, or_, true
 from sqlalchemy.orm import Session
 
 from ..financial_models import PagamentoAlocacao, PagamentoEstorno
@@ -250,10 +250,33 @@ def cash_shift_totals(
     )
 
 
+def operational_online_payment_filter():
+    """Garante que pedidos originados com cobrança Pix online só aparecem no Caixa após aprovação."""
+    return or_(
+        Comanda.online_payment_status.in_(("approved", "pending_released")),
+        and_(
+            Comanda.online_payment_status.is_(None),
+            or_(
+                Comanda.delivery_forma_pagamento.is_(None),
+                Comanda.delivery_forma_pagamento != "pix",
+            ),
+        ),
+    )
+
+
 def count_open_commands(db: Session, restaurante_id: int) -> int:
     return int(db.query(func.count(Comanda.id)).filter(
         Comanda.restaurante_id == restaurante_id,
         Comanda.fechada == False,
+    ).scalar() or 0)
+
+
+def count_operational_open_commands(db: Session, restaurante_id: int) -> int:
+    """Conta somente comandas abertas visíveis na operação do Caixa."""
+    return int(db.query(func.count(Comanda.id)).filter(
+        Comanda.restaurante_id == restaurante_id,
+        Comanda.fechada == False,
+        operational_online_payment_filter(),
     ).scalar() or 0)
 
 

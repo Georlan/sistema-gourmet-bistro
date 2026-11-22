@@ -12,6 +12,7 @@ import {
   ReceiptText,
   Smartphone,
   Printer,
+  AlertTriangle,
 } from 'lucide-react';
 import { CaixaTurnoResumo, FechamentoCaixaResult } from '../../types';
 import { imprimirComprovanteFechamento } from '../../config/caixaService';
@@ -34,6 +35,7 @@ interface CaixaFechamentoTabProps {
   onOpenNovoTurnoModal?: () => void;
   onNavigateToPendingPayments?: () => void;
   onNavigateToOpenComandas?: () => void;
+  onOpenFinancialPending?: () => void;
   hasPrinting?: boolean;
   restaurantName?: string;
 }
@@ -132,6 +134,7 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
   onOpenNovoTurnoModal,
   onNavigateToPendingPayments,
   onNavigateToOpenComandas,
+  onOpenFinancialPending,
   hasPrinting = true,
   restaurantName = 'KÔMA',
 }) => {
@@ -148,7 +151,11 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const openAccountsCount = turnoResumo?.comandas_abertas_count ?? 0;
-  const hasBlockingPending = pendingPaymentsCount > 0 || openAccountsCount > 0;
+  const currentShiftPixPendingCount = turnoResumo?.pendencias_financeiras_turno_atual_count ?? 0;
+  const currentShiftPixPendingTotal = Number(turnoResumo?.pendencias_financeiras_turno_atual_total ?? 0);
+  const previousShiftPixPendingCount = turnoResumo?.pendencias_financeiras_anteriores_count ?? 0;
+  const totalPixPendingAmount = Number(turnoResumo?.pendencias_financeiras_total ?? 0);
+  const hasBlockingPending = pendingPaymentsCount > 0 || openAccountsCount > 0 || currentShiftPixPendingCount > 0;
   const expectedCash = Number(turnoResumo?.saldo_esperado_dinheiro || 0);
   const expectedCard = Number(turnoResumo?.total_cartao || 0);
   const expectedPix = Number(turnoResumo?.total_pix || 0);
@@ -558,9 +565,33 @@ export const CaixaFechamentoTab: React.FC<CaixaFechamentoTabProps> = ({
               <strong className="text-xl tabular-nums text-koma-foreground">{openAccountsCount}</strong>
             </div>
             <h3 className="mt-3 text-sm font-bold text-koma-foreground">Contas ainda abertas</h3>
-            <p className="mt-1 text-xs text-koma-muted">{openAccountsCount > 0 ? 'Finalize essas contas antes de encerrar o turno.' : 'Todas as contas estão finalizadas.'}</p>
+            <p className="mt-1 text-xs text-koma-muted">Finalize essas contas operacionais antes de encerrar o turno.</p>
             {onNavigateToOpenComandas && (
-              <button type="button" onClick={onNavigateToOpenComandas} className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 hover:text-koma-foreground">Ver contas <ArrowRight size={13} /></button>
+              <button type="button" onClick={onNavigateToOpenComandas} className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 hover:text-koma-foreground">Ver contas <ArrowRight size={13} /></button>
+            )}
+          </div>}
+
+          {currentShiftPixPendingCount > 0 && <div className="rounded-2xl border border-koma-warning-border bg-koma-warning-bg p-4">
+            <div className="flex items-start justify-between gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-koma-warning-border text-koma-warning-text"><AlertTriangle size={17} /></span>
+              <strong className="text-xl tabular-nums text-koma-foreground">{currentShiftPixPendingCount}</strong>
+            </div>
+            <h3 className="mt-3 text-sm font-bold text-koma-foreground">Pendências de Pix do turno</h3>
+            <p className="mt-1 text-xs text-koma-secondary">{formatMoney(currentShiftPixPendingTotal)} em revisão (não contabilizado como recebido). Pedidos não aprovados ficam fora da cozinha até revisão.</p>
+            {onOpenFinancialPending && (
+              <button type="button" onClick={onOpenFinancialPending} className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-xs font-bold text-koma-warning-text hover:text-koma-foreground">Revisar pendências <ArrowRight size={13} /></button>
+            )}
+          </div>}
+
+          {previousShiftPixPendingCount > 0 && <div className="rounded-2xl border border-koma-border bg-koma-card p-4">
+            <div className="flex items-start justify-between gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-koma-border text-koma-secondary"><AlertTriangle size={17} /></span>
+              <strong className="text-xl tabular-nums text-koma-foreground">{previousShiftPixPendingCount}</strong>
+            </div>
+            <h3 className="mt-3 text-sm font-bold text-koma-foreground">Pendências de turnos anteriores</h3>
+            <p className="mt-1 text-xs text-koma-muted">{formatMoney(totalPixPendingAmount)} em revisão histórica (não pertence às contas deste turno, mas bloqueia troca de Pix).</p>
+            {onOpenFinancialPending && (
+              <button type="button" onClick={onOpenFinancialPending} className="mt-3 inline-flex min-h-11 items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 hover:text-koma-foreground">Revisar pendências <ArrowRight size={13} /></button>
             )}
           </div>}
         </div>

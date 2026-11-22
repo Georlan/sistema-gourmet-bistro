@@ -287,9 +287,16 @@ def _log_validation_rejection(
     logger.info(json.dumps(diagnostic, separators=(",", ":")))
 
 
-def validate_pix_payer_email(provider: str, email: str | None) -> None:
-    if provider != "direct_pix" and not email:
+def validate_pix_payer_email(provider: str, email: str | None) -> str:
+    normalized = (email or "").strip().lower()
+    if provider == "direct_pix":
+        return normalized
+    if not normalized:
         raise HTTPException(status_code=422, detail="Informe o e-mail para gerar o pagamento Pix.")
+    from ...services.online_payments.pagbank.provider import valid_order_payer_email
+    if not valid_order_payer_email(normalized):
+        raise HTTPException(status_code=422, detail="Informe um e-mail válido para gerar o Pix.")
+    return normalized
 
 
 class CardapioWebAdapter:
@@ -444,11 +451,11 @@ class CardapioWebAdapter:
                     OnlinePaymentIntent.comanda_id == existing_comanda.id,
                 ).first()
                 if online_payment and existing_intent and not existing_intent.external_payment_id:
-                    validate_pix_payer_email(existing_intent.provider, payload.cliente_email)
+                    payer_email = validate_pix_payer_email(existing_intent.provider, payload.cliente_email)
                     OnlinePaymentService.ensure_pix_created(
                         db,
                         intent=existing_intent,
-                        payer_email=payload.cliente_email or "",
+                        payer_email=payer_email,
                         payer_name=payload.cliente_nome,
                         payer_tax_id=payload.cliente_documento,
                     )
@@ -569,14 +576,12 @@ class CardapioWebAdapter:
 
             payment_account = None
             payment_shift = None
+            normalized_payer_email = ""
             if online_payment:
                 payment_account = OnlinePaymentService.active_account(db, rest_id)
-                validate_pix_payer_email(payment_account.provider, payload.cliente_email)
+                normalized_payer_email = validate_pix_payer_email(payment_account.provider, payload.cliente_email)
                 if payment_account.provider == "pagbank":
                     from ...tax_ids import is_valid_cpf, is_valid_cnpj
-                    from ...services.online_payments.pagbank.provider import valid_order_payer_email
-                    if not valid_order_payer_email(payload.cliente_email):
-                        raise HTTPException(422, "Informe um e-mail válido para gerar o Pix.")
                     if not (is_valid_cpf(payload.cliente_documento) or is_valid_cnpj(payload.cliente_documento)):
                         raise HTTPException(422, "Informe um CPF/CNPJ válido do comprador para gerar o Pix PagBank.")
                 payment_shift = OnlinePaymentService.open_shift(db, rest_id)
@@ -737,7 +742,7 @@ class CardapioWebAdapter:
                 payment_intent = OnlinePaymentService.ensure_pix_created(
                     db,
                     intent=payment_intent,
-                    payer_email=payload.cliente_email or "",
+                    payer_email=normalized_payer_email,
                     payer_name=payload.cliente_nome,
                     payer_tax_id=payload.cliente_documento,
                     account=payment_account,

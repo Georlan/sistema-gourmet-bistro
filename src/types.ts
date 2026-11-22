@@ -217,6 +217,11 @@ export interface CaixaTurnoResumo {
   total_pedidos_pagos: number;
   atividades_recentes?: CaixaAtividadeRecente[];
   comandas_abertas_count?: number;
+  pendencias_financeiras_count?: number;
+  pendencias_financeiras_turno_atual_count?: number;
+  pendencias_financeiras_anteriores_count?: number;
+  pendencias_financeiras_total?: number;
+  pendencias_financeiras_turno_atual_total?: number;
   ultima_movimentacao?: {
     id: number;
     tipo: string;

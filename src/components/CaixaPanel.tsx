@@ -2,9 +2,10 @@ import './caixa/orders/fulfillmentBoard.css';
 import { useCashierNotice } from './caixa/navigation/useCashierNotice';
 import { StaffPushNotifications } from './caixa/realtime/StaffPushNotifications';
 import { DirectPixPendingPanel } from './caixa/orders/DirectPixPendingPanel';
+import { FinancialPendingCenter, useFinancialPendingModal } from './caixa/payments/FinancialPendingCenter';
 import { KomaBillingNotice } from './caixa/settings/KomaBillingNotice';
 import clsx from 'clsx';
-import { Loader2, Lock, Maximize2, Menu, MessageSquare, Minimize2 } from 'lucide-react';
+import { Loader2, Lock, Maximize2, Menu, MessageSquare, Minimize2, Wallet } from 'lucide-react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   getSubscriptionPlan,
@@ -200,6 +201,7 @@ export function CaixaPanel({
   const [errorMsg, setErrorMsg] = useState('');
   const { toastData, showToast } = useCashierNotice();
   const [planNoticeBanner, setPlanNoticeBanner] = useState<string | null>(null);
+  const financialPending = useFinancialPendingModal();
 
   const {
     isChatDrawerOpen,
@@ -958,7 +960,24 @@ export function CaixaPanel({
               !hasDeliverySnapshot && deliveryOrdersLoadState === 'loading' ? <div role="status" data-testid="cashier-orders-loading" className="p-5 text-koma-muted">Carregando pedidos…</div> : !hasDeliverySnapshot && deliveryOrdersLoadState === 'error' ? <div role="alert" className="p-5">Não foi possível atualizar os pedidos digitais. <button onClick={() => void fetchDeliveryOrders()}>Tentar novamente</button></div> : <>
               {deliveryOrdersLoadState === 'error' && <div role="alert" className="p-3 text-koma-muted">A atualização dos pedidos digitais falhou. Mantendo os últimos dados. <button onClick={() => void fetchDeliveryOrders()}>Tentar novamente</button></div>}
               <CaixaOrdersWorkspace
-                pixConferenceTrigger={<DirectPixPendingPanel apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onRefreshOrders={onRefreshOrders} />}
+                pixConferenceTrigger={(
+                  <>
+                    <DirectPixPendingPanel apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onRefreshOrders={onRefreshOrders} />
+                    {(turnoResumo?.pendencias_financeiras_count ?? 0) > 0 && (
+                      <button
+                        type="button"
+                        onClick={financialPending.openModal}
+                        className="orders-new-orders orders-pix-conference"
+                        aria-haspopup="dialog"
+                        aria-expanded={financialPending.isOpen}
+                      >
+                        <Wallet size={14} aria-hidden="true" />
+                        <span>Revisar Pix</span>
+                        <span className="orders-new-orders__count">{turnoResumo?.pendencias_financeiras_count}</span>
+                      </button>
+                    )}
+                  </>
+                )}
                 hasLocalServiceWork={hasLocalServiceWork}
                 queueNotices={deliveriesWithoutCourier.length > 0 && (
                   <button type="button" className="orders-queue-notice"
@@ -1198,6 +1217,7 @@ export function CaixaPanel({
                   onOpenSangriaModal={() => setShowSangriaModal(true)}
                   onOpenSuprimentoModal={() => setShowSuprimentoModal(true)}
                   onOpenNovoTurnoModal={() => setShowAbrirModal(true)}
+                  onOpenFinancialPending={financialPending.openModal}
                 />
               </div>
             )}
@@ -1247,6 +1267,7 @@ export function CaixaPanel({
                       setActiveTab('operacao');
                       setActiveSubTab('pedidos');
                     }}
+                    onOpenFinancialPending={financialPending.openModal}
                   />
                 ) : (
                   <div className="rounded-2xl border border-koma-border bg-koma-panel p-8 text-center text-koma-muted">
@@ -1453,6 +1474,16 @@ export function CaixaPanel({
           kitchenCount={activeKitchenItems.length}
             shiftOpen={turno?.status === 'aberto'}
           />
+
+        <FinancialPendingCenter
+          apiBaseUrl={apiBaseUrl}
+          authHeaders={authHeaders}
+          open={financialPending.isOpen}
+          onClose={financialPending.closeModal}
+          onResolved={async () => {
+            await Promise.allSettled([onRefreshTurnoResumo(), onRefreshOrders()]);
+          }}
+        />
       </SidebarProvider>
     </div>
   );

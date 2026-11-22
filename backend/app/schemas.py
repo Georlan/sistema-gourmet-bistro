@@ -615,6 +615,11 @@ class CaixaTurnoResumoResponse(BaseModel):
     saldo_esperado_dinheiro: float = 0.0
     total_pedidos_pagos: int = 0
     comandas_abertas_count: int = 0
+    pendencias_financeiras_count: int = 0
+    pendencias_financeiras_turno_atual_count: int = 0
+    pendencias_financeiras_anteriores_count: int = 0
+    pendencias_financeiras_total: float = 0.0
+    pendencias_financeiras_turno_atual_total: float = 0.0
     atividades_recentes: List[dict] = Field(default_factory=list)
     ultima_movimentacao: Optional[dict] = None
     resumo_dia: Optional[dict] = None
