@@ -240,31 +240,34 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Store Identity (Open Canvas, Zero Heavy Box) ───────────────────────── */
+/* ── Store Identity (Open Canvas, Clean Typographic & Operational Lockup) ─── */
 .km-store-identity {
   position: relative;
   z-index: 3;
   max-width: 780px;
-  margin: -22px auto 0;
+  margin: -24px auto 0;
   padding: 0 16px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
+  gap: 11px;
 }
 
 .km-store-identity__row {
   width: 100%;
   display: flex;
-  align-items: flex-end;
-  gap: 12px;
+  align-items: flex-start;
+  gap: 13px;
 }
 
 .km-store-identity__copy {
   flex: 1;
   min-width: 0;
-  padding-top: 12px;
-  padding-bottom: 2px;
+  padding-top: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
 }
 
 .km-store-avatar-btn {
@@ -283,14 +286,21 @@
 }
 
 .km-store-avatar {
-  width: 64px;
-  height: 64px;
+  width: 68px;
+  height: 68px;
   border-radius: 50%;
   object-fit: contain;
   border: 0;
   background: transparent;
   box-shadow: var(--km-shadow-card);
   display: block;
+}
+
+@media (min-width: 640px) {
+  .km-store-avatar {
+    width: 76px;
+    height: 76px;
+  }
 }
 
 .km-store-socials {
@@ -326,32 +336,109 @@
 
 .km-store-name {
   font-family: var(--koma-font-display, "Space Grotesk", sans-serif);
-  font-size: 1.375rem;
+  font-size: clamp(1.5rem, 1.32rem + 0.9vw, 1.9375rem);
   font-weight: 700;
-  line-height: 1.15;
-  letter-spacing: -0.03em;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  font-kerning: normal;
   margin: 0;
   color: var(--km-ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-wrap: balance;
+  overflow-wrap: break-word;
+  max-width: 100%;
 }
 
-.km-store-meta-row {
+.km-store-status-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 12px;
-  font-size: 0.8125rem;
-  color: var(--km-muted);
+  gap: 6px 10px;
 }
 
 .km-status-inline {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.km-status-inline--open {
+  background: var(--km-accent-soft);
+  border: 1px solid var(--km-accent-border);
+  color: var(--km-accent-text);
+}
+
+.km-status-inline--closed {
+  background: var(--km-alert-soft);
+  border: 1px solid var(--km-alert-border);
+  color: var(--km-alert-text);
+}
+
+.km-store-facts {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+
+.km-store-modalities {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.km-store-modality {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8125rem;
   font-weight: 600;
+  line-height: 1.3;
   color: var(--km-ink-2);
+  white-space: nowrap;
+}
+
+.km-store-modality__icon {
+  color: var(--km-accent-text);
+  flex-shrink: 0;
+}
+
+.km-store-rule {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 5px;
+  max-width: 100%;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: var(--km-card);
+  border: 1px solid var(--km-line);
+  font-size: 0.75rem;
+  line-height: 1.25;
+  color: var(--km-muted);
+}
+
+.km-store-rule__icon {
+  color: var(--km-accent-text);
+  flex-shrink: 0;
+}
+
+.km-store-rule__label {
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.km-store-rule__value {
+  font-weight: 700;
+  color: var(--km-ink);
+  white-space: nowrap;
 }
 
 .km-store-actions-row {
@@ -363,28 +450,32 @@
 }
 
 .km-status-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--km-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--km-accent) 24%, transparent);
   flex-shrink: 0;
 }
 
 .km-status-dot--closed {
-  background: var(--km-subtle);
+  background: var(--km-alert-dot);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--km-alert-dot) 24%, transparent);
 }
 
 .km-fees-link {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
+  min-block-size: 38px;
+  padding: 7px 13px;
   border-radius: 999px;
   border: 1px solid var(--km-line);
   background: var(--km-card);
   color: var(--km-accent-text);
   font-size: 0.75rem;
   font-weight: 600;
+  line-height: 1.2;
   cursor: pointer;
   box-shadow: var(--km-shadow-card);
   transition: transform 0.15s ease;

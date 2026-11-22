@@ -4,7 +4,7 @@
  * O conteúdo promocional é buscado em cada abertura do painel. Isso mantém
  * as mudanças feitas no Caixa visíveis sem adicionar carga ao catálogo.
  */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   Copy,
@@ -92,6 +92,13 @@ export default function CardapioBenefitsDrawer({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [copiedCode, setCopiedCode] = useState("");
+  const copyTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (copyTimeoutRef.current !== null) {
+      window.clearTimeout(copyTimeoutRef.current);
+    }
+  }, []);
 
   const restaurantKey = String(restaurantId || "");
 
@@ -148,7 +155,13 @@ export default function CardapioBenefitsDrawer({
     try {
       await navigator.clipboard.writeText(code);
       setCopiedCode(code);
-      window.setTimeout(() => setCopiedCode((current) => current === code ? "" : current), 1800);
+      if (copyTimeoutRef.current !== null) {
+        window.clearTimeout(copyTimeoutRef.current);
+      }
+      copyTimeoutRef.current = window.setTimeout(() => {
+        copyTimeoutRef.current = null;
+        setCopiedCode((current) => current === code ? "" : current);
+      }, 1800);
     } catch {
       setCopiedCode("");
     }
@@ -158,7 +171,8 @@ export default function CardapioBenefitsDrawer({
 
   return (
     <div
-      className="fixed inset-0 z-[70] flex justify-end bg-black/70 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-[70] flex justify-end animate-fade-in"
+      style={{ backgroundColor: "var(--km-overlay)" }}
       id="cardapio-benefits-overlay"
       onClick={onClose}
     >

@@ -1,3 +1,5 @@
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 
 const API_ORIGIN = 'http://127.0.0.1:8000';
@@ -7,6 +9,14 @@ type MenuConfig = {
   slug?: string;
   name?: string;
   primaryColor?: string;
+  bannerUrl?: string;
+  logoUrl?: string;
+  acceptingOrders?: boolean;
+  availabilitySource?: string;
+  activeOrderTypes?: Array<'delivery' | 'retirada' | 'consumo_local'>;
+  deliveryEnabled?: boolean;
+  pedidoMinimo?: number;
+  socials?: { whatsapp?: string; instagram?: string };
   promotions?: Array<Record<string, unknown>>;
   products?: Array<Record<string, unknown>>;
   categories?: Array<Record<string, unknown>>;
@@ -18,6 +28,9 @@ function buildMenuPayload(config: MenuConfig = {}) {
   const slug = config.slug ?? `rest-${restaurantId}`;
   const name = config.name ?? 'Pizzeria Bella Italia';
   const primaryColor = config.primaryColor ?? '#ec4899';
+  const acceptingOrders = config.acceptingOrders ?? true;
+  const deliveryActive = config.deliveryEnabled ?? true;
+  const activeTypes = config.activeOrderTypes ?? ['delivery', 'retirada'];
 
   const defaultCategories = config.categories ?? [
     { id: 10, nome: 'Pizzas Artesanais' },
@@ -115,20 +128,24 @@ function buildMenuPayload(config: MenuConfig = {}) {
       id: restaurantId,
       nome: name,
       slug,
-      logo_url: '',
-      banner_url: '',
+      logo_url: config.logoUrl ?? '',
+      banner_url: config.bannerUrl ?? '',
       subtitulo: 'Forno a lenha & massa artesanal',
       sobre_nos: 'Receitas artesanais preparadas na hora.',
       endereco: 'Av. Principal, 100 - Centro',
       google_maps_url: '',
-      status_override: 'Forçado Aberto',
-      aceitando_pedidos: true,
-      delivery_ativo: true,
-      retirada_ativa: true,
+      status_override: acceptingOrders ? 'Forçado Aberto' : 'Forçado Fechado',
+      aceitando_pedidos: acceptingOrders,
+      origem_disponibilidade: config.availabilitySource ?? (acceptingOrders ? 'automatic' : 'cash_closed'),
+      delivery_ativo: deliveryActive,
+      retirada_ativa: activeTypes.includes('retirada'),
+      tipos_pedido_ativos: activeTypes,
+      pedido_minimo: config.pedidoMinimo ?? 0,
       taxa_entrega_fixa: 6,
       pagamento_online_ativo: false,
       conta_cliente_obrigatoria: Boolean(config.accountRequired),
       formas_pagamento_aceitas: ['Pix', 'Dinheiro', 'Cartão de crédito'],
+      socials: config.socials ?? {},
       cor_primaria: primaryColor,
       beneficios: { coupons: false, loyalty: false, cashback: false },
     },
@@ -830,5 +847,169 @@ test.describe('Missão Final Cardápio V2', () => {
     await expect(page.locator('#active-order-banner')).toContainText('Pedido #501');
     const cartA = await openBag(page);
     await expect(cartA).toContainText('Refrigerante Lata 350ml');
+  });
+
+  test('bloco do topo: tipografia editorial, separação de status/modalidades/pedido mínimo e zero sobreposição em múltiplos temas', async ({ page }, testInfo) => {
+    const captureDir = process.env.KOMA_HEADER_EVIDENCE_DIR;
+    if (captureDir) {
+      mkdirSync(captureDir, { recursive: true });
+    }
+    const isMobile = testInfo.project.name.includes('mobile');
+    const warmBannerSvg =
+      'data:image/svg+xml;utf8,' +
+      encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="320" viewBox="0 0 900 320"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#431407"/><stop offset="50%" stop-color="#7c2d12"/><stop offset="100%" stop-color="#1c1917"/></linearGradient></defs><rect width="900" height="320" fill="url(#g)"/><circle cx="720" cy="110" r="140" fill="#fb923c" fill-opacity="0.16"/><circle cx="190" cy="240" r="110" fill="#f59e0b" fill-opacity="0.12"/></svg>',
+      );
+    const orangeBannerSvg =
+      'data:image/svg+xml;utf8,' +
+      encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="900" height="320" viewBox="0 0 900 320"><defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0f172a"/><stop offset="100%" stop-color="#1e293b"/></linearGradient></defs><rect width="900" height="320" fill="url(#b)"/><circle cx="680" cy="95" r="130" fill="#f97316" fill-opacity="0.2"/></svg>',
+      );
+
+    const quentinhaMenu = buildMenuPayload({
+      restaurantId: 301,
+      slug: 'quentinha-caseira',
+      name: 'Quentinha Caseira',
+      primaryColor: '#ec4899',
+      bannerUrl: warmBannerSvg,
+      acceptingOrders: false,
+      availabilitySource: 'cash_closed',
+      activeOrderTypes: ['delivery', 'retirada'],
+      pedidoMinimo: 10,
+      socials: { whatsapp: '88996105555', instagram: 'quentinhacaseira' },
+      promotions: [
+        {
+          id: 'promo-quentinha-1',
+          nome: 'Combo Quentinha P + Refri',
+          descricao: 'Almoço completo na hora com bebida gelada.',
+          tipo: 'combo',
+          preco: 22.9,
+          componentes: [['101'], ['201']],
+          quantidades: [1, 1],
+        },
+      ],
+    });
+    const orangeOpenMenu = buildMenuPayload({
+      restaurantId: 302,
+      slug: 'd8-burger',
+      name: 'D8 Burger',
+      primaryColor: '#f97316',
+      bannerUrl: orangeBannerSvg,
+      acceptingOrders: true,
+      activeOrderTypes: ['delivery', 'retirada', 'consumo_local'],
+      pedidoMinimo: 25,
+      socials: { whatsapp: '85999991111', instagram: 'd8burger' },
+    });
+    const longNameGreenMenu = buildMenuPayload({
+      restaurantId: 303,
+      slug: 'artesanal-do-bairro',
+      name: 'Hamburgueria Artesanal do Bairro',
+      primaryColor: '#05c49d',
+      acceptingOrders: true,
+      deliveryEnabled: false,
+      activeOrderTypes: ['retirada'],
+      pedidoMinimo: 0,
+    });
+
+    await setupMockBackend(page, {
+      menusByIdentifier: {
+        '301': quentinhaMenu,
+        'quentinha-caseira': quentinhaMenu,
+        '302': orangeOpenMenu,
+        'd8-burger': orangeOpenMenu,
+        '303': longNameGreenMenu,
+        'artesanal-do-bairro': longNameGreenMenu,
+      },
+    });
+
+    const assertHeaderHierarchy = async (expectedName: string) => {
+      const nameHeading = page.locator('.km-store-name');
+      const statusBadge = page.locator('.km-status-inline');
+      const modalitiesList = page.locator('.km-store-modalities');
+      const heroWrap = page.locator('.km-hero-wave-wrap');
+
+      await expect(nameHeading).toHaveText(expectedName);
+      await expect(statusBadge).toBeVisible();
+      await expect(modalitiesList).toBeVisible();
+
+      const metrics = await page.evaluate(() => {
+        const nameEl = document.querySelector('.km-store-name') as HTMLElement | null;
+        const statusEl = document.querySelector('.km-status-inline') as HTMLElement | null;
+        const modEl = document.querySelector('.km-store-modalities') as HTMLElement | null;
+        const heroEl = document.querySelector('.km-hero-wave-wrap') as HTMLElement | null;
+        const ruleEl = document.querySelector('.km-store-rule') as HTMLElement | null;
+        const ruleLabelEl = document.querySelector('.km-store-rule__label') as HTMLElement | null;
+        const ruleValueEl = document.querySelector('.km-store-rule__value') as HTMLElement | null;
+        if (!nameEl || !statusEl || !modEl || !heroEl) return null;
+        const nameRect = nameEl.getBoundingClientRect();
+        const statusRect = statusEl.getBoundingClientRect();
+        const modRect = modEl.getBoundingClientRect();
+        const heroRect = heroEl.getBoundingClientRect();
+        return {
+          nameScrollWidth: nameEl.scrollWidth,
+          nameClientWidth: nameEl.clientWidth,
+          nameTop: nameRect.top,
+          heroBottom: heroRect.bottom,
+          statusBottom: statusRect.bottom,
+          modTop: modRect.top,
+          hasRule: Boolean(ruleEl),
+          ruleLabelY: ruleLabelEl?.getBoundingClientRect().y ?? null,
+          ruleValueY: ruleValueEl?.getBoundingClientRect().y ?? null,
+          docScrollWidth: document.documentElement.scrollWidth,
+          viewportWidth: window.innerWidth,
+        };
+      });
+
+      expect(metrics).not.toBeNull();
+      expect(metrics!.nameScrollWidth).toBeLessThanOrEqual(metrics!.nameClientWidth + 1);
+      // Título deve iniciar abaixo da área útil superior da onda/banner e sem colisão com modalidades
+      expect(metrics!.nameTop).toBeGreaterThanOrEqual(metrics!.heroBottom - 6);
+      expect(metrics!.modTop).toBeGreaterThan(metrics!.statusBottom + 2);
+      expect(metrics!.docScrollWidth).toBeLessThanOrEqual(metrics!.viewportWidth);
+      if (metrics!.hasRule && metrics!.ruleLabelY !== null && metrics!.ruleValueY !== null) {
+        expect(Math.abs(metrics!.ruleLabelY - metrics!.ruleValueY)).toBeLessThanOrEqual(6);
+      }
+    };
+
+    // 1. Quentinha Caseira (tema rosa escuro, Fechado, Entrega + Retirada + Pedido mínimo R$ 10,00, 1 oferta)
+    await page.goto('/cardapio?restaurante_id=301&vitrine=artistic-total&tema=dark');
+    await assertHeaderHierarchy('Quentinha Caseira');
+    await expect(page.locator('.km-status-inline')).toContainText('Fechado');
+    await expect(page.locator('.km-store-modalities')).toContainText('Entrega');
+    await expect(page.locator('.km-store-modalities')).toContainText('Retirada');
+    await expect(page.locator('.km-store-rule')).toContainText('Pedido mínimo');
+    await expect(page.locator('.km-store-rule')).toContainText('R$ 10,00');
+    await expect(page.locator('#cardapio-promotions-home')).toHaveAttribute('data-promo-layout', 'single');
+    await expect(page.locator('#cardapio-promotions-home .km-promo-showcase__count')).toHaveText('1 oferta');
+    if (isMobile && captureDir) {
+      await page.screenshot({ path: join(captureDir, 'after-quentinha-pink-dark.png') });
+    }
+
+    // 2. Quentinha Caseira em modo claro
+    await page.goto('/cardapio?restaurante_id=301&vitrine=artistic-total&tema=light');
+    await assertHeaderHierarchy('Quentinha Caseira');
+    if (isMobile && captureDir) {
+      await page.screenshot({ path: join(captureDir, 'after-quentinha-pink-light.png') });
+    }
+
+    // 3. D8 Burger (tema laranja escuro, Aberto, 3 modalidades + Pedido mínimo R$ 25,00)
+    await page.goto('/cardapio?restaurante_id=302&vitrine=artistic-total&tema=dark');
+    await assertHeaderHierarchy('D8 Burger');
+    await expect(page.locator('.km-status-inline')).toContainText('Aberto');
+    await expect(page.locator('.km-store-modalities')).toContainText('Consumo local');
+    await expect(page.locator('.km-store-rule')).toContainText('R$ 25,00');
+    if (isMobile && captureDir) {
+      await page.screenshot({ path: join(captureDir, 'after-d8-orange-open.png') });
+    }
+
+    // 4. Nome longo + tema verde KÔMA + Somente retirada + sem pedido mínimo
+    await page.goto('/cardapio?restaurante_id=303&vitrine=artistic-total&tema=dark');
+    await assertHeaderHierarchy('Hamburgueria Artesanal do Bairro');
+    await expect(page.locator('.km-status-inline')).toContainText('Aberto');
+    await expect(page.locator('.km-store-modalities')).toContainText('Somente retirada');
+    await expect(page.locator('.km-store-rule')).toHaveCount(0);
+    if (isMobile && captureDir) {
+      await page.screenshot({ path: join(captureDir, 'after-long-name-green.png') });
+    }
   });
 });

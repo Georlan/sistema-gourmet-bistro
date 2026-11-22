@@ -35,7 +35,7 @@ const renderStoreInfo = (testBrand: BrandConfig) =>
 
 test('resumo mostra mínimo configurado e acesso às taxas sem sacola', () => {
   const html = renderHome(brand({ pedidoMinimo: 30 }));
-  assert.match(html, /Mín\.\s*R\$ 30,00/);
+  assert.match(html, /class="km-store-rule[^"]*"[\s\S]*Pedido mínimo[\s\S]*R\$ 30,00/);
   assert.match(html, /Taxas de entrega e horários/);
 });
 
@@ -160,4 +160,47 @@ test('controles de pagamento configurados mantêm seleção e troco acessíveis'
   const checkout = readFileSync(new URL('../src/cardapio/components/CardapioDigital.tsx', import.meta.url), 'utf8');
   assert.match(checkout, /method=\{paymentMethodDetail\} fulfillment=\{deliveryMethod\} changeFor=\{trocoPara\}/);
   assert.match(checkout, /forma_pagamento_detalhe: paymentMethodDetail/);
+});
+
+test('cabeçalho separa status operacional, modalidades configuradas e regra comercial sem truncar', () => {
+  const closedFull = renderHome(brand({
+    name: 'Quentinha Caseira da Serra',
+    acceptingOrders: false,
+    activeOrderTypes: ['delivery', 'retirada'],
+    pedidoMinimo: 10,
+  }));
+  assert.match(closedFull, /km-status-inline km-status-inline--closed[\s\S]*>Fechado</);
+  assert.match(closedFull, /class="km-store-modalities"[\s\S]*Entrega[\s\S]*Retirada/);
+  assert.match(closedFull, /class="km-store-rule km-tabular"[\s\S]*Pedido mínimo[\s\S]*R\$ 10,00/);
+
+  const openWithDineIn = renderHome(brand({
+    acceptingOrders: true,
+    activeOrderTypes: ['delivery', 'retirada', 'consumo_local'],
+    pedidoMinimo: 25,
+  }));
+  assert.match(openWithDineIn, /km-status-inline km-status-inline--open[\s\S]*>Aberto</);
+  assert.match(openWithDineIn, /Entrega[\s\S]*Retirada[\s\S]*Consumo local/);
+  assert.match(openWithDineIn, /Pedido mínimo[\s\S]*R\$ 25,00/);
+
+  const dineInOnly = renderHome(brand({
+    deliveryEnabled: false,
+    activeOrderTypes: ['consumo_local'],
+    pedidoMinimo: 40,
+  }));
+  assert.match(dineInOnly, /Consumo local/);
+  assert.doesNotMatch(dineInOnly, /Entrega|Retirada|km-store-rule|Pedido mínimo|R\$/);
+
+  const pickupOnly = renderHome(brand({
+    deliveryEnabled: false,
+    activeOrderTypes: ['retirada'],
+  }));
+  assert.match(pickupOnly, /Somente retirada/);
+  assert.doesNotMatch(pickupOnly, /km-store-rule|Pedido mínimo|Entrega/);
+});
+
+test('overlays de benefícios e Pix no Cardápio V2 não usam backdrop-blur', () => {
+  const benefitsDrawer = readFileSync(new URL('../src/cardapio/components/CardapioBenefitsDrawer.tsx', import.meta.url), 'utf8');
+  const page = readFileSync(new URL('../src/cardapio/CardapioPage.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(benefitsDrawer, /backdrop-blur/);
+  assert.doesNotMatch(page, /backdrop-blur/);
 });

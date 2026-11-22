@@ -3,6 +3,7 @@ import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import NumberFlow from "@number-flow/react";
 import {
   ArrowUpRight,
+  Bike,
   ChevronRight,
   Clock3,
   Gift,
@@ -11,8 +12,11 @@ import {
   Moon,
   Phone,
   Plus,
+  ReceiptText,
   Share2,
+  Store,
   Sun,
+  UtensilsCrossed,
   X,
 } from "lucide-react";
 import {
@@ -472,17 +476,16 @@ export default function MenuV2Experience({
 
   const isOpen = activeBrand.acceptingOrders !== false;
   const minOrderAmount = fulfillment.delivery ? Number(activeBrand.pedidoMinimo || 0) : 0;
-  const minOrderLabel = minOrderAmount > 0 ? `Mín. ${formatMenuPrice(minOrderAmount)}` : null;
-
-  const fulfillmentParts: string[] = [isOpen ? "Aberto" : "Fechado"];
+  const storeModalities: Array<{ key: "delivery" | "pickup" | "dine_in"; label: string }> = [];
   if (fulfillment.delivery) {
-    fulfillmentParts.push("Entrega");
-    if (fulfillment.pickup) fulfillmentParts.push("Retirada");
+    storeModalities.push({ key: "delivery", label: "Entrega" });
+    if (fulfillment.pickup) storeModalities.push({ key: "pickup", label: "Retirada" });
   } else if (fulfillment.pickup) {
-    fulfillmentParts.push("Somente retirada");
+    storeModalities.push({ key: "pickup", label: "Somente retirada" });
   }
-  if (fulfillment.dine_in) fulfillmentParts.push("Consumo local");
-  if (minOrderLabel) fulfillmentParts.push(minOrderLabel);
+  if (fulfillment.dine_in) {
+    storeModalities.push({ key: "dine_in", label: "Consumo local" });
+  }
 
   const attributionUrl = useMemo(
     () => buildKomaAttributionUrl("menu_footer", activeBrand.id),
@@ -685,14 +688,45 @@ export default function MenuV2Experience({
 
             <div className="km-store-identity__copy">
               <h1 className="km-store-name">{activeBrand.name}</h1>
-              <div className="km-store-meta-row">
-                <span className="km-status-inline km-tabular">
+              <div className="km-store-status-row">
+                <span
+                  className={`km-status-inline ${isOpen ? "km-status-inline--open" : "km-status-inline--closed"}`}
+                >
                   <span className={`km-status-dot ${isOpen ? "" : "km-status-dot--closed"}`} aria-hidden="true" />
-                  <span>{fulfillmentParts.join(" · ")}</span>
+                  <span>{isOpen ? "Aberto" : "Fechado"}</span>
                 </span>
               </div>
             </div>
           </div>
+
+          {(storeModalities.length > 0 || minOrderAmount > 0) && (
+            <div className="km-store-facts">
+              {storeModalities.length > 0 && (
+                <div className="km-store-modalities" role="list" aria-label="Modalidades disponíveis">
+                  {storeModalities.map((mod) => (
+                    <span key={mod.key} className="km-store-modality" role="listitem">
+                      {mod.key === "delivery" ? (
+                        <Bike size={14} className="km-store-modality__icon" aria-hidden="true" />
+                      ) : mod.key === "pickup" ? (
+                        <Store size={14} className="km-store-modality__icon" aria-hidden="true" />
+                      ) : (
+                        <UtensilsCrossed size={14} className="km-store-modality__icon" aria-hidden="true" />
+                      )}
+                      <span>{mod.label}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {minOrderAmount > 0 && (
+                <span className="km-store-rule km-tabular">
+                  <ReceiptText size={13} className="km-store-rule__icon" aria-hidden="true" />
+                  <span className="km-store-rule__label">Pedido mínimo</span>
+                  <strong className="km-store-rule__value">{formatMenuPrice(minOrderAmount)}</strong>
+                </span>
+              )}
+            </div>
+          )}
 
           <div className="km-store-actions-row">
             <div className="flex flex-wrap items-center gap-2">

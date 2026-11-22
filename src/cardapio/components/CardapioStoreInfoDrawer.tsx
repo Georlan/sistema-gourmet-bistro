@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { BrandConfig } from "../CardapioTypes";
 import {
   Check,
@@ -39,6 +39,13 @@ export default function CardapioStoreInfoDrawer({
   onClose,
 }: CardapioStoreInfoDrawerProps) {
   const [copiedShare, setCopiedShare] = useState(false);
+  const copiedShareTimerRef = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (copiedShareTimerRef.current !== null) {
+      window.clearTimeout(copiedShareTimerRef.current);
+    }
+  }, []);
 
   if (!isOpen) return null;
 
@@ -73,7 +80,13 @@ export default function CardapioStoreInfoDrawer({
       try {
         await navigator.clipboard.writeText(window.location.href);
         setCopiedShare(true);
-        setTimeout(() => setCopiedShare(false), 2500);
+        if (copiedShareTimerRef.current !== null) {
+          window.clearTimeout(copiedShareTimerRef.current);
+        }
+        copiedShareTimerRef.current = window.setTimeout(() => {
+          copiedShareTimerRef.current = null;
+          setCopiedShare(false);
+        }, 2500);
       } catch {
         // fallback
       }
