@@ -1,11 +1,18 @@
 import { expect, test } from '@playwright/test';
-import { cashierConfig, mockCashierBackend, seedCashierSession } from './fixtures/cashier';
+import { cashierConfig, mockCashierBackend } from './fixtures/cashier';
 
 for (const profile of ['generic', 'marmitaria'] as const) {
   test(`${profile}: remove desconto direto, salva null e mantém preço normal ao reabrir`, async ({ page }) => {
     await mockCashierBackend(page);
-    await seedCashierSession(page);
+    // Esta fixture abre diretamente o cadastro; a sessão padrão de Caixa
+    // repõe a aba "operacao" e esconderia a lista de produtos.
     await page.addInitScript(() => {
+      sessionStorage.setItem('koma_caixa_token', 'playwright-e2e-token');
+      sessionStorage.setItem('koma_active_operational_portal', 'caixa');
+      sessionStorage.setItem('koma_caixa_id', 'caixa-e2e');
+      sessionStorage.setItem('koma_caixa_name', 'Caixa E2E');
+      sessionStorage.setItem('koma_caixa_role', 'caixa');
+      localStorage.setItem('token', 'playwright-e2e-token');
       sessionStorage.setItem('koma_active_tab', 'cardapio');
       sessionStorage.setItem('koma_active_subtab', 'produtos');
     });
