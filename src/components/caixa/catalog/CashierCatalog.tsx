@@ -1418,19 +1418,35 @@ export default function CashierCatalog({
 
                   {!hasVariants && (
                     <div className="space-y-1.5">
-                      <label
-                        htmlFor="product-promo-price"
-                        className="block text-xs font-semibold text-koma-secondary"
-                      >
-                        Preço promocional (Por R$)
-                      </label>
+                      <div className="flex items-center justify-between gap-2">
+                        <label
+                          htmlFor="product-promo-price"
+                          className="block text-xs font-semibold text-koma-secondary"
+                        >
+                          Preço promocional (Por R$)
+                        </label>
+                        {prodFormPrecoPromocional !== '' && (
+                          <button
+                            type="button"
+                            onClick={() => setProdFormPrecoPromocional('')}
+                            className="min-h-11 shrink-0 rounded-lg px-2 text-xs font-semibold text-koma-secondary underline underline-offset-2 hover:text-koma-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--koma-focus-ring)]"
+                          >
+                            Remover desconto
+                          </button>
+                        )}
+                      </div>
                       <MoneyInput
                         id="product-promo-price"
                         placeholder="Opcional"
                         value={prodFormPrecoPromocional}
-                        onValueChange={setProdFormPrecoPromocional}
+                        onValueChange={(value) => setProdFormPrecoPromocional(value === 0 ? '' : value)}
                         className="min-h-11 w-full rounded-xl border border-koma-border bg-koma-input px-3 text-sm text-koma-foreground tabular-nums outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--koma-focus-ring)]"
                       />
+                      {prodFormPrecoPromocional === '' && (
+                        <p className="text-xs text-koma-muted">
+                          Sem desconto: será cobrado o preço normal do produto.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
