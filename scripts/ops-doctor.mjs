@@ -38,6 +38,27 @@ export async function diagnose(fetcher = fetch) {
     try {
       const body = await ready.json();
       lines.push(`DB: ${body.database}; latência ${body.database_latency_ms} ms`);
+      if (body.db_pool && typeof body.db_pool === 'object') {
+        const pool = body.db_pool;
+        const checkedOut = pool.checked_out ?? '?';
+        const poolSize = pool.pool_size ?? '?';
+        const overflow = pool.overflow ?? 0;
+        const waitP95 = pool.wait_ms?.p95 ?? 0;
+        const holdP95 = pool.hold_ms?.p95 ?? 0;
+        const timeouts = Number(pool.wait_timeouts_total || 0);
+        const slowWaits = Number(pool.slow_waits_total || 0);
+        const slowHolds = Number(pool.slow_holds_total || 0);
+        lines.push(
+          `DB pool (${pool.pool_type || 'pool'}): ${checkedOut}/${poolSize} em uso (overflow ${overflow}); ` +
+          `wait p95 ${waitP95} ms; hold p95 ${holdP95} ms; timeouts ${timeouts}; slow waits ${slowWaits}; slow holds ${slowHolds}`,
+        );
+        if (timeouts > 0) {
+          lines.push(`ALERTA DB pool: ${timeouts} timeout(s) de espera no pool de conexões.`);
+          healthy = false;
+        } else if (Number(waitP95) >= 500) {
+          lines.push(`AVISO DB pool: wait p95 elevado (${waitP95} ms >= 500 ms).`);
+        }
+      }
       lines.push(`WebSocket: ${body.websocket?.transport_connected ? 'conectado' : 'desconectado'}; instância ${body.websocket?.instance || 'indisponível'}`);
       if (body.database !== 'healthy' || !body.websocket?.transport_connected) healthy = false;
     } catch { lines.push('Backend ready: resposta inválida'); healthy = false; }

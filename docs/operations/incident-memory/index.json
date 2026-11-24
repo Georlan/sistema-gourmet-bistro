@@ -1,0 +1,298 @@
+{
+  "schema_version": "1.0",
+  "updated_at": "2026-11-24",
+  "entries": [
+    {
+      "id": "print-agent-offline-or-stalled-queue",
+      "title": "Agente de impressão térmica offline ou fila pendente",
+      "category": "printing",
+      "symptom_signatures": [
+        "impressora offline",
+        "não imprime pedido",
+        "agente de impressão desconectado",
+        "fila de impressão parada",
+        "comanda não saiu na térmica"
+      ],
+      "log_patterns": [
+        "/api/print-agents",
+        "print_queue",
+        "heartbeat",
+        "PrintJob"
+      ],
+      "likely_causes": [
+        "Computador do caixa hibernou, perdeu rede ou fechou o processo do koma-print",
+        "Impressora USB mudou de porta COM ou perdeu compartilhamento após reinicialização",
+        "Token local do agente revogado ou expirado no painel de impressão"
+      ],
+      "verification_steps": [
+        "Rodar npm run ops:triage -- --support-code <codigo> --json para correlacionar falhas HTTP recentes",
+        "Pedir para o cliente abrir Configurações -> Impressão via link direto ?go=config_impressao e checar status Online/Heartbeat",
+        "Confirmar fila sem carga sintética nem reimpressão manual fora de janela autorizada"
+      ],
+      "safe_remediation": [
+        "Orientar o cliente com link direto ?go=config_impressao para confirmar token ativo e executar impressão de teste local",
+        "Reiniciar apenas o serviço/executável do agente na máquina do caixa sem alterar configuração de outros tenants"
+      ],
+      "customer_guidance_go_id": "config_impressao",
+      "prevention_refs": [
+        "docs/engineering/universal-printing.md",
+        "backend/tests/test_print_agents.py"
+      ]
+    },
+    {
+      "id": "online-menu-provisional-preparation-block",
+      "title": "Cardápio digital bloqueado em preparação provisória",
+      "category": "onboarding",
+      "symptom_signatures": [
+        "cardápio não aceita pedidos",
+        "restaurante em fase de preparação",
+        "operação comercial não liberada",
+        "qa_token expirado ou ausente",
+        "botão de finalizar pedido bloqueado"
+      ],
+      "log_patterns": [
+        "provisional_preparation",
+        "/api/cardapio-digital/public",
+        "HTTP 403",
+        "SUPERADMIN_QA_OPERATION_START"
+      ],
+      "likely_causes": [
+        "Tenant provisionado com defer_trial=True ainda não aceitou contrato nem foi liberado comercialmente",
+        "Sessão de QA operacional expirou ou o link foi aberto sem o parâmetro ?qa_token=",
+        "Um dos 4 pré-requisitos de implantação (horários, tipos de pedido, pagamento ou produto ativo) está incompleto"
+      ],
+      "verification_steps": [
+        "Checar GET /api/cardapio-digital/public e verificar origem_disponibilidade === 'provisional_preparation'",
+        "Conferir GET /api/onboarding/status para identificar itens pendentes de implantação antes do aceite"
+      ],
+      "safe_remediation": [
+        "Para testes de implantação com dono, iniciar janela curta via scripts/ops-onboarding.mjs qa-start e enviar URL com ?qa_token=",
+        "Para liberar produção após homologação, enviar link de aceite contratual via scripts/ops-onboarding.mjs contract-invite",
+        "Orientar cliente a completar etapas essenciais em ?go=config_implantacao"
+      ],
+      "customer_guidance_go_id": "config_implantacao",
+      "prevention_refs": [
+        "docs/operations/onboarding/fast-track.md",
+        "backend/tests/test_operational_qa_isolation_and_contract_transition.py"
+      ]
+    },
+    {
+      "id": "delivery-area-or-fee-quote-rejection",
+      "title": "Pedido delivery recusado por área, bairro ou regra de frete",
+      "category": "delivery",
+      "symptom_signatures": [
+        "não entrega no endereço",
+        "taxa de entrega inválida",
+        "erro no cálculo de frete",
+        "delivery desativado no cardápio",
+        "bairro fora da área"
+      ],
+      "log_patterns": [
+        "/api/cardapio-digital/delivery/quote",
+        "delivery_disabled",
+        "tabela_taxas_bairros",
+        "tabela_taxas_km"
+      ],
+      "likely_causes": [
+        "Modo de entrega configurado por bairro sem o bairro normalizado do cliente",
+        "Raio máximo ou faixa de km vazia na tabela de taxas por distância",
+        "Toggle delivery_ativo desmarcado ou pedido abaixo do valor mínimo configurado"
+      ],
+      "verification_steps": [
+        "Inspecionar support_code retornado no erro de quote ou checkout via npm run ops:trace",
+        "Verificar campos delivery_ativo, tipo_taxa_entrega e pedido_minimo no snapshot público do restaurante"
+      ],
+      "safe_remediation": [
+        "Enviar link direto ?go=online_entrega para o responsável ajustar bairros, faixas de km e pedido mínimo",
+        "Nunca editar tabela de entrega de tenant em produção sem autorização explícita"
+      ],
+      "customer_guidance_go_id": "online_entrega",
+      "prevention_refs": [
+        "backend/tests/test_delivery_area_policy.py",
+        "backend/tests/test_delivery_fee_policy.py"
+      ]
+    },
+    {
+      "id": "online-payment-oauth-or-checkout-rejection",
+      "title": "Pagamento online indisponível ou token Mercado Pago desconectado",
+      "category": "payments",
+      "symptom_signatures": [
+        "pix online não aparece",
+        "mercado pago desconectado",
+        "erro ao gerar pagamento online",
+        "checkout rejeitou pagamento",
+        "split não autorizado"
+      ],
+      "log_patterns": [
+        "pagamento_online_ativo",
+        "test_online_payment",
+        "/api/pagamentos",
+        "mercadopago",
+        "HTTP 409"
+      ],
+      "likely_causes": [
+        "Conta Mercado Pago ainda não conectada via OAuth ou token expirado após revogação",
+        "Tentativa de pagamento online durante janela operational-qa (bloqueio intencional com HTTP 409)",
+        "Meio de pagamento selecionado não habilitado em formas_pagamento_aceitas do restaurante"
+      ],
+      "verification_steps": [
+        "Conferir via ops:triage se a rejeição ocorreu em janela QA (409 intencional) ou falha OAuth/provider",
+        "Verificar se webhook e token OAuth do tenant pertencem ao próprio restaurante sem vazamento cross-tenant"
+      ],
+      "safe_remediation": [
+        "Orientar o proprietário a reconectar a conta recebedora pela tela segura via ?go=online_pagamentos",
+        "Nunca cadastrar credenciais manuais ou contornar validação de valor/split no servidor"
+      ],
+      "customer_guidance_go_id": "online_pagamentos",
+      "prevention_refs": [
+        "backend/tests/test_online_payment_gate.py",
+        "backend/tests/test_online_payment_token_refresh.py"
+      ]
+    },
+    {
+      "id": "cash-shift-closed-or-reconciliation-gap",
+      "title": "Caixa fechado bloqueando pedidos ou divergência no fechamento",
+      "category": "cashier",
+      "symptom_signatures": [
+        "estabelecimento fechado até a abertura do caixa",
+        "caixa fechado no cardápio",
+        "não consegue lançar pedido no balcão",
+        "saldo do turno não bate",
+        "turno não abre"
+      ],
+      "log_patterns": [
+        "cash_closed",
+        "/caixa/turno",
+        "CaixaTurno",
+        "caixa_turno_atual"
+      ],
+      "likely_causes": [
+        "Operador esqueceu de abrir o turno de caixa no início do expediente",
+        "Turno anterior permaneceu aberto de dia anterior ou foi encerrado por outro operador",
+        "Divergência causada por forma de pagamento lançada incorretamente antes da quitação"
+      ],
+      "verification_steps": [
+        "Verificar em GET /api/cardapio-digital/public se origem_disponibilidade === 'cash_closed'",
+        "Conferir via ops:trace se há tentativas de criação de pedido retornando erro de turno fechado"
+      ],
+      "safe_remediation": [
+        "Enviar link direto ?go=caixa_turno_atual para o operador verificar turno aberto/fechado e conferência de caixa",
+        "Nunca fechar turno manualmente em banco de produção nem incluir pedidos QA na conciliação"
+      ],
+      "customer_guidance_go_id": "caixa_turno_atual",
+      "prevention_refs": [
+        "backend/tests/test_financial_cash_stage3c.py",
+        "docs/engineering/cashier-ownership.md"
+      ]
+    },
+    {
+      "id": "postgres-queuepool-exhaustion-or-wait-timeout",
+      "title": "Saturação ou timeout de espera no QueuePool do PostgreSQL",
+      "category": "database",
+      "symptom_signatures": [
+        "latência alta generalizada",
+        "timeout ao conectar no banco",
+        "queuepool timeout",
+        "db_pool wait_timeouts_total maior que zero",
+        "health ready lento"
+      ],
+      "log_patterns": [
+        "QueuePool limit",
+        "wait_timeouts_total",
+        "slow_waits_total",
+        "slow_holds_total"
+      ],
+      "likely_causes": [
+        "Consultas mantendo transação aberta durante chamada HTTP externa ou lock prolongado",
+        "Polling agressivo de agentes ou múltiplos workers sem backoff dentro de DB_POOL_SIZE=4",
+        "Consultas pesadas sem filtro de tenant/índice segurando conexões acima do threshold"
+      ],
+      "verification_steps": [
+        "Executar npm run ops:doctor e inspecionar db_pool (checked_out, wait_ms.p95, hold_ms.p95, wait_timeouts_total)",
+        "Cruzar requests lentas via npm run ops:triage -- --json antes de alterar qualquer configuração de pool"
+      ],
+      "safe_remediation": [
+        "Identificar e otimizar a transação que retém conexão por mais tempo antes de elevar DB_POOL_SIZE",
+        "Confirmar com EXPLAIN isolado em cópia segura; nunca derrubar conexões de clientes ativos sem plano de rollback"
+      ],
+      "customer_guidance_go_id": null,
+      "prevention_refs": [
+        "docs/engineering/infra-frugal-capacity.md",
+        "backend/app/database_diagnostics.py"
+      ]
+    },
+    {
+      "id": "frontend-backend-sha-drift-or-readiness-failure",
+      "title": "Descompasso de versão após deploy ou falha no health/ready",
+      "category": "deployment",
+      "symptom_signatures": [
+        "erro após publicar PR",
+        "commit frontend diferente do backend",
+        "chunk não encontrado",
+        "health ready retornando 503",
+        "meta.json desatualizado"
+      ],
+      "log_patterns": [
+        "/health/ready",
+        "/meta.json",
+        "VITE_BUILD_SHA",
+        "Failed to fetch dynamically imported module"
+      ],
+      "likely_causes": [
+        "Cloudflare Pages concluiu deploy antes do container Railway (ou vice-versa)",
+        "Navegador com bundle antigo em memória tentando carregar chunk removido após novo build",
+        "Falha de startup/migration no Railway impedindo readiness do backend"
+      ],
+      "verification_steps": [
+        "Rodar npm run ops:triage -- --json e comparar meta.json (Cloudflare) vs /health/live commit (Railway)",
+        "Executar node scripts/production-smoke.mjs somente leitura para confirmar status HTTP, headers e rotas contratuais"
+      ],
+      "safe_remediation": [
+        "Aguardar conclusão do rollout em andamento no Railway/Cloudflare antes de declarar regressão",
+        "Em caso de chunk antigo no cliente, orientar atualização da aba (recovery boundary já recarrega automaticamente)",
+        "Se backend falhar após deploy, acionar playbook docs/operations/hotfix-emergency-playbook.md"
+      ],
+      "customer_guidance_go_id": null,
+      "prevention_refs": [
+        "scripts/production-smoke.mjs",
+        "docs/operations/hotfix-emergency-playbook.md"
+      ]
+    },
+    {
+      "id": "websocket-realtime-bus-disconnected",
+      "title": "Barramento WebSocket desconectado atrasando atualização ao vivo",
+      "category": "realtime",
+      "symptom_signatures": [
+        "pedido demora para aparecer no caixa",
+        "caixa precisa dar f5 para atualizar",
+        "websocket transport_connected false",
+        "notificação sonora em tempo real falhou",
+        "kds não atualiza sozinho"
+      ],
+      "log_patterns": [
+        "transport_connected",
+        "websocket",
+        "ws",
+        "LISTEN/NOTIFY"
+      ],
+      "likely_causes": [
+        "Perda transitória da conexão LISTEN/NOTIFY do barramento PostgreSQL no processo da API",
+        "Queda momentânea de conectividade local no navegador do restaurante sem reconexão visível",
+        "Reconexão pós-restart do Railway ainda restabelecendo listeners"
+      ],
+      "verification_steps": [
+        "Consultar /health/ready via npm run ops:doctor e verificar websocket.transport_connected e active_connections",
+        "Checar logs recentes com npm run ops:triage para eventos de reconexão do bus"
+      ],
+      "safe_remediation": [
+        "Confirmar que o fallback de reconciliação em janela ativa mantém operação sem perda de pedidos",
+        "Se transport_connected permanecer false entre múltiplos checks, revisar logs do container e planejar restart controlado"
+      ],
+      "customer_guidance_go_id": null,
+      "prevention_refs": [
+        "backend/tests/test_realtime_ws_fallback.py",
+        "scripts/ops-doctor.mjs"
+      ]
+    }
+  ]
+}
