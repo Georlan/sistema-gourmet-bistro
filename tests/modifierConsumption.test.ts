@@ -6,7 +6,7 @@ import {
   summarizeModifierConsumption,
   formatShare,
   type ModifierConsumptionReport,
-} from './modifierConsumption';
+} from '../src/domain/modifierConsumption';
 
 test('normalizeModifierConsumption safely handles empty, missing and invalid values', () => {
   const norm = normalizeModifierConsumption(null);
