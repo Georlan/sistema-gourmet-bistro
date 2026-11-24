@@ -1040,7 +1040,7 @@ export default function CardapioPage() {
   const cartAssemblyEnabled = orderingEnabled || isPreparationSimulation;
   const orderingMessage = activeBrand?.orderingMessage || "O restaurante pausou novos pedidos por enquanto.";
 
-  const handleAddToCart = (
+  const handleAddToCart = useCallback((
     product: Product,
     quantity: number,
     selectedOptions: Record<string, ProductOption[]> = {},
@@ -1111,7 +1111,7 @@ export default function CardapioPage() {
     });
 
     if (revealCart && window.innerWidth >= 1024) setIsCartOpen(true);
-  };
+  }, [cartAssemblyEnabled, orderingMessage, editingCartItem, selectedProduct, productModalOrigin, isCartOpen, activeBrand?.id]);
 
   const handlePromotionConfirm = (parts: PromotionPartSelection[]) => {
     if (!selectedPromotion || !activeBrand || !cartAssemblyEnabled) return;
@@ -1174,14 +1174,14 @@ export default function CardapioPage() {
     setCartAnnouncement("Promoção incluída na sacola");
   };
 
-  const handleFastAdd = (product: Product) => {
+  const handleFastAdd = useCallback((product: Product) => {
     const hasModifiers = Boolean(
       (product.modifiers && product.modifiers.length > 0) ||
       (product.modifierGroups && product.modifierGroups.length > 0)
     );
     if (hasModifiers) openProductModal(product, "catalog");
     else handleAddToCart(product, 1, {}, "", false);
-  };
+  }, [openProductModal, handleAddToCart]);
 
   const handleFastRemove = useCallback((product: Product) => {
     const targetItemId = `${product.id}--`;
