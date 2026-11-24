@@ -506,6 +506,8 @@ export default function MenuV2Experience({
                 src={activeBrand.bannerImage}
                 alt={`${activeBrand.name} — capa`}
                 className="km-hero-banner-bg"
+                loading="eager"
+                fetchPriority="high"
                 decoding="async"
                 onError={() => {
                   setBannerFailed(true);

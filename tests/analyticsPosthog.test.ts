@@ -243,3 +243,20 @@ test('SDK envelope preserves only its configured public project key while removi
   assert.equal(JSON.stringify(properties).includes('secret-'), false);
   assert.equal(JSON.stringify(properties).includes('private-'), false);
 });
+
+test('web_vitals_metric preserves metric_name across PII sanitization', () => {
+  const target: any = globalThis;
+  target.__KOMA_ANALYTICS_EVENTS__ = [];
+  trackAnalyticsEvent('web_vitals_metric', {
+    metric_name: 'LCP',
+    value: 1840,
+    rating: 'good',
+    surface: 'public',
+  });
+  const recorded = target.__KOMA_ANALYTICS_EVENTS__.at(-1);
+  assert.equal(recorded.event, 'web_vitals_metric');
+  assert.equal(recorded.properties.metric_name, 'LCP');
+  assert.equal(recorded.properties.value, 1840);
+  assert.equal(recorded.properties.rating, 'good');
+  assert.equal(recorded.properties.surface, 'public');
+});

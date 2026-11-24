@@ -8,8 +8,6 @@ import { getPersistedOperationalPortal, saveOperatorSession } from "./utils/auth
 import { forgetInstalledOperatorSession, loadInstalledOperatorSession } from "./utils/installedOperatorSession";
 import ReactDOM from "react-dom/client";
 import "./index.css";
-import "./landing/siara-event.css";
-import "./components/shared/operationalHeader.css";
 import { KomaLoading } from "./components/app/KomaLoading";
 import { initializeKomaTheme } from "./config/theme";
 import { AppRecoveryBoundary } from "./components/auth/AppRecoveryBoundary";
@@ -274,9 +272,9 @@ const RootApp = React.lazy(
       : isPlanContractRoute
         ? () => import("./legal/PlanContractPageV2")
         : isCearaTechQrRoute
-          ? () => import("./landing/CearaTechQrPage")
+          ? () => Promise.all([import("./landing/siara-event.css"), import("./landing/CearaTechQrPage")]).then(([, mod]) => mod)
           : isCearaTechRoute
-            ? () => import("./landing/CearaTechLeadPage")
+            ? () => Promise.all([import("./landing/siara-event.css"), import("./landing/CearaTechLeadPage")]).then(([, mod]) => mod)
             : isUnifiedOperationalRoute
             ? () => import("./components/auth/UnifiedOperationalEntry")
             : isOnboardingAwareManagementRoute

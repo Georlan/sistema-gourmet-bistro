@@ -1,13 +1,5 @@
-/* Google Fonts carregadas via <link rel="preconnect"> + <link rel="stylesheet"> em index.html. */
 @import "tailwindcss";
 @import "./styles/komaFoundation.css";
-@import "./components/caixa/cashRegister.css";
-@import "./components/caixa/pdv/cashierPdvVisual.css";
-@import "./components/caixa/pdv/cashierPdvCart.css";
-@import "./components/caixa/pdv/cashierPdvConfig.css";
-@import "./components/caixa/pdv/cashierPdvTone.css";
-@import "./components/caixa/kitchen/kdsWorkspace.css";
-@import "./components/mesas/waiterOperational.css";
 
 @custom-variant dark (&:where([data-koma-theme="dark"], [data-koma-theme="dark"] *));
 

@@ -4,6 +4,9 @@
  */
 
 
+import './components/shared/operationalHeader.css';
+import './components/caixa/kitchen/kdsWorkspace.css';
+import './components/mesas/waiterOperational.css';
 import { snapshotFetch } from './utils/snapshotFetch';
 import { fetchCaixaConfiguracoes } from './utils/caixaConfigClient';
 import { invalidateCardapioDigitalConfigCache } from './components/caixa/online-menu/cardapioDigitalConfigClient';
