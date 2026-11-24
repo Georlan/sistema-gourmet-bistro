@@ -38,6 +38,7 @@ Antes de projetar ou alterar interfaces, consulte `docs/design-system/DESIGN_SYS
 | Impressão | `docs/engineering/universal-printing.md` | `backend/app/application/printing/`; bordas só declaram `PrintIntent` |
 | Fiscal / NFC-e | `docs/architecture/fiscal-core.md` | `backend/app/fiscal/`, `backend/app/fiscal_models.py`; regra fiscal exige fonte oficial e vigência |
 | Intenção de produto / backlog | `docs/architecture/product_intent_protection.md` | `docs/architecture/phase7_backlog.md` |
+| Plano Mestre B0–B13 / evolução | `docs/architecture/GUIA_VIVO_EVOLUCAO_KOMA_B0_B13.md` | 14 blocos (B0–B13), 5 modelos de venda, 3 dimensões (original/ampliado/homologação) |
 | Cardápio público | `src/cardapio/` | `docs/architecture/cardapio_delivery_presentation.md` e `cardapio_addons_direction.md` |
 | Landing / dispositivos | `.cursor/rules/landing-device-mockups.mdc` | `docs/landing-*-mockup.md`; preservar visual 3D, alpha real e tela substituível |
 | CI / governança | `.github/workflows/quality-gate.yml` | `docs/engineering/change-governance.md` |
