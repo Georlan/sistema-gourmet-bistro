@@ -270,6 +270,7 @@ export default function CardapioOrdersDrawer({
       );
       sources.push(source);
 
+      let sawInitialConnected = false;
       source.onopen = () => {
         const isReconnect = openedOrders.has(order.id);
         openedOrders.add(order.id);
@@ -277,7 +278,13 @@ export default function CardapioOrdersDrawer({
         if (isReconnect) scheduleRealtimeRefresh(true);
       };
       source.onerror = () => markDegraded(order.id);
-      source.addEventListener("connected", () => { scheduleRealtimeRefresh(false); });
+      source.addEventListener("connected", () => {
+        if (!sawInitialConnected) {
+          sawInitialConnected = true;
+          return;
+        }
+        scheduleRealtimeRefresh(false);
+      });
 
       source.addEventListener("refresh", () => { scheduleRealtimeRefresh(true); });
 

@@ -260,6 +260,7 @@ export default function CardapioOrderChatPanel({
 
     try {
       source = new EventSource(`${apiRoot}/events`);
+      let sawInitialConnected = false;
       source.onopen = () => {
         const isReconnect = hasOpenedOnce;
         hasOpenedOnce = true;
@@ -267,7 +268,13 @@ export default function CardapioOrderChatPanel({
         if (isReconnect) void refresh();
       };
       source.onerror = startFallback;
-      source.addEventListener("connected", () => { void refresh(); });
+      source.addEventListener("connected", () => {
+        if (!sawInitialConnected) {
+          sawInitialConnected = true;
+          return;
+        }
+        void refresh();
+      });
       source.addEventListener("refresh", () => { void refresh(); });
       source.addEventListener("message", (event: MessageEvent) => {
         try {

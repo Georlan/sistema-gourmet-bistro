@@ -44,6 +44,9 @@
 /acompanhar
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
+/acompanhar/*
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
 /entregador
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
 
@@ -55,6 +58,12 @@
 
 /cardapio
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/cardapio/*
+  Cache-Control: no-store, no-cache, must-revalidate, max-age=0
+
+/brand/*
+  Cache-Control: public, max-age=86400
 
 /meta.json
   Cache-Control: no-store, no-cache, must-revalidate, max-age=0
