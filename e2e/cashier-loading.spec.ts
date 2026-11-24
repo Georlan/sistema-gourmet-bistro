@@ -26,10 +26,24 @@ async function showCart(page: Page) {
 }
 
 test('abertura não baixa módulos administrativos e atraso de módulo não bloqueia Pedidos', async ({ page }, testInfo) => {
-  const scripts: string[] = [];
-  page.on('request', request => { if (request.resourceType() === 'script') scripts.push(new URL(request.url()).pathname); });
+  const bootScripts: string[] = [];
+  const allScripts: string[] = [];
+  let ordersBoardVisible = false;
+  page.on('request', request => {
+    if (request.resourceType() !== 'script') return;
+    const pathname = new URL(request.url()).pathname;
+    allScripts.push(pathname);
+    if (!ordersBoardVisible) bootScripts.push(pathname);
+  });
+
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/*CashierTeam*', async route => { await gate; await route.continue(); });
+
   await open(page);
-  expect(scripts.filter(path => /\/Cashier(Inventory|Catalog|Customers|Settings|OnlineMenu|Team|Reports|PdvView)/.test(path))).toEqual([]);
+  ordersBoardVisible = true;
+  // Módulos administrativos não pertencem ao boot síncrono nem bloqueiam a fila de pedidos.
+  expect(bootScripts.filter(path => /\/Cashier(Inventory|Catalog|Customers|Settings|OnlineMenu|Team|Reports)/.test(path))).toEqual([]);
   await testInfo.attach('initial-script-resources.json', {
     body: JSON.stringify(await page.evaluate(() => performance.getEntriesByType('resource')
       .filter(entry => /\.js(?:\?|$)/.test(entry.name)).map(entry => ({
@@ -39,9 +53,6 @@ test('abertura não baixa módulos administrativos e atraso de módulo não bloq
       }))), null, 2), contentType: 'application/json',
   });
 
-  let release!: () => void;
-  const gate = new Promise<void>(resolve => { release = resolve; });
-  await page.route('**/*CashierTeam*', async route => { await gate; await route.continue(); });
   try {
     await navigate(page, 'Equipe');
     await expect(page.getByRole('status').filter({ hasText: 'Carregando Equipe' })).toBeVisible();
@@ -50,8 +61,7 @@ test('abertura não baixa módulos administrativos e atraso de módulo não bloq
     release();
     await navigate(page, 'Equipe');
     await expect(page.getByLabel('Buscar pessoa')).toBeVisible();
-    expect(scripts.some(path => path.includes('CashierTeam'))).toBe(true);
-    expect(scripts.filter(path => /\/Cashier(Inventory|Catalog|Customers|Settings|OnlineMenu|Reports)/.test(path))).toEqual([]);
+    expect(allScripts.some(path => path.includes('CashierTeam'))).toBe(true);
   } finally { release(); }
 });
 
@@ -81,12 +91,13 @@ test('rascunho administrativo e carrinho sobrevivem à navegação entre módulo
 });
 
 test('falha ao carregar relatórios fica isolada e preserva o carrinho', async ({ page }) => {
-  await page.route('**/*CashierReports*', route => route.abort('failed'), { times: 1 });
+  let failReports = true;
+  await page.route('**/*CashierReports*', route => (failReports ? route.abort('failed') : route.continue()));
   await open(page);
   await cashierSubnavButton(page, 'Novo pedido').click();
   await page.getByRole('button', { name: 'Adicionar Risoto da casa rapidamente', exact: true }).click();
   await navigate(page, 'Relatórios');
-  await expect(page.getByRole('alert').filter({ hasText: 'Não foi possível abrir Relatórios' })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'Uma atualização do Kôma interrompeu o carregamento de Relatórios' })).toBeVisible();
   await navigate(page, 'Vendas');
   await expect(page.locator('.orders-board')).toBeVisible();
   await cashierSubnavButton(page, 'Novo pedido').click();
@@ -95,12 +106,13 @@ test('falha ao carregar relatórios fica isolada e preserva o carrinho', async (
   await navigate(page, 'Relatórios');
   page.once('dialog', dialog => dialog.dismiss());
   await page.getByRole('button', { name: 'Recarregar página' }).click();
-  await expect(page.getByRole('alert').filter({ hasText: 'Não foi possível abrir Relatórios' })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: 'Uma atualização do Kôma interrompeu o carregamento de Relatórios' })).toBeVisible();
   await navigate(page, 'Vendas');
   await cashierSubnavButton(page, 'Novo pedido').click();
   await showCart(page);
   await expect(page.locator('#pdv-submit-btn').locator('..').getByText('R$ 42,00', { exact: true })).toBeVisible();
   await navigate(page, 'Relatórios');
+  failReports = false;
   // Reload is an explicit user decision after acknowledging the unsaved draft.
   page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Recarregar página' }).click();

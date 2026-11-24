@@ -1135,6 +1135,7 @@ class CardapioPublicResponse(BaseModel):
     produtos_promocionais: List[CardapioPublicProductResponse] = Field(default_factory=list)
     promocoes: List[dict] = Field(default_factory=list)
     promocao_composicao_explicita: bool = False
+    modo_homologacao_qa: bool = False
 
 
 class DeliveryFeeQuoteRequest(BaseModel):

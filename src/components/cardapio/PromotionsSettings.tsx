@@ -17,6 +17,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { campaignInstant, campaignLocalTime } from '../../utils/promotionSchedule';
+import { prepareImageUpload } from '../../utils/imageUpload';
 import {
   buildBuyGetSuggestion,
   buildComboSuggestion,
@@ -404,8 +405,9 @@ export default function PromotionsSettings({
     setUploadingImage(true);
     setNotice('');
     try {
+      const preparedFile = await prepareImageUpload(file, 'products');
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', preparedFile);
       const response = await fetch(`${apiBaseUrl}/api/cardapio-digital/assets/promotion`, {
         method: 'POST',
         headers: buildMultipartUploadHeaders(authHeaders),

@@ -312,7 +312,7 @@ def _test_order_type_values(order_types: list[str]) -> list[str]:
 def _build_onboarding_status(
     db: Session,
     *,
-    current_user: Usuario,
+    current_user: Usuario | Any | None = None,
 ) -> dict[str, Any]:
     tenant_id = require_tenant_id()
     restaurant = (

@@ -6,11 +6,11 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Iterable
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, load_only
 
 from ..financial_models import PagamentoAlocacao, PagamentoEstorno
-from ..models import Pagamento
+from ..models import Comanda, Pagamento
 from ..operational_models import AtendimentoComanda
 from ..timezone_utils import (
     get_operational_now,
@@ -99,16 +99,26 @@ def resolve_financial_period(
     return FinancialPeriod(start_day, end_day, start_utc, end_utc)
 
 
+def _exclude_onboarding_test_condition():
+    return or_(Comanda.id.is_(None), Comanda.onboarding_test.is_(False))
+
+
 def _payments_in_period(db: Session, restaurante_id: int, period: FinancialPeriod) -> list[Pagamento]:
     return (
         db.query(Pagamento)
+        .outerjoin(
+            Comanda,
+            (Comanda.id == Pagamento.comanda_id)
+            & (Comanda.restaurante_id == Pagamento.restaurante_id),
+        )
         .options(load_only(Pagamento.id, Pagamento.comanda_id, Pagamento.valor,
                            Pagamento.metodo, Pagamento.criado_em,
                            Pagamento.cliente_id, Pagamento.cpf_cliente))
         .filter(Pagamento.restaurante_id == restaurante_id,
                 Pagamento.status == "aprovado",
                 Pagamento.criado_em >= period.start_utc,
-                Pagamento.criado_em < period.end_utc)
+                Pagamento.criado_em < period.end_utc,
+                _exclude_onboarding_test_condition())
         .order_by(Pagamento.criado_em, Pagamento.id).all()
     )
 
@@ -116,11 +126,22 @@ def _payments_in_period(db: Session, restaurante_id: int, period: FinancialPerio
 def _refunds_in_period(db: Session, restaurante_id: int, period: FinancialPeriod) -> list[PagamentoEstorno]:
     return (
         db.query(PagamentoEstorno)
+        .outerjoin(
+            Pagamento,
+            (Pagamento.id == PagamentoEstorno.pagamento_id)
+            & (Pagamento.restaurante_id == PagamentoEstorno.restaurante_id),
+        )
+        .outerjoin(
+            Comanda,
+            (Comanda.id == Pagamento.comanda_id)
+            & (Comanda.restaurante_id == Pagamento.restaurante_id),
+        )
         .options(load_only(PagamentoEstorno.id, PagamentoEstorno.valor,
                            PagamentoEstorno.metodo, PagamentoEstorno.criado_em))
         .filter(PagamentoEstorno.restaurante_id == restaurante_id,
                 PagamentoEstorno.criado_em >= period.start_utc,
-                PagamentoEstorno.criado_em < period.end_utc)
+                PagamentoEstorno.criado_em < period.end_utc,
+                _exclude_onboarding_test_condition())
         .order_by(PagamentoEstorno.criado_em, PagamentoEstorno.id).all()
     )
 
@@ -129,12 +150,29 @@ def load_period_totals(db: Session, restaurante_id: int, start_day: str, end_day
     """Duas agregações limitadas ao período, sem carregar identidades/ledger inteiro."""
     period = resolve_financial_period(db, restaurante_id, start_day, end_day)
     payments = (db.query(Pagamento.metodo, func.sum(Pagamento.valor).label("valor"))
+                .outerjoin(
+                    Comanda,
+                    (Comanda.id == Pagamento.comanda_id)
+                    & (Comanda.restaurante_id == Pagamento.restaurante_id),
+                )
                 .filter(Pagamento.restaurante_id == restaurante_id, Pagamento.status == "aprovado",
-                        Pagamento.criado_em >= period.start_utc, Pagamento.criado_em < period.end_utc)
+                        Pagamento.criado_em >= period.start_utc, Pagamento.criado_em < period.end_utc,
+                        _exclude_onboarding_test_condition())
                 .group_by(Pagamento.metodo).all())
     refunds = (db.query(PagamentoEstorno.metodo, func.sum(PagamentoEstorno.valor).label("valor"))
+               .outerjoin(
+                   Pagamento,
+                   (Pagamento.id == PagamentoEstorno.pagamento_id)
+                   & (Pagamento.restaurante_id == PagamentoEstorno.restaurante_id),
+               )
+               .outerjoin(
+                   Comanda,
+                   (Comanda.id == Pagamento.comanda_id)
+                   & (Comanda.restaurante_id == Pagamento.restaurante_id),
+               )
                .filter(PagamentoEstorno.restaurante_id == restaurante_id,
-                       PagamentoEstorno.criado_em >= period.start_utc, PagamentoEstorno.criado_em < period.end_utc)
+                       PagamentoEstorno.criado_em >= period.start_utc, PagamentoEstorno.criado_em < period.end_utc,
+                       _exclude_onboarding_test_condition())
                .group_by(PagamentoEstorno.metodo).all())
     return totais_financeiros(payments, refunds)
 
@@ -154,6 +192,11 @@ def count_period_sales(db: Session, restaurante_id: int, period: FinancialPeriod
         )
         .select_from(Pagamento)
         .outerjoin(
+            Comanda,
+            (Comanda.id == Pagamento.comanda_id)
+            & (Comanda.restaurante_id == Pagamento.restaurante_id),
+        )
+        .outerjoin(
             PagamentoAlocacao,
             (PagamentoAlocacao.pagamento_id == Pagamento.id)
             & (PagamentoAlocacao.restaurante_id == Pagamento.restaurante_id),
@@ -168,6 +211,7 @@ def count_period_sales(db: Session, restaurante_id: int, period: FinancialPeriod
             Pagamento.status == "aprovado",
             Pagamento.criado_em >= period.start_utc,
             Pagamento.criado_em < period.end_utc,
+            _exclude_onboarding_test_condition(),
         )
         .order_by(Pagamento.id, PagamentoAlocacao.id)
         .all()
@@ -240,21 +284,38 @@ def load_period_comparison(
     period = resolve_financial_period(db, restaurante_id, start_day, end_day)
     payments = (
         db.query(Pagamento.metodo, func.sum(Pagamento.valor).label("valor"))
+        .outerjoin(
+            Comanda,
+            (Comanda.id == Pagamento.comanda_id)
+            & (Comanda.restaurante_id == Pagamento.restaurante_id),
+        )
         .filter(
             Pagamento.restaurante_id == restaurante_id,
             Pagamento.status == "aprovado",
             Pagamento.criado_em >= period.start_utc,
             Pagamento.criado_em < period.end_utc,
+            _exclude_onboarding_test_condition(),
         )
         .group_by(Pagamento.metodo)
         .all()
     )
     refunds = (
         db.query(PagamentoEstorno.metodo, func.sum(PagamentoEstorno.valor).label("valor"))
+        .outerjoin(
+            Pagamento,
+            (Pagamento.id == PagamentoEstorno.pagamento_id)
+            & (Pagamento.restaurante_id == PagamentoEstorno.restaurante_id),
+        )
+        .outerjoin(
+            Comanda,
+            (Comanda.id == Pagamento.comanda_id)
+            & (Comanda.restaurante_id == Pagamento.restaurante_id),
+        )
         .filter(
             PagamentoEstorno.restaurante_id == restaurante_id,
             PagamentoEstorno.criado_em >= period.start_utc,
             PagamentoEstorno.criado_em < period.end_utc,
+            _exclude_onboarding_test_condition(),
         )
         .group_by(PagamentoEstorno.metodo)
         .all()

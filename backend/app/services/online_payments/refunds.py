@@ -17,6 +17,7 @@ from ...models import Comanda, OnlinePaymentIntent, Pagamento, RestaurantPayment
 from ...online_payment_refund_models import OnlinePaymentRefund
 from ..cash_reconciliation import RefundDomainError, create_refund, money
 from .mercado_pago import MercadoPagoError, MercadoPagoProvider
+from .provider_registry import close_provider
 
 
 def _fingerprint(
@@ -357,8 +358,9 @@ def create_mercado_pago_refund(
 
     if provider_call:
         assert access_token is not None
+        provider = MercadoPagoProvider(access_token)
         try:
-            provider_refund = MercadoPagoProvider(access_token).refund_payment(
+            provider_refund = provider.refund_payment(
                 external_payment_id,
                 amount=provider_amount,
                 idempotency_key=provider_key,
@@ -394,6 +396,8 @@ def create_mercado_pago_refund(
                 "O Mercado Pago recusou a devolução. Verifique o saldo/estado da conta do restaurante antes de tentar novamente.",
                 status_code=409,
             ) from exc
+        finally:
+            close_provider(provider)
 
         if money(provider_refund.amount) != refund_value:
             persisted = db.query(OnlinePaymentRefund).filter(

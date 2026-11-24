@@ -1,3 +1,4 @@
+from collections.abc import Collection
 import os
 import logging
 import asyncio
@@ -19,7 +20,7 @@ router = APIRouter(
 )
 
 KOMA_AUTH_SUBPROTOCOL = "koma-auth"
-SESSION_REVALIDATION_SECONDS = 30.0
+SESSION_REVALIDATION_SECONDS = 180.0
 KOMA_TENANT_ORIGIN_RE = re.compile(r"^https://[a-z0-9-]+\.komafood\.com\.br$")
 
 
@@ -95,7 +96,7 @@ def _validated_internal_websocket_identity(token: str, requested_user_id: str):
         current_restaurante_id.reset(tenant_token)
 
 
-def _websocket_origin_allowed(clean_origin: str, allowed_origins: list[str]) -> bool:
+def _websocket_origin_allowed(clean_origin: str, allowed_origins: Collection[str]) -> bool:
     return clean_origin in allowed_origins or bool(KOMA_TENANT_ORIGIN_RE.fullmatch(clean_origin))
 
 
@@ -110,7 +111,7 @@ async def validate_websocket_origin(websocket: WebSocket) -> bool:
     Registra apenas a origem sanitizada (nunca tokens, query params ou dados de usuário).
     """
     raw_origin = websocket.headers.get("origin") or websocket.headers.get("Origin")
-    allowed_origins = settings.get_cors_allowed_origins()
+    allowed_origins = settings.get_cors_allowed_origins_set()
 
     if raw_origin:
         try:

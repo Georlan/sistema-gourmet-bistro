@@ -506,6 +506,8 @@ export default function MenuV2Experience({
                 src={activeBrand.bannerImage}
                 alt={`${activeBrand.name} — capa`}
                 className="km-hero-banner-bg"
+                loading="eager"
+                fetchPriority="high"
                 decoding="async"
                 onError={() => {
                   setBannerFailed(true);
@@ -1099,7 +1101,7 @@ export default function MenuV2Experience({
                       key={item.id}
                       product={item as any}
                       variant="row"
-                      priority={catIndex === 0 && itemIndex < 6}
+                      priority={catIndex === 0 && itemIndex < 2}
                       cartQuantity={getDisplayItemCartQty(item)}
                       onSelectProduct={onSelectProduct as any}
                       onFastAdd={onFastAdd as any}

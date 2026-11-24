@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 _worker_wakeup_loop: asyncio.AbstractEventLoop | None = None
 _worker_wakeup_event: asyncio.Event | None = None
 _WORKER_MIN_IDLE_SECONDS = 30.0
-_WORKER_MAX_IDLE_SECONDS = 30.0
+_WORKER_MAX_IDLE_SECONDS = 300.0
 _WORKER_ACTIVE_POLL_SECONDS = 2.0
 
 
@@ -284,11 +284,12 @@ def dispatch_batch():
                 text("SELECT * FROM koma_internal.claim_signup_notifications(:claim)"),
                 {"claim": claim},
             ).mappings().all()
+            has_db_changes = True
         else:
-            db.query(RestaurantSignup).filter(
+            deleted_signups = db.query(RestaurantSignup).filter(
                 RestaurantSignup.expires_at < now
             ).delete(synchronize_session=False)
-            db.query(SignupNotification).filter(
+            expired_notices = db.query(SignupNotification).filter(
                 SignupNotification.expires_at < now,
                 SignupNotification.status.in_(["pending", "sending", "failed"]),
                 SignupNotification.payload_encrypted != "",
@@ -314,7 +315,11 @@ def dispatch_batch():
                 rows.append(
                     {c.name: getattr(row, c.name) for c in SignupNotification.__table__.columns}
                 )
-        db.commit()
+            has_db_changes = bool(rows or deleted_signups or expired_notices)
+        if has_db_changes:
+            db.commit()
+        else:
+            db.rollback()
 
     for row in rows:
         error = None

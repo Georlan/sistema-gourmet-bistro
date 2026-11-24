@@ -1,6 +1,8 @@
+import { parseDeepLinkGoSyntax } from './deepLinkStorage';
+
 /**
- * Keep only explicitly supported one-time callbacks while removing legacy
- * operational query parameters on the canonical app.komafood.com.br host.
+ * Keep only explicitly supported one-time callbacks and safe contextual deep-link
+ * syntax while removing legacy operational query parameters on app.komafood.com.br.
  *
  * The PagBank callback is returned through ?pagbank=authorized&code=...&state=...
  * and must survive the entry-point normalization until PagBankConnectionCard
@@ -32,6 +34,11 @@ export function canonicalOperationalQuery(search: string): string {
       canonical.set('pagbank', 'cancelled');
       canonical.set('state', state);
     }
+  }
+
+  const goId = parseDeepLinkGoSyntax(search);
+  if (goId) {
+    canonical.set('go', goId);
   }
 
   return canonical.toString();

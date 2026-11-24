@@ -8,26 +8,26 @@ def _source(relative_path: str) -> str:
     return (ROOT / relative_path).read_text(encoding="utf-8")
 
 
-def test_appearance_only_exposes_logo_and_banner_editing():
+def test_appearance_exposes_logo_banner_and_normalized_brand_color_without_background_override():
     source = _source("src/components/cardapio/CardapioDigitalSettingsPanel.tsx")
 
     assert ("Imagens do restaurante" in source or 'title="Logo e capa"' in source)
     assert ("Logo e capa" in source or "Você personaliza somente as imagens que identificam o restaurante." in source)
-    assert "Cores do cardápio" not in source
-    assert 'type="color"' not in source
-    assert "Cor de destaque" not in source
-    assert "Cor de fundo" not in source
     assert 'type="logo"' in source
     assert 'type="banner"' in source
+    assert "BRAND_COLOR_PRESETS" in source
+    assert 'type="color"' in source
+    assert "normalizeConfigBrandColor" in source
+    assert "Cor de fundo" not in source
+    assert "cor_fundo" not in source
 
 
-def test_settings_keep_the_menu_on_the_koma_palette():
+def test_settings_keep_koma_default_primary_and_oklch_theme_tokens():
     source = _source("src/components/cardapio/CardapioDigitalSettingsPanel.tsx")
 
     assert "const KOMA_MENU_PRIMARY = '#00b894';" in source
-    assert "const KOMA_MENU_BACKGROUND = '#090a0f';" in source
     assert "cor_primaria: KOMA_MENU_PRIMARY" in source
-    assert "cor_fundo: KOMA_MENU_BACKGROUND" in source
+    assert "buildMenuThemeTokens" in source
 
 
 def test_migration_normalizes_existing_custom_menu_colors():

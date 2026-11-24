@@ -303,7 +303,7 @@ export function CashierCouriers({
 
         <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
           <div className="space-y-2">
-            {motoboysLoadState === 'loading' ? (
+            {motoboysLoadState === 'idle' || motoboysLoadState === 'loading' ? (
               <span className="text-xs italic text-koma-muted">Sincronizando entregadores...</span>
             ) : motoboysLoadState === 'error' ? (
               <span className="text-xs italic text-amber-500">Não foi possível confirmar a lista de entregadores.</span>

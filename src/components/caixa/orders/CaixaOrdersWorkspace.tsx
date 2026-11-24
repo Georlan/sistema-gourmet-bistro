@@ -65,7 +65,7 @@ export interface CaixaOrdersWorkspaceProps {
       readonly nome: string;
       readonly ativo?: boolean;
     }[];
-    readonly loadState: 'loading' | 'loaded' | 'error';
+    readonly loadState: 'idle' | 'loading' | 'loaded' | 'error';
     readonly selectedByOrderId: Readonly<Record<string, string>>;
     readonly onChange: (orderId: string, courierId: string) => void;
     readonly onRequestReassignment: (order: DeliveryOrderView) => void;

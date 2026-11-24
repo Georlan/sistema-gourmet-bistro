@@ -88,7 +88,7 @@ export interface AnalyticsEventMap {
   public_checkout_initiated: PublicCheckoutInitiatedProps;
   public_order_submitted: PublicOrderSubmittedProps;
   web_vitals_metric: {
-    name: 'LCP' | 'INP' | 'CLS';
+    metric_name: 'LCP' | 'INP' | 'CLS';
     value: number;
     rating: 'good' | 'needs-improvement' | 'poor';
     surface?: string;

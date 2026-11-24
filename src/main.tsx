@@ -8,8 +8,6 @@ import { getPersistedOperationalPortal, saveOperatorSession } from "./utils/auth
 import { forgetInstalledOperatorSession, loadInstalledOperatorSession } from "./utils/installedOperatorSession";
 import ReactDOM from "react-dom/client";
 import "./index.css";
-import "./landing/siara-event.css";
-import "./components/shared/operationalHeader.css";
 import { KomaLoading } from "./components/app/KomaLoading";
 import { initializeKomaTheme } from "./config/theme";
 import { AppRecoveryBoundary } from "./components/auth/AppRecoveryBoundary";
@@ -27,6 +25,7 @@ import { SupportCodeNotice } from "./components/app/SupportCodeNotice";
 import { installSupportCodeObserver } from "./utils/supportCode";
 import { AnalyticsProvider, initAnalytics } from "./analytics";
 import { canonicalOperationalQuery } from "./utils/operationalCallbackParams";
+import { capturePendingDeepLink, parseDeepLinkGoSyntax } from "./utils/deepLinkStorage";
 
 import {
   KOMA_OPERATIONAL_APP_URL,
@@ -127,6 +126,11 @@ function redirectLegacyOperationalStaffHost(): boolean {
   // Links antigos como restaurante-caixa/restaurante-garcom não são mais uma
   // segunda autenticação. Em produção eles convergem para o único acesso da equipe.
   if (isPublicMenuRoute() || isPublicCommercialRoute() || isOperationalUtilityRoute()) return false;
+  const goId = parseDeepLinkGoSyntax(window.location.search);
+  if (goId) {
+    window.location.replace(`${KOMA_OPERATIONAL_APP_URL}?go=${encodeURIComponent(goId)}`);
+    return true;
+  }
   window.location.replace(KOMA_OPERATIONAL_APP_URL);
   return true;
 }
@@ -219,6 +223,13 @@ const hasCustomerSupportSurface =
   && !isInternalSupportOperationalRoute
   && (isUnifiedOperationalRoute || isOnboardingAwareManagementRoute || isSmartPosRoute || isEmbeddedOperationalPreview);
 
+if (
+  (isUnifiedOperationalRoute || isOnboardingAwareManagementRoute || isEmbeddedOperationalPreview)
+  && !isInternalSupportOperationalRoute
+) {
+  capturePendingDeepLink(window.location.search);
+}
+
 // O Chrome mobile pode esconder path/query na barra e fazer links legados
 // parecerem o domínio puro. Em produção, antes de montar o shell, removemos
 // rota/query legadas. Preservamos somente os parâmetros efêmeros do pareamento
@@ -274,9 +285,9 @@ const RootApp = React.lazy(
       : isPlanContractRoute
         ? () => import("./legal/PlanContractPageV2")
         : isCearaTechQrRoute
-          ? () => import("./landing/CearaTechQrPage")
+          ? () => Promise.all([import("./landing/siara-event.css"), import("./landing/CearaTechQrPage")]).then(([, mod]) => mod)
           : isCearaTechRoute
-            ? () => import("./landing/CearaTechLeadPage")
+            ? () => Promise.all([import("./landing/siara-event.css"), import("./landing/CearaTechLeadPage")]).then(([, mod]) => mod)
             : isUnifiedOperationalRoute
             ? () => import("./components/auth/UnifiedOperationalEntry")
             : isOnboardingAwareManagementRoute

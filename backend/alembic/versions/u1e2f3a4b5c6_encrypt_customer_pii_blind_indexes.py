@@ -12,7 +12,22 @@ lookup and uniqueness without exposing the raw values.
 from alembic import op
 import sqlalchemy as sa
 
-from app.crypt import decrypt_field, encrypt_field, pii_lookup_hash
+def decrypt_field(*args, **kwargs):
+    from app.crypt import decrypt_field as _fn
+
+    return _fn(*args, **kwargs)
+
+
+def encrypt_field(*args, **kwargs):
+    from app.crypt import encrypt_field as _fn
+
+    return _fn(*args, **kwargs)
+
+
+def pii_lookup_hash(*args, **kwargs):
+    from app.crypt import pii_lookup_hash as _fn
+
+    return _fn(*args, **kwargs)
 
 
 revision = "u1e2f3a4b5c6"

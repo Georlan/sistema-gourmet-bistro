@@ -1,6 +1,11 @@
 import '../shared/komaOperationalOverlays.css';
 import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowUpRight,
+  CheckCircle2,
   CircleHelp,
+  Info,
   Lightbulb,
   MessageSquareWarning,
   Send,
@@ -12,9 +17,27 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { API_BASE_URL } from '../../config/api';
 import { getOperatorSession, type OperatorSession } from '../../utils/authSession';
+import { KOMA_NAVIGATE_GO_EVENT } from '../../utils/deepLinkStorage';
+import { OPEN_SUPPORT_WIDGET_EVENT, getLatestApiError, type RecentApiError } from '../../utils/supportCode';
+import { resolveCurrentCashierNavigationId } from '../caixa/navigation/cashierDeepLink';
 import { KOMA_OPEN_CUSTOMER_SUPPORT_EVENT } from './customerSupportEvents';
 
 type FeedbackKind = 'question' | 'suggestion' | 'complaint' | 'problem';
+type SupportSurface = 'caixa' | 'garcom' | 'entregador';
+
+interface DiagnosticIssue {
+  code: string;
+  severity: 'error' | 'warning' | 'info' | string;
+  title: string;
+  description: string;
+  action_label: string;
+  go_id: string;
+}
+
+interface DiagnosticsSnapshot {
+  summary_status: 'ok' | 'attention' | string;
+  issues: DiagnosticIssue[];
+}
 
 type FeedbackOption = {
   id: FeedbackKind;
@@ -22,6 +45,9 @@ type FeedbackOption = {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
 };
+
+const MANAGEMENT_ROLES = new Set(['admin', 'gerente', 'superadmin']);
+const SAFE_VERSION_RE = /^[a-zA-Z0-9._-]{4,64}$/;
 
 const FEEDBACK_OPTIONS: readonly FeedbackOption[] = [
   {
@@ -58,6 +84,26 @@ function readSession(): OperatorSession | null {
   }
 }
 
+function detectSupportSurface(session: OperatorSession | null): SupportSurface {
+  try {
+    const portal = typeof sessionStorage !== 'undefined'
+      ? sessionStorage.getItem('koma_active_operational_portal')
+      : null;
+    if (portal === 'caixa' || portal === 'garcom') return portal;
+  } catch {
+    // Ignore storage read failures.
+  }
+  const role = String(session?.user?.role || session?.user?.cargo || '').trim().toLowerCase();
+  if (role === 'entregador') return 'entregador';
+  if (role === 'garcom') return 'garcom';
+  return 'caixa';
+}
+
+function readSafeFrontendVersion(): string | undefined {
+  const sha = String(import.meta.env?.VITE_BUILD_SHA || '').trim();
+  return SAFE_VERSION_RE.test(sha) ? sha : undefined;
+}
+
 export function CustomerSupportWidget() {
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const submittingRef = useRef(false);
@@ -69,33 +115,62 @@ export function CustomerSupportWidget() {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState('');
   const [sentId, setSentId] = useState<string | null>(null);
+  const [attachedSupportCode, setAttachedSupportCode] = useState<string | null>(null);
+  const [latestApiError, setLatestApiError] = useState<RecentApiError | null>(null);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsSnapshot | null>(null);
+  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
 
   useEffect(() => {
     const acceptSession = (next: OperatorSession | null) => {
       const scope = next ? `${next.user.restaurante_id}:${next.user.id}` : null;
       if (scopeRef.current !== null && scope !== scopeRef.current) {
-        setMessage('');setKind('question');setSentId(null);setError('');setIsOpen(false);
+        setMessage('');
+        setKind('question');
+        setSentId(null);
+        setError('');
+        setAttachedSupportCode(null);
+        setLatestApiError(null);
+        setDiagnostics(null);
+        setIsOpen(false);
       }
-      scopeRef.current = scope;setSession(next);
+      scopeRef.current = scope;
+      setSession(next);
     };
     acceptSession(readSession());
     const syncSession = () => acceptSession(readSession());
-    const openSupport = () => {
+
+    const openSupportDrawer = (supportCode?: string | null) => {
       const nextSession = readSession();
       acceptSession(nextSession);
       if (!nextSession?.token) return;
+      const latestErr = getLatestApiError();
+      setLatestApiError(latestErr);
+      if (supportCode) {
+        setKind('problem');
+        setAttachedSupportCode(supportCode);
+      } else {
+        setAttachedSupportCode(latestErr?.support_code ?? null);
+      }
       setSentId(null);
       setError('');
       setIsOpen(true);
     };
 
+    const onOpenDefault = () => openSupportDrawer();
+    const onOpenWithCode = (event: Event) => {
+      const detail = (event as CustomEvent<{ supportCode?: string }>).detail;
+      openSupportDrawer(detail?.supportCode ?? null);
+    };
+
     window.addEventListener('focus', syncSession);
     window.addEventListener('storage', syncSession);
-    window.addEventListener(KOMA_OPEN_CUSTOMER_SUPPORT_EVENT, openSupport);
+    window.addEventListener(KOMA_OPEN_CUSTOMER_SUPPORT_EVENT, onOpenDefault);
+    window.addEventListener(OPEN_SUPPORT_WIDGET_EVENT, onOpenWithCode);
     return () => {
       window.removeEventListener('focus', syncSession);
       window.removeEventListener('storage', syncSession);
-      window.removeEventListener(KOMA_OPEN_CUSTOMER_SUPPORT_EVENT, openSupport);
+      window.removeEventListener(KOMA_OPEN_CUSTOMER_SUPPORT_EVENT, onOpenDefault);
+      window.removeEventListener(OPEN_SUPPORT_WIDGET_EVENT, onOpenWithCode);
     };
   }, []);
 
@@ -106,6 +181,39 @@ export function CustomerSupportWidget() {
     if (!sentId) messageRef.current?.focus({ preventScroll: true });
     return () => { document.body.style.overflow = previous; };
   }, [isOpen, sentId]);
+
+  const role = String(session?.user?.role || session?.user?.cargo || '').trim().toLowerCase();
+  const isManagementRole = MANAGEMENT_ROLES.has(role);
+  const surface = detectSupportSurface(session);
+
+  useEffect(() => {
+    if (!isOpen || !session?.token || !isManagementRole) {
+      setDiagnostics(null);
+      setDiagnosticsLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setDiagnosticsLoading(true);
+    fetch(`${API_BASE_URL}/api/support/diagnostics`, {
+      headers: { Authorization: `Bearer ${session.token}` },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return (await response.json()) as DiagnosticsSnapshot;
+      })
+      .then((data) => {
+        if (controller.signal.aborted || !data || !Array.isArray(data.issues)) return;
+        setDiagnostics(data);
+      })
+      .catch(() => {
+        // Autodiagnóstico é auxiliar e falha de forma silenciosa.
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setDiagnosticsLoading(false);
+      });
+    return () => controller.abort();
+  }, [isOpen, session?.token, isManagementRole]);
 
   const activeOption = useMemo(
     () => FEEDBACK_OPTIONS.find((option) => option.id === kind) ?? FEEDBACK_OPTIONS[0],
@@ -119,6 +227,7 @@ export function CustomerSupportWidget() {
     setMessage('');
     setError('');
     setSentId(null);
+    setAttachedSupportCode(getLatestApiError()?.support_code ?? null);
   };
 
   const closeDrawer = () => {
@@ -126,13 +235,45 @@ export function CustomerSupportWidget() {
     setError('');
   };
 
+  const navigateToDiagnosticTarget = (goId: string) => {
+    closeDrawer();
+    if (surface === 'caixa') {
+      window.dispatchEvent(new CustomEvent(KOMA_NAVIGATE_GO_EVENT, { detail: { id: goId } }));
+      return;
+    }
+    window.location.assign(`/?go=${encodeURIComponent(goId)}`);
+  };
+
   const submitFeedback = async (event: React.FormEvent) => {
     event.preventDefault();
     const trimmedMessage = message.trim();
     if (trimmedMessage.length < 5 || submittingRef.current) return;
     const active = readSession();
-    if (!active || active.token !== session.token) { setIsOpen(false);return; }
+    if (!active || active.token !== session.token) { setIsOpen(false); return; }
     submittingRef.current = true;
+
+    const currentNavId = surface === 'caixa' && typeof sessionStorage !== 'undefined'
+      ? resolveCurrentCashierNavigationId(
+          sessionStorage.getItem('koma_active_tab'),
+          sessionStorage.getItem('koma_active_subtab'),
+        )
+      : null;
+    const frontendVersion = readSafeFrontendVersion();
+    const effectiveSupportCode = attachedSupportCode || latestApiError?.support_code || null;
+    const detectedIssueCodes = (diagnostics?.issues ?? []).map((item) => item.code).slice(0, 12);
+
+    const contextPayload: Record<string, unknown> = {
+      surface,
+      ...(currentNavId ? { navigation_id: currentNavId } : {}),
+      ...(frontendVersion ? { frontend_version: frontendVersion } : {}),
+      ...(effectiveSupportCode ? { last_support_code: effectiveSupportCode } : {}),
+      ...(latestApiError ? {
+        last_error_status: latestApiError.status,
+        last_error_area: latestApiError.area,
+        last_error_endpoint: latestApiError.endpoint,
+      } : {}),
+      ...(detectedIssueCodes.length ? { detected_issue_codes: detectedIssueCodes } : {}),
+    };
 
     setIsSending(true);
     setError('');
@@ -148,6 +289,7 @@ export function CustomerSupportWidget() {
           message: trimmedMessage,
           // Não enviamos query string nem hash para evitar vazar tokens em links.
           page_path: window.location.pathname,
+          context: contextPayload,
         }),
       });
 
@@ -184,13 +326,13 @@ export function CustomerSupportWidget() {
       if (event.key === 'Tab') {
         const controls = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), textarea')].filter(node => node.getClientRects().length > 0 && node.getAttribute('aria-label') !== 'Fechar ajuda');
         const first = controls[0], last = controls.at(-1);
-        if (event.shiftKey && document.activeElement === first) { event.preventDefault();last?.focus(); }
-        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault();first?.focus(); }
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
       }
     }}>
       <button
         type="button"
-        className="absolute inset-0 bg-black/55 backdrop-blur-[1px]"
+        className="absolute inset-0 bg-black/55"
         onClick={closeDrawer}
         aria-label="Fechar ajuda"
       />
@@ -243,6 +385,99 @@ export function CustomerSupportWidget() {
         ) : (
           <form onSubmit={submitFeedback} className="flex min-h-0 flex-1 flex-col">
             <div className="flex-1 overflow-y-auto px-5 py-5">
+              {attachedSupportCode ? (
+                <div
+                  className="mb-4 flex items-center justify-between gap-2 rounded-2xl border px-3.5 py-2.5 text-xs"
+                  style={{
+                    borderColor: 'var(--ko-line)',
+                    background: 'var(--ko-panel)',
+                    color: 'var(--ko-ink)',
+                  }}
+                >
+                  <span>
+                    Código técnico anexado: <strong>{attachedSupportCode}</strong>
+                  </span>
+                </div>
+              ) : null}
+
+              {isManagementRole && (diagnosticsLoading || diagnostics) ? (
+                <section aria-label="Verificações automáticas da loja" className="mb-4">
+                  <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-koma-muted-foreground">
+                    Verificações automáticas da loja
+                  </p>
+                  {diagnosticsLoading && !diagnostics ? (
+                    <div
+                      className="rounded-2xl border px-3.5 py-2.5 text-xs"
+                      style={{
+                        borderColor: 'var(--ko-line)',
+                        background: 'var(--ko-panel)',
+                        color: 'var(--ko-muted)',
+                      }}
+                    >
+                      Verificando configurações essenciais...
+                    </div>
+                  ) : diagnostics?.issues.length ? (
+                    <div className="flex flex-col gap-2">
+                      {diagnostics.issues.slice(0, 4).map((issue) => {
+                        const SeverityIcon = issue.severity === 'error'
+                          ? AlertCircle
+                          : issue.severity === 'warning'
+                            ? AlertTriangle
+                            : Info;
+                        return (
+                          <div
+                            key={issue.code}
+                            className="rounded-2xl border p-3 text-left"
+                            style={{
+                              borderColor: issue.severity === 'error' ? 'var(--koma-danger-border)' : 'var(--ko-line)',
+                              background: 'var(--ko-panel)',
+                              color: 'var(--ko-ink)',
+                            }}
+                          >
+                            <div className="flex items-start gap-2">
+                              <SeverityIcon className="mt-0.5 h-4 w-4 shrink-0 text-koma-accent" />
+                              <div className="min-w-0 flex-1">
+                                <div className="text-sm font-semibold">{issue.title}</div>
+                                <p className="mt-0.5 text-xs leading-4" style={{ color: 'var(--ko-muted)' }}>
+                                  {issue.description}
+                                </p>
+                                {issue.go_id ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => navigateToDiagnosticTarget(issue.go_id)}
+                                    className="mt-2 inline-flex min-h-[36px] items-center gap-1 rounded-xl border px-2.5 py-1 text-xs font-semibold transition hover:opacity-90"
+                                    style={{
+                                      borderColor: 'var(--ko-line)',
+                                      background: 'var(--ko-raised)',
+                                      color: 'var(--ko-ink)',
+                                    }}
+                                  >
+                                    {issue.action_label || 'Ir para configuração'}
+                                    <ArrowUpRight className="h-3.5 w-3.5" />
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : diagnostics ? (
+                    <div
+                      className="flex items-center gap-2 rounded-2xl border px-3.5 py-2.5 text-xs"
+                      style={{
+                        borderColor: 'var(--ko-line)',
+                        background: 'var(--ko-panel)',
+                        color: 'var(--ko-muted)',
+                      }}
+                    >
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-koma-accent" />
+                      <span>Nenhum bloqueio detectado nas configurações principais.</span>
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
+
               <label className="block">
                 <span className="text-xs font-bold uppercase tracking-[0.12em] text-koma-muted-foreground">
                   Sua mensagem
@@ -255,14 +490,14 @@ export function CustomerSupportWidget() {
                   maxLength={2000}
                   rows={5}
                   className="mt-2 w-full resize-none rounded-2xl border border-koma-border bg-koma-card px-4 py-3 text-[max(16px,1rem)] text-koma-foreground outline-none transition placeholder:text-koma-muted-foreground focus:border-koma-accent focus:ring-2 focus:ring-koma-accent/20"
-                  placeholder={`Escreva aqui…`}
+                  placeholder="Escreva aqui…"
                   required
                 />
               </label>
 
               <div className="mt-2 flex items-center justify-between gap-3 text-xs text-koma-muted-foreground">
                 <span>{message.length}/2000</span>
-                <span>Página de origem incluída.</span>
+                <span>Diagnóstico técnico incluído.</span>
               </div>
 
               <p className="mb-3 text-xs font-bold uppercase tracking-[0.12em] text-koma-muted-foreground">
@@ -286,7 +521,6 @@ export function CustomerSupportWidget() {
                     >
                       <Icon className={`inline-block h-4 w-4 ${selected ? 'text-koma-accent' : 'text-koma-muted-foreground'}`} />
                       <span className="ml-2 text-sm font-semibold text-koma-foreground">{option.label}</span>
-
                     </button>
                   );
                 })}
@@ -310,7 +544,7 @@ export function CustomerSupportWidget() {
                 {isSending ? 'Enviando…' : `Enviar ${activeOption.label.toLowerCase()}`}
               </button>
               <p className="mt-2 text-center text-[11px] leading-4 text-koma-muted-foreground">
-                Não envie senhas ou dados de cartão.
+                Não envie senhas ou dados de clientes.
               </p>
             </footer>
           </form>

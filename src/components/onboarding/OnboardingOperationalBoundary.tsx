@@ -3,6 +3,14 @@ import { clearOperatorSession, getOperatorSession, type OperationalPortal } from
 import { FirstAccessOnboarding, ONBOARDING_SETUP_MODE_KEY } from './FirstAccessOnboarding';
 import { useOnboardingAccessGate } from './useOnboardingAccessGate';
 import { SUPPORT_SESSION_STORAGE_KEY } from '../../super-admin/SuperAdminSupportModal';
+import {
+  consumePendingDeepLink,
+  parseDeepLinkGoParam,
+  peekPendingDeepLink,
+  resolveDeepLinkTarget,
+  stripGoParamFromUrl,
+} from '../caixa/navigation/cashierDeepLink';
+import { hasDeepLinkGoParam } from '../../utils/deepLinkStorage';
 
 function readSetupMode(): boolean {
   try {
@@ -85,6 +93,29 @@ export function OnboardingOperationalBoundary({
   if (setupMode) return <>{children}</>;
 
   if (!gate.requiredComplete) {
+    const requestedGo = typeof window !== 'undefined'
+      ? parseDeepLinkGoParam(window.location.search) || peekPendingDeepLink()
+      : peekPendingDeepLink();
+    if (requestedGo) {
+      const resolution = resolveDeepLinkTarget(requestedGo, { role, isOnboardingPending: true });
+      if (resolution.allowed && resolution.requiresSetupMode) {
+        try {
+          sessionStorage.setItem(ONBOARDING_SETUP_MODE_KEY, '1');
+        } catch {
+          // Storage can be blocked in restricted browser contexts.
+        }
+        if (readSetupMode()) {
+          return <>{children}</>;
+        }
+      } else {
+        consumePendingDeepLink();
+        stripGoParamFromUrl();
+      }
+    } else if (typeof window !== 'undefined' && hasDeepLinkGoParam(window.location.search)) {
+      consumePendingDeepLink();
+      stripGoParamFromUrl();
+    }
+
     return (
       <FirstAccessOnboarding
         accessToken={session.token}

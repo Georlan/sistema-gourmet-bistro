@@ -313,6 +313,7 @@ class PrintingApplicationService:
                 event_at=source_time,
                 table_id=mesa_id,
                 preserve_item_customers=True,
+                is_test_order=bool(getattr(comanda, "onboarding_test", False)),
             ),
             paper_width=paper_profile.width,
             compact_58=paper_profile.compact_58,
@@ -492,6 +493,7 @@ class PrintingApplicationService:
                 ),
                 payment_required=payment_required,
                 show_financial_breakdown=is_primary,
+                is_test_order=bool(getattr(comanda, "onboarding_test", False)),
             )
             paper_profile = resolve_printer_paper_profile(
                 db,
@@ -607,8 +609,11 @@ class PrintingApplicationService:
                 ),
             ]
 
+        is_test_order = bool(getattr(comanda, "onboarding_test", False))
         jobs: list[PrintJob] = []
         for part, payload in payloads:
+            if is_test_order:
+                payload = "*** TESTE HOMOLOGACAO (SEM VALOR) ***\n" + payload
             if paper_profile.compact_58:
                 payload = apply_compact_58_projection(
                     payload,

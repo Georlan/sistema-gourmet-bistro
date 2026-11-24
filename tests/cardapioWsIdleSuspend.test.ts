@@ -22,11 +22,18 @@ test('ao voltar visível cancela o timer, recarrega o catálogo e reconecta', ()
 });
 
 test('suspensão por aba oculta não agenda reconexão automática e o cleanup limpa o timer', () => {
-  assert.match(wsBlock, /if \(pausedByHidden \|\| document\.hidden\) return;\s*reconnectTimer = setTimeout\(connect/);
+  assert.match(wsBlock, /if \(pausedByHidden \|\| document\.hidden\) return;\s*reconnectTimer = setTimeout\(\(\) => \{\s*reconnectTimer = undefined;\s*connect\(\);/);
   assert.match(wsBlock, /if \(hiddenDisconnectTimer\) clearTimeout\(hiddenDisconnectTimer\);\s*ws\?\.close\(\);/);
 });
 
 test('cardápio mantém imports estáticos e toast em CSS puro', () => {
   assert.doesNotMatch(page, /React\.lazy\(/);
   assert.doesNotMatch(page, /motion\/react|KOMA_EASE_SMOOTH/);
+});
+
+test('reconexão mantém somente um socket e invalida timers e callbacks antigos', () => {
+  assert.match(wsBlock, /if \(ws && ws\.readyState !== WebSocket\.CLOSED\) return;/);
+  assert.match(wsBlock, /if \(reconnectTimer\) \{\s*clearTimeout\(reconnectTimer\);\s*reconnectTimer = undefined;\s*\}\s*const socket = new WebSocket/);
+  assert.match(wsBlock, /socket\.onopen = \(\) => \{\s*if \(stopped \|\| ws !== socket\) return;/);
+  assert.match(wsBlock, /socket\.onmessage = \(event\) => \{\s*if \(stopped \|\| ws !== socket\) return;/);
 });

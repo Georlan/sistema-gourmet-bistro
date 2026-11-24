@@ -2,7 +2,7 @@
 
 ## Quality gates de merge
 
-A proteção ativa de `main` usa o ruleset **Protect main branch**. Seu único status obrigatório é `Merge verdict` (GitHub Actions), com a branch atualizada em relação à base (`strict_required_status_checks_policy: true`), PR obrigatório e threads de revisão resolvidas. Não há atores com bypass. Consulte o ruleset novamente antes de integrar: a configuração do GitHub é a fonte de verdade dos checks exigidos.
+A proteção ativa de `main` usa o ruleset **Protect main branch**. Seu único status obrigatório é `Merge verdict` (GitHub Actions), com `strict_required_status_checks_policy: false` (`allow_auto_merge: true`), PR obrigatório e threads de revisão resolvidas. Não há atores com bypass. Consulte o ruleset novamente antes de integrar: a configuração do GitHub é a fonte de verdade dos checks exigidos.
 
 `Merge verdict` executa `.github/workflows/quality-gate.yml` (**Koma Minimal Gate**): TypeScript (`npm run lint`), suíte unitária frontend (`npm run test:unit`, cobrindo todos os `tests/*.test.ts`), build de produção (`npm run build`) e compilação sintática de `backend/app`. Quando o detector de paths sensíveis é acionado, também executa no mesmo check:
 - validação de head único do Alembic (`alembic heads == 1`) ao tocar migrations ou modelos;

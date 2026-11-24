@@ -246,6 +246,8 @@ def registrar_fidelidade_compra_quitada(
     O crédito é tenant-scoped e idempotente por ``comanda_id``. Pedidos
     recusados/cancelados e pagamentos sem cliente nunca geram benefício.
     """
+    if getattr(comanda, "onboarding_test", False):
+        return False
     if not has_plan_entitlement(
         db,
         comanda.restaurante_id,
@@ -451,6 +453,8 @@ def _insert_guest_cliente_if_needed(
 @event.listens_for(Comanda, "before_insert")
 def _vincular_cliente_universal_antes_da_comanda(_mapper, connection, target: Comanda) -> None:
     """Garante identidade canônica para qualquer canal que informe telefone."""
+    if getattr(target, "onboarding_test", False):
+        return
     resolved_id, canonical_name = _insert_guest_cliente_if_needed(connection, target)
     if resolved_id is not None:
         target.cliente_id = resolved_id

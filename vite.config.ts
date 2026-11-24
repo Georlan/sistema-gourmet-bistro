@@ -59,6 +59,20 @@ export default defineConfig(() => {
           app: path.resolve(__dirname, 'index.html'),
           publicMarketing: path.resolve(__dirname, 'src/landing/publicMain.tsx'),
         },
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return undefined;
+            if (id.includes('lucide-react')) return 'vendor-icons';
+            if (
+              id.includes('/node_modules/react/')
+              || id.includes('/node_modules/react-dom/')
+              || id.includes('/node_modules/scheduler/')
+            ) {
+              return 'vendor-react';
+            }
+            return undefined;
+          },
+        },
       },
     },
     resolve: {

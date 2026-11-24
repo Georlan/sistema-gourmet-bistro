@@ -379,9 +379,15 @@ class OrderApplicationService:
         if not new_sales_allowed(db, cmd.restaurant_id):
             raise OrderValidationError('Novas vendas indisponíveis: regularize a fatura KÔMA em atraso. Faturas e histórico continuam acessíveis.')
 
-        from ...services.restaurant_provisioning import is_provisional_preparation
+        from ...services.restaurant_provisioning import (
+            is_provisional_preparation,
+            is_superadmin_operational_qa_active,
+        )
         if is_provisional_preparation(db, cmd.restaurant_id):
             raise OrderValidationError("Restaurante em fase de preparação. Operação comercial não liberada.")
+
+        qa_window_active = is_superadmin_operational_qa_active(db, cmd.restaurant_id)
+        is_qa_order = bool(cmd.onboarding_test) or qa_window_active
 
         if cmd.coupon_code and not has_plan_entitlement(
             db,
@@ -449,10 +455,10 @@ class OrderApplicationService:
             itens_solicitados=itens_solicitados,
             delivery_address=delivery_addr,
             delivery_phone=clean_phone,
-            cupom_codigo=cmd.coupon_code,
-            cliente_telefone=clean_phone,
-            cliente_id=str(cmd.customer.customer_id) if cmd.customer and cmd.customer.customer_id else None,
-            usar_cashback=cmd.usar_cashback or cmd.cashback_discount > Decimal("0.00"),
+            cupom_codigo=None if is_qa_order else cmd.coupon_code,
+            cliente_telefone=None if is_qa_order else clean_phone,
+            cliente_id=None if is_qa_order else (str(cmd.customer.customer_id) if cmd.customer and cmd.customer.customer_id else None),
+            usar_cashback=False if is_qa_order else (cmd.usar_cashback or cmd.cashback_discount > Decimal("0.00")),
         )
 
         # O mínimo depende do preço efetivo da oferta, que pode ser maior ou
@@ -541,9 +547,9 @@ class OrderApplicationService:
             if garcom:
                 garcom_id = garcom.id
 
-        # 5. Cadastro / Atualização do Cliente (Preserva regra de segurança: pedidos web sem OTP não se apropriam de cadastro)
+        # 5. Cadastro / Atualização do Cliente (Preserva regra de segurança e isola pedidos QA)
         cliente = None
-        if cmd.customer and cmd.customer.customer_id:
+        if not is_qa_order and cmd.customer and cmd.customer.customer_id:
             cliente = (
                 db.query(Cliente)
                 .filter(
@@ -560,7 +566,7 @@ class OrderApplicationService:
                     nome=cliente.nome,
                     endereco=delivery_addr,
                 )
-        elif cmd.channel != OrderChannel.WEB_CARDAPIO and cmd.customer and cmd.customer.name and len(cmd.customer.name.strip()) >= 2 and clean_phone:
+        elif not is_qa_order and cmd.channel != OrderChannel.WEB_CARDAPIO and cmd.customer and cmd.customer.name and len(cmd.customer.name.strip()) >= 2 and clean_phone:
             existing_by_phone = buscar_cliente_por_telefone(
                 db,
                 restaurante_id=cmd.restaurant_id,
@@ -653,9 +659,12 @@ class OrderApplicationService:
             auto_delivery_status = "pendente" if is_digital_dine_in else None
             initial_lancamento_status = "pendente" if is_digital_dine_in else "producao"
 
+        if comanda is not None and bool(getattr(comanda, "onboarding_test", False)):
+            is_qa_order = True
+
         cupom_db_id = None
         coupon_discount_applied = Decimal("0.00")
-        if quote.coupon_discount > Decimal("0.00") and cmd.coupon_code:
+        if not is_qa_order and quote.coupon_discount > Decimal("0.00") and cmd.coupon_code:
             clean_code = cmd.coupon_code.strip()
             # Incremento atômico condicional no banco de dados (protege contra corridas em SQLite e PostgreSQL)
             update_count = (
@@ -736,7 +745,7 @@ class OrderApplicationService:
                     identificador=cmd.customer.name if cmd.customer else None,
                     numero_pedido=numero_pedido,
                     fechada=False,
-                    onboarding_test=bool(cmd.onboarding_test),
+                    onboarding_test=bool(is_qa_order),
                     whatsapp_status_opt_in=bool(
                         cmd.channel == OrderChannel.WEB_CARDAPIO and cmd.whatsapp_status_opt_in
                     ),
@@ -783,7 +792,7 @@ class OrderApplicationService:
                 )
 
             # 7. Efeitos Transacionais de Cashback no Saldo do Cliente
-            if quote.cashback_discount > Decimal("0.00") and cliente is not None:
+            if not is_qa_order and quote.cashback_discount > Decimal("0.00") and cliente is not None:
                 cliente.saldo_cashback = max(
                     0.0,
                     round(float(cliente.saldo_cashback or 0.0) - float(quote.cashback_discount), 2),
@@ -865,11 +874,12 @@ class OrderApplicationService:
             db.flush()
 
             # 10. Consumo de Estoque (pedidos em produção baixam imediatamente, pendentes aguardam aceite)
-            consumir_estoque_dos_itens(db, itens_criados, usuario_id=garcom_id, liberar_pendente=False)
+            if not is_qa_order:
+                consumir_estoque_dos_itens(db, itens_criados, usuario_id=garcom_id, liberar_pendente=False)
 
             # 11. Transactional Outbox (mesma sessão ACID). Pagamentos online
             # só liberam este evento após confirmação autoritativa do provedor.
-            if not cmd.defer_operational_publish:
+            if not cmd.defer_operational_publish and not is_qa_order:
                 eid = cls._event_identity_kwargs(db, novo_lancamento, comanda)
                 event = OrderCreated(
                     restaurant_id=cmd.restaurant_id,
@@ -988,34 +998,36 @@ class OrderApplicationService:
         comanda.delivery_status = "producao" if cmd.start_preparation else "aceito"
 
         target_items = [it for it in comanda.itens if it.lancamento_id == lancamento.id] if lancamento else comanda.itens
-        consumir_estoque_dos_itens(db, target_items, liberar_pendente=True)
-        eid = cls._event_identity_kwargs(db, lancamento, comanda)
-        event = (
-            OrderPreparing(
-                restaurant_id=cmd.restaurant_id,
-                order_id=eid["order_id"],
-                check_id=eid["check_id"],
-                display_number=eid["display_number"],
-                check_number=eid["check_number"],
-                operator_user_id=cmd.operator_user_id,
+        is_qa_order = bool(getattr(comanda, "onboarding_test", False))
+        if not is_qa_order:
+            consumir_estoque_dos_itens(db, target_items, liberar_pendente=True)
+            eid = cls._event_identity_kwargs(db, lancamento, comanda)
+            event = (
+                OrderPreparing(
+                    restaurant_id=cmd.restaurant_id,
+                    order_id=eid["order_id"],
+                    check_id=eid["check_id"],
+                    display_number=eid["display_number"],
+                    check_number=eid["check_number"],
+                    operator_user_id=cmd.operator_user_id,
+                )
+                if current_status == OrderStatus.ACCEPTED
+                else OrderAccepted(
+                    restaurant_id=cmd.restaurant_id,
+                    order_id=eid["order_id"],
+                    check_id=eid["check_id"],
+                    display_number=eid["display_number"],
+                    check_number=eid["check_number"],
+                    operator_user_id=cmd.operator_user_id,
+                    estimated_prep_minutes=cmd.estimated_prep_minutes,
+                )
             )
-            if current_status == OrderStatus.ACCEPTED
-            else OrderAccepted(
-                restaurant_id=cmd.restaurant_id,
-                order_id=eid["order_id"],
-                check_id=eid["check_id"],
-                display_number=eid["display_number"],
-                check_number=eid["check_number"],
-                operator_user_id=cmd.operator_user_id,
-                estimated_prep_minutes=cmd.estimated_prep_minutes,
+            enqueue_outbox_event_in_session(
+                db,
+                event,
+                aggregate_type="order",
+                aggregate_id=str(eid["order_id"]),
             )
-        )
-        enqueue_outbox_event_in_session(
-            db,
-            event,
-            aggregate_type="order",
-            aggregate_id=str(eid["order_id"]),
-        )
 
         if commit:
             _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
@@ -1062,23 +1074,24 @@ class OrderApplicationService:
         if active_items and all(it.status == "pronto" for it in active_items):
             comanda.delivery_status = "pronto"
 
-        eid = cls._event_identity_kwargs(db, lancamento, comanda)
-        event = OrderReady(
-            restaurant_id=cmd.restaurant_id,
-            order_id=eid["order_id"],
-            check_id=eid["check_id"],
-            display_number=eid["display_number"],
-            check_number=eid["check_number"],
-            fulfillment=fulfillment,
-            customer_name=comanda.identificador,
-            customer_phone=comanda.delivery_telefone,
-        )
-        enqueue_outbox_event_in_session(
-            db,
-            event,
-            aggregate_type="order",
-            aggregate_id=str(eid["order_id"]),
-        )
+        if not bool(getattr(comanda, "onboarding_test", False)):
+            eid = cls._event_identity_kwargs(db, lancamento, comanda)
+            event = OrderReady(
+                restaurant_id=cmd.restaurant_id,
+                order_id=eid["order_id"],
+                check_id=eid["check_id"],
+                display_number=eid["display_number"],
+                check_number=eid["check_number"],
+                fulfillment=fulfillment,
+                customer_name=comanda.identificador,
+                customer_phone=comanda.delivery_telefone,
+            )
+            enqueue_outbox_event_in_session(
+                db,
+                event,
+                aggregate_type="order",
+                aggregate_id=str(eid["order_id"]),
+            )
 
         if commit:
             _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
@@ -1177,7 +1190,8 @@ class OrderApplicationService:
                 it.status = "cancelado"
                 itens_cancelados.append(it)
 
-        if cmd.refund_stock and itens_cancelados:
+        is_qa_order = bool(getattr(comanda, "onboarding_test", False))
+        if cmd.refund_stock and itens_cancelados and not is_qa_order:
             estornar_estoque_dos_itens(
                 db,
                 itens_cancelados,
@@ -1190,23 +1204,24 @@ class OrderApplicationService:
             comanda.fechada = True
             comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
 
-        eid = cls._event_identity_kwargs(db, lancamento, comanda)
-        event = OrderCancelled(
-            restaurant_id=cmd.restaurant_id,
-            order_id=eid["order_id"],
-            check_id=eid["check_id"],
-            display_number=eid["display_number"],
-            check_number=eid["check_number"],
-            reason=cmd.reason or "Cancelado pela operação",
-            operator_user_id=cmd.operator_user_id,
-            refunded_stock=cmd.refund_stock,
-        )
-        enqueue_outbox_event_in_session(
-            db,
-            event,
-            aggregate_type="order",
-            aggregate_id=str(eid["order_id"]),
-        )
+        if not is_qa_order:
+            eid = cls._event_identity_kwargs(db, lancamento, comanda)
+            event = OrderCancelled(
+                restaurant_id=cmd.restaurant_id,
+                order_id=eid["order_id"],
+                check_id=eid["check_id"],
+                display_number=eid["display_number"],
+                check_number=eid["check_number"],
+                reason=cmd.reason or "Cancelado pela operação",
+                operator_user_id=cmd.operator_user_id,
+                refunded_stock=cmd.refund_stock,
+            )
+            enqueue_outbox_event_in_session(
+                db,
+                event,
+                aggregate_type="order",
+                aggregate_id=str(eid["order_id"]),
+            )
 
         if commit:
             _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
@@ -1258,23 +1273,24 @@ class OrderApplicationService:
             comanda.fechada = True
             comanda.fechado_em = datetime.datetime.now(datetime.timezone.utc)
 
-        eid = cls._event_identity_kwargs(db, lancamento, comanda)
-        event = OrderRejected(
-            restaurant_id=cmd.restaurant_id,
-            order_id=eid["order_id"],
-            check_id=eid["check_id"],
-            display_number=eid["display_number"],
-            check_number=eid["check_number"],
-            reason=cmd.reason or "Recusado pelo restaurante",
-            operator_user_id=cmd.operator_user_id,
-            customer_phone=comanda.delivery_telefone,
-        )
-        enqueue_outbox_event_in_session(
-            db,
-            event,
-            aggregate_type="order",
-            aggregate_id=str(eid["order_id"]),
-        )
+        if not bool(getattr(comanda, "onboarding_test", False)):
+            eid = cls._event_identity_kwargs(db, lancamento, comanda)
+            event = OrderRejected(
+                restaurant_id=cmd.restaurant_id,
+                order_id=eid["order_id"],
+                check_id=eid["check_id"],
+                display_number=eid["display_number"],
+                check_number=eid["check_number"],
+                reason=cmd.reason or "Recusado pelo restaurante",
+                operator_user_id=cmd.operator_user_id,
+                customer_phone=comanda.delivery_telefone,
+            )
+            enqueue_outbox_event_in_session(
+                db,
+                event,
+                aggregate_type="order",
+                aggregate_id=str(eid["order_id"]),
+            )
 
         if commit:
             _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
@@ -1319,23 +1335,24 @@ class OrderApplicationService:
             except (ValueError, TypeError):
                 pass
 
-        eid = cls._event_identity_kwargs(db, lancamento, comanda)
-        event = OrderDispatched(
-            restaurant_id=cmd.restaurant_id,
-            order_id=eid["order_id"],
-            check_id=eid["check_id"],
-            display_number=eid["display_number"],
-            check_number=eid["check_number"],
-            courier_id=int(cmd.courier_id) if cmd.courier_id is not None else None,
-            customer_name=comanda.identificador,
-            customer_phone=comanda.delivery_telefone,
-        )
-        enqueue_outbox_event_in_session(
-            db,
-            event,
-            aggregate_type="order",
-            aggregate_id=str(eid["order_id"]),
-        )
+        if not bool(getattr(comanda, "onboarding_test", False)):
+            eid = cls._event_identity_kwargs(db, lancamento, comanda)
+            event = OrderDispatched(
+                restaurant_id=cmd.restaurant_id,
+                order_id=eid["order_id"],
+                check_id=eid["check_id"],
+                display_number=eid["display_number"],
+                check_number=eid["check_number"],
+                courier_id=int(cmd.courier_id) if cmd.courier_id is not None else None,
+                customer_name=comanda.identificador,
+                customer_phone=comanda.delivery_telefone,
+            )
+            enqueue_outbox_event_in_session(
+                db,
+                event,
+                aggregate_type="order",
+                aggregate_id=str(eid["order_id"]),
+            )
 
         if commit:
             _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)
@@ -1399,21 +1416,22 @@ class OrderApplicationService:
         if active_launches and all(l.status == "finalizado" for l in active_launches):
             comanda.delivery_status = "finalizado"
 
-        eid = cls._event_identity_kwargs(db, lancamento, comanda)
-        event = OrderCompleted(
-            restaurant_id=cmd.restaurant_id,
-            order_id=eid["order_id"],
-            check_id=eid["check_id"],
-            display_number=eid["display_number"],
-            check_number=eid["check_number"],
-            operator_user_id=cmd.operator_user_id,
-        )
-        enqueue_outbox_event_in_session(
-            db,
-            event,
-            aggregate_type="order",
-            aggregate_id=str(eid["order_id"]),
-        )
+        if not bool(getattr(comanda, "onboarding_test", False)):
+            eid = cls._event_identity_kwargs(db, lancamento, comanda)
+            event = OrderCompleted(
+                restaurant_id=cmd.restaurant_id,
+                order_id=eid["order_id"],
+                check_id=eid["check_id"],
+                display_number=eid["display_number"],
+                check_number=eid["check_number"],
+                operator_user_id=cmd.operator_user_id,
+            )
+            enqueue_outbox_event_in_session(
+                db,
+                event,
+                aggregate_type="order",
+                aggregate_id=str(eid["order_id"]),
+            )
 
         if commit:
             _emit_chat_status_event(db, cmd.restaurant_id, comanda.id, comanda.delivery_status)

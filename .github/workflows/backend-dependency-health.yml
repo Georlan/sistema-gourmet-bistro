@@ -21,31 +21,8 @@ permissions:
   contents: read
 
 jobs:
-  schedule-gate:
-    name: Check recent main activity
-    if: github.event_name == 'schedule'
-    runs-on: ubuntu-24.04
-    outputs:
-      run: ${{ steps.activity.outputs.run }}
-    steps:
-      - name: Checkout main head
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
-      - name: Check for commits in last 8 days
-        id: activity
-        run: |
-          if [ -n "$(git log -1 --since='8 days ago' --format=%H)" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No new commits on main in the last 8 days; skipping weekly dependency audit."
-            echo "run=false" >> "$GITHUB_OUTPUT"
-          fi
-
   npm-audit:
     name: Frontend npm vulnerability check
-    needs: [schedule-gate]
-    if: always() && !cancelled() && (needs.schedule-gate.result == 'skipped' || (needs.schedule-gate.result == 'success' && needs.schedule-gate.outputs.run == 'true'))
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     steps:
@@ -63,8 +40,6 @@ jobs:
 
   pip-check:
     name: Backend pip dependency check
-    needs: [schedule-gate]
-    if: always() && !cancelled() && (needs.schedule-gate.result == 'skipped' || (needs.schedule-gate.result == 'success' && needs.schedule-gate.outputs.run == 'true'))
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:

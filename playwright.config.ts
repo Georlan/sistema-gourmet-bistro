@@ -28,8 +28,8 @@ export default defineConfig({
     baseURL,
     browserName: 'chromium',
     screenshot: 'only-on-failure',
-    trace: 'retain-on-failure',
-    video: 'retain-on-failure',
+    trace: 'on-first-retry',
+    video: 'on-first-retry',
   },
   projects: [...viewportMatrix.map(({ name, width, height, touch }) => ({
     name,

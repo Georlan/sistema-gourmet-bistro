@@ -1120,7 +1120,6 @@ def _claim_pending_jobs(
 ) -> list[dict]:
     """Reserva atomicamente até ``limit`` trabalhos na ordem da fila."""
     safe_limit = max(1, min(limit, MAX_CLAIM_BATCH_SIZE))
-    coalesced_reprints = _coalesce_pending_reprints(db, agent.restaurante_id)
     # The recovery probes are intentionally off the hot claim path. Their own
     # thresholds are five minutes / hours, so checking once per tenant every
     # 30s preserves recovery semantics while removing two write-capable queries
@@ -1137,6 +1136,21 @@ def _claim_pending_jobs(
             db.flush()
             maintenance_ran = True
 
+    has_pending = (
+        db.query(PrintJob.id)
+        .filter(
+            PrintJob.restaurante_id == agent.restaurante_id,
+            PrintJob.status == "pending",
+        )
+        .first()
+        is not None
+    )
+    if not has_pending:
+        if maintenance_ran:
+            db.commit()
+        return []
+
+    coalesced_reprints = _coalesce_pending_reprints(db, agent.restaurante_id)
     can_claim_generic, role = _can_agent_claim_generic_jobs(db, agent)
 
     if db.get_bind().dialect.name == "postgresql":
@@ -1267,11 +1281,47 @@ def _claim_pending_jobs(
     return claimed_jobs
 
 
+async def _prefilter_agent_token_hash(
+    request: Request = None,
+    x_agent_token: Optional[str] = Header(None, alias="X-Agent-Token"),
+    authorization: Optional[str] = Header(None),
+) -> str:
+    """Rejeita tokens ausentes ou inválidos em cache antes de abrir sessão DB."""
+    client_ip, user_agent = _extract_client_info(request)
+    raw_token = x_agent_token
+    if not raw_token and authorization:
+        parts = authorization.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            raw_token = parts[1]
+
+    if not raw_token:
+        log.warning(
+            "print_agent_auth_rejected reason=missing_token client_ip=%s user_agent=%s",
+            client_ip,
+            user_agent,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de agente não fornecido no cabeçalho X-Agent-Token",
+            headers={"Retry-After": "60"},
+        )
+
+    computed_hash = hash_token(raw_token.strip())
+    if _invalid_agent_token_is_cached(computed_hash):
+        _log_cached_invalid_agent_token()
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token de agente inválido ou revogado",
+            headers={"Retry-After": "60"},
+        )
+    return computed_hash
+
+
 def get_current_agent(
     request: Request = None,
     x_agent_token: Optional[str] = Header(None, alias="X-Agent-Token"),
     authorization: Optional[str] = Header(None),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ) -> PrintAgentToken:
     """
     Dependency de autenticação do Agent Token.
@@ -1282,7 +1332,6 @@ def get_current_agent(
     fila ociosa não precisam gerar uma escrita no banco a cada polling.
     """
     client_ip, user_agent = _extract_client_info(request)
-
     raw_token = x_agent_token
     if not raw_token and authorization:
         parts = authorization.split()
@@ -2565,7 +2614,7 @@ def set_primary_agent(
     }
 
 
-@router.post("/heartbeat")
+@router.post("/heartbeat", dependencies=[Depends(_prefilter_agent_token_hash)])
 def agent_heartbeat(
     background_tasks: BackgroundTasks,
     req: Optional[HeartbeatRequest] = None,
@@ -2766,7 +2815,7 @@ def get_next_job(
     }
 
 
-@router.post("/jobs/claim-next")
+@router.post("/jobs/claim-next", dependencies=[Depends(_prefilter_agent_token_hash)])
 def claim_next_job(
     agent: PrintAgentToken = Depends(get_current_agent),
     db: Session = Depends(get_db),
@@ -2786,7 +2835,7 @@ def claim_next_job(
     return claimed_jobs[0] if claimed_jobs else None
 
 
-@router.post("/jobs/claim-batch")
+@router.post("/jobs/claim-batch", dependencies=[Depends(_prefilter_agent_token_hash)])
 def claim_job_batch(
     limit: int = Query(default=10, ge=1, le=MAX_CLAIM_BATCH_SIZE),
     agent: PrintAgentToken = Depends(get_current_agent),
@@ -2906,7 +2955,7 @@ def claim_job(
         "idempotency_key": job.idempotency_key
     }
 
-@router.post("/jobs/complete-batch")
+@router.post("/jobs/complete-batch", dependencies=[Depends(_prefilter_agent_token_hash)])
 def complete_job_batch(
     req: CompleteJobsRequest,
     background_tasks: BackgroundTasks,
@@ -2951,18 +3000,21 @@ def complete_job_batch(
             changed = True
         confirmed_job_ids.append(job_id)
 
-    db.commit()
-    if confirmed_job_ids:
-        _schedule_print_monitor_refresh(
-            background_tasks,
-            restaurante_id,
-        )
     if changed:
+        manager.queue_committed_broadcast(
+            db,
+            {"event": "print_monitor_updated"},
+            restaurante_id,
+            target_audience="internal",
+        )
+        db.commit()
         _schedule_print_history_maintenance(
             background_tasks,
             restaurante_id,
             now,
         )
+    else:
+        db.rollback()
 
     return {
         "status": "processed",

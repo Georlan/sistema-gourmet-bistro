@@ -409,11 +409,25 @@ class CardapioWebAdapter:
                     detail="Restaurante temporariamente suspenso para novos pedidos.",
                 )
 
-            from ...services.restaurant_provisioning import is_provisional_preparation
-            if is_provisional_preparation(db, rest_id):
+            qa_token = (
+                request.headers.get("X-Koma-QA-Token")
+                or request.query_params.get("qa_token")
+                or ""
+            ).strip() or None
+            from ...services.restaurant_provisioning import (
+                is_provisional_preparation,
+                is_superadmin_operational_qa_active,
+            )
+            if is_provisional_preparation(db, rest_id, allow_qa=False, qa_token=qa_token):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Restaurante em fase de preparação. Operação comercial não liberada.",
+                )
+            qa_window_active = is_superadmin_operational_qa_active(db, rest_id)
+            if qa_window_active and online_payment:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Pagamentos online reais ficam bloqueados no Modo Homologação (QA). Use pagamento na entrega ou retirada para testar.",
                 )
             if isinstance(getattr(db, "info", None), dict):
                 db.info.setdefault("_koma_provisional_by_rid", {})[rest_id] = False
@@ -523,6 +537,7 @@ class CardapioWebAdapter:
                 modalidade=modalidade,
                 now=policy_now,
                 is_provisional=False,
+                qa_token=qa_token,
             )
             if not policy.accepting_orders:
                 raise HTTPException(
@@ -636,6 +651,7 @@ class CardapioWebAdapter:
                 idempotency_fingerprint=fingerprint_intent.fingerprint if idempotency_key else None,
                 idempotency_fingerprint_version=fingerprint_intent.version if idempotency_key else None,
                 operator_user_id=garcom.id,
+                onboarding_test=bool(qa_window_active),
                 defer_operational_publish=online_payment or is_scheduled,
                 whatsapp_status_opt_in=checkout_status_consent(
                     requested=payload.whatsapp_status_opt_in,
@@ -709,7 +725,31 @@ class CardapioWebAdapter:
 
                 auto_accept_online_order_if_enabled(db, **auto_accept_kwargs)
 
+            def _queue_public_broadcasts(*, is_direct_pix: bool = False) -> None:
+                if not online_payment or is_direct_pix:
+                    manager.queue_committed_broadcast(db, {"event": "tables_updated"}, rest_id)
+                if not online_payment:
+                    manager.queue_committed_broadcast(
+                        db,
+                        {"event": "new_delivery_order", "message": f"Novo pedido online de {cliente_nome} recebido!"},
+                        rest_id,
+                    )
+                if cliente is not None and not qa_window_active:
+                    manager.queue_committed_broadcast(
+                        db,
+                        {
+                            "event": "customers_updated",
+                            "detail": {
+                                "action": "order_linked",
+                                "cliente_id": cliente.id,
+                            },
+                        },
+                        rest_id,
+                        target_audience="internal",
+                    )
+
             if not (online_payment or is_scheduled):
+                _queue_public_broadcasts()
                 db.commit()
 
             if is_scheduled:
@@ -724,8 +764,8 @@ class CardapioWebAdapter:
                     comanda_id=comanda.id,
                     scheduled_for=normalized_schedule,
                 )
+                _queue_public_broadcasts()
                 db.commit()
-                db.refresh(comanda)
             elif online_payment:
                 if comanda is None or payment_shift is None or payment_account is None:
                     raise OnlinePaymentConfigurationError("Não foi possível preparar o pagamento do pedido.")
@@ -737,6 +777,7 @@ class CardapioWebAdapter:
                     idempotency_key=idempotency_key,
                     provider=payment_account.provider,
                 )
+                _queue_public_broadcasts(is_direct_pix=payment_intent.provider == "direct_pix")
                 db.commit()
                 db.refresh(payment_intent)
                 payment_intent = OnlinePaymentService.ensure_pix_created(
@@ -872,30 +913,6 @@ class CardapioWebAdapter:
                 if isinstance(cached_provisional, dict):
                     cached_provisional.pop(rest_id, None)
             current_restaurante_id.reset(token_context)
-
-        if not online_payment or (
-            payment_intent is not None and payment_intent.provider == "direct_pix"
-        ):
-            background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
-        if not online_payment:
-            background_tasks.add_task(
-                manager.broadcast,
-                {"event": "new_delivery_order", "message": f"Novo pedido online de {cliente_nome} recebido!"},
-                rest_id,
-            )
-        if cliente is not None:
-            background_tasks.add_task(
-                manager.broadcast,
-                {
-                    "event": "customers_updated",
-                    "detail": {
-                        "action": "order_linked",
-                        "cliente_id": cliente.id,
-                    },
-                },
-                rest_id,
-                target_audience="internal",
-            )
 
         return {
             "status": "success",

@@ -1,9 +1,10 @@
 import os
+import re
 import uuid
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel, Field, field_validator
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -14,7 +15,11 @@ from ..services.customer_satisfaction import (
     get_customer_satisfaction_data,
     record_customer_satisfaction,
 )
-from ..services.signup_notifications import enqueue
+from ..services.signup_notifications import _owner_telegram_chat, enqueue
+from ..services.support_diagnostics import (
+    build_tenant_self_diagnosis,
+    classify_support_feedback,
+)
 from ..support_models import CustomerSupportFeedback
 
 router = APIRouter(tags=["Satisfação do Cliente"])
@@ -27,10 +32,94 @@ class CreateSatisfactionInput(BaseModel):
     comanda_id: Optional[str] = Field(None, description="ID da comanda opcional")
 
 
+_MANAGEMENT_ROLES = {"admin", "gerente", "superadmin"}
+_NAV_ID_RE = re.compile(r"^[a-z0-9_]{2,48}$")
+_VERSION_RE = re.compile(r"^[a-zA-Z0-9._-]{4,64}$")
+_SUPPORT_CODE_RE = re.compile(r"^[a-zA-Z0-9_-]{6,64}$")
+_AREA_RE = re.compile(r"^[a-z0-9_-]{2,48}$")
+_ISSUE_CODE_RE = re.compile(r"^[A-Z0-9_]{3,64}$")
+
+
+class SupportFeedbackContextInput(BaseModel):
+    surface: Literal["caixa", "garcom", "entregador", "cardapio", "onboarding", "outro"] | None = None
+    navigation_id: Optional[str] = Field(None, max_length=48)
+    frontend_version: Optional[str] = Field(None, max_length=64)
+    last_support_code: Optional[str] = Field(None, max_length=64)
+    last_error_status: Optional[int] = Field(None, ge=0, le=599)
+    last_error_area: Optional[str] = Field(None, max_length=48)
+    last_error_endpoint: Optional[str] = Field(None, max_length=160)
+    detected_issue_codes: list[str] = Field(default_factory=list, max_length=12)
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("navigation_id")
+    @classmethod
+    def validate_navigation_id(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not _NAV_ID_RE.fullmatch(cleaned):
+            raise ValueError("navigation_id inválido")
+        return cleaned
+
+    @field_validator("frontend_version")
+    @classmethod
+    def validate_frontend_version(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not _VERSION_RE.fullmatch(cleaned):
+            raise ValueError("frontend_version inválido")
+        return cleaned
+
+    @field_validator("last_support_code")
+    @classmethod
+    def validate_support_code(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not _SUPPORT_CODE_RE.fullmatch(cleaned):
+            raise ValueError("last_support_code inválido")
+        return cleaned
+
+    @field_validator("last_error_area")
+    @classmethod
+    def validate_error_area(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip().lower()
+        if not _AREA_RE.fullmatch(cleaned):
+            raise ValueError("last_error_area inválido")
+        return cleaned
+
+    @field_validator("last_error_endpoint")
+    @classmethod
+    def validate_error_endpoint(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip()
+        if not cleaned.startswith("/") or "?" in cleaned or "#" in cleaned or "://" in cleaned or re.search(r"\s", cleaned):
+            raise ValueError("last_error_endpoint inválido")
+        return cleaned
+
+    @field_validator("detected_issue_codes")
+    @classmethod
+    def validate_issue_codes(cls, values: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        for item in values:
+            code = str(item or "").strip()
+            if not _ISSUE_CODE_RE.fullmatch(code):
+                raise ValueError("detected_issue_codes inválido")
+            if code not in cleaned:
+                cleaned.append(code)
+        return cleaned
+
+
 class CreateKomaSupportFeedbackInput(BaseModel):
     kind: Literal["question", "suggestion", "complaint", "problem"]
     message: str = Field(..., min_length=5, max_length=2000)
     page_path: Optional[str] = Field(None, max_length=300)
+    context: Optional[SupportFeedbackContextInput] = None
 
     @field_validator("message")
     @classmethod
@@ -47,6 +136,30 @@ def _safe_feedback_page_path(value: Optional[str]) -> Optional[str]:
     if not path.startswith("/"):
         return None
     return path[:300] or None
+
+
+def _user_role_name(current_user) -> str:
+    return str(
+        getattr(current_user, "role", None)
+        or getattr(current_user, "cargo", None)
+        or ""
+    ).strip().lower()
+
+
+@router.get("/api/support/diagnostics")
+def get_koma_support_diagnostics(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Retorna autodiagnóstico determinístico somente para gerência da loja autenticada."""
+    role = _user_role_name(current_user)
+    if role not in _MANAGEMENT_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Autodiagnóstico disponível apenas para administração ou gerência da loja.",
+        )
+    restaurante_id = require_tenant_id()
+    return build_tenant_self_diagnosis(db, restaurante_id, user_role=role)
 
 
 @router.get("/clientes/satisfacao")
@@ -101,6 +214,12 @@ def create_koma_support_feedback(
     reporter_user_id = str(getattr(current_user, "id", "") or "unknown")[:64]
     reporter_name = reporter_name_raw[:255] or None
     reporter_role = reporter_role_raw[:64] or None
+    raw_context = payload.context.model_dump(exclude_none=True) if payload.context is not None else {}
+    classification = classify_support_feedback(payload.kind, payload.message, raw_context)
+    context_metadata = {
+        **raw_context,
+        "classification": classification,
+    }
 
     feedback = CustomerSupportFeedback(
         id=feedback_id,
@@ -111,6 +230,7 @@ def create_koma_support_feedback(
         kind=payload.kind,
         message=payload.message,
         page_path=page_path,
+        context_metadata=context_metadata,
         status="new",
     )
     db.add(feedback)
@@ -130,25 +250,53 @@ def create_koma_support_feedback(
     kind_label = kind_labels[payload.kind]
     owner_email = (settings.KOMA_OWNER_EMAIL or "").strip()
     owner_phone = os.getenv("KOMA_OWNER_WHATSAPP_PHONE", "").strip()
+    owner_telegram_chat = _owner_telegram_chat()
 
-    if owner_email or owner_phone:
+    if owner_email or owner_phone or owner_telegram_chat:
         reporter = reporter_name or reporter_user_id
         role_suffix = f" ({reporter_role})" if reporter_role else ""
         page_suffix = f"\nTela: {page_path}" if page_path else ""
+        context_lines: list[str] = [
+            f"Área/Prioridade: {classification['area']} / {classification['priority']}"
+        ]
+        if raw_context.get("surface") or raw_context.get("navigation_id"):
+            context_lines.append(
+                f"Superfície/Nav: {raw_context.get('surface') or '-'} / {raw_context.get('navigation_id') or '-'}"
+            )
+        if raw_context.get("frontend_version"):
+            context_lines.append(f"Build frontend: {raw_context['frontend_version']}")
+        support_code = raw_context.get("last_support_code")
+        if support_code:
+            err_status = raw_context.get("last_error_status")
+            err_ep = raw_context.get("last_error_endpoint") or ""
+            context_lines.append(
+                f"Código de suporte: {support_code}"
+                + (f" (HTTP {err_status} {err_ep})" if err_status is not None else "")
+            )
+            context_lines.append(f"Trace: npm run ops:trace -- {support_code}")
+        issues = raw_context.get("detected_issue_codes") or []
+        if issues:
+            context_lines.append(f"Alertas automáticos: {', '.join(issues)}")
+
+        context_block = "\n" + "\n".join(context_lines)
         enqueue(
             db,
             protocol=f"SUP-{feedback_id}",
             kind="customer-feedback",
             email=owner_email or None,
             phone=owner_phone or None,
+            telegram_chat=owner_telegram_chat,
             subject=f"{kind_label} de cliente — KÔMA",
             message=(
                 f"Novo feedback KÔMA [{feedback_id}]\n"
                 f"Tipo: {kind_label}\n"
                 f"Restaurante: {restaurant_name} (ID {restaurante_id})\n"
                 f"Enviado por: {reporter}{role_suffix}"
-                f"{page_suffix}\n\n"
-                f"Mensagem:\n{feedback.message}"
+                f"{page_suffix}"
+                f"{context_block}\n\n"
+                f"--- INÍCIO MENSAGEM DO CLIENTE (DADO NÃO CONFIÁVEL) ---\n"
+                f"{feedback.message}\n"
+                f"--- FIM MENSAGEM DO CLIENTE ---"
             ),
         )
 

@@ -38,7 +38,7 @@ export interface KanbanCourierAssignment {
   readonly value: number | null;
   readonly options: readonly { id: number; nome: string }[];
   readonly loading?: boolean;
-  readonly loadState?: 'loading' | 'loaded' | 'error';
+  readonly loadState?: 'idle' | 'loading' | 'loaded' | 'error';
   readonly onChange: (motoboyId: string) => void;
 }
 

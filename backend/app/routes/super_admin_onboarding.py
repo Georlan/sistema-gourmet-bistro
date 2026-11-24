@@ -1,7 +1,9 @@
 import datetime
+import hashlib
 import logging
 import math
 import re
+import secrets
 from types import SimpleNamespace
 from typing import Any, Literal
 
@@ -562,6 +564,7 @@ def update_operational_qa(
     from ..services.restaurant_provisioning import (
         QA_OPERATION_END,
         QA_OPERATION_START,
+        clear_operational_qa_cache,
         is_provisional_preparation,
         is_superadmin_operational_qa_active,
     )
@@ -598,18 +601,24 @@ def update_operational_qa(
 
             active = is_superadmin_operational_qa_active(db, tenant_id_int)
             now = datetime.datetime.now(datetime.timezone.utc)
+            raw_qa_token: str | None = None
+            qa_menu_path: str | None = None
             if payload.action == "start":
                 if active:
                     raise HTTPException(status_code=409, detail="Janela de QA já ativa. Encerre antes de reiniciar.")
-                if not is_provisional_preparation(db, tenant_id_int):
+                if not is_provisional_preparation(db, tenant_id_int, allow_qa=False):
                     raise HTTPException(status_code=409, detail="Restaurante não está em implantação provisória.")
                 expires_at = now + datetime.timedelta(hours=payload.hours)
                 action = QA_OPERATION_START
+                raw_qa_token = f"{tenant_id_int}.{secrets.token_urlsafe(24)}"
+                qa_token_hash = hashlib.sha256(raw_qa_token.encode("utf-8")).hexdigest()
+                qa_menu_path = f"/c/{restaurante.slug}?qa_token={raw_qa_token}"
                 after = {
                     "mode": "operational_qa",
                     "started_at": now.isoformat(),
                     "expires_at": expires_at.isoformat(),
                     "hours": payload.hours,
+                    "qa_token_hash": qa_token_hash,
                     "commercial_contract_created": False,
                     "subscription_created": False,
                 }
@@ -629,8 +638,9 @@ def update_operational_qa(
                 after_data=after,
             ))
             db.commit()
+            clear_operational_qa_cache(db, tenant_id_int)
 
-            return {
+            response_payload = {
                 "restaurantId": str(tenant_id_int),
                 "qaActive": payload.action == "start",
                 "expiresAt": expires_at.isoformat(),
@@ -639,6 +649,10 @@ def update_operational_qa(
                 "message": "Homologação operacional temporária liberada." if payload.action == "start"
                     else "Homologação operacional encerrada.",
             }
+            if raw_qa_token is not None:
+                response_payload["qaAccessToken"] = raw_qa_token
+                response_payload["qaMenuPath"] = qa_menu_path
+            return response_payload
     except HTTPException:
         if db.in_transaction():
             db.rollback()

@@ -4,6 +4,9 @@
  */
 
 
+import './components/shared/operationalHeader.css';
+import './components/caixa/kitchen/kdsWorkspace.css';
+import './components/mesas/waiterOperational.css';
 import { snapshotFetch } from './utils/snapshotFetch';
 import { fetchCaixaConfiguracoes } from './utils/caixaConfigClient';
 import { invalidateCardapioDigitalConfigCache } from './components/caixa/online-menu/cardapioDigitalConfigClient';
@@ -880,11 +883,11 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           window.dispatchEvent(new Event('koma_catalog_updated'));
           window.dispatchEvent(new Event('koma_online_order_control_updated'));
           window.dispatchEvent(new Event('koma_orders_updated'));
+          // Reconcilia visões gerenciais após quedas silenciosas de conexão.
+          // Os listeners só consultam dados quando a respectiva tela está aberta.
+          window.dispatchEvent(new Event('koma_team_updated'));
+          window.dispatchEvent(new Event('koma_reports_updated'));
         }
-        // Reconcilia visões gerenciais após quedas silenciosas de conexão.
-        // Os listeners só consultam dados quando a respectiva tela está aberta.
-        window.dispatchEvent(new Event('koma_team_updated'));
-        window.dispatchEvent(new Event('koma_reports_updated'));
       };
 
       socket.onmessage = (event) => {

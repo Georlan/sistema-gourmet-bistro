@@ -164,6 +164,17 @@ class PagBankProvider:
         self._client = httpx.Client(base_url=api_url(environment), headers={'Authorization': f'Bearer {access_token}'},
                                    timeout=settings.ONLINE_PAYMENT_REQUEST_TIMEOUT_SECONDS)
 
+    def close(self) -> None:
+        client = getattr(self, "_client", None)
+        if client is not None:
+            client.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
     def _request(self, method, path, **kwargs):
         is_order_create = method == 'POST' and path == '/orders'
         try:

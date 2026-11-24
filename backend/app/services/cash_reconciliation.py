@@ -125,10 +125,17 @@ def cash_shift_totals(
             ).label("gross_card"),
             func.count(func.distinct(Pagamento.comanda_id)).label("paid_count"),
         )
+        .select_from(Pagamento)
+        .outerjoin(
+            Comanda,
+            (Comanda.id == Pagamento.comanda_id)
+            & (Comanda.restaurante_id == Pagamento.restaurante_id),
+        )
         .filter(
             Pagamento.restaurante_id == restaurante_id,
             Pagamento.turno_id == turno.id,
             Pagamento.status == "aprovado",
+            or_(Comanda.id.is_(None), Comanda.onboarding_test.is_(False)),
         )
         .subquery()
     )
@@ -166,9 +173,20 @@ def cash_shift_totals(
             (PagamentoEstornoLiquidacao.estorno_id == PagamentoEstorno.id)
             & (PagamentoEstornoLiquidacao.restaurante_id == PagamentoEstorno.restaurante_id),
         )
+        .outerjoin(
+            Pagamento,
+            (Pagamento.id == PagamentoEstorno.pagamento_id)
+            & (Pagamento.restaurante_id == PagamentoEstorno.restaurante_id),
+        )
+        .outerjoin(
+            Comanda,
+            (Comanda.id == Pagamento.comanda_id)
+            & (Comanda.restaurante_id == Pagamento.restaurante_id),
+        )
         .filter(
             PagamentoEstorno.restaurante_id == restaurante_id,
             PagamentoEstorno.turno_id == turno.id,
+            or_(Comanda.id.is_(None), Comanda.onboarding_test.is_(False)),
         )
         .subquery()
     )
