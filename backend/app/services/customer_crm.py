@@ -49,7 +49,11 @@ _CRM_SCHEMA_READY_BINDS: set[int] = set()
 def crm_schema_available(db: Session) -> bool:
     """Only inspect schema on the tenant-bound connection; never issue DDL."""
     bind = db.get_bind()
-    bind_key = id(bind) if bind is not None else None
+    cacheable = bool(
+        bind is not None
+        and getattr(getattr(bind, "dialect", None), "name", None) == "postgresql"
+    )
+    bind_key = id(bind) if cacheable else None
     if bind_key is not None and bind_key in _CRM_SCHEMA_READY_BINDS:
         return True
     existing = set(sa_inspect(db.connection()).get_table_names())
