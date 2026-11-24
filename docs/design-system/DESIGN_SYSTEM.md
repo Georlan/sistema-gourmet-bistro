@@ -1,6 +1,6 @@
 # Sistema de design KÔMA
 
-Fonte de referência para novas interfaces e evolução das existentes. Base observada: `214cdc1005fe6063f6bca166d9d97e27164dac58`, 02/11/2026. As orientações abaixo são a direção para trabalho novo; não são declaração de que todas as telas já as implementam. Padrões de operação aprovados, contratos de domínio e acessibilidade prevalecem sobre migrações puramente visuais. Mudanças em produção devem preservar tenant, pagamentos, estado operacional e continuidade.
+Fonte de referência para novas interfaces e evolução das existentes. O inventário inicial foi levantado em 02/11/2026; **não trate aquele commit como estado atual nem como homologação visual**. Antes de criar ou ajustar telas, confira a implementação vigente na `main`, os tokens de `src/styles/komaFoundation.css` e `src/index.css`, e os contratos específicos de cada módulo. As orientações abaixo são direção de trabalho, não declaração de que todas as telas já as implementam. Padrões de operação aprovados, contratos de domínio e acessibilidade prevalecem sobre migrações puramente visuais. Mudanças em produção devem preservar tenant, pagamentos, estado operacional e continuidade.
 
 **Estados de decisão:** existente = implementado no código apontado; direção = especificação deste documento para trabalhos futuros, ainda não demonstrada em todas as telas; exceção = regra contextual preservada; legado = ainda existe, sem recomendação de expansão. Não atribuir aprovação histórica a decisões novas. Quando mudar uma regra, atualizar esta fonte e os consumidores afetados.
 
