@@ -9,7 +9,6 @@ const inFlight = new Map<string, Promise<OnlineOrdersControlResult>>();
 const recentCache = new Map<string, { expiresAt: number; result: OnlineOrdersControlResult }>();
 
 export function invalidateOnlineOrdersControlCache() {
-  inFlight.clear();
   recentCache.clear();
 }
 
