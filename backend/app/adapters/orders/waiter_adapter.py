@@ -276,7 +276,7 @@ class WaiterAdapter:
                     detail="Erro ao recuperar lançamento criado.",
                 )
 
-            # Identificador operacional canônico para consumo no local
+            # Persistir origem do terminal no lançamento gerado pelo Core.\n            # Não alterar replays idempotentes nem pedidos de outros canais.\n            if getattr(lancamento_in, "origem", None) == "smartpos":\n                novo_lancamento.origem = "smartpos"\n\n            # Identificador operacional canônico para consumo no local
             if comanda.tipo == "Consumo no Local" and comanda.mesa_id is not None:
                 ensure_atendimento_for_comanda(db, comanda, actor_id=current_user.id)
                 ensure_launch_identity(db, novo_lancamento)
