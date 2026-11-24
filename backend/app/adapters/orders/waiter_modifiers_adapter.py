@@ -214,7 +214,11 @@ class WaiterModifiersAdapter:
             if not novo_lancamento:
                 raise HTTPException(status_code=500, detail="Erro ao recuperar lançamento criado.")
 
-            # Preserve the true SmartPOS origin on the persisted table launch.\n            if getattr(lancamento_in, "origem", None) == "smartpos":\n                novo_lancamento.origem = "smartpos"\n\n            # The order core already persists the table session and launch identity.
+            # Preserve the true SmartPOS origin on the persisted table launch.
+            if getattr(lancamento_in, "origem", None) == "smartpos":
+                novo_lancamento.origem = "smartpos"
+
+            # The order core already persists the table session and launch identity.
             novo_lancamento.dispensado_impressao = True
             if waiter_permission_enabled(db, current_user, "perm_garcom_print"):
                 try:
