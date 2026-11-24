@@ -59,7 +59,7 @@ data class CompleteBatchResponse(
     val rejectedJobIds: List<String>,
 )
 
-class AgentRevokedException(message: String) : RuntimeException(message)
+class AgentRevokedException(message: String, val statusCode: Int) : RuntimeException(message)
 
 /**
  * Cliente HTTP oficial do KÔMA Print Android para as rotas `/api/print-agents`.
@@ -288,7 +288,7 @@ class KomaPrintAgentClient(
 
     private fun ensureAuthorizedAndSuccess(res: HttpResponsePayload, operation: String) {
         if (res.statusCode == 401 || res.statusCode == 403) {
-            throw AgentRevokedException("Credencial do agente recusada ($operation: HTTP ${res.statusCode})")
+            throw AgentRevokedException("Credencial do agente recusada ($operation: HTTP ${res.statusCode})", res.statusCode)
         }
         if (res.statusCode !in 200..299) {
             error("Erro HTTP ${res.statusCode} em $operation: ${res.body.take(240)}")
