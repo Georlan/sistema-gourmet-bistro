@@ -110,7 +110,7 @@ export function MenuPromotionsShowcase({
                   <CatalogProductImage
                     image={offerImage}
                     alt={promo.nome}
-                    priority={index < 1}
+                    priority={index < 2}
                     sizes={mediaSizes}
                   />
                 </div>
