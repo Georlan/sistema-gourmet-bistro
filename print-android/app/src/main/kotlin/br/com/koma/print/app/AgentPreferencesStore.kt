@@ -42,7 +42,7 @@ class AgentPreferencesStore(context: Context) {
         agentToken: String,
         restauranteId: Int,
         restaurantName: String,
-    ) {
+    ) = synchronized(CREDENTIALS_LOCK) {
         prefs.edit()
             .putString(KEY_BACKEND_URL, backendUrl.trim().trimEnd('/'))
             .putString(KEY_AGENT_ID, agentId.trim())
@@ -54,11 +54,27 @@ class AgentPreferencesStore(context: Context) {
             .apply()
     }
 
-    fun clearCredentials() {
+    fun clearCredentials() = synchronized(CREDENTIALS_LOCK) {
         prefs.edit()
             .remove(KEY_AGENT_TOKEN)
+            .putBoolean(KEY_AUTO_START, false)
+            .putLong(KEY_LAST_CONTACT, 0L)
             .putString(KEY_LAST_STATUS, "Desconectado pelo operador.")
             .apply()
+    }
+
+    // A late 401 must not erase credentials from a concurrent new pairing.
+    fun invalidateRevokedCredentials(expectedToken: String): Boolean = synchronized(CREDENTIALS_LOCK) {
+        if (expectedToken.isBlank() || prefs.getString(KEY_AGENT_TOKEN, "").orEmpty() != expectedToken) {
+            return@synchronized false
+        }
+        prefs.edit()
+            .remove(KEY_AGENT_TOKEN)
+            .putBoolean(KEY_AUTO_START, false)
+            .putLong(KEY_LAST_CONTACT, 0L)
+            .putString(KEY_LAST_STATUS, "Vínculo expirado ou revogado. Reconecte pelo Caixa KÔMA.")
+            .commit()
+        true
     }
 
     fun savePreferredPrinter(name: String, address: String) {
@@ -89,6 +105,7 @@ class AgentPreferencesStore(context: Context) {
     }
 
     companion object {
+        private val CREDENTIALS_LOCK = Any()
         private const val PREFS_NAME = "koma_print_android_prefs"
         private const val DEFAULT_BACKEND_URL = "https://sistema-gourmet-bistro-production.up.railway.app"
         private const val KEY_BACKEND_URL = "backend_url"
