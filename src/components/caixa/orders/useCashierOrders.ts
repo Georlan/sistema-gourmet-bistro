@@ -334,7 +334,7 @@ export function useCashierOrders({
   // may be older than a confirmed acceptance and must never reinsert its rows.
 
   const [motoboys, setMotoboys] = useState<any[]>([]);
-  const [motoboysLoadState, setMotoboysLoadState] = useState<'loading' | 'loaded' | 'error'>('loading');
+  const [motoboysLoadState, setMotoboysLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle');
   // Keep an open detail synchronized when the existing courier request finishes.
   useEffect(() => {
     setSelectedKanbanOrder((current: any) => {
