@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateProductMinStartingPrice, groupCategoryProductsForDisplay, isGroupedProduct } from '../src/cardapio/catalogGrouping';
+import { buildPublicCatalogSections, calculateProductMinStartingPrice, groupCategoryProductsForDisplay, isGroupedProduct } from '../src/cardapio/catalogGrouping';
 import type { Product } from '../src/cardapio/CardapioTypes';
+import { smartSearchMatch } from '../src/domain/search';
 
 const sku = (id: string, name: string, price: number, category: string): Product => ({
   id, name, price, category, description: '', image: '', isAvailable: true,
@@ -139,4 +140,43 @@ test('família nativa funciona fora do JE, mantém SKU real e ordem comercial', 
   if (!isGroupedProduct(cards[1])) return;
   assert.equal(cards[1].requiresExplicitVariantSelection,true);
   assert.deepEqual(cards[1].variants.map(v=>[v.product.id,v.price]),[['sol',7],['queijo',8]]);
+});
+
+// Compare the indexed implementation to the previous per-category scan. The
+// reference keeps search, family/SKU identities, availability and stable order.
+test('indexed public sections preserve the old catalog contract across tenants and searches', () => {
+  const categories = ['Bebidas', 'Pastéis', 'Vazia', 'Pastéis'];
+  const products: Product[] = [
+    {...sku('water', 'Água', 4, 'Bebidas'), ordem_exibicao: 2},
+    {...variant(sku('p1', 'Pastel frango', 7, 'Pastéis'), 'pastel', 'Pastel Médio', 'sabor', 'Frango'), ordem_exibicao: 1},
+    {...variant(sku('p2', 'Pastel queijo', 8, 'Pastéis'), 'pastel', 'Pastel Médio', 'sabor', 'Queijo'), ordem_exibicao: 1, isAvailable: false},
+    {...sku('juice', 'Suco', 6, 'Bebidas'), ordem_exibicao: 0, description: 'Laranja natural'},
+    sku('orphan', 'Item oculto', 5, 'Não publicada'),
+    {...sku('p3', 'Pastel carne', 9, 'Pastéis'), ordem_exibicao: null},
+    sku('p4', 'Pastel doce', 10, 'Pastéis'),
+  ];
+  const before = JSON.stringify(products);
+  for (const tenant of ['1', '6', '999', undefined]) {
+    for (const rawQuery of ['', '  ', 'pastel', 'Pastel Médio', 'laranja', 'queijo', 'pasrel', 'não existe']) {
+      const query = rawQuery.trim();
+      const expected = categories.map(category => {
+        const filtered = products.filter(p => p.category === category &&
+          (!query || smartSearchMatch(`${p.name} ${p.familia_nome || ''} ${p.description || ''}`, query)))
+          .sort((a,b) => (a.ordem_exibicao ?? Number.MAX_SAFE_INTEGER) - (b.ordem_exibicao ?? Number.MAX_SAFE_INTEGER));
+        return {category, items: groupCategoryProductsForDisplay(category, filtered, tenant)};
+      }).filter(section => section.items.length > 0);
+      assert.deepEqual(buildPublicCatalogSections(categories, products, tenant, rawQuery), expected);
+    }
+  }
+  assert.equal(JSON.stringify(products), before);
+});
+
+test('large catalog only includes published categories and preserves original SKU references', () => {
+  const categories = Array.from({length: 40}, (_, i) => `Category ${i}`);
+  const products = Array.from({length: 2000}, (_, i) => sku(String(i), `Product ${i}`, 1, categories[i % categories.length]));
+  const sections = buildPublicCatalogSections(categories, products, 'other-tenant', '');
+  assert.equal(sections.length, 40);
+  assert.equal(sections.reduce((sum, section) => sum + section.items.length, 0), 2000);
+  assert.equal(sections[0].items[0], products[0]);
+  assert.deepEqual(sections[39].items.map(item => item.id), products.filter(p => p.category === categories[39]).map(p => p.id));
 });
