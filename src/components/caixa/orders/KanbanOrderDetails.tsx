@@ -3,7 +3,7 @@ import { OrderItemComposition } from '../../shared/OrderItemComposition';
 import { itemCompositionPresentation, itemCompositionSignature, type CompositionSource } from '../../../domain/orderItemComposition';
 import React from 'react';
 import clsx from 'clsx';
-import { X, Check, Trash2 } from 'lucide-react';
+import { X, Check, Trash2, Smartphone } from 'lucide-react';
 import type { Table } from '../../../types';
 import type { TableOrderContext as Context } from '../../../domain/tableReadModel';
 import { TableOrderContext } from '../../shared/TableOrderContext';
@@ -307,14 +307,7 @@ export function KanbanOrderDetails({
               {(selectedKanbanOrder.origemOperacional === 'smartpos'
                 || selectedKanbanOrder.itens?.some((item) => item.origemOperacional === 'smartpos')) ? (
                 <span className="orders-card__chip orders-card__chip--smartpos" data-origin="smartpos">
-                  <img
-                    src="/brand/cashier/smartpos-tag-v1.svg"
-                    alt=""
-                    aria-hidden="true"
-                    className="orders-card__smartpos-icon"
-                    width={14}
-                    height={14}
-                  />
+                  <Smartphone size={14} aria-hidden="true" />
                   <span>Maquininha · SmartPOS</span>
                 </span>
               ) : (

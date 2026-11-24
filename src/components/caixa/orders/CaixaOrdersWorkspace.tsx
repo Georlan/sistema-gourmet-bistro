@@ -118,19 +118,9 @@ const isSmartPosOrigin = (order: SmartPosOriginCandidate): boolean => {
 const renderSmartPosTag = (order: SmartPosOriginCandidate) => {
   if (!isSmartPosOrigin(order)) return null;
   return (
-    <span
-      className="orders-card__chip orders-card__chip--smartpos"
-      data-origin="smartpos"
-      title="Pedido lançado pela maquininha SmartPOS"
-    >
-      <img
-        src="/brand/cashier/smartpos-tag-v1.svg"
-        alt=""
-        aria-hidden="true"
-        className="orders-card__smartpos-icon"
-        width={14}
-        height={14}
-      />
+    <span className="orders-card__recency orders-card__recency--smartpos"
+      data-origin="smartpos" title="Pedido lançado pela maquininha SmartPOS">
+      <Smartphone size={11} aria-hidden="true" />
       <span>Maquininha</span>
     </span>
   );
@@ -368,6 +358,16 @@ export function CaixaOrdersWorkspaceView({
     </span>
   ) : null;
 
+  const renderTopIndicators = (key: string, order: SmartPosOriginCandidate) => {
+    if (latestCardKey !== key && !isSmartPosOrigin(order)) return null;
+    return (
+      <div className="orders-card__recency-group">
+        {renderLatestTag(key)}
+        {renderSmartPosTag(order)}
+      </div>
+    );
+  };
+
   const { channelLanes, latestCardKey, totalResultadosBusca, withoutSalon } = orderLanes ?? buildOrderLanes(
     columns, restaurantConfig?.tipos_pedido_ativos,
     Boolean(hasLocalServiceWork) || pagamentosPendentes.some(payment => Number(payment.mesaNum) > 0),
@@ -415,7 +415,7 @@ export function CaixaOrdersWorkspaceView({
           sla.borderTopClass
         )}
       >
-        {renderLatestTag(`salon:${order.id}`)}
+        {renderTopIndicators(`salon:${order.id}`, order)}
         <div className="orders-card__identity">
           <div className="orders-card__number is-table">
             <span className="orders-card__table-label">{order.mesaId > 0 ? 'Mesa' : 'Balcão'}</span>
@@ -459,9 +459,8 @@ export function CaixaOrdersWorkspaceView({
             )}
           </div>
         </div>
-        {(isSmartPosOrigin(order) || smartPosState || tableMovement.transferredFromMesaIds.length > 0 || tableMovement.mergedMesaIds.length > 0) && (
+        {(smartPosState || tableMovement.transferredFromMesaIds.length > 0 || tableMovement.mergedMesaIds.length > 0) && (
         <div className="orders-card__identity-chips">
-          {renderSmartPosTag(order)}
           {smartPosState && (
             <span className={clsx('orders-card__chip', smartPosState.chipClass)}>{smartPosState.label}</span>
           )}
@@ -568,7 +567,7 @@ export function CaixaOrdersWorkspaceView({
           sla.borderTopClass
         )}
       >
-        {renderLatestTag(`digital:${order.id}`)}
+        {renderTopIndicators(`digital:${order.id}`, order)}
         {digitalOrderEdge(order)}
         <div className="orders-card__identity">
           {digitalOrderMark(order, orderNumber, Boolean(tableBlockLabel))}
@@ -616,10 +615,8 @@ export function CaixaOrdersWorkspaceView({
         </div>
         <div className="orders-card__identity-chips">
           <span className="orders-card__state" data-state={order.status}>{badgeText}</span>
-          {!order.partner && (
-            isSmartPosOrigin(order)
-              ? renderSmartPosTag(order)
-              : <span className={"orders-card__chip is-muted"}>{getDigitalOrderSourceLabel(order)}</span>
+          {!order.partner && !isSmartPosOrigin(order) && (
+            <span className={"orders-card__chip is-muted"}>{getDigitalOrderSourceLabel(order)}</span>
           )}
           <span className="orders-card__chip">{getDigitalOrderPaymentSummary(order)}</span>
         </div>
@@ -684,7 +681,7 @@ export function CaixaOrdersWorkspaceView({
           sla.borderTopClass
         )}
       >
-        {renderLatestTag(`closing:${order.id}`)}
+        {renderTopIndicators(`closing:${order.id}`, order)}
         <div className="orders-card__identity">
           <div className="orders-card__number is-table">
             <span className="orders-card__table-label">{order.mesaId > 0 ? 'Mesa' : 'Balcão'}</span>
@@ -746,7 +743,6 @@ export function CaixaOrdersWorkspaceView({
         )}
         <div className="orders-card__identity-chips">
           <span className="orders-card__state" data-state={contaPedida ? "bill" : "ready"}>{badgeText}</span>
-          {renderSmartPosTag(order)}
           {smartPosState && (
             <span className={clsx('orders-card__chip', smartPosState.chipClass)}>{smartPosState.label}</span>
           )}
@@ -817,7 +813,7 @@ export function CaixaOrdersWorkspaceView({
           sla.borderTopClass
         )}
       >
-        {renderLatestTag(`finalization:${order.id}`)}
+        {renderTopIndicators(`finalization:${order.id}`, order)}
         {digitalOrderEdge(order)}
         <div className="orders-card__identity">
           {digitalOrderMark(order, orderNumber, Boolean(tableBlockLabel))}
@@ -868,10 +864,8 @@ export function CaixaOrdersWorkspaceView({
         )}
         <div className="orders-card__identity-chips">
           <span className="orders-card__state" data-state={order.status}>{badgeText}</span>
-          {!order.partner && (
-            isSmartPosOrigin(order)
-              ? renderSmartPosTag(order)
-              : <span className={"orders-card__chip is-muted"}>{getDigitalOrderSourceLabel(order)}</span>
+          {!order.partner && !isSmartPosOrigin(order) && (
+            <span className={"orders-card__chip is-muted"}>{getDigitalOrderSourceLabel(order)}</span>
           )}
           <span className="orders-card__chip">{getDigitalOrderPaymentSummary(order)}</span>
         </div>

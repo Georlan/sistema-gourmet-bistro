@@ -158,7 +158,6 @@
 }
 
 /* Maquininha (SmartPOS) origin tag & quick production transition on table cards */
-.orders-workspace .orders-card__chip--smartpos,
 .orders-detail-modal .orders-card__chip--smartpos {
   display: inline-flex;
   align-items: center;
@@ -169,12 +168,6 @@
   background: var(--koma-accent-soft);
   color: var(--koma-accent-text);
   font-weight: 700;
-}
-.orders-card__smartpos-icon {
-  flex: 0 0 auto;
-  width: 14px;
-  height: 14px;
-  display: block;
 }
 .orders-workspace .orders-card__foot-actions {
   display: flex;
