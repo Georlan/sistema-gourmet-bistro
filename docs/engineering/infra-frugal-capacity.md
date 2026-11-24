@@ -114,3 +114,7 @@ por restaurante ocioso; não muda planos, pool, réplicas ou serviços pagos.
 Reversão: não há migration. Preferir correção progressiva ou reverter a mudança
 de despacho mantendo o opt-in da retenção; restaurar o worker antigo sem o opt-in
 pode executar a limpeza legada na inicialização. Não apagar filas nem fazer replay.
+
+## Atualização B11 (24/11/2026) — Scale & Efficiency Engine
+
+O estudo completo de capacidade 1/10/100 restaurantes, benchmarks reproduzíveis em PostgreSQL 17 (`RTT=0ms` e `RTT=25ms`, BEFORE vs AFTER), otimizações integradas (PRs `#1475`, `#1478`, `#1479`, `#1480`, `#1481`), modelagem FinOps 2026 e matriz de gatilhos objetivos de upgrade está consolidado em [`b11-scale-efficiency-engine.md`](./b11-scale-efficiency-engine.md) e reproduzível via `backend/scripts/benchmark_b11_scale_1_10_100.py`.
