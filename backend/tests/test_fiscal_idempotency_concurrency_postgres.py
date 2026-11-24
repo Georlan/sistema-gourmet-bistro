@@ -13,7 +13,7 @@ from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import Column, ForeignKey, Integer, MetaData, String, Table
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, MetaData, String, Table
 from sqlalchemy import UniqueConstraint, create_engine, event, insert, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
@@ -40,6 +40,7 @@ def _metadata():
         "comandas", metadata,
         Column("id", String, primary_key=True),
         Column("restaurante_id", Integer, ForeignKey("restaurantes.id"), nullable=False),
+        Column("onboarding_test", Boolean, nullable=False, server_default=text("false")),
         UniqueConstraint("restaurante_id", "id", name="uq_comandas_restaurante_id_id"),
     )
     for model in (RestaurantFiscalProfile, FiscalDocument, FiscalEvent, FiscalSequence):

@@ -9,15 +9,18 @@ import PixCopyCode from "./components/PixCopyCode";
 import type { CardapioFulfillment } from "./fulfillment";
 import { fetchPopularProducts, registerPopularProductsAlias } from "./popularProductsClient";
 import {
+  clearPublicMenuCache,
   fetchPublicMenu,
   getPublicMenuIdentifier,
   getPublicMenuLoadDurationMs,
 } from "./publicMenuClient";
+import { captureQaTokenFromUrl, clearQaToken } from "./qaSession";
 import { buildWhatsAppContactUrl } from "../config/whatsappUtils";
 import { getEffectiveProductPrice, normalizeProductBadge } from "../domain/productMerchandising";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
+  FlaskConical,
   QrCode,
   X,
   XCircle,
@@ -153,6 +156,7 @@ export default function CardapioPage() {
   const [user, setUser] = useState<CustomerProfile | null>(null);
   const [customerToken, setCustomerToken] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  const [isQaMode, setIsQaMode] = useState(false);
   const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [cartAnnouncement, setCartAnnouncement] = useState("");
   const lastReportedMenuIdRef = useRef<string | number | null>(null);
@@ -298,11 +302,17 @@ export default function CardapioPage() {
         restaurantId: isNumericIdentifier ? identifier : null,
         force: background,
       }).catch(() => []);
+      captureQaTokenFromUrl();
       const payload = await fetchPublicMenu({
         apiBaseUrl: API_BASE_URL,
         identifier,
         force: background,
       });
+      const qaActive = payload.modo_homologacao_qa === true;
+      setIsQaMode(qaActive);
+      if (!qaActive) {
+        clearQaToken();
+      }
 
       const restaurant = payload.restaurante;
       if (restaurant?.id) {
@@ -1419,6 +1429,41 @@ export default function CardapioPage() {
               <X className="h-4 w-4" />
             </button>
           </div>
+        </div>
+      )}
+
+      {isQaMode && (
+        <div
+          role="status"
+          style={{
+            background: "var(--koma-surface-panel)",
+            borderColor: "var(--koma-warning-border)",
+            color: "var(--koma-text-primary)",
+            fontFamily: "var(--koma-font-body)",
+          }}
+          className="relative z-40 flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 text-xs"
+        >
+          <span className="inline-flex items-center gap-2 font-semibold">
+            <FlaskConical className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>Modo Homologação (QA) — Pedidos de teste isolados (sem cobrança real)</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              clearQaToken();
+              clearPublicMenuCache();
+              setIsQaMode(false);
+              void loadRestaurantData(false);
+            }}
+            style={{
+              background: "var(--koma-surface-raised)",
+              borderColor: "var(--koma-border-default)",
+              color: "var(--koma-text-primary)",
+            }}
+            className="min-h-[32px] rounded-lg border px-2.5 py-1 text-xs font-semibold transition hover:opacity-90 cursor-pointer"
+          >
+            Sair do modo QA
+          </button>
         </div>
       )}
 

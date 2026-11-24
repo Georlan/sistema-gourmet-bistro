@@ -238,12 +238,16 @@ def create_numbered_fiscal_document(
         return FiscalDocumentCreationResult(existing, True)
 
     if comanda_id is not None:
-        owned_comanda = db.query(Comanda.id).filter(
+        owned_comanda = db.query(Comanda.id, Comanda.onboarding_test).filter(
             Comanda.id == comanda_id,
             Comanda.restaurante_id == restaurante_id,
         ).first()
         if owned_comanda is None:
             raise FiscalDocumentPersistenceError("Comanda fiscal não encontrada neste restaurante.")
+        if bool(owned_comanda.onboarding_test):
+            raise FiscalDocumentPersistenceError(
+                "Pedidos de teste/homologação não podem emitir documento fiscal."
+            )
 
     document_id = str(uuid.uuid4())
     number = reserve_fiscal_number(

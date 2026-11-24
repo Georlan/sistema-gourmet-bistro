@@ -799,6 +799,8 @@ def _registrar_fidelidade_quitacao(
     cliente_fallback: Optional[Cliente] = None,
 ) -> bool:
     """Registra fidelidade uma única vez quando uma comanda é quitada."""
+    if getattr(comanda, "onboarding_test", False):
+        return False
     cliente = None
     if comanda.cliente_id:
         cliente = buscar_cliente_por_id(
