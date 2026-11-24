@@ -965,9 +965,17 @@ export default function CardapioPage() {
 
     const connect = () => {
       if (stopped || document.hidden) return;
+      // A visibility resume may race the scheduled reconnect. Keep a single
+      // transport, including while the handshake is still CONNECTING.
+      if (ws && ws.readyState !== WebSocket.CLOSED) return;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
+      }
       const socket = new WebSocket(wsUrl);
       ws = socket;
       socket.onopen = () => {
+        if (stopped || ws !== socket) return;
         delay = 2000;
         if (hasConnected) void loadRestaurantData(true);
         hasConnected = true;
@@ -977,6 +985,7 @@ export default function CardapioPage() {
         }
       };
       socket.onmessage = (event) => {
+        if (stopped || ws !== socket) return;
         try {
           const data = JSON.parse(event.data);
           const eventName = data.event || data.type;
@@ -992,7 +1001,10 @@ export default function CardapioPage() {
         if (stopped || ws !== socket) return;
         ws = null;
         if (pausedByHidden || document.hidden) return;
-        reconnectTimer = setTimeout(connect, delay);
+        reconnectTimer = setTimeout(() => {
+          reconnectTimer = undefined;
+          connect();
+        }, delay);
         delay = Math.min(delay * 1.5, 30000);
       };
       socket.onerror = () => socket.close();
