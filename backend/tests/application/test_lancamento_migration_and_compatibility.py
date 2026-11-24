@@ -146,9 +146,14 @@ class TestLancamentoMigrationAndCompatibility:
             db.rollback()
             cleanup_token = current_restaurante_id.set(None)
             try:
+                from app.models import ConfiguracaoRestaurante
+
                 db.query(Motoboy).filter(
                     Motoboy.restaurante_id == other_rid,
                     Motoboy.id == 9988,
+                ).delete(synchronize_session=False)
+                db.query(ConfiguracaoRestaurante).filter(
+                    ConfiguracaoRestaurante.restaurante_id == other_rid,
                 ).delete(synchronize_session=False)
                 db.query(Restaurante).filter(Restaurante.id == other_rid).delete(
                     synchronize_session=False
