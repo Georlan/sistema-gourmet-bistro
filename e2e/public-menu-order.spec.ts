@@ -464,7 +464,7 @@ test('visitante consegue revisar delivery com endereço sem OTP', async ({ page 
 });
 
 test('consulta de CEP alimenta o snapshot universal e permite correção manual', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'desktop-1024', 'Fluxo de CEP coberto uma vez por matriz.');
+  test.skip(testInfo.project.name !== 'desktop-1366', 'Fluxo de CEP coberto uma vez por matriz.');
   const capturedOrders: CapturedOrder[] = [];
   await mockPublicMenuBackend(page, capturedOrders);
   await page.route('https://viacep.com.br/ws/60165121/json/', route => route.fulfill({ json: {
@@ -504,7 +504,7 @@ test('consulta de CEP alimenta o snapshot universal e permite correção manual'
 });
 
 test('consulta de CEP ignora resposta antiga que chega fora de ordem', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'desktop-1024', 'Concorrência de CEP coberta uma vez por matriz.');
+  test.skip(testInfo.project.name !== 'desktop-1366', 'Concorrência de CEP coberta uma vez por matriz.');
   await mockPublicMenuBackend(page, []);
   const requestedPostalCodes: string[] = [];
   await page.route('https://viacep.com.br/ws/**', async route => {
