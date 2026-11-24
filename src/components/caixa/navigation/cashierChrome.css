@@ -599,7 +599,7 @@
 .cashier-shell [data-collapsible="icon"] .cashier-operator { padding: .25rem; justify-content: center; }
 .cashier-shell [data-collapsible="icon"] .cashier-operator__avatar { width: 32px; height: 32px; flex-basis: 32px; }
 
-.cashier-feedback-inline { max-width: 20rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--koma-text-secondary); font-size: .75rem; font-weight: 500; }
+.cashier-feedback-inline { max-width: 20rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--koma-text-secondary); font-size: .75rem; font-weight: 500; pointer-events: none; }
 @media(max-width:640px) { .cashier-feedback-inline { max-width: 7rem; } }
 /* Restaurant identity remains available on short POS screens as well. */
 .cashier-shell .cashier-sidebar__footer .cashier-operator { display: flex !important; }
