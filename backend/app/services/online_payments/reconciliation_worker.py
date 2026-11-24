@@ -153,6 +153,13 @@ def reconcile_pending_intents(
                                     intent.id,
                                     rid,
                                 )
+                            elif (
+                                not db.new
+                                and not db.dirty
+                                and not db.deleted
+                                and db.in_transaction()
+                            ):
+                                db.rollback()
                         except Exception as exc:
                             db.rollback()
                             logger.warning(
@@ -168,16 +175,28 @@ def reconcile_pending_intents(
     return total_reconciled
 
 async def run_worker(poll_interval_seconds: float = 20.0) -> None:
-    """Loop assíncrono em background para conciliação automática."""
+    """Loop assíncrono em background para conciliação automática com backoff ocioso."""
     logger.info(
         "Autonomous reconciliation worker started; enabled_tenants=%d",
         len(_allowed_reconciliation_tenants()),
     )
+    base_interval = max(5.0, float(poll_interval_seconds))
+    max_idle_interval = max(base_interval, 120.0)
+    current_interval = base_interval
     while True:
+        reconciled = 0
         try:
-            await asyncio.to_thread(reconcile_pending_intents)
+            reconciled = int(await asyncio.to_thread(reconcile_pending_intents) or 0)
+            if reconciled > 0:
+                current_interval = base_interval
+            else:
+                current_interval = min(max_idle_interval, current_interval * 2.0)
+            await asyncio.sleep(current_interval)
         except asyncio.CancelledError:
             break
         except Exception:
             logger.exception("Error in online payment reconciliation worker loop")
-        await asyncio.sleep(poll_interval_seconds)
+            try:
+                await asyncio.sleep(base_interval)
+            except asyncio.CancelledError:
+                break

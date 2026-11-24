@@ -25,7 +25,7 @@ from ...models import (
 from ..outbox import enqueue_outbox_event_in_session
 from .base import ProviderPayment
 from .mercado_pago import MercadoPagoError, MercadoPagoProvider
-from .provider_registry import UnsupportedPaymentProviderError, provider_for_account
+from .provider_registry import UnsupportedPaymentProviderError, close_provider, provider_for_account
 from .oauth import MercadoPagoOAuthError, refresh_access_token
 from .account_connection import is_marketplace_owner_account
 from .pagbank.oauth import PagBankOAuthError, refresh_access_token as refresh_pagbank, environment_for_restaurant as pagbank_environment, is_application_owner, credential as pagbank_credential, owner_receiver_blocked, owner_receiver_pilot_enabled
@@ -296,7 +296,7 @@ class OnlinePaymentService:
                 account = cls._refresh_account_credentials(db, account)
         else:
             try:
-                _provider_adapter(account)
+                close_provider(_provider_adapter(account))
             except UnsupportedPaymentProviderError as exc:
                 raise OnlinePaymentConfigurationError(str(exc)) from exc
 
@@ -692,20 +692,23 @@ class OnlinePaymentService:
                 provider_adapter = _provider_adapter(account)
             except UnsupportedPaymentProviderError as exc:
                 raise OnlinePaymentConfigurationError(str(exc)) from exc
-            buyer = {"payer_name": payer_name, "payer_tax_id": payer_tax_id} if account.provider == "pagbank" else {}
-            return provider_adapter.create_pix(
-                amount=_money(intent.amount),
-                marketplace_fee=_money(intent.marketplace_fee),
-                payer_email=payer_email,
-                external_reference=intent.id,
-                idempotency_key=f"koma-online-{intent.id}",
-                notification_url=(
-                    f"{settings.KOMA_PUBLIC_API_URL}/payments/webhooks/"
-                    f"{account.provider.replace('_', '-')}/{account.id}"
-                ),
-                expires_at=expires_at,
-                **buyer,
-            )
+            try:
+                buyer = {"payer_name": payer_name, "payer_tax_id": payer_tax_id} if account.provider == "pagbank" else {}
+                return provider_adapter.create_pix(
+                    amount=_money(intent.amount),
+                    marketplace_fee=_money(intent.marketplace_fee),
+                    payer_email=payer_email,
+                    external_reference=intent.id,
+                    idempotency_key=f"koma-online-{intent.id}",
+                    notification_url=(
+                        f"{settings.KOMA_PUBLIC_API_URL}/payments/webhooks/"
+                        f"{account.provider.replace('_', '-')}/{account.id}"
+                    ),
+                    expires_at=expires_at,
+                    **buyer,
+                )
+            finally:
+                close_provider(provider_adapter)
 
         try:
             try:
@@ -848,29 +851,33 @@ class OnlinePaymentService:
         except UnsupportedPaymentProviderError as exc:
             raise OnlinePaymentConfigurationError(str(exc)) from exc
         try:
-            payment = provider.cancel_payment(intent.external_payment_id)
-        except MercadoPagoError as exc:
-            if exc.status_code == 401:
-                stale_access_token = account.access_token
-                account = cls._refresh_account_credentials(
-                    db,
-                    account,
-                    force=True,
-                    known_access_token=stale_access_token,
-                )
-                try:
-                    provider = _provider_adapter(account)
-                except UnsupportedPaymentProviderError as provider_exc:
-                    raise OnlinePaymentConfigurationError(str(provider_exc)) from provider_exc
-                try:
-                    payment = provider.cancel_payment(intent.external_payment_id)
-                except MercadoPagoError:
+            try:
+                payment = provider.cancel_payment(intent.external_payment_id)
+            except MercadoPagoError as exc:
+                if exc.status_code == 401:
+                    stale_access_token = account.access_token
+                    account = cls._refresh_account_credentials(
+                        db,
+                        account,
+                        force=True,
+                        known_access_token=stale_access_token,
+                    )
+                    close_provider(provider)
+                    try:
+                        provider = _provider_adapter(account)
+                    except UnsupportedPaymentProviderError as provider_exc:
+                        raise OnlinePaymentConfigurationError(str(provider_exc)) from provider_exc
+                    try:
+                        payment = provider.cancel_payment(intent.external_payment_id)
+                    except MercadoPagoError:
+                        payment = provider.get_payment(intent.external_payment_id)
+                else:
+                    # A aprovação pode vencer a corrida entre o GET e o cancelamento.
+                    # Nessa situação consultamos novamente a fonte de verdade e deixamos
+                    # a resposta autoritativa decidir entre approved e ainda-pendente.
                     payment = provider.get_payment(intent.external_payment_id)
-            else:
-                # A aprovação pode vencer a corrida entre o GET e o cancelamento.
-                # Nessa situação consultamos novamente a fonte de verdade e deixamos
-                # a resposta autoritativa decidir entre approved e ainda-pendente.
-                payment = provider.get_payment(intent.external_payment_id)
+        finally:
+            close_provider(provider)
 
         settled_intent, _ = cls.apply_provider_snapshot_in_session(
             db,
@@ -940,31 +947,83 @@ class OnlinePaymentService:
         account: RestaurantPaymentAccount,
         external_payment_id: str,
     ) -> tuple[OnlinePaymentIntent | None, bool]:
+        account_id = getattr(account, "id", None)
+        account_rid = getattr(account, "restaurante_id", None)
+        account_provider = getattr(account, "provider", None)
+        try:
+            provider = _provider_adapter(account)
+        except UnsupportedPaymentProviderError as provider_exc:
+            raise OnlinePaymentConfigurationError(str(provider_exc)) from provider_exc
+
+        # Return QueuePool PostgreSQL connections before external HTTP I/O when the
+        # session has no pending ORM mutations.
+        bind = db.get_bind()
+        if (
+            bind is not None
+            and bind.dialect.name == "postgresql"
+            and not db.new
+            and not db.dirty
+            and not db.deleted
+            and db.in_transaction()
+        ):
+            db.rollback()
+
         try:
             try:
-                provider = _provider_adapter(account)
-            except UnsupportedPaymentProviderError as provider_exc:
-                raise OnlinePaymentConfigurationError(str(provider_exc)) from provider_exc
-            payment = provider.get_payment(external_payment_id)
-        except MercadoPagoError as exc:
-            if exc.status_code != 401:
-                raise
-            stale_access_token = account.access_token
-            account = cls._refresh_account_credentials(
-                db,
-                account,
-                force=True,
-                known_access_token=stale_access_token,
+                payment = provider.get_payment(external_payment_id)
+            except MercadoPagoError as exc:
+                if exc.status_code != 401:
+                    raise
+                stale_access_token = account.access_token
+                account_for_refresh = account
+                if account_id is not None and account_rid is not None:
+                    account_for_refresh = (
+                        db.query(RestaurantPaymentAccount)
+                        .filter(
+                            RestaurantPaymentAccount.restaurante_id == account_rid,
+                            RestaurantPaymentAccount.id == account_id,
+                        )
+                        .first()
+                        or account
+                    )
+                account = cls._refresh_account_credentials(
+                    db,
+                    account_for_refresh,
+                    force=True,
+                    known_access_token=stale_access_token,
+                )
+                close_provider(provider)
+                try:
+                    provider = _provider_adapter(account)
+                except UnsupportedPaymentProviderError as provider_exc:
+                    raise OnlinePaymentConfigurationError(str(provider_exc)) from provider_exc
+                if (
+                    bind is not None
+                    and bind.dialect.name == "postgresql"
+                    and not db.new
+                    and not db.dirty
+                    and not db.deleted
+                    and db.in_transaction()
+                ):
+                    db.rollback()
+                payment = provider.get_payment(external_payment_id)
+        finally:
+            close_provider(provider)
+
+        if account_id is not None and account_rid is not None:
+            account = (
+                db.query(RestaurantPaymentAccount)
+                .filter(
+                    RestaurantPaymentAccount.restaurante_id == account_rid,
+                    RestaurantPaymentAccount.id == account_id,
+                )
+                .first()
+                or account
             )
-            try:
-                provider = _provider_adapter(account)
-            except UnsupportedPaymentProviderError as provider_exc:
-                raise OnlinePaymentConfigurationError(str(provider_exc)) from provider_exc
-            payment = provider.get_payment(external_payment_id)
 
         intent = db.query(OnlinePaymentIntent).filter(
-            OnlinePaymentIntent.restaurante_id == account.restaurante_id,
-            OnlinePaymentIntent.provider == account.provider,
+            OnlinePaymentIntent.restaurante_id == account_rid,
+            OnlinePaymentIntent.provider == account_provider,
             OnlinePaymentIntent.external_payment_id == payment.external_id,
         ).first()
         if intent is None:
