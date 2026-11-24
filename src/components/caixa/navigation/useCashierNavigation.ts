@@ -9,6 +9,18 @@ import {
 } from '../../../config/subscriptionPlans';
 import './cashierSetupMode.css';
 import { operationalEntitlementEnabled } from '../../../config/subscriptionPlans';
+import { getOperatorSession } from '../../../utils/authSession';
+import { hasDeepLinkGoParam } from '../../../utils/deepLinkStorage';
+import {
+  KOMA_NAVIGATE_GO_EVENT,
+  consumePendingDeepLink,
+  getDeepLinkCatalogEntry,
+  parseDeepLinkGoParam,
+  peekPendingDeepLink,
+  resolveDeepLinkTarget,
+  stripGoParamFromUrl,
+  type DeepLinkDeniedReason,
+} from './cashierDeepLink';
 import {
   getCashierNavigationAction,
   getCashierNavigationTarget,
@@ -17,6 +29,41 @@ import {
   normalizeCashierNavigationState,
   normalizeCashierTargetForEntitlements,
 } from './cashierNavigation';
+
+function deepLinkDeniedMessage(reason: DeepLinkDeniedReason): string {
+  switch (reason) {
+    case 'entitlement':
+      return 'Esta área não está disponível no plano atual do restaurante.';
+    case 'role':
+      return 'Seu cargo atual não possui acesso a este destino.';
+    case 'onboarding_blocked':
+      return 'Esta área será liberada após concluir a implantação inicial.';
+    default:
+      return 'Link de destino inválido ou indisponível.';
+  }
+}
+
+function readOperatorRoleForCashier(): string {
+  try {
+    const session = getOperatorSession('caixa');
+    return String(
+      session?.user?.role
+      || session?.user?.cargo
+      || sessionStorage.getItem('koma_caixa_role')
+      || '',
+    ).trim().toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function isSupportModeActive(): boolean {
+  try {
+    return Boolean(sessionStorage.getItem('koma_support_session'));
+  } catch {
+    return false;
+  }
+}
 
 type BoundaryProps = {
   hasOnlineMenu: boolean;
@@ -54,11 +101,53 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
   })());
   const normalizePlanTarget = (target: { tab: CashierTab; subTab: string }) =>
     normalizeCashierTargetForEntitlements(target, entitlements);
+  const pendingDeepLinkId = useRef<string | null>(null);
+  const pendingDeepLinkNotice = useRef<string | null>(null);
+  const operatorRole = readOperatorRoleForCashier();
   const [initialNavigation] = useState(() => {
     const callbackParams = new URLSearchParams(window.location.search);
     if (callbackParams.has("pagbank") || callbackParams.has("mercado_pago")) {
       return { tab: "impressao_salao" as CashierTab, subTab: "integracoes" };
     }
+
+    const supportActive = isSupportModeActive() || callbackParams.get('support') === '1';
+    if (!supportActive) {
+      const hasRawGo = hasDeepLinkGoParam(window.location.search);
+      const requestedGo = parseDeepLinkGoParam(window.location.search) || peekPendingDeepLink();
+      if (requestedGo) {
+        const entry = getDeepLinkCatalogEntry(requestedGo);
+        if (entry) {
+          if (entry.requiresEntitlementCheck && !entitlements) {
+            // Checar barreiras de cargo e setup imediatamente; entitlements assíncronos decidem após carregar.
+            const preCheck = resolveDeepLinkTarget(requestedGo, {
+              role: operatorRole,
+              entitlements: undefined,
+              isSetupMode: setupMode,
+            });
+            if (!preCheck.allowed && (preCheck.reason === 'role' || preCheck.reason === 'onboarding_blocked')) {
+              pendingDeepLinkNotice.current = deepLinkDeniedMessage(preCheck.reason);
+            } else {
+              pendingDeepLinkId.current = requestedGo;
+            }
+          } else {
+            const resolution = resolveDeepLinkTarget(requestedGo, {
+              role: operatorRole,
+              entitlements,
+              isSetupMode: setupMode,
+            });
+            if (resolution.allowed && resolution.target) {
+              return resolution.target;
+            }
+            pendingDeepLinkNotice.current = deepLinkDeniedMessage(resolution.reason ?? 'invalid');
+          }
+        } else {
+          pendingDeepLinkNotice.current = deepLinkDeniedMessage('invalid');
+        }
+      } else if (hasRawGo) {
+        pendingDeepLinkNotice.current = deepLinkDeniedMessage('invalid');
+      }
+    }
+
     const restored = normalizePlanTarget(normalizeCashierNavigationState(
       sessionStorage.getItem('koma_active_tab'),
       sessionStorage.getItem('koma_active_subtab'),
@@ -70,6 +159,57 @@ export function useCashierNavigation({ hasOnlineMenu, planId, entitlements, show
   });
   const [activeTab, setActiveTab] = useState<CashierTab>(initialNavigation.tab);
   const [activeSubTab, setActiveSubTab] = useState<string>(initialNavigation.subTab);
+
+  useEffect(() => {
+    if (isSupportModeActive()) return;
+    if (peekPendingDeepLink() || hasDeepLinkGoParam(window.location.search)) {
+      consumePendingDeepLink();
+      stripGoParamFromUrl();
+    }
+    if (pendingDeepLinkNotice.current) {
+      const notice = pendingDeepLinkNotice.current;
+      pendingDeepLinkNotice.current = null;
+      showToast(notice, 'info');
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (!entitlements || !pendingDeepLinkId.current) return;
+    const goId = pendingDeepLinkId.current;
+    pendingDeepLinkId.current = null;
+    const resolution = resolveDeepLinkTarget(goId, {
+      role: operatorRole,
+      entitlements,
+      isSetupMode: setupMode,
+    });
+    if (resolution.allowed && resolution.target) {
+      setActiveTab(resolution.target.tab);
+      setActiveSubTab(resolution.target.subTab);
+    } else {
+      showToast(deepLinkDeniedMessage(resolution.reason ?? 'invalid'), 'info');
+    }
+  }, [entitlements, operatorRole, setupMode, showToast]);
+
+  useEffect(() => {
+    const onNavigateGo = (event: Event) => {
+      const goId = (event as CustomEvent<{ goId?: string }>).detail?.goId;
+      if (!goId) return;
+      const resolution = resolveDeepLinkTarget(goId, {
+        role: operatorRole,
+        entitlements,
+        isSetupMode: setupMode,
+      });
+      if (resolution.allowed && resolution.target) {
+        pendingDeepLinkId.current = null;
+        setActiveTab(resolution.target.tab);
+        setActiveSubTab(resolution.target.subTab);
+      } else {
+        showToast(deepLinkDeniedMessage(resolution.reason ?? 'invalid'), 'info');
+      }
+    };
+    window.addEventListener(KOMA_NAVIGATE_GO_EVENT, onNavigateGo);
+    return () => window.removeEventListener(KOMA_NAVIGATE_GO_EVENT, onNavigateGo);
+  }, [entitlements, operatorRole, setupMode, showToast]);
 
   useEffect(() => {
     let cancelled = false;

@@ -24,6 +24,7 @@ import { identifyOperator, resetAnalytics } from '../../analytics';
 import { KomaLoading } from '../app/KomaLoading';
 import { OnboardingOperationalBoundary } from '../onboarding/OnboardingOperationalBoundary';
 import { OperationalLogin, type LoginRestaurantOption } from './OperationalLogin';
+import { clearPendingDeepLink } from '../../utils/deepLinkStorage';
 
 const loadOperationalApp = () => import('../../App');
 const OperationalApp = React.lazy(loadOperationalApp);
@@ -141,6 +142,7 @@ export default function UnifiedOperationalEntry() {
       const { token, user, destination } = parseStaffLogin(data);
       if (controller.signal.aborted) return;
       if (destination === 'entregador') {
+        clearPendingDeepLink();
         const access = await requestCourierAccess(API_BASE_URL, token, controller.signal);
         if (controller.signal.aborted) return;
         persistCourierAccess(access);
@@ -149,6 +151,9 @@ export default function UnifiedOperationalEntry() {
         releaseTabSessionOwnershipForNavigation();
         window.location.replace('/entregador');
         return;
+      }
+      if (destination !== 'caixa') {
+        clearPendingDeepLink();
       }
       // O login substitui a identidade apenas desta aba e vincula seu portal.
       clearCourierAccess();

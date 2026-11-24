@@ -1,5 +1,6 @@
 import { normalizeStaffRole, resolveOperationalPortal, type OperationalPortal } from './staffDestination';
 import { forgetInstalledOperatorSession, rememberInstalledOperatorSession } from './installedOperatorSession';
+import { PENDING_DEEP_LINK_KEY } from './deepLinkStorage';
 export type { OperationalPortal } from './staffDestination';
 
 /**
@@ -211,7 +212,8 @@ export function clearOperatorSession(portal?: OperationalPortal, notify = true):
     ? [SESSION_KEY_BY_PORTAL[selectedPortal], ...(selectedPortal === 'garcom' ? WAITER_ALIAS_KEYS : CAIXA_ALIAS_KEYS)]
     : [...Object.values(SESSION_KEY_BY_PORTAL), ...CAIXA_ALIAS_KEYS, ...WAITER_ALIAS_KEYS]);
   clearKeys(storage, ['koma_settings_vFinal_v3', 'koma_restaurant_name_v3',
-    'koma_caixa_selected_table_v3', 'koma_garcom_selected_table_v3', 'koma_onboarding_setup_mode']);
+    'koma_caixa_selected_table_v3', 'koma_garcom_selected_table_v3', 'koma_onboarding_setup_mode',
+    ...(notify ? [PENDING_DEEP_LINK_KEY] : [])]);
   clearKeys(storage, [ACTIVE_PORTAL_KEY]);
   try { storage?.setItem(LOGGED_OUT_TAB_KEY, '1'); } catch { /* No persistence available. */ }
   if (notify) {
