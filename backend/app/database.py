@@ -1,3 +1,5 @@
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from contextvars import ContextVar
 import os
@@ -9,9 +11,15 @@ from fastapi import Request
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker, with_loader_criteria
 from sqlalchemy.pool import QueuePool
-from starlette.concurrency import run_in_threadpool
 
 from .config import settings
+
+# Dedicated executor for Session.close() so DB cleanup never blocks the asyncio
+# event loop AND can never starve behind AnyIO's request worker threadpool.
+_DB_CLOSE_EXECUTOR = ThreadPoolExecutor(
+    max_workers=4,
+    thread_name_prefix="koma-db-close",
+)
 
 # AJUSTADO: connect_args agora é condicional para não travar no PostgreSQL (Supabase)
 connect_args = {"connect_timeout": 10}
@@ -490,7 +498,8 @@ async def get_db(request: Request = None):
     try:
         yield db
     finally:
-        await run_in_threadpool(db.close)
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(_DB_CLOSE_EXECUTOR, db.close)
 
 
 def validate_postgres_runtime_role() -> None:

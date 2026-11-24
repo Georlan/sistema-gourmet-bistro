@@ -1,5 +1,7 @@
 from ..services.online_payments.service import OnlinePaymentService
 from contextlib import contextmanager
+import hashlib
+import json
 import logging
 from typing import Optional, Literal
 from urllib.parse import quote
@@ -10,7 +12,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, ConfigDict, StrictInt
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, Response, UploadFile, status
 from starlette.concurrency import run_in_threadpool
 from sqlalchemy import text
 from sqlalchemy.orm import Session, load_only, raiseload, lazyload
@@ -566,6 +568,8 @@ def obter_produtos_cardapio_digital(
 
 @router.get("/public", response_model=CardapioPublicResponse)
 def obter_cardapio_publico(
+    request: Request,
+    response: Response,
     restaurante_id: Optional[str] = None,
     slug: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -632,7 +636,7 @@ def obter_cardapio_publico(
         )
         categorias_ordenadas = _ordered_categories(categorias_com_produtos, niche=niche)
 
-        return {
+        payload = {
             "restaurante": _public_restaurant_payload(
                 restaurante,
                 configuracao,
@@ -667,6 +671,28 @@ def obter_cardapio_publico(
             "promocoes": active_offers,
             "promocao_composicao_explicita": True,
         }
+        canonical_bytes = json.dumps(
+            payload,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+            ensure_ascii=False,
+        ).encode("utf-8")
+        etag = f'W/"{hashlib.sha256(canonical_bytes).hexdigest()[:16]}"'
+        cache_control = "public, max-age=15, stale-while-revalidate=60"
+        if_none_match = (request.headers.get("if-none-match") or "").strip()
+        if if_none_match and (
+            if_none_match == etag
+            or if_none_match == etag[2:]
+            or etag in {tag.strip() for tag in if_none_match.split(",")}
+        ):
+            return Response(
+                status_code=status.HTTP_304_NOT_MODIFIED,
+                headers={"ETag": etag, "Cache-Control": cache_control},
+            )
+        response.headers["ETag"] = etag
+        response.headers["Cache-Control"] = cache_control
+        return payload
 
 
 @router.post("/delivery/quote", response_model=DeliveryFeeQuoteResponse)

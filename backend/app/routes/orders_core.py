@@ -126,7 +126,7 @@ def get_comandas_detalhes(
     """
     require_order_reader(current_user)
     query = db.query(Comanda).options(
-        joinedload(Comanda.itens).joinedload(Item.produto),
+        selectinload(Comanda.itens).joinedload(Item.produto),
         joinedload(Comanda.criada_por),
         selectinload(Comanda.lancamentos).selectinload(Lancamento.itens).joinedload(Item.produto),
     ).filter(
@@ -912,6 +912,7 @@ def _advance_kds_check_if_all_ready(db: Session, comanda: Comanda, rest_id: int,
         outcome = OrderLifecycleCoordinator.transition_check_status(
             db, restaurant_id=rest_id, comanda_id=comanda.id,
             target_status="pronto", operator_user_id=operator_id, commit=False,
+            locked_comanda=comanda,
         )
         return bool(outcome.changed)
     return False
@@ -964,13 +965,20 @@ def update_kds_items_ready(
         db.flush()
     # Reconcile a legacy all-ready check even when this is an idempotent replay.
     lifecycle_changed = _advance_kds_check_if_all_ready(db, comanda, rest_id, current_user.id)
+    final_delivery_status = comanda.delivery_status
     if changed or lifecycle_changed:
+        manager.queue_committed_broadcast(
+            db,
+            {
+                "event": "tables_updated",
+                "detail": {"type": "kds_items_ready", "comanda_id": comanda.id},
+            },
+            rest_id,
+        )
         db.commit()
-        db.refresh(comanda)
-        background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
     # Numeric metrics only: never put customer names, tokens or item IDs in logs.
     logger.info("kds_batch_ready count=%d changed=%s duration_ms=%.1f", len(ids), changed, (perf_counter() - started_at) * 1000)
-    return KdsBatchReadyResponse(confirmed_ids=ids, already_ready_ids=already_ready, delivery_status=comanda.delivery_status)
+    return KdsBatchReadyResponse(confirmed_ids=ids, already_ready_ids=already_ready, delivery_status=final_delivery_status)
 
 
 @router.put("/itens/{item_id}/status", response_model=ItemResponse)
@@ -1061,17 +1069,23 @@ def update_item_status(
     db.flush()
     if avancar_pedido and status == "pronto":
         _advance_kds_check_if_all_ready(db, locked_check, rest_id, current_garcom.id)
-    db.commit()
-    db.refresh(item)
-
+    response_item = ItemResponse.model_validate(item)
     # The opt-in KDS transition above shares the canonical order transaction.
     # Item readiness is a production signal only. Customer-facing "ready" status
     # belongs to the canonical order lifecycle and is emitted only when the
     # operator explicitly advances the order to `pronto`.
-    background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
+    manager.queue_committed_broadcast(
+        db,
+        {
+            "event": "tables_updated",
+            "detail": {"type": "item_status_updated", "comanda_id": locked_check.id},
+        },
+        rest_id,
+    )
+    db.commit()
     if kds_started_at is not None:
         logger.info("kds_item_ready duration_ms=%.1f", (perf_counter() - kds_started_at) * 1000)
-    return item
+    return response_item
 
 
 # ----------------- DELIVERY & MOTOBOYS ENDPOINTS -----------------
@@ -1101,7 +1115,7 @@ def _listar_delivery_operacional(db: Session, *, pending_only: bool) -> List[Com
     checks = (
         db.query(Comanda)
         .options(
-            joinedload(Comanda.itens).joinedload(Item.produto),
+            selectinload(Comanda.itens).joinedload(Item.produto),
             joinedload(Comanda.criada_por),
             selectinload(Comanda.lancamentos)
             .selectinload(Lancamento.itens)

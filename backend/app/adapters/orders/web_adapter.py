@@ -709,7 +709,31 @@ class CardapioWebAdapter:
 
                 auto_accept_online_order_if_enabled(db, **auto_accept_kwargs)
 
+            def _queue_public_broadcasts(*, is_direct_pix: bool = False) -> None:
+                if not online_payment or is_direct_pix:
+                    manager.queue_committed_broadcast(db, {"event": "tables_updated"}, rest_id)
+                if not online_payment:
+                    manager.queue_committed_broadcast(
+                        db,
+                        {"event": "new_delivery_order", "message": f"Novo pedido online de {cliente_nome} recebido!"},
+                        rest_id,
+                    )
+                if cliente is not None:
+                    manager.queue_committed_broadcast(
+                        db,
+                        {
+                            "event": "customers_updated",
+                            "detail": {
+                                "action": "order_linked",
+                                "cliente_id": cliente.id,
+                            },
+                        },
+                        rest_id,
+                        target_audience="internal",
+                    )
+
             if not (online_payment or is_scheduled):
+                _queue_public_broadcasts()
                 db.commit()
 
             if is_scheduled:
@@ -724,8 +748,8 @@ class CardapioWebAdapter:
                     comanda_id=comanda.id,
                     scheduled_for=normalized_schedule,
                 )
+                _queue_public_broadcasts()
                 db.commit()
-                db.refresh(comanda)
             elif online_payment:
                 if comanda is None or payment_shift is None or payment_account is None:
                     raise OnlinePaymentConfigurationError("Não foi possível preparar o pagamento do pedido.")
@@ -737,6 +761,7 @@ class CardapioWebAdapter:
                     idempotency_key=idempotency_key,
                     provider=payment_account.provider,
                 )
+                _queue_public_broadcasts(is_direct_pix=payment_intent.provider == "direct_pix")
                 db.commit()
                 db.refresh(payment_intent)
                 payment_intent = OnlinePaymentService.ensure_pix_created(
@@ -872,30 +897,6 @@ class CardapioWebAdapter:
                 if isinstance(cached_provisional, dict):
                     cached_provisional.pop(rest_id, None)
             current_restaurante_id.reset(token_context)
-
-        if not online_payment or (
-            payment_intent is not None and payment_intent.provider == "direct_pix"
-        ):
-            background_tasks.add_task(manager.broadcast, {"event": "tables_updated"}, rest_id)
-        if not online_payment:
-            background_tasks.add_task(
-                manager.broadcast,
-                {"event": "new_delivery_order", "message": f"Novo pedido online de {cliente_nome} recebido!"},
-                rest_id,
-            )
-        if cliente is not None:
-            background_tasks.add_task(
-                manager.broadcast,
-                {
-                    "event": "customers_updated",
-                    "detail": {
-                        "action": "order_linked",
-                        "cliente_id": cliente.id,
-                    },
-                },
-                rest_id,
-                target_audience="internal",
-            )
 
         return {
             "status": "success",

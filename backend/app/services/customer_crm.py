@@ -43,12 +43,20 @@ DEFAULT_ATTRIBUTION_WINDOW_DAYS = 14
 CRM_TABLE_NAMES = frozenset({
     "crm_clientes_preferencias", "crm_campanhas", "crm_contatos_clientes",
 })
+_CRM_SCHEMA_READY_BINDS: set[int] = set()
 
 
 def crm_schema_available(db: Session) -> bool:
     """Only inspect schema on the tenant-bound connection; never issue DDL."""
+    bind = db.get_bind()
+    bind_key = id(bind) if bind is not None else None
+    if bind_key is not None and bind_key in _CRM_SCHEMA_READY_BINDS:
+        return True
     existing = set(sa_inspect(db.connection()).get_table_names())
-    return CRM_TABLE_NAMES.issubset(existing)
+    ready = CRM_TABLE_NAMES.issubset(existing)
+    if ready and bind_key is not None:
+        _CRM_SCHEMA_READY_BINDS.add(bind_key)
+    return ready
 
 
 def ensure_crm_tables(db: Session) -> None:
@@ -1425,6 +1433,7 @@ def get_crm_overview_and_results(
     )
     campanhas_by_id = {str(cp.id): cp for cp in campanhas_rows}
 
+    sql_cutoff = (inicio_periodo - datetime.timedelta(days=1)).replace(tzinfo=None)
     contatos_rows = (
         db.query(CrmContatoCliente)
         .filter(
@@ -1432,6 +1441,7 @@ def get_crm_overview_and_results(
             CrmContatoCliente.acao_executada.in_(
                 ["CONTATO_MANUAL_CONFIRMADO"]
             ),
+            CrmContatoCliente.criado_em >= sql_cutoff,
         )
         .order_by(CrmContatoCliente.criado_em.asc(), CrmContatoCliente.id.asc())
         .all()
@@ -1444,7 +1454,6 @@ def get_crm_overview_and_results(
     ]
 
     # 3. Carregar comandas do restaurante no período para atribuição honesta
-    sql_cutoff = (inicio_periodo - datetime.timedelta(days=1)).replace(tzinfo=None)
     comandas_all = (
         db.query(
             Comanda.id,

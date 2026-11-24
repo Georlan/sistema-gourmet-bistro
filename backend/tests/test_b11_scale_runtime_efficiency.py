@@ -39,27 +39,31 @@ def test_tenant_filtered_models_cached_and_matches_registry():
 
 def test_get_db_closes_session_off_event_loop(monkeypatch):
     closed = []
-    threadpool_calls = []
+    used_executors = []
 
     class _FakeSession:
         def close(self):
             closed.append(True)
 
-    async def _fake_run_in_threadpool(func, *args, **kwargs):
-        threadpool_calls.append(func.__name__)
-        return func(*args, **kwargs)
-
-    monkeypatch.setattr(app_db, "SessionLocal", lambda **kwargs: _FakeSession())
-    monkeypatch.setattr(app_db, "run_in_threadpool", _fake_run_in_threadpool)
+    orig_executor = app_db._DB_CLOSE_EXECUTOR
 
     async def _exercise():
+        loop = asyncio.get_running_loop()
+        orig_run = loop.run_in_executor
+
+        def _spy_run(executor, func, *args):
+            used_executors.append((executor, func.__name__))
+            return orig_run(executor, func, *args)
+
+        monkeypatch.setattr(loop, "run_in_executor", _spy_run)
         gen = app_db.get_db()
         session = await gen.__anext__()
         assert session is not None
         await gen.aclose()
 
+    monkeypatch.setattr(app_db, "SessionLocal", lambda **kwargs: _FakeSession())
     asyncio.run(_exercise())
-    assert threadpool_calls == ["close"]
+    assert used_executors == [(orig_executor, "close")]
     assert closed == [True]
 
 

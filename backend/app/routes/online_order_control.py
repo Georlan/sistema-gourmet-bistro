@@ -100,12 +100,14 @@ def get_online_order_control(
     del current_user
     rid = require_tenant_id()
     result = operational_status(db, rid)
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        result = operational_status(db, rid)
-        db.commit()
+    if db.new or db.dirty or db.deleted:
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            result = operational_status(db, rid)
+            if db.new or db.dirty or db.deleted:
+                db.commit()
     return result
 
 

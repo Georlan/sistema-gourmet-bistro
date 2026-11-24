@@ -13,7 +13,7 @@ import logging
 
 from fastapi import BackgroundTasks, HTTPException, status
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ...application.orders.addressing import delivery_address_from_payload
 from ...application.orders.commands import (
@@ -280,17 +280,20 @@ class PosAdapter:
 
         # 2. Resolução de operador / garçom
         garcom_id = venda_in.garcom_id or current_user.id
-        garcom = (
-            db.query(Usuario)
-            .filter(
-                Usuario.restaurante_id == rid,
-                Usuario.id == garcom_id,
-            )
-            .first()
-        )
-        if not garcom:
-            garcom_id = current_user.id
+        if garcom_id == current_user.id:
             garcom = current_user
+        else:
+            garcom = (
+                db.query(Usuario)
+                .filter(
+                    Usuario.restaurante_id == rid,
+                    Usuario.id == garcom_id,
+                )
+                .first()
+            )
+            if not garcom:
+                garcom_id = current_user.id
+                garcom = current_user
 
         # 3. Mapeamento para CreateOrderCommand
         if tipo_pedido == "Entrega":
@@ -358,15 +361,18 @@ class PosAdapter:
         )
 
         # 4. Delegação ao OrderApplicationService + intenção universal de impressão
+        db_info = getattr(db, "info", None)
+        if isinstance(db_info, dict) and config is not None:
+            db_info.setdefault("_koma_config_by_rid", {})[rid] = config
         try:
             order_dto = OrderApplicationService.create_order(db, cmd, commit=False)
 
-            # Carregar a Comanda completa com relacionamentos
+            # Carregar a Comanda completa com relacionamentos (selectinload evita produto cartesiano)
             comanda = (
                 db.query(Comanda)
                 .options(
-                    joinedload(Comanda.itens).joinedload(Item.produto),
-                    joinedload(Comanda.lancamentos).joinedload(Lancamento.itens),
+                    selectinload(Comanda.itens).joinedload(Item.produto),
+                    selectinload(Comanda.lancamentos).selectinload(Lancamento.itens).joinedload(Item.produto),
                     joinedload(Comanda.criada_por),
                 )
                 .filter(
@@ -428,10 +434,44 @@ class PosAdapter:
                         print_err,
                     )
 
-            # Pedido e PrintJob são persistidos juntos; não há background paralelo
-            # criando uma segunda semântica de impressão.
+            # Serializa antes do commit para eliminar db.refresh() + lazy-loads pós-commit
+            # e enfileira broadcasts na mesma transação (evita 2ª conexão simultânea do pool).
+            if venda_in.mesa_id is not None:
+                manager.queue_committed_broadcast(
+                    db,
+                    {
+                        "type": "MESA_UPDATED",
+                        "mesa_id": venda_in.mesa_id,
+                        "status": "OCUPADA",
+                    },
+                    rid,
+                )
+            manager.queue_committed_broadcast(
+                db,
+                {
+                    "event": "tables_updated",
+                    "detail": {"type": "lancamento_criado", "comanda_id": comanda.id},
+                },
+                rid,
+            )
+            if comanda.cliente_id is not None:
+                manager.queue_committed_broadcast(
+                    db,
+                    {
+                        "event": "customers_updated",
+                        "detail": {
+                            "action": "order_linked",
+                            "cliente_id": comanda.cliente_id,
+                        },
+                    },
+                    rid,
+                    target_audience="internal",
+                )
+
+            response_comanda = ComandaDetail.model_validate(comanda)
+
+            # Pedido, PrintJob e notificações realtime são persistidos atomicamente.
             db.commit()
-            db.refresh(comanda)
 
         except HTTPException:
             db.rollback()
@@ -500,36 +540,10 @@ class PosAdapter:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Não foi possível processar a venda direta.",
             )
+        finally:
+            if isinstance(db_info, dict):
+                cached_configs = db_info.get("_koma_config_by_rid")
+                if isinstance(cached_configs, dict):
+                    cached_configs.pop(rid, None)
 
-        # 5. Broadcasts de WebSocket
-        if venda_in.mesa_id is not None:
-            background_tasks.add_task(
-                manager.broadcast,
-                {
-                    "type": "MESA_UPDATED",
-                    "mesa_id": venda_in.mesa_id,
-                    "status": "OCUPADA",
-                },
-                tenant_id=current_user.tenant_id,
-            )
-
-        background_tasks.add_task(
-            manager.broadcast,
-            {"event": "tables_updated"},
-            rid,
-        )
-        if comanda.cliente_id is not None:
-            background_tasks.add_task(
-                manager.broadcast,
-                {
-                    "event": "customers_updated",
-                    "detail": {
-                        "action": "order_linked",
-                        "cliente_id": comanda.cliente_id,
-                    },
-                },
-                rid,
-                target_audience="internal",
-            )
-
-        return comanda
+        return response_comanda

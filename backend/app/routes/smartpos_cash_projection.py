@@ -6,7 +6,7 @@ from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from ..database import get_db, require_tenant_id
 from ..models import CaixaTurno, Comanda, Item, Lancamento, Usuario
@@ -94,6 +94,7 @@ def projetar_operacao_smartpos_no_caixa(
     restaurante_id = require_tenant_id()
     comandas = (
         db.query(Comanda)
+        .options(selectinload(Comanda.itens))
         .filter(
             Comanda.restaurante_id == restaurante_id,
             Comanda.fechada == False,
