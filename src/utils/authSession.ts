@@ -1,6 +1,7 @@
 import { normalizeStaffRole, resolveOperationalPortal, type OperationalPortal } from './staffDestination';
 import { forgetInstalledOperatorSession, rememberInstalledOperatorSession } from './installedOperatorSession';
 import { PENDING_DEEP_LINK_KEY } from './deepLinkStorage';
+import { RECENT_API_ERRORS_KEY, clearRecentApiErrors } from './supportCode';
 export type { OperationalPortal } from './staffDestination';
 
 /**
@@ -166,7 +167,8 @@ export function saveOperatorSession(token: string, user: any, requestedPortal?: 
   const previous = getOperatorSession();
   if (previous && (previous.user.id !== minimalUser.id || previous.user.restaurante_id !== minimalUser.restaurante_id)) {
     clearKeys(storage, ['koma_settings_vFinal_v3', 'koma_restaurant_name_v3',
-      'koma_caixa_selected_table_v3', 'koma_garcom_selected_table_v3', 'koma_onboarding_setup_mode']);
+      'koma_caixa_selected_table_v3', 'koma_garcom_selected_table_v3', 'koma_onboarding_setup_mode',
+      RECENT_API_ERRORS_KEY]);
   }
   // Uma identidade operacional por aba; nenhuma escrita em sessão de outra aba.
   clearKeys(storage, [...Object.values(SESSION_KEY_BY_PORTAL), ...CAIXA_ALIAS_KEYS, ...WAITER_ALIAS_KEYS]);
@@ -214,6 +216,7 @@ export function clearOperatorSession(portal?: OperationalPortal, notify = true):
   clearKeys(storage, ['koma_settings_vFinal_v3', 'koma_restaurant_name_v3',
     'koma_caixa_selected_table_v3', 'koma_garcom_selected_table_v3', 'koma_onboarding_setup_mode',
     ...(notify ? [PENDING_DEEP_LINK_KEY] : [])]);
+  if (notify) clearRecentApiErrors();
   clearKeys(storage, [ACTIVE_PORTAL_KEY]);
   try { storage?.setItem(LOGGED_OUT_TAB_KEY, '1'); } catch { /* No persistence available. */ }
   if (notify) {

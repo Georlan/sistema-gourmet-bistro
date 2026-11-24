@@ -6,7 +6,7 @@
 import type { PostHog } from 'posthog-js';
 import { resolveKomaHost } from '../domain/komaHost';
 import { API_BASE_URL } from '../config/api';
-import { isKnownExternalWebViewNoise, observeOperationalFetch, operationalArea } from './operational';
+import { enrichOperationalSignal, isKnownExternalWebViewNoise, observeOperationalFetch } from './operational';
 import { initWebVitals } from './webVitals';
 import type {
   AnalyticsEventMap,
@@ -223,7 +223,7 @@ export function initAnalytics(): Promise<boolean> {
       posthogInstance = posthog;
       analyticsActive = true;
       window.fetch = observeOperationalFetch(window.fetch.bind(window), new URL(API_BASE_URL, window.location.href).origin,
-        window.location.href, signal => trackAnalyticsEvent('operational_api_signal', { ...signal, area: operationalArea(signal.endpoint), surface: resolveKomaHost().surface }));
+        window.location.href, signal => trackAnalyticsEvent('operational_api_signal', enrichOperationalSignal(signal, resolveKomaHost().surface)));
       flushPendingQueue();
       initWebVitals(metric => trackAnalyticsEvent('web_vitals_metric', {
         metric_name: metric.name,

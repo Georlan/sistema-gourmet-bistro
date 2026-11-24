@@ -2,6 +2,7 @@ import { authFetch } from './authRequest';
 import { getOperatorSession, saveOperatorSession } from './authSession';
 import type { OperatorIdentitySnapshot } from './authSession';
 import { PENDING_DEEP_LINK_KEY } from './deepLinkStorage';
+import { RECENT_API_ERRORS_KEY, clearRecentApiErrors } from './supportCode';
 
 export interface StoreOption { id: number; nome: string }
 export interface StoreIndex {
@@ -67,7 +68,8 @@ export function commitStoreSwitch(next: StoreSwitchSession, expectedToken: strin
   }
   saveOperatorSession(next.token, next.user, 'caixa');
   // Navigation and onboarding drafts are specific to the previous unit, too.
-  for (const key of ['koma_active_tab', 'koma_active_subtab', 'koma_relationship_last_subtab', 'koma_relationship_last_benefit', 'koma_onboarding_test_order', PENDING_DEEP_LINK_KEY]) {
+  for (const key of ['koma_active_tab', 'koma_active_subtab', 'koma_relationship_last_subtab', 'koma_relationship_last_benefit', 'koma_onboarding_test_order', PENDING_DEEP_LINK_KEY, RECENT_API_ERRORS_KEY]) {
     sessionStorage.removeItem(key);
   }
+  clearRecentApiErrors();
 }

@@ -6,9 +6,25 @@ export interface OperationalSignal {
   duration_ms: number;
   outcome: 'http_error' | 'network_error' | 'slow';
   request_id?: string;
+  support_code?: string;
   area?: ReturnType<typeof operationalArea>;
   surface?: string;
   is_diagnostic?: boolean;
+}
+
+/** Enriches an operational signal for analytics without mutating the base capture test contract. */
+export function enrichOperationalSignal(
+  signal: OperationalSignal,
+  surface?: string,
+): OperationalSignal {
+  const reqId = typeof signal.request_id === 'string' ? signal.request_id.trim() : '';
+  const supportCode = /^[A-Za-z0-9_-]{8,64}$/.test(reqId) ? reqId.slice(0, 12) : undefined;
+  return {
+    ...signal,
+    ...(supportCode ? { support_code: supportCode } : {}),
+    area: operationalArea(signal.endpoint),
+    ...(surface ? { surface } : {}),
+  };
 }
 
 const ROUTE_WORDS = new Set(('api caixa comandas itens lancamentos cardapio cardapio-digital assets promotion pedidos produtos categorias '
