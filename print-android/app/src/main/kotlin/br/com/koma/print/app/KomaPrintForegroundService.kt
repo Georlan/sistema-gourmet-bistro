@@ -173,12 +173,28 @@ class KomaPrintForegroundService : Service() {
                         )
                     }
                 } catch (revoked: AgentRevokedException) {
-                    updateStatusAndNotification(
-                        store,
-                        "Vínculo expirado ou revogado. Reconecte pelo Caixa KÔMA.",
-                    )
-                    // Não faça polling infinito com credencial revogada.
-                    store.setAutoStartEnabled(false)
+                    if (revoked.statusCode == 401) {
+                        // A credencial recusada não pode voltar a ser usada após
+                        // reinício, permissão Bluetooth ou toque em Ativar.
+                        // Se houve novo pareamento, preserve a nova credencial.
+                        if (!store.invalidateRevokedCredentials(cfg.agentToken)) {
+                            return@withCycleWakeLock
+                        }
+                        updateStatusAndNotification(
+                            store,
+                            "Vínculo expirado ou revogado. Reconecte pelo Caixa KÔMA.",
+                        )
+                    } else {
+                        // 403 não prova revogação; preserve o vínculo.
+                        if (store.load().agentToken != cfg.agentToken) {
+                            return@withCycleWakeLock
+                        }
+                        store.setAutoStartEnabled(false)
+                        updateStatusAndNotification(
+                            store,
+                            "Acesso à impressão bloqueado pelo servidor. Verifique o Caixa KÔMA.",
+                        )
+                    }
                     running.set(false)
                     stopSelf()
                 } catch (err: Throwable) {
