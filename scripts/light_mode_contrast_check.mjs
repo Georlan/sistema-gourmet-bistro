@@ -4,14 +4,20 @@ import { fileURLToPath } from 'node:url';
 
 const root = new URL('../', import.meta.url);
 const rootPath = fileURLToPath(root);
-const cssPath = new URL('src/index.css', root);
-const css = await readFile(cssPath, 'utf8');
+// CSS @import is not expanded by this Node audit: read both token owners explicitly.
+const foundationCss = await readFile(new URL('src/styles/komaFoundation.css', root), 'utf8');
+const indexCss = await readFile(new URL('src/index.css', root), 'utf8');
+const combinedCss = `${foundationCss}\n${indexCss}`;
 
-const lightBlock = css.match(/\[data-koma-theme="light"\]\s*\{([\s\S]*?)\n\}/)?.[1];
-if (!lightBlock) throw new Error('Bloco de tokens do modo claro não encontrado.');
+// Preserve cascade order. New foundation tokens must not silently escape the AA audit.
+const lightBlocks = [...combinedCss.matchAll(/\[data-koma-theme="light"\]\s*\{([\s\S]*?)\n\}/g)]
+  .map((match) => match[1]);
+if (lightBlocks.length === 0) throw new Error('Bloco de tokens do modo claro não encontrado.');
 
 const tokens = Object.fromEntries(
-  [...lightBlock.matchAll(/--([\w-]+):\s*(#[0-9a-f]{6})\s*;/gi)].map(([, name, value]) => [name, value]),
+  lightBlocks.flatMap((block) =>
+    [...block.matchAll(/--([\w-]+):\s*(#[0-9a-f]{6})\s*;/gi)].map(([, name, value]) => [name, value]),
+  ),
 );
 
 function rgb(hex) {
