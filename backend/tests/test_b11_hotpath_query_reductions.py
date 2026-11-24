@@ -138,7 +138,7 @@ def test_crm_schema_available_caches_ready_bind(monkeypatch):
             calls.append(1)
             return list(customer_crm.CRM_TABLE_NAMES)
 
-    fake_bind = object()
+    fake_bind = SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
 
     class _FakeDb:
         def get_bind(self):
