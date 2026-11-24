@@ -28,11 +28,10 @@ import {
 } from "../CardapioTypes";
 import type { CustomerProfile } from "../customerSession";
 import { API_BASE_URL } from "../../config/api";
-import { smartSearchMatch } from "../../domain";
 import { useActivePromotions } from "../useActivePromotions";
 import { fetchPopularProducts } from "../popularProductsClient";
 import {
-  groupCategoryProductsForDisplay,
+  buildPublicCatalogSections,
   isGroupedProduct,
   type CatalogDisplayItem,
 } from "../catalogGrouping";
@@ -370,26 +369,12 @@ export default function MenuV2Experience({
     [getProductCartQuantity],
   );
 
-  const groupedCategories = useMemo(() => {
-    const query = searchQuery.trim();
-    return activeBrand.categories
-      .map((category) => {
-        const filtered = activeBrand.products
-          .filter(
-            (p) =>
-              p.category === category &&
-              (!query || smartSearchMatch(`${p.name} ${p.familia_nome || ""} ${p.description || ""}`, query)),
-          )
-          .sort((a, b) => {
-            const orderA = a.ordem_exibicao ?? Number.MAX_SAFE_INTEGER;
-            const orderB = b.ordem_exibicao ?? Number.MAX_SAFE_INTEGER;
-            return orderA - orderB;
-          });
-        const items = groupCategoryProductsForDisplay(category, filtered, activeBrand.id);
-        return { category, items };
-      })
-      .filter((entry) => entry.items.length > 0);
-  }, [activeBrand.categories, activeBrand.products, activeBrand.id, searchQuery]);
+  const groupedCategories = useMemo(
+    () => buildPublicCatalogSections(
+      activeBrand.categories, activeBrand.products, activeBrand.id, searchQuery,
+    ),
+    [activeBrand.categories, activeBrand.products, activeBrand.id, searchQuery],
+  );
 
   const [visibleCategory, setVisibleCategory] = useState<string>(selectedCategory || "");
   const catTrackRef = useRef<HTMLDivElement>(null);
@@ -407,11 +392,14 @@ export default function MenuV2Experience({
 
       const triggerTop = 165;
       let nextCategory = "";
-      for (const { category } of groupedCategories) {
+      // The last matching section is authoritative; stop as soon as it is found.
+      for (let index = groupedCategories.length - 1; index >= 0; index--) {
+        const { category } = groupedCategories[index];
         const el = document.getElementById(`km-cat-${toSafeCategoryDomId(category)}`);
         if (!el) continue;
         if (el.getBoundingClientRect().top <= triggerTop) {
           nextCategory = category;
+          break;
         }
       }
       setVisibleCategory((prev) => (prev === nextCategory ? prev : nextCategory));
