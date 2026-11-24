@@ -9,10 +9,21 @@
  * All products, names and prices are fictitious. No database, Railway or
  * production API is contacted. Every non-GET operation is refused.
  */
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const PORT = 8000;
 const HOSTS = ['127.0.0.1', '::1'];
+const FIXTURE_IMAGES_DIR = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'mock-preview');
+const MOCK_PREVIEW_FILES = new Set([
+  'burger-hero.jpg',
+  'drink-combo.jpg',
+  'porcao-fritas.jpg',
+  'smash-duplo.jpg',
+]);
+const mockPreviewImageUrl = (filename) => `http://localhost:${PORT}/mock-preview/${filename}`;
 const ALLOWED_ORIGINS = new Set([
   'http://localhost:3000',
   'http://127.0.0.1:3000',
@@ -62,7 +73,7 @@ const payload = {
       nome: 'Burger clássico artesanal',
       descricao: 'Blend 160g grelhado no fogo, cheddar cremoso, cebola caramelizada e pão brioche selado na manteiga.',
       preco: 34.9,
-      imagem_url: '/mock-preview/burger-hero.jpg',
+      imagem_url: mockPreviewImageUrl('burger-hero.jpg'),
       categoria_id: 1,
       ordem_exibicao: 1,
       grupos_modificadores: [
@@ -92,14 +103,14 @@ const payload = {
         },
       ],
     },
-    { id: 990012, nome: 'Smash duplo KÔMA', descricao: 'Dois smashes 90g com crosta crocante, queijo prato duplo derretido e maionese defumada.', preco: 32.9, imagem_url: '/mock-preview/smash-duplo.jpg', categoria_id: 1, ordem_exibicao: 2, grupos_modificadores: [] },
-    { id: 990013, nome: 'Combo da casa KÔMA', descricao: 'Burger artesanal, batata rústica crocante e bebida gelada à sua escolha.', preco: 44.9, imagem_url: '/mock-preview/drink-combo.jpg', categoria_id: 2, ordem_exibicao: 3, grupos_modificadores: [] },
-    { id: 990014, nome: 'Batata rústica crocante', descricao: 'Porção individual de batatas rústicas com alecrim fresco e sal de parrilla.', preco: 18.5, imagem_url: '/mock-preview/porcao-fritas.jpg', categoria_id: 3, ordem_exibicao: 4, grupos_modificadores: [] },
+    { id: 990012, nome: 'Smash duplo KÔMA', descricao: 'Dois smashes 90g com crosta crocante, queijo prato duplo derretido e maionese defumada.', preco: 32.9, imagem_url: mockPreviewImageUrl('smash-duplo.jpg'), categoria_id: 1, ordem_exibicao: 2, grupos_modificadores: [] },
+    { id: 990013, nome: 'Combo da casa KÔMA', descricao: 'Burger artesanal, batata rústica crocante e bebida gelada à sua escolha.', preco: 44.9, imagem_url: mockPreviewImageUrl('drink-combo.jpg'), categoria_id: 2, ordem_exibicao: 3, grupos_modificadores: [] },
+    { id: 990014, nome: 'Batata rústica crocante', descricao: 'Porção individual de batatas rústicas com alecrim fresco e sal de parrilla.', preco: 18.5, imagem_url: mockPreviewImageUrl('porcao-fritas.jpg'), categoria_id: 3, ordem_exibicao: 4, grupos_modificadores: [] },
     { id: 990015, nome: 'Molho especial da casa', descricao: 'Receita autoral à base de páprica defumada, ervas finas e mostarda dijon.', preco: 6.0, imagem_url: '', categoria_id: 3, ordem_exibicao: 5, grupos_modificadores: [] },
-    { id: 990016, nome: 'Suco de Laranja Natural 400ml', descricao: 'Frutas frescas da estação espremidas na hora, servido bem gelado.', preco: 12.0, imagem_url: '/mock-preview/drink-combo.jpg', categoria_id: 4, ordem_exibicao: 6, grupos_modificadores: [] },
-    { id: 990017, nome: 'Refrigerante Artesanal de Guaraná', descricao: 'Xarope natural de guaraná da Amazônia com gaseificação suave e toque cítrico.', preco: 9.5, imagem_url: '/mock-preview/drink-combo.jpg', categoria_id: 4, ordem_exibicao: 7, grupos_modificadores: [] },
-    { id: 990018, nome: 'Pudim de Leite KÔMA', descricao: 'Textura acetinada sem furinhos com abundante caramelo de cumaru.', preco: 14.5, imagem_url: '/mock-preview/burger-hero.jpg', categoria_id: 5, ordem_exibicao: 8, grupos_modificadores: [] },
-    { id: 990019, nome: 'Brownie artesanal com calda de chocolate', descricao: 'Cacau 70% com castanhas tostadas e calda morna aveludada.', preco: 17.0, imagem_url: '/mock-preview/smash-duplo.jpg', categoria_id: 5, ordem_exibicao: 9, grupos_modificadores: [] },
+    { id: 990016, nome: 'Suco de Laranja Natural 400ml', descricao: 'Frutas frescas da estação espremidas na hora, servido bem gelado.', preco: 12.0, imagem_url: mockPreviewImageUrl('drink-combo.jpg'), categoria_id: 4, ordem_exibicao: 6, grupos_modificadores: [] },
+    { id: 990017, nome: 'Refrigerante Artesanal de Guaraná', descricao: 'Xarope natural de guaraná da Amazônia com gaseificação suave e toque cítrico.', preco: 9.5, imagem_url: mockPreviewImageUrl('drink-combo.jpg'), categoria_id: 4, ordem_exibicao: 7, grupos_modificadores: [] },
+    { id: 990018, nome: 'Pudim de Leite KÔMA', descricao: 'Textura acetinada sem furinhos com abundante caramelo de cumaru.', preco: 14.5, imagem_url: mockPreviewImageUrl('burger-hero.jpg'), categoria_id: 5, ordem_exibicao: 8, grupos_modificadores: [] },
+    { id: 990019, nome: 'Brownie artesanal com calda de chocolate', descricao: 'Cacau 70% com castanhas tostadas e calda morna aveludada.', preco: 17.0, imagem_url: mockPreviewImageUrl('smash-duplo.jpg'), categoria_id: 5, ordem_exibicao: 9, grupos_modificadores: [] },
   ],
   promocoes: [
     {
@@ -157,6 +168,19 @@ function handler(request, response) {
       { produto_id: '990011', escolhas: 9 },
       { produto_id: '990012', escolhas: 6 },
     ] });
+  }
+  if (url.pathname.startsWith('/mock-preview/')) {
+    const filename = url.pathname.slice('/mock-preview/'.length);
+    if (!MOCK_PREVIEW_FILES.has(filename)) {
+      return sendJson(response, 404, { detail: 'Imagem de prévia não encontrada.' });
+    }
+    const imageBuffer = readFileSync(join(FIXTURE_IMAGES_DIR, filename));
+    response.writeHead(200, {
+      'Content-Type': 'image/jpeg',
+      'Content-Length': String(imageBuffer.byteLength),
+      'Cache-Control': 'no-store',
+    });
+    return response.end(request.method === 'HEAD' ? undefined : imageBuffer);
   }
   if (url.pathname === '/health') {
     return sendJson(response, 200, { preview: true, mode: 'read-only' });

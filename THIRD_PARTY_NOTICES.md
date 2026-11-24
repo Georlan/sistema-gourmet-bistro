@@ -100,7 +100,6 @@ src/cardapio/components/CardapioProductCard.tsx
 src/cardapio/components/CardapioProductModal.tsx
 src/cardapio/components/CardapioStoreInfoDrawer.tsx
 src/cardapio/components/CardapioUserProfileModal.tsx
-src/components/FechamentoCegoModal.tsx
 src/components/KitchenPanel.tsx
 src/components/ManagerPinModal.tsx
 src/components/MenuPanel.tsx

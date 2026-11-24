@@ -66,12 +66,14 @@ def test_stage3d_hybrid_fields_distinguish_money_from_points_without_local_coupo
 
 
 def test_stage3d_cash_closing_uses_money_input_instead_of_custom_money_parser():
-    source = _source("src/components/FechamentoCegoModal.tsx")
+    legacy_modal = ROOT / "src/components/FechamentoCegoModal.tsx"
+    assert not legacy_modal.exists()
 
-    assert "import MoneyInput from './MoneyInput';" in source
-    assert source.count("<MoneyInput") == 4
+    source = _source("src/components/caixa/CaixaFechamentoTab.tsx")
+
+    assert "import { MoneyInput } from '../MoneyInput';" in source
+    assert "<MoneyInput" in source
     assert "parseFloat" not in source
-    assert "useState<number | ''>" in source
 
 
 def test_stage3d_legacy_generic_card_method_has_human_readable_label():
