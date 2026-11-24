@@ -207,3 +207,79 @@ test('vitrine padrão do JE mantém contato e compartilhar visíveis no mobile a
   await expect(page.locator('#btn-instagram-header')).toBeVisible();
   await expect(page.locator('#btn-share-header')).toBeVisible();
 });
+
+
+test('mobile resume never creates another catalog socket while reconnect is pending', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-390', 'Deterministic lifecycle test runs once');
+  let menuReads = 0;
+  await page.addInitScript(() => {
+    const sockets: any[] = [];
+    (window as any).__catalogSockets = sockets;
+    const NativeSocket = window.WebSocket;
+    // Model a slow handshake, independently of network timing.
+    window.WebSocket = new Proxy(NativeSocket, {
+      construct(target, args) {
+        if (!String(args[0]).includes('/ws/cliente?')) return Reflect.construct(target, args);
+        const socket: any = {
+          readyState: NativeSocket.CONNECTING,
+          onopen: null, onmessage: null, onclose: null, onerror: null,
+          open() {
+            this.readyState = NativeSocket.OPEN;
+            this.onopen?.(new Event('open'));
+          },
+          close() {
+            this.readyState = NativeSocket.CLOSED;
+            this.onclose?.(new Event('close'));
+          },
+          publish() {
+            this.onmessage?.({ data: JSON.stringify({ event: 'catalog_updated' }) });
+          },
+        };
+        sockets.push(socket);
+        return socket;
+      },
+    });
+  });
+  await page.route('http://127.0.0.1:8000/**', route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === '/api/cardapio-digital/public') {
+      menuReads++;
+      return route.fulfill({ json: {
+        restaurante: { id: 906, nome: 'Loja Reconexão', slug: 'qa-reconnect',
+          aceitando_pedidos: true, status_override: 'Forçado Aberto',
+          delivery_ativo: false, formas_pagamento_aceitas: ['Dinheiro'] },
+        categorias: [{ id: 1, nome: 'Lanches' }],
+        produtos: [{ id: 906, nome: 'Pastel de teste', preco: 8, categoria_id: 1, grupos_modificadores: [] }],
+      } });
+    }
+    if (path === '/api/cardapio-digital/populares') return route.fulfill({ json: { produtos: [] } });
+    return route.fulfill({ json: {} });
+  });
+  await page.goto('/c/qa-reconnect');
+  await expect(page.locator('#product-card-906')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as any).__catalogSockets.length)).toBeGreaterThan(0);
+  const initial = await page.evaluate(() => {
+    const sockets = (window as any).__catalogSockets;
+    const current = sockets[sockets.length - 1];
+    const before = sockets.length;
+    current.open();
+    current.close(); // schedules a reconnect in two seconds
+    document.dispatchEvent(new Event('visibilitychange')); // starts reconnect immediately
+    return before + 1;
+  });
+  await expect.poll(() => page.evaluate(() => (window as any).__catalogSockets.length)).toBe(initial);
+  // Keep the new handshake pending beyond the old retry deadline.
+  await page.waitForTimeout(2300);
+  expect(await page.evaluate(() => (window as any).__catalogSockets.length)).toBe(initial);
+  await page.evaluate(() => {
+    const sockets = (window as any).__catalogSockets;
+    sockets[sockets.length - 1].open();
+  });
+  // A real event on the current transport must still trigger a refresh.
+  const baseline = menuReads;
+  await page.evaluate(() => {
+    const sockets = (window as any).__catalogSockets;
+    sockets[sockets.length - 1].publish();
+  });
+  await expect.poll(() => menuReads).toBeGreaterThan(baseline);
+});
