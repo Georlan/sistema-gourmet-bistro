@@ -1,30 +1,8 @@
-import { register } from 'node:module';
-register('./helpers/staticAssetsLoader.mjs', import.meta.url);
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8');
-
-test('recomendações usam somente produtos e disponibilidade do catálogo atual', () => {
-  const recommendations = source('../src/cardapio/catalogRecommendations.ts');
-  assert.match(recommendations, /products\.filter/);
-  assert.match(recommendations, /product\.isAvailable !== false/);
-  assert.match(recommendations, /product\.category/);
-  assert.doesNotMatch(recommendations, /fetch\(|localStorage|sessionStorage|historico|history/i);
-});
-
-test('recomendações priorizam produto principal, combo e acompanhamento antes de bebidas/sobremesas', () => {
-  const recommendations = source('../src/cardapio/catalogRecommendations.ts');
-  assert.match(recommendations, /MAIN_CATEGORY_MATCHER/);
-  assert.match(recommendations, /COMBO_MATCHER/);
-  assert.match(recommendations, /UPSELL_MATCHER/);
-  assert.match(recommendations, /BEBIDA_MATCHER/);
-  assert.match(recommendations, /SOBREMESA_MATCHER/);
-  assert.match(recommendations, /destaque/);
-  assert.match(recommendations, /combo/);
-  assert.match(recommendations, /upsell/);
-});
 
 test('home V2 reutiliza MenuProductCard canônico e preços correntes do catálogo', () => {
   const v2 = source('../src/cardapio/v2/MenuV2Experience.tsx');
@@ -36,37 +14,6 @@ test('home V2 reutiliza MenuProductCard canônico e preços correntes do catálo
   assert.match(card, /onClick=\{\(\) => onSelectProduct\(product\)\}/);
 });
 
-test('buildCatalogRecommendations prioriza burger, combo e batata antes de bebidas e sobremesas', async () => {
-  const { buildCatalogRecommendations } = await import('../src/cardapio/catalogRecommendations.js');
-  const d8Products = [
-    { id: '1', name: 'Suco de Acerola', description: '', image: '', price: 10, category: 'BEBIDAS', isAvailable: true },
-    { id: '2', name: 'Refrigerante Cola', description: '', image: '', price: 8, category: 'BEBIDAS', isAvailable: true },
-    { id: '3', name: 'D8 Clássico', description: '', image: '', price: 34, category: 'BURGERS', isAvailable: true },
-    { id: '4', name: 'Combo Clássico', description: '', image: '', price: 46, category: 'COMBOS', isAvailable: true },
-    { id: '5', name: 'Batata Frita Rústica', description: '', image: '', price: 18, category: 'PORÇÕES', isAvailable: true },
-    { id: '6', name: 'Brownie D8', description: '', image: '', price: 16, category: 'SOBREMESAS', isAvailable: true },
-  ];
-
-  const recs = buildCatalogRecommendations(d8Products);
-  assert.equal(recs.length, 3);
-  assert.equal(recs[0].kind, 'destaque');
-  assert.equal(recs[0].product.name, 'D8 Clássico');
-  assert.equal(recs[1].kind, 'combo');
-  assert.equal(recs[1].product.name, 'Combo Clássico');
-  assert.equal(recs[2].kind, 'upsell');
-  assert.equal(recs[2].product.name, 'Batata Frita Rústica');
+test('módulo legado catalogRecommendations foi removido após unificação da vitrine V2', () => {
+  assert.equal(existsSync(new URL('../src/cardapio/catalogRecommendations.ts', import.meta.url)), false);
 });
-
-test('buildCatalogRecommendations recorre a bebida e sobremesa se não houver comidas suficientes', async () => {
-  const { buildCatalogRecommendations } = await import('../src/cardapio/catalogRecommendations.js');
-  const drinksAndDessertsOnly = [
-    { id: '1', name: 'Suco de Acerola', description: '', image: '', price: 10, category: 'BEBIDAS', isAvailable: true },
-    { id: '2', name: 'Brownie D8', description: '', image: '', price: 16, category: 'SOBREMESAS', isAvailable: true },
-  ];
-
-  const recs = buildCatalogRecommendations(drinksAndDessertsOnly);
-  assert.equal(recs.length, 2);
-  assert.equal(recs[0].kind, 'bebida');
-  assert.equal(recs[1].kind, 'sobremesa');
-});
-
