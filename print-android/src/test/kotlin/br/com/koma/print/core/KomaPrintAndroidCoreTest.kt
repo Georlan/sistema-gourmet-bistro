@@ -6,12 +6,28 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class KomaPrintAndroidCoreTest {
+    @Test
+    fun `heartbeat distinguishes rejected credential and forbidden access`() {
+        for (code in listOf(401, 403)) {
+            val transport = object : PrintAgentHttpTransport {
+                override fun post(path: String, body: String, headers: Map<String, String>) =
+                    HttpResponsePayload(code, "{}")
+                override fun get(path: String, headers: Map<String, String>) =
+                    HttpResponsePayload(code, "{}")
+            }
+            val client = KomaPrintAgentClient(transport, agentTokenProvider = { "test-token" })
+            val error = assertFailsWith<AgentRevokedException> { client.heartbeat(emptyList()) }
+            assertEquals(code, error.statusCode)
+        }
+    }
+
     @Test
     fun `infer profile detects Kapbom KA-1445 and 58mm printers with 32 columns and no cut`() {
         val kapbom = PrinterPaperProfile.infer("Kapbom KA-1445")
