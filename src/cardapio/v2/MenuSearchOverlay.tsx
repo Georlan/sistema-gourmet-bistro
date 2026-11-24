@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { ArrowLeft, X } from "lucide-react";
 import { Product } from "../CardapioTypes";
 import { smartSearchMatch } from "../../domain";
@@ -44,12 +44,18 @@ export default function MenuSearchOverlay({
   }, [open, onClose]);
 
   const results = useMemo(() => {
+    if (!open) return [];
     const trimmed = query.trim();
     if (!trimmed) return products.slice(0, 12);
     return products.filter(
       (p) => smartSearchMatch(p.name, trimmed) || smartSearchMatch(p.description || "", trimmed),
     );
-  }, [products, query]);
+  }, [open, products, query]);
+
+  const selectSearchResult = useCallback((product: Product) => {
+    onClose();
+    onSelectProduct(product);
+  }, [onClose, onSelectProduct]);
 
   if (!open) return null;
 
@@ -110,10 +116,7 @@ export default function MenuSearchOverlay({
                 key={product.id}
                 product={product}
                 cartQuantity={getProductCartQuantity(product.id)}
-                onSelectProduct={(p) => {
-                  onClose();
-                  onSelectProduct(p as Product);
-                }}
+                onSelectProduct={selectSearchResult}
                 onFastAdd={onFastAdd as any}
                 onFastRemove={onFastRemove as any}
               />
