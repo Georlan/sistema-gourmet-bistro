@@ -25,6 +25,7 @@ import { SupportCodeNotice } from "./components/app/SupportCodeNotice";
 import { installSupportCodeObserver } from "./utils/supportCode";
 import { AnalyticsProvider, initAnalytics } from "./analytics";
 import { canonicalOperationalQuery } from "./utils/operationalCallbackParams";
+import { capturePendingDeepLink, parseDeepLinkGoSyntax } from "./utils/deepLinkStorage";
 
 import {
   KOMA_OPERATIONAL_APP_URL,
@@ -125,6 +126,11 @@ function redirectLegacyOperationalStaffHost(): boolean {
   // Links antigos como restaurante-caixa/restaurante-garcom não são mais uma
   // segunda autenticação. Em produção eles convergem para o único acesso da equipe.
   if (isPublicMenuRoute() || isPublicCommercialRoute() || isOperationalUtilityRoute()) return false;
+  const goId = parseDeepLinkGoSyntax(window.location.search);
+  if (goId) {
+    window.location.replace(`${KOMA_OPERATIONAL_APP_URL}?go=${encodeURIComponent(goId)}`);
+    return true;
+  }
   window.location.replace(KOMA_OPERATIONAL_APP_URL);
   return true;
 }
@@ -216,6 +222,13 @@ const hasCustomerSupportSurface =
   !pathname.startsWith("/super-admin")
   && !isInternalSupportOperationalRoute
   && (isUnifiedOperationalRoute || isOnboardingAwareManagementRoute || isSmartPosRoute || isEmbeddedOperationalPreview);
+
+if (
+  (isUnifiedOperationalRoute || isOnboardingAwareManagementRoute || isEmbeddedOperationalPreview)
+  && !isInternalSupportOperationalRoute
+) {
+  capturePendingDeepLink(window.location.search);
+}
 
 // O Chrome mobile pode esconder path/query na barra e fazer links legados
 // parecerem o domínio puro. Em produção, antes de montar o shell, removemos
