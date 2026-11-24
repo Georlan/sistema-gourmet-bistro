@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    JSON,
     String,
     Text,
     func,
@@ -111,6 +112,7 @@ class CustomerSupportFeedback(Base):
     kind = Column(String(20), nullable=False)
     message = Column(Text, nullable=False)
     page_path = Column(String(300), nullable=True)
+    context_metadata = Column(JSON, nullable=True)
     status = Column(String(20), default="new", nullable=False)
     created_at = Column(
         DateTime(timezone=True),
