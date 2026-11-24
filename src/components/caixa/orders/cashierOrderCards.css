@@ -136,7 +136,27 @@
   font-weight: 600;
   line-height: 1.25;
 }
-.orders-workspace .orders-card:has([data-order-recency="latest"]) { padding-top: 1.2rem !important; contain: layout style; }
+/* Recency and SmartPOS share one compact strip, with no extra SVG asset. */
+.orders-workspace .orders-card__recency-group {
+  position: absolute;
+  z-index: 1;
+  top: -.5rem;
+  left: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem;
+  max-width: calc(100% - 2rem);
+}
+.orders-workspace .orders-card__recency-group .orders-card__recency {
+  position: static;
+  min-height: 1.35rem;
+}
+.orders-workspace .orders-card__recency--smartpos {
+  background: var(--koma-accent-soft);
+  color: var(--koma-accent-text);
+  border: 1px solid var(--koma-accent-border);
+}
+.orders-workspace .orders-card:has(.orders-card__recency-group) { padding-top: 1.2rem !important; contain: layout style; }
 .orders-workspace .orders-card__items { padding: .55rem 0 .1rem; border: 0; border-top: 1px solid var(--koma-border-default); border-radius: 0; background: transparent; }
 .orders-workspace .orders-card__action {
   min-height: 2.75rem;
