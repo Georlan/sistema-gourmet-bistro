@@ -694,8 +694,8 @@ def validate_operational_qa_token(
 
 def _is_base_provisional_preparation(db: Session, restaurante_id: int) -> bool:
     rid = int(restaurante_id)
-    audit = (
-        db.query(SuperAdminAuditLog)
+    audit_row = (
+        db.query(SuperAdminAuditLog.after_data)
         .filter(
             SuperAdminAuditLog.restaurante_id == rid,
             SuperAdminAuditLog.action == "SUPERADMIN_TENANT_ONBOARD",
@@ -703,9 +703,10 @@ def _is_base_provisional_preparation(db: Session, restaurante_id: int) -> bool:
         .order_by(SuperAdminAuditLog.id.desc())
         .first()
     )
-    if audit is None or not isinstance(audit.after_data, dict):
+    after_data = audit_row[0] if audit_row is not None else None
+    if not isinstance(after_data, dict):
         return False
-    if audit.after_data.get("trial_status") != "pending_setup":
+    if after_data.get("trial_status") != "pending_setup":
         return False
 
     sub_exists = (

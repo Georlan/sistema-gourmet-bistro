@@ -6,9 +6,11 @@ from dataclasses import dataclass
 import datetime
 import json
 import re
+from types import SimpleNamespace
 import unicodedata
 from typing import Any
 
+from sqlalchemy import exists, select
 from sqlalchemy.orm import object_session, load_only
 from sqlalchemy.orm.exc import UnmappedInstanceError
 
@@ -272,6 +274,57 @@ def _infer_emergency_pause(restaurante: Any, *, now: datetime.datetime | None = 
     return is_effectively_paused(control, now=now)
 
 
+def _infer_pause_and_cash_shift(
+    restaurante: Any,
+    *,
+    include_cash_shift: bool,
+    now: datetime.datetime | None = None,
+) -> tuple[bool, bool | None]:
+    """Lê pausa operacional e existência de turno aberto em uma única consulta SQL."""
+
+    restaurante_id = getattr(restaurante, "id", None)
+    if not restaurante_id:
+        return False, (False if include_cash_shift else None)
+    db = _restaurant_session(restaurante)
+    if db is None:
+        return False, (False if include_cash_shift else None)
+
+    from ..online_order_control_models import OnlineOrderControl
+    from .online_order_control import is_effectively_paused
+
+    paused_sq = (
+        select(OnlineOrderControl.paused)
+        .where(OnlineOrderControl.restaurante_id == restaurante_id)
+        .limit(1)
+        .scalar_subquery()
+    )
+    pause_until_sq = (
+        select(OnlineOrderControl.pause_until)
+        .where(OnlineOrderControl.restaurante_id == restaurante_id)
+        .limit(1)
+        .scalar_subquery()
+    )
+    if include_cash_shift:
+        cash_open_expr = exists(
+            select(CaixaTurno.id).where(
+                CaixaTurno.restaurante_id == restaurante_id,
+                CaixaTurno.status == "aberto",
+            )
+        )
+        row = db.execute(select(paused_sq, pause_until_sq, cash_open_expr)).one()
+        paused_val, pause_until_val, cash_open_val = row[0], row[1], bool(row[2])
+    else:
+        row = db.execute(select(paused_sq, pause_until_sq)).one()
+        paused_val, pause_until_val, cash_open_val = row[0], row[1], None
+
+    control = (
+        SimpleNamespace(paused=paused_val, pause_until=pause_until_val)
+        if paused_val is not None
+        else None
+    )
+    return is_effectively_paused(control, now=now), cash_open_val
+
+
 def evaluate_online_order_policy(
     restaurante: Any,
     configuracao: Any = None,
@@ -328,8 +381,15 @@ def evaluate_online_order_policy(
     )
     delivery_enabled = configured_delivery is not False
     pickup_enabled = True
+    is_forced_closed = "forcado fechado" in override or override == "fechado"
 
-    if _infer_emergency_pause(restaurante, now=now):
+    emergency_paused, fetched_cash_open = _infer_pause_and_cash_shift(
+        restaurante,
+        include_cash_shift=(cash_open is None and not is_forced_closed),
+        now=now,
+    )
+
+    if emergency_paused:
         return OnlineOrderPolicy(
             accepting_orders=False,
             delivery_enabled=delivery_enabled,
@@ -338,7 +398,7 @@ def evaluate_online_order_policy(
             source="operational_pause",
         )
 
-    if "forcado fechado" in override or override == "fechado":
+    if is_forced_closed:
         return OnlineOrderPolicy(
             accepting_orders=False,
             delivery_enabled=delivery_enabled,
@@ -347,7 +407,11 @@ def evaluate_online_order_policy(
             source="forced_closed",
         )
 
-    cash_shift_open = _infer_open_cash_shift(restaurante) if cash_open is None else cash_open
+    cash_shift_open = (
+        fetched_cash_open
+        if cash_open is None and fetched_cash_open is not None
+        else (_infer_open_cash_shift(restaurante) if cash_open is None else cash_open)
+    )
     if not cash_shift_open:
         return OnlineOrderPolicy(
             accepting_orders=False,
