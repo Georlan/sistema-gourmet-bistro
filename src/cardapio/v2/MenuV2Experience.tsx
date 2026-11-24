@@ -164,6 +164,7 @@ export default function MenuV2Experience({
   const [themeMode, setThemeMode] = useState<MenuThemeMode>(readInitialThemeMode);
   const [popularIds, setPopularIds] = useState<string[]>(() => activeBrand.popularProductIds || []);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const closeSearch = useCallback(() => setIsSearchOpen(false), []);
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [isPlatformModalOpen, setIsPlatformModalOpen] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -1270,7 +1271,7 @@ export default function MenuV2Experience({
         open={isSearchOpen}
         query={searchQuery}
         onQueryChange={setSearchQuery}
-        onClose={() => setIsSearchOpen(false)}
+        onClose={closeSearch}
         products={activeBrand.products}
         getProductCartQuantity={getProductCartQuantity}
         onSelectProduct={onSelectProduct as any}

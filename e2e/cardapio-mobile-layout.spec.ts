@@ -7,7 +7,7 @@ for (const [profile, category, product] of [
   ['acai', 'Açaí', 'Açaí 500 ml'],
   ['churrasco', 'Carnes', 'Espeto da casa'],
 ]) {
-  test(`${profile}: vitrine, navegação e busca preservam layout e catálogo`, async ({ page }) => {
+  test(`${profile}: vitrine, navegação e busca preservam layout e catálogo`, async ({ page }, testInfo) => {
     let menuReads = 0;
     let rankingReads = 0;
     await page.route('http://127.0.0.1:8000/**', async route => {
@@ -71,6 +71,18 @@ for (const [profile, category, product] of [
     await page.getByRole('searchbox').fill('');
     await expect(page.locator('#product-card-901')).toContainText(product);
     await expect(page.locator('#product-card-902')).toContainText('Hambúrguer artesanal');
+    if (profile === 'generic' && testInfo.project.name === 'mobile-390') {
+      const card = page.locator('#product-card-902');
+      await card.getByRole('button', { name: 'Adicionar Hambúrguer artesanal à sacola' }).click();
+      await expect(card.locator('#qty-902')).toHaveText('1');
+      await card.getByRole('button', { name: 'Adicionar mais uma unidade de Hambúrguer artesanal' }).click();
+      await expect(card.locator('#qty-902')).toHaveText('2');
+      await card.getByRole('button', { name: 'Remover uma unidade de Hambúrguer artesanal' }).click();
+      await expect(card.locator('#qty-902')).toHaveText('1');
+      await card.getByRole('button', { name: 'Remover uma unidade de Hambúrguer artesanal' }).click();
+      await expect(card.locator('#qty-902')).toHaveCount(0);
+      await expect(card.getByRole('button', { name: 'Adicionar Hambúrguer artesanal à sacola' })).toBeVisible();
+    }
     expect({ menuReads, rankingReads }).toEqual(initialReads);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
