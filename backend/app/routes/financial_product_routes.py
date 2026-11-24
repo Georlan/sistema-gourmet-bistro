@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, conlist, StrictInt
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db, require_tenant_id
@@ -52,31 +53,28 @@ def get_relatorio_produtos_operacional(
         for sale in snapshot.sales.values()
         for command_id in sale.command_ids
     }
-    items = (
-        db.query(ComandaItem)
-        .filter(
-            ComandaItem.restaurante_id == rest_id,
-            ComandaItem.comanda_id.in_(command_ids),
-            ComandaItem.status != "cancelado",
-        )
-        .all()
-        if command_ids
-        else []
-    )
-
     consumption: dict[str, dict[str, Decimal | int]] = {}
-    for item in items:
-        if not item.produto_id:
-            continue
-        product_id = str(item.produto_id)
-        quantity = int(getattr(item, "quantidade", 1) or 1)
-        unit_value = money(getattr(item, "preco_unit", 0) or 0)
-        row = consumption.setdefault(
-            product_id,
-            {"quantity": 0, "value": Decimal("0.00")},
+    if command_ids:
+        agg_rows = (
+            db.query(
+                ComandaItem.produto_id,
+                func.count(ComandaItem.id),
+                func.coalesce(func.sum(ComandaItem.preco_unit), 0),
+            )
+            .filter(
+                ComandaItem.restaurante_id == rest_id,
+                ComandaItem.comanda_id.in_(command_ids),
+                ComandaItem.status != "cancelado",
+                ComandaItem.produto_id.isnot(None),
+            )
+            .group_by(ComandaItem.produto_id)
+            .all()
         )
-        row["quantity"] = int(row["quantity"]) + quantity
-        row["value"] = money(Decimal(str(row["value"])) + unit_value * quantity)
+        for product_id_raw, qty_raw, val_raw in agg_rows:
+            consumption[str(product_id_raw)] = {
+                "quantity": int(qty_raw or 0),
+                "value": money(val_raw or 0),
+            }
 
     result = []
     for product in products:
