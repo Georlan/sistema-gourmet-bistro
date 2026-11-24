@@ -51,6 +51,9 @@ test('frontend efficiency guards remain active across realtime, headers, fonts a
   const realtime = readRepoFile('src/components/caixa/realtime/useCashierRealtime.ts');
   assert.match(realtime, /needsCouriers\s*&&\s*motoboysLoadState\s*===\s*'idle'/);
 
+  const cashierOrders = readRepoFile('src/components/caixa/orders/useCashierOrders.ts');
+  assert.match(cashierOrders, /useState<'idle'\s*\|\s*'loading'\s*\|\s*'loaded'\s*\|\s*'error'>\('idle'\)/);
+
   const drawer = readRepoFile('src/cardapio/components/CardapioOrdersDrawer.tsx');
   assert.match(drawer, /let\s+sawInitialConnected\s*=\s*false/);
 
