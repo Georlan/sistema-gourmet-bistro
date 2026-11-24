@@ -1,7 +1,7 @@
 import { PasswordRecoveryHelp } from "../components/auth/PasswordRecoveryHelp";
 import React, { useEffect, useState } from "react";
 import { LockKeyhole, LogIn } from "lucide-react";
-import SuperAdminPanel from "./SuperAdminPanel";
+const SuperAdminPanel = React.lazy(() => import("./SuperAdminPanel"));
 import {
   getSuperAdminToken,
   loginSuperAdmin,
@@ -54,7 +54,17 @@ export function SuperAdminGate() {
   };
 
   if (isAuthenticated) {
-    return <SuperAdminPanel />;
+    return (
+      <React.Suspense
+        fallback={
+          <main className="min-h-screen bg-koma-page text-koma-foreground flex items-center justify-center p-6">
+            <p role="status" className="text-sm text-koma-muted">Carregando painel SuperAdmin…</p>
+          </main>
+        }
+      >
+        <SuperAdminPanel />
+      </React.Suspense>
+    );
   }
 
   return (

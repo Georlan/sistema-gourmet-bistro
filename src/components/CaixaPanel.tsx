@@ -24,20 +24,13 @@ import {
 import { normalizeOperationalTimestamp } from '../domain/operationalTime';
 import { clearOperatorSession } from '../utils/authSession';
 import { waitForInstalledOperatorSessionWrite } from '../utils/installedOperatorSession';
-import { AssinaturaPixTab } from './assinatura/AssinaturaPixTab';
-import { CaixaFechamentoTab } from './caixa/CaixaFechamentoTab';
-import { CaixaMovimentacoesTab } from './caixa/CaixaMovimentacoesTab';
-import { CaixaTurnoAtualTab } from './caixa/CaixaTurnoAtualTab';
 import type { CaixaPanelProps } from './caixa/cashierContracts';
 import { formatCompactCurrency } from './caixa/cashierPresentation';
 import { useCashierCatalog } from './caixa/catalog/useCashierCatalog';
-import { CheckoutDialog } from './caixa/checkout/CheckoutDialog';
 import { useCheckoutController } from './caixa/checkout/useCheckoutController';
 import { useCashierCustomers } from './caixa/customers/useCashierCustomers';
-import { CashierKitchen } from './caixa/kitchen/CashierKitchen';
 import { isKdsKitchenOrderEligible } from './caixa/kitchen/kdsProjection';
 import { DeferredCashierSection } from './caixa/loading/DeferredCashierSection';
-import { CashierConversationsDrawer } from './caixa/chat/CashierConversationsDrawer';
 import { useCashierChat } from './caixa/chat/useCashierChat';
 import { CashierDesktopSidebar } from './caixa/navigation/CashierDesktopSidebar';
 import { CashierMobileBottomBar } from './caixa/navigation/CashierMobileBottomBar';
@@ -49,13 +42,7 @@ import { shouldShowSalon } from '../domain/cashierSalonVisibility';
 import { useCashierNavigation } from './caixa/navigation/useCashierNavigation';
 import { useCashierPreferences } from './caixa/navigation/useCashierPreferences';
 import { CaixaOrdersWorkspace } from './caixa/orders/CaixaOrdersWorkspace';
-import { CashierCancelConsumptionDialog } from './caixa/orders/CashierCancelConsumptionDialog';
-import { CashierCouriers } from './caixa/orders/CashierCouriers';
-import { CourierReassignmentDialog } from './caixa/orders/CourierReassignmentDialog';
-import { FulfillmentConversionDialog } from './caixa/orders/FulfillmentConversionDialog';
-import { CashierPickups } from './caixa/orders/CashierPickups';
 import type { CashierTableCard } from './caixa/orders/cashierWorkspaceTypes';
-import { KanbanOrderDetails } from './caixa/orders/KanbanOrderDetails';
 import { useCashierOrders } from './caixa/orders/useCashierOrders';
 import { useCourierReassignment } from './caixa/orders/useCourierReassignment';
 import { useFulfillmentConversion } from './caixa/orders/useFulfillmentConversion';
@@ -67,12 +54,9 @@ import { useCashierClock } from './caixa/realtime/useCashierClock';
 import { useCashierRealtime } from './caixa/realtime/useCashierRealtime';
 import { CaixaSalonTab } from './caixa/salao/CaixaSalonTab';
 import { useCashierSalonProjection } from './caixa/salao/useCashierSalonProjection';
-import { SangriaModal } from './caixa/SangriaModal';
 import { useCashierSettings } from './caixa/settings/useCashierSettings';
-import { CashierOpenShiftDialog } from './caixa/shift/CashierOpenShiftDialog';
 import { useCashShift } from './caixa/shift/useCashShift';
 import { useCashierSmartPos } from './caixa/smartpos/useCashierSmartPos';
-import { SuprimentoModal } from './caixa/SuprimentoModal';
 import { OperationalBanner } from './shared/OperationalBanner';
 import { SidebarProvider } from './ui/sidebar';
 import './caixa/navigation/cashierChrome.css';
@@ -99,6 +83,22 @@ const loadCashierOnlineMenu = () => import('./caixa/online-menu/CashierOnlineMen
 const loadCashierTeam = () => import('./caixa/team/CashierTeam');
 const loadCashierReports = () => import('./caixa/reports/CashierReports');
 const loadCashierPdvView = () => import('./caixa/pdv/CashierPdvView');
+const loadAssinaturaPixTab = () => import('./assinatura/AssinaturaPixTab').then(module => ({ default: module.AssinaturaPixTab }));
+const loadCaixaFechamentoTab = () => import('./caixa/CaixaFechamentoTab').then(module => ({ default: module.CaixaFechamentoTab }));
+const loadCaixaTurnoAtualTab = () => import('./caixa/CaixaTurnoAtualTab').then(module => ({ default: module.CaixaTurnoAtualTab }));
+const loadCaixaMovimentacoesTab = () => import('./caixa/CaixaMovimentacoesTab').then(module => ({ default: module.CaixaMovimentacoesTab }));
+const loadCashierKitchen = () => import('./caixa/kitchen/CashierKitchen').then(module => ({ default: module.CashierKitchen }));
+const loadCashierConversationsDrawer = () => import('./caixa/chat/CashierConversationsDrawer');
+const LazySangriaModal = React.lazy(() => import('./caixa/SangriaModal').then(module => ({ default: module.SangriaModal })));
+const LazySuprimentoModal = React.lazy(() => import('./caixa/SuprimentoModal').then(module => ({ default: module.SuprimentoModal })));
+const CheckoutDialog = React.lazy(() => import('./caixa/checkout/CheckoutDialog').then(module => ({ default: module.CheckoutDialog })));
+const KanbanOrderDetails = React.lazy(() => import('./caixa/orders/KanbanOrderDetails').then(module => ({ default: module.KanbanOrderDetails })));
+const CashierCouriers = React.lazy(() => import('./caixa/orders/CashierCouriers').then(module => ({ default: module.CashierCouriers })));
+const CashierPickups = React.lazy(() => import('./caixa/orders/CashierPickups').then(module => ({ default: module.CashierPickups })));
+const CashierCancelConsumptionDialog = React.lazy(() => import('./caixa/orders/CashierCancelConsumptionDialog').then(module => ({ default: module.CashierCancelConsumptionDialog })));
+const FulfillmentConversionDialog = React.lazy(() => import('./caixa/orders/FulfillmentConversionDialog').then(module => ({ default: module.FulfillmentConversionDialog })));
+const CourierReassignmentDialog = React.lazy(() => import('./caixa/orders/CourierReassignmentDialog').then(module => ({ default: module.CourierReassignmentDialog })));
+const CashierOpenShiftDialog = React.lazy(() => import('./caixa/shift/CashierOpenShiftDialog').then(module => ({ default: module.CashierOpenShiftDialog })));
 
 const formatClockTime = (value: unknown) => {
   const timestamp = normalizeOperationalTimestamp(value);
@@ -1046,25 +1046,41 @@ export function CaixaPanel({
               sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, deliveryOrders, activeKitchenItems, apiCategorias }}
             />
 
-            <CashierKitchen mode={hasDedicatedKds ? 'kds' : 'queue'} activeSubTab={activeTab === 'operacao' ? activeSubTab : ''} activeKitchenItems={activeKitchenItems} handleUpdateItemStatus={handleUpdateItemStatus} handleConfirmTicketReady={handleConfirmTicketReady} onRefreshOrders={onRefreshOrders} />
-
-            <CashierPickups
-              query={searchQuery} setQuery={setSearchQuery}
-              isWsConnected={isWsConnected}
-              activeSubTab={activeTab === 'operacao' ? activeSubTab : ''}
-              deliveryOrders={deliveryOrders}
-              deliveryOrdersLoadState={deliveryOrdersLoadState}
-              hasDeliverySnapshot={hasDeliverySnapshot}
-              onRetry={fetchDeliveryOrders}
-              apiBaseUrl={apiBaseUrl}
-              authHeaders={authHeaders}
-              now={nowTimestamp}
-              handleAcceptPendingDeliveryOrder={handleAcceptPendingDeliveryOrder}
-              handleRejectPendingDeliveryOrder={handleRejectPendingDeliveryOrder}
-              handleAdvanceDigitalOrder={handleAdvanceDigitalOrder}
-              handleFinalizeDigitalOrder={handleFinalizeDigitalOrder}
-              openDeliveryOrderDetails={openDeliveryOrderDetails}
+            <DeferredCashierSection
+              active={activeTab === 'operacao' && (activeSubTab === 'kds' || activeSubTab === 'preparo' || activeSubTab === 'cozinha')}
+              label="Cozinha"
+              load={loadCashierKitchen}
+              sectionProps={{
+                mode: hasDedicatedKds ? 'kds' : 'queue',
+                activeSubTab: activeTab === 'operacao' ? activeSubTab : '',
+                activeKitchenItems,
+                handleUpdateItemStatus,
+                handleConfirmTicketReady,
+                onRefreshOrders,
+              }}
             />
+
+            {activeTab === 'operacao' && activeSubTab === 'retiradas' && (
+              <React.Suspense fallback={<div role="status" className="p-5 text-koma-muted">Carregando Retiradas…</div>}>
+                <CashierPickups
+                  query={searchQuery} setQuery={setSearchQuery}
+                  isWsConnected={isWsConnected}
+                  activeSubTab={activeSubTab}
+                  deliveryOrders={deliveryOrders}
+                  deliveryOrdersLoadState={deliveryOrdersLoadState}
+                  hasDeliverySnapshot={hasDeliverySnapshot}
+                  onRetry={fetchDeliveryOrders}
+                  apiBaseUrl={apiBaseUrl}
+                  authHeaders={authHeaders}
+                  now={nowTimestamp}
+                  handleAcceptPendingDeliveryOrder={handleAcceptPendingDeliveryOrder}
+                  handleRejectPendingDeliveryOrder={handleRejectPendingDeliveryOrder}
+                  handleAdvanceDigitalOrder={handleAdvanceDigitalOrder}
+                  handleFinalizeDigitalOrder={handleFinalizeDigitalOrder}
+                  openDeliveryOrderDetails={openDeliveryOrderDetails}
+                />
+              </React.Suspense>
+            )}
 
             <DeferredCashierSection active={activeTab === 'permissoes_cargos'} label="Equipe" load={loadCashierTeam} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast }} />
 
@@ -1094,17 +1110,20 @@ export function CaixaPanel({
               }}
             />
 
-            {activeTab === 'assinatura_pix' && (
-              <AssinaturaPixTab
-                currentPlanId={currentPlanId}
-                hasPrinting={hasPrinting}
-                hasOnlineMenu={hasOnlineMenu}
-                activeSubTab={activeSubTab}
-                setActiveSubTab={setActiveSubTab}
-                isTestPlan={restauranteConfig?.plano_modo_teste === true}
-                bannerNotice={planNoticeBanner}
-              />
-            )}
+            <DeferredCashierSection
+              active={activeTab === 'assinatura_pix'}
+              label="Assinatura"
+              load={loadAssinaturaPixTab}
+              sectionProps={{
+                currentPlanId,
+                hasPrinting,
+                hasOnlineMenu,
+                activeSubTab,
+                setActiveSubTab,
+                isTestPlan: restauranteConfig?.plano_modo_teste === true,
+                bannerNotice: planNoticeBanner,
+              }}
+            />
 
             <DeferredCashierSection active={activeTab === 'clientes'} label="Clientes" load={loadCashierCustomers} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, loyaltyUsers, customersStatus, hasCustomerSnapshot, refreshLoyaltyUsers, totalCustomers, hasMoreCustomers, loadingMoreCustomers, loadMoreCustomers, hasLoyalty, hasCoupons }} />
 
@@ -1141,8 +1160,8 @@ export function CaixaPanel({
 
             <DeferredCashierSection active={hasInventory && activeTab === 'estoque'} label="Estoque" load={loadCashierInventory} sectionProps={{ apiBaseUrl, authHeaders, activeTab, activeSubTab, setActiveSubTab, showToast, apiProdutos, isLoading }} />
 
-            {activeTab === 'financeiro' && (activeSubTab === 'turno_atual' || activeSubTab === 'fluxo') && (
-              <div className={"orders-workspace space-y-4"}>
+            <div className={activeTab === 'financeiro' && (activeSubTab === 'turno_atual' || activeSubTab === 'fluxo') ? 'orders-workspace space-y-4' : 'contents'}>
+              {activeTab === 'financeiro' && (activeSubTab === 'turno_atual' || activeSubTab === 'fluxo') && (
                 <OperationalBanner
                   id="cash-heading"
                   eyebrow="CAIXA"
@@ -1185,114 +1204,138 @@ export function CaixaPanel({
                     },
                   ]}
                 />
-                <CaixaTurnoAtualTab
-                  onRefundSuccess={async () => { await Promise.allSettled([onRefreshTurnoResumo(), onRefreshOrders()]); }}
-                  turnoResumo={turnoResumo}
-                  isLoading={!isTurnoResumoReady || isTurnoResumoLoading}
-                  pendingPaymentsCount={pagamentosPendentes.length}
-                  pendingPaymentsTotal={pendingPaymentsTotal}
-                  onNavigateToFechamento={() => setActiveSubTab('fechamento')}
-                  onNavigateToMovimentacoes={() => setActiveSubTab('movimentacoes')}
-                  onNavigateToPendingPayments={() => {
+              )}
+              <DeferredCashierSection
+                active={activeTab === 'financeiro' && (activeSubTab === 'turno_atual' || activeSubTab === 'fluxo')}
+                label="Turno atual"
+                load={loadCaixaTurnoAtualTab}
+                sectionProps={{
+                  onRefundSuccess: async () => { await Promise.allSettled([onRefreshTurnoResumo(), onRefreshOrders()]); },
+                  turnoResumo,
+                  isLoading: !isTurnoResumoReady || isTurnoResumoLoading,
+                  pendingPaymentsCount: pagamentosPendentes.length,
+                  pendingPaymentsTotal,
+                  onNavigateToFechamento: () => setActiveSubTab('fechamento'),
+                  onNavigateToMovimentacoes: () => setActiveSubTab('movimentacoes'),
+                  onNavigateToPendingPayments: () => {
                     setActiveTab('operacao');
                     setActiveSubTab('pedidos');
-                  }}
-                  onOpenSangriaModal={() => setShowSangriaModal(true)}
-                  onOpenSuprimentoModal={() => setShowSuprimentoModal(true)}
-                  onOpenNovoTurnoModal={() => setShowAbrirModal(true)}
-                  onNavigateToPaymentIntegrations={() => handleSidebarNavigation('config_integracoes')}
-                />
-              </div>
-            )}
+                  },
+                  onOpenSangriaModal: () => setShowSangriaModal(true),
+                  onOpenSuprimentoModal: () => setShowSuprimentoModal(true),
+                  onOpenNovoTurnoModal: () => setShowAbrirModal(true),
+                  onNavigateToPaymentIntegrations: () => handleSidebarNavigation('config_integracoes'),
+                }}
+              />
+            </div>
 
-            {activeTab === 'financeiro' &&
-              (activeSubTab === 'movimentacoes' || activeSubTab === 'ajustes' || activeSubTab === 'suprimento' || activeSubTab === 'sangria') && (
-                <CaixaMovimentacoesTab movimentacoes={caixaMovimentacoes} turnoResumo={turnoResumo} isLoading={isCaixaMovimentacoesLoading} />
-              )}
-
-            {activeTab === 'financeiro' && (activeSubTab === 'fechamento' || activeSubTab === 'conferencia') && (
-              <div className={"orders-workspace space-y-4"}>
-                <OperationalBanner
-                  id="cash-closing-heading"
-                  eyebrow="CAIXA"
-                  title="Fechamento"
-                  accent={!isTurnoResumoReady ? 'sincronizando' : 'do seu jeito'}
-                  description={!isTurnoResumoReady ? 'Confirmando o turno antes de habilitar a conferência.' : 'Use a conferência rápida ou faça uma conferência totalmente cega.'}
-                  metrics={[
-                    {
-                      label: 'aberto há',
-                      value: isTurnoResumoReady && turnoResumo?.status === 'aberto' ? formatDuration(turnoResumo.tempo_aberto_minutos) : '—',
-                    },
-                    {
-                      label: 'pagamentos pendentes',
-                      value: isTurnoResumoReady ? pagamentosPendentes.length : '—',
-                      valueClassName: isTurnoResumoReady && pagamentosPendentes.length > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-koma-muted',
-                    },
-                    { label: 'valor pendente', value: isTurnoResumoReady ? formatCompactCurrency(pendingPaymentsTotal) : '—' },
-                  ]}
-                />
-                {isTurnoResumoReady ? (
-                  <CaixaFechamentoTab
-                    isTurnoAberto={turnoResumo?.status === 'aberto'}
-                    fechamentoResult={fechamentoResult}
-                    turnoResumo={turnoResumo}
-                    pendingPaymentsCount={pagamentosPendentes.length}
-                    pendingPaymentsTotal={pendingPaymentsTotal}
-                    hasPrinting={hasPrinting}
-                    restaurantName={String(restauranteConfig?.nome || 'KÔMA')}
-                    onConfirmFechamento={handleConfirmarFechamento}
-                    onOpenNovoTurnoModal={() => setShowAbrirModal(true)}
-                    onNavigateToPendingPayments={() => {
-                      setActiveTab('operacao');
-                      setActiveSubTab('pedidos');
-                    }}
-                    onNavigateToOpenComandas={() => {
-                      setActiveTab('operacao');
-                      setActiveSubTab('pedidos');
-                    }}
-                    onNavigateToPaymentIntegrations={() => handleSidebarNavigation('config_integracoes')}
-                  />
-                ) : (
-                  <div className="rounded-2xl border border-koma-border bg-koma-panel p-8 text-center text-koma-muted">
-                    <Loader2 size={22} className="mx-auto mb-3 animate-spin" />
-                    <p className="text-xs font-bold">Sincronizando turno antes do fechamento...</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <CashierCouriers
-              query={searchQuery} setQuery={setSearchQuery}
-              isWsConnected={isWsConnected}
-              activeSubTab={activeTab === 'operacao' ? activeSubTab : ''}
-              deliveryOrders={deliveryOrders}
-              deliveryOrdersLoadState={deliveryOrdersLoadState}
-              hasDeliverySnapshot={hasDeliverySnapshot}
-              onRetry={fetchDeliveryOrders}
-              selectedMotoboys={selectedMotoboys}
-              setSelectedMotoboys={setSelectedMotoboys}
-              motoboys={motoboys}
-              motoboysLoadState={motoboysLoadState}
-              hasCourierApp={hasCourierApp}
-              handleDespacharKanban={handleDespacharKanban}
-              handleGerarLinkMotoboy={handleGerarLinkMotoboy}
-              handleRevogarAcessoMotoboy={handleRevogarAcessoMotoboy}
-              handleFinalizarPedido={handleFinalizeCourierOrder}
-              handleAcceptPendingDeliveryOrder={handleAcceptPendingDeliveryOrder}
-              handleRejectPendingDeliveryOrder={handleRejectPendingDeliveryOrder}
-              handleAdvanceDigitalOrder={handleAdvanceDigitalOrder}
-              openDeliveryOrderDetails={openDeliveryOrderDetails}
-              onRequestCourierReassignment={courierReassignment.request}
-              onRequestFulfillmentConversion={fulfillmentConversion.request}
-              apiBaseUrl={apiBaseUrl}
-              authHeaders={authHeaders}
-              now={nowTimestamp}
-              handleAddMotoboy={handleAddMotoboy}
-              novoMotoboyNome={novoMotoboyNome}
-              novoMotoboyTelefone={novoMotoboyTelefone}
-              setNewMotoboyNome={setNewMotoboyNome}
-              setNewMotoboyTelefone={setNewMotoboyTelefone}
+            <DeferredCashierSection
+              active={
+                activeTab === 'financeiro' &&
+                (activeSubTab === 'movimentacoes' || activeSubTab === 'ajustes' || activeSubTab === 'suprimento' || activeSubTab === 'sangria')
+              }
+              label="Movimentações"
+              load={loadCaixaMovimentacoesTab}
+              sectionProps={{
+                movimentacoes: caixaMovimentacoes,
+                turnoResumo,
+                isLoading: isCaixaMovimentacoesLoading,
+              }}
             />
+
+            <div className={activeTab === 'financeiro' && (activeSubTab === 'fechamento' || activeSubTab === 'conferencia') ? 'orders-workspace space-y-4' : 'contents'}>
+              {activeTab === 'financeiro' && (activeSubTab === 'fechamento' || activeSubTab === 'conferencia') && (
+                <>
+                  <OperationalBanner
+                    id="cash-closing-heading"
+                    eyebrow="CAIXA"
+                    title="Fechamento"
+                    accent={!isTurnoResumoReady ? 'sincronizando' : 'do seu jeito'}
+                    description={!isTurnoResumoReady ? 'Confirmando o turno antes de habilitar a conferência.' : 'Use a conferência rápida ou faça uma conferência totalmente cega.'}
+                    metrics={[
+                      {
+                        label: 'aberto há',
+                        value: isTurnoResumoReady && turnoResumo?.status === 'aberto' ? formatDuration(turnoResumo.tempo_aberto_minutos) : '—',
+                      },
+                      {
+                        label: 'pagamentos pendentes',
+                        value: isTurnoResumoReady ? pagamentosPendentes.length : '—',
+                        valueClassName: isTurnoResumoReady && pagamentosPendentes.length > 0 ? 'text-amber-600 dark:text-amber-300' : 'text-koma-muted',
+                      },
+                      { label: 'valor pendente', value: isTurnoResumoReady ? formatCompactCurrency(pendingPaymentsTotal) : '—' },
+                    ]}
+                  />
+                  {!isTurnoResumoReady && (
+                    <div className="rounded-2xl border border-koma-border bg-koma-panel p-8 text-center text-koma-muted">
+                      <Loader2 size={22} className="mx-auto mb-3 animate-spin" />
+                      <p className="text-xs font-bold">Sincronizando turno antes do fechamento...</p>
+                    </div>
+                  )}
+                </>
+              )}
+              <DeferredCashierSection
+                active={activeTab === 'financeiro' && (activeSubTab === 'fechamento' || activeSubTab === 'conferencia') && isTurnoResumoReady}
+                label="Fechamento"
+                load={loadCaixaFechamentoTab}
+                sectionProps={{
+                  isTurnoAberto: turnoResumo?.status === 'aberto',
+                  fechamentoResult,
+                  turnoResumo,
+                  pendingPaymentsCount: pagamentosPendentes.length,
+                  pendingPaymentsTotal,
+                  hasPrinting,
+                  restaurantName: String(restauranteConfig?.nome || 'KÔMA'),
+                  onConfirmFechamento: handleConfirmarFechamento,
+                  onOpenNovoTurnoModal: () => setShowAbrirModal(true),
+                  onNavigateToPendingPayments: () => {
+                    setActiveTab('operacao');
+                    setActiveSubTab('pedidos');
+                  },
+                  onNavigateToOpenComandas: () => {
+                    setActiveTab('operacao');
+                    setActiveSubTab('pedidos');
+                  },
+                  onNavigateToPaymentIntegrations: () => handleSidebarNavigation('config_integracoes'),
+                }}
+              />
+            </div>
+
+            {activeTab === 'operacao' && activeSubTab === 'entregadores' && (
+              <React.Suspense fallback={<div role="status" className="p-5 text-koma-muted">Carregando Entregadores…</div>}>
+                <CashierCouriers
+                  query={searchQuery} setQuery={setSearchQuery}
+                  isWsConnected={isWsConnected}
+                  activeSubTab={activeSubTab}
+                  deliveryOrders={deliveryOrders}
+                  deliveryOrdersLoadState={deliveryOrdersLoadState}
+                  hasDeliverySnapshot={hasDeliverySnapshot}
+                  onRetry={fetchDeliveryOrders}
+                  selectedMotoboys={selectedMotoboys}
+                  setSelectedMotoboys={setSelectedMotoboys}
+                  motoboys={motoboys}
+                  motoboysLoadState={motoboysLoadState}
+                  hasCourierApp={hasCourierApp}
+                  handleDespacharKanban={handleDespacharKanban}
+                  handleGerarLinkMotoboy={handleGerarLinkMotoboy}
+                  handleRevogarAcessoMotoboy={handleRevogarAcessoMotoboy}
+                  handleFinalizarPedido={handleFinalizeCourierOrder}
+                  handleAcceptPendingDeliveryOrder={handleAcceptPendingDeliveryOrder}
+                  handleRejectPendingDeliveryOrder={handleRejectPendingDeliveryOrder}
+                  handleAdvanceDigitalOrder={handleAdvanceDigitalOrder}
+                  openDeliveryOrderDetails={openDeliveryOrderDetails}
+                  onRequestCourierReassignment={courierReassignment.request}
+                  onRequestFulfillmentConversion={fulfillmentConversion.request}
+                  apiBaseUrl={apiBaseUrl}
+                  authHeaders={authHeaders}
+                  now={nowTimestamp}
+                  handleAddMotoboy={handleAddMotoboy}
+                  novoMotoboyNome={novoMotoboyNome}
+                  novoMotoboyTelefone={novoMotoboyTelefone}
+                  setNewMotoboyNome={setNewMotoboyNome}
+                  setNewMotoboyTelefone={setNewMotoboyTelefone}
+                />
+              </React.Suspense>
+            )}
 
             <DeferredCashierSection
               active={activeTab === 'cardapio_digital' || activeSubTab === 'cardapio_digital'}
@@ -1304,43 +1347,60 @@ export function CaixaPanel({
           </div>
         </main>
 
-        <CashierOpenShiftDialog
-          showAbrirModal={showAbrirModal}
-          setShowAbrirModal={setShowAbrirModal}
-          handleAbrirCaixa={handleAbrirCaixa}
-          saldoInicial={saldoInicial}
-          setSaldoInicial={setSaldoInicial}
-          errorMsg={errorMsg}
-        />
+        {showAbrirModal && (
+          <React.Suspense fallback={null}>
+            <CashierOpenShiftDialog
+              showAbrirModal={showAbrirModal}
+              setShowAbrirModal={setShowAbrirModal}
+              handleAbrirCaixa={handleAbrirCaixa}
+              saldoInicial={saldoInicial}
+              setSaldoInicial={setSaldoInicial}
+              errorMsg={errorMsg}
+            />
+          </React.Suspense>
+        )}
 
-        <CheckoutDialog
-          controller={checkout}
-          smartPos={smartPos}
-          errorMsg={errorMsg}
-          taxaServicoAtiva={taxaServicoAtiva}
-          serviceTaxRate={serviceTaxRate}
-          hasPrinting={hasPrinting}
-          restaurantInfo={restauranteConfig as any}
-        />
+        {(selectedOrder || hasOpenedCheckout) && (
+          <React.Suspense fallback={null}>
+            <CheckoutDialog
+              controller={checkout}
+              smartPos={smartPos}
+              errorMsg={errorMsg}
+              taxaServicoAtiva={taxaServicoAtiva}
+              serviceTaxRate={serviceTaxRate}
+              hasPrinting={hasPrinting}
+              restaurantInfo={restauranteConfig as any}
+            />
+          </React.Suspense>
+        )}
 
-        <CourierReassignmentDialog
-          target={courierReassignment.target}
-          couriers={motoboys}
-          isSubmitting={courierReassignment.isSubmitting}
-          onClose={courierReassignment.close}
-          onSubmit={courierReassignment.submit}
-        />
+        {Boolean(courierReassignment.target) && (
+          <React.Suspense fallback={null}>
+            <CourierReassignmentDialog
+              target={courierReassignment.target}
+              couriers={motoboys}
+              isSubmitting={courierReassignment.isSubmitting}
+              onClose={courierReassignment.close}
+              onSubmit={courierReassignment.submit}
+            />
+          </React.Suspense>
+        )}
 
-        <FulfillmentConversionDialog
-          target={fulfillmentConversion.target}
-          isSubmitting={fulfillmentConversion.isSubmitting}
-          onClose={fulfillmentConversion.close}
-          onSubmit={fulfillmentConversion.submit}
-          onPreview={fulfillmentConversion.preview}
-        />
+        {Boolean(fulfillmentConversion.target) && (
+          <React.Suspense fallback={null}>
+            <FulfillmentConversionDialog
+              target={fulfillmentConversion.target}
+              isSubmitting={fulfillmentConversion.isSubmitting}
+              onClose={fulfillmentConversion.close}
+              onSubmit={fulfillmentConversion.submit}
+              onPreview={fulfillmentConversion.preview}
+            />
+          </React.Suspense>
+        )}
 
         {selectedKanbanOrder && (
-          <KanbanOrderDetails
+          <React.Suspense fallback={null}>
+            <KanbanOrderDetails
             order={selectedKanbanOrder}
             saveObservation={saveItemObservation}
           removeItem={removeOrderItem}
@@ -1392,28 +1452,37 @@ export function CaixaPanel({
               cancelConsumption: handleCancelSelectedKanbanConsumption,
               cancelOrder: handleCancelSelectedKanbanOrder,
             }}
-          />
+            />
+          </React.Suspense>
         )}
 
-        <CashierCancelConsumptionDialog
-          cancelConsumptionTarget={cancelConsumptionTarget}
-          setCancelConsumptionTarget={setCancelConsumptionTarget}
-          isCancellingTable={isCancellingTable}
-          cancelTableReason={cancelTableReason}
-          setCancelTableReason={setCancelTableReason}
-          handleCancelTableConsumption={handleCancelTableConsumption}
-        />
+        {Boolean(cancelConsumptionTarget) && (
+          <React.Suspense fallback={null}>
+            <CashierCancelConsumptionDialog
+              cancelConsumptionTarget={cancelConsumptionTarget}
+              setCancelConsumptionTarget={setCancelConsumptionTarget}
+              isCancellingTable={isCancellingTable}
+              cancelTableReason={cancelTableReason}
+              setCancelTableReason={setCancelTableReason}
+              handleCancelTableConsumption={handleCancelTableConsumption}
+            />
+          </React.Suspense>
+        )}
 
         {showSangriaModal && (
-          <SangriaModal
-            saldoDisponivelDinheiro={isTurnoResumoReady ? (turnoResumo?.saldo_esperado_dinheiro || 0) : 0}
-            onClose={() => setShowSangriaModal(false)}
-            onSubmit={handleRegistrarSangria}
-          />
+          <React.Suspense fallback={null}>
+            <LazySangriaModal
+              saldoDisponivelDinheiro={isTurnoResumoReady ? (turnoResumo?.saldo_esperado_dinheiro || 0) : 0}
+              onClose={() => setShowSangriaModal(false)}
+              onSubmit={handleRegistrarSangria}
+            />
+          </React.Suspense>
         )}
 
         {showSuprimentoModal && (
-          <SuprimentoModal onClose={() => setShowSuprimentoModal(false)} onSubmit={handleRegistrarSuprimento} />
+          <React.Suspense fallback={null}>
+            <LazySuprimentoModal onClose={() => setShowSuprimentoModal(false)} onSubmit={handleRegistrarSuprimento} />
+          </React.Suspense>
         )}
 
         <CashierOperatorDrawer
@@ -1431,20 +1500,25 @@ export function CaixaPanel({
           activateAudio={activateAudio}
         />
 
-        <CashierConversationsDrawer
+        <DeferredCashierSection
           key={authHeaders.Authorization}
-          authorization={authHeaders.Authorization || ""}
-          isOpen={isChatDrawerOpen}
-          realtimeEvent={chatRealtimeEvent}
-          realtimeHealth={chatUnreadStatus}
-          draftScope={`${Number.isFinite(restId) ? restId : 'tenant'}:${turno?.id ?? 'no-shift'}`}
-          onClose={() => setIsChatDrawerOpen(false)}
-          onInspectOrder={(pedidoId) => {
-            handleSidebarNavigation('vendas_pedidos');
-            const target = deliveryOrders.find((o) => o.id === pedidoId);
-            if (target) openDeliveryOrderDetails(target);
+          active={isChatDrawerOpen}
+          label="Conversas"
+          load={loadCashierConversationsDrawer}
+          sectionProps={{
+            authorization: authHeaders.Authorization || "",
+            isOpen: isChatDrawerOpen,
+            realtimeEvent: chatRealtimeEvent,
+            realtimeHealth: chatUnreadStatus,
+            draftScope: `${Number.isFinite(restId) ? restId : 'tenant'}:${turno?.id ?? 'no-shift'}`,
+            onClose: () => setIsChatDrawerOpen(false),
+            onInspectOrder: (pedidoId: string) => {
+              handleSidebarNavigation('vendas_pedidos');
+              const target = deliveryOrders.find((o) => o.id === pedidoId);
+              if (target) openDeliveryOrderDetails(target);
+            },
+            onUnreadCountChange: setChatUnreadCount,
           }}
-          onUnreadCountChange={setChatUnreadCount}
         />
 
         <CashierMobileBottomBar
