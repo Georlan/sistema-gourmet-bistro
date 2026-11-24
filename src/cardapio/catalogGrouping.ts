@@ -5,6 +5,7 @@
 
 import type { Product } from './CardapioTypes';
 import { getEffectiveProductPrice } from '../domain/productMerchandising';
+import { smartSearchMatch } from '../domain/search';
 
 export interface DisplayVariant {
   id: string;
@@ -138,4 +139,37 @@ export function groupCategoryProductsForDisplay(
     result.push(display);
   }
   return result;
+}
+
+/** Build the public catalog in one pass over the products, not once per category.
+ * Preserve the published category order, stable SKU ordering and search semantics.
+ */
+export function buildPublicCatalogSections(
+  categories: readonly string[],
+  products: readonly Product[],
+  restaurantId: string | number | undefined,
+  searchQuery: string,
+): { category: string; items: CatalogDisplayItem[] }[] {
+  const query = searchQuery.trim();
+  const knownCategories = new Set(categories);
+  const byCategory = new Map<string, Product[]>();
+  for (const product of products) {
+    if (!knownCategories.has(product.category)) continue;
+    if (query && !smartSearchMatch(
+      `${product.name} ${product.familia_nome || ""} ${product.description || ""}`, query,
+    )) continue;
+    const bucket = byCategory.get(product.category);
+    if (bucket) bucket.push(product);
+    else byCategory.set(product.category, [product]);
+  }
+  return categories.flatMap((category) => {
+    const bucket = byCategory.get(category);
+    if (!bucket?.length) return [];
+    // Do not mutate source arrays or shared buckets (including duplicate categories).
+    const ordered = [...bucket].sort((a, b) =>
+      (a.ordem_exibicao ?? Number.MAX_SAFE_INTEGER) -
+      (b.ordem_exibicao ?? Number.MAX_SAFE_INTEGER),
+    );
+    return [{ category, items: groupCategoryProductsForDisplay(category, ordered, restaurantId) }];
+  });
 }
