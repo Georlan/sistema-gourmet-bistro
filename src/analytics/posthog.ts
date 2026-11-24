@@ -225,7 +225,12 @@ export function initAnalytics(): Promise<boolean> {
       window.fetch = observeOperationalFetch(window.fetch.bind(window), new URL(API_BASE_URL, window.location.href).origin,
         window.location.href, signal => trackAnalyticsEvent('operational_api_signal', { ...signal, area: operationalArea(signal.endpoint), surface: resolveKomaHost().surface }));
       flushPendingQueue();
-      initWebVitals(metric => trackAnalyticsEvent('web_vitals_metric', { ...metric, surface: resolveKomaHost().surface }));
+      initWebVitals(metric => trackAnalyticsEvent('web_vitals_metric', {
+        metric_name: metric.name,
+        value: metric.value,
+        rating: metric.rating,
+        surface: resolveKomaHost().surface,
+      }));
       return true;
     } catch (error) {
       console.warn('[analytics] Falha ao inicializar PostHog:', error);
