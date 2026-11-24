@@ -375,8 +375,9 @@ def _public_restaurant_payload(
     pix_proprio: bool = False,
     cardapio_ativo_id: Optional[str] = None,
     cardapio_ativo_nome: Optional[str] = None,
+    qa_token: Optional[str] = None,
 ) -> dict:
-    policy = evaluate_online_order_policy(restaurante, configuracao)
+    policy = evaluate_online_order_policy(restaurante, configuracao, qa_token=qa_token)
     next_opening = (
         next_schedule_opening(restaurante.horarios_funcionamento)
         if not policy.accepting_orders and policy.source == "schedule"
@@ -468,12 +469,18 @@ def _public_product_payload(
 @router.get("/config", response_model=CardapioPublicRestaurantResponse)
 @router.get("/", response_model=CardapioPublicRestaurantResponse)
 def obter_config_cardapio_digital(
+    request: Request,
     restaurante_id: Optional[str] = None,
     slug: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: Optional[Usuario] = Depends(get_current_garcom_optional)
 ):
     """Retorna as configurações whitelabel do restaurante resolvido."""
+    qa_token = (
+        request.headers.get("X-Koma-QA-Token")
+        or request.query_params.get("qa_token")
+        or ""
+    ).strip() or None
     with public_tenant_scope(restaurante_id, slug, db, current_user) as rest_id:
         restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
         if not restaurante:
@@ -494,6 +501,7 @@ def obter_config_cardapio_digital(
             pix_proprio=pix_proprio,
             cardapio_ativo_id=cardapio_ativo_id,
             cardapio_ativo_nome=cardapio_ativo_nome,
+            qa_token=qa_token,
         )
 
 
@@ -636,6 +644,14 @@ def obter_cardapio_publico(
         )
         categorias_ordenadas = _ordered_categories(categorias_com_produtos, niche=niche)
 
+        qa_token = (
+            request.headers.get("X-Koma-QA-Token")
+            or request.query_params.get("qa_token")
+            or ""
+        ).strip() or None
+        from ..services.restaurant_provisioning import validate_operational_qa_token
+        qa_mode_active = bool(qa_token and validate_operational_qa_token(db, rest_id, qa_token))
+
         payload = {
             "restaurante": _public_restaurant_payload(
                 restaurante,
@@ -646,6 +662,7 @@ def obter_cardapio_publico(
                 pix_proprio=pix_proprio,
                 cardapio_ativo_id=cardapio_ativo_id,
                 cardapio_ativo_nome=cardapio_ativo_nome,
+                qa_token=qa_token,
             ),
             "categorias": [
                 _public_category_payload(category)
@@ -670,6 +687,7 @@ def obter_cardapio_publico(
             ],
             "promocoes": active_offers,
             "promocao_composicao_explicita": True,
+            "modo_homologacao_qa": qa_mode_active,
         }
         canonical_bytes = json.dumps(
             payload,
@@ -679,6 +697,11 @@ def obter_cardapio_publico(
             ensure_ascii=False,
         ).encode("utf-8")
         etag = f'W/"{hashlib.sha256(canonical_bytes).hexdigest()[:16]}"'
+        if qa_token or qa_mode_active:
+            response.headers["Cache-Control"] = "private, no-store"
+            response.headers["Vary"] = "X-Koma-QA-Token"
+            return payload
+
         cache_control = "public, max-age=15, stale-while-revalidate=60"
         if_none_match = (request.headers.get("if-none-match") or "").strip()
         if if_none_match and (
@@ -692,6 +715,7 @@ def obter_cardapio_publico(
             )
         response.headers["ETag"] = etag
         response.headers["Cache-Control"] = cache_control
+        response.headers["Vary"] = "X-Koma-QA-Token"
         return payload
 
 

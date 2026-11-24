@@ -800,6 +800,7 @@ def accept_contract_invite(
                 .one_or_none()
             )
             created_subscription = False
+            invite_payment_method = getattr(invite, "payment_method_type", None)
             if existing_subscription is None:
                 db.add(
                     SaaSSubscription(
@@ -807,7 +808,7 @@ def accept_contract_invite(
                         provider="mercado_pago",
                         provider_customer_id=None,
                         provider_subscription_id=None,
-                        payment_method_type=None,
+                        payment_method_type=invite_payment_method,
                         status="onboarding",
                         trial_started_at=None,
                         trial_ends_at=None,
@@ -815,12 +816,60 @@ def accept_contract_invite(
                     )
                 )
                 created_subscription = True
+            elif invite_payment_method and not existing_subscription.payment_method_type:
+                existing_subscription.payment_method_type = invite_payment_method
+
+            if invite_payment_method == "pix":
+                from ..services.billing_service import (
+                    link_billing_setup_to_tenant,
+                    upsert_billing_setup,
+                )
+
+                canonical_cycle = (
+                    "annual"
+                    if str(invite.billing_cycle or "").strip().lower() in {"annual", "anual"}
+                    else "monthly"
+                )
+                upsert_billing_setup(
+                    db,
+                    protocol=protocol,
+                    contract_acceptance_id=acceptance_id,
+                    provider="mercado_pago",
+                    payment_method_type="pix",
+                    status="ready",
+                    billing_cycle=canonical_cycle,
+                )
+                link_billing_setup_to_tenant(db, protocol, tenant_id)
 
             subscription_status = (
                 "onboarding"
                 if created_subscription
                 else getattr(existing_subscription, "status", None)
             )
+
+            from ..services.restaurant_provisioning import (
+                QA_OPERATION_END,
+                clear_operational_qa_cache,
+                is_superadmin_operational_qa_active,
+            )
+
+            qa_ended = False
+            if is_superadmin_operational_qa_active(db, tenant_id):
+                db.add(
+                    SuperAdminAuditLog(
+                        restaurante_id=tenant_id,
+                        actor=f"contract_invite:{invite.id}",
+                        action=QA_OPERATION_END,
+                        reason="Encerramento automático da janela de QA operacional após aceite contratual.",
+                        before_data={"qa_active": True},
+                        after_data={
+                            "mode": "operational_qa",
+                            "ended_at": now.isoformat(),
+                            "ended_by_contract_protocol": protocol,
+                        },
+                    )
+                )
+                qa_ended = True
 
             db.add(
                 SuperAdminAuditLog(
@@ -835,6 +884,9 @@ def accept_contract_invite(
                         "acceptance_id": acceptance_id,
                         "plan": invite.plan,
                         "billing_cycle": invite.billing_cycle,
+                        "payment_method_type": invite_payment_method,
+                        "auto_release_on_accept": bool(getattr(invite, "auto_release_on_accept", False)),
+                        "qa_ended": qa_ended,
                         "created_subscription": created_subscription,
                         "subscription_status": subscription_status,
                     },
@@ -851,6 +903,56 @@ def accept_contract_invite(
                 phone=phone,
             )
             db.commit()
+            clear_operational_qa_cache(db, tenant_id)
+
+            auto_released = False
+            trial_started = False
+            release_pending_reason: str | None = None
+            if bool(getattr(invite, "auto_release_on_accept", False)):
+                from ..services.onboarding_trial import ensure_trial_started_after_onboarding
+                from .onboarding import _build_onboarding_status
+
+                status_snapshot = _build_onboarding_status(db)
+                configuration_complete = bool(
+                    (status_snapshot.get("readiness") or {}).get("configurationComplete")
+                )
+                if not configuration_complete:
+                    release_pending_reason = "configuration_incomplete"
+                else:
+                    trial_result = ensure_trial_started_after_onboarding(
+                        db,
+                        restaurante_id=tenant_id,
+                        actor=f"contract_invite:{invite.id}",
+                    )
+                    if trial_result is not None and trial_result.get("trial_started_at") is not None:
+                        subscription_status = str(trial_result.get("status") or "trialing")
+                        auto_released = True
+                        trial_started = True
+                        try:
+                            from ..services.signup_notifications import enqueue_trial_started
+                            from ..models import Usuario
+
+                            admin_user = (
+                                db.query(Usuario)
+                                .filter(Usuario.restaurante_id == tenant_id, Usuario.cargo == "admin")
+                                .order_by(Usuario.id)
+                                .first()
+                            )
+                            if admin_user is not None:
+                                enqueue_trial_started(
+                                    db,
+                                    tenant_id=tenant_id,
+                                    restaurant_name=restaurant_name,
+                                    plan=invite.plan,
+                                    billing_cycle=invite.billing_cycle,
+                                    customer_name=admin_user.nome or representative_name,
+                                    customer_email=admin_user.email or email,
+                                    customer_phone=admin_user.telefone or phone,
+                                    trial_ends_at=trial_result["trial_ends_at"],
+                                )
+                                db.commit()
+                        except Exception:
+                            db.rollback()
 
             return {
                 "protocol": protocol,
@@ -860,6 +962,10 @@ def accept_contract_invite(
                 "plan": invite.plan,
                 "billingCycle": invite.billing_cycle,
                 "subscriptionStatus": subscription_status,
+                "qaEnded": qa_ended,
+                "autoReleased": auto_released,
+                "trialStarted": trial_started,
+                "releasePendingReason": release_pending_reason,
                 "receipt": receipt,
                 "message": "Contrato aceito e vinculado ao restaurante com sucesso.",
             }

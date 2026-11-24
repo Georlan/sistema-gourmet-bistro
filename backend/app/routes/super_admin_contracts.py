@@ -7,7 +7,7 @@ import re
 import secrets
 import uuid
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -89,6 +89,8 @@ class ContractInviteCreateRequest(BaseModel):
     restaurant_id: int = Field(gt=0)
     billing_cycle: str = Field(default="mensal", min_length=5, max_length=16)
     expires_hours: int = Field(default=72, ge=1, le=168)
+    payment_method_type: Literal["pix"] | None = None
+    auto_release_on_accept: bool = False
     reason: str = Field(
         default="Envio de link único para aceite contratual pelo lojista",
         min_length=3,
@@ -635,7 +637,7 @@ def activate_contract(
                     .filter(Restaurante.id == requested_tid)
                     .one_or_none()
                 )
-                if existing_rest is not None and is_provisional_preparation(db, requested_tid):
+                if existing_rest is not None and is_provisional_preparation(db, requested_tid, allow_qa=False):
                     current_contract = (
                         db.query(RestaurantContractAcceptance)
                         .filter(RestaurantContractAcceptance.restaurante_id == requested_tid)
@@ -1049,6 +1051,15 @@ def create_contract_invite(
                 )
 
             plan = str(restaurant.plano or "pocket").strip().lower()
+            from ..subscription import subscription_monthly_price
+
+            fixed_billing_required = subscription_monthly_price(plan) > 0
+            if payload.auto_release_on_accept and fixed_billing_required and payload.payment_method_type is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail="Informe payment_method_type='pix' para habilitar liberação automática neste plano.",
+                )
+
             now = datetime.datetime.now(datetime.timezone.utc)
             expires_at = now + datetime.timedelta(hours=int(payload.expires_hours))
             raw_token = f"{tenant_id}.{secrets.token_urlsafe(32)}"
@@ -1065,6 +1076,8 @@ def create_contract_invite(
                 reason=payload.reason.strip(),
                 created_at=now,
                 expires_at=expires_at,
+                payment_method_type=payload.payment_method_type,
+                auto_release_on_accept=bool(payload.auto_release_on_accept),
             )
             db.add(invite)
             db.add(
@@ -1079,6 +1092,8 @@ def create_contract_invite(
                         "plan": plan,
                         "billing_cycle": payload.billing_cycle,
                         "expires_at": expires_at.isoformat(),
+                        "payment_method_type": payload.payment_method_type,
+                        "auto_release_on_accept": bool(payload.auto_release_on_accept),
                     },
                 )
             )
@@ -1092,6 +1107,8 @@ def create_contract_invite(
                 "restaurantName": restaurant.nome,
                 "plan": plan,
                 "billingCycle": payload.billing_cycle,
+                "paymentMethodType": payload.payment_method_type,
+                "autoReleaseOnAccept": bool(payload.auto_release_on_accept),
                 "expiresAt": expires_at.isoformat(),
                 "token": raw_token,
                 "invitePath": invite_path,

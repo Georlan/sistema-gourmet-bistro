@@ -48,6 +48,7 @@ class ComandaVariant:
     amount_due: float = 0.0
     payment_required: bool = False
     show_financial_breakdown: bool = False
+    is_test_order: bool = False
 
 
 def _format_brl(value: float) -> str:
@@ -743,6 +744,11 @@ def render_canonical_comanda(
         order_type=order_type,
         width=width,
     )
+    if variant.is_test_order:
+        lines.insert(
+            0,
+            ESC_BOLD_ON + align_center("*** TESTE HOMOLOGACAO (SEM VALOR) ***", width) + ESC_BOLD_OFF,
+        )
     rendered = "\n".join(lines)
     if compact_58:
         return apply_compact_58_projection(rendered, width=width)

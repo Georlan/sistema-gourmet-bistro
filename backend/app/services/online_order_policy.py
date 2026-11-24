@@ -280,6 +280,7 @@ def evaluate_online_order_policy(
     now: datetime.datetime | None = None,
     cash_open: bool | None = None,
     is_provisional: bool | None = None,
+    qa_token: str | None = None,
 ) -> OnlineOrderPolicy:
     """Calcula se o servidor aceita um novo pedido e qual taxa deve aplicar.
 
@@ -295,7 +296,22 @@ def evaluate_online_order_policy(
     com caixa aberto.
     """
 
-    if is_provisional is True:
+    resolved_provisional = is_provisional
+    if resolved_provisional is None:
+        db = _restaurant_session(restaurante)
+        if db is not None:
+            from .restaurant_provisioning import is_provisional_preparation
+
+            rest_id = getattr(restaurante, "id", None)
+            if rest_id is not None:
+                resolved_provisional = is_provisional_preparation(
+                    db,
+                    rest_id,
+                    allow_qa=False,
+                    qa_token=qa_token,
+                )
+
+    if resolved_provisional is True:
         return OnlineOrderPolicy(
             accepting_orders=False,
             delivery_enabled=False,
@@ -333,19 +349,6 @@ def evaluate_online_order_policy(
 
     cash_shift_open = _infer_open_cash_shift(restaurante) if cash_open is None else cash_open
     if not cash_shift_open:
-        if is_provisional is None:
-            db = _restaurant_session(restaurante)
-            if db is not None:
-                from .restaurant_provisioning import is_provisional_preparation
-                rest_id = getattr(restaurante, "id", None)
-                if rest_id is not None and is_provisional_preparation(db, rest_id):
-                    return OnlineOrderPolicy(
-                        accepting_orders=False,
-                        delivery_enabled=False,
-                        pickup_enabled=False,
-                        reason="Restaurante em fase de preparação. Operação comercial não liberada.",
-                        source="provisional_preparation",
-                    )
         return OnlineOrderPolicy(
             accepting_orders=False,
             delivery_enabled=delivery_enabled,

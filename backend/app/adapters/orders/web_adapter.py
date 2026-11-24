@@ -409,11 +409,25 @@ class CardapioWebAdapter:
                     detail="Restaurante temporariamente suspenso para novos pedidos.",
                 )
 
-            from ...services.restaurant_provisioning import is_provisional_preparation
-            if is_provisional_preparation(db, rest_id):
+            qa_token = (
+                request.headers.get("X-Koma-QA-Token")
+                or request.query_params.get("qa_token")
+                or ""
+            ).strip() or None
+            from ...services.restaurant_provisioning import (
+                is_provisional_preparation,
+                is_superadmin_operational_qa_active,
+            )
+            if is_provisional_preparation(db, rest_id, allow_qa=False, qa_token=qa_token):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="Restaurante em fase de preparação. Operação comercial não liberada.",
+                )
+            qa_window_active = is_superadmin_operational_qa_active(db, rest_id)
+            if qa_window_active and online_payment:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Pagamentos online reais ficam bloqueados no Modo Homologação (QA). Use pagamento na entrega ou retirada para testar.",
                 )
             if isinstance(getattr(db, "info", None), dict):
                 db.info.setdefault("_koma_provisional_by_rid", {})[rest_id] = False
@@ -523,6 +537,7 @@ class CardapioWebAdapter:
                 modalidade=modalidade,
                 now=policy_now,
                 is_provisional=False,
+                qa_token=qa_token,
             )
             if not policy.accepting_orders:
                 raise HTTPException(
@@ -636,6 +651,7 @@ class CardapioWebAdapter:
                 idempotency_fingerprint=fingerprint_intent.fingerprint if idempotency_key else None,
                 idempotency_fingerprint_version=fingerprint_intent.version if idempotency_key else None,
                 operator_user_id=garcom.id,
+                onboarding_test=bool(qa_window_active),
                 defer_operational_publish=online_payment or is_scheduled,
                 whatsapp_status_opt_in=checkout_status_consent(
                     requested=payload.whatsapp_status_opt_in,
@@ -718,7 +734,7 @@ class CardapioWebAdapter:
                         {"event": "new_delivery_order", "message": f"Novo pedido online de {cliente_nome} recebido!"},
                         rest_id,
                     )
-                if cliente is not None:
+                if cliente is not None and not qa_window_active:
                     manager.queue_committed_broadcast(
                         db,
                         {

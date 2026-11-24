@@ -63,6 +63,7 @@ import {
 import { trackAnalyticsEvent } from "../../analytics";
 import { fetchWithInlineSupport } from "../../utils/supportCode";
 import { startPaymentStatusPolling } from "../paymentStatusPolling";
+import { clearQaToken, getQaRequestHeaders } from "../qaSession";
 
 import { createCheckoutDiagnostics, type CheckoutOutcome } from "../../analytics/checkoutDiagnostic";
 
@@ -506,9 +507,11 @@ export default function CardapioDigital({
     const timeoutId = window.setTimeout(() => controller.abort(), ORDER_REQUEST_TIMEOUT_MS);
 
     try {
+      const qaHeaders = getQaRequestHeaders();
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         "X-Idempotency-Key": idempotencyKey,
+        ...qaHeaders,
         ...diagnostic.headers,
       };
       if (customerToken) headers["X-Koma-Customer-Token"] = customerToken;
@@ -517,7 +520,11 @@ export default function CardapioDigital({
       // The cart is a draft; a daily-menu change must not be silently discarded.
       const catalogResponse = await fetchWithInlineSupport(
         `${API_BASE_URL}/api/cardapio-digital/public?restaurante_id=${targetRestauranteId}`,
-        { cache: "no-store", signal: controller.signal },
+        {
+          cache: "no-store",
+          signal: controller.signal,
+          ...(Object.keys(qaHeaders).length ? { headers: qaHeaders } : {}),
+        },
       );
       diagnostic.response(catalogResponse);
       if (!catalogResponse.ok) {
@@ -549,6 +556,9 @@ export default function CardapioDigital({
 
       diagnostic.response(response);
       const data = await response.json().catch(() => null);
+      if (response.status === 403 && typeof data?.detail === "string" && data.detail.toLowerCase().includes("preparação")) {
+        clearQaToken();
+      }
       if (!response.ok) {
         setCanCorrectSubmission([400, 404, 422].includes(response.status));
       }

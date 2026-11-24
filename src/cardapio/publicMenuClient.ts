@@ -1,4 +1,5 @@
 import { resolveKomaHost } from '../domain/komaHost';
+import { captureQaTokenFromUrl, getQaToken } from './qaSession';
 
 export interface PublicMenuPayload {
   restaurante: Record<string, any>;
@@ -7,6 +8,7 @@ export interface PublicMenuPayload {
   produtos_promocionais?: Array<Record<string, any>>;
   promocoes?: Array<Record<string, any>>;
   promocao_composicao_explicita?: boolean;
+  modo_homologacao_qa?: boolean;
 }
 
 type CacheEntry = {
@@ -64,10 +66,11 @@ export function fetchPublicMenu({
     return Promise.reject(new Error('CARDAPIO_NOT_FOUND'));
   }
 
-  const key = buildKey(apiBaseUrl, cleanIdentifier);
+  const qaToken = captureQaTokenFromUrl() || getQaToken();
+  const key = buildKey(apiBaseUrl, `${cleanIdentifier}${qaToken ? ':qa' : ''}`);
   const now = Date.now();
 
-  if (force) {
+  if (force || qaToken) {
     recentResults.delete(key);
   } else {
     const cached = recentResults.get(key);
@@ -86,7 +89,10 @@ export function fetchPublicMenu({
     flight = (async () => {
       const response = await fetch(
         `${apiBaseUrl}/api/cardapio-digital/public?${query.toString()}`,
-        { cache: 'no-store' },
+        {
+          cache: 'no-store',
+          ...(qaToken ? { headers: { 'X-Koma-QA-Token': qaToken } } : {}),
+        },
       );
       if (response.status === 404) throw new Error('CARDAPIO_NOT_FOUND');
       if (!response.ok) throw new Error(`CARDAPIO_HTTP_${response.status}`);

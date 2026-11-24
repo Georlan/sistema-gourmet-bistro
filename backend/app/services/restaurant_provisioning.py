@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
+import hmac
 import json
 import os
 import logging
@@ -600,63 +602,102 @@ QA_OPERATION_START = "SUPERADMIN_QA_OPERATION_START"
 QA_OPERATION_END = "SUPERADMIN_QA_OPERATION_END"
 
 
-def is_superadmin_operational_qa_active(db: Session, restaurante_id: int) -> bool:
-    """Janela temporária autorizada pelo Super Admin para testes operacionais.
-
-    Esta janela é independente de contrato, assinatura, cobrança e trial SaaS.
-    É revogável, possui validade curta e nunca concede acesso entre tenants.
-    """
+def clear_operational_qa_cache(db: Session, restaurante_id: int) -> None:
+    """Invalida caches de QA e prontidão provisória vinculados à sessão ORM atual."""
     db_info = getattr(db, "info", None)
-    qa_cache = db_info.get("_koma_qa_active_by_rid") if isinstance(db_info, dict) else None
-    if isinstance(qa_cache, dict) and int(restaurante_id) in qa_cache:
-        return bool(qa_cache[int(restaurante_id)])
+    if not isinstance(db_info, dict):
+        return
+    rid = int(restaurante_id)
+    for key in (
+        "_koma_qa_record_by_rid",
+        "_koma_qa_active_by_rid",
+        "_koma_base_provisional_by_rid",
+        "_koma_provisional_by_rid",
+    ):
+        bucket = db_info.get(key)
+        if isinstance(bucket, dict):
+            bucket.pop(rid, None)
+
+
+def get_active_operational_qa_record(
+    db: Session,
+    restaurante_id: int,
+) -> dict[str, Any] | None:
+    """Retorna os metadados da janela de QA operacional ativa, ou None se inativa/expirada."""
+    if restaurante_id is None or restaurante_id <= 0:
+        return None
+    rid = int(restaurante_id)
+    db_info = getattr(db, "info", None)
+    cache = db_info.get("_koma_qa_record_by_rid") if isinstance(db_info, dict) else None
+    if isinstance(cache, dict) and rid in cache:
+        return cache[rid]
 
     record = (
         db.query(SuperAdminAuditLog)
         .filter(
-            SuperAdminAuditLog.restaurante_id == restaurante_id,
+            SuperAdminAuditLog.restaurante_id == rid,
             SuperAdminAuditLog.action.in_((QA_OPERATION_START, QA_OPERATION_END)),
         )
         .order_by(SuperAdminAuditLog.id.desc())
         .first()
     )
-    active = False
+    active_data: dict[str, Any] | None = None
     if record is not None and record.action == QA_OPERATION_START:
         data = record.after_data
         raw_expiry = data.get("expires_at") if isinstance(data, dict) and data.get("mode") == "operational_qa" else None
         if isinstance(raw_expiry, str):
             try:
                 expires_at = datetime.datetime.fromisoformat(raw_expiry.replace("Z", "+00:00"))
-                if expires_at.tzinfo is not None:
-                    active = datetime.datetime.now(datetime.timezone.utc) < expires_at.astimezone(datetime.timezone.utc)
+                if expires_at.tzinfo is not None and (
+                    datetime.datetime.now(datetime.timezone.utc) < expires_at.astimezone(datetime.timezone.utc)
+                ):
+                    active_data = dict(data)
             except ValueError:
-                active = False
+                active_data = None
+
     if isinstance(db_info, dict):
-        db_info.setdefault("_koma_qa_active_by_rid", {})[int(restaurante_id)] = active
-    return active
+        db_info.setdefault("_koma_qa_record_by_rid", {})[rid] = active_data
+        db_info.setdefault("_koma_qa_active_by_rid", {})[rid] = active_data is not None
+    return active_data
 
 
-def is_provisional_preparation(db: Session, restaurante_id: int) -> bool:
-    """Retorna True se o restaurante está em preparação provisória (onboarding deferido),
-    sem assinatura comercial vinculada e sem trial iniciado.
-    Durante este estado, a operação comercial (pedidos e abertura de caixa) permanece impedida.
+def is_superadmin_operational_qa_active(db: Session, restaurante_id: int) -> bool:
+    """Janela temporária autorizada pelo Super Admin para testes operacionais.
+
+    Esta janela é independente de contrato, assinatura, cobrança e trial SaaS.
+    É revogável, possui validade curta e nunca concede acesso entre tenants.
     """
-    if restaurante_id is None or restaurante_id <= 0:
+    return get_active_operational_qa_record(db, restaurante_id) is not None
+
+
+def validate_operational_qa_token(
+    db: Session,
+    restaurante_id: int,
+    raw_token: str | None,
+) -> bool:
+    """Valida em tempo constante o token efêmero de acesso ao cardápio em modo QA."""
+    token = str(raw_token or "").strip()
+    if not token or "." not in token or restaurante_id is None or restaurante_id <= 0:
         return False
+    tid_part, secret_part = token.split(".", 1)
+    if not tid_part.isdigit() or int(tid_part) != int(restaurante_id) or len(secret_part) < 16:
+        return False
+    record = get_active_operational_qa_record(db, int(restaurante_id))
+    if not record:
+        return False
+    expected_hash = str(record.get("qa_token_hash") or "").strip().lower()
+    if len(expected_hash) != 64:
+        return False
+    actual_hash = hashlib.sha256(token.encode("utf-8")).hexdigest().lower()
+    return hmac.compare_digest(actual_hash, expected_hash)
 
-    db_info = getattr(db, "info", None)
-    provisional_cache = (
-        db_info.get("_koma_provisional_by_rid")
-        if isinstance(db_info, dict)
-        else None
-    )
-    if isinstance(provisional_cache, dict) and int(restaurante_id) in provisional_cache:
-        return bool(provisional_cache[int(restaurante_id)])
 
+def _is_base_provisional_preparation(db: Session, restaurante_id: int) -> bool:
+    rid = int(restaurante_id)
     audit = (
         db.query(SuperAdminAuditLog)
         .filter(
-            SuperAdminAuditLog.restaurante_id == restaurante_id,
+            SuperAdminAuditLog.restaurante_id == rid,
             SuperAdminAuditLog.action == "SUPERADMIN_TENANT_ONBOARD",
         )
         .order_by(SuperAdminAuditLog.id.desc())
@@ -669,7 +710,7 @@ def is_provisional_preparation(db: Session, restaurante_id: int) -> bool:
 
     sub_exists = (
         db.query(SaaSSubscription.id)
-        .filter(SaaSSubscription.restaurante_id == restaurante_id)
+        .filter(SaaSSubscription.restaurante_id == rid)
         .first()
     )
     if sub_exists is not None:
@@ -678,33 +719,51 @@ def is_provisional_preparation(db: Session, restaurante_id: int) -> bool:
     from ..contract_models import RestaurantContractAcceptance
     contract_exists = (
         db.query(RestaurantContractAcceptance.id)
-        .filter(RestaurantContractAcceptance.restaurante_id == restaurante_id)
+        .filter(RestaurantContractAcceptance.restaurante_id == rid)
         .first()
     )
     if contract_exists is not None:
         return False
 
-    # Exceção operacional explícita e reversível, configurada pelo responsável
-    # pela implantação no ambiente (ex.: "1"). Não cria assinatura, contrato,
-    # aceite ou trial e não substitui a posterior regularização comercial.
-    # Entrada inválida falha fechada; IDs de outros restaurantes não são afetados.
+    # Exceção operacional explícita e reversível configurada apenas quando autorizada.
     allowed_raw = os.getenv("KOMA_PROVISIONAL_OPERATION_ALLOWLIST", "").strip()
     allowed_ids = [value.strip() for value in allowed_raw.split(",")] if allowed_raw else []
     if (
         allowed_ids
         and all(re.fullmatch(r"[1-9][0-9]*", value) for value in allowed_ids)
-        and str(restaurante_id) in allowed_ids
+        and str(rid) in allowed_ids
     ):
         restaurant = (
             db.query(Restaurante)
-            .filter(Restaurante.id == restaurante_id)
+            .filter(Restaurante.id == rid)
             .one_or_none()
         )
         if restaurant is not None and str(restaurant.saas_status or "").lower() == "active":
-            logger.warning("PROVISIONAL_OPERATION_OVERRIDE tenant=%s", restaurante_id)
+            logger.warning("PROVISIONAL_OPERATION_OVERRIDE tenant=%s", rid)
             return False
 
-    # Somente QA autenticado ou a exceção explícita acima suspendem o bloqueio.
-    # Iniciar trial administrativo genérico não basta.
-    return not is_superadmin_operational_qa_active(db, restaurante_id)
+    return True
+
+
+def is_provisional_preparation(
+    db: Session,
+    restaurante_id: int,
+    *,
+    allow_qa: bool = True,
+    qa_token: str | None = None,
+) -> bool:
+    """Retorna True se o restaurante está em preparação provisória sem liberação para o canal.
+
+    Para canais públicos (`allow_qa=False`), uma janela de QA ativa só libera acesso
+    mediante ``qa_token`` criptográfico válido para este tenant.
+    """
+    if restaurante_id is None or restaurante_id <= 0:
+        return False
+
+    if not _is_base_provisional_preparation(db, restaurante_id):
+        return False
+
+    if allow_qa:
+        return not is_superadmin_operational_qa_active(db, restaurante_id)
+    return not validate_operational_qa_token(db, restaurante_id, qa_token)
 

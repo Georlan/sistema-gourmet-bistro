@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import declarative_base
 
@@ -150,6 +151,13 @@ class ContractInvite(Base):
     used_at = Column(DateTime(timezone=True), nullable=True)
     acceptance_id = Column(String(36), nullable=True)
     protocol = Column(String(64), nullable=True)
+    payment_method_type = Column(String(32), nullable=True)
+    auto_release_on_accept = Column(
+        Boolean,
+        default=False,
+        server_default=text("false"),
+        nullable=False,
+    )
 
     __table_args__ = (
         Index(
