@@ -151,6 +151,10 @@ class PostgresListenMultiplexer:
             dsn,
             connect_timeout=10,
             application_name=app_name,
+            keepalives=1,
+            keepalives_idle=30,
+            keepalives_interval=10,
+            keepalives_count=3,
         )
 
     def _listen_forever(self) -> None:

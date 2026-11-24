@@ -438,7 +438,7 @@ async def add_security_headers_middleware(request: Request, call_next):
 
     origin = request.headers.get("origin")
     if origin and (
-        origin in settings.get_cors_allowed_origins()
+        origin in settings.get_cors_allowed_origins_set()
         or _KOMA_SUBDOMAIN_ORIGIN_RE.match(origin)
     ):
         response.headers["Timing-Allow-Origin"] = origin
@@ -573,9 +573,13 @@ def _websocket_connections_count() -> int:
     try:
         from .websocket_manager import manager
 
-        return sum(
-            len(connections) for connections in manager.active_connections.values()
-        )
+        total = 0
+        for connections in manager.active_connections.values():
+            if isinstance(connections, dict):
+                total += sum(len(bucket) for bucket in connections.values())
+            else:
+                total += len(connections)
+        return total
     except Exception:
         return 0
 

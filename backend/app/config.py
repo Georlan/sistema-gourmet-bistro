@@ -164,7 +164,7 @@ class Settings:
     DB_POOL_RECYCLE: int = int(os.getenv("DB_POOL_RECYCLE", "1800"))
     DB_PRE_PING_FRESH_SECONDS: float = max(
         0.0,
-        float(os.getenv("DB_PRE_PING_FRESH_SECONDS", "5.0")),
+        float(os.getenv("DB_PRE_PING_FRESH_SECONDS", "30.0")),
     )
     
 
@@ -227,36 +227,32 @@ class Settings:
         os.getenv("WEBSOCKET_ALLOW_MISSING_ORIGIN", "false").lower() == "true"
     )
 
-    def get_cors_allowed_origins(self) -> list[str]:
-        """
-        Retorna a lista normalizada e estrita de origens permitidas para CORS.
+    def _resolve_cors_allowed_origins_tuple(self) -> tuple[str, ...]:
+        running_on_railway = bool(
+            os.getenv("RAILWAY_PROJECT_ID")
+            or os.getenv("RAILWAY_ENVIRONMENT_ID")
+            or os.getenv("RAILWAY_SERVICE_ID")
+        )
+        env = os.getenv("ENVIRONMENT", "production").lower()
+        cache_key = (self.CORS_ALLOWED_ORIGINS, env, running_on_railway)
+        cached = getattr(self, "_cors_origins_cache", None)
+        if cached is not None and cached[0] == cache_key:
+            return cached[1]
 
-        Em produção genérica não adicionamos localhost nem wildcards implícitos.
-        Quando o backend está rodando no Railway, porém, a origem HTTPS exata do
-        frontend público oficial do KÔMA é sempre autorizada. Isso mantém o
-        checkout first-party funcional mesmo se a variável CORS_ALLOWED_ORIGINS
-        for removida ou sobrescrita no ambiente de deploy.
-        """
         raw_origins = [o.strip() for o in self.CORS_ALLOWED_ORIGINS.split(",") if o.strip()]
-        
+
         normalized: list[str] = []
         for origin_str in raw_origins:
             clean_origin = normalize_cors_origin(origin_str)
             if clean_origin not in normalized:
                 normalized.append(clean_origin)
 
-        running_on_railway = bool(
-            os.getenv("RAILWAY_PROJECT_ID")
-            or os.getenv("RAILWAY_ENVIRONMENT_ID")
-            or os.getenv("RAILWAY_SERVICE_ID")
-        )
         if running_on_railway:
             for official_origin_raw in OFFICIAL_PUBLIC_FRONTEND_ORIGINS:
                 official_origin = normalize_cors_origin(official_origin_raw)
                 if official_origin not in normalized:
                     normalized.append(official_origin)
-                
-        env = os.getenv("ENVIRONMENT", "production").lower()
+
         if not normalized and env in ("development", "test"):
             local_defaults = [
                 "http://localhost:5173",
@@ -269,8 +265,26 @@ class Settings:
                 norm_loc = normalize_cors_origin(loc)
                 if norm_loc not in normalized:
                     normalized.append(norm_loc)
-                    
-        return normalized
+
+        frozen_tuple = tuple(normalized)
+        self._cors_origins_cache = (cache_key, frozen_tuple, frozenset(frozen_tuple))
+        return frozen_tuple
+
+    def get_cors_allowed_origins(self) -> list[str]:
+        """
+        Retorna a lista normalizada e estrita de origens permitidas para CORS.
+
+        Em produção genérica não adicionamos localhost nem wildcards implícitos.
+        Quando o backend está rodando no Railway, porém, a origem HTTPS exata do
+        frontend público oficial do KÔMA é sempre autorizada. Isso mantém o
+        checkout first-party funcional mesmo se a variável CORS_ALLOWED_ORIGINS
+        for removida ou sobrescrita no ambiente de deploy.
+        """
+        return list(self._resolve_cors_allowed_origins_tuple())
+
+    def get_cors_allowed_origins_set(self) -> frozenset[str]:
+        self._resolve_cors_allowed_origins_tuple()
+        return self._cors_origins_cache[2]
 
     # ENCRYPTION_KEY environment check
     ENCRYPTION_KEY: str = os.getenv("ENCRYPTION_KEY", "")

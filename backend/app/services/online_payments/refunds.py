@@ -358,11 +358,12 @@ def create_mercado_pago_refund(
     if provider_call:
         assert access_token is not None
         try:
-            provider_refund = MercadoPagoProvider(access_token).refund_payment(
-                external_payment_id,
-                amount=provider_amount,
-                idempotency_key=provider_key,
-            )
+            with MercadoPagoProvider(access_token) as provider:
+                provider_refund = provider.refund_payment(
+                    external_payment_id,
+                    amount=provider_amount,
+                    idempotency_key=provider_key,
+                )
         except (httpx.TimeoutException, httpx.RequestError) as exc:
             persisted = db.query(OnlinePaymentRefund).filter(
                 OnlinePaymentRefund.restaurante_id == restaurante_id,

@@ -154,6 +154,17 @@ class MercadoPagoProvider:
             timeout=settings.ONLINE_PAYMENT_REQUEST_TIMEOUT_SECONDS,
         )
 
+    def close(self) -> None:
+        client = getattr(self, "_client", None)
+        if client is not None:
+            client.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
     @staticmethod
     def _map(payload: dict) -> ProviderPayment:
         transaction = payload.get("point_of_interaction") or {}

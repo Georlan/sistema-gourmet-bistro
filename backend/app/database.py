@@ -1,10 +1,15 @@
 from contextlib import contextmanager
 from contextvars import ContextVar
 import os
+import select
+import threading
+from time import monotonic
 
 from fastapi import Request
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker, with_loader_criteria
+from sqlalchemy.pool import QueuePool
+from starlette.concurrency import run_in_threadpool
 
 from .config import settings
 
@@ -240,6 +245,29 @@ def _track_sqlite_product_images(session, flush_context, instances):
         sqlite_track_changes(session)
 
 
+_TENANT_FILTERED_MAPPERS_COUNT = -1
+_TENANT_FILTERED_MODELS: tuple[type, ...] = ()
+_TENANT_FILTERED_LOCK = threading.Lock()
+
+
+def _tenant_filtered_models() -> tuple[type, ...]:
+    global _TENANT_FILTERED_MAPPERS_COUNT, _TENANT_FILTERED_MODELS
+    mappers = tuple(Base.registry.mappers)
+    count = len(mappers)
+    if count != _TENANT_FILTERED_MAPPERS_COUNT:
+        with _TENANT_FILTERED_LOCK:
+            mappers = tuple(Base.registry.mappers)
+            count = len(mappers)
+            if count != _TENANT_FILTERED_MAPPERS_COUNT:
+                _TENANT_FILTERED_MODELS = tuple(
+                    mapper.class_
+                    for mapper in mappers
+                    if hasattr(mapper.class_, "restaurante_id")
+                )
+                _TENANT_FILTERED_MAPPERS_COUNT = count
+    return _TENANT_FILTERED_MODELS
+
+
 @event.listens_for(Session, "do_orm_execute")
 def _add_tenant_id_filtering_criteria(execute_state):
     # Garante que a filtragem se aplica apenas a consultas SELECT comuns de entidades.
@@ -250,23 +278,15 @@ def _add_tenant_id_filtering_criteria(execute_state):
     ):
         tenant_id = _effective_tenant_id(execute_state.session)
         if tenant_id is not None:
-            # Aplica recursivamente o filtro para todas as classes mapeadas que tenham restaurante_id.
-            for mapper in Base.registry.mappers:
-                cls = mapper.class_
-                if hasattr(cls, "restaurante_id"):
-                    execute_state.statement = execute_state.statement.options(
-                        with_loader_criteria(
-                            cls,
-                            lambda target_cls: target_cls.restaurante_id == tenant_id,
-                            track_closure_variables=True,
-                        )
+            # Aplica recursivamente o filtro usando a tupla em cache dos modelos tenant-scoped.
+            for cls in _tenant_filtered_models():
+                execute_state.statement = execute_state.statement.options(
+                    with_loader_criteria(
+                        cls,
+                        lambda target_cls: target_cls.restaurante_id == tenant_id,
+                        track_closure_variables=True,
                     )
-
-
-import select
-from time import monotonic
-import threading
-from sqlalchemy.pool import QueuePool
+                )
 
 
 def _is_dbapi_socket_cleanly_idle(dbapi_conn) -> bool:
@@ -470,7 +490,7 @@ async def get_db(request: Request = None):
     try:
         yield db
     finally:
-        db.close()
+        await run_in_threadpool(db.close)
 
 
 def validate_postgres_runtime_role() -> None:

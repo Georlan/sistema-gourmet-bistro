@@ -10,6 +10,13 @@ class UnsupportedPaymentProviderError(RuntimeError):
     pass
 
 
+def close_provider(provider: object | None) -> None:
+    """Close adapter HTTP clients cleanly without failing on lightweight test doubles."""
+    close_fn = getattr(provider, "close", None)
+    if callable(close_fn):
+        close_fn()
+
+
 def provider_for_account(
     account: RestaurantPaymentAccount,
     *,
