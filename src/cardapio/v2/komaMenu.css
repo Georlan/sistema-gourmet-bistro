@@ -1062,6 +1062,11 @@
   place-items: center;
   width: 24px;
   height: 24px;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.km-dock__btn.is-active .km-dock__icon-wrap {
+  transform: translateY(-1px) scale(1.06);
 }
 
 .km-dock__label {
@@ -1107,6 +1112,17 @@
   justify-content: center;
 }
 
+@keyframes km-bag-fab-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 .km-bag-fab {
   pointer-events: auto;
   display: inline-flex;
@@ -1124,6 +1140,12 @@
   box-shadow: var(--km-shadow-cta);
   -webkit-tap-highlight-color: transparent;
   will-change: transform, opacity;
+  animation: km-bag-fab-in 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: transform 0.14s ease;
+}
+
+.km-bag-fab:active {
+  transform: scale(0.96);
 }
 
 .km-bag-fab__icon {
@@ -1298,7 +1320,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .km-dock__ink-drop {
+  .km-dock__ink-drop,
+  .km-dock__icon-wrap,
+  .km-bag-fab {
     animation: none !important;
     transition: none !important;
   }

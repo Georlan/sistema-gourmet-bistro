@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import NumberFlow from "@number-flow/react";
 import {
   ArrowUpRight,
@@ -64,7 +63,6 @@ import {
   MenuSearchGlyph,
   MenuTopWaveBackdrop,
 } from "./MenuSvgAssets";
-import { KOMA_SPRING_BUBBLE, KOMA_SPRING_NAV } from "./motionTokens";
 import MenuActiveOrderCard from "./MenuActiveOrderCard";
 import MenuBottomDock from "./MenuBottomDock";
 import MenuProductCard, { formatMenuPrice } from "./MenuProductCard";
@@ -490,7 +488,6 @@ export default function MenuV2Experience({
   );
 
   return (
-    <MotionConfig reducedMotion="user">
     <div
       className={`km-root${cartCount > 0 && !hasOpenOverlay ? " km-root--with-bag" : ""}`}
       id="koma-artistic-canvas"
@@ -869,11 +866,7 @@ export default function MenuV2Experience({
             >
               Início
               {visibleCategory === "" && (
-                <motion.span
-                  layoutId="km-cat-active-bar"
-                  className="km-cat-tab__bar"
-                  transition={KOMA_SPRING_NAV}
-                />
+                <span className="km-cat-tab__bar" aria-hidden="true" />
               )}
             </button>
 
@@ -893,11 +886,7 @@ export default function MenuV2Experience({
                 >
                   {category}
                   {isActive && (
-                    <motion.span
-                      layoutId="km-cat-active-bar"
-                      className="km-cat-tab__bar"
-                      transition={KOMA_SPRING_NAV}
-                    />
+                    <span className="km-cat-tab__bar" aria-hidden="true" />
                   )}
                 </button>
               );
@@ -1145,43 +1134,36 @@ export default function MenuV2Experience({
       </main>
 
       {/* Redundant Floating Bag Feedback Pill above Dock when browsing Home */}
-      <AnimatePresence>
-        {!hasOpenOverlay && activeDockTab === "home" && cartCount > 0 && (
-          <div className="km-bag-fab-wrap">
-            <motion.button
-              type="button"
-              className="km-bag-fab"
-              initial={{ opacity: 0, y: 14, scale: 0.94 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 12, scale: 0.94 }}
-              whileTap={{ scale: 0.96 }}
-              transition={KOMA_SPRING_BUBBLE}
-              onClick={onCartToggle}
-              aria-label={`Ver sacola com ${cartCount} ${cartCount === 1 ? "item" : "itens"}`}
-            >
-              <span className="km-bag-fab__icon" aria-hidden="true">
-                <MenuBagGlyph className="w-4 h-4" />
-                <span className="km-bag-fab__badge km-tabular">
-                  <NumberFlow value={cartCount} />
-                </span>
+      {!hasOpenOverlay && activeDockTab === "home" && cartCount > 0 && (
+        <div className="km-bag-fab-wrap">
+          <button
+            type="button"
+            className="km-bag-fab"
+            onClick={onCartToggle}
+            aria-label={`Ver sacola com ${cartCount} ${cartCount === 1 ? "item" : "itens"}`}
+          >
+            <span className="km-bag-fab__icon" aria-hidden="true">
+              <MenuBagGlyph className="w-4 h-4" />
+              <span className="km-bag-fab__badge km-tabular">
+                <NumberFlow value={cartCount} />
               </span>
-              <span className="km-bag-fab__label">Ver sacola</span>
-              <span className="km-bag-fab__dot" aria-hidden="true">·</span>
-              <span className="km-bag-fab__total km-tabular">
-                {typeof window !== "undefined" && typeof document !== "undefined" ? (
-                  <NumberFlow
-                    value={cartTotal}
-                    format={{ style: "currency", currency: "BRL" }}
-                    locales="pt-BR"
-                  />
-                ) : (
-                  formatMenuPrice(cartTotal)
-                )}
-              </span>
-            </motion.button>
-          </div>
-        )}
-      </AnimatePresence>
+            </span>
+            <span className="km-bag-fab__label">Ver sacola</span>
+            <span className="km-bag-fab__dot" aria-hidden="true">·</span>
+            <span className="km-bag-fab__total km-tabular">
+              {typeof window !== "undefined" && typeof document !== "undefined" ? (
+                <NumberFlow
+                  value={cartTotal}
+                  format={{ style: "currency", currency: "BRL" }}
+                  locales="pt-BR"
+                />
+              ) : (
+                formatMenuPrice(cartTotal)
+              )}
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* Physics-Driven Floating Mobile Dock */}
       <MenuBottomDock
@@ -1283,6 +1265,5 @@ export default function MenuV2Experience({
         themeMode={themeMode}
       />
     </div>
-    </MotionConfig>
   );
 }
