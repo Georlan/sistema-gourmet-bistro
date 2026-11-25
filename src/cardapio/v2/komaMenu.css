@@ -950,12 +950,26 @@
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(10px + env(safe-area-inset-bottom));
+  bottom: 0;
   z-index: 60;
-  padding: 0 14px;
-  pointer-events: none;
+  padding: 4px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  pointer-events: auto;
   display: flex;
   justify-content: center;
+}
+
+/* Reserve a real, non-overlapping touch region for the dock.
+ * A full-viewport cart backdrop must never compete with Android hit testing.
+ * The shadow extends only the visual backdrop; it has no hit-test area. */
+@media (max-width: 767px) {
+  #cart-overlay {
+    bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 calc(76px + env(safe-area-inset-bottom, 0px)) 0 var(--km-overlay);
+  }
+
+  #cart-drawer-container {
+    max-height: 100%;
+  }
 }
 
 @media (min-width: 768px) {
