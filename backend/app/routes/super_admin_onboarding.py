@@ -21,6 +21,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from ..database import Base, SessionLocal, tenant_session_scope
 from ..models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
@@ -375,7 +376,6 @@ def _commercial_release_preview(
     snapshot = _build_onboarding_status(
         db, current_user=SimpleNamespace(is_support_mode=False)
     )
-    qa_record = get_active_operational_qa_record(db, tenant_id)
     subscription = (
         db.query(SaaSSubscription)
         .filter(SaaSSubscription.restaurante_id == tenant_id)
@@ -383,6 +383,11 @@ def _commercial_release_preview(
     )
     if subscription is None and require_subscription:
         raise HTTPException(status_code=409, detail="Restaurante sem assinatura comercial vinculada.")
+    qa_record = (
+        get_active_operational_qa_record(db, tenant_id)
+        if subscription is None and isinstance(db, Session)
+        else None
+    )
     return {
         "restaurant": snapshot["restaurant"],
         "subscription": {
