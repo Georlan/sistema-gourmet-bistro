@@ -63,6 +63,7 @@ interface CardapioOrdersDrawerProps {
   onRealtimeRefresh?: () => void;
   isRefreshing?: boolean;
   hasFloatingCart?: boolean;
+  showFloatingChat?: boolean;
 }
 
 interface RequestedPushOrder {
@@ -113,6 +114,7 @@ export default function CardapioOrdersDrawer({
   onRealtimeRefresh,
   isRefreshing = false,
   hasFloatingCart = false,
+  showFloatingChat = true,
 }: CardapioOrdersDrawerProps) {
   const [chatOrderId, setChatOrderId] = React.useState<string | null>(null);
   const [pixModalOrder, setPixModalOrder] = React.useState<StoredOrder | null>(null);
@@ -388,12 +390,13 @@ export default function CardapioOrdersDrawer({
 
   const chatOrder = chatOrderId ? orders.find((order) => order.id === chatOrderId) || null : null;
   const preferredChatOrder = React.useMemo(
-    () => ordersWithChat.find((order) => unreadFor(order.id) > 0)
+    () => activeChatOrders.find((order) => unreadFor(order.id) > 0)
+      || activeChatOrders.find((order) => order.id === selectedOrderId)
+      || activeChatOrders[0]
       || ordersWithChat.find((order) => order.id === selectedOrderId)
-      || ordersWithChat.find((order) => !resolveOrderState(order).terminal)
       || ordersWithChat[0]
       || null,
-    [ordersWithChat, selectedOrderId, unreadFor],
+    [activeChatOrders, ordersWithChat, selectedOrderId, unreadFor],
   );
 
   const markChatReadLocally = React.useCallback((orderId: string) => {
@@ -485,19 +488,21 @@ export default function CardapioOrdersDrawer({
   };
 
   if (!drawerOpen) {
-    if (!canOpen) return null;
+    if (!canOpen || !showFloatingChat) return null;
     const displayOrder = preferredChatOrder || activeOrders[0] || null;
     const displayState = displayOrder ? resolveOrderState(displayOrder) : null;
     const isChatAvailable = Boolean(displayOrder && resolveTrackingToken(displayOrder) && displayState?.can_chat);
+    const showMobileShortcut = Boolean(displayState && !displayState.terminal && isChatAvailable);
     const statusText = displayState?.label || "Acompanhe seus pedidos";
 
     return (
       <div
         className={clsx(
-          "hidden md:block fixed right-4 z-40 sm:right-6 transition-[opacity,transform] duration-300 pointer-events-auto",
+          "fixed right-4 z-40 sm:right-6 transition-[opacity,transform] duration-300 pointer-events-auto",
+          showMobileShortcut ? "block" : "hidden md:block",
           hasFloatingCart
-            ? "bottom-[calc(6.75rem+env(safe-area-inset-bottom,0px))]"
-            : "bottom-5 sm:bottom-6 pb-[env(safe-area-inset-bottom,0px)]"
+            ? "bottom-[calc(134px+env(safe-area-inset-bottom,0px))] md:bottom-[calc(6.75rem+env(safe-area-inset-bottom,0px))]"
+            : "bottom-[calc(82px+env(safe-area-inset-bottom,0px))] md:bottom-6 md:pb-[env(safe-area-inset-bottom,0px)]"
         )}
         id="floating-order-chat-container"
       >
@@ -535,7 +540,8 @@ export default function CardapioOrdersDrawer({
           )}>
             {isChatAvailable || !displayOrder ? <MessageCircle className="h-4 w-4" /> : <Clock3 className="h-4 w-4" />}
           </span>
-          <div className="text-left pr-1">
+          <span className="text-xs font-bold md:hidden">Chat</span>
+          <div className="hidden text-left pr-1 md:block">
             {displayOrder ? (
               <>
                 <div className="flex items-center gap-1.5">
