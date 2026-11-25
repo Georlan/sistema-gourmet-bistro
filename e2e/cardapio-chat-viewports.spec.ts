@@ -125,12 +125,7 @@ async function expectInsideViewport(page: Page, selector: string) {
 }
 
 async function openOrderChat(page: Page) {
-  if ((page.viewportSize()?.width || 0) <= 640) {
-    await page.locator('#mobile-nav-orders').click();
-    await page.locator('#orders-drawer-panel').getByRole('button', { name: /Ler mensagem|Falar com a loja|Abrir mensagem|Chat & Status/ }).first().click();
-  } else {
-    await page.locator('#floating-order-chat-trigger').click();
-  }
+  await page.locator('#floating-order-chat-trigger').click();
 }
 
 for (const viewport of [
@@ -146,16 +141,31 @@ for (const viewport of [
     await page.goto('/cardapio?restaurante_id=2');
 
     const mobile = viewport.width <= 640;
-    const trigger = page.locator(mobile ? '#mobile-nav-orders' : '#floating-order-chat-trigger');
+    const trigger = page.locator('#floating-order-chat-trigger');
     await expect(trigger).toBeVisible();
     if (mobile) {
-      await expect(trigger).toContainText('Pedidos');
-      await expect(page.locator('#floating-order-chat-trigger')).toBeHidden();
+      await expect(trigger.getByText('Chat', { exact: true })).toBeVisible();
+      await expect(page.locator('#mobile-nav-orders')).toBeVisible();
+      const dock = (await page.locator('#koma-art-dock').boundingBox())!;
+      const shortcut = (await trigger.boundingBox())!;
+      expect(shortcut.y + shortcut.height).toBeLessThanOrEqual(dock.y);
+      await page.locator('#btn-fast-add-101').click();
+      const bag = page.getByRole('button', { name: 'Ver sacola com 1 item' });
+      await expect(bag).toBeVisible();
+      await expect.poll(async () => {
+        const chatBox = (await trigger.boundingBox())!;
+        const bagBox = (await bag.boundingBox())!;
+        return chatBox.y + chatBox.height <= bagBox.y;
+      }).toBe(true);
+      await page.locator('#mobile-nav-cart').click();
+      await expect(trigger).toBeHidden();
+      await page.locator('#mobile-nav-home').click();
+      await expect(trigger).toBeVisible();
     } else {
       await expect(trigger).toContainText('Pedido #4321');
       await expect(trigger).toContainText('Nova mensagem');
     }
-    await expectInsideViewport(page, mobile ? '#mobile-nav-orders' : '#floating-order-chat-trigger');
+    await expectInsideViewport(page, '#floating-order-chat-trigger');
 
     const pageOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(pageOverflow).toBeLessThanOrEqual(1);
@@ -163,6 +173,7 @@ for (const viewport of [
     await openOrderChat(page);
     const drawer = page.locator('#orders-drawer-panel');
     await expect(drawer).toBeVisible();
+    await expect(trigger).toBeHidden();
     await expectInsideViewport(page, '#orders-drawer-panel');
     await expect(page.locator('#inline-order-chat-panel .koma-public-icon')).toBeVisible();
     await expect(page.getByText('Conversa com o restaurante')).toBeVisible();
