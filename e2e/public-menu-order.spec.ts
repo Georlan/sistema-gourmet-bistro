@@ -327,6 +327,84 @@ test('dock mantém uma superfície ativa e preserva a sacola ao alternar por toq
   expect(capturedOrders).toHaveLength(0);
 });
 
+test('dock aceita toque bruto nas bordas e alternância rápida sem perder ações', async ({ page }, testInfo) => {
+  test.skip(!['mobile-360', 'mobile-390', 'mobile-412', 'mobile-430'].includes(testInfo.project.name), 'Toque mobile real.');
+  await mockPublicMenuBackend(page, []);
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
+  await page.locator('#btn-fast-add-101').tap();
+  await expect(page.locator('#mobile-nav-cart')).toBeVisible();
+  const tabs = ['home', 'orders', 'cart', 'account'] as const;
+  const points = Object.fromEntries(await Promise.all(tabs.map(async tab => {
+    const b = (await page.locator(`#mobile-nav-${tab}`).boundingBox())!;
+    return [tab, { x: b.x + b.width / 2, y: b.y + 1, centerY: b.y + b.height / 2 }];
+  })));
+  const cdp = await page.context().newCDPSession(page);
+  const tap = async (tab: typeof tabs[number], edge = false) => {
+    const p = points[tab];
+    await cdp.send('Input.dispatchTouchEvent', {type:'touchStart', touchPoints:[{x:p.x,y:edge?p.y:p.centerY}]});
+    // Give the press animation enough time to run while the finger is down.
+    if (edge) await page.waitForTimeout(80);
+    await cdp.send('Input.dispatchTouchEvent', {type:'touchEnd',touchPoints:[]});
+  };
+  const check = async (tab: typeof tabs[number]) => {
+    await expect(page.locator(`#mobile-nav-${tab}`)).toHaveAttribute('aria-current','page',{timeout:1000});
+    const active = await page.locator('#cart-drawer-container:visible, #orders-drawer-panel:visible, #auth-modal-overlay:visible').count();
+    expect(active).toBe(tab === 'home' ? 0 : 1);
+  };
+  for (const tab of ['orders','cart','orders','cart','account','home'] as const) {
+    await tap(tab, true);
+    await check(tab);
+  }
+  for (let i=0;i<4;i++) {
+    for (const tab of ['orders','cart','orders','home','cart','account','home'] as const) {
+      await tap(tab);
+      await check(tab);
+    }
+  }
+  await tap('cart');
+  await check('cart');
+  await expect(page.locator('#cart-drawer-container').getByRole('heading',{name:'1× Pizza Margherita'})).toBeVisible();
+  await cdp.detach();
+});
+
+test('dock mantém alvo fixo e recebe cada toque consecutivo inclusive na margem', async ({page}, testInfo) => {
+  test.skip(!['mobile-360','mobile-390','mobile-412','mobile-430'].includes(testInfo.project.name), 'Toque mobile real.');
+  await mockPublicMenuBackend(page, []);
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
+  await page.locator('#btn-fast-add-101').tap();
+  const dock = page.locator('#koma-art-dock');
+  await expect(dock).toBeVisible();
+  const tabs = ['home','orders','cart','account'] as const;
+  const b = (await dock.boundingBox())!;
+  const hit = await page.evaluate(({x,y,width,height}) => {
+    return [0,1,2,3].map(i => document.elementFromPoint(x+width*(i+0.5)/4,y+3)?.closest('button')?.id || null);
+  }, b);
+  expect(hit).toEqual(tabs.map(t=>`mobile-nav-${t}`));
+  await page.evaluate(() => {
+    (window as any).__dockTouchClicks = [];
+    document.addEventListener('click',e=>{
+      const button=(e.target as Element)?.closest('#koma-art-dock button');
+      if(button) (window as any).__dockTouchClicks.push(button.id);
+    },true);
+  });
+  const centers = Object.fromEntries(await Promise.all(tabs.map(async tab => {
+    const rect = (await page.locator(`#mobile-nav-${tab}`).boundingBox())!;
+    return [tab,{x:rect.x+rect.width/2,y:rect.y+rect.height/2}];
+  })));
+  const cdp=await page.context().newCDPSession(page);
+  const sequence = ['orders','orders','cart','cart','orders','cart','home','orders','cart','account','home'] as const;
+  for(const [i,tab] of sequence.entries()) {
+    const point = i < 4 ? {x:b.x+b.width*(tabs.indexOf(tab)+0.5)/4,y:b.y+3} : centers[tab];
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  }
+  await expect.poll(()=>page.evaluate(()=> (window as any).__dockTouchClicks)).toEqual(sequence.map(t=>`mobile-nav-${t}`));
+  await expect(page.locator('#mobile-nav-home')).toHaveAttribute('aria-current','page');
+  expect(await page.evaluate(()=>window.visualViewport?.scale)).toBe(1);
+  await expect(page.locator('#cart-drawer-container:visible, #orders-drawer-panel:visible, #auth-modal-overlay:visible')).toHaveCount(0);
+  await cdp.detach();
+});
+
 test('retomada por notificação não disputa o controle do dock com a sacola', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-390', 'Toque real no dock mobile.');
   await page.addInitScript(() => {

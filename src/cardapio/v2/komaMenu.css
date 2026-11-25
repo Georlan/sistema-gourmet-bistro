@@ -982,8 +982,9 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: center;
-  padding: 5px;
-  gap: 2px;
+  padding: 0;
+  gap: 0;
+  touch-action: manipulation;
   overflow: hidden;
 }
 
@@ -996,7 +997,9 @@
   gap: 2px;
   height: 100%;
   border: 0;
-  border-radius: 999px;
+  border-radius: 0;
+  min-width: 0;
+  touch-action: manipulation;
   background: transparent;
   color: var(--km-ink-2);
   font-size: 0.6875rem;
@@ -1011,6 +1014,10 @@
   background-color: var(--km-shell);
 }
 
+.km-dock__btn:active .km-dock__icon-wrap {
+  opacity: 0.75;
+}
+
 .km-dock__btn.is-active {
   color: var(--km-on-accent);
   font-weight: 700;
@@ -1018,11 +1025,14 @@
 
 .km-dock__ink {
   position: absolute;
-  inset: 0;
+  inset: 5px 1px;
   z-index: -1;
   pointer-events: none;
   will-change: transform;
 }
+
+.km-dock__btn:first-child .km-dock__ink { left: 5px; }
+.km-dock__btn:last-child .km-dock__ink { right: 5px; }
 
 .km-dock__ink-drop {
   position: absolute;

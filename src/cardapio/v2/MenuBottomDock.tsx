@@ -72,15 +72,13 @@ function MenuBottomDock({
                   : 0;
 
             return (
-              <motion.button
+              <button
                 key={tab.id}
                 type="button"
                 id={tab.domId}
                 className={`km-dock__btn ${isActive ? "is-active" : ""}`}
                 aria-current={isActive ? "page" : undefined}
                 aria-label={tab.id === "account" ? (userFullName || "Minha conta") : undefined}
-                whileTap={{ scale: 0.94 }}
-                transition={KOMA_SPRING_BUBBLE}
                 onClick={() => onNavigate(tab.id)}
               >
                 {isActive && (
@@ -124,7 +122,7 @@ function MenuBottomDock({
                     tab.label
                   )}
                 </span>
-              </motion.button>
+              </button>
             );
           })}
         </nav>
