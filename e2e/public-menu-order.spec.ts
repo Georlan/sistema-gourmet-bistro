@@ -808,9 +808,10 @@ test('modo automático mostra aberto quando a política do servidor aceita pedid
   expect(capturedOrders).toHaveLength(0);
 });
 
-test('pedido recusado continua visível em vez de desaparecer', async ({ page }) => {
+test('pedido recusado fica visível até Entendi e permanece no histórico após recarregar', async ({ page }) => {
   const capturedOrders: CapturedOrder[] = [];
   await page.addInitScript(() => {
+    if (sessionStorage.getItem('koma_active_orders')) return;
     localStorage.setItem('koma_active_order', JSON.stringify({
       id: 'pedido-e2e',
       numero_pedido: 4321,
@@ -826,7 +827,10 @@ test('pedido recusado continua visível em vez de desaparecer', async ({ page })
 
   await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
   await expect(page.getByText('Pedido não aceito', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Fazer novo pedido', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Entendi', exact: true }).click();
+  await expect(page.locator('#active-order-banner')).toHaveCount(0);
+  await page.reload();
+  await expect(page.locator('#active-order-banner')).toHaveCount(0);
   await page.locator('#mobile-nav-orders:visible, button[aria-label="Ver pedidos"]:visible').first().click();
   await expect(page.locator('#orders-drawer-panel').getByText('Pedido não aceito', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /Ver motivo/ })).toBeVisible();
