@@ -251,8 +251,10 @@ export default function CardapioPage() {
   );
 
   const homeOrders = useMemo(
-    () => storedOrders.filter(isOrderVisibleOnHome),
-    [storedOrders],
+    // A escolha explícita de Ver detalhes no histórico pode reabrir o resultado
+    // nesta visita, sem desfazer o reconhecimento persistido.
+    () => storedOrders.filter(order => isOrderVisibleOnHome(order) || order.id === selectedOrderId),
+    [storedOrders, selectedOrderId],
   );
 
   const activeOrder = useMemo(() => {
