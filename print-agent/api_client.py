@@ -9,7 +9,7 @@ from retry_budget import RetryBudget
 
 log = logging.getLogger("print-agent.api")
 AGENT_CAPABILITIES = ["connect_usb", "test_bluetooth"]
-AGENT_VERSION = "2026.10.20.1"
+AGENT_VERSION = "2026.11.24.1"
 
 
 class AgentAuthenticationError(RuntimeError):
@@ -53,6 +53,7 @@ class KomaApiClient:
         self.headers = {
             "Content-Type": "application/json",
             "X-Agent-Token": agent_token,
+            "User-Agent": f"KomaPrintAgent/{AGENT_VERSION}",
         }
 
     @staticmethod
@@ -70,6 +71,7 @@ class KomaApiClient:
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {jwt_token}",
+            "User-Agent": f"KomaPrintAgent/{AGENT_VERSION}",
         }
         try:
             resp = self.session.post(

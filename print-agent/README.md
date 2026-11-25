@@ -37,7 +37,12 @@ OWNER/REPO pelo endereço público real e verificando o SHA-256 recebido.
 Não usar o antigo `raw.githubusercontent.com/Georlan/sistema-gourmet-bistro`.
 
 Os instaladores executam **apenas a partir do ZIP completo extraído**.
-A atualização não apaga o pareamento. Nunca divulgar
+A atualização não apaga o pareamento.
+A versão 2026.11.24.1 identifica o build nas requisições HTTP (inclusive 401)
+e preserva o código de saída de pareamento também pelo atalho legado `agent.py`.
+Agentes já instalados precisam de atualização local; um deploy do SaaS não
+substitui os arquivos do serviço. Em caso de autorização recusada, use
+**Preparar impressão** para parear novamente somente o computador afetado. Nunca divulgar
 `config.json`, `credentials.json`, ZIP de código completo do SaaS nem
 credenciais ou tokens de GitHub.
 
