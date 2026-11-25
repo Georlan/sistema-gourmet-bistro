@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { register } from 'node:module';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import React, { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -422,7 +423,10 @@ test('7. Sacola: alternar de entrega para retirada zera a taxa de entrega imedia
   );
 
   assert.doesNotMatch(deliveryHtml, /pb-\[86px\]/);
-  assert.match(deliveryHtml, /pb-\[calc\(86px\+env\(safe-area-inset-bottom,0px\)\)\]/);
+  assert.match(deliveryHtml, /id="cart-overlay"/);
+  const menuCss = readFileSync(new URL('../src/cardapio/v2/komaMenu.css', import.meta.url), 'utf8');
+  assert.match(menuCss, /#cart-overlay\s*\{[^}]*bottom:\s*calc\(76px \+ env\(safe-area-inset-bottom, 0px\)\)/);
+  assert.match(deliveryHtml, /border-t[^"\n]*pb-3[^"\n]*md:pb-5/);
   assert.match(deliveryHtml, /md:pb-5/);
   assert.match(deliveryHtml, /Taxa de entrega/);
   assert.match(deliveryHtml, /R\$\s*12,00/);

@@ -280,6 +280,37 @@ test('sacola abre no primeiro toque real pela navegação móvel', async ({ page
   await expect(page.locator('#btn-cart-header')).toBeHidden();
 });
 
+test('dock permanece tocável com a sacola aberta pelo próprio atalho', async ({ page }, testInfo) => {
+  test.skip(!['mobile-360', 'mobile-390', 'mobile-412', 'mobile-430'].includes(testInfo.project.name), 'Toque mobile real.');
+  await mockPublicMenuBackend(page, []);
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
+  await page.locator('#btn-fast-add-101').tap();
+  const cart = page.locator('#cart-drawer-container');
+  const dock = page.locator('#koma-art-dock');
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    for (const tab of ['orders', 'account', 'home'] as const) {
+      await dock.locator('#mobile-nav-cart').tap();
+      await expect(cart).toBeVisible();
+      const overlay = (await page.locator('#cart-overlay').boundingBox())!;
+      const nav = (await dock.boundingBox())!;
+      expect(overlay.y + overlay.height).toBeLessThanOrEqual(nav.y);
+      const button = dock.locator(`#mobile-nav-${tab}`);
+      const box = (await button.boundingBox())!;
+      const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      expect(await page.evaluate(({x, y}) => document.elementFromPoint(x, y)?.closest('button')?.id, point)).toBe(`mobile-nav-${tab}`);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [point] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await expect(button).toHaveAttribute('aria-current', 'page');
+      await expect(cart).toBeHidden();
+    }
+    await dock.locator('#mobile-nav-cart').tap();
+    await expect(cart.getByRole('heading', { name: '1× Pizza Margherita', exact: true })).toBeVisible();
+  } finally {
+    await cdp.detach();
+  }
+});
+
 test('dock mantém uma superfície ativa e preserva a sacola ao alternar por toque', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-390', 'Toque real no dock mobile.');
   const capturedOrders: CapturedOrder[] = [];

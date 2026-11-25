@@ -41,13 +41,15 @@ test('sacola e abas ficam abaixo do dock permanente (z-60), e modais bloqueantes
   assert.match(page, /id="page-pix-payment-modal-backdrop"[\s\S]*?z-\[75\]|z-\[75\][^>]*id="page-pix-payment-modal-backdrop"/);
 });
 
-test('sacola móvel acompanha a altura disponível, reserva espaço opaco acima do dock em <768px e libera em md:', () => {
+test('sacola móvel acompanha a altura disponível, separa fisicamente a região de toque do dock em <768px', () => {
   assert.doesNotMatch(cart, /pb-\[86px\]/);
   assert.match(cart, /max-h-\[94dvh\]/);
   assert.equal((cart.match(/min-h-0[^"\n]*overflow-y-auto/g) ?? []).length, 2);
   assert.match(cart, /className="flex shrink-0 items-center justify-between/);
-  assert.match(cart, /className="shrink-0 border-t[^"\n]*pb-\[calc\(86px\+env\(safe-area-inset-bottom,0px\)\)\][^"\n]*md:pb-5/);
-  assert.match(cart, /pb-\[calc\(94px\+env\(safe-area-inset-bottom,0px\)\)\] md:pb-6/);
+  assert.match(cart, /className="shrink-0 border-t[^"\n]*pb-3[^"\n]*md:pb-5/);
+  assert.match(css, /#cart-overlay\s*\{[^}]*bottom:\s*calc\(76px \+ env\(safe-area-inset-bottom, 0px\)\)/);
+  assert.match(css, /#cart-drawer-container\s*\{[^}]*max-height:\s*100%/);
+  assert.match(css, /\.km-dock-wrap\s*\{[^}]*pointer-events:\s*auto/);
   assert.match(ordersDrawer, /pb-\[calc\(90px\+env\(safe-area-inset-bottom,0px\)\)\][^"\n]*md:pb-5/);
   assert.match(profileModal, /pb-\[calc\(90px\+env\(safe-area-inset-bottom,0px\)\)\][^"\n]*md:pb-6/);
   assert.match(authModal, /pb-\[calc\(88px\+env\(safe-area-inset-bottom,0px\)\)\]!\s*md:pb-6!/);
