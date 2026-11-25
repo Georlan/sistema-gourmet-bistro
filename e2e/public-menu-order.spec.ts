@@ -252,6 +252,7 @@ test('sacola abre no primeiro toque real pela navegação móvel', async ({ page
   const cartTrigger = page.locator('#mobile-nav-cart');
   const mobileNav = page.locator('#koma-art-dock');
   await expect(cartTrigger).toBeVisible();
+  await expect(cartTrigger).toHaveAccessibleName(/^Sacola, 1 item, R\$\s*48,00$/);
   await expect(mobileNav).toBeVisible();
   await expect(page.locator('#floating-cart-trigger')).toBeHidden();
   await expect(page.locator('#floating-order-chat-trigger')).toBeHidden();
