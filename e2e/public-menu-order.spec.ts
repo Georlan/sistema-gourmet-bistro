@@ -830,9 +830,15 @@ test('pedido recusado fica visível até Entendi e permanece no histórico após
   await page.getByRole('button', { name: 'Entendi', exact: true }).click();
   await expect(page.locator('#active-order-banner')).toHaveCount(0);
   await page.reload();
+  await expect(page.locator('#btn-fast-add-101')).toBeVisible();
   await expect(page.locator('#active-order-banner')).toHaveCount(0);
   await page.locator('#mobile-nav-orders:visible, button[aria-label="Ver pedidos"]:visible').first().click();
   await expect(page.locator('#orders-drawer-panel').getByText('Pedido não aceito', { exact: true })).toBeVisible();
+  await page.locator('#orders-drawer-panel').getByRole('button', { name: 'Ver detalhes', exact: true }).click();
+  await expect(page.locator('#active-order-banner')).toContainText('Pedido não aceito');
+  await page.getByRole('button', { name: 'Entendi', exact: true }).click();
+  await expect(page.locator('#active-order-banner')).toHaveCount(0);
+  await page.locator('#mobile-nav-orders:visible, button[aria-label="Ver pedidos"]:visible').first().click();
   await expect(page.getByRole('button', { name: /Ver motivo/ })).toBeVisible();
   await page.getByRole('button', { name: /Ver motivo/ }).click();
   await expect(page.locator('#inline-order-chat-panel')).toBeVisible();
