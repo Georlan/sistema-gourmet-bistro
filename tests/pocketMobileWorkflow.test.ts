@@ -192,7 +192,7 @@ test('mobile bottom bar delegates pinned actions to canonical navigation ids', (
 
 test('all plans share the mobile shell while Pocket keeps its plan-specific refinements', () => {
   const caixaPanel = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
-  const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+  const cashierCss = readFileSync(new URL('../src/components/shared/operationalWorkspace.css', import.meta.url), 'utf8');
 
   assert.match(caixaPanel, /data-koma-plan=\{currentPlanId\}/);
   assert.match(caixaPanel, /<CashierMobileBottomBar/);
@@ -214,7 +214,7 @@ test('mobile operation subnav keeps every destination accessible above the conte
 
 test('mobile menu avoids duplicated owner shortcuts and keeps the compact touch-first shell', () => {
   const mobileSidebar = readFileSync(new URL('../src/components/caixa/navigation/CashierMobileSidebar.tsx', import.meta.url), 'utf8');
-  const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+  const cashierCss = readFileSync(new URL('../src/components/shared/operationalWorkspace.css', import.meta.url), 'utf8');
 
   assert.doesNotMatch(mobileSidebar, /cashier-mobile-quick-actions|mobileQuickActions/);
   assert.match(mobileSidebar, /CashierSidebarSearch/);
@@ -233,7 +233,7 @@ test('mobile order stage names match the columns they actually project', () => {
 });
 
 test('mobile orders prioritize actionable controls above the fold', () => {
-  const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+  const cashierCss = readFileSync(new URL('../src/components/shared/operationalWorkspace.css', import.meta.url), 'utf8');
 
   assert.match(cashierCss, /\.orders-workspace > \.operational-header \.orders-hero__copy > p:last-child/);
   assert.match(cashierCss, /\.orders-search__input \{[\s\S]*min-height: 2\.75rem/);
@@ -243,7 +243,7 @@ test('mobile orders prioritize actionable controls above the fold', () => {
 
 test('mobile catalog prioritizes create preview and bulk actions', () => {
   const products = readFileSync(new URL('../src/components/cardapio/CardapioProdutosTab.tsx', import.meta.url), 'utf8');
-  const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+  const cashierCss = readFileSync(new URL('../src/components/shared/operationalWorkspace.css', import.meta.url), 'utf8');
 
   assert.match(products, /cardapio-products-actions/);
   assert.match(products, /cardapio-products-create/);
@@ -256,7 +256,7 @@ test('online menu keeps edit and publish actions in their canonical editor witho
   const editor = readFileSync(new URL('../src/components/cardapio/CardapioDigitalSettingsPanel.tsx', import.meta.url), 'utf8');
   const onlineShell = readFileSync(new URL('../src/components/caixa/online-menu/CashierOnlineMenu.tsx', import.meta.url), 'utf8');
   const qrLinks = readFileSync(new URL('../src/components/caixa/online-menu/OnlineMenuQrLinks.tsx', import.meta.url), 'utf8');
-  const cashierCss = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+  const cashierCss = readFileSync(new URL('../src/components/shared/operationalWorkspace.css', import.meta.url), 'utf8');
 
   assert.doesNotMatch(onlineShell, /Editar → Publicar → Conferir/);
   assert.doesNotMatch(onlineShell, />\s*1\. Editar|>\s*2\. Publicar|>\s*3\. Conferir/);

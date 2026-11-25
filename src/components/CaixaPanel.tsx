@@ -56,6 +56,7 @@ import { FeatureErrorBoundary } from './shared/FeatureErrorBoundary';
 import { OperationalBanner } from './shared/OperationalBanner';
 import { SidebarProvider } from './ui/sidebar';
 import './caixa/navigation/cashierChrome.css';
+import './shared/operationalWorkspace.css';
 import './caixa/cashRegister.css';
 import './caixa/pdv/cashierPdvVisual.css';
 import './caixa/pdv/cashierPdvCart.css';

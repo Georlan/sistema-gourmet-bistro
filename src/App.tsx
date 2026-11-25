@@ -5,6 +5,7 @@
 
 
 import './components/shared/operationalHeader.css';
+import './components/shared/operationalWorkspace.css';
 import './components/mesas/waiterOperational.css';
 import { snapshotFetch } from './utils/snapshotFetch';
 import { fetchCaixaConfiguracoes } from './utils/caixaConfigClient';

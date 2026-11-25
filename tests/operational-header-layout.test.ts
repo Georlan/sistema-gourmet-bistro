@@ -20,6 +20,10 @@ test('all consumers retain their accessible heading without an indicators widget
 });
 
 test('kanban columns preserve their container-based card layout', () => {
-  const css = readFileSync(new URL('../src/index.css', import.meta.url), 'utf8');
+  const css = readFileSync(new URL('../src/components/shared/operationalWorkspace.css', import.meta.url), 'utf8');
+  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  const caixa = readFileSync(new URL('../src/components/CaixaPanel.tsx', import.meta.url), 'utf8');
   assert.match(css, /\.orders-column\s*\{[^}]*container-type:\s*inline-size;/);
+  assert.match(app, /operationalWorkspace\.css/);
+  assert.match(caixa, /operationalWorkspace\.css/);
 });
