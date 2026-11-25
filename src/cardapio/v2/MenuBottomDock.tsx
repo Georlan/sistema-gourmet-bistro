@@ -70,6 +70,13 @@ function MenuBottomDock({
                 : tab.id === "orders"
                   ? activeOrdersCount
                   : 0;
+            let accessibleLabel: string | undefined;
+            if (tab.id === "account") {
+              accessibleLabel = userFullName || "Minha conta";
+            } else if (tab.id === "bag" && cartCount > 0) {
+              const itemLabel = cartCount === 1 ? "item" : "itens";
+              accessibleLabel = `${tab.label}, ${cartCount} ${itemLabel}, ${brlFormatter.format(cartTotal)}`;
+            }
 
             return (
               <button
@@ -78,7 +85,7 @@ function MenuBottomDock({
                 id={tab.domId}
                 className={`km-dock__btn ${isActive ? "is-active" : ""}`}
                 aria-current={isActive ? "page" : undefined}
-                aria-label={tab.id === "account" ? (userFullName || "Minha conta") : undefined}
+                aria-label={accessibleLabel}
                 onClick={() => onNavigate(tab.id)}
               >
                 {isActive && (
