@@ -1049,7 +1049,7 @@ export default function CardapioCartDrawer({
         )}
 
         {cart.length === 0 ? (
-          <div className="flex min-h-0 flex-1 flex-col items-center justify-start p-6 pb-[calc(94px+env(safe-area-inset-bottom,0px))] md:pb-6 text-center overflow-y-auto overscroll-contain no-scrollbar">
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-start p-6 pb-6 text-center overflow-y-auto overscroll-contain no-scrollbar">
             <div className="mt-6 flex flex-col items-center">
               <KomaBagAsset className="h-20 w-20" />
               <h3 className="mt-4 font-display text-xl font-black text-[var(--km-ink)]">Sua sacola está vazia</h3>
@@ -1979,7 +1979,7 @@ export default function CardapioCartDrawer({
             </div>
 
             {/* Footer Summary & Action */}
-            <div className="shrink-0 border-t border-[var(--km-line-subtle)] bg-[var(--km-panel)] px-4 pt-3 pb-[calc(86px+env(safe-area-inset-bottom,0px))] sm:px-5 sm:pt-5 md:pb-5">
+            <div className="shrink-0 border-t border-[var(--km-line-subtle)] bg-[var(--km-panel)] px-4 pt-3 pb-3 sm:px-5 sm:pt-5 md:pb-5">
               <div className="space-y-1 text-xs">
                 <div className="flex justify-between text-[var(--km-muted)]"><span>Subtotal</span><span className="tabular-nums">{formatPrice(subtotal)}</span></div>
                 {deliveryMethod === "delivery" && (
