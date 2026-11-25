@@ -108,6 +108,7 @@ export interface StoredOrder {
   status?: string;
   state?: OrderStateContract;
   fechado?: boolean;
+  homeAcknowledgedPhase?: OrderPhase;
   itens?: StoredOrderItem[];
   created_at?: string;
   tracking_token?: string;
@@ -263,6 +264,12 @@ export function resolveOrderState(
 }
 
 // Wrappers legados centralizados. Não fazem mais parsing por substring.
+/** Acknowledgement affects the home banner only, never the order/history. */
+export function isOrderVisibleOnHome(order: StoredOrder): boolean {
+  const state = resolveOrderState(order);
+  return !state.terminal || order.homeAcknowledgedPhase !== state.phase;
+}
+
 export function isTerminalStatus(status: string | undefined): boolean {
   return fallbackOrderState(status).terminal;
 }
@@ -307,7 +314,14 @@ function trackingTokenFromOrder(order: Partial<StoredOrder>): string {
 
 /** Reúne somente dados efêmeros removidos intencionalmente do armazenamento local. */
 export function mergeLocalOrderSnapshots(local: StoredOrder[], current: StoredOrder[]): StoredOrder[] {
-  return local.map((order) => {
+  return local.map((snapshot) => {
+    const previousAck = current.find(item => item.id === snapshot.id
+      && item.restaurante_id === snapshot.restaurante_id
+      && !isOrderVisibleOnHome(item));
+    const order = previousAck && resolveOrderState(snapshot).terminal
+      && previousAck.homeAcknowledgedPhase === resolveOrderState(snapshot).phase
+      ? { ...snapshot, homeAcknowledgedPhase: previousAck.homeAcknowledgedPhase }
+      : snapshot;
     if (order.delivery_receipt_code !== undefined || order.fechado || resolveOrderState(order).terminal) return order;
     const token = trackingTokenFromOrder(order);
     const legacyKey = token ? "" : String(order.idempotency_key || "").trim();
@@ -346,6 +360,7 @@ function minimalPersistedOrder(order: StoredOrder, now = Date.now()): StoredOrde
     status: String(order.status || "pendente"),
     state: isOrderStateContract(order.state) ? order.state : undefined,
     fechado: Boolean(order.fechado),
+    homeAcknowledgedPhase: resolveOrderState(order).terminal && order.homeAcknowledgedPhase === resolveOrderState(order).phase ? order.homeAcknowledgedPhase : undefined,
     created_at: order.created_at ? String(order.created_at) : undefined,
     tracking_token: trackingToken || undefined,
     pagamento: order.pagamento ? { ...order.pagamento } : undefined,
@@ -525,7 +540,13 @@ export function updateStoredOrderStatus(
   const index = current.findIndex((item) => item.id === orderId);
   if (index === -1) return;
 
-  current[index] = { ...current[index], ...updates };
+  const previous = current[index];
+  const next = { ...previous, ...updates };
+  if (!next.homeAcknowledgedPhase && !isOrderVisibleOnHome(previous)
+      && resolveOrderState(next).terminal && previous.homeAcknowledgedPhase === resolveOrderState(next).phase) {
+    next.homeAcknowledgedPhase = previous.homeAcknowledgedPhase;
+  }
+  current[index] = next;
   persistStoredOrders(current);
 }
 

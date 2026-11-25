@@ -21,6 +21,7 @@ import {
   clearAllStoredOrders,
   customerOrderLabel,
   fallbackOrderState,
+  isOrderVisibleOnHome,
   loadStoredOrders,
   mergeLocalOrderSnapshots,
   orderFulfillmentLabel,
@@ -768,12 +769,48 @@ test('MenuActiveOrderCard: alternância entre 2 pedidos não vaza status, códig
       fulfillmentLabel: orderFulfillmentLabel(completedState.fulfillment),
       storedOrders: [order1],
       isRefreshingOrders: false,
-      onClearTrackedOrder() {},
+      onDismissTrackedOrder() {},
     }),
   );
   assert.doesNotMatch(terminalView, /123/);
   assert.doesNotMatch(terminalView, /k-delivery-receipt/);
-  assert.match(terminalView, /Fazer novo pedido/);
+  assert.match(terminalView, /Entendi/);
+});
+
+test('home: reconhecer resultado terminal preserva pedido, não esconde ativos ou nova fase', () => {
+  const order: StoredOrder = {
+    id: 'dismiss-1', numero_pedido: 71, timestamp: Date.now(),
+    restaurante_id: 10, tipo: 'Retirada', total: 36.90,
+    idempotency_key: 'legacy-key', status: 'recusado',
+  };
+  saveStoredOrder(order);
+  assert.equal(isOrderVisibleOnHome(loadStoredOrders(10)[0]), true);
+  updateStoredOrderStatus(order.id, { homeAcknowledgedPhase: 'rejected' });
+  const history = loadStoredOrders(10);
+  assert.equal(history.length, 1);
+  assert.equal(history[0].homeAcknowledgedPhase, 'rejected');
+  assert.equal(isOrderVisibleOnHome(history[0]), false);
+  assert.equal(isOrderVisibleOnHome(mergeLocalOrderSnapshots([order], history)[0]), false);
+  updateStoredOrderStatus(order.id, { ...order, homeAcknowledgedPhase: undefined });
+  assert.equal(isOrderVisibleOnHome(loadStoredOrders(10)[0]), false);
+  assert.equal(isOrderVisibleOnHome({ ...history[0], status: 'aceito' }), true);
+  assert.equal(isOrderVisibleOnHome({ ...history[0], status: 'cancelado' }), true);
+  assert.deepEqual(loadStoredOrders(20), []);
+});
+
+test('home: reconhecimento sobrevive à retomada cifrada após fechamento da aba', async () => {
+  installMockIndexedDB();
+  await persistOrderResume({
+    id: 'dismiss-resume', numero_pedido: 71, timestamp: Date.now(),
+    restaurante_id: 10, tipo: 'Retirada', total: 36.90,
+    idempotency_key: '', tracking_token: 'resume-token',
+    status: 'recusado', homeAcknowledgedPhase: 'rejected',
+  });
+  sessionStorage.clear();
+  const restored = await restoreDurableStoredOrders(10);
+  assert.equal(restored.length, 1);
+  assert.equal(restored[0].homeAcknowledgedPhase, 'rejected');
+  assert.equal(isOrderVisibleOnHome(restored[0]), false);
 });
 
 test('DeliveryReceiptCode + menuActiveOrder.css usam tokens --km-* (com fallback legado) sem cores fixas', () => {
