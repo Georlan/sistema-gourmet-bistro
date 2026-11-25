@@ -1,3 +1,4 @@
+import './caixa/kitchen/kdsWorkspace.css';
 import { useMemo } from 'react';
 import type { Order } from '../types';
 import { CashierKitchen } from './caixa/kitchen/CashierKitchen';

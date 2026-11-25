@@ -1,8 +1,6 @@
 import './caixa/orders/fulfillmentBoard.css';
 import { useCashierNotice } from './caixa/navigation/useCashierNotice';
-import { StaffPushNotifications } from './caixa/realtime/StaffPushNotifications';
 import { DirectPixPendingPanel } from './caixa/orders/DirectPixPendingPanel';
-import { KomaBillingNotice } from './caixa/settings/KomaBillingNotice';
 import clsx from 'clsx';
 import { Loader2, Lock, Maximize2, Menu, MessageSquare, Minimize2 } from 'lucide-react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -34,8 +32,6 @@ import { DeferredCashierSection } from './caixa/loading/DeferredCashierSection';
 import { useCashierChat } from './caixa/chat/useCashierChat';
 import { CashierDesktopSidebar } from './caixa/navigation/CashierDesktopSidebar';
 import { CashierMobileBottomBar } from './caixa/navigation/CashierMobileBottomBar';
-import { CashierMobileSidebar } from './caixa/navigation/CashierMobileSidebar';
-import { CashierOperatorDrawer } from './caixa/navigation/CashierOperatorDrawer';
 import { bucketCourierDeliveryOrders } from './caixa/orders/deliveryOrderProjection';
 import { CashierSubNavigation } from './caixa/navigation/CashierSubNavigation';
 import { shouldShowSalon } from '../domain/cashierSalonVisibility';
@@ -52,11 +48,11 @@ import { useCashierPdv } from './caixa/pdv/useCashierPdv';
 import { useCashierAlerts } from './caixa/realtime/useCashierAlerts';
 import { useCashierClock } from './caixa/realtime/useCashierClock';
 import { useCashierRealtime } from './caixa/realtime/useCashierRealtime';
-import { CaixaSalonTab } from './caixa/salao/CaixaSalonTab';
 import { useCashierSalonProjection } from './caixa/salao/useCashierSalonProjection';
 import { useCashierSettings } from './caixa/settings/useCashierSettings';
 import { useCashShift } from './caixa/shift/useCashShift';
 import { useCashierSmartPos } from './caixa/smartpos/useCashierSmartPos';
+import { FeatureErrorBoundary } from './shared/FeatureErrorBoundary';
 import { OperationalBanner } from './shared/OperationalBanner';
 import { SidebarProvider } from './ui/sidebar';
 import './caixa/navigation/cashierChrome.css';
@@ -94,6 +90,16 @@ const loadCaixaTurnoAtualTab = () => import('./caixa/CaixaTurnoAtualTab').then(m
 const loadCaixaMovimentacoesTab = () => import('./caixa/CaixaMovimentacoesTab').then(module => ({ default: module.CaixaMovimentacoesTab }));
 const loadCashierKitchen = () => import('./caixa/kitchen/CashierKitchen').then(module => ({ default: module.CashierKitchen }));
 const loadCashierConversationsDrawer = () => import('./caixa/chat/CashierConversationsDrawer');
+const loadCaixaSalonTab = () => import('./caixa/salao/CaixaSalonTab').then(module => ({ default: module.CaixaSalonTab }));
+const CaixaSalonTab = React.lazy(loadCaixaSalonTab);
+const loadCashierMobileSidebar = () => import('./caixa/navigation/CashierMobileSidebar').then(module => ({ default: module.CashierMobileSidebar }));
+const loadCashierOperatorDrawer = () => import('./caixa/navigation/CashierOperatorDrawer').then(module => ({ default: module.CashierOperatorDrawer }));
+const loadStaffPushNotifications = () => import('./caixa/realtime/StaffPushNotifications').then(module => ({ default: module.StaffPushNotifications }));
+const loadKomaBillingNotice = () => import('./caixa/settings/KomaBillingNotice').then(module => ({ default: module.KomaBillingNotice }));
+const CashierMobileSidebar = React.lazy(loadCashierMobileSidebar);
+const CashierOperatorDrawer = React.lazy(loadCashierOperatorDrawer);
+const StaffPushNotifications = React.lazy(loadStaffPushNotifications);
+const KomaBillingNotice = React.lazy(loadKomaBillingNotice);
 const LazySangriaModal = React.lazy(() => import('./caixa/SangriaModal').then(module => ({ default: module.SangriaModal })));
 const LazySuprimentoModal = React.lazy(() => import('./caixa/SuprimentoModal').then(module => ({ default: module.SuprimentoModal })));
 const CheckoutDialog = React.lazy(() => import('./caixa/checkout/CheckoutDialog').then(module => ({ default: module.CheckoutDialog })));
@@ -505,8 +511,14 @@ export function CaixaPanel({
     window.addEventListener('koma-open-suprimento', handleOpenSuprimento);
     window.addEventListener('koma-sync-all', handleSyncAll);
     window.addEventListener('koma-open-impressoras', handleOpenImpressoras);
+    const prewarmTimer = window.setTimeout(() => {
+      void loadCaixaSalonTab().catch(() => null);
+      void loadCashierMobileSidebar().catch(() => null);
+      void loadCashierOperatorDrawer().catch(() => null);
+    }, 900);
 
     return () => {
+      window.clearTimeout(prewarmTimer);
       window.removeEventListener('koma-open-sangria', handleOpenSangria);
       window.removeEventListener('koma-open-suprimento', handleOpenSuprimento);
       window.removeEventListener('koma-sync-all', handleSyncAll);
@@ -788,29 +800,35 @@ export function CaixaPanel({
         </div>
       )}
       <SidebarProvider className="contents">
-        <CashierMobileSidebar
-          isMobileSidebarOpen={isMobileSidebarOpen}
-          setIsMobileSidebarOpen={setIsMobileSidebarOpen}
-          setIsOperatorDrawerOpen={setIsOperatorDrawerOpen}
-          turno={turno}
-          turnoLoadState={turnoLoadState}
-          setShowAbrirModal={setShowAbrirModal}
-          planId={currentPlanId}
-          entitlements={planEntitlements}
-            showSalon={showSalon}
-          hasOnlineMenu={hasOnlineMenu}
-          isWsConnected={isWsConnected}
-          isSidebarTabActive={isSidebarTabActive}
-          sidebarOrderCount={sidebarOrderCount}
-          handleSidebarNavigation={handleSidebarNavigation}
-          changeFontSize={changeFontSize}
-          fontSize={fontSize}
-          setTheme={setTheme}
-          theme={theme}
-          activeWaiterNome={activeWaiterNome}
-          restaurantName={String(restauranteConfig?.nome || 'KÔMA')}
-          restaurantLogo={String(restauranteConfig?.logo_url || '')}
-        />
+        {isMobileSidebarOpen && (
+          <FeatureErrorBoundary label="Menu principal">
+            <React.Suspense fallback={null}>
+              <CashierMobileSidebar
+                isMobileSidebarOpen={isMobileSidebarOpen}
+                setIsMobileSidebarOpen={setIsMobileSidebarOpen}
+                setIsOperatorDrawerOpen={setIsOperatorDrawerOpen}
+                turno={turno}
+                turnoLoadState={turnoLoadState}
+                setShowAbrirModal={setShowAbrirModal}
+                planId={currentPlanId}
+                entitlements={planEntitlements}
+                  showSalon={showSalon}
+                hasOnlineMenu={hasOnlineMenu}
+                isWsConnected={isWsConnected}
+                isSidebarTabActive={isSidebarTabActive}
+                sidebarOrderCount={sidebarOrderCount}
+                handleSidebarNavigation={handleSidebarNavigation}
+                changeFontSize={changeFontSize}
+                fontSize={fontSize}
+                setTheme={setTheme}
+                theme={theme}
+                activeWaiterNome={activeWaiterNome}
+                restaurantName={String(restauranteConfig?.nome || 'KÔMA')}
+                restaurantLogo={String(restauranteConfig?.logo_url || '')}
+              />
+            </React.Suspense>
+          </FeatureErrorBoundary>
+        )}
 
         <CashierDesktopSidebar
           setIsOperatorDrawerOpen={setIsOperatorDrawerOpen}
@@ -911,9 +929,17 @@ export function CaixaPanel({
             </div>
           </header>
 
-          <StaffPushNotifications key={authHeaders.Authorization} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onOpenOrders={() => handleSidebarNavigation('vendas_pedidos')} />
+          <FeatureErrorBoundary label="Notificações">
+            <React.Suspense fallback={null}>
+              <StaffPushNotifications key={authHeaders.Authorization} apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onOpenOrders={() => handleSidebarNavigation('vendas_pedidos')} />
+            </React.Suspense>
+          </FeatureErrorBoundary>
 
-          <KomaBillingNotice apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onOpenBilling={(consolidated)=>{setActiveTab(consolidated ? 'configuracoes' : 'assinatura_pix');setActiveSubTab(consolidated ? 'integracoes' : 'contrato_documentos');}} />
+          <FeatureErrorBoundary label="Aviso de cobrança">
+            <React.Suspense fallback={null}>
+              <KomaBillingNotice apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} onOpenBilling={(consolidated)=>{setActiveTab(consolidated ? 'configuracoes' : 'assinatura_pix');setActiveSubTab(consolidated ? 'integracoes' : 'contrato_documentos');}} />
+            </React.Suspense>
+          </FeatureErrorBoundary>
 
           <CashierSubNavigation
             activeTab={activeTab}
@@ -1031,17 +1057,21 @@ export function CaixaPanel({
             <DeferredCashierSection active={activeTab === 'operacao' && activeSubTab === 'balcao'} label="Novo pedido" load={loadCashierPdvView} sectionProps={{ activeSubTab, catalogReady, isLoading, pdvTableOptions, pdv }} />
 
             {activeTab === 'operacao' && activeSubTab === 'mesas' && (
-              <CaixaSalonTab
-                cards={salonTableCards}
-                visibleCards={visibleSalonTableCards}
-                counts={tableStatusCounts}
-                filter={tableStatusFilter}
-                onFilterChange={setTableStatusFilter}
-                search={tableSearch}
-                onSearchChange={setTableSearch}
-                fetchError={fetchError}
-                actions={{ inspectTable: handleInspectSalonTable, openTableOrder: handleOpenSalonTableOrder }}
-              />
+              <FeatureErrorBoundary label="Salão">
+                <React.Suspense fallback={null}>
+                  <CaixaSalonTab
+                    cards={salonTableCards}
+                    visibleCards={visibleSalonTableCards}
+                    counts={tableStatusCounts}
+                    filter={tableStatusFilter}
+                    onFilterChange={setTableStatusFilter}
+                    search={tableSearch}
+                    onSearchChange={setTableSearch}
+                    fetchError={fetchError}
+                    actions={{ inspectTable: handleInspectSalonTable, openTableOrder: handleOpenSalonTableOrder }}
+                  />
+                </React.Suspense>
+              </FeatureErrorBoundary>
             )}
 
             <DeferredCashierSection
@@ -1490,20 +1520,26 @@ export function CaixaPanel({
           </React.Suspense>
         )}
 
-        <CashierOperatorDrawer
-          isOperatorDrawerOpen={isOperatorDrawerOpen}
-          setIsOperatorDrawerOpen={setIsOperatorDrawerOpen}
-          activeWaiterNome={activeWaiterNome}
-          handleLogoutOperator={handleLogoutOperator}
-          onRefreshOrders={onRefreshOrders}
-          showToast={showToast}
-          restaurantName={String(restauranteConfig?.nome || 'KÔMA')}
-          isWsConnected={isWsConnected}
-          soundEnabled={soundEnabled}
-          toggleSound={toggleSound}
-          audioReady={audioReady}
-          activateAudio={activateAudio}
-        />
+        {isOperatorDrawerOpen && (
+          <FeatureErrorBoundary label="Menu do operador">
+            <React.Suspense fallback={null}>
+              <CashierOperatorDrawer
+                isOperatorDrawerOpen={isOperatorDrawerOpen}
+                setIsOperatorDrawerOpen={setIsOperatorDrawerOpen}
+                activeWaiterNome={activeWaiterNome}
+                handleLogoutOperator={handleLogoutOperator}
+                onRefreshOrders={onRefreshOrders}
+                showToast={showToast}
+                restaurantName={String(restauranteConfig?.nome || 'KÔMA')}
+                isWsConnected={isWsConnected}
+                soundEnabled={soundEnabled}
+                toggleSound={toggleSound}
+                audioReady={audioReady}
+                activateAudio={activateAudio}
+              />
+            </React.Suspense>
+          </FeatureErrorBoundary>
+        )}
 
         <DeferredCashierSection
           key={authHeaders.Authorization}

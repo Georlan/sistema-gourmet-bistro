@@ -5,7 +5,6 @@
 
 
 import './components/shared/operationalHeader.css';
-import './components/caixa/kitchen/kdsWorkspace.css';
 import './components/mesas/waiterOperational.css';
 import { snapshotFetch } from './utils/snapshotFetch';
 import { fetchCaixaConfiguracoes } from './utils/caixaConfigClient';
@@ -23,20 +22,17 @@ import {
 import { useCashierBootstrap } from './components/app/data/useCashierBootstrap';
 import { useOperationalOrders } from './components/app/data/useOperationalOrders';
 import { useOperationalTables } from './components/app/data/useOperationalTables';
-import { WaiterHistoryHost } from './components/app/WaiterHistoryHost';
 import { openWaiterHistory } from './components/app/waiterHistoryEvents';
 import { useOperationalDrafts } from './components/app/drafts/useOperationalDrafts';
 import { OperationalSnapshotLoading } from './components/app/OperationalSnapshotLoading';
-import { KitchenPanel } from './components/KitchenPanel';
 import { confirmKdsBatch } from './components/caixa/kitchen/confirmKdsBatch';
 import { KomaLogo } from './components/KomaLogo';
-import { MesaDetailsModal } from './components/MesaDetailsModal';
 import { AppRouteBoundary } from './components/app/AppRouteBoundary';
-import { OperationalDrawer } from './components/app/OperationalDrawer';
+import type { OperationalDrawerProps } from './components/app/OperationalDrawer';
+import { FeatureErrorBoundary } from './components/shared/FeatureErrorBoundary';
 import { SupportSessionBanner } from './components/app/SupportSessionBanner';
 import { OperationalLogin } from './components/auth/OperationalLogin';
 import { WaiterServiceArtwork } from './components/mesas/WaiterServiceArtwork';
-import { MesasView } from './components/mesas/MesasView';
 import { API_BASE_URL, WS_BASE_URL } from './config/api';
 import { KOMA_THEME_CHANGED_EVENT, nextKomaTheme, persistKomaTheme, readKomaTheme, type KomaTheme } from './config/theme';
 import {
@@ -76,6 +72,21 @@ const loadMemoizedCaixaPanel = () =>
     default: module.MemoizedCaixaPanel
   }));
 const MemoizedCaixaPanel = React.lazy(loadMemoizedCaixaPanel);
+const loadKitchenPanel = () =>
+  import('./components/KitchenPanel').then(module => ({ default: module.KitchenPanel }));
+const KitchenPanel = React.lazy(loadKitchenPanel);
+const loadMesasView = () =>
+  import('./components/mesas/MesasView').then(module => ({ default: module.MesasView }));
+const MesasView = React.lazy(loadMesasView);
+const loadMesaDetailsModal = () =>
+  import('./components/MesaDetailsModal').then(module => ({ default: module.MesaDetailsModal }));
+const MesaDetailsModal = React.lazy(loadMesaDetailsModal);
+const loadOperationalDrawer = () =>
+  import('./components/app/OperationalDrawer').then(module => ({ default: module.OperationalDrawer as React.ComponentType<OperationalDrawerProps> }));
+const OperationalDrawer = React.lazy(loadOperationalDrawer);
+const loadWaiterHistoryHost = () =>
+  import('./components/app/WaiterHistoryHost').then(module => ({ default: module.WaiterHistoryHost }));
+const WaiterHistoryHost = React.lazy(loadWaiterHistoryHost);
 
 const CashierLoading = () => (
   <div className="w-full h-full bg-koma-page text-koma-accent flex items-center justify-center font-mono text-[10px] uppercase tracking-[0.18em]">
@@ -247,8 +258,17 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
       });
       if (activeRole === 'atendente') {
         void loadAttendantQuickOrderPanel().catch(() => null);
+      } else if (activeRole === 'cozinha') {
+        void loadKitchenPanel().catch(() => null);
       } else if (isManagementRole(activeRole)) {
         void loadMemoizedCaixaPanel().catch(() => null);
+      } else {
+        void loadMesasView().catch(() => null);
+        void loadMesaDetailsModal().catch(() => null);
+        void loadOperationalDrawer().catch(() => null);
+        if (activeRole === 'garcom') {
+          void loadWaiterHistoryHost().catch(() => null);
+        }
       }
     } else {
       resetAnalytics();
@@ -1925,40 +1945,48 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
 
       {/* LATERAL DRAWER MENU */}
       {isSidebarOpen && (
-        <OperationalDrawer
-          portal={portal}
-          showOperationalStatus={restauranteConfig?.perm_garcom_status !== false}
-          restaurantName={restaurantName}
-          activeWaiterName={activeWaiter.nome}
-          waiterAvailable={waiterAvailable}
-          orders={orders}
-          tableCounts={tableCounts}
-          turnoResumo={turnoResumo}
-          settings={settings}
-          theme={theme}
-          onWaiterAvailabilityChange={setWaiterAvailable}
-          onSettingsChange={setSettings}
-          onToggleTheme={toggleTheme}
-          onClose={() => setIsSidebarOpen(false)}
-          onLogout={handleLogout}
-          onOpenHistory={openWaiterHistory}
-          onOpenTable={handleTableClick}
-          onSyncSalon={() => {
-            fetchOrdersFromAPI();
-            fetchTables();
-          }}
-        />
+        <FeatureErrorBoundary label="Menu operacional">
+          <React.Suspense fallback={null}>
+            <OperationalDrawer
+              portal={portal}
+              showOperationalStatus={restauranteConfig?.perm_garcom_status !== false}
+              restaurantName={restaurantName}
+              activeWaiterName={activeWaiter.nome}
+              waiterAvailable={waiterAvailable}
+              orders={orders}
+              tableCounts={tableCounts}
+              turnoResumo={turnoResumo}
+              settings={settings}
+              theme={theme}
+              onWaiterAvailabilityChange={setWaiterAvailable}
+              onSettingsChange={setSettings}
+              onToggleTheme={toggleTheme}
+              onClose={() => setIsSidebarOpen(false)}
+              onLogout={handleLogout}
+              onOpenHistory={openWaiterHistory}
+              onOpenTable={handleTableClick}
+              onSyncSalon={() => {
+                fetchOrdersFromAPI();
+                fetchTables();
+              }}
+            />
+          </React.Suspense>
+        </FeatureErrorBoundary>
       )}
 
       {/* MAIN CONTAINER */}
       <main className="flex-1 max-w-[1680px] w-full mx-auto px-3 sm:px-6 lg:px-10 py-4 sm:py-7 space-y-4 sm:space-y-7">
         {activeRole === 'cozinha' ? (
-          <KitchenPanel
-            orders={orders}
-            onFinishPreparation={handleFinishPreparation}
-            onFinishPreparationBatch={handleFinishPreparationBatch}
-            onRefreshOrders={fetchOrdersFromAPI}
-          />
+          <FeatureErrorBoundary label="Cozinha">
+            <React.Suspense fallback={<CashierLoading />}>
+              <KitchenPanel
+                orders={orders}
+                onFinishPreparation={handleFinishPreparation}
+                onFinishPreparationBatch={handleFinishPreparationBatch}
+                onRefreshOrders={fetchOrdersFromAPI}
+              />
+            </React.Suspense>
+          </FeatureErrorBoundary>
         ) : isManagementRole(activeRole) ? (
           <React.Suspense fallback={<CashierLoading />}>
             <MemoizedCaixaPanel
@@ -1997,27 +2025,35 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           </React.Suspense>
         ) : (
           /* VIEW 2: SALÃO (WAITERS OR CASHIER DASHBOARD) */
-          <MesasView
-            rows={waiterTableRows}
-            salonTables={salonTables}
-            orders={orders}
-            draftItemsMap={drafts}
-            activeDrafts={activeDrafts}
-            pagamentosPendentes={pagamentosPendentes}
-            activeWaiterId={activeWaiterId}
-            currentTime={currentTime}
-            onTableClick={handleTableClick}
-            onOpenOrderEntry={handleOpenOrderEntry}
-            onOpenConsumption={handleOpenConsumption}
-            tableFilter={tableFilter}
-            onFilterChange={setTableFilter}
-            showOperationalStatus={isConfigLoaded && restauranteConfig?.perm_garcom_status !== false}
-          />
+          <FeatureErrorBoundary label="Salão">
+            <React.Suspense fallback={<CashierLoading />}>
+              <MesasView
+                rows={waiterTableRows}
+                salonTables={salonTables}
+                orders={orders}
+                draftItemsMap={drafts}
+                activeDrafts={activeDrafts}
+                pagamentosPendentes={pagamentosPendentes}
+                activeWaiterId={activeWaiterId}
+                currentTime={currentTime}
+                onTableClick={handleTableClick}
+                onOpenOrderEntry={handleOpenOrderEntry}
+                onOpenConsumption={handleOpenConsumption}
+                tableFilter={tableFilter}
+                onFilterChange={setTableFilter}
+                showOperationalStatus={isConfigLoaded && restauranteConfig?.perm_garcom_status !== false}
+              />
+            </React.Suspense>
+          </FeatureErrorBoundary>
         )}
 
       </main>
 
-      {activeRole === 'garcom' && <WaiterHistoryHost key={draftScopeKey} getAuthHeaders={getAuthHeaders} />}
+      {activeRole === 'garcom' && (
+        <React.Suspense fallback={null}>
+          <WaiterHistoryHost key={draftScopeKey} getAuthHeaders={getAuthHeaders} />
+        </React.Suspense>
+      )}
       {/* FOOTER */}
       <footer className={"kw-footer bg-koma-page text-koma-muted border-t border-white/[0.06] py-4 text-center text-xs shrink-0 font-sans"}>
         <div className={"max-w-[1680px] mx-auto px-4 flex items-center justify-center gap-2"}>
@@ -2046,8 +2082,10 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
           .map(gId => activeDrafts[selectedTable.id][gId].garcomNome);
 
         return (
-          <MesaDetailsModal
-            key={`${selectedTable.id}-${targetModalTabRef.current || 'default'}`}
+          <FeatureErrorBoundary label="Detalhes da mesa">
+            <React.Suspense fallback={null}>
+              <MesaDetailsModal
+                key={`${selectedTable.id}-${targetModalTabRef.current || 'default'}`}
             initialTab={targetModalTabRef.current}
             initialReadyOnly={tableFilter === 'prontas' && restauranteConfig?.perm_garcom_status !== false}
             table={selectedTable}
@@ -2096,6 +2134,8 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
             onMergeTables={handleMergeTables}
             onUnmergeTable={handleUnmergeTable}
           />
+            </React.Suspense>
+          </FeatureErrorBoundary>
         );
       })()}
 
