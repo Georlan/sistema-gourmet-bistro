@@ -245,13 +245,12 @@ test('promoções universais suportam Compre e Ganhe (brinde simples ou produto)
   assert.equal(getPromotionTypeLabel('desconto_item'), 'Desconto agendado');
 });
 
-test('PromotionsSettings e MarmitariaOfferTemplates não possuem hardcodes de tenant/produto/preço nem drawer de bebida oculta', () => {
+test('PromotionsSettings não possui hardcodes de tenant/produto/preço nem drawer de bebida oculta', () => {
   const settings = source('../src/components/cardapio/PromotionsSettings.tsx');
-  const legacyTemplates = source('../src/components/cardapio/MarmitariaOfferTemplates.tsx');
   const publicPage = source('../src/cardapio/CardapioPage.tsx');
   const wizard = source('../src/cardapio/components/CardapioPromotionWizard.tsx');
 
-  for (const content of [settings, legacyTemplates]) {
+  for (const content of [settings]) {
     assert.doesNotMatch(content, /pitulinha|pithulinha|pituchulinha|pitchulinha/i);
     assert.doesNotMatch(content, /R\$\s*22|R\$\s*16|22\.00|16\.00/);
     assert.doesNotMatch(content, /bebida-combo|Cadastrar bebida exclusiva para o combo|Criar bebida apenas para promoções/);

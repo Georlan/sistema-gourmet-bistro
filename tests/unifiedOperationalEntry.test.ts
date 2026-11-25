@@ -123,10 +123,6 @@ test('operational staff links and mockups eliminate legacy URLs in favor of app.
   assert.doesNotMatch(modal, /-caixa\.komafood\.com\.br/);
   assert.doesNotMatch(modal, /-garcom\.komafood\.com\.br/);
 
-  const desktopFrame = source('../src/landing/product/DesktopFrame.tsx');
-  assert.match(desktopFrame, /app\.komafood\.com\.br/);
-  assert.doesNotMatch(desktopFrame, /sistema-gourmet-bistro\.pages\.dev/);
-
   const landing = source('../src/landing/seo.ts');
   assert.match(landing, /https:\/\/komafood\.com\.br\//);
   assert.doesNotMatch(landing, /https:\/\/komafood\.com\.br\/landing/);

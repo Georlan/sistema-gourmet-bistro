@@ -7,7 +7,7 @@
 - O PNG conserva os detalhes do render gerado, sem ampliação artificial, com recorte do espaço externo sem uso.
 - `EditableTabletFrame` posiciona HTML ou captura em uma camada separada, com perspectiva calculada para cada largura.
 - `TabletFrame` fornece a demonstração atual. Usado na abertura e na aba Cozinha; notebook e celular continuam preservados.
-- Arquivo do tablet anterior mantido em `src/assets/koma-tablet-shell-3d.png` e código anterior disponível no histórico Git.
+- Arquivo do tablet anterior (`src/assets/koma-tablet-shell-3d.png`) e código anterior disponíveis no histórico Git.
 
 ## Trocar por prints reais
 
