@@ -25,7 +25,7 @@ export interface MenuActiveOrderCardProps {
   onSelectOrderId?: (id: string) => void;
   onPayPixClick?: (order: StoredOrder) => void;
   onRefreshOrders?: () => void;
-  onClearTrackedOrder?: (orderId: string) => void;
+  onDismissTrackedOrder?: (orderId: string) => void;
   onOrdersClick?: () => void;
 }
 
@@ -80,7 +80,7 @@ export function MenuActiveOrderCard({
   onSelectOrderId,
   onPayPixClick,
   onRefreshOrders,
-  onClearTrackedOrder,
+  onDismissTrackedOrder,
   onOrdersClick,
 }: MenuActiveOrderCardProps) {
   if (!activeOrder || !activeState) return null;
@@ -96,7 +96,7 @@ export function MenuActiveOrderCard({
     <section
       id={id}
       className={`km-order-card${isAlertState ? " km-order-card--alert" : ""}`}
-      aria-label="Pedido em andamento"
+      aria-label={activeState.terminal ? "Resultado do pedido" : "Pedido em andamento"}
       data-order-id={activeOrder.id}
       data-order-phase={activeState.phase}
     >
@@ -172,13 +172,13 @@ export function MenuActiveOrderCard({
             </button>
           )}
 
-          {activeState.terminal && onClearTrackedOrder ? (
+          {activeState.terminal && onDismissTrackedOrder ? (
             <button
               type="button"
               className="km-order-card__cta"
-              onClick={() => onClearTrackedOrder(activeOrder.id)}
+              onClick={() => onDismissTrackedOrder(activeOrder.id)}
             >
-              Fazer novo pedido
+              Entendi
             </button>
           ) : (
             onOrdersClick && (
