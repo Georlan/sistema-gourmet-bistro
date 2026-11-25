@@ -119,7 +119,7 @@ interface CardapioDigitalProps {
   onClose: () => void;
   onEditCart?: () => void;
   onOrderCreated?: (order: CreatedOrder) => void;
-  onOrderSuccess: (order: CreatedOrder) => void;
+  onOrderSuccess: (order: CreatedOrder, openOrdersDrawer?: boolean) => void;
   onCreateAccount?: () => void;
   onSessionExpired?: () => void;
   isLocalSimulation?: boolean;
@@ -740,15 +740,7 @@ export default function CardapioDigital({
 
   const handleFinish = (openOrdersDrawer = false) => {
     if (!createdOrder) return;
-    const finishedOrder = createdOrder;
-    onOrderSuccess(finishedOrder);
-    if (openOrdersDrawer && typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("koma:open-orders-drawer", {
-          detail: { orderId: finishedOrder.comanda_id },
-        }),
-      );
-    }
+    onOrderSuccess(createdOrder, openOrdersDrawer);
   };
 
   const isCreatedOrderScheduled = Boolean(createdOrder?.scheduled_for);

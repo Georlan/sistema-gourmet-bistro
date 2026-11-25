@@ -279,6 +279,80 @@ test('sacola abre no primeiro toque real pela navegação móvel', async ({ page
   await expect(page.locator('#btn-cart-header')).toBeHidden();
 });
 
+test('dock mantém uma superfície ativa e preserva a sacola ao alternar por toque', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-390', 'Toque real no dock mobile.');
+  const capturedOrders: CapturedOrder[] = [];
+  await mockPublicMenuBackend(page, capturedOrders);
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}`);
+  await page.locator('#btn-fast-add-101').tap();
+  const cart = page.locator('#cart-drawer-container');
+  const orders = page.locator('#orders-drawer-panel');
+  const auth = page.locator('#auth-modal-overlay');
+  const dock = page.locator('#koma-art-dock');
+  const tapTab = async (tab: string) => {
+    const button = dock.locator(`#mobile-nav-${tab}`);
+    await button.tap();
+    await expect(button).toHaveAttribute('aria-current', 'page');
+  };
+  await page.getByRole('button', { name: 'Ver sacola com 1 item' }).tap();
+  await expect(cart).toBeVisible();
+  await expect(orders).toBeHidden();
+  for (let i = 0; i < 3; i++) {
+    await tapTab('orders');
+    await expect(orders.getByText('Nenhum pedido por aqui ainda')).toBeVisible();
+    await expect(cart).toBeHidden();
+    await tapTab('cart');
+    await expect(cart).toBeVisible();
+    await expect(orders).toBeHidden();
+    await expect(cart.getByRole('heading', { name: '1× Pizza Margherita', exact: true })).toBeVisible();
+    await tapTab('account');
+    await expect(auth).toBeVisible();
+    await expect(cart).toBeHidden();
+    await tapTab('home');
+    await expect(auth).toBeHidden();
+    await expect(orders).toBeHidden();
+    await expect(cart).toBeHidden();
+  }
+  await tapTab('orders');
+  await orders.getByRole('button', { name: 'Fechar', exact: true }).tap();
+  await tapTab('cart');
+  await expect(cart).toBeVisible();
+  await page.locator('#btn-close-cart').tap();
+  await tapTab('orders');
+  await expect(orders).toBeVisible();
+  await tapTab('cart');
+  await expect(cart).toBeVisible();
+  await expect(orders).toBeHidden();
+  await expect(cart.getByRole('heading', { name: '1× Pizza Margherita', exact: true })).toBeVisible();
+  expect(capturedOrders).toHaveLength(0);
+});
+
+test('retomada por notificação não disputa o controle do dock com a sacola', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-390', 'Toque real no dock mobile.');
+  await page.addInitScript(() => {
+    localStorage.setItem('koma_active_orders', JSON.stringify([{
+      id: 'pedido-e2e-push', numero_pedido: 4321, restaurante_id: 2,
+      tipo: 'Retirada', total: 48, timestamp: Date.now(), status: 'pendente',
+      idempotency_key: 'push-e2e-key', tracking_token: 'qa-capability-token',
+    }]));
+  });
+  await mockPublicMenuBackend(page, []);
+  await page.goto(`/cardapio?restaurante_id=2&vitrine=${variant}#koma-order=pedido-e2e-push`);
+  await expect(page.locator('#orders-drawer-panel')).toBeVisible();
+  await expect(page.locator('#mobile-nav-orders')).toHaveAttribute('aria-current', 'page');
+  await page.locator('#mobile-nav-home').tap();
+  await expect(page.locator('#orders-drawer-panel')).toBeHidden();
+  await page.locator('#btn-fast-add-101').tap();
+  await page.getByRole('button', { name: 'Ver sacola com 1 item' }).tap();
+  await expect(page.locator('#cart-drawer-container')).toBeVisible();
+  await expect(page.locator('#orders-drawer-panel')).toBeHidden();
+  await page.locator('#mobile-nav-orders').tap();
+  await expect(page.locator('#orders-drawer-panel')).toBeVisible();
+  await page.locator('#mobile-nav-cart').tap();
+  await expect(page.locator('#cart-drawer-container')).toBeVisible();
+  await expect(page.locator('#orders-drawer-panel')).toBeHidden();
+});
+
 async function fillDeliveryAddress(page: Page) {
   await page.locator('#cart-drawer-container').getByRole('button', { name: 'Receber', exact: true }).click();
   await page.locator('#delivery-address-bairro').fill('Centro');

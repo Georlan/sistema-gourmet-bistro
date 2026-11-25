@@ -44,6 +44,8 @@ interface CardapioOrdersDrawerProps {
   restaurantPhone?: string | null;
   isOpen: boolean;
   onClose: () => void;
+  onOpen: () => void;
+  canOpen: boolean;
   orders: StoredOrder[];
   selectedOrderId: string | null;
   onSelectOrder: (orderId: string) => void;
@@ -98,6 +100,8 @@ export default function CardapioOrdersDrawer({
   restaurantId,
   restaurantPhone,
   isOpen,
+  onOpen,
+  canOpen,
   onClose,
   orders,
   selectedOrderId,
@@ -112,7 +116,6 @@ export default function CardapioOrdersDrawer({
 }: CardapioOrdersDrawerProps) {
   const [chatOrderId, setChatOrderId] = React.useState<string | null>(null);
   const [pixModalOrder, setPixModalOrder] = React.useState<StoredOrder | null>(null);
-  const [floatingOpen, setFloatingOpen] = React.useState(false);
   const [receiptByOrder, setReceiptByOrder] = React.useState<Record<string, string | null>>({});
   const [unreadByOrder, setUnreadByOrder] = React.useState<Record<string, number>>({});
   const [requestedPushOrder, setRequestedPushOrder] = React.useState<RequestedPushOrder | null>(
@@ -121,11 +124,10 @@ export default function CardapioOrdersDrawer({
   const chatOrderIdRef = React.useRef<string | null>(null);
   const seenRealtimeMessageIdsRef = React.useRef<Set<string>>(new Set());
   const prevIsOpenRef = React.useRef(isOpen);
-  const drawerOpen = isOpen || floatingOpen;
+  const drawerOpen = isOpen;
 
   React.useEffect(() => {
     if (prevIsOpenRef.current && !isOpen) {
-      setFloatingOpen(false);
       setChatOrderId(null);
       setPixModalOrder(null);
     }
@@ -435,7 +437,7 @@ export default function CardapioOrdersDrawer({
   }, []);
 
   React.useEffect(() => {
-    if (!requestedPushOrder) return;
+    if (!requestedPushOrder || !canOpen) return;
     const order = orders.find((candidate) => (
       candidate.id === requestedPushOrder.orderId
       && (
@@ -446,7 +448,7 @@ export default function CardapioOrdersDrawer({
     if (!order || !resolveTrackingToken(order)) return;
 
     openChat(order.id);
-    setFloatingOpen(true);
+    onOpen();
     setRequestedPushOrder(null);
 
     if (window.location.hash.startsWith("#koma-order=")) {
@@ -456,31 +458,16 @@ export default function CardapioOrdersDrawer({
         `${window.location.pathname}${window.location.search}`,
       );
     }
-  }, [openChat, orders, requestedPushOrder]);
-
-  React.useEffect(() => {
-    const handleOpenOrdersDrawer = (event: Event) => {
-      const detail = (event as CustomEvent<{ orderId?: string }>).detail;
-      if (detail?.orderId) {
-        onSelectOrder(detail.orderId);
-      }
-      setChatOrderId(null);
-      setFloatingOpen(true);
-    };
-    window.addEventListener("koma:open-orders-drawer", handleOpenOrdersDrawer);
-    return () => {
-      window.removeEventListener("koma:open-orders-drawer", handleOpenOrdersDrawer);
-    };
-  }, [onSelectOrder]);
+  }, [openChat, orders, requestedPushOrder, onOpen, canOpen]);
 
   const openFloatingChat = React.useCallback(() => {
     if (preferredChatOrder) openChat(preferredChatOrder.id);
-    setFloatingOpen(true);
-  }, [openChat, preferredChatOrder]);
+    onOpen();
+  }, [openChat, preferredChatOrder, onOpen]);
 
   const closeDrawer = React.useCallback(() => {
-    setFloatingOpen(false);
     setChatOrderId(null);
+    setPixModalOrder(null);
     onClose();
   }, [onClose]);
 
@@ -498,6 +485,7 @@ export default function CardapioOrdersDrawer({
   };
 
   if (!drawerOpen) {
+    if (!canOpen) return null;
     const displayOrder = preferredChatOrder || activeOrders[0] || null;
     const displayState = displayOrder ? resolveOrderState(displayOrder) : null;
     const isChatAvailable = Boolean(displayOrder && resolveTrackingToken(displayOrder) && displayState?.can_chat);
@@ -506,7 +494,7 @@ export default function CardapioOrdersDrawer({
     return (
       <div
         className={clsx(
-          "hidden sm:block fixed right-4 z-40 sm:right-6 transition-[opacity,transform] duration-300 pointer-events-auto",
+          "hidden md:block fixed right-4 z-40 sm:right-6 transition-[opacity,transform] duration-300 pointer-events-auto",
           hasFloatingCart
             ? "bottom-[calc(6.75rem+env(safe-area-inset-bottom,0px))]"
             : "bottom-5 sm:bottom-6 pb-[env(safe-area-inset-bottom,0px)]"
@@ -519,7 +507,7 @@ export default function CardapioOrdersDrawer({
             if (preferredChatOrder) {
               openFloatingChat();
             } else {
-              setFloatingOpen(true);
+              onOpen();
             }
           }}
           className={clsx(

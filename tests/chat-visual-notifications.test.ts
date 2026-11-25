@@ -19,7 +19,9 @@ test('cardapio mantém um gatilho flutuante de chat dentro da própria página',
   assert.match(drawer, /floating-order-chat-trigger/);
   assert.match(drawer, /Chat do pedido/);
   assert.match(drawer, /Fale com o restaurante/);
-  assert.match(drawer, /setFloatingOpen\(true\)/);
+  assert.match(drawer, /onOpen\(\)/);
+  assert.match(drawer, /const drawerOpen = isOpen;/);
+  assert.doesNotMatch(drawer, /setFloatingOpen/);
   assert.match(drawer, /onClose=\{closeDrawer\}/);
 });
 

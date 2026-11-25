@@ -1156,13 +1156,7 @@ export default function MenuV2Experience({
               exit={{ opacity: 0, y: 12, scale: 0.94 }}
               whileTap={{ scale: 0.96 }}
               transition={KOMA_SPRING_BUBBLE}
-              onClick={() => {
-                if (onDockNavigate) {
-                  onDockNavigate("bag");
-                } else {
-                  onCartToggle();
-                }
-              }}
+              onClick={onCartToggle}
               aria-label={`Ver sacola com ${cartCount} ${cartCount === 1 ? "item" : "itens"}`}
             >
               <span className="km-bag-fab__icon" aria-hidden="true">
