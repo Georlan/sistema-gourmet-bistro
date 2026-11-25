@@ -1,5 +1,4 @@
 import React from "react";
-import { MotionConfig, motion } from "motion/react";
 import NumberFlow from "@number-flow/react";
 import {
   MenuAccountGlyph,
@@ -7,7 +6,6 @@ import {
   MenuHomeGlyph,
   MenuOrdersGlyph,
 } from "./MenuSvgAssets";
-import { KOMA_SPRING_BUBBLE } from "./motionTokens";
 
 export type MenuDockTab = "home" | "orders" | "bag" | "account";
 
@@ -59,7 +57,6 @@ function MenuBottomDock({
   };
 
   return (
-    <MotionConfig reducedMotion="user">
       <div className="km-dock-wrap">
         <nav className="km-dock" id="koma-art-dock" aria-label="Navegação rápida">
           {TABS.map((tab) => {
@@ -89,28 +86,19 @@ function MenuBottomDock({
                 onClick={() => onNavigate(tab.id)}
               >
                 {isActive && (
-                  <motion.span
-                    layoutId="km-dock-ink"
-                    className="km-dock__ink"
-                    transition={KOMA_SPRING_BUBBLE}
-                    aria-hidden="true"
-                  >
+                  <span className="km-dock__ink" aria-hidden="true">
                     <span key={activeTab} className="km-dock__ink-drop" />
-                  </motion.span>
+                  </span>
                 )}
 
-                <motion.span
-                  className="km-dock__icon-wrap"
-                  animate={isActive ? { scale: 1.06, y: -1 } : { scale: 1, y: 0 }}
-                  transition={KOMA_SPRING_BUBBLE}
-                >
+                <span className="km-dock__icon-wrap">
                   {renderGlyph(tab.id)}
                   {badge > 0 && (
                     <span className="km-dock__badge" aria-label={`${badge} itens`}>
                       {canUseNumberFlow ? <NumberFlow value={badge} /> : badge}
                     </span>
                   )}
-                </motion.span>
+                </span>
 
                 <span className="km-dock__label km-tabular">
                   {tab.id === "bag" && cartCount > 0 ? (
@@ -134,7 +122,6 @@ function MenuBottomDock({
           })}
         </nav>
       </div>
-    </MotionConfig>
   );
 }
 
