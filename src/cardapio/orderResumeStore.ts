@@ -31,6 +31,7 @@ export interface DurableOrderResume {
   status?: string;
   state?: unknown;
   fechado?: boolean;
+  homeAcknowledgedPhase?: string;
   created_at?: string;
   tracking_token: string;
 }
@@ -144,6 +145,7 @@ function sanitizeResume(order: DurableOrderResume): DurableOrderResume | null {
     status: order.status ? String(order.status) : undefined,
     state: order.state,
     fechado: Boolean(order.fechado),
+    homeAcknowledgedPhase: typeof order.homeAcknowledgedPhase === "string" ? order.homeAcknowledgedPhase : undefined,
     created_at: order.created_at ? String(order.created_at) : undefined,
     tracking_token: trackingToken,
   };
