@@ -84,6 +84,6 @@ Antes de projetar ou alterar interfaces, consulte `docs/design-system/DESIGN_SYS
 
 ## Higiene de código e substituições
 
-- Ao substituir um componente, rota, script ou asset, remova o legado no mesmo PR após verificar referências e histórico; não acumule arquivos órfãos ou previews temporários em `public/`.
+- Ao substituir um componente, rota, script ou asset, remova o legado no mesmo PR após verificar referências e histórico; não acumule arquivos órfãos ou previews temporários em `public/`. Caso o legado precise permanecer temporariamente, documentar finalidade, condição de retirada e risco.
 - Preserve os guardrails automatizados de higiene, orçamento de bundle e proteção contra chunk skew (`tests/repositoryHygiene.test.ts`, `scripts/audit-cashier-loading.mjs` e `tests/pagesSkewIntegrity.test.ts`).
 - Scripts pontuais em `backend/tools/` só permanecem versionados se tiverem uso operacional recorrente ou auditoria/recuperação ativa; nunca remover utilitários ligados ao tenant ID 6 ou segurança sem confirmação explícita.
