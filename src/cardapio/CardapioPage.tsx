@@ -1784,6 +1784,7 @@ export default function CardapioPage() {
           onRealtimeRefresh={handleRealtimeOrderRefresh}
           isRefreshing={isRefreshingOrders}
           hasFloatingCart={cartCount > 0 && !hasOpenOverlay}
+          showFloatingChat={!hasOpenOverlay}
         />
       )}
 
