@@ -242,3 +242,26 @@ def test_transient_failure_preserves_credentials_and_recovers_without_exit(isola
     # Credencial continua íntegra no disco
     assert pairing.load_stored_token() == PAIRED
 
+
+
+def test_legacy_entrypoint_propagates_terminal_exit_code(monkeypatch):
+    """O alias distribuído deve respeitar RestartPreventExitStatus=2."""
+    import runpy
+
+    monkeypatch.setattr(agent_main, "main", lambda: agent_main.PAIRING_REQUIRED_EXIT)
+    with pytest.raises(SystemExit) as exit_info:
+        runpy.run_module("agent", run_name="__main__")
+    assert exit_info.value.code == 2
+
+
+def test_rejected_requests_identify_agent_build_without_credentials_in_user_agent():
+    from api_client import AGENT_VERSION
+
+    client = KomaApiClient("https://example.invalid", STALE)
+    client.session.post = MagicMock(return_value=MagicMock(status_code=401))
+    for method in (client.heartbeat, client.claim_jobs):
+        with pytest.raises(AgentAuthenticationError):
+            method()
+        headers = client.session.post.call_args.kwargs["headers"]
+        assert headers["User-Agent"] == f"KomaPrintAgent/{AGENT_VERSION}"
+        assert STALE not in headers["User-Agent"]
