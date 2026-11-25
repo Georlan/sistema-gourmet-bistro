@@ -108,6 +108,7 @@ export interface StoredOrder {
   status?: string;
   state?: OrderStateContract;
   fechado?: boolean;
+  homeAcknowledgedPhase?: OrderPhase;
   itens?: StoredOrderItem[];
   created_at?: string;
   tracking_token?: string;
@@ -263,6 +264,12 @@ export function resolveOrderState(
 }
 
 // Wrappers legados centralizados. Não fazem mais parsing por substring.
+/** Acknowledgement affects the home banner only, never the order/history. */
+export function isOrderVisibleOnHome(order: StoredOrder): boolean {
+  const state = resolveOrderState(order);
+  return !state.terminal || order.homeAcknowledgedPhase !== state.phase;
+}
+
 export function isTerminalStatus(status: string | undefined): boolean {
   return fallbackOrderState(status).terminal;
 }
@@ -346,6 +353,7 @@ function minimalPersistedOrder(order: StoredOrder, now = Date.now()): StoredOrde
     status: String(order.status || "pendente"),
     state: isOrderStateContract(order.state) ? order.state : undefined,
     fechado: Boolean(order.fechado),
+    homeAcknowledgedPhase: resolveOrderState(order).terminal && order.homeAcknowledgedPhase === resolveOrderState(order).phase ? order.homeAcknowledgedPhase : undefined,
     created_at: order.created_at ? String(order.created_at) : undefined,
     tracking_token: trackingToken || undefined,
     pagamento: order.pagamento ? { ...order.pagamento } : undefined,
