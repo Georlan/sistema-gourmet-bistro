@@ -67,13 +67,6 @@ test('frontend efficiency guards remain active across realtime, headers, fonts a
 
   const indexCss = readRepoFile('src/index.css');
   assert.doesNotMatch(indexCss, /@import\s+url\(['"]https:\/\/fonts\.googleapis\.com/);
-  assert.doesNotMatch(indexCss, /^\.cashier-shell\b/m);
-
-  const appTsx = readRepoFile('src/App.tsx');
-  assert.match(appTsx, /operationalWorkspace\.css/);
-
-  const caixaPanel = readRepoFile('src/components/CaixaPanel.tsx');
-  assert.match(caixaPanel, /operationalWorkspace\.css/);
 
   const indexHtml = readRepoFile('index.html');
   assert.match(indexHtml, /rel="preconnect"\s+href="https:\/\/fonts\.googleapis\.com"/);

@@ -13,6 +13,7 @@ import {
   Headphones,
   History,
   Layers,
+  Link2,
   Lock,
   Pencil,
   Plus,
@@ -27,8 +28,11 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { formatCurrency, getSubscriptionPlan } from "../config/subscriptionPlans";
+import { SuperAdminContractInviteCard, type ContractInviteGenerateInput, type ContractInviteGeneratedResult } from "./SuperAdminContractInviteCard";
 import { SuperAdminCreateIssueModal } from "./SuperAdminCreateIssueModal";
+import { SuperAdminOnboardingQaCard, type OperationalQaSnapshot } from "./SuperAdminOnboardingQaCard";
 import { SuperAdminReleaseModal } from "./SuperAdminReleaseModal";
+import { SuperAdminSupportToolkitModal } from "./SuperAdminSupportToolkitModal";
 import { SuperAdminTrialModal } from "./SuperAdminTrialModal";
 import type { ContractInboxItem } from "./SuperAdminContractsTab";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
@@ -132,6 +136,7 @@ type ReleasePreview = {
     operationReleased?: boolean;
     requiresKomaRelease?: boolean;
   };
+  operationalQa?: OperationalQaSnapshot | null;
   readiness?: {
     configurationComplete?: boolean;
     trialStarted?: boolean;
@@ -313,20 +318,11 @@ export function SuperAdminRestaurant360({
   const [loading, setLoading] = useState(true);
   const [trialOpen, setTrialOpen] = useState(false);
   const [releaseOpen, setReleaseOpen] = useState(false);
-  const [qaOpen, setQaOpen] = useState(false);
-  const [qaHours, setQaHours] = useState(24);
-  const [qaReason, setQaReason] = useState("");
-  const [qaBusy, setQaBusy] = useState(false);
-  const [qaNotice, setQaNotice] = useState<string | null>(null);
-  const [qaError, setQaError] = useState<string | null>(null);
+  const [supportToolkitOpen, setSupportToolkitOpen] = useState(false);
+  const [supportToolkitTab, setSupportToolkitTab] = useState<"links" | "investigate">("links");
   const [inviteBusy, setInviteBusy] = useState(false);
   const [inviteNotice, setInviteNotice] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
-  const [contractInviteCycle, setContractInviteCycle] = useState<"mensal" | "anual">("mensal");
-  const [contractInviteBusy, setContractInviteBusy] = useState(false);
-  const [contractInviteUrl, setContractInviteUrl] = useState<string | null>(null);
-  const [contractInviteError, setContractInviteError] = useState<string | null>(null);
-  const [contractInviteCopied, setContractInviteCopied] = useState(false);
   const [operationsEditing, setOperationsEditing] = useState(false);
   const [operationModes, setOperationModes] = useState<OperationMode[]>([]);
   const [operationReason, setOperationReason] = useState("");
@@ -555,30 +551,6 @@ export function SuperAdminRestaurant360({
     ));
   };
 
-  const startOperationalQa = async () => {
-    if (qaBusy || qaReason.trim().length < 10 || qaHours < 1 || qaHours > 72 || !Number.isInteger(qaHours)) return;
-    setQaBusy(true);
-    setQaError(null);
-    setQaNotice(null);
-    try {
-      const response = await superAdminFetch(`/api/super-admin/onboarding/restaurantes/${tenant.id}/operational-qa`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "start", hours: qaHours, reason: qaReason.trim() }),
-      });
-      const body = await response.json();
-      if (!response.ok || body?.qaActive !== true) throw new Error(body?.detail || "Não foi possível liberar a homologação.");
-      setQaNotice(`Homologação liberada até ${formatDate(body.expiresAt)}. O trial comercial não foi iniciado.`);
-      setQaOpen(false);
-      setQaReason("");
-      await loadData();
-    } catch (error) {
-      setQaError(superAdminErrorMessage(error));
-    } finally {
-      setQaBusy(false);
-    }
-  };
-
   const saveOperationModes = async () => {
     if (operationBusy) return;
     if (operationModes.length === 0) {
@@ -681,30 +653,34 @@ export function SuperAdminRestaurant360({
     }
   };
 
-  const generateContractInvite = async () => {
-    if (linkedContract || contractInviteBusy) return;
-    setContractInviteBusy(true);
-    setContractInviteError(null);
-    setContractInviteCopied(false);
-    try {
-      const response = await superAdminFetch("/api/super-admin/contracts/invite", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          restaurant_id: Number(tenant.id),
-          billing_cycle: contractInviteCycle,
-          expires_hours: 72,
-          reason: "Link único de aceite contratual gerado pela ficha Restaurante 360",
-        }),
-      });
-      const body = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(body?.detail || "Não foi possível gerar o link de aceite.");
-      setContractInviteUrl(String(body.inviteUrl || body.invitePath || ""));
-    } catch (error) {
-      setContractInviteError(superAdminErrorMessage(error));
-    } finally {
-      setContractInviteBusy(false);
+  const handleGenerateContractInvite = async (
+    input: ContractInviteGenerateInput,
+  ): Promise<ContractInviteGeneratedResult> => {
+    if (linkedContract) {
+      throw new Error("Este restaurante já possui contrato vinculado.");
     }
+    const response = await superAdminFetch("/api/super-admin/contracts/invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        restaurant_id: Number(tenant.id),
+        billing_cycle: input.billing_cycle,
+        expires_hours: 72,
+        payment_method_type: input.payment_method_type,
+        auto_release_on_accept: input.auto_release_on_accept,
+        reason: "Link único de aceite contratual gerado pela ficha Restaurante 360",
+      }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(body?.detail || "Não foi possível gerar o link de aceite.");
+    }
+    return {
+      inviteUrl: String(body.inviteUrl || body.invitePath || ""),
+      paymentMethodType: body.paymentMethodType ?? input.payment_method_type,
+      autoReleaseOnAccept: Boolean(body.autoReleaseOnAccept ?? input.auto_release_on_accept),
+      expiresAt: body.expiresAt ?? null,
+    };
   };
 
   const cockpitItems = release ? [
@@ -990,6 +966,16 @@ export function SuperAdminRestaurant360({
             <button type="button" onClick={() => onSupport(tenant)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-800/60 bg-amber-950/30 px-3 py-2 text-xs font-bold text-amber-300">
               <Headphones className="h-3.5 w-3.5" /> Modo suporte
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSupportToolkitTab("links");
+                setSupportToolkitOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-800/60 bg-emerald-950/25 px-3 py-2 text-xs font-bold text-emerald-200"
+            >
+              <Link2 className="h-3.5 w-3.5" /> Links & Investigação
+            </button>
             <button type="button" onClick={() => onEdit(tenant)} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-3 py-2 text-xs font-bold text-koma-secondary">
               <Pencil className="h-3.5 w-3.5" /> Editar cadastro
             </button>
@@ -1149,19 +1135,22 @@ export function SuperAdminRestaurant360({
       {section === "implementation" && (
         <div className="space-y-5">
           {release?.onboarding?.mode === "administrative" && (
-            <section className="rounded-xl border border-emerald-800/50 bg-koma-card p-5" aria-label="Homologação operacional">
-              <h3 className="text-sm font-bold text-koma-foreground">Homologação operacional</h3>
-              <p className="mt-1 text-xs text-koma-muted">Liberação temporária de até 72 horas para testes. Não inicia o trial comercial nem abre o caixa.</p>
-              {qaNotice && <p role="status" className="mt-3 text-sm text-emerald-300">{qaNotice}</p>}
-              {qaError && <p role="alert" className="mt-3 text-sm text-rose-300">{qaError}</p>}
-              {!qaOpen ? <button type="button" onClick={() => { setQaOpen(true); setQaError(null); }} className="mt-3 rounded-lg border border-emerald-700 px-3 py-2 text-sm font-bold text-emerald-200">Preparar liberação de teste</button> : (
-                <div className="mt-3 space-y-3">
-                  <label className="block text-sm text-koma-foreground">Duração em horas (1 a 72)<input type="number" min={1} max={72} value={qaHours} onChange={event => setQaHours(Number(event.target.value))} className="ml-2 w-20 rounded border border-zinc-600 bg-koma-page p-2" /></label>
-                  <label className="block text-sm text-koma-foreground">Motivo <textarea value={qaReason} onChange={event => setQaReason(event.target.value)} className="mt-1 block w-full rounded border border-zinc-600 bg-koma-page p-2" /></label>
-                  <div className="flex gap-2"><button type="button" disabled={qaBusy || qaReason.trim().length < 10 || !Number.isInteger(qaHours) || qaHours < 1 || qaHours > 72} onClick={() => void startOperationalQa()} className="rounded-lg bg-emerald-500 px-3 py-2 text-sm font-bold text-black disabled:opacity-50">{qaBusy ? "Liberando…" : "Liberar para testes"}</button><button type="button" disabled={qaBusy} onClick={() => setQaOpen(false)} className="rounded-lg border border-zinc-600 px-3 py-2 text-sm">Cancelar</button></div>
-                </div>
-              )}
-            </section>
+            <SuperAdminOnboardingQaCard
+              tenantId={tenant.id}
+              tenantName={tenant.name}
+              operationalQa={release.operationalQa}
+              onUpdated={refreshAll}
+            />
+          )}
+          {!linkedContract && release?.onboarding?.mode === "administrative" && (
+            <SuperAdminContractInviteCard
+              tenantId={tenant.id}
+              tenantName={tenant.name}
+              tenantPlan={tenant.plan}
+              configurationComplete={Boolean(release?.readiness?.configurationComplete)}
+              ctaLabel="Gerar link único de aceite"
+              onGenerateInvite={handleGenerateContractInvite}
+            />
           )}
           <div className="rounded-xl border border-zinc-800 bg-koma-card p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1363,52 +1352,18 @@ export function SuperAdminRestaurant360({
                 <p className="mt-4 text-[11px] text-koma-muted">Benefícios individuais não alteram automaticamente cobrança, ciclo ou taxa do aceite.</p>
               </>
             ) : (
-              <div className="mt-3 space-y-3 rounded-lg border border-zinc-800 bg-koma-page p-4 text-xs text-koma-muted">
-                <p>
+              <div className="mt-3 space-y-3">
+                <p className="text-xs text-koma-muted">
                   {contractsAvailable ? "Nenhum aceite vinculado foi localizado para este tenant." : "Inbox de contratações indisponível; termos não são inferidos pelo plano."}
                 </p>
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <select
-                    aria-label="Ciclo do link de aceite"
-                    value={contractInviteCycle}
-                    onChange={(event) => setContractInviteCycle(event.target.value === "anual" ? "anual" : "mensal")}
-                    className="rounded-lg border border-zinc-700 bg-koma-card px-2.5 py-1.5 text-xs text-koma-foreground"
-                  >
-                    <option value="mensal">Mensal</option>
-                    <option value="anual">Anual</option>
-                  </select>
-                  <button
-                    type="button"
-                    disabled={contractInviteBusy}
-                    onClick={() => void generateContractInvite()}
-                    className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-zinc-950 disabled:opacity-50"
-                  >
-                    {contractInviteBusy ? "Gerando link…" : "Gerar link único de aceite"}
-                  </button>
-                </div>
-                {contractInviteError && <p className="text-rose-400" role="alert">{contractInviteError}</p>}
-                {contractInviteUrl && (
-                  <div className="space-y-2 rounded-lg border border-emerald-800/50 bg-emerald-950/20 p-3">
-                    <p className="text-[11px] font-bold text-emerald-300">Link de uso único pronto (válido por 72h):</p>
-                    <div className="flex items-center gap-2">
-                      <input
-                        readOnly
-                        value={contractInviteUrl}
-                        className="w-full rounded border border-zinc-700 bg-koma-card px-2 py-1 font-mono text-[11px] text-koma-foreground"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          void navigator.clipboard?.writeText(contractInviteUrl);
-                          setContractInviteCopied(true);
-                        }}
-                        className="shrink-0 rounded border border-emerald-700 px-2.5 py-1 text-[11px] font-bold text-emerald-200"
-                      >
-                        {contractInviteCopied ? "Copiado" : "Copiar"}
-                      </button>
-                    </div>
-                  </div>
-                )}
+                <SuperAdminContractInviteCard
+                  tenantId={tenant.id}
+                  tenantName={tenant.name}
+                  tenantPlan={tenant.plan}
+                  configurationComplete={Boolean(release?.readiness?.configurationComplete)}
+                  ctaLabel="Gerar link único de aceite"
+                  onGenerateInvite={handleGenerateContractInvite}
+                />
               </div>
             )}
           </div>
@@ -1901,6 +1856,13 @@ export function SuperAdminRestaurant360({
 
       {trialOpen && <SuperAdminTrialModal tenant={tenant} onClose={() => setTrialOpen(false)} onUpdated={() => void refreshAll()} />}
       {releaseOpen && <SuperAdminReleaseModal restaurantId={tenant.id} onClose={() => setReleaseOpen(false)} onReleased={() => void refreshAll()} />}
+      <SuperAdminSupportToolkitModal
+        open={supportToolkitOpen}
+        onClose={() => setSupportToolkitOpen(false)}
+        initialTab={supportToolkitTab}
+        tenant={{ id: tenant.id, name: tenant.name, plan: tenant.plan }}
+        incidents={incidents}
+      />
       {createIssueOpen && (
         <SuperAdminCreateIssueModal
           tenant={tenant}
