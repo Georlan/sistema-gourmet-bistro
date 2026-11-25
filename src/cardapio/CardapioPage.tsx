@@ -78,7 +78,7 @@ import {
   restoreDurableStoredOrders,
   refreshAllStoredOrders,
   removeStoredOrder,
-  clearAllStoredOrders,
+  isOrderVisibleOnHome,
   fallbackOrderState,
   resolveOrderState,
   updateStoredOrderStatus,
@@ -250,14 +250,18 @@ export default function CardapioPage() {
     [storedOrders],
   );
 
+  const homeOrders = useMemo(
+    () => storedOrders.filter(isOrderVisibleOnHome),
+    [storedOrders],
+  );
+
   const activeOrder = useMemo(() => {
-    if (storedOrders.length === 0) return null;
     if (selectedOrderId) {
-      const match = storedOrders.find((order) => order.id === selectedOrderId);
+      const match = homeOrders.find((order) => order.id === selectedOrderId);
       if (match) return match;
     }
-    return activeOrders[0] || storedOrders[0] || null;
-  }, [storedOrders, selectedOrderId, activeOrders]);
+    return homeOrders.find((order) => !resolveOrderState(order).terminal) || homeOrders[0] || null;
+  }, [homeOrders, selectedOrderId]);
 
   const checkActiveOrders = useCallback(async (restaurantId: number, seedOrders?: StoredOrder[]) => {
     const currentOrders = seedOrders ?? storedOrdersRef.current;
@@ -1376,19 +1380,16 @@ export default function CardapioPage() {
     });
   }, []);
 
-  const clearTrackedOrder = (orderId?: string) => {
-    const targetId = orderId || activeOrder?.id;
-    if (targetId) {
-      removeStoredOrder(targetId);
-      if (activeBrand?.id) {
-        setStoredOrders(current => mergeLocalOrderSnapshots(loadStoredOrders(Number(activeBrand.id)), current));
-      }
-    } else {
-      if (activeBrand?.id) {
-        clearAllStoredOrders(Number(activeBrand.id));
-        setStoredOrders([]);
-      }
-    }
+  const dismissTrackedOrder = (orderId: string) => {
+    const order = storedOrdersRef.current.find((item) => item.id === orderId);
+    if (!order || !activeBrand || order.restaurante_id !== Number(activeBrand.id)) return;
+    const state = resolveOrderState(order);
+    if (!state.terminal) return;
+    const updates = { homeAcknowledgedPhase: state.phase };
+    updateStoredOrderStatus(orderId, updates);
+    setStoredOrders(current => current.map(item => item.id === orderId
+      && item.restaurante_id === order.restaurante_id ? { ...item, ...updates } : item));
+    setSelectedOrderId(current => current === orderId ? null : current);
   };
 
   if (isLoading) {
@@ -1508,7 +1509,7 @@ export default function CardapioPage() {
         onBenefitsClick={handleOpenBenefits}
         activeOrder={activeOrder}
         activeState={activeState}
-        storedOrders={storedOrders}
+        storedOrders={homeOrders}
         storedOrdersCount={storedOrders.length}
         onSelectOrderId={setSelectedOrderId}
         onPayPixClick={(order) => setPixModalOrder(order)}
@@ -1516,7 +1517,7 @@ export default function CardapioPage() {
           if (activeBrand?.id) void checkActiveOrders(Number(activeBrand.id));
         }}
         isRefreshingOrders={isRefreshingOrders}
-        onClearTrackedOrder={(id) => clearTrackedOrder(id)}
+        onDismissTrackedOrder={dismissTrackedOrder}
         orderingMessage={orderingMessage}
         onNotify={showNotification}
         activeDockTab={primaryPanel}
