@@ -83,6 +83,8 @@ export interface AnalyticsEventMap {
   operational_api_signal: import('./operational').OperationalSignal;
   operational_screen_viewed: { screen: string; sub_screen: string; surface: 'cashier' };
   public_menu_viewed: PublicMenuViewedProps;
+  public_menu_navigation_requested: { action: "home" | "bag" | "orders" | "account"; source: string };
+  public_menu_navigation_changed: { previous_panel: string; opened_panel: string };
   public_product_viewed: PublicProductViewedProps;
   public_cart_item_added: PublicCartItemAddedProps;
   public_checkout_initiated: PublicCheckoutInitiatedProps;

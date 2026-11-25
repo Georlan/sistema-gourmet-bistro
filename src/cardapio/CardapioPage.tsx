@@ -221,22 +221,28 @@ export default function CardapioPage() {
     return shouldReturnToCart;
   }, [activeBrand, promotionModalOrigin]);
 
-  const openCart = useCallback(() => {
-    // Garante uma única superfície interativa ao abrir a sacola.
-    // Em celulares reais, FABs sobrepostos podem disputar o mesmo toque.
+  // The page owns primary navigation; drawers only request a transition.
+  const navigatePrimary = useCallback((tab: "home" | "bag" | "orders" | "account", source: string) => {
     setSelectedProduct(null);
     setEditingCartItem(null);
     setProductModalOrigin(null);
     setSelectedPromotion(null);
     setEditingPromotionItem(null);
     setPromotionModalOrigin(null);
-    setIsOrdersDrawerOpen(false);
-    setIsBenefitsOpen(false);
     setIsStoreInfoOpen(false);
-    setIsProfileOpen(false);
-    setIsAuthOpen(false);
-    setIsCartOpen(true);
-  }, []);
+    setIsBenefitsOpen(false);
+    setPixModalOrder(null);
+    setIsCartOpen(tab === "bag");
+    setIsOrdersDrawerOpen(tab === "orders");
+    setIsAuthOpen(tab === "account" && !user);
+    setIsProfileOpen(tab === "account" && Boolean(user));
+    if (tab !== "account") setAuthMode("login");
+    if (tab !== "bag") setCouponToApply("");
+    trackAnalyticsEvent("public_menu_navigation_requested", { action: tab, source });
+  }, [user]);
+
+  const openCart = useCallback(() => navigatePrimary("bag", "cart"), [navigatePrimary]);
+  const handleOpenOrdersDrawer = useCallback(() => navigatePrimary("orders", "order_tracking"), [navigatePrimary]);
 
 
   const activeOrders = useMemo(
@@ -806,30 +812,25 @@ export default function CardapioPage() {
     || isBenefitsOpen,
   );
   const hasOpenOverlay = isTabSheetOpen || isBlockingModalOpen;
-
+  const primaryPanel = isAuthOpen || isProfileOpen ? "account" : isCartOpen ? "bag" : isOrdersDrawerOpen ? "orders" : "home";
+  const previousPrimaryPanel = useRef(primaryPanel);
   useEffect(() => {
-    const handleOpenOrdersDrawer = (event: Event) => {
-      const detail = (event as CustomEvent<{ orderId?: string }>).detail;
-      if (detail?.orderId) setSelectedOrderId(detail.orderId);
-      setIsCartOpen(false);
-      setIsCheckoutOpen(false);
-      setCheckoutRequest(null);
-      setIsAuthOpen(false);
-      setIsProfileOpen(false);
-      setIsStoreInfoOpen(false);
-      setIsBenefitsOpen(false);
-      setPixModalOrder(null);
-      setIsOrdersDrawerOpen(true);
-    };
-    window.addEventListener("koma:open-orders-drawer", handleOpenOrdersDrawer);
-    return () => window.removeEventListener("koma:open-orders-drawer", handleOpenOrdersDrawer);
-  }, []);
+    if (previousPrimaryPanel.current === primaryPanel) return;
+    trackAnalyticsEvent("public_menu_navigation_changed", {
+      previous_panel: previousPrimaryPanel.current,
+      opened_panel: primaryPanel,
+    });
+    previousPrimaryPanel.current = primaryPanel;
+  }, [primaryPanel]);
 
   // Uma entrada no histórico protege o cliente de sair do cardápio ao usar
   // Voltar no Android/Chrome enquanto uma interface sobreposta está aberta.
   // O estado de produto/sacola continua sendo canônico no React, nunca na URL.
   const overlayHistoryToken = useRef(`koma-menu-overlay-${Date.now()}-${Math.random()}`);
   const overlayHistoryArmed = useRef(false);
+  const overlayHistoryClosing = useRef(false);
+  const latestOverlayOpen = useRef(hasOpenOverlay);
+  latestOverlayOpen.current = hasOpenOverlay;
   const overlayBackRef = useRef<() => boolean>(() => false);
 
   overlayBackRef.current = () => {
@@ -892,6 +893,11 @@ export default function CardapioPage() {
 
   useEffect(() => {
     const onPopState = () => {
+      if (overlayHistoryClosing.current) {
+        overlayHistoryClosing.current = false;
+        if (latestOverlayOpen.current) pushOverlayHistoryGuardRef.current();
+        return;
+      }
       if (!overlayHistoryArmed.current) return;
       overlayHistoryArmed.current = false;
       const hasUnderlyingOverlay = overlayBackRef.current();
@@ -903,13 +909,16 @@ export default function CardapioPage() {
   }, []);
 
   useEffect(() => {
-    if (hasOpenOverlay && !overlayHistoryArmed.current) {
+    if (hasOpenOverlay && !overlayHistoryArmed.current && !overlayHistoryClosing.current) {
       pushOverlayHistoryGuardRef.current();
     } else if (!hasOpenOverlay && overlayHistoryArmed.current) {
       const ownsEntry = window.history.state?.__komaPublicMenuOverlay === overlayHistoryToken.current;
       overlayHistoryArmed.current = false;
       // Fechar pelo X ou adicionar produto também consome a entrada temporária.
-      if (ownsEntry) window.history.back();
+      if (ownsEntry) {
+        overlayHistoryClosing.current = true;
+        window.history.back();
+      }
     }
   }, [hasOpenOverlay]);
 
@@ -1224,7 +1233,6 @@ export default function CardapioPage() {
     [openProductModal],
   );
   const handleOpenStoreInfo = useCallback(() => setIsStoreInfoOpen(true), []);
-  const handleOpenOrdersDrawer = useCallback(() => setIsOrdersDrawerOpen(true), []);
   const handleOpenBenefits = useCallback(() => setIsBenefitsOpen(true), []);
 
   const cartQuantityByProductId = useMemo(() => {
@@ -1496,7 +1504,7 @@ export default function CardapioPage() {
           openPromotionModal(offer, "catalog");
         }}
         user={user}
-        onAuthClick={() => (user ? setIsProfileOpen(true) : setIsAuthOpen(true))}
+        onAuthClick={() => navigatePrimary("account", "header")}
         onBenefitsClick={handleOpenBenefits}
         activeOrder={activeOrder}
         activeState={activeState}
@@ -1511,48 +1519,8 @@ export default function CardapioPage() {
         onClearTrackedOrder={(id) => clearTrackedOrder(id)}
         orderingMessage={orderingMessage}
         onNotify={showNotification}
-        activeDockTab={
-          isCartOpen
-            ? "bag"
-            : isOrdersDrawerOpen
-              ? "orders"
-              : isAuthOpen || isProfileOpen
-                ? "account"
-                : "home"
-        }
-        onDockNavigate={(tab) => {
-          setSelectedProduct(null);
-          setEditingCartItem(null);
-          setProductModalOrigin(null);
-          setSelectedPromotion(null);
-          setEditingPromotionItem(null);
-          setPromotionModalOrigin(null);
-          setIsCheckoutOpen(false);
-          setCheckoutRequest(null);
-          setIsStoreInfoOpen(false);
-          setIsBenefitsOpen(false);
-          setPixModalOrder(null);
-          if (tab !== "bag") {
-            setCouponToApply("");
-          }
-
-          setIsCartOpen(false);
-          setIsOrdersDrawerOpen(false);
-          setIsAuthOpen(false);
-          setIsProfileOpen(false);
-
-          if (tab === "bag") {
-            setIsCartOpen(true);
-          } else if (tab === "orders") {
-            setIsOrdersDrawerOpen(true);
-          } else if (tab === "account") {
-            if (user) {
-              setIsProfileOpen(true);
-            } else {
-              setIsAuthOpen(true);
-            }
-          }
-        }}
+        activeDockTab={primaryPanel}
+        onDockNavigate={(tab) => navigatePrimary(tab, "dock")}
       />
 
       {selectedPromotion && (
@@ -1757,7 +1725,7 @@ export default function CardapioPage() {
               setStoredOrders(current => mergeLocalOrderSnapshots(loadStoredOrders(rid), current));
             }
           }}
-          onOrderSuccess={() => {
+          onOrderSuccess={(order, openOrdersDrawer) => {
             checkoutOrderCreatedRef.current = false;
             setCart([]);
             setFulfillmentChoice(null);
@@ -1766,6 +1734,10 @@ export default function CardapioPage() {
             setIsCartOpen(false);
             setIsCheckoutOpen(false);
             setCheckoutRequest(null);
+            if (openOrdersDrawer) {
+              setSelectedOrderId(order.comanda_id);
+              navigatePrimary("orders", "checkout_success");
+            }
             if (activeBrand?.id) {
               clearCartDraft(activeBrand.id);
               const rid = Number(activeBrand.id);
@@ -1786,6 +1758,8 @@ export default function CardapioPage() {
           restaurantId={activeBrand?.id}
           restaurantPhone={activeBrand?.phone}
           isOpen={isOrdersDrawerOpen}
+          onOpen={handleOpenOrdersDrawer}
+          canOpen={!isBlockingModalOpen && !isAuthOpen}
           onClose={() => setIsOrdersDrawerOpen(false)}
           orders={storedOrders}
           selectedOrderId={activeOrder?.id || null}

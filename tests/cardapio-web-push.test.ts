@@ -129,5 +129,5 @@ test("clique da notificação retoma cold-start sem capability em payload ou que
   assert.match(ordersDrawer, /requestedPushOrderFromHash/);
   assert.match(ordersDrawer, /KOMA_PUSH_OPEN_ORDER/);
   assert.match(ordersDrawer, /openChat\(order\.id\)/);
-  assert.match(ordersDrawer, /setFloatingOpen\(true\)/);
+  assert.match(ordersDrawer, /onOpen\(\)/);
 });

@@ -187,7 +187,7 @@ export function MenuActiveOrderCard({
                 className="km-order-card__cta"
                 onClick={onOrdersClick}
               >
-                Ver pedido
+                Acompanhar pedido
               </button>
             )
           )}
