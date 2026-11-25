@@ -113,6 +113,10 @@ jobs:
         if: steps.backend_paths.outputs.frontend == 'true'
         run: npm run build
 
+      - name: Performance budget audit
+        if: steps.backend_paths.outputs.frontend == 'true'
+        run: npm run audit:perf
+
       - name: Backend syntax check
         run: python -m compileall -q backend/app
 
