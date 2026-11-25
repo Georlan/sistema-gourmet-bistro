@@ -26,6 +26,11 @@ type AcceptedResult = {
   plan: string;
   billingCycle: string;
   message: string;
+  qaEnded?: boolean;
+  autoReleased?: boolean;
+  trialStarted?: boolean;
+  releasePendingReason?: string | null;
+  subscriptionStatus?: string | null;
 };
 
 export function ContractInviteAcceptPage({ token }: { token: string | null }) {
@@ -182,13 +187,29 @@ export function ContractInviteAcceptPage({ token }: { token: string | null }) {
               <h1 className="text-lg font-bold">Contrato aceito e vinculado</h1>
             </div>
             <p className="text-sm text-koma-foreground">{accepted.message}</p>
-            <div className="rounded-xl border border-zinc-800 bg-koma-page p-4 text-xs space-y-1">
+            <div className="rounded-xl border border-zinc-800 bg-koma-page p-4 text-xs space-y-1.5">
               <p><strong>Protocolo:</strong> <span className="font-mono">{accepted.protocol}</span></p>
               <p><strong>Restaurante:</strong> {accepted.restaurantName}</p>
               <p><strong>Plano / Ciclo:</strong> {accepted.plan.toUpperCase()} · {accepted.billingCycle}</p>
+              {accepted.qaEnded && (
+                <p className="text-emerald-300">
+                  <strong>Homologação QA:</strong> encerrada automaticamente preservando seu cardápio e configurações.
+                </p>
+              )}
+              {accepted.autoReleased && accepted.trialStarted ? (
+                <p className="text-emerald-300">
+                  <strong>Operação comercial:</strong> liberada e período grátis de 7 dias iniciado agora.
+                </p>
+              ) : accepted.releasePendingReason === 'configuration_incomplete' ? (
+                <p className="text-amber-300">
+                  <strong>Próximo passo:</strong> conclua os 4 itens essenciais no painel para iniciar os 7 dias grátis automaticamente.
+                </p>
+              ) : null}
             </div>
             <p className="text-xs text-koma-muted">
-              Você já pode fechar esta página. A operação do restaurante já está vinculada no painel KÔMA.
+              {accepted.autoReleased && accepted.trialStarted
+                ? 'Seu restaurante já pode operar comercialmente em app.komafood.com.br.'
+                : 'Você já pode fechar esta página. A operação do restaurante já está vinculada no painel KÔMA.'}
             </p>
           </div>
         )}

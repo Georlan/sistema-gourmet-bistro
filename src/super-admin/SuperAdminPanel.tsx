@@ -11,8 +11,10 @@ import {
   X,
   AlertOctagon,
   ContactRound,
+  Link2,
 } from "lucide-react";
 import type { Tenant } from "./superAdminTypes";
+import { SuperAdminSupportToolkitModal } from "./SuperAdminSupportToolkitModal";
 import {
   clearSuperAdminSession,
   getSuperAdminToken,
@@ -60,6 +62,7 @@ export default function SuperAdminPanel() {
   const [runtimeHealth, setRuntimeHealth] = useState<{ status: "ok" | "unavailable"; commit?: string | null; version?: string } | null>(null);
   const [runtimeEnvironment, setRuntimeEnvironment] = useState<string | null>(null);
   const [apiNotice, setApiNotice] = useState<string | null>(null);
+  const [supportToolkitOpen, setSupportToolkitOpen] = useState(false);
 
   const reportApiError = (context: string, error: unknown) => {
     const message = `${context}: ${superAdminErrorMessage(error)}`;
@@ -293,6 +296,15 @@ export default function SuperAdminPanel() {
           </div>
           <div className="h-6 w-px bg-zinc-800 hidden lg:block"></div>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSupportToolkitOpen(true)}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-lg border border-emerald-800/60 bg-emerald-950/30 px-2.5 py-1.5 text-xs font-bold text-emerald-200 hover:bg-emerald-950/60"
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Suporte & Links</span>
+              <span className="sm:hidden">Links</span>
+            </button>
             <span className="hidden sm:inline-block px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-semibold text-koma-secondary">superadmin</span>
             <button type="button" onClick={() => clearSuperAdminSession()} className="px-3 py-1.5 bg-zinc-900 hover:bg-rose-950/50 border border-zinc-800 hover:border-rose-800/60 text-koma-secondary hover:text-rose-300 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5" title="Encerrar sessão de SuperAdmin">
               <LogOut className="w-3.5 h-3.5" /><span>Sair</span>
@@ -389,6 +401,10 @@ export default function SuperAdminPanel() {
           )}
         </main>
       </div>
+      <SuperAdminSupportToolkitModal
+        open={supportToolkitOpen}
+        onClose={() => setSupportToolkitOpen(false)}
+      />
     </div>
   );
 }
