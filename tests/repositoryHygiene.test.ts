@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
@@ -27,4 +27,12 @@ test('ferramentas exclusivas de build ficam em devDependencies e não em depende
     assert.equal(tool in deps, false, `${tool} não deve estar em dependencies`);
     assert.equal(tool in devDeps, true, `${tool} deve estar em devDependencies`);
   }
+});
+
+test('assets de mock-preview não retornam para public/ e telas secundárias permanecem lazy em App.tsx', () => {
+  assert.equal(existsSync(new URL('../public/mock-preview', import.meta.url)), false, 'public/mock-preview não deve ser publicado no bundle');
+  const app = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8');
+  assert.doesNotMatch(app, /^import\s+\{\s*MesaDetailsModal\s*\}\s+from/m);
+  assert.doesNotMatch(app, /^import\s+\{\s*MesasView\s*\}\s+from/m);
+  assert.doesNotMatch(app, /^import\s+\{\s*KitchenPanel\s*\}\s+from/m);
 });

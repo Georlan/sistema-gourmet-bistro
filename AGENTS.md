@@ -81,3 +81,9 @@ Antes de projetar ou alterar interfaces, consulte `docs/design-system/DESIGN_SYS
 - Extrair responsabilidade com estado, efeitos e contratos, não fragmentar JSX apenas para reduzir linhas.
 - Preservar autenticação, idempotência, cleanup de subscriptions/timers e regras de SmartPOS/pagamento.
 - Histórico e decisões extensas ficam nos documentos apontados, não no contexto obrigatório.
+
+## Higiene de código e substituições
+
+- Ao substituir um componente, rota, script ou asset, remova o legado no mesmo PR após verificar referências e histórico; não acumule arquivos órfãos ou previews temporários em `public/`.
+- Preserve os guardrails automatizados de higiene, orçamento de bundle e proteção contra chunk skew (`tests/repositoryHygiene.test.ts`, `scripts/audit-cashier-loading.mjs` e `tests/pagesSkewIntegrity.test.ts`).
+- Scripts pontuais em `backend/tools/` só permanecem versionados se tiverem uso operacional recorrente ou auditoria/recuperação ativa; nunca remover utilitários ligados ao tenant ID 6 ou segurança sem confirmação explícita.
