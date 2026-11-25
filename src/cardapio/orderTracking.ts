@@ -314,7 +314,14 @@ function trackingTokenFromOrder(order: Partial<StoredOrder>): string {
 
 /** Reúne somente dados efêmeros removidos intencionalmente do armazenamento local. */
 export function mergeLocalOrderSnapshots(local: StoredOrder[], current: StoredOrder[]): StoredOrder[] {
-  return local.map((order) => {
+  return local.map((snapshot) => {
+    const previousAck = current.find(item => item.id === snapshot.id
+      && item.restaurante_id === snapshot.restaurante_id
+      && !isOrderVisibleOnHome(item));
+    const order = previousAck && resolveOrderState(snapshot).terminal
+      && previousAck.homeAcknowledgedPhase === resolveOrderState(snapshot).phase
+      ? { ...snapshot, homeAcknowledgedPhase: previousAck.homeAcknowledgedPhase }
+      : snapshot;
     if (order.delivery_receipt_code !== undefined || order.fechado || resolveOrderState(order).terminal) return order;
     const token = trackingTokenFromOrder(order);
     const legacyKey = token ? "" : String(order.idempotency_key || "").trim();
@@ -533,7 +540,13 @@ export function updateStoredOrderStatus(
   const index = current.findIndex((item) => item.id === orderId);
   if (index === -1) return;
 
-  current[index] = { ...current[index], ...updates };
+  const previous = current[index];
+  const next = { ...previous, ...updates };
+  if (!next.homeAcknowledgedPhase && !isOrderVisibleOnHome(previous)
+      && resolveOrderState(next).terminal && previous.homeAcknowledgedPhase === resolveOrderState(next).phase) {
+    next.homeAcknowledgedPhase = previous.homeAcknowledgedPhase;
+  }
+  current[index] = next;
   persistStoredOrders(current);
 }
 
