@@ -21,6 +21,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from ..database import Base, SessionLocal, tenant_session_scope
 from ..models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
@@ -369,6 +370,7 @@ def _commercial_release_preview(
     db, tenant_id: int, *, require_subscription: bool = True
 ) -> dict[str, Any]:
     # Import here to keep the existing route composition free of circular imports.
+    from ..services.restaurant_provisioning import get_active_operational_qa_record
     from .onboarding import _build_onboarding_status
 
     snapshot = _build_onboarding_status(
@@ -381,6 +383,11 @@ def _commercial_release_preview(
     )
     if subscription is None and require_subscription:
         raise HTTPException(status_code=409, detail="Restaurante sem assinatura comercial vinculada.")
+    qa_record = (
+        get_active_operational_qa_record(db, tenant_id)
+        if subscription is None and isinstance(db, Session)
+        else None
+    )
     return {
         "restaurant": snapshot["restaurant"],
         "subscription": {
@@ -397,6 +404,13 @@ def _commercial_release_preview(
         "progress": snapshot["progress"],
         "payments": snapshot["payments"],
         "onboarding": snapshot["onboarding"],
+        "operationalQa": {
+            "active": qa_record is not None,
+            "startedAt": qa_record.get("started_at") if qa_record else None,
+            "expiresAt": qa_record.get("expires_at") if qa_record else None,
+            "hours": qa_record.get("hours") if qa_record else None,
+            "hasToken": bool(qa_record and qa_record.get("qa_token_hash")),
+        },
         "trial": snapshot["trial"],
         "readiness": snapshot["readiness"],
         "readyForRelease": snapshot["readyForRelease"],
