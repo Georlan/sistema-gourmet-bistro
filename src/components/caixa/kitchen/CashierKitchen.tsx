@@ -1,3 +1,4 @@
+import './kdsWorkspace.css';
 import { Check, ClipboardList, Maximize2, Minimize2, MoreHorizontal, RefreshCw, Search, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { itemCompositionPresentation } from '../../../domain/orderItemComposition';
