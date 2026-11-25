@@ -48,6 +48,7 @@ from app.services.restaurant_provisioning import (
 )
 from app.session_models import UserSessionVersion
 from app.signup_models import SignupBase, SignupNotification
+from app.support_models import CustomerSupportFeedback
 
 TENANT_QA = 9885
 TENANT_INCOMPLETE = 9886
@@ -84,6 +85,7 @@ def _documents() -> dict[str, dict]:
 
 def _cleanup(db):
     for tid in (TENANT_QA, TENANT_INCOMPLETE):
+        db.query(CustomerSupportFeedback).filter(CustomerSupportFeedback.restaurante_id == tid).delete()
         db.query(FiscalEvent).filter(FiscalEvent.restaurante_id == tid).delete()
         db.query(FiscalDocument).filter(FiscalDocument.restaurante_id == tid).delete()
         db.query(FiscalSequence).filter(FiscalSequence.restaurante_id == tid).delete()
@@ -143,6 +145,7 @@ def setup_db(monkeypatch):
         FiscalDocument.__table__,
         FiscalEvent.__table__,
         FiscalSequence.__table__,
+        CustomerSupportFeedback.__table__,
     ):
         tbl.create(bind=engine, checkfirst=True)
     SignupBase.metadata.create_all(bind=engine)
@@ -241,6 +244,14 @@ def test_qa_token_isolates_public_traffic_shields_side_effects_and_transitions_c
         )
         db.commit()
 
+    # Antes de iniciar QA, preview de release deve reportar operationalQa.active=False
+    res_rel_before = client.get(
+        f"/api/super-admin/onboarding/restaurantes/{TENANT_QA}/release",
+        headers=sa_headers,
+    )
+    assert res_rel_before.status_code == 200, res_rel_before.text
+    assert res_rel_before.json()["operationalQa"]["active"] is False
+
     # Inicia QA operacional — deve retornar qaAccessToken uma vez e salvar somente hash no audit log
     res_qa = client.post(
         f"/api/super-admin/onboarding/restaurantes/{TENANT_QA}/operational-qa",
@@ -253,11 +264,47 @@ def test_qa_token_isolates_public_traffic_shields_side_effects_and_transitions_c
     assert qa_token.startswith(f"{TENANT_QA}.")
     assert f"qa_token={qa_token}" in qa_data["qaMenuPath"]
 
+    # Preview mostra operationalQa ativo e validade, sem vazar token bruto ou hash
+    res_rel_active = client.get(
+        f"/api/super-admin/onboarding/restaurantes/{TENANT_QA}/release",
+        headers=sa_headers,
+    )
+    assert res_rel_active.status_code == 200, res_rel_active.text
+    rel_active_json = res_rel_active.json()
+    assert rel_active_json["operationalQa"]["active"] is True
+    assert rel_active_json["operationalQa"]["hasToken"] is True
+    assert rel_active_json["operationalQa"]["expiresAt"]
+    assert qa_token not in str(rel_active_json)
+
+    # Encerrar e reabrir QA pelo painel administrativo funciona e limpa estado ativo
+    res_qa_end = client.post(
+        f"/api/super-admin/onboarding/restaurantes/{TENANT_QA}/operational-qa",
+        headers=sa_headers,
+        json={"action": "end", "reason": "Teste de encerramento antecipado."},
+    )
+    assert res_qa_end.status_code == 200, res_qa_end.text
+    assert res_qa_end.json()["qaActive"] is False
+    res_rel_ended = client.get(
+        f"/api/super-admin/onboarding/restaurantes/{TENANT_QA}/release",
+        headers=sa_headers,
+    )
+    assert res_rel_ended.json()["operationalQa"]["active"] is False
+
+    res_qa = client.post(
+        f"/api/super-admin/onboarding/restaurantes/{TENANT_QA}/operational-qa",
+        headers=sa_headers,
+        json={"action": "start", "hours": 12, "reason": "Reabertura para validar cardápio, caixa e aceite."},
+    )
+    assert res_qa.status_code == 200, res_qa.text
+    qa_data = res_qa.json()
+    qa_token = qa_data["qaAccessToken"]
+
     with SessionLocal() as db:
         audit = db.query(SuperAdminAuditLog).filter(
             SuperAdminAuditLog.restaurante_id == TENANT_QA,
             SuperAdminAuditLog.action == "SUPERADMIN_QA_OPERATION_START",
-        ).one()
+        ).order_by(SuperAdminAuditLog.id.desc()).first()
+        assert audit is not None
         assert "qa_token_hash" in audit.after_data
         assert qa_token not in str(audit.after_data)
         assert validate_operational_qa_token(db, TENANT_QA, qa_token) is True
@@ -447,11 +494,35 @@ def test_qa_token_isolates_public_traffic_shields_side_effects_and_transitions_c
         assert sub.status == "trialing"
         assert sub.payment_method_type == "pix"
 
-    # Sem regressão no onboarding após aceite
+    # Sem regressão no onboarding após aceite e operação comercial liberada para visitantes
     res_status = client.get("/api/onboarding/status", headers=admin_headers)
     assert res_status.status_code == 200, res_status.text
     assert res_status.json()["onboarding"]["releaseState"] == "released"
     assert res_status.json()["readiness"]["trialStarted"] is True
+
+    res_rel_final = client.get(
+        f"/api/super-admin/onboarding/restaurantes/{TENANT_QA}/release",
+        headers=sa_headers,
+    )
+    assert res_rel_final.status_code == 200, res_rel_final.text
+    assert res_rel_final.json()["operationalQa"]["active"] is False
+    assert res_rel_final.json()["trialStarted"] is True
+
+    # Pedido anônimo público SEM qa_token passa a funcionar imediatamente após o aceite
+    res_live_order = client.post(
+        "/cardapio/pedidos",
+        headers={"X-Idempotency-Key": "live-post-accept-order-1"},
+        json={
+            "restaurante_id": TENANT_QA,
+            "cliente_nome": "Cliente Real",
+            "cliente_telefone": "85988887777",
+            "tipo_pedido": "retirada",
+            "forma_pagamento": "na_entrega",
+            "forma_pagamento_detalhe": "dinheiro",
+            "itens": [{"produto_id": "prod-qa-1", "quantidade": 1}],
+        },
+    )
+    assert res_live_order.status_code in {200, 201}, res_live_order.text
 
 
 def test_contract_invite_with_incomplete_essentials_never_starts_trial_prematurely():
@@ -516,3 +587,53 @@ def test_contract_invite_with_incomplete_essentials_never_starts_trial_premature
     assert accepted["trialStarted"] is False
     assert accepted["subscriptionStatus"] == "onboarding"
     assert accepted["releasePendingReason"] == "configuration_incomplete"
+
+
+def test_superadmin_support_feedbacks_endpoint_enforces_tenant_isolation():
+    client = TestClient(app)
+    sa_headers = _superadmin_headers()
+
+    with SessionLocal() as db:
+        db.add(Restaurante(id=TENANT_QA, nome="Loja Feedback A", slug="feedback-a-9885", plano="pro"))
+        db.add(Restaurante(id=TENANT_INCOMPLETE, nome="Loja Feedback B", slug="feedback-b-9886", plano="pocket"))
+        db.flush()
+        db.add(
+            CustomerSupportFeedback(
+                id=str(uuid.uuid4()),
+                restaurante_id=TENANT_QA,
+                reporter_user_id="usr-a",
+                reporter_name="Gestor A",
+                reporter_role="admin",
+                kind="problem",
+                message="Erro de impressão no tenant A",
+                page_path="/",
+                context_metadata={"last_support_code": "codeA1234567", "suspected_bug": True},
+                status="new",
+            )
+        )
+        db.add(
+            CustomerSupportFeedback(
+                id=str(uuid.uuid4()),
+                restaurante_id=TENANT_INCOMPLETE,
+                reporter_user_id="usr-b",
+                reporter_name="Gestor B",
+                reporter_role="admin",
+                kind="question",
+                message="Segredo privado do tenant B",
+                page_path="/",
+                context_metadata={},
+                status="new",
+            )
+        )
+        db.commit()
+
+    res_a = client.get(f"/api/super-admin/support/{TENANT_QA}/feedbacks", headers=sa_headers)
+    assert res_a.status_code == 200, res_a.text
+    data_a = res_a.json()
+    assert data_a["tenantId"] == str(TENANT_QA)
+    assert len(data_a["items"]) == 1
+    assert data_a["items"][0]["message"] == "Erro de impressão no tenant A"
+    assert data_a["items"][0]["context"]["last_support_code"] == "codeA1234567"
+
+    res_unauth = client.get(f"/api/super-admin/support/{TENANT_QA}/feedbacks")
+    assert res_unauth.status_code in {401, 403}

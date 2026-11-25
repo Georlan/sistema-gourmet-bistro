@@ -2,14 +2,14 @@ import datetime
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal, get_db, tenant_session_scope
 from ..models import Restaurante, SuperAdminAuditLog
 from ..security import create_access_token, get_current_user_for_support_action
-from ..support_models import SupportSession
+from ..support_models import CustomerSupportFeedback, SupportSession
 from .super_admin import get_current_admin
 
 logger = logging.getLogger("koma.super_admin.support")
@@ -347,3 +347,38 @@ def end_current_support_session(
     )
 
     return {"message": "Sessão de suporte encerrada com sucesso.", "session_id": session_id}
+
+
+@router.get("/{tenant_id}/feedbacks")
+def list_tenant_support_feedbacks(
+    tenant_id: str,
+    limit: int = Query(default=20, ge=1, le=50),
+    admin: dict = Depends(get_current_admin),
+):
+    """Lista chamados recentes de Ajuda e feedback de um restaurante (somente leitura)."""
+    _ = admin
+    target_tenant_id = _parse_tenant_id(tenant_id)
+    with SessionLocal() as db:
+        with tenant_session_scope(db, target_tenant_id):
+            rows = (
+                db.query(CustomerSupportFeedback)
+                .filter(CustomerSupportFeedback.restaurante_id == target_tenant_id)
+                .order_by(CustomerSupportFeedback.created_at.desc())
+                .limit(limit)
+                .all()
+            )
+            items = [
+                {
+                    "id": str(row.id),
+                    "kind": str(row.kind),
+                    "message": str(row.message),
+                    "pagePath": row.page_path,
+                    "reporterName": row.reporter_name,
+                    "reporterRole": row.reporter_role,
+                    "status": str(row.status),
+                    "context": dict(row.context_metadata) if isinstance(row.context_metadata, dict) else {},
+                    "createdAt": row.created_at.isoformat() if row.created_at else None,
+                }
+                for row in rows
+            ]
+    return {"tenantId": str(target_tenant_id), "items": items}

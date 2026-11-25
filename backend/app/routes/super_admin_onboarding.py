@@ -369,11 +369,13 @@ def _commercial_release_preview(
     db, tenant_id: int, *, require_subscription: bool = True
 ) -> dict[str, Any]:
     # Import here to keep the existing route composition free of circular imports.
+    from ..services.restaurant_provisioning import get_active_operational_qa_record
     from .onboarding import _build_onboarding_status
 
     snapshot = _build_onboarding_status(
         db, current_user=SimpleNamespace(is_support_mode=False)
     )
+    qa_record = get_active_operational_qa_record(db, tenant_id)
     subscription = (
         db.query(SaaSSubscription)
         .filter(SaaSSubscription.restaurante_id == tenant_id)
@@ -397,6 +399,13 @@ def _commercial_release_preview(
         "progress": snapshot["progress"],
         "payments": snapshot["payments"],
         "onboarding": snapshot["onboarding"],
+        "operationalQa": {
+            "active": qa_record is not None,
+            "startedAt": qa_record.get("started_at") if qa_record else None,
+            "expiresAt": qa_record.get("expires_at") if qa_record else None,
+            "hours": qa_record.get("hours") if qa_record else None,
+            "hasToken": bool(qa_record and qa_record.get("qa_token_hash")),
+        },
         "trial": snapshot["trial"],
         "readiness": snapshot["readiness"],
         "readyForRelease": snapshot["readyForRelease"],

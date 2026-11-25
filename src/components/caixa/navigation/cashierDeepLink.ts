@@ -106,6 +106,64 @@ export function listAllowedDeepLinkIds(): string[] {
   return [...DEEP_LINK_CATALOG.keys()];
 }
 
+export interface SupportDeepLinkEntry {
+  id: string;
+  label: string;
+  groupLabel: string;
+  parentId: string | null;
+  path: string;
+  fullUrl: string;
+  whatsappText: string;
+}
+
+const SUPPORT_BASE_URL = 'https://app.komafood.com.br';
+
+/**
+ * Returns the full canonical deep-link catalog for Super Admin search/copy,
+ * derived directly from CASHIER_SIDEBAR_GROUPS and excluding mutating actions.
+ */
+export function listAllowedDeepLinkEntries(): SupportDeepLinkEntry[] {
+  const results: SupportDeepLinkEntry[] = [];
+  const seen = new Set<string>();
+
+  for (const group of CASHIER_SIDEBAR_GROUPS) {
+    for (const parent of group.items) {
+      if (!seen.has(parent.id) && DEEP_LINK_CATALOG.has(parent.id)) {
+        seen.add(parent.id);
+        const path = `/?go=${parent.id}`;
+        const fullUrl = `${SUPPORT_BASE_URL}${path}`;
+        results.push({
+          id: parent.id,
+          label: parent.label,
+          groupLabel: group.category,
+          parentId: null,
+          path,
+          fullUrl,
+          whatsappText: `Para acessar "${parent.label}" direto no KÔMA (usando sua sessão), abra: ${fullUrl}`,
+        });
+      }
+
+      for (const child of parent.children ?? []) {
+        if (child.action || seen.has(child.id) || !DEEP_LINK_CATALOG.has(child.id)) continue;
+        seen.add(child.id);
+        const path = `/?go=${child.id}`;
+        const fullUrl = `${SUPPORT_BASE_URL}${path}`;
+        results.push({
+          id: child.id,
+          label: `${parent.label} -> ${child.label}`,
+          groupLabel: group.category,
+          parentId: parent.id,
+          path,
+          fullUrl,
+          whatsappText: `Para ir direto em "${child.label}" no KÔMA (usando sua sessão), abra: ${fullUrl}`,
+        });
+      }
+    }
+  }
+
+  return results;
+}
+
 export function parseDeepLinkGoParam(search: string): string | null {
   const syntaxValid = parseDeepLinkGoSyntax(search);
   return syntaxValid && isValidDeepLinkId(syntaxValid) ? syntaxValid : null;
