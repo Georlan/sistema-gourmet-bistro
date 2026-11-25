@@ -103,7 +103,7 @@ export interface MenuV2ExperienceProps {
   onPayPixClick?: (order: StoredOrder) => void;
   onRefreshOrders?: () => void;
   isRefreshingOrders?: boolean;
-  onClearTrackedOrder?: (orderId: string) => void;
+  onDismissTrackedOrder?: (orderId: string) => void;
   orderingMessage?: string;
   onNotify?: (message: string) => void;
   activeDockTab?: "home" | "orders" | "bag" | "account";
@@ -155,7 +155,7 @@ export default function MenuV2Experience({
   onPayPixClick,
   onRefreshOrders,
   isRefreshingOrders = false,
-  onClearTrackedOrder,
+  onDismissTrackedOrder,
   orderingMessage,
   onNotify,
   activeDockTab = "home",
@@ -849,7 +849,7 @@ export default function MenuV2Experience({
             onSelectOrderId={onSelectOrderId}
             onPayPixClick={onPayPixClick}
             onRefreshOrders={onRefreshOrders}
-            onClearTrackedOrder={onClearTrackedOrder}
+            onDismissTrackedOrder={onDismissTrackedOrder}
             onOrdersClick={onOrdersClick}
           />
         )}
