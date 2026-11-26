@@ -25,6 +25,7 @@
     "ops:investigate": "node scripts/ops-agent-run.mjs",
     "ops:memory:promote": "node scripts/ops-memory-promote.mjs",
     "ops:onboarding": "node scripts/ops-onboarding.mjs",
+    "ops:preflight": "node scripts/support-preflight.mjs",
     "focus:check": "node scripts/focus-check.mjs"
   },
   "dependencies": {
