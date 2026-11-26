@@ -66,3 +66,58 @@ test('histórico aberto acompanha websocket sem duplicar linhas nem consultar en
   await page.waitForTimeout(200);
   expect(state.reads).toBe(2);
 });
+
+test('assistente analisa tema, separa avisos não relacionados e encaminha possível bug', async ({ page }) => {
+  const state = await open(page);
+  const assistRequests: any[] = [];
+  await page.route('**/api/support/assist', route => {
+    assistRequests.push(route.request().postDataJSON());
+    return route.fulfill({
+      status: 200,
+      json: {
+        interpreted_domain: 'entrega',
+        evidence_status: 'possible_bug_no_config_blocker',
+        suspected_bug: true,
+        headline: 'Sem bloqueio de configuração nessa área — pode ser um bug',
+        summary: 'As verificações ligadas a este tema não mostraram erro de configuração ou pausa.',
+        related_checks: [],
+        guided_steps: [
+          {
+            title: 'Conferir regras de entrega e taxas por bairro ou distância',
+            description: 'Verifique se o delivery está ativo e com taxa padrão configurada.',
+            action_label: null,
+            go_id: null,
+          },
+        ],
+        unrelated_observations_count: 2,
+      },
+    });
+  });
+
+  await page.locator('#open-sidebar-btn').click();
+  await page.locator('#drawer-open-customer-support').click();
+
+  const dialog = page.getByRole('dialog', { name: 'Ajuda e feedback KÔMA', exact: true });
+  await dialog.getByRole('button', { name: 'Entrega', exact: true }).click();
+
+  await expect.poll(() => assistRequests.length).toBe(1);
+  expect(assistRequests[0]).toMatchObject({ topic: 'entrega' });
+
+  await expect(dialog.getByText('Possível bug — sem bloqueio de configuração', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Outros 2 aviso(s) gerais da loja não explicam este tema e não foram considerados causa deste problema.')).toBeVisible();
+
+  state.feedbackFails = false;
+  await dialog.getByRole('button', { name: 'Encaminhar para investigação KÔMA', exact: true }).click();
+
+  await expect(dialog.getByText('Mensagem recebida', { exact: true })).toBeVisible();
+  expect(state.feedback).toHaveLength(1);
+  expect(state.feedback[0]).toMatchObject({
+    kind: 'problem',
+    context: {
+      surface: 'garcom',
+      interpreted_domain: 'entrega',
+      suspected_bug: true,
+      evidence_status: 'possible_bug_no_config_blocker',
+    },
+  });
+});
