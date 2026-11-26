@@ -17,6 +17,7 @@ from ..services.customer_satisfaction import (
 )
 from ..services.signup_notifications import _owner_telegram_chat, enqueue
 from ..services.support_diagnostics import (
+    assist_tenant_support,
     build_tenant_self_diagnosis,
     classify_support_feedback,
 )
@@ -49,8 +50,28 @@ class SupportFeedbackContextInput(BaseModel):
     last_error_area: Optional[str] = Field(None, max_length=48)
     last_error_endpoint: Optional[str] = Field(None, max_length=160)
     detected_issue_codes: list[str] = Field(default_factory=list, max_length=12)
+    interpreted_domain: Optional[str] = Field(None, max_length=48)
+    suspected_bug: Optional[bool] = None
+    evidence_status: Optional[
+        Literal[
+            "api_error_detected",
+            "config_condition_found",
+            "possible_bug_no_config_blocker",
+            "guidance_only",
+        ]
+    ] = None
 
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("interpreted_domain")
+    @classmethod
+    def validate_interpreted_domain(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip().lower()
+        if not _AREA_RE.fullmatch(cleaned):
+            raise ValueError("interpreted_domain inválido")
+        return cleaned
 
     @field_validator("navigation_id")
     @classmethod
@@ -146,6 +167,27 @@ def _user_role_name(current_user) -> str:
     ).strip().lower()
 
 
+class SupportAssistInput(BaseModel):
+    message: str = Field("", max_length=2000)
+    topic: Optional[str] = Field(None, max_length=48)
+    kind: Optional[Literal["question", "suggestion", "complaint", "problem"]] = None
+    context: Optional[SupportFeedbackContextInput] = None
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("topic")
+    @classmethod
+    def validate_topic(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = value.strip().lower()
+        if not cleaned:
+            return None
+        if not _AREA_RE.fullmatch(cleaned):
+            raise ValueError("topic inválido")
+        return cleaned
+
+
 @router.get("/api/support/diagnostics")
 def get_koma_support_diagnostics(
     db: Session = Depends(get_db),
@@ -160,6 +202,32 @@ def get_koma_support_diagnostics(
         )
     restaurante_id = require_tenant_id()
     return build_tenant_self_diagnosis(db, restaurante_id, user_role=role)
+
+
+@router.post("/api/support/assist")
+def analyze_koma_support_request(
+    payload: SupportAssistInput,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Analisa o pedido de ajuda com causalidade estrita sobre o estado da loja autenticada."""
+    role = _user_role_name(current_user)
+    restaurante_id = require_tenant_id()
+    ctx = payload.context.model_dump(exclude_none=True) if payload.context is not None else {}
+    return assist_tenant_support(
+        db,
+        restaurante_id,
+        user_role=role,
+        message=payload.message,
+        topic=payload.topic,
+        kind=payload.kind,
+        surface=ctx.get("surface"),
+        navigation_id=ctx.get("navigation_id"),
+        last_support_code=ctx.get("last_support_code"),
+        last_error_status=ctx.get("last_error_status"),
+        last_error_area=ctx.get("last_error_area"),
+        last_error_endpoint=ctx.get("last_error_endpoint"),
+    )
 
 
 @router.get("/clientes/satisfacao")
@@ -277,7 +345,23 @@ def create_koma_support_feedback(
         issues = raw_context.get("detected_issue_codes") or []
         if issues:
             context_lines.append(f"Alertas automáticos: {', '.join(issues)}")
+        if raw_context.get("interpreted_domain") or raw_context.get("evidence_status"):
+            context_lines.append(
+                "Assistente KÔMA: "
+                f"domínio={raw_context.get('interpreted_domain') or '-'} | "
+                f"evidência={raw_context.get('evidence_status') or '-'} | "
+                f"suspeita_bug={'sim' if raw_context.get('suspected_bug') else 'não'}"
+            )
+        triage_domain = raw_context.get("interpreted_domain") or classification["area"]
+        triage_flags = f"--tenant {restaurante_id}"
+        if support_code:
+            triage_flags += f" --support-code {support_code}"
+        elif triage_domain and triage_domain != "geral":
+            triage_flags += f" --domain {triage_domain}"
+        context_lines.append(f"Triagem: npm run ops:triage -- {triage_flags} --json")
 
+        suspected_bug = bool(raw_context.get("suspected_bug"))
+        subject_prefix = "[POSSÍVEL BUG] " if suspected_bug else ""
         context_block = "\n" + "\n".join(context_lines)
         enqueue(
             db,
@@ -286,7 +370,7 @@ def create_koma_support_feedback(
             email=owner_email or None,
             phone=owner_phone or None,
             telegram_chat=owner_telegram_chat,
-            subject=f"{kind_label} de cliente — KÔMA",
+            subject=f"{subject_prefix}{kind_label} de cliente — KÔMA",
             message=(
                 f"Novo feedback KÔMA [{feedback_id}]\n"
                 f"Tipo: {kind_label}\n"
