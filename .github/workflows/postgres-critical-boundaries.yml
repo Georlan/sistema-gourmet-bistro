@@ -3,28 +3,6 @@ name: PostgreSQL Critical Boundaries
 on:
   pull_request:
     branches: [main]
-    paths:
-      - 'backend/alembic/**'
-      - 'backend/app/*models*.py'
-      - 'backend/app/database.py'
-      - 'backend/app/main.py'
-      - 'backend/app/security.py'
-      - 'backend/app/permissions.py'
-      - 'backend/app/websocket_manager.py'
-      - 'backend/app/marmitaria_catalog.py'
-      - 'backend/app/application/orders/**'
-      - 'backend/app/services/**'
-      - 'backend/app/routes/**'
-      - 'backend/requirements*.txt'
-      - 'backend/requirements.lock'
-      - 'backend/tests/*postgres*.py'
-      - 'backend/tests/test_workers_multiprocess.py'
-      - 'backend/tests/test_operational_realtime_multiprocess.py'
-      - 'backend/tests/test_direct_pix.py'
-      - 'backend/tests/test_marmitaria_sizes.py'
-      - 'backend/tests/test_marmitaria_size_migration.py'
-      - 'backend/tests/test_crm_operational_evolution.py'
-      - '.github/workflows/postgres-critical-boundaries.yml'
   schedule:
     - cron: '45 5 * * *'
   workflow_dispatch:
@@ -58,10 +36,42 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
           fi
 
-  postgres-boundaries:
-    name: PostgreSQL critical boundaries
-    needs: [schedule-gate]
-    if: always() && !cancelled() && (needs.schedule-gate.result == 'skipped' || (needs.schedule-gate.result == 'success' && needs.schedule-gate.outputs.run == 'true'))
+  detect-changes:
+    name: Detect PostgreSQL scope
+    if: github.event_name != 'schedule' || github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    outputs:
+      run_pg: ${{ steps.scope.outputs.run_pg }}
+    steps:
+      - name: Checkout base/head
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Check changed paths
+        id: scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT_NAME" != "pull_request" ] || [ -z "$BASE_SHA" ]; then
+            echo "run_pg=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          fi
+          if git diff --name-only "$BASE_SHA" HEAD | grep -Eq '^(backend/alembic/|backend/app/.*models.*\.py$|backend/app/(database|main|security|permissions|websocket_manager|marmitaria_catalog)\.py$|backend/app/(application/orders|services|routes)/|backend/requirements.*\.txt$|backend/requirements\.lock$|backend/tests/.*postgres.*\.py$|backend/tests/test_(workers_multiprocess|operational_realtime_multiprocess|direct_pix|marmitaria_sizes|marmitaria_size_migration|crm_operational_evolution)\.py$|\.github/workflows/postgres-critical-boundaries\.yml$)'; then
+            echo "run_pg=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No PostgreSQL-critical backend files changed; skipping suite cleanly."
+            echo "run_pg=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  postgres-boundaries-suite:
+    name: PostgreSQL critical boundaries suite
+    needs: [schedule-gate, detect-changes]
+    if: always() && !cancelled() && (needs.schedule-gate.result == 'skipped' || (needs.schedule-gate.result == 'success' && needs.schedule-gate.outputs.run == 'true')) && (needs.detect-changes.outputs.run_pg == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
@@ -347,3 +357,21 @@ jobs:
           MIGRATION_DATABASE_URL: sqlite:///./realtime-ci.db
           KOMA_REALTIME_TEST_DATABASE_URL: postgresql+psycopg2://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_realtime_test
         run: python -m pytest -q -ra -x backend/tests/test_operational_realtime_multiprocess.py
+
+  postgres-boundaries:
+    name: PostgreSQL critical boundaries
+    needs: [schedule-gate, detect-changes, postgres-boundaries-suite]
+    if: always() && !cancelled() && (needs.schedule-gate.result == 'skipped' || (needs.schedule-gate.result == 'success' && needs.schedule-gate.outputs.run == 'true'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Enforce PostgreSQL suite verdict
+        run: |
+          echo "detect-changes=${{ needs.detect-changes.result }} (run_pg=${{ needs.detect-changes.outputs.run_pg }})"
+          echo "postgres-boundaries-suite=${{ needs.postgres-boundaries-suite.result }}"
+          if [ "${{ needs.detect-changes.result }}" != "success" ]; then
+            exit 1
+          fi
+          if [ "${{ needs.detect-changes.outputs.run_pg }}" = "true" ] && [ "${{ needs.postgres-boundaries-suite.result }}" != "success" ]; then
+            exit 1
+          fi

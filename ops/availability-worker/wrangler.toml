@@ -11,7 +11,7 @@ KOMA_CENTRAL_URL = "https://central.komafood.com.br"
 KOMA_API_URL = "https://sistema-gourmet-bistro-production.up.railway.app"
 ALERT_COOLDOWN_MS = "1800000"
 
-# Opcional (persistência de estado UP/DEGRADED/DOWN entre invocações no free tier):
-# [[kv_namespaces]]
-# binding = "MONITOR_STATE"
-# id = "<PREENCHER_COM_KV_NAMESPACE_ID>"
+# Persistência durável de estado UP/DEGRADED/DOWN entre execuções no free tier:
+[[kv_namespaces]]
+binding = "MONITOR_STATE"
+id = "8a29e5c20d25476196d34239946d6f66"
