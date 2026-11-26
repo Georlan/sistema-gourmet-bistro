@@ -1,10 +1,42 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, symlinkSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, symlinkSync } from 'node:fs';
 import path from 'node:path';
 
 const DEFAULT_FRONTEND_URL = process.env.KOMA_FRONTEND_URL || 'https://app.komafood.com.br';
 const DEFAULT_API_URL = process.env.KOMA_API_URL || 'https://sistema-gourmet-bistro-production.up.railway.app';
+
+const MANUAL_APPROVAL_PATTERNS = [
+  /^backend\/alembic\//,
+  /^backend\/app\/(security|permissions|fiscal_models)\.py$/,
+  /^backend\/app\/fiscal\//,
+  /^backend\/app\/(routes|services)\/(direct_pix|saas_pix|online_payments|billing|saas_billing|saas_mercadopago)/,
+  /^\.github\/workflows\//,
+  /^product-contract\.json$/,
+];
+
+export function requiresManualApproval(changedFiles = []) {
+  const matched = [];
+  for (const file of changedFiles) {
+    if (MANUAL_APPROVAL_PATTERNS.some(rx => rx.test(file))) {
+      matched.push(file);
+    }
+  }
+  return { required: matched.length > 0, matched };
+}
+
+export function lockfileHash(dir) {
+  const fp = path.join(dir, 'package-lock.json');
+  if (!existsSync(fp)) return null;
+  return createHash('sha256').update(readFileSync(fp)).digest('hex');
+}
+
+export function lockfilesMatch(dirA, dirB) {
+  const ha = lockfileHash(dirA);
+  const hb = lockfileHash(dirB);
+  return Boolean(ha && hb && ha === hb);
+}
 
 export function shaMatches(actual, expected) {
   const a = String(actual || '').trim().toLowerCase();
@@ -22,7 +54,13 @@ export function isShaPublishedOrSuperseded(liveSha, targetSha, isAncestorFn = is
 
 function isGitAncestor(ancestorSha, descendantSha) {
   try {
-    const res = spawnSync('git', ['merge-base', '--is-ancestor', ancestorSha, descendantSha], {
+    let res = spawnSync('git', ['merge-base', '--is-ancestor', ancestorSha, descendantSha], {
+      stdio: 'ignore',
+    });
+    if (res.status === 0) return true;
+    // Fetch latest main once in case a concurrent deploy pushed a newer commit not yet in local git db.
+    spawnSync('git', ['fetch', '--no-tags', 'origin', 'main'], { stdio: 'ignore' });
+    res = spawnSync('git', ['merge-base', '--is-ancestor', ancestorSha, descendantSha], {
       stdio: 'ignore',
     });
     return res.status === 0;
@@ -45,6 +83,8 @@ export function parsePreflightArgs(argv = []) {
     startScope: null,
     cleanupScope: null,
     ship: false,
+    noAutoMerge: false,
+    confirmAutoMerge: false,
     title: '',
     body: '',
     expectBackend: false,
@@ -59,6 +99,8 @@ export function parsePreflightArgs(argv = []) {
     else if (arg === '--backend') opts.expectBackend = true;
     else if (arg === '--smoke') opts.runSmoke = true;
     else if (arg === '--ship') opts.ship = true;
+    else if (arg === '--no-auto-merge') opts.noAutoMerge = true;
+    else if (arg === '--confirm-auto-merge') opts.confirmAutoMerge = true;
     else if (arg === '--watch-deploy' && i + 1 < argv.length) opts.watchDeploy = argv[++i].trim();
     else if (arg.startsWith('--watch-deploy=')) opts.watchDeploy = arg.slice('--watch-deploy='.length).trim();
     else if (arg === '--start' && i + 1 < argv.length) opts.startScope = sanitizeScope(argv[++i]);
@@ -247,6 +289,14 @@ async function watchDeploy(opts) {
   process.exit(1);
 }
 
+function listSupportWorktrees() {
+  const out = safeGit(['worktree', 'list', '--porcelain']);
+  return out
+    .split('\n')
+    .filter(l => l.startsWith('worktree /tmp/koma-'))
+    .map(l => l.replace(/^worktree\s+/, '').trim());
+}
+
 async function startWorktree(scope) {
   if (!scope) {
     console.error('Informe um escopo válido: npm run ops:preflight -- --start <escopo>');
@@ -261,15 +311,33 @@ async function startWorktree(scope) {
     }),
   ]);
   execFileSync('git', ['worktree', 'prune'], { stdio: 'ignore' });
+  const activeWts = listSupportWorktrees().filter(w => w !== wtDir);
+  if (activeWts.length > 0) {
+    console.log(`⚠ Worktrees de suporte ativos/abandonados detectados: ${activeWts.join(', ')}`);
+  }
+  let depsMode = 'existing';
   if (!existsSync(wtDir)) {
-    execFileSync('git', ['worktree', 'add', '-b', branch, wtDir, 'origin/main'], { stdio: 'inherit' });
+    try {
+      execFileSync('git', ['worktree', 'add', '-b', branch, wtDir, 'origin/main'], { stdio: 'inherit' });
+    } catch (err) {
+      execFileSync('git', ['worktree', 'prune'], { stdio: 'ignore' });
+      throw err;
+    }
     const srcNodeModules = path.resolve(process.cwd(), 'node_modules');
     const dstNodeModules = path.join(wtDir, 'node_modules');
     if (existsSync(srcNodeModules) && !existsSync(dstNodeModules)) {
-      symlinkSync(srcNodeModules, dstNodeModules);
+      if (lockfilesMatch(process.cwd(), wtDir)) {
+        symlinkSync(srcNodeModules, dstNodeModules);
+        depsMode = 'symlink (lockfile idêntico)';
+      } else {
+        console.log('ℹ package-lock.json diverge do workspace pai; instalando dependências isoladas no worktree (npm ci)...');
+        execFileSync('npm', ['ci', '--no-audit', '--no-fund'], { cwd: wtDir, stdio: 'inherit' });
+        depsMode = 'npm ci isolado (lockfile divergente)';
+      }
     }
   }
   console.log(`\n✓ Worktree pronto: ${wtDir} (branch ${branch})`);
+  console.log(`  Dependências      : ${depsMode}`);
   console.log(`  PREV_FRONTEND_SHA : ${baseline.production.frontendSha || 'indisponível'}`);
   console.log(`  PREV_API_SHA      : ${baseline.production.apiSha || 'indisponível'}`);
   console.log(`  STARTED_AT        : ${new Date().toISOString()}`);
@@ -298,9 +366,34 @@ function shipBranch(opts) {
     console.error('✗ Informe --title "<título do PR>" ao usar --ship.');
     process.exit(1);
   }
+
+  const changedFiles = safeGit(['diff', '--name-only', 'origin/main...HEAD'])
+    .split('\n')
+    .map(s => s.trim())
+    .filter(Boolean);
+  const approval = requiresManualApproval(changedFiles);
+
   execFileSync('git', ['push', '-u', 'origin', branch], { stdio: 'inherit' });
-  const prArgs = ['pr', 'create', '--base', 'main', '--title', opts.title, '--body', opts.body || opts.title];
-  execFileSync('gh', prArgs, { stdio: 'inherit' });
+
+  // Reutiliza PR existente se houver falha parcial anterior
+  const existingPr = spawnSync('gh', ['pr', 'view', '--json', 'number,url'], { encoding: 'utf8' });
+  if (existingPr.status === 0 && existingPr.stdout.trim()) {
+    console.log(`ℹ PR já existente para ${branch}: ${existingPr.stdout.trim()}`);
+  } else {
+    const prArgs = ['pr', 'create', '--base', 'main', '--title', opts.title, '--body', opts.body || opts.title];
+    execFileSync('gh', prArgs, { stdio: 'inherit' });
+  }
+
+  if (opts.noAutoMerge) {
+    console.log('ℹ Auto-merge omitido (--no-auto-merge). Aguarde revisão/aprovação.');
+    return;
+  }
+  if (approval.required && !opts.confirmAutoMerge) {
+    console.log(
+      `⚠ Auto-merge bloqueado automaticamente: alteração toca arquivos sensíveis (${approval.matched.join(', ')}). Revise e aprove explicitamente ou passe --confirm-auto-merge quando autorizado.`,
+    );
+    return;
+  }
   execFileSync('gh', ['pr', 'merge', '--auto', '--squash', '--delete-branch'], { stdio: 'inherit' });
 }
 

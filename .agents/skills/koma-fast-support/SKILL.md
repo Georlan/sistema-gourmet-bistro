@@ -7,78 +7,71 @@ description: >-
   por restaurante ou incidente em produção.
 ---
 
-# KÔMA — Fast Support Protocol (v2 — Execução Determinística)
+# KÔMA — Fast Support Protocol (Definitivo)
 
-**Princípio central:** IA para diagnóstico e decisão; scripts determinísticos para localização, worktree, validação, PR e deploy. Conhecimento acumulado em vez de redescoberta.
+**Princípio permanente:** IA para diagnóstico e decisões; software determinístico para execução repetitiva; skills para conhecimento acumulado; ferramentas escolhidas por eficiência comprovada.
 
-## 1. Classificação Automática (obrigatória antes de agir)
+## 1. Classificação Automática (e reclassificação dinâmica)
 
-| Nível | Escopo | Regras de execução | Meta experimental |
+Classifique internamente toda solicitação pelo impacto real — **sem exigir que o usuário informe o modo**. Se a investigação focal revelar complexidade ou risco maior, **reclassifique imediatamente** para `STANDARD`, `CRITICAL` ou `INCIDENT`.
+
+| Nível | Escopo | Diretriz | Meta experimental |
 |---|---|---|---|
-| **FAST** | Textos, botões, layout, responsividade, estados visuais, bugs localizados | **Sem** auditoria global, **sem** plano extenso, **sem** artefato intermediário, **sem** subagente extra. Localização via `ops:locate`, 2–4 leituras cirúrgicas, reprodução visual quando UI, correção mínima + teste focal, `focus:check`, PR + auto-merge | **5–7 min** (meta experimental) |
+| **FAST** | Textos, botões, layout, responsividade, estados visuais, bugs localizados de baixo risco | Execução direta (1 agente), `ops:locate`, 2–4 leituras cirúrgicas, reprodução visual quando UI, fix mínimo + teste focal, `focus:check`, PR + auto-merge + smoke | **5–7 min** |
 | **STANDARD** | Frontend + backend, regras operacionais, pedidos, estoque, sync/cache, integrações | `ops:locate` + cruzamento de logs/serviços, teste de integração focal, `focus:check`, PR, CI, auto-merge e smoke | **10–20 min** |
-| **CRITICAL** | Pagamentos, Pix, segurança, auth, multitenancy/RLS, migrations, fiscal, billing, PII | Investigação aprofundada, testes de segurança/PG/concorrência, plano de rollback explícito, aprovação obrigatória antes de merge | Rigor máximo |
-| **INCIDENT** | Operação parada ou degradação severa em produção | Contenção imediata, `ops:preflight --start`, correção mínima em worktree limpo, 1 push, auto-merge, `--watch-deploy --smoke` | **< 10 min** |
+| **CRITICAL** | Pagamentos, Pix, segurança, auth, multitenancy/RLS, migrations, fiscal, billing, PII | Investigação aprofundada, testes PG/segurança/concorrência, plano de rollback, **aprovação explícita antes de merge** (`--ship` bloqueia auto-merge automaticamente) | Rigor máximo |
+| **INCIDENT** | Operação parada ou degradação severa em produção | Contenção imediata, `ops:preflight --start`, correção mínima, 1 push, auto-merge, `--watch-deploy --smoke` | **< 10 min** |
 
-## 2. Matriz Benchmarkada de Ferramentas (primária → fallback)
+## 2. Regras Anti-Overkill Permanentes (chamados FAST)
 
-| Tarefa | Ferramenta Primária (menor latência/contexto) | Fallback | Evitar |
+- **Não** começar com auditoria global nem produzir planos extensos para correções simples.
+- **Não** fazer dezenas de `read_file` antes da 1ª edição: comece sempre com `npm run ops:locate -- "<relato>"` (~60–90ms).
+- **Não** pesquisar novamente informações já presentes nesta skill ou em `AGENTS.md`.
+- **Não** usar MCP lento quando CLI resolve melhor (`gh` CLI 604ms, `railway` CLI 2.5s, HTTP direto 300ms).
+- **Não** criar subagentes sem ganho concreto nem gerar artefatos intermediários desnecessários.
+- **Não** repetir testes equivalentes nem consultar serviços em loop manual.
+- **Não** produzir relatórios longos para chamados simples nem pedir confirmação quando já há informação e autorização suficientes.
+- **Não** encerrar na implementação local quando o escopo autorizado inclui publicação em produção.
+
+## 3. Matriz Definitiva de Ferramentas (primária → fallback)
+
+| Tarefa | Primária | Fallback | Evitar |
 |---|---|---|---|
-| **Localizar arquivos/rotas/testes** | `npm run ops:locate -- "<relato>"` (~50–150ms, usa `rg` 28ms) | `rg -n "<termo>" src/ backend/app/` | Leituras exploratórias em cascata |
-| **GitHub (PRs, checks, merge)** | `gh` CLI (~600ms, autenticado) | — | `github-mcp-server` (PAT expirado `401`) |
-| **Baseline & Deploy Watch** | `npm run ops:preflight` (~1.5s, HTTP direto 300ms) | `curl /meta.json` + `/api/contracts/readiness` | MCP Cloudflare para checar SHA |
-| **Railway status / deploys** | `railway` CLI (`railway deployment list --limit 5`, ~2.5s, 409B) | `railway_mcp` (`get-logs` para logs estruturados) | `railway_mcp list-deployments` (~25s) |
-| **Triagem / Saúde / Banco** | `npm run ops:triage -- --symptom "..."` / `ops:doctor` (read-only) | `supabase_mcp` apenas se autorizado | `supabase_mcp execute_sql` (bloqueado por transport) |
-| **Reprodução visual na tela** | Subagente `browser` (`Model: "flash"`) ou `chrome-devtools-mcp` | Playwright focal (`mobile-390` + `desktop-1366`) | Assumir correção visual só com `build` verde |
+| **Localizar arquivos/endpoints/testes** | `npm run ops:locate -- "<relato>"` (`rg` 28ms + fallback `git grep` 38ms) | `rg -n "<termo>" src/ backend/app/` | Leituras exploratórias em cascata |
+| **GitHub (PRs, checks, merge)** | `gh` CLI (~600ms) | — | `github-mcp-server` (PAT expirado `401`) |
+| **Baseline / Worktree / Ship / Deploy** | `npm run ops:preflight` (`--start`, `--ship`, `--watch-deploy --smoke`, `--cleanup`) | `curl /meta.json` + `/api/contracts/readiness` | Comandos manuais repetidos |
+| **Railway status / logs** | `railway` CLI (`status`, `deployment list`, ~2.5s) | `railway_mcp` (`get-logs`) | `railway_mcp list-deployments` (~25s) |
+| **Triagem / Saúde / Banco** | `npm run ops:triage -- --symptom "..."` / `ops:doctor` (read-only) | `supabase_mcp` somente quando autenticado | `supabase_mcp execute_sql` (rejeitado por transport) |
+| **Tela real / UI** | Subagente `browser` (`Model: "flash"`) ou `chrome-devtools-mcp` | Playwright focal (`mobile-390` + `desktop-1366`) | Assumir correção visual só com `build` verde |
 
-## 3. Fluxo Determinístico de 5 Passos (mínimo de turnos)
+## 4. Ciclo Determinístico de 5 Passos
 
-### Passo 1 — Turno único: Localização + Worktree + Baseline (em paralelo)
-No **primeiro turno**, execute em paralelo:
-1. `npm run ops:locate -- "<relato>"` (retorna top arquivos frontend, backend, endpoints FastAPI e testes exatos em < 150ms).
-2. `npm run ops:preflight -- --start <escopo-curto>` (captura `PREV_FRONTEND_SHA`/`PREV_API_SHA` e cria `/tmp/koma-fix-<escopo>` direto de `origin/main` com `node_modules` linkado, preservando `/home/testuser/Koma_LOCAL`).
-3. Se houver relato de produção: `npm run ops:triage -- --symptom "<relato>"` ou `railway_mcp` (`get-logs`).
-4. Se for bug visual/UI: inicie reprodução real na tela (preview local / fixture E2E / leitura passiva — **nunca** mutação em produção).
+1. **Turno 1 (em paralelo):**
+   - `npm run ops:locate -- "<relato>"`
+   - `npm run ops:preflight -- --start <escopo-curto>` *(verifica hash do `package-lock.json` antes de linkar `node_modules`, lista worktrees concorrentes e preserva `/home/testuser/Koma_LOCAL` intacto)*
+   - Se relato de produção: `npm run ops:triage -- --symptom "<relato>"` ou `railway_mcp get-logs`.
+   - Se bug visual/UI: reprodução real na tela (ambiente local/preview ou leitura passiva).
+2. **Leitura cirúrgica + Correção + Teste focal:**
+   - Leia apenas os 2–4 arquivos apontados pelo `ops:locate`.
+   - Para UI: **Reprodução real → Causa → Correção → Repetição da interação → Confirmação visual** (reaproveite specs `e2e/` e fixtures em `KOMA_E2E_PORT=4283`).
+3. **Validação local única (no worktree):**
+   - `npm run focus:check` (`lint` + `test:unit` + `build` em paralelo ~30s + `pytest` focal) ou `npm run focus:check -- --e2e`.
+4. **1 Push + PR + Auto-Merge Seguro:**
+   - `npm run ops:preflight -- --ship --title "fix(<escopo>): <descrição>" --body "..."`
+   - `--ship` reutiliza PR existente em caso de falha parcial e **bloqueia auto-merge automaticamente** em migrations, segurança, pagamentos/Pix, fiscal, workflows e `product-contract.json` (use `--no-auto-merge` para revisões estéticas pendentes).
+5. **Deploy Watch (resiliente a deploys concorrentes) + Smoke + Limpeza:**
+   - `git fetch origin main && MERGE_SHA=$(git rev-parse origin/main)`
+   - `npm run ops:preflight -- --watch-deploy "$MERGE_SHA" --smoke` *(adicione `--backend` se alterou `backend/**`)*
+   - `npm run ops:preflight -- --cleanup <escopo-curto>`
 
-### Passo 2 — Leitura cirúrgica + Correção mínima + Teste focal
-- Leia apenas os 2–4 arquivos apontados pelo `ops:locate` (evite reler o mesmo arquivo).
-- Implemente a menor correção causal + 1 teste focal de regressão (unitário, pytest ou Playwright).
-- Para bugs de interface, siga a cadeia: **Reprodução real → Causa → Correção → Repetição da interação → Confirmação visual** (reutilize fixtures/specs existentes em `e2e/` com `KOMA_E2E_PORT=4283` em `mobile-390` + `desktop-1366`).
+## 5. Telemetria Compacta Obrigatória (1 linha ao encerrar chamado real)
 
-### Passo 3 — Validação Local Única
-Rode **1 única vez** dentro do worktree:
-```bash
-npm run focus:check            # lint + test:unit + build em paralelo (~30s) + pytest focal
-npm run focus:check -- --e2e   # quando alterou UI/fluxo crítico
-```
+Sem relatórios extensos — registre apenas esta linha sem PII/segredos:
+`[fast-support] class=<FAST|STANDARD|CRITICAL|INCIDENT> first_edit=<Xs> tools=<N> reads=<N> impl=<Xs> validate=<Xs> ci=<Xs> merge=<Xs> deploy=<Xs> total=<Xs> status=<ok|blocked>`
 
-### Passo 4 — 1 Push, PR e Auto-Merge Condicionado
-Em **1 único comando** dentro do worktree (respeitando todos os required checks e aprovações pendentes):
-```bash
-npm run ops:preflight -- --ship --title "fix(<escopo>): <descrição objetiva>" --body "<causa raiz, arquivos, teste, PREV_FRONTEND_SHA/PREV_API_SHA>"
-```
-- **Nunca** execute `--ship` com auto-merge em alterações que exijam aprovação estética, operacional ou de segurança ainda pendente.
-
-### Passo 5 — Deploy Watch (resiliente a deploys concorrentes) + Smoke + Limpeza
-Após merge na `main`:
-```bash
-git fetch origin main && MERGE_SHA=$(git rev-parse origin/main)
-npm run ops:preflight -- --watch-deploy "$MERGE_SHA" --smoke            # frontend-only
-npm run ops:preflight -- --watch-deploy "$MERGE_SHA" --backend --smoke  # se alterou backend/**
-npm run ops:preflight -- --cleanup <escopo-curto>
-```
-- `--watch-deploy` reconhece automaticamente commits posteriores que contenham `$MERGE_SHA` (`git merge-base --is-ancestor`), evitando falso timeout em deploys concorrentes.
-
-## 4. Modelos, Subagentes e Instrumentação Leve
-
-- **Execução direta (1 agente)** é o padrão em chamados `FAST` e `STANDARD` — não invoque subagentes quando 1 turno paralelo local resolve mais rápido.
-- Reserve subagente `browser` (`Model: "flash"`) para interação real na tela e `research` apenas para investigações extensas multi-módulo.
-- Ao encerrar qualquer chamado real, inclua **1 única linha** de telemetria (sem gerar relatórios longos):
-  `[fast-support] class=<FAST|STANDARD|CRITICAL|INCIDENT> locate=<Xs> edit=<Xs> pr=<Xs> merge=<Xs> live=<Xs> reads=<N>`
-
-## 5. Regras Invioláveis
+## 6. Regras Invioláveis
 
 - Nunca fazer push direto em `main`, `--force`, desativar rulesets ou ignorar CI vermelho.
 - Nunca escrever dados sintéticos, pedidos, pagamentos ou reimpressões no **tenant ID 6 (Quentinha Caseira)** ou em produção.
 - Nunca expor tokens, segredos, `.env` ou PII em chats, commits ou logs.
-- Nunca declarar resolvido sem evidência de PR mergeado + SHA publicado (ou superseded) + validação real.
+- Nunca declarar resolvido sem evidência de PR mergeado + SHA publicado (ou descendente confirmado) + validação real.
