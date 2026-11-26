@@ -26,7 +26,7 @@ from app.services.restaurant_provisioning import QA_OPERATION_START
 from app.services.support_diagnostics import build_tenant_self_diagnosis
 from app.session_models import UserSessionVersion
 from app.signup_models import SignupNotification
-from app.support_models import CustomerSupportFeedback
+from app.support_models import CustomerSupportFeedback, SupportInvestigation
 
 TENANT_A = 9881
 TENANT_B = 9882
@@ -43,6 +43,7 @@ def _auth_headers(tenant_id: int, role: str, user_id: str) -> dict[str, str]:
 
 def _cleanup(db):
     for tid in (TENANT_A, TENANT_B):
+        db.query(SupportInvestigation).filter(SupportInvestigation.restaurante_id == tid).delete()
         db.query(CustomerSupportFeedback).filter(CustomerSupportFeedback.restaurante_id == tid).delete()
         db.query(PrintJob).filter(PrintJob.restaurante_id == tid).delete()
         db.query(PrintAgentToken).filter(PrintAgentToken.restaurante_id == tid).delete()
