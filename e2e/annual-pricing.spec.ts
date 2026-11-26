@@ -2,8 +2,8 @@ import { expect, test } from '@playwright/test';
 
 const annualPlans = [
   { plan: 'pocket', monthly: 'R$ 99,90', equivalent: 'R$ 89,91', total: 'R$ 1.078,92', savings: 'R$ 119,88' },
-  { plan: 'pro', monthly: 'R$ 199,90', equivalent: 'R$ 161,91', total: 'R$ 1.942,92', savings: 'R$ 215,88' },
-  { plan: 'premium', monthly: 'R$ 329,90', equivalent: 'R$ 296,91', total: 'R$ 3.562,92', savings: 'R$ 3119,88' },
+  { plan: 'pro', monthly: 'R$ 179,90', equivalent: 'R$ 161,91', total: 'R$ 1.942,92', savings: 'R$ 215,88' },
+  { plan: 'premium', monthly: 'R$ 329,90', equivalent: 'R$ 296,91', total: 'R$ 3.562,92', savings: 'R$ 395,88' },
 ] as const;
 
 for (const { plan, monthly, equivalent, total, savings } of annualPlans) {

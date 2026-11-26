@@ -124,23 +124,23 @@ def resolve_plan_entitlements(
         ).all())
         baseline = frozenset()
         if any(key not in overrides for key in selected):
-            founders_grant = (
-                db.query(SaaSCommercialGrant.id)
-                .filter(
-                    SaaSCommercialGrant.restaurante_id == restaurante_id,
-                    SaaSCommercialGrant.cohort_code == FOUNDERS_COHORT_CODE,
-                    SaaSCommercialGrant.active.is_(True),
-                    SaaSCommercialGrant.free_addon_licenses.is_(True),
-                )
-                .first()
+            plan = get_effective_subscription_plan(
+                restaurante_id, _stored_plan(db, restaurante_id, stored_plan),
             )
-            if founders_grant is not None:
+            if plan == "premium":
                 baseline = KNOWN_ENTITLEMENTS
             else:
-                plan = get_effective_subscription_plan(
-                    restaurante_id, _stored_plan(db, restaurante_id, stored_plan),
+                founders_grant = (
+                    db.query(SaaSCommercialGrant.id)
+                    .filter(
+                        SaaSCommercialGrant.restaurante_id == restaurante_id,
+                        SaaSCommercialGrant.cohort_code == FOUNDERS_COHORT_CODE,
+                        SaaSCommercialGrant.active.is_(True),
+                        SaaSCommercialGrant.free_addon_licenses.is_(True),
+                    )
+                    .first()
                 )
-                baseline = _PLAN_ENTITLEMENTS[plan]
+                baseline = KNOWN_ENTITLEMENTS if founders_grant is not None else _PLAN_ENTITLEMENTS[plan]
         return {key: bool(overrides[key]) if key in overrides else key in baseline for key in selected}
 
     if _effective_tenant_id(db) == int(restaurante_id):
