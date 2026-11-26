@@ -47,6 +47,9 @@ export function parseArgs(argv = []) {
   const result = {
     supportCode: null,
     tenantId: null,
+    investigationId: null,
+    domain: null,
+    bundlePath: null,
     environment: 'production',
     symptom: '',
     json: false,
@@ -64,6 +67,18 @@ export function parseArgs(argv = []) {
       result.tenantId = String(argv[++i]).trim();
     } else if (token.startsWith('--tenant=')) {
       result.tenantId = token.slice('--tenant='.length).trim();
+    } else if (token === '--investigation' && i + 1 < argv.length) {
+      result.investigationId = String(argv[++i]).trim();
+    } else if (token.startsWith('--investigation=')) {
+      result.investigationId = token.slice('--investigation='.length).trim();
+    } else if (token === '--domain' && i + 1 < argv.length) {
+      result.domain = String(argv[++i]).trim().toLowerCase();
+    } else if (token.startsWith('--domain=')) {
+      result.domain = token.slice('--domain='.length).trim().toLowerCase();
+    } else if (token === '--bundle' && i + 1 < argv.length) {
+      result.bundlePath = String(argv[++i]).trim();
+    } else if (token.startsWith('--bundle=')) {
+      result.bundlePath = token.slice('--bundle='.length).trim();
     } else if (token === '--env' && i + 1 < argv.length) {
       result.environment = String(argv[++i]).trim().toLowerCase() || 'production';
     } else if (token.startsWith('--env=')) {
@@ -80,6 +95,12 @@ export function parseArgs(argv = []) {
   }
   if (result.tenantId && !/^[1-9][0-9]*$/.test(result.tenantId)) {
     throw new Error('ID de tenant inválido (--tenant). Informe inteiro positivo.');
+  }
+  if (result.investigationId && !/^INV-[A-Za-z0-9_-]{4,36}$/.test(result.investigationId)) {
+    throw new Error('ID de investigação inválido (--investigation). Use o formato INV-<id>.');
+  }
+  if (result.domain && !/^[a-z0-9_-]{2,48}$/.test(result.domain)) {
+    throw new Error('Domínio inválido (--domain).');
   }
   if (!['production', 'homologation'].includes(result.environment)) {
     throw new Error('Ambiente inválido (--env). Use production ou homologation.');
@@ -227,6 +248,7 @@ export function buildTriageReport({
   contractsProbe,
   traceResult,
   incidentEntries,
+  investigationResult = { queried: false, status: 'skipped', reason: 'Nenhum --investigation informado.', bundle: null },
 }) {
   const frontendSha = metaProbe?.body?.commit || metaProbe?.body?.sha || metaProbe?.body?.buildSha || null;
   const backendSha = liveProbe?.body?.commit || readyProbe?.body?.commit || null;
@@ -261,8 +283,17 @@ export function buildTriageReport({
     websocket: websocketSummary,
   };
 
+  const bundle = investigationResult?.bundle || null;
+  const bundleUntrustedText = bundle?.untrusted_customer_message?.value || '';
+  const combinedSymptom = [
+    args.symptom || '',
+    args.domain || '',
+    bundle?.domain || '',
+    bundleUntrustedText,
+  ].filter(Boolean).join(' ');
+
   const matched = matchIncidentMemory(incidentEntries, {
-    symptom: args.symptom,
+    symptom: combinedSymptom,
     traceEntries: traceResult.entries,
     liveHealth: liveHealthSignals,
   });
@@ -301,6 +332,9 @@ export function buildTriageReport({
   if (args.supportCode && traceResult.status === 'unavailable') {
     recommendedNextSteps.push('Autenticar Railway CLI (`railway login`) para correlacionar logs estruturados do support_code.');
   }
+  if (args.investigationId && !bundle) {
+    recommendedNextSteps.push('Definir KOMA_SUPERADMIN_TOKEN ou --bundle <arquivo.json> para carregar o pacote completo da investigação.');
+  }
 
   return {
     schema_version: TRIAGE_SCHEMA_VERSION,
@@ -309,9 +343,32 @@ export function buildTriageReport({
     environment: args.environment,
     query: {
       support_code: wrapUntrusted(args.supportCode),
-      tenant_id: args.tenantId ? Number(args.tenantId) : null,
+      tenant_id: args.tenantId ? Number(args.tenantId) : (bundle?.restaurante_id ?? null),
+      investigation_id: wrapUntrusted(args.investigationId || bundle?.investigation_id || null),
+      domain: wrapUntrusted(args.domain || bundle?.domain || null),
       symptom: wrapUntrusted(args.symptom || null),
     },
+    investigation: bundle
+      ? {
+          queried: investigationResult.queried,
+          status: investigationResult.status,
+          investigation_id: bundle.investigation_id,
+          restaurante_id: bundle.restaurante_id ?? null,
+          source: bundle.source,
+          domain: bundle.domain,
+          severity: bundle.severity,
+          investigation_status: bundle.status,
+          occurrence_count: bundle.occurrence_count,
+          untrusted_customer_message: wrapUntrusted(bundleUntrustedText || null),
+          evidence_snapshot: bundle.evidence_snapshot || {},
+          initial_diagnosis: bundle.initial_diagnosis || {},
+          agent_result: bundle.agent_result || null,
+        }
+      : {
+          queried: investigationResult.queried,
+          status: investigationResult.status,
+          reason: investigationResult.reason,
+        },
     live_health: {
       frontend_meta: {
         ok: Boolean(metaProbe?.ok),
@@ -354,6 +411,44 @@ export function buildTriageReport({
   };
 }
 
+async function fetchInvestigationBundle(args, target, fetcher) {
+  if (args.bundlePath) {
+    const parsed = JSON.parse(readFileSync(resolve(process.cwd(), args.bundlePath), 'utf8'));
+    return { queried: true, status: 'loaded_from_bundle', reason: null, bundle: parsed };
+  }
+  if (!args.investigationId) {
+    return { queried: false, status: 'skipped', reason: 'Nenhum --investigation informado.', bundle: null };
+  }
+  const token = String(process.env.KOMA_SUPERADMIN_TOKEN || '').trim();
+  if (!token) {
+    return {
+      queried: false,
+      status: 'token_unavailable',
+      reason: 'KOMA_SUPERADMIN_TOKEN não definido neste ambiente.',
+      bundle: null,
+    };
+  }
+  try {
+    const url = `${target.apiUrl.replace(/\/$/, '')}/api/super-admin/support/investigations/${encodeURIComponent(args.investigationId)}`;
+    const res = await fetcher(url, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      return { queried: true, status: 'error', reason: `HTTP ${res.status}`, bundle: null };
+    }
+    const body = await res.json();
+    return { queried: true, status: 'loaded', reason: null, bundle: body };
+  } catch (error) {
+    return {
+      queried: true,
+      status: 'error',
+      reason: error instanceof Error ? error.message : String(error),
+      bundle: null,
+    };
+  }
+}
+
 export async function runTriage(
   argv = process.argv.slice(2),
   {
@@ -366,14 +461,18 @@ export async function runTriage(
   const target = DEFAULT_TARGETS[args.environment];
   const entries = incidentEntries ?? loadIncidentMemory();
 
-  const [metaProbe, liveProbe, readyProbe, contractsProbe] = await Promise.all([
+  const [metaProbe, liveProbe, readyProbe, contractsProbe, investigationResult] = await Promise.all([
     fetchJsonSafely(fetcher, `${target.frontendUrl}/meta.json`),
     fetchJsonSafely(fetcher, `${target.apiUrl}/health/live`),
     fetchJsonSafely(fetcher, `${target.apiUrl}/health/ready`),
     fetchJsonSafely(fetcher, `${target.apiUrl}/api/contracts/readiness`),
+    fetchInvestigationBundle(args, target, fetcher),
   ]);
 
-  const traceResult = queryRailwayTrace(args, target, runner);
+  const effectiveSupportCode = args.supportCode
+    || investigationResult?.bundle?.evidence_snapshot?.context?.last_support_code
+    || null;
+  const traceResult = queryRailwayTrace({ ...args, supportCode: effectiveSupportCode }, target, runner);
 
   return buildTriageReport({
     args,
@@ -384,6 +483,7 @@ export async function runTriage(
     contractsProbe,
     traceResult,
     incidentEntries: entries,
+    investigationResult,
   });
 }
 

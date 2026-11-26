@@ -1,9 +1,12 @@
+import hashlib
+import hmac
+import json
 import os
 import re
 import uuid
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
@@ -21,6 +24,7 @@ from ..services.support_diagnostics import (
     build_tenant_self_diagnosis,
     classify_support_feedback,
 )
+from ..services.support_investigation_service import open_or_deduplicate_investigation
 from ..support_models import CustomerSupportFeedback
 
 router = APIRouter(tags=["Satisfação do Cliente"])
@@ -302,6 +306,31 @@ def create_koma_support_feedback(
         status="new",
     )
     db.add(feedback)
+    db.flush()
+
+    investigation_id: str | None = None
+    investigation_occurrences = 1
+    investigation_severity: str | None = None
+    correlated_count = 0
+    if payload.kind == "problem" or bool(raw_context.get("suspected_bug")):
+        try:
+            inv_record, _deduped = open_or_deduplicate_investigation(
+                db,
+                restaurante_id=restaurante_id,
+                source="customer_support",
+                feedback_id=feedback_id,
+                kind=payload.kind,
+                message=payload.message,
+                raw_context=raw_context,
+                reporter_role=reporter_role,
+            )
+            investigation_id = str(inv_record.id)
+            investigation_occurrences = int(inv_record.occurrence_count or 1)
+            investigation_severity = str(inv_record.severity)
+            correlated_count = int((inv_record.initial_diagnosis or {}).get("correlated_incident_count") or 0)
+        except Exception:
+            # Investigação automática nunca deve impedir o registro do feedback.
+            investigation_id = None
 
     restaurant_name = (
         db.query(Restaurante.nome)
@@ -327,6 +356,10 @@ def create_koma_support_feedback(
         context_lines: list[str] = [
             f"Área/Prioridade: {classification['area']} / {classification['priority']}"
         ]
+        if investigation_id:
+            context_lines.append(
+                f"Investigação: {investigation_id} | sev={investigation_severity} | ocorrências={investigation_occurrences} | correlações={correlated_count}"
+            )
         if raw_context.get("surface") or raw_context.get("navigation_id"):
             context_lines.append(
                 f"Superfície/Nav: {raw_context.get('surface') or '-'} / {raw_context.get('navigation_id') or '-'}"
@@ -353,12 +386,17 @@ def create_koma_support_feedback(
                 f"suspeita_bug={'sim' if raw_context.get('suspected_bug') else 'não'}"
             )
         triage_domain = raw_context.get("interpreted_domain") or classification["area"]
-        triage_flags = f"--tenant {restaurante_id}"
-        if support_code:
-            triage_flags += f" --support-code {support_code}"
-        elif triage_domain and triage_domain != "geral":
-            triage_flags += f" --domain {triage_domain}"
-        context_lines.append(f"Triagem: npm run ops:triage -- {triage_flags} --json")
+        if investigation_id:
+            context_lines.append(
+                f"Triagem: npm run ops:triage -- --tenant {restaurante_id} --investigation {investigation_id} --json"
+            )
+        else:
+            triage_flags = f"--tenant {restaurante_id}"
+            if support_code:
+                triage_flags += f" --support-code {support_code}"
+            elif triage_domain and triage_domain != "geral":
+                triage_flags += f" --domain {triage_domain}"
+            context_lines.append(f"Triagem: npm run ops:triage -- {triage_flags} --json")
 
         suspected_bug = bool(raw_context.get("suspected_bug"))
         subject_prefix = "[POSSÍVEL BUG] " if suspected_bug else ""
@@ -385,4 +423,79 @@ def create_koma_support_feedback(
         )
 
     db.commit()
-    return {"id": feedback_id, "status": "received"}
+    result_payload: dict[str, object] = {"id": feedback_id, "status": "received"}
+    if investigation_id:
+        result_payload["investigation_id"] = investigation_id
+    return result_payload
+
+
+@router.post("/api/internal/support/availability-event", status_code=status.HTTP_201_CREATED)
+async def ingest_availability_worker_event(
+    request: Request,
+    x_koma_monitor_signature: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    """Recebe eventos assinados do availability-worker e registra investigação dedup."""
+    secret = os.getenv("AVAILABILITY_WEBHOOK_SECRET", "").strip()
+    if not secret:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Ingestão de disponibilidade não configurada.",
+        )
+
+    raw_body = await request.body()
+    expected = "sha256=" + hmac.new(
+        secret.encode("utf-8"),
+        raw_body,
+        hashlib.sha256,
+    ).hexdigest()
+    provided = str(x_koma_monitor_signature or "").strip()
+    if not provided or not hmac.compare_digest(expected, provided):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Assinatura de monitoramento inválida.",
+        )
+
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Payload JSON inválido.",
+        )
+
+    transition = str(payload.get("transition") or payload.get("status") or "DOWN").upper()
+    down_checks = payload.get("down_checks") or []
+    degraded_checks = payload.get("degraded_checks") or []
+    summary_parts = [
+        f"Transição externa {transition}",
+        *(f"FALHA {c.get('url')}: {c.get('reason')}" for c in down_checks[:3] if isinstance(c, dict)),
+        *(f"DEGRADADO {c.get('url')}: {c.get('reason')}" for c in degraded_checks[:3] if isinstance(c, dict)),
+    ]
+
+    inv, deduped = open_or_deduplicate_investigation(
+        db,
+        restaurante_id=None,
+        source="availability_worker",
+        kind="problem",
+        message=" | ".join(summary_parts),
+        raw_context={
+            "interpreted_domain": "geral",
+            "suspected_bug": transition in {"DOWN", "DEGRADED"},
+            "evidence_status": "api_error_detected" if transition == "DOWN" else "guidance_only",
+        },
+        external_evidence={
+            "transition": transition,
+            "status": payload.get("status"),
+            "occurred_at": payload.get("occurred_at"),
+            "down_checks": down_checks[:5],
+            "degraded_checks": degraded_checks[:5],
+        },
+    )
+    db.commit()
+    return {
+        "ok": True,
+        "investigation_id": str(inv.id),
+        "deduplicated": deduped,
+        "occurrence_count": int(inv.occurrence_count or 1),
+    }

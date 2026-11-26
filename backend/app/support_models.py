@@ -1,6 +1,7 @@
 import datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Column,
     DateTime,
@@ -160,3 +161,77 @@ class SupportOperatorUser:
 
     def __repr__(self) -> str:
         return f"<SupportOperatorUser {self.id} tenant={self.restaurante_id}>"
+
+
+class SupportInvestigation(Base):
+    """Registro durável de investigação de incidente ou possível bug do KÔMA."""
+
+    __tablename__ = "support_investigations"
+    __table_args__ = (
+        CheckConstraint(
+            "source IN ('customer_support', 'availability_worker', 'manual')",
+            name="ck_support_investigations_source",
+        ),
+        CheckConstraint(
+            "severity IN ('critical', 'high', 'medium', 'low')",
+            name="ck_support_investigations_severity",
+        ),
+        CheckConstraint(
+            "status IN ('queued', 'collecting', 'prepared', 'analyzing', 'completed', 'failed')",
+            name="ck_support_investigations_status",
+        ),
+        CheckConstraint(
+            "occurrence_count >= 1 AND attempts >= 0 AND max_attempts >= 1 AND max_attempts <= 10",
+            name="ck_support_investigations_bounds",
+        ),
+        Index("ix_support_investigations_dedup_key", "dedup_key"),
+        Index("ix_support_investigations_status_created", "status", "created_at"),
+    )
+
+    id = Column(String(40), primary_key=True)
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    feedback_id = Column(
+        String(36),
+        ForeignKey("customer_support_feedback.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    source = Column(String(32), nullable=False, default="customer_support")
+    dedup_key = Column(String(128), nullable=False)
+    domain = Column(String(48), nullable=False, default="geral")
+    severity = Column(String(16), nullable=False, default="medium")
+    status = Column(String(24), nullable=False, default="prepared")
+    evidence_status = Column(String(48), nullable=True)
+    suspected_bug = Column(Boolean, nullable=False, default=False)
+    occurrence_count = Column(Integer, nullable=False, default=1)
+    attempts = Column(Integer, nullable=False, default=0)
+    max_attempts = Column(Integer, nullable=False, default=3)
+    untrusted_summary = Column(Text, nullable=True)
+    evidence_snapshot = Column(JSON, nullable=True)
+    initial_diagnosis = Column(JSON, nullable=True)
+    agent_result = Column(JSON, nullable=True)
+    last_error = Column(Text, nullable=True)
+    last_seen_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        server_default=func.now(),
+        onupdate=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )

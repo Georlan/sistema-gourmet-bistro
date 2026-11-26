@@ -30,6 +30,9 @@ test('ops-triage parses valid args and rejects invalid support codes or tenants'
   assert.deepEqual(parsed, {
     supportCode: 'abc123def456',
     tenantId: '6',
+    investigationId: null,
+    domain: null,
+    bundlePath: null,
     environment: 'production',
     symptom: 'impressora offline',
     json: true,

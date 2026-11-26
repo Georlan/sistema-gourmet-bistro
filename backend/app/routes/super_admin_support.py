@@ -2,6 +2,8 @@ import datetime
 import logging
 import uuid
 
+from typing import Any, Literal, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
@@ -9,7 +11,11 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal, get_db, tenant_session_scope
 from ..models import Restaurante, SuperAdminAuditLog
 from ..security import create_access_token, get_current_user_for_support_action
-from ..support_models import CustomerSupportFeedback, SupportSession
+from ..services.support_investigation_service import (
+    build_investigation_triage_bundle,
+    record_investigation_agent_result,
+)
+from ..support_models import CustomerSupportFeedback, SupportInvestigation, SupportSession
 from .super_admin import get_current_admin
 
 logger = logging.getLogger("koma.super_admin.support")
@@ -382,3 +388,94 @@ def list_tenant_support_feedbacks(
                 for row in rows
             ]
     return {"tenantId": str(target_tenant_id), "items": items}
+
+
+class InvestigationAgentResultInput(BaseModel):
+    executor_mode: Literal["codex-readonly", "simulated", "dry-run", "manual"]
+    simulated: bool = False
+    root_cause_hypothesis: str = Field(..., min_length=5, max_length=2000)
+    confidence: Literal["high", "medium", "low"]
+    affected_components: list[str] = Field(default_factory=list, max_length=15)
+    requires_human_approval: bool = True
+    recommended_actions: list[str] = Field(default_factory=list, max_length=10)
+    safe_customer_guidance_go_id: Optional[str] = Field(None, max_length=64)
+    summary: Optional[str] = Field(None, max_length=2000)
+    next_status: Literal["completed", "failed"] = "completed"
+
+    model_config = ConfigDict(extra="forbid")
+
+
+@router.get("/investigations")
+def list_support_investigations(
+    tenant_id: Optional[str] = Query(default=None),
+    status_filter: Optional[str] = Query(default=None, alias="status"),
+    severity: Optional[str] = Query(default=None),
+    limit: int = Query(default=30, ge=1, le=100),
+    admin: dict = Depends(get_current_admin),
+):
+    """Lista investigações de suporte duráveis para triagem do fundador e agentes."""
+    _ = admin
+    with SessionLocal() as db:
+        if tenant_id is not None:
+            target_tid = _parse_tenant_id(tenant_id)
+            with tenant_session_scope(db, target_tid):
+                q = db.query(SupportInvestigation).filter(
+                    SupportInvestigation.restaurante_id == target_tid
+                )
+                if status_filter:
+                    q = q.filter(SupportInvestigation.status == status_filter.strip().lower())
+                if severity:
+                    q = q.filter(SupportInvestigation.severity == severity.strip().lower())
+                rows = q.order_by(SupportInvestigation.last_seen_at.desc()).limit(limit).all()
+                return {"items": [build_investigation_triage_bundle(r) for r in rows]}
+
+        q = db.query(SupportInvestigation)
+        if status_filter:
+            q = q.filter(SupportInvestigation.status == status_filter.strip().lower())
+        if severity:
+            q = q.filter(SupportInvestigation.severity == severity.strip().lower())
+        rows = q.order_by(SupportInvestigation.last_seen_at.desc()).limit(limit).all()
+        return {"items": [build_investigation_triage_bundle(r) for r in rows]}
+
+
+@router.get("/investigations/{investigation_id}")
+def get_support_investigation_bundle(
+    investigation_id: str,
+    admin: dict = Depends(get_current_admin),
+):
+    """Retorna o pacote estruturado da investigação para ops:triage e agentes."""
+    _ = admin
+    with SessionLocal() as db:
+        inv = db.get(SupportInvestigation, investigation_id.strip())
+        if inv is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Investigação não encontrada.",
+            )
+        return build_investigation_triage_bundle(inv)
+
+
+@router.post("/investigations/{investigation_id}/result")
+def submit_support_investigation_result(
+    investigation_id: str,
+    payload: InvestigationAgentResultInput,
+    admin: dict = Depends(get_current_admin),
+):
+    """Registra resultado estruturado de um executor de agente com limite de tentativas."""
+    _ = admin
+    with SessionLocal() as db:
+        inv = db.get(SupportInvestigation, investigation_id.strip())
+        if inv is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Investigação não encontrada.",
+            )
+        result_dict: dict[str, Any] = payload.model_dump(exclude={"next_status"})
+        updated = record_investigation_agent_result(
+            db,
+            inv,
+            result_payload=result_dict,
+            next_status=payload.next_status,
+        )
+        db.commit()
+        return build_investigation_triage_bundle(updated)
