@@ -133,10 +133,10 @@ def test_cpf_cnpj_validation_rejects_repeated_digits_and_accepts_valid_examples(
 
 
 def test_server_is_source_of_truth_for_contract_prices():
-    assert subscription_monthly_price("pocket") == Decimal("79.90")
+    assert subscription_monthly_price("pocket") == Decimal("99.90")
     assert subscription_marketplace_rate("pocket") == Decimal("0.000000")
-    assert subscription_annual_total("pocket") == Decimal("862.92")
-    assert subscription_annual_monthly_equivalent("pocket") == Decimal("71.91")
+    assert subscription_annual_total("pocket") == Decimal("1078.92")
+    assert subscription_annual_monthly_equivalent("pocket") == Decimal("89.91")
 
     assert subscription_monthly_price("pro") == Decimal("179.90")
     assert subscription_marketplace_rate("pro") == Decimal("0.000000")
@@ -164,8 +164,8 @@ def test_accept_persists_immutable_snapshot_and_returns_receipt(client_and_sessi
     assert data["protocol"].startswith("KOMA-CTR-")
     receipt = data["receipt"]
     assert receipt["commercial"]["pricingVersion"] == COMMERCIAL_PRICING_VERSION
-    assert receipt["commercial"]["fixedMonthlyPrice"] == "79.90"
-    assert receipt["commercial"]["billingAmount"] == "79.90"
+    assert receipt["commercial"]["fixedMonthlyPrice"] == "99.90"
+    assert receipt["commercial"]["billingAmount"] == "99.90"
     assert receipt["commercial"]["annualMonthlyEquivalent"] is None
     assert receipt["commercial"]["marketplaceRate"] == "0.000000"
     assert receipt["commercial"]["fixedBillingRequired"] is True
@@ -228,9 +228,9 @@ def test_pocket_annual_contract_snapshots_discounted_fixed_amount_and_same_onlin
     )
     assert response.status_code == 201, response.text
     commercial = response.json()["receipt"]["commercial"]
-    assert commercial["fixedMonthlyPrice"] == "79.90"
-    assert commercial["billingAmount"] == "862.92"
-    assert commercial["annualMonthlyEquivalent"] == "71.91"
+    assert commercial["fixedMonthlyPrice"] == "99.90"
+    assert commercial["billingAmount"] == "1078.92"
+    assert commercial["annualMonthlyEquivalent"] == "89.91"
     assert commercial["marketplaceRate"] == "0.000000"
     assert commercial["trialDays"] == 7
 
@@ -260,8 +260,8 @@ def test_tenant_commercial_terms_resolves_linked_signed_receipt(client_and_sessi
         assert terms.protocol == accepted.json()["protocol"]
         assert terms.plan == "pocket"
         assert terms.billing_cycle == "mensal"
-        assert terms.fixed_monthly_price == Decimal("79.90")
-        assert terms.billing_amount == Decimal("79.90")
+        assert terms.fixed_monthly_price == Decimal("99.90")
+        assert terms.billing_amount == Decimal("99.90")
         assert terms.annual_monthly_equivalent is None
         assert terms.marketplace_rate == Decimal("0.000000")
         assert terms.legal_version == LEGAL_VERSION
@@ -315,7 +315,7 @@ def test_legacy_v25_snapshot_remains_authoritative_and_immutable(client_and_sess
         frozen_ciphertext = acceptance.receipt_snapshot_encrypted
 
         # Catálogo atual já é o vNext; o contrato antigo não acompanha a mudança.
-        assert subscription_monthly_price("pocket") == Decimal("79.90")
+        assert subscription_monthly_price("pocket") == Decimal("99.90")
         assert subscription_marketplace_rate("pocket") == Decimal("0.000000")
 
         terms = tenant_commercial_terms(db, 988)
@@ -550,8 +550,8 @@ def test_superadmin_inbox_lists_pending_acceptance_without_exposing_full_tax_ids
     assert item["status"] == "SIGNED_PENDING_ACTIVATION"
     assert item["plan"] == "pocket"
     assert item["billingCycle"] == "mensal"
-    assert item["fixedMonthlyPrice"] == "79.90"
-    assert item["billingAmount"] == "79.90"
+    assert item["fixedMonthlyPrice"] == "99.90"
+    assert item["billingAmount"] == "99.90"
     assert item["billingStatus"] == "pending"
     assert item["activationEligible"] is False
     assert item["contractingPartyTaxIdLast4"] == VALID_CNPJ[-4:]
@@ -625,8 +625,8 @@ def test_accept_rejects_stale_legal_provenance(client_and_session):
 @pytest.mark.parametrize(
     "plan,cycle,expected_amount",
     [
-        ("pocket", "mensal", "79.90"),
-        ("pocket", "anual", "862.92"),
+        ("pocket", "mensal", "99.90"),
+        ("pocket", "anual", "1078.92"),
         ("pro", "mensal", "179.90"),
         ("pro", "anual", "1942.92"),
         ("premium", "mensal", "329.90"),

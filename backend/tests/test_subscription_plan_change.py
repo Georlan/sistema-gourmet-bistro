@@ -20,7 +20,7 @@ from app.database import current_restaurante_id, get_db
 from app.legal_config import LEGAL_SOURCE_BLOB_SHA, LEGAL_SOURCE_COMMIT, LEGAL_VERSION
 from app.models import Restaurante, SuperAdminAuditLog
 from app.routes import contracts, saas_billing, subscription_account, super_admin_contracts
-from app.saas_billing_models import SaaSPlanChange, SaaSSubscription
+from app.saas_billing_models import SaaSCommercialGrant, SaaSPlanChange, SaaSSubscription
 from app.services.billing_service import tenant_commercial_terms
 from app.services.online_payments.service import OnlinePaymentService
 from app.services.restaurant_provisioning import resolve_activation_acceptance
@@ -77,6 +77,7 @@ def plan_change_env(monkeypatch):
     RestaurantContractAcceptance.__table__.create(engine)
     SaaSSubscription.__table__.create(engine)
     SaaSPlanChange.__table__.create(engine)
+    SaaSCommercialGrant.__table__.create(engine)
     Session = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
     monkeypatch.setattr(contracts, "SessionLocal", Session)
@@ -365,13 +366,13 @@ def test_paid_to_pocket_updates_recurrence_and_preserves_zero_commission(
     assert accepted.status_code == 201, accepted.text
     change = accepted.json()
     assert change["providerAction"] == "update_amount"
-    assert change["receipt"]["commercial"]["billingAmount"] == "79.90"
+    assert change["receipt"]["commercial"]["billingAmount"] == "99.90"
     assert change["receipt"]["commercial"]["trialDays"] == 0
     assert _fee(Session) == Decimal("0.00")
 
     applied = client.post(f"/api/subscription/plan-change/{change['id']}/apply")
     assert applied.status_code == 200, applied.text
-    assert updated == [("mock-pro-v25", Decimal("79.90"), "pocket")]
+    assert updated == [("mock-pro-v25", Decimal("99.90"), "pocket")]
     assert _fee(Session) == Decimal("0.00")
 
     db = Session()

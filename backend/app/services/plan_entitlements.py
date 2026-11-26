@@ -13,6 +13,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..models import Restaurante
+from ..product_catalog import load_product_catalog
 from ..smartpos_models import RestauranteCapability
 from ..subscription import get_effective_subscription_plan
 
@@ -39,18 +40,10 @@ KNOWN_ENTITLEMENTS = frozenset(
     }
 )
 
+_CATALOG_PLANS = load_product_catalog()["plans"]
 _PLAN_ENTITLEMENTS: dict[str, frozenset[str]] = {
-    "pocket": frozenset({ENTITLEMENT_WAITER_APP}),
-    "pro": frozenset(
-        {
-            ENTITLEMENT_PRINTING,
-            ENTITLEMENT_KDS,
-            ENTITLEMENT_WAITER_APP,
-            ENTITLEMENT_INVENTORY,
-            ENTITLEMENT_ADVANCED_REPORTS,
-        }
-    ),
-    "premium": KNOWN_ENTITLEMENTS,
+    plan_id: frozenset(plan_data.get("capabilities", ()))
+    for plan_id, plan_data in _CATALOG_PLANS.items()
 }
 
 
@@ -122,6 +115,9 @@ def resolve_plan_entitlements(
         return {}
 
     def _resolve():
+        from ..saas_billing_models import SaaSCommercialGrant
+        from ..subscription import FOUNDERS_COHORT_CODE
+
         overrides = dict(db.query(RestauranteCapability.capability, RestauranteCapability.enabled).filter(
             RestauranteCapability.restaurante_id == restaurante_id,
             RestauranteCapability.capability.in_(selected),
@@ -131,7 +127,20 @@ def resolve_plan_entitlements(
             plan = get_effective_subscription_plan(
                 restaurante_id, _stored_plan(db, restaurante_id, stored_plan),
             )
-            baseline = _PLAN_ENTITLEMENTS[plan]
+            if plan == "premium":
+                baseline = KNOWN_ENTITLEMENTS
+            else:
+                founders_grant = (
+                    db.query(SaaSCommercialGrant.id)
+                    .filter(
+                        SaaSCommercialGrant.restaurante_id == restaurante_id,
+                        SaaSCommercialGrant.cohort_code == FOUNDERS_COHORT_CODE,
+                        SaaSCommercialGrant.active.is_(True),
+                        SaaSCommercialGrant.free_addon_licenses.is_(True),
+                    )
+                    .first()
+                )
+                baseline = KNOWN_ENTITLEMENTS if founders_grant is not None else _PLAN_ENTITLEMENTS[plan]
         return {key: bool(overrides[key]) if key in overrides else key in baseline for key in selected}
 
     if _effective_tenant_id(db) == int(restaurante_id):

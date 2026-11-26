@@ -2,8 +2,8 @@ import React from 'react';
 
 const QUESTIONS = [
   {
-    question: 'O KÔMA é um sistema de gestão para restaurantes com PDV?',
-    answer: 'Sim. O KÔMA reúne ponto de venda (PDV), mesas, comandas, pedidos de balcão, retirada, delivery e caixa. Estoque, fichas técnicas e relatórios financeiros estão disponíveis nos planos Pro e Premium.',
+    question: 'O KÔMA é um sistema de gestão completo para restaurantes?',
+    answer: 'Sim. O KÔMA reúne frente de caixa, mesas, comandas, pedidos de balcão, retirada, delivery e fechamento de turno. Estoque, custo dos pratos, aplicativo do entregador e relatórios completos estão disponíveis nos planos Pro e Premium.',
   },
   {
     question: 'Como funcionam as mesas e comandas digitais no App do Garçom?',
@@ -23,11 +23,11 @@ const QUESTIONS = [
   },
   {
     question: 'Posso atender mesas e delivery juntos?',
-    answer: 'Sim, inclusive no Pocket. Os pedidos do cardápio digital chegam pelo checkout web integrado (o cliente não precisa de WhatsApp para comprar); pedidos de WhatsApp ou telefone são lançados por você. O delivery com endereço, taxa e status funciona em todos os planos. O app do entregador faz parte do Premium.',
+    answer: 'Sim, inclusive no Pocket. Os pedidos do cardápio digital chegam pelo checkout web integrado (o cliente não precisa de WhatsApp para comprar); pedidos de WhatsApp ou telefone são lançados por você. O delivery com endereço, taxa e status funciona em todos os planos. O app do entregador faz parte do Pro e do Premium.',
   },
   {
     question: 'Tem taxa de implantação, comissão ou módulos extras?',
-    answer: 'Não. A oferta atual tem 0% de comissão KÔMA sobre pedidos online nos três planos, não cobra taxa de implantação e não vende add-ons. Se você precisar de recursos avançados que não estão no seu plano, o caminho é subir de plano.',
+    answer: 'A implantação padrão é gratuita e a comissão KÔMA sobre pedidos próprios é 0% em todos os planos. Se preferir, oferecemos Implantação VIP opcional por R$ 299,00 (cadastro de até 80 produtos e sessão remota de configuração). Módulos especializados futuros serão opcionais após homologação.',
   },
   {
     question: 'Precisa de internet?',

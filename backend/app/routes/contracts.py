@@ -33,15 +33,47 @@ from ..saas_billing_models import SaaSSubscription
 from ..security import IPRateLimiter, get_current_user
 from ..subscription import (
     COMMERCIAL_PRICING_VERSION,
+    FUTURE_MODULES,
+    ONBOARDING_OFFER,
     VALID_SUBSCRIPTION_PLANS,
+    is_future_module_purchasable,
     subscription_annual_monthly_equivalent,
     subscription_annual_total,
     subscription_marketplace_rate,
     subscription_monthly_price,
 )
+from ..product_catalog import load_product_catalog
 
 
 router = APIRouter(prefix="/api/contracts", tags=["Contratos eletrônicos"])
+
+
+@router.get("/catalog")
+def get_commercial_catalog():
+    """Retorna o catálogo comercial canônico vigente e os módulos futuros não compráveis."""
+    catalog = load_product_catalog()
+    return {
+        "version": COMMERCIAL_PRICING_VERSION,
+        "onlineOrderCommissionEnabled": catalog.get("online_order_commission_enabled", False) is True,
+        "annualDiscountRate": catalog.get("annual_discount_rate", 0.1),
+        "onboarding": ONBOARDING_OFFER,
+        "plans": catalog.get("plans", {}),
+        "futureModules": FUTURE_MODULES,
+    }
+
+
+@router.post("/modules/{module_id}/checkout")
+def block_unavailable_module_checkout(module_id: str):
+    """Impede compra de módulos ainda não homologados ou exclusivos de plano."""
+    normalized = (module_id or "").strip().lower()
+    if normalized not in FUTURE_MODULES:
+        raise HTTPException(status_code=404, detail="Módulo comercial não encontrado.")
+    if not is_future_module_purchasable(normalized):
+        raise HTTPException(
+            status_code=409,
+            detail="Este módulo ainda não está disponível para contratação avulsa.",
+        )
+    raise HTTPException(status_code=409, detail="Contratação avulsa indisponível nesta fase.")
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 _EXPECTED_DOCUMENTS = {
     "terms": "termos",

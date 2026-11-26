@@ -4,6 +4,7 @@ import datetime
 import uuid
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Column,
     DateTime,
@@ -12,6 +13,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     text,
 )
 
@@ -227,6 +229,56 @@ class SaaSPlanChange(Base):
             sqlite_where=text(
                 "status IN ('pending', 'provider_syncing', 'provider_synced')"
             ),
+        ),
+    )
+
+
+class SaaSCommercialGrant(Base):
+    """Condição comercial especial persistente e auditável (ex.: KÔMA Founders)."""
+
+    __tablename__ = "saas_commercial_grants"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    restaurante_id = Column(
+        Integer,
+        ForeignKey("restaurantes.id", ondelete="CASCADE"),
+        default=lambda: current_restaurante_id.get(),
+        nullable=False,
+        index=True,
+    )
+    cohort_code = Column(String(32), nullable=False, default="founders_5")
+    fixed_monthly_price = Column(Numeric(12, 2), nullable=False)
+    free_addon_licenses = Column(Boolean, nullable=False, default=True)
+    active = Column(Boolean, nullable=False, default=True, index=True)
+
+    granted_by = Column(String(64), nullable=False)
+    reason = Column(Text, nullable=False)
+    granted_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.datetime.now(datetime.timezone.utc),
+        nullable=False,
+    )
+
+    revoked_by = Column(String(64), nullable=True)
+    revoke_reason = Column(Text, nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(
+            "cohort_code IN ('founders_5')",
+            name="ck_saas_commercial_grants_cohort",
+        ),
+        CheckConstraint(
+            "fixed_monthly_price >= 0",
+            name="ck_saas_commercial_grants_price",
+        ),
+        Index(
+            "uq_saas_commercial_grants_active_tenant_cohort",
+            "restaurante_id",
+            "cohort_code",
+            unique=True,
+            postgresql_where=text("active IS TRUE"),
+            sqlite_where=text("active = 1"),
         ),
     )
 

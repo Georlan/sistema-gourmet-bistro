@@ -31,21 +31,21 @@ test('Pocket, Pro e Premium mensais seguem direto para suas telas de contrataç�
   assert.equal(html.includes('FALAR SOBRE PRO'), false);
   assert.equal(html.includes('FALAR SOBRE PREMIUM'), false);
   assert.equal(html.includes('koma-plan-savings'), false);
-  assert.equal((html.match(/class="koma-plan-addons"/g) ?? []).length, 3);
+  assert.equal((html.match(/class="koma-plan-addons"/g) ?? []).length, 0);
 });
 
 test('FAQ starts closed and explains delivery, pricing, internet and support without new promises', () => {
   const html = renderToStaticMarkup(createElement(FAQ));
   assert.equal((html.match(/<details>/g) ?? []).length, 10);
   assert.equal(html.includes('<details open'), false);
-  assert.ok(html.includes('sistema de gestão para restaurantes com PDV?'));
+  assert.ok(html.includes('sistema de gestão completo para restaurantes?'));
   assert.ok(html.includes('cardápio digital aceita pedidos sem WhatsApp?'));
   assert.ok(html.includes('mesas e comandas digitais no App do Garçom?'));
   assert.ok(html.includes('restaurantes pequenos com delivery próprio?'));
   assert.ok(html.includes('inclusive no Pocket'));
-  assert.ok(html.includes('O app do entregador faz parte do Premium'));
-  assert.ok(html.includes('não cobra taxa de implantação'));
-  assert.ok(html.includes('não vende add-ons'));
+  assert.ok(html.includes('O app do entregador faz parte do Pro e do Premium'));
+  assert.ok(html.includes('implantação padrão é gratuita'));
+  assert.ok(html.includes('Implantação VIP opcional por R$ 299,00'));
   assert.ok(html.includes('não é plantão 24 horas'));
 });
 

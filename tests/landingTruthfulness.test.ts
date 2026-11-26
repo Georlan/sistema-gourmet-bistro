@@ -49,12 +49,12 @@ test('plan cards expose limitations and a canonical feature comparison without d
   assert.match(plans, /PLAN_COMPARISON_MATRIX/);
   assert.match(plans, /NÃO INCLUI NESTE PLANO/);
   assert.match(plans, /COMPARE TODOS OS RECURSOS/);
-  assert.match(plans, /7 DIAS GRÁTIS NO COMPONENTE FIXO/);
-  assert.match(plans, /Nos planos Pocket, Pro e Premium elegíveis/);
-  assert.match(plans, /isenta somente o componente fixo/);
-  assert.match(plans, /comissão KÔMA é 0% nos três planos e as tarifas de terceiros permanecem separadas/);
-  assert.ok(pocket?.limitations.includes('Sem KDS e impressão automática'));
-  assert.ok(pocket?.limitations.includes('Sem app do entregador e fidelidade'));
+  assert.match(plans, /7 DIAS GRÁTIS APÓS A CONFIGURAÇÃO INICIAL/);
+  assert.match(plans, /0% DE COMISSÃO KÔMA NOS PEDIDOS PRÓPRIOS/);
+  assert.match(plans, /Implantação padrão gratuita/);
+  assert.match(plans, /Tarifas de pagamento de terceiros são cobradas à parte/);
+  assert.ok(pocket?.limitations.includes('Sem painel dedicado da cozinha e impressão automática'));
+  assert.ok(pocket?.limitations.includes('Sem aplicativo do entregador e fidelidade'));
 });
 
 test('plan comparison stays collapsed and exposes a keyboard-friendly horizontal viewport', () => {

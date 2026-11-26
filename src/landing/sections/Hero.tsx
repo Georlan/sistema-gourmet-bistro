@@ -110,7 +110,7 @@ export function Hero() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.45 }}
           >
-            PDV, mesas e comandas com cardápio digital integrado ao caixa. Salão, balcão, retirada e delivery no mesmo fluxo — com 0% de comissão KÔMA por pedido online. Tarifas de pagamento de terceiros são cobradas à parte.
+            Caixa, mesas, garçom e cozinha com cardápio digital integrado. Salão, balcão, retirada e delivery no mesmo fluxo — com 0% de comissão KÔMA por pedido online. Tarifas de pagamento de terceiros são cobradas à parte.
           </motion.p>
 
           <motion.ul

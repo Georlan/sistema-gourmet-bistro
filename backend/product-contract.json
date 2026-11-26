@@ -1,32 +1,43 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "version": "2026-10-zero-commission",
+  "version": "2026-11-business-v2a",
   "online_order_commission_enabled": false,
-  "description": "Contrato canônico de produto, planos comerciais e capabilities do KÔMA.",
+  "annual_discount_rate": 0.1,
+  "description": "Contrato canônico de produto, planos comerciais e capabilities do KÔMA (Business V2-A).",
+  "founders_program": {
+    "cohort_code": "founders_5",
+    "name": "KÔMA Founders",
+    "max_beneficiaries": 5,
+    "monthly_price": 79.9,
+    "free_addon_licenses": true
+  },
+  "onboarding": {
+    "standard_price": 0.0,
+    "vip_price": 299.0,
+    "vip_scope": "Cadastro assistido de até 80 produtos com grupos de complementos + 1 sessão remota de 45 min para configuração de impressora e pedido teste."
+  },
   "plans": {
     "pocket": {
       "id": "pocket",
       "name": "Kôma Pocket",
-      "price": 79.9,
+      "price": 99.9,
       "split_fee_rate": 0.0,
-      "tagline": "O essencial para começar, com 0% de comissão KÔMA.",
+      "tagline": "O essencial para organizar salão, balcão e delivery próprio.",
       "capabilities": [
         "waiter_app"
       ],
       "features": [
-        "Mesas, comandas e balcão",
-        "App do Garçom para salão e comandas",
-        "Equipe, funções e permissões por cargo",
-        "Cardápio digital e QR Code com pedidos no PDV",
-        "Retirada e delivery no mesmo caixa",
-        "Fila de preparo na tela, sem impressora",
-        "Caixa, fechamento e resumo de vendas",
-        "Clientes e histórico de pedidos"
+        "Caixa, mesas e comandas no mesmo fluxo",
+        "Pedidos pelo celular do garçom",
+        "Cardápio digital e QR Code na mesa",
+        "Delivery próprio e retirada integrados",
+        "Fila de preparo organizada na tela da cozinha",
+        "Controle de equipe e fechamento de caixa"
       ],
       "limitations": [
-        "Sem KDS e impressão automática",
-        "Sem estoque, fichas técnicas e financeiro completo",
-        "Sem app do entregador e fidelidade"
+        "Sem painel dedicado da cozinha e impressão automática",
+        "Sem controle de estoque e custo dos pratos",
+        "Sem aplicativo do entregador e fidelidade"
       ]
     },
     "pro": {
@@ -34,23 +45,26 @@
       "name": "Kôma Pro",
       "price": 179.9,
       "split_fee_rate": 0.0,
-      "tagline": "Gestão profissional, com 0% de comissão KÔMA.",
+      "tagline": "Mais controle na cozinha, estoque e entregas.",
       "recommended": true,
       "capabilities": [
         "advanced_reports",
+        "courier_app",
         "inventory",
         "kds",
         "printing",
         "waiter_app"
       ],
       "features": [
-        "Tudo do Pocket",
-        "KDS e impressão automática",
-        "Estoque, fichas técnicas e financeiro",
-        "Relatórios completos para acompanhar o negócio"
+        "Tudo do Pocket incluído",
+        "Painel dedicado da cozinha e impressão automática",
+        "Controle de estoque e baixa por receita",
+        "Custo real e margem de cada prato",
+        "Aplicativo do entregador no celular",
+        "Relatórios completos de vendas e horários"
       ],
       "limitations": [
-        "Sem app do entregador e fidelidade"
+        "Sem programa de fidelidade, cashback e cupons"
       ]
     },
     "premium": {
@@ -58,7 +72,7 @@
       "name": "Kôma Premium",
       "price": 329.9,
       "split_fee_rate": 0.0,
-      "tagline": "Gestão completa, entregadores e fidelização, com 0% de comissão KÔMA.",
+      "tagline": "Operação completa e ferramentas para o cliente voltar.",
       "capabilities": [
         "advanced_reports",
         "coupons",
@@ -70,12 +84,112 @@
         "waiter_app"
       ],
       "features": [
-        "Tudo do Pro",
-        "App do entregador incluído",
-        "Pontos, cashback e cupons incluídos",
-        "Suporte prioritário"
+        "Tudo do Pro incluído",
+        "Programa de fidelidade com pontos e cashback",
+        "Cupons promocionais e campanhas de recompra",
+        "Segmentação de clientes e histórico completo",
+        "Atendimento prioritário em horário comercial",
+        "Preparado para os módulos especializados futuros"
       ],
       "limitations": []
+    }
+  },
+  "future_modules": {
+    "connect_ifood": {
+      "id": "connect_ifood",
+      "name": "KÔMA Connect (iFood)",
+      "status": "planned",
+      "available": false,
+      "purchasable": false,
+      "addon_price_by_plan": {
+        "pocket": 39.9,
+        "pro": 0.0,
+        "premium": 0.0
+      },
+      "summary": "Recebimento e sincronização oficial com iFood (incluso no Pro e Premium após homologação)."
+    },
+    "totem": {
+      "id": "totem",
+      "name": "KÔMA Totem",
+      "status": "planned",
+      "available": false,
+      "purchasable": false,
+      "unit_price": 59.9,
+      "billing_unit": "terminal",
+      "included_in_plans": {
+        "premium": 1
+      },
+      "summary": "Autoatendimento por terminal (1 licença prevista no Premium após homologação; hardware não incluso)."
+    },
+    "loyalty": {
+      "id": "loyalty",
+      "name": "KÔMA Loyalty",
+      "status": "available_in_plan_only",
+      "available": true,
+      "purchasable": false,
+      "standalone_price": 39.9,
+      "included_in_plans": [
+        "premium"
+      ],
+      "summary": "Pontos, cashback e cupons (atualmente exclusivo do plano Premium)."
+    },
+    "finance": {
+      "id": "finance",
+      "name": "KÔMA Finance",
+      "status": "planned",
+      "available": false,
+      "purchasable": false,
+      "standalone_price": 59.9,
+      "included_in_plans": [
+        "premium"
+      ],
+      "summary": "Contas a pagar, contas a receber, fluxo de caixa e DRE gerencial real (em desenvolvimento)."
+    },
+    "fiscal": {
+      "id": "fiscal",
+      "name": "KÔMA Fiscal",
+      "status": "pending_quotation",
+      "available": false,
+      "purchasable": false,
+      "price": null,
+      "quotas_pending": true,
+      "summary": "Emissão de NFC-e integrada (preço e franquia pendentes de cotação com provedores)."
+    },
+    "whatsapp": {
+      "id": "whatsapp",
+      "name": "KÔMA WhatsApp",
+      "status": "planned",
+      "available": false,
+      "purchasable": false,
+      "price": null,
+      "summary": "Automação oficial via Meta Cloud API (produto futuro)."
+    },
+    "multi": {
+      "id": "multi",
+      "name": "KÔMA Multi",
+      "status": "planned",
+      "available": false,
+      "purchasable": false,
+      "price": null,
+      "summary": "Gestão consolidada para redes e franquias (produto futuro)."
+    },
+    "api": {
+      "id": "api",
+      "name": "KÔMA API",
+      "status": "planned",
+      "available": false,
+      "purchasable": false,
+      "price": null,
+      "summary": "Acesso programático e webhooks externos (produto futuro)."
+    },
+    "ai": {
+      "id": "ai",
+      "name": "KÔMA AI",
+      "status": "planned",
+      "available": false,
+      "purchasable": false,
+      "price": null,
+      "summary": "Assistentes operacionais e de cardápio com IA (produto futuro)."
     }
   },
   "capabilities": {
@@ -125,7 +239,7 @@
       "id": "advanced_reports",
       "name": "Relatórios avançados",
       "category": "gestao",
-      "description": "DRE de vendas, indicadores operacionais e relatórios analíticos completos."
+      "description": "Relatórios financeiros de vendas, indicadores operacionais e análises completas."
     }
   },
   "navigation_rules": {
@@ -174,19 +288,19 @@
     }
   ],
   "comparison_matrix": [
-    { "category": "Operação de Salão", "feature": "Kanban de Mesas, Comandas e Balcão", "pocket": true, "pro": true, "premium": true },
-    { "category": "Operação de Salão", "feature": "Caixa e Fechamento de Turno", "pocket": true, "pro": true, "premium": true },
+    { "category": "Operação de Salão", "feature": "Caixa, Mesas, Comandas e Balcão", "pocket": true, "pro": true, "premium": true },
+    { "category": "Operação de Salão", "feature": "Fechamento de Caixa e Turno", "pocket": true, "pro": true, "premium": true },
     { "category": "Operação de Salão", "feature": "Retirada e Delivery com Endereço, Taxa e Status", "pocket": true, "pro": true, "premium": true },
     { "category": "Impressão & Cozinha", "feature": "Fila de Preparo na Tela, sem Impressora", "pocket": true, "pro": true, "premium": true },
-    { "category": "Impressão & Cozinha", "feature": "KDS Dedicado e Impressão Automática", "pocket": false, "pro": true, "premium": true },
+    { "category": "Impressão & Cozinha", "feature": "Painel da Cozinha e Impressão Automática", "pocket": false, "pro": true, "premium": true },
     { "category": "Gestão & Equipe", "feature": "App do Garçom para Salão e Comandas", "pocket": true, "pro": true, "premium": true },
     { "category": "Gestão & Equipe", "feature": "Gestão de Funcionários e Permissões por Cargo", "pocket": true, "pro": true, "premium": true },
-    { "category": "Gestão & Equipe", "feature": "Relatórios Financeiros e DRE de Vendas", "pocket": false, "pro": true, "premium": true },
-    { "category": "Gestão & Equipe", "feature": "Estoque e Fichas Técnicas", "pocket": false, "pro": true, "premium": true },
+    { "category": "Gestão & Equipe", "feature": "Relatórios Completos de Vendas", "pocket": false, "pro": true, "premium": true },
+    { "category": "Gestão & Equipe", "feature": "Estoque e Custo dos Pratos", "pocket": false, "pro": true, "premium": true },
     { "category": "Cardápio Digital", "feature": "Cardápio Online & Pedidos via QR Code", "pocket": true, "pro": true, "premium": true },
-    { "category": "Cardápio Digital", "feature": "Aceite de Pedidos Digitais no PDV", "pocket": true, "pro": true, "premium": true },
+    { "category": "Cardápio Digital", "feature": "Aceite de Pedidos Digitais no Caixa", "pocket": true, "pro": true, "premium": true },
     { "category": "Pagamento Online", "feature": "Taxa KÔMA por pedido online pago", "pocket": "0%", "pro": "0%", "premium": "0%" },
-    { "category": "Entrega", "feature": "App do Entregador", "pocket": false, "pro": false, "premium": true },
+    { "category": "Entrega", "feature": "App do Entregador", "pocket": false, "pro": true, "premium": true },
     { "category": "Clientes", "feature": "Cadastro e Histórico de Clientes", "pocket": true, "pro": true, "premium": true },
     { "category": "Clientes", "feature": "Pontos, Cashback e Cupons", "pocket": false, "pro": false, "premium": true },
     { "category": "Suporte", "feature": "Atendimento Prioritário", "pocket": false, "pro": false, "premium": true }
@@ -194,7 +308,7 @@
   "commercial_comparison_rules": [
     {
       "category": "Impressão & Cozinha",
-      "feature": "KDS Dedicado e Impressão Automática",
+      "feature": "Painel da Cozinha e Impressão Automática",
       "capability_tie": "kds",
       "expected_by_plan": {
         "pocket": false,
@@ -214,7 +328,7 @@
     },
     {
       "category": "Gestão & Equipe",
-      "feature": "Relatórios Financeiros e DRE de Vendas",
+      "feature": "Relatórios Completos de Vendas",
       "capability_tie": "advanced_reports",
       "expected_by_plan": {
         "pocket": false,
@@ -224,7 +338,7 @@
     },
     {
       "category": "Gestão & Equipe",
-      "feature": "Estoque e Fichas Técnicas",
+      "feature": "Estoque e Custo dos Pratos",
       "capability_tie": "inventory",
       "expected_by_plan": {
         "pocket": false,
@@ -238,7 +352,7 @@
       "capability_tie": "courier_app",
       "expected_by_plan": {
         "pocket": false,
-        "pro": false,
+        "pro": true,
         "premium": true
       }
     },

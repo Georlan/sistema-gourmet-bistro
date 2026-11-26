@@ -127,8 +127,8 @@ test('checkout reconhece cartão e Pix universal', () => {
   assert.match(planContract, /payment-methods-v2/);
 });
 
-test('proveniência jurídica fixa commit e blob da Legal 3.5 sem documento fiscal pessoal', () => {
-  assert.match(legalEvidence, /legalContentV35/);
+test('proveniência jurídica fixa commit e blob da Legal 3.6 sem documento fiscal pessoal', () => {
+  assert.match(legalEvidence, /legalContentV36/);
   assert.match(legalEvidence, /LEGAL_SOURCE_COMMIT = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /LEGAL_SOURCE_BLOB_SHA = '[0-9a-f]{40}'/);
   assert.match(legalEvidence, /requireDocument\('termos'\)/);
@@ -221,7 +221,7 @@ test('Legal 3.5 publica modernização jurídica com CRM, PagBank e Pix Direto',
   const { LEGAL_DOCUMENTS, LEGAL_VERSION } = await import('../src/legal/legalContentV35');
   assert.equal(LEGAL_VERSION, '3.5');
   assert.match(legalV35, /from '\.\/legalContentV34'/);
-  assert.match(readFileSync('src/legal/legalContent.ts', 'utf8'), /export \* from '\.\/legalContentV35'/);
+  assert.match(readFileSync('src/legal/legalContent.ts', 'utf8'), /export \* from '\.\/legalContentV36'/);
   const serialized = JSON.stringify(LEGAL_DOCUMENTS);
   for (const amount of ['79,90', '179,90', '329,90', '862,92', '1.942,92', '3.562,92']) {
     assert.ok(serialized.includes(`R$ ${amount}`), `Preço ausente: ${amount}`);

@@ -45,9 +45,11 @@ export interface SubscriptionPlan {
   limitations: string[];
 }
 
-export const ANNUAL_DISCOUNT_RATE = 0.1;
+export const ANNUAL_DISCOUNT_RATE = productContract.annual_discount_rate ?? 0.1;
 export const COMMERCIAL_PRICING_VERSION = productContract.version;
 export const ONLINE_ORDER_COMMISSION_ENABLED = productContract.online_order_commission_enabled;
+export const ONBOARDING_OFFER = productContract.onboarding;
+export const FUTURE_MODULES = productContract.future_modules;
 
 export function getSubscriptionPricing(monthlyPrice: number) {
   const monthlyPriceInCents = Math.round(monthlyPrice * 100);

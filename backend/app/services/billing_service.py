@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..subscription import ONLINE_ORDER_COMMISSION_ENABLED
 from ..models import Restaurante
-from ..saas_billing_models import SaaSBillingSetup, SaaSSubscription
+from ..saas_billing_models import SaaSBillingSetup, SaaSCommercialGrant, SaaSSubscription
 
 
 @dataclass(frozen=True)
@@ -517,3 +517,28 @@ def contract_billing_terms(db, protocol):
         from fastapi import HTTPException
         raise HTTPException(409, "Comprovante contratual indisponível para cobrança.")
     return json.loads(decrypt_field(raw))
+
+
+def tenant_founders_benefit(db: Session, restaurante_id: int) -> SaaSCommercialGrant | None:
+    """Retorna o benefício KÔMA Founders ativo do restaurante, se houver."""
+    from ..subscription import FOUNDERS_COHORT_CODE
+
+    return (
+        db.query(SaaSCommercialGrant)
+        .filter(
+            SaaSCommercialGrant.restaurante_id == restaurante_id,
+            SaaSCommercialGrant.cohort_code == FOUNDERS_COHORT_CODE,
+            SaaSCommercialGrant.active.is_(True),
+        )
+        .one_or_none()
+    )
+
+
+def effective_catalog_monthly_price(db: Session, restaurante_id: int, plan: str) -> Decimal:
+    """Retorna a mensalidade efetiva para o tenant preservando benefício Founders."""
+    from ..subscription import subscription_monthly_price
+
+    grant = tenant_founders_benefit(db, restaurante_id)
+    if grant is not None:
+        return Decimal(str(grant.fixed_monthly_price)).quantize(Decimal("0.01"))
+    return subscription_monthly_price(plan)

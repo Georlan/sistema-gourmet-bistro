@@ -77,7 +77,7 @@ def test_plan_matrix_pocket_pro_premium(tenant_db):
     assert has_plan_entitlement(db, TENANT_ID, ENTITLEMENT_WAITER_APP, stored_plan=rest.plano)
     assert not has_plan_entitlement(db, TENANT_ID, ENTITLEMENT_LOYALTY, stored_plan=rest.plano)
     assert not has_plan_entitlement(db, TENANT_ID, ENTITLEMENT_COUPONS, stored_plan=rest.plano)
-    assert not has_plan_entitlement(db, TENANT_ID, ENTITLEMENT_COURIER_APP, stored_plan=rest.plano)
+    assert has_plan_entitlement(db, TENANT_ID, ENTITLEMENT_COURIER_APP, stored_plan=rest.plano)
     assert has_plan_entitlement(db, TENANT_ID, ENTITLEMENT_INVENTORY, stored_plan=rest.plano)
     assert has_plan_entitlement(db, TENANT_ID, ENTITLEMENT_ADVANCED_REPORTS, stored_plan=rest.plano)
 

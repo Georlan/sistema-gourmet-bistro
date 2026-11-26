@@ -16,6 +16,17 @@ _CONTRACT_PLANS = _PRODUCT_CONTRACT["plans"]
 COMMERCIAL_PRICING_VERSION = _PRODUCT_CONTRACT["version"]
 # Isenção operacional: não reescreve os valores dos snapshots assinados.
 ONLINE_ORDER_COMMISSION_ENABLED = _PRODUCT_CONTRACT.get("online_order_commission_enabled", False) is True
+FOUNDERS_PROGRAM = _PRODUCT_CONTRACT.get("founders_program", {})
+FOUNDERS_COHORT_CODE = str(FOUNDERS_PROGRAM.get("cohort_code") or "founders_5")
+FOUNDERS_MAX_BENEFICIARIES = int(FOUNDERS_PROGRAM.get("max_beneficiaries") or 5)
+FOUNDERS_MONTHLY_PRICE = Decimal(str(FOUNDERS_PROGRAM.get("monthly_price") or "79.90")).quantize(Decimal("0.01"))
+ONBOARDING_OFFER = _PRODUCT_CONTRACT.get("onboarding", {})
+FUTURE_MODULES = _PRODUCT_CONTRACT.get("future_modules", {})
+
+
+def is_future_module_purchasable(module_id: str) -> bool:
+    module = FUTURE_MODULES.get((module_id or "").strip().lower())
+    return bool(module and module.get("purchasable") is True and module.get("available") is True)
 
 # Catálogo comercial vigente para NOVAS contratações.
 #

@@ -12,7 +12,7 @@ def test_backend_only_deployment_loads_generated_canonical_catalog(tmp_path):
     source = Path(__file__).resolve().parents[2] / "product-contract.json"
     (backend / "product-contract.json").write_bytes(source.read_bytes())
     catalog = load_product_catalog(repo_root=tmp_path, backend_root=backend)
-    assert catalog["plans"]["pocket"]["price"] == 79.9
+    assert catalog["plans"]["pocket"]["price"] == 99.9
     assert catalog["online_order_commission_enabled"] is False
 
 

@@ -30,8 +30,10 @@ from .super_admin_fiscal_compliance import router as _super_admin_fiscal_complia
 from .super_admin_integrations import router as _super_admin_integrations_router  # noqa: E402
 
 from .super_admin_capabilities import router as _super_admin_capabilities_router
+from .super_admin_founders import router as _super_admin_founders_router
 
 _super_admin.router.include_router(_super_admin_capabilities_router)
+_super_admin.router.include_router(_super_admin_founders_router)
 _super_admin.router.include_router(_super_admin_access_router)
 _super_admin.router.include_router(_super_admin_support_router)
 _super_admin.router.include_router(_super_admin_incidents_router)

@@ -28,13 +28,14 @@ from ..legal_config import (
 from ..models import Restaurante, SuperAdminAuditLog
 from ..saas_billing_models import SaaSPlanChange, SaaSSubscription
 from ..subscription import (
+    ANNUAL_DISCOUNT_RATE,
     COMMERCIAL_PRICING_VERSION,
     subscription_annual_monthly_equivalent,
     subscription_annual_total,
     subscription_marketplace_rate,
     subscription_monthly_price,
 )
-from .billing_service import tenant_commercial_terms
+from .billing_service import effective_catalog_monthly_price, tenant_commercial_terms
 from .saas_mercadopago import SaasMercadoPagoError, default_saas_mp_service
 
 
@@ -139,12 +140,21 @@ def _cycle_kind(value: str | None) -> str:
     return clean
 
 
-def _target_financials(plan: str, billing_cycle: str) -> tuple[Decimal, Decimal, Decimal | None, Decimal]:
-    fixed = subscription_monthly_price(plan)
+def _target_financials(
+    plan: str,
+    billing_cycle: str,
+    *,
+    db: Session | None = None,
+    tenant_id: int | None = None,
+) -> tuple[Decimal, Decimal, Decimal | None, Decimal]:
+    if db is not None and tenant_id is not None:
+        fixed = effective_catalog_monthly_price(db, tenant_id, plan)
+    else:
+        fixed = subscription_monthly_price(plan)
     rate = subscription_marketplace_rate(plan)
     if _cycle_kind(billing_cycle) == "annual":
-        billing = subscription_annual_total(plan)
-        equivalent = subscription_annual_monthly_equivalent(plan)
+        billing = (fixed * Decimal("12") * (Decimal("1") - ANNUAL_DISCOUNT_RATE)).quantize(_MONEY)
+        equivalent = (billing / Decimal("12")).quantize(_MONEY)
     else:
         billing = fixed
         equivalent = None
@@ -236,6 +246,8 @@ def create_plan_change(
     fixed, billing_amount, annual_equivalent, target_rate = _target_financials(
         payload.plan,
         payload.billing_cycle,
+        db=db,
+        tenant_id=tenant_id,
     )
     if fixed > 0 and _cycle_kind(payload.billing_cycle) != _cycle_kind(current_terms.billing_cycle):
         raise HTTPException(

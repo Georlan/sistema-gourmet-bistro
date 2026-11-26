@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 const annualPlans = [
-  { plan: 'pocket', monthly: 'R$ 79,90', equivalent: 'R$ 71,91', total: 'R$ 862,92', savings: 'R$ 95,88' },
+  { plan: 'pocket', monthly: 'R$ 99,90', equivalent: 'R$ 89,91', total: 'R$ 1.078,92', savings: 'R$ 119,88' },
   { plan: 'pro', monthly: 'R$ 179,90', equivalent: 'R$ 161,91', total: 'R$ 1.942,92', savings: 'R$ 215,88' },
   { plan: 'premium', monthly: 'R$ 329,90', equivalent: 'R$ 296,91', total: 'R$ 3.562,92', savings: 'R$ 395,88' },
 ] as const;
@@ -38,8 +38,9 @@ for (const { plan, monthly, equivalent, total, savings } of annualPlans) {
     });
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     await page.getByLabel('Nome do restaurante', { exact: true }).fill('Bistrô Anual');
+    await page.getByLabel('Tipo de operação').selectOption('generic');
     await page.getByLabel('Seu nome', { exact: true }).fill('Ana Silva');
-    await page.getByLabel('E-mail', { exact: true }).fill('ana@example.com');
+    await page.getByLabel('E-mail de acesso do administrador').fill('ana@example.com');
     await page.getByLabel('WhatsApp', { exact: true }).fill('85999999999');
     await page.getByRole('button', { name: 'Salvar e continuar' }).click();
     expect(savedCycle).toBe('anual');
