@@ -101,23 +101,38 @@ jobs:
         if: steps.backend_paths.outputs.frontend == 'true' && steps.node_modules_cache.outputs.cache-hit != 'true'
         run: npm ci --no-audit --no-fund
 
-      - name: TypeScript check
+      - name: TypeScript check and production build (parallel)
         if: steps.backend_paths.outputs.frontend == 'true'
-        run: npm run lint
+        run: |
+          set -uo pipefail
+          run_task() {
+            local name="$1"; shift
+            local start=$SECONDS
+            "$@" > "/tmp/ci-${name}.log" 2>&1
+            local rc=$?
+            echo "${name} finished in $((SECONDS - start))s (exit=${rc})"
+            return $rc
+          }
+          run_task lint npm run lint &
+          pid_lint=$!
+          run_task build npm run build &
+          pid_build=$!
+
+          rc=0
+          wait "$pid_lint" || { echo "::error::TypeScript check failed"; cat /tmp/ci-lint.log; rc=1; }
+          wait "$pid_build" || { echo "::error::Production build failed"; cat /tmp/ci-build.log; rc=1; }
+          exit "$rc"
 
       - name: Frontend unit tests
         if: steps.backend_paths.outputs.frontend == 'true'
         run: npm run test:unit
-
-      - name: Production build
-        if: steps.backend_paths.outputs.frontend == 'true'
-        run: npm run build
 
       - name: Performance budget audit
         if: steps.backend_paths.outputs.frontend == 'true'
         run: npm run audit:perf
 
       - name: Backend syntax check
+        if: steps.backend_paths.outputs.print == 'true'
         run: python -m compileall -q backend/app
 
       - name: Setup Python for sensitive backend smoke

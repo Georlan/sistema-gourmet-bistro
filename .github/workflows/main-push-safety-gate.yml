@@ -35,12 +35,28 @@ jobs:
       - name: Install dependencies
         if: steps.node_modules_cache.outputs.cache-hit != 'true'
         run: npm ci --no-audit --no-fund
-      - name: TypeScript check
-        run: npm run lint
+      - name: TypeScript check and production build (parallel)
+        run: |
+          set -uo pipefail
+          run_task() {
+            local name="$1"; shift
+            local start=$SECONDS
+            "$@" > "/tmp/ci-main-${name}.log" 2>&1
+            local rc=$?
+            echo "${name} finished in $((SECONDS - start))s (exit=${rc})"
+            return $rc
+          }
+          run_task lint npm run lint &
+          pid_lint=$!
+          run_task build npm run build &
+          pid_build=$!
+
+          rc=0
+          wait "$pid_lint" || { echo "::error::TypeScript check failed"; cat /tmp/ci-main-lint.log; rc=1; }
+          wait "$pid_build" || { echo "::error::Production build failed"; cat /tmp/ci-main-build.log; rc=1; }
+          exit "$rc"
       - name: Frontend unit tests
         run: npm run test:unit
-      - name: Production build
-        run: npm run build
 
   backend:
     name: Backend post-merge critical smoke

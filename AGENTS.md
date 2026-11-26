@@ -43,7 +43,7 @@ Antes de projetar ou alterar interfaces, consulte `docs/design-system/DESIGN_SYS
 | Landing / dispositivos | `.cursor/rules/landing-device-mockups.mdc` | `docs/landing-*-mockup.md`; preservar visual 3D, alpha real e tela substituível |
 | CI / governança | `.github/workflows/quality-gate.yml` | `docs/engineering/change-governance.md` |
 | Rotas / aliases HTTP | `docs/engineering/route-ownership.md` | Um responsável por método/URL; preservar contratos e imports explícitos |
-| Suporte urgente / Hotfix | `docs/operations/hotfix-emergency-playbook.md` | Worktree isolado de `origin/main`, validação focal, 1 push, `gh pr merge --auto --squash --delete-branch` e `production-smoke.mjs` |
+| Suporte rápido / Hotfix | `.agents/skills/koma-fast-support/SKILL.md` e `docs/operations/hotfix-emergency-playbook.md` | Classificação automática (`FAST`/`STANDARD`/`CRITICAL`/`INCIDENT`), `npm run ops:preflight`, worktree de `origin/main`, `focus:check`, 1 push, auto-merge e `production-smoke.mjs` |
 
 ## Eficiência sem regressão operacional (obrigatória)
 
