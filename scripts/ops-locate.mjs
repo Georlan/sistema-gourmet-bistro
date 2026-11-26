@@ -65,6 +65,16 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function parseCountOutput(out) {
+  return out
+    .split('\n')
+    .filter(Boolean)
+    .map(line => {
+      const idx = line.lastIndexOf(':');
+      return { file: line.slice(0, idx), hits: Number(line.slice(idx + 1)) || 1 };
+    });
+}
+
 function runRgCount(pattern, dirs, cwd) {
   const existing = dirs.filter(d => existsSync(`${cwd}/${d}`));
   if (!existing.length || !pattern) return [];
@@ -74,15 +84,21 @@ function runRgCount(pattern, dirs, cwd) {
       ['--count-matches', '--ignore-case', '--no-heading', '--color=never', pattern, ...existing],
       { cwd, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] },
     );
-    return out
-      .split('\n')
-      .filter(Boolean)
-      .map(line => {
-        const idx = line.lastIndexOf(':');
-        return { file: line.slice(0, idx), hits: Number(line.slice(idx + 1)) || 1 };
-      });
-  } catch {
-    return [];
+    return parseCountOutput(out);
+  } catch (err) {
+    if (err && typeof err === 'object' && 'status' in err && err.status === 1) {
+      return [];
+    }
+    try {
+      const out = execFileSync(
+        'git',
+        ['grep', '-c', '-i', '-E', pattern, '--', ...existing],
+        { cwd, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] },
+      );
+      return parseCountOutput(out);
+    } catch {
+      return [];
+    }
   }
 }
 
