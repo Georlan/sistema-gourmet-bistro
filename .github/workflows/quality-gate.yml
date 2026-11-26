@@ -21,7 +21,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Detect changed surfaces and sensitive backend paths
         id: backend_paths
@@ -101,7 +101,7 @@ jobs:
         if: steps.backend_paths.outputs.frontend == 'true' && steps.node_modules_cache.outputs.cache-hit != 'true'
         run: npm ci --no-audit --no-fund
 
-      - name: Frontend lint, unit tests and build (parallel)
+      - name: TypeScript check and production build (parallel)
         if: steps.backend_paths.outputs.frontend == 'true'
         run: |
           set -uo pipefail
@@ -115,19 +115,17 @@ jobs:
           }
           run_task lint npm run lint &
           pid_lint=$!
-          run_task unit npm run test:unit &
-          pid_unit=$!
           run_task build npm run build &
           pid_build=$!
 
           rc=0
           wait "$pid_lint" || { echo "::error::TypeScript check failed"; cat /tmp/ci-lint.log; rc=1; }
-          wait "$pid_unit" || { echo "::error::Frontend unit tests failed"; cat /tmp/ci-unit.log; rc=1; }
           wait "$pid_build" || { echo "::error::Production build failed"; cat /tmp/ci-build.log; rc=1; }
-          if [ "$rc" -ne 0 ]; then
-            exit "$rc"
-          fi
-          tail -n 12 /tmp/ci-unit.log
+          exit "$rc"
+
+      - name: Frontend unit tests
+        if: steps.backend_paths.outputs.frontend == 'true'
+        run: npm run test:unit
 
       - name: Performance budget audit
         if: steps.backend_paths.outputs.frontend == 'true'
