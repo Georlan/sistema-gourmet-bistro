@@ -156,6 +156,65 @@ async function sendTelegramAlert(env, text, fetcher) {
   return { sent: response.ok, status: response.status };
 }
 
+async function signPayloadHmac(secret, rawBody) {
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signatureBuffer = await crypto.subtle.sign('HMAC', key, encoder.encode(rawBody));
+  return Array.from(new Uint8Array(signatureBuffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+async function notifyInvestigationIngest(env, { transition, probeResult, nowMs }, fetcher) {
+  const ingestUrl = String(env?.KOMA_AVAILABILITY_INGEST_URL || '').trim();
+  const secret = String(env?.AVAILABILITY_WEBHOOK_SECRET || '').trim();
+  if (!ingestUrl || !secret) return { sent: false, reason: 'ingest_not_configured' };
+
+  const payload = {
+    source: 'availability_worker',
+    transition,
+    status: probeResult.status,
+    occurred_at: new Date(nowMs).toISOString(),
+    down_checks: (probeResult.downChecks || []).map(item => ({
+      url: item.url,
+      kind: item.kind,
+      status: item.status,
+      reason: item.reason,
+      elapsed_ms: item.elapsedMs,
+    })),
+    degraded_checks: (probeResult.degradedChecks || []).map(item => ({
+      url: item.url,
+      kind: item.kind,
+      status: item.status,
+      reason: item.reason,
+      elapsed_ms: item.elapsedMs,
+    })),
+  };
+  const rawBody = JSON.stringify(payload);
+  const signature = await signPayloadHmac(secret, rawBody);
+
+  try {
+    const response = await fetcher(ingestUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Koma-Monitor-Signature': `sha256=${signature}`,
+      },
+      body: rawBody,
+      signal: AbortSignal.timeout(5_000),
+    });
+    return { sent: response.ok, status: response.status };
+  } catch (error) {
+    return { sent: false, reason: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 let memoryFallbackState = null;
 
 async function readState(env) {
@@ -197,18 +256,23 @@ export async function runScheduledCheck(
     retested = true;
   }
 
+  const nowMs = now();
   const previousState = await readState(env);
   const evaluation = evaluateTransition({
     previousState,
     probeStatus: probeResult.status,
-    nowMs: now(),
+    nowMs,
     cooldownMs,
   });
 
   let alertResult = { sent: false, reason: 'no_transition' };
+  let investigationResult = { sent: false, reason: 'no_transition' };
   if (evaluation.shouldAlert) {
     const message = buildTelegramMessage({ transition: evaluation.transition, probeResult });
-    alertResult = await sendTelegramAlert(env, message, fetcher);
+    [alertResult, investigationResult] = await Promise.all([
+      sendTelegramAlert(env, message, fetcher),
+      notifyInvestigationIngest(env, { transition: evaluation.transition, probeResult, nowMs }, fetcher),
+    ]);
   }
 
   await writeState(env, evaluation.nextState);
@@ -218,6 +282,7 @@ export async function runScheduledCheck(
     retested,
     shouldAlert: evaluation.shouldAlert,
     alertResult,
+    investigationResult,
     state: evaluation.nextState,
     checks: probeResult.checks,
   };

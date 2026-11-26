@@ -201,3 +201,42 @@ test('availability worker flags DEGRADED when db_pool has wait_timeouts_total > 
   const escalated = evaluateTransition({ previousState: result.state, probeStatus: 'DOWN', nowMs: 3_001_000 });
   assert.equal(escalated.shouldAlert, true);
 });
+
+test('availability worker signs and posts investigation event on DOWN transition when ingest URL is configured', async () => {
+  const kv = makeKvStore();
+  const ingestRequests: Array<{ headers: HeadersInit | undefined; body: any }> = [];
+
+  const result = await runScheduledCheck(
+    {
+      MONITOR_STATE: kv,
+      KOMA_AVAILABILITY_INGEST_URL: 'https://api.example.test/api/internal/support/availability-event',
+      AVAILABILITY_WEBHOOK_SECRET: 'demo-webhook-key',
+    },
+    {
+      fetcher: async (url: string | URL, init?: RequestInit) => {
+        const target = String(url);
+        if (target.includes('/api/internal/support/availability-event')) {
+          ingestRequests.push({
+            headers: init?.headers,
+            body: JSON.parse(String(init?.body || '{}')),
+          });
+          return new Response(JSON.stringify({ ok: true, investigation_id: 'INV-TEST1' }), { status: 201 });
+        }
+        return healthyFetcher({
+          '/health/live': () => new Response('down', { status: 503 }),
+        })(url);
+      },
+      sleep: async () => {},
+      retestDelayMs: 15000,
+      now: () => 4_000_000,
+    },
+  );
+
+  assert.equal(result.status, 'DOWN');
+  assert.equal(result.investigationResult.sent, true);
+  assert.equal(ingestRequests.length, 1);
+  assert.equal(ingestRequests[0].body.transition, 'DOWN');
+  assert.equal(ingestRequests[0].body.down_checks.length, 1);
+  const sigHeader = (ingestRequests[0].headers as Record<string, string>)['X-Koma-Monitor-Signature'];
+  assert.match(sigHeader, /^sha256=[a-f0-9]{64}$/);
+});
