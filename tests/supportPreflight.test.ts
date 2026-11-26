@@ -4,7 +4,9 @@ import test from 'node:test';
 import {
   evaluateWorkspaceDrift,
   isShaPublishedOrSuperseded,
+  lockfilesMatch,
   parsePreflightArgs,
+  requiresManualApproval,
   sanitizeScope,
   shaMatches,
 } from '../scripts/support-preflight.mjs';
@@ -63,4 +65,33 @@ test('isShaPublishedOrSuperseded accepts exact match and newer descendant commit
     matched: false,
     superseded: false,
   });
+});
+
+test('requiresManualApproval flags critical paths and allows low-risk UI fixes', () => {
+  assert.deepEqual(requiresManualApproval(['src/cardapio/v2/MenuBottomDock.tsx']), {
+    required: false,
+    matched: [],
+  });
+  const critical = requiresManualApproval([
+    'backend/alembic/versions/20261126_test.py',
+    'backend/app/routes/direct_pix.py',
+    'src/App.tsx',
+  ]);
+  assert.equal(critical.required, true);
+  assert.equal(critical.matched.length, 2);
+});
+
+test('lockfilesMatch detects identical directory lockfile', () => {
+  assert.equal(lockfilesMatch(process.cwd(), process.cwd()), true);
+  assert.equal(lockfilesMatch(process.cwd(), '/nonexistent-dir-koma'), false);
+});
+
+test('parsePreflightArgs handles --no-auto-merge and --confirm-auto-merge flags', () => {
+  const noAuto = parsePreflightArgs(['--ship', '--no-auto-merge', '--title', 'fix: ui']);
+  assert.equal(noAuto.ship, true);
+  assert.equal(noAuto.noAutoMerge, true);
+  assert.equal(noAuto.confirmAutoMerge, false);
+
+  const confirm = parsePreflightArgs(['--ship', '--confirm-auto-merge', '--title', 'fix: ci']);
+  assert.equal(confirm.confirmAutoMerge, true);
 });
