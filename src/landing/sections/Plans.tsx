@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { Check, Minus } from 'lucide-react';
 import {
   ANNUAL_DISCOUNT_RATE,
+  FUTURE_MODULES,
+  ONBOARDING_OFFER,
   PLAN_COMPARISON_MATRIX,
   SUBSCRIPTION_PLANS,
   formatCurrency,
-  formatPercentage,
   getSubscriptionPricing,
   type FeatureComparisonRow,
   type SubscriptionPlanId,
@@ -15,27 +16,31 @@ const PLAN_PRESENTATION: Record<SubscriptionPlanId, {
   stage: string;
   action: string;
   fit: string;
-  note: string;
 }> = {
   pocket: {
     stage: 'ENTRADA SIMPLES',
     action: 'COMEÇAR',
-    fit: 'Para restaurantes pequenos e operações enxutas que atendem salão, balcão e delivery próprio.',
-    note: 'Tudo o que é essencial para começar: cardápio digital, App do Garçom, equipe, pedidos, caixa, clientes e fila de preparo na tela.',
+    fit: 'Para lanchonetes, cafés e restaurantes enxutos com salão, balcão e delivery próprio.',
   },
   pro: {
     stage: 'MAIS RECOMENDADO',
     action: 'ORGANIZAR',
-    fit: 'Para quem quer adicionar cozinha dedicada, estoque, financeiro e relatórios a uma operação mais profissional.',
-    note: 'Gestão de cozinha, estoque e financeiro com 0% de comissão KÔMA nos pedidos online.',
+    fit: 'Para restaurantes com cozinha ativa, controle de estoque e entregas próprias.',
   },
   premium: {
     stage: 'GESTÃO COMPLETA',
     action: 'ESCALAR',
-    fit: 'Para quem quer gestão completa, entregadores e fidelização com 0% de comissão KÔMA.',
-    note: 'App do entregador, pontos, cashback e cupons já fazem parte do plano. Não existem módulos pagos à parte.',
+    fit: 'Para operações que querem fidelizar clientes com pontos, cashback e cupons.',
   },
 };
+
+const FUTURE_MODULE_ITEMS = Object.values(FUTURE_MODULES ?? {}) as Array<{
+  id: string;
+  name: string;
+  status: string;
+  available: boolean;
+  summary: string;
+}>;
 
 const COMPARISON_CATEGORIES = PLAN_COMPARISON_MATRIX.reduce<string[]>((categories, row) => {
   if (!categories.includes(row.category)) categories.push(row.category);
@@ -57,11 +62,13 @@ export function Plans() {
       <div className="koma-plans-simple-heading">
         <div>
           <span>05 / PLANOS</span>
-          <h2 id="plans-title">COMECE LEVE.<br />CRESÇA PAGANDO MENOS.</h2>
+          <h2 id="plans-title">COMECE ENXUTO.<br />CRESÇA NO SEU RITMO.</h2>
         </div>
         <div>
-          <p><strong>SEM TAXA DE IMPLANTAÇÃO.</strong> Sem add-ons. Você escolhe o plano e já sabe o que está incluído.</p>
-          <small>0% de comissão KÔMA por pedido online nos três planos. Cardápio digital, mesas, equipe, App do Garçom e delivery já começam no Pocket.</small>
+          <p><strong>0% DE COMISSÃO KÔMA NOS PEDIDOS PRÓPRIOS.</strong> Válido para todos os planos, sem cobrança por volume de pedidos.</p>
+          <small>
+            Implantação padrão gratuita. Implantação VIP opcional por {formatCurrency(ONBOARDING_OFFER?.vip_price ?? 299)} ({ONBOARDING_OFFER?.vip_scope}). Tarifas de pagamento de terceiros são cobradas à parte pelo provedor conectado.
+          </small>
         </div>
       </div>
 
@@ -86,14 +93,14 @@ export function Plans() {
         </div>
         <p>
           {isYearly
-            ? `Pocket, Pro e Premium: valor mensal equivalente com ${ANNUAL_DISCOUNT_RATE * 100}% de desconto somente no componente fixo. A taxa KÔMA por pedido online não muda.`
-            : 'Pague mês a mês, sem taxa de implantação.'}
+            ? `Pocket, Pro e Premium: valor mensal equivalente com ${ANNUAL_DISCOUNT_RATE * 100}% de desconto na assinatura fixa.`
+            : 'Pague mês a mês, sem fidelidade e com implantação padrão gratuita.'}
         </p>
       </div>
 
       <div className="koma-plan-trial-note" role="note" aria-label="Condição do período de teste">
-        <strong>7 DIAS GRÁTIS NO COMPONENTE FIXO</strong>
-        <span>Nos planos Pocket, Pro e Premium elegíveis, o teste começa após a implantação essencial e isenta somente o componente fixo; a comissão KÔMA é 0% nos três planos e as tarifas de terceiros permanecem separadas.</span>
+        <strong>7 DIAS GRÁTIS APÓS A CONFIGURAÇÃO INICIAL</strong>
+        <span>O período de teste começa somente depois que você prepara o essencial para operar; você não perde dias enquanto monta o cardápio.</span>
       </div>
 
       <div className="koma-plans-grid koma-plans-grid--simple">
@@ -128,8 +135,8 @@ export function Plans() {
               </div>
               <p className="koma-plan-billing-note">
                 {isYearly
-                  ? `${formatCurrency(pricing.annualTotal)} por ano · condições de pagamento exibidas na contratação`
-                  : 'Sem taxa de implantação'}
+                  ? `${formatCurrency(pricing.annualTotal)} por ano · condições exibidas na contratação`
+                  : 'Implantação padrão gratuita · VIP opcional R$ 299,00'}
               </p>
               {isYearly && (
                 <p className="koma-plan-savings is-active">
@@ -153,21 +160,6 @@ export function Plans() {
                   </ul>
                 </div>
               )}
-
-              <p className="koma-plan-extra">{presentation.note}</p>
-
-              <div className="koma-plan-addons" aria-label={`Taxa de pagamentos online do ${plan.name}`}>
-                <h4>PAGAMENTOS ONLINE</h4>
-                <dl>
-                  <div className="is-included">
-                    <dt>Taxa KÔMA por pedido online pago</dt>
-                    <dd>{plan.splitFeeRate === 0 ? '0%' : formatPercentage(plan.splitFeeRate)}</dd>
-                  </div>
-                </dl>
-                <p>
-                  0% de comissão KÔMA. Tarifas de gateways, adquirentes e Mercado Pago são pagas diretamente ao provedor conectado.
-                </p>
-              </div>
 
               <a
                 href={`/contratar/${plan.id}?cobranca=${billing}`}
@@ -225,7 +217,18 @@ export function Plans() {
         </div>
       </details>
 
-      <p className="koma-plans-note">Sem taxa de implantação e sem add-ons. A comissão KÔMA é 0% por pedido online nos três planos; custos do provedor de pagamento são separados e pagos diretamente ao provedor conectado. No anual, o desconto de 10% vale apenas para a assinatura fixa e a taxa por pedido permanece igual. As formas e condições de pagamento são apresentadas na etapa de contratação. App do entregador sem GPS ao vivo; suporte prioritário não significa plantão 24 horas. Emissão fiscal e integração com marketplaces não fazem parte desta oferta.</p>
+      {FUTURE_MODULE_ITEMS.length > 0 && (
+        <div className="koma-plan-trial-note" role="note" aria-label="Módulos especializados em desenvolvimento">
+          <strong>MÓDULOS ESPECIALIZADOS FUTUROS (EM PREPARAÇÃO)</strong>
+          <span>
+            Recursos como integração com iFood, emissão fiscal, autoatendimento (totem) e financeiro gerencial completo estão em fase de homologação e não fazem parte da oferta ativa de hoje nem estão disponíveis para compra avulsa nesta etapa.
+          </span>
+        </div>
+      )}
+
+      <p className="koma-plans-note">
+        Implantação padrão gratuita; Implantação VIP opcional por {formatCurrency(ONBOARDING_OFFER?.vip_price ?? 299)}. A comissão KÔMA é 0% por pedido online próprio nos três planos; custos de gateways e adquirentes são cobrados à parte pelo provedor conectado. No anual, o desconto de 10% vale apenas para a assinatura fixa. App do entregador sem GPS ao vivo; atendimento prioritário não significa plantão 24 horas. Emissão fiscal, totem, financeiro gerencial avançado e integração com marketplaces ainda não estão disponíveis nesta fase.
+      </p>
     </section>
   );
 }

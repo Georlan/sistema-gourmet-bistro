@@ -18,7 +18,7 @@ test('catálogo de planos reflete a verdade comercial canônica', () => {
   const pro = getSubscriptionPlan('pro');
   const premium = getSubscriptionPlan('premium');
 
-  assert.equal(pocket.price, 79.90);
+  assert.equal(pocket.price, 99.90);
   assert.equal(pocket.splitFeeRate, 0);
   assert.equal(pro.price, 179.90);
   assert.equal(pro.splitFeeRate, 0);
@@ -26,23 +26,23 @@ test('catálogo de planos reflete a verdade comercial canônica', () => {
   assert.equal(premium.splitFeeRate, 0);
 });
 
-test('matriz de comparação não promete DRE ou relatórios avançados no Pocket', () => {
-  const dreRow = PLAN_COMPARISON_MATRIX.find(
-    (row) => row.feature === 'Relatórios Financeiros e DRE de Vendas',
+test('matriz de comparação não promete relatórios avançados no Pocket', () => {
+  const reportsRow = PLAN_COMPARISON_MATRIX.find(
+    (row) => row.feature === 'Relatórios Completos de Vendas',
   );
-  assert.ok(dreRow, 'Linha de DRE deve existir na matriz comparativa');
-  assert.equal(dreRow.pocket, false, 'Pocket não possui DRE de Vendas nem relatórios financeiros avançados');
-  assert.equal(dreRow.pro, true, 'Pro possui relatórios financeiros e DRE');
-  assert.equal(dreRow.premium, true, 'Premium possui relatórios financeiros e DRE');
+  assert.ok(reportsRow, 'Linha de relatórios deve existir na matriz comparativa');
+  assert.equal(reportsRow.pocket, false, 'Pocket não possui relatórios completos');
+  assert.equal(reportsRow.pro, true, 'Pro possui relatórios completos');
+  assert.equal(reportsRow.premium, true, 'Premium possui relatórios completos');
 });
 
-test('matriz de comparação restringe App do Entregador exclusivamente ao Premium', () => {
+test('matriz de comparação inclui App do Entregador no Pro e Premium', () => {
   const courierRow = PLAN_COMPARISON_MATRIX.find(
     (row) => row.feature === 'App do Entregador',
   );
   assert.ok(courierRow, 'Linha do App do Entregador deve existir');
   assert.equal(courierRow.pocket, false);
-  assert.equal(courierRow.pro, false);
+  assert.equal(courierRow.pro, true);
   assert.equal(courierRow.premium, true);
 });
 
@@ -55,7 +55,7 @@ test('landing Capabilities não agrupa Equipe com Impressão nem restringe Equip
   const labels = LANDING_BENEFITS.flatMap((b) => b.items.map(resolveBenefitItemLabel));
   assert.ok(labels.includes('EQUIPE E DELIVERY — TODOS OS PLANOS'));
   assert.ok(labels.includes('IMPRESSÃO E KDS — PRO E PREMIUM'));
-  assert.ok(labels.includes('APP DO ENTREGADOR — PREMIUM'));
+  assert.ok(labels.includes('APP DO ENTREGADOR — PRO E PREMIUM'));
 });
 
 test('landing Ecosystem afirma equipe na base e não como recurso que varia conforme plano', () => {
@@ -77,7 +77,7 @@ test('.env.example não divulga Pocket R$ 0 nem domínios legados pages.dev', ()
   assert.doesNotMatch(envExample, /Pocket R\$ 0/);
   assert.doesNotMatch(envExample, /sistema-gourmet-bistro\.pages\.dev/);
   assert.match(envExample, /komafood\.com\.br/);
-  assert.match(envExample, /Pocket R\$ 79,90, Pro R\$ 179,90, Premium R\$ 329,90/);
+  assert.match(envExample, /Pocket R\$ 99,90, Pro R\$ 179,90, Premium R\$ 329,90/);
 });
 
 test('contratação V2 distingue explicitamente condição histórica R$0 de contratação atual R$79,90', () => {

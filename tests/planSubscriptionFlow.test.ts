@@ -28,7 +28,7 @@ test('seleção comercial oferece anual com desconto aos três planos', () => {
   assert.match(planContract, /annualMonthlyEquivalent/);
   assert.match(planContract, /Os 7 dias começam depois dos 4 itens essenciais/);
   assert.match(landingPlans, /Pocket, Pro e Premium: valor mensal equivalente/);
-  assert.match(landingPlans, /A taxa KÔMA por pedido online não muda/);
+  assert.match(landingPlans, /de desconto na assinatura fixa/);
   assert.doesNotMatch(planContract, /12 meses \+ 7 dias|dias adicionais de bônus/);
 });
 

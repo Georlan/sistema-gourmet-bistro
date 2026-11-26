@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 
-const frontendLegal = readFileSync('src/legal/legalContentV35.ts', 'utf8');
+const frontendLegal = readFileSync('src/legal/legalContentV36.ts', 'utf8');
 const frontendEvidence = readFileSync('src/legal/legalEvidence.ts', 'utf8');
 const backendLegal = readFileSync('backend/app/legal_config.py', 'utf8');
 
@@ -27,13 +27,23 @@ test('frontend e backend publicam a mesma versão e evidência jurídica', () =>
   assert.equal(backendBlob, frontendBlob);
 });
 
-test('proveniência aponta para o snapshot 3.5 real e congelado no commit informado', () => {
+test('proveniência aponta para o snapshot 3.6 real e congelado no commit informado', () => {
   const commit = capture(frontendEvidence, /LEGAL_SOURCE_COMMIT = '([0-9a-f]{40})'/, 'commit');
   const blob = capture(frontendEvidence, /LEGAL_SOURCE_BLOB_SHA = '([0-9a-f]{40})'/, 'blob');
-  const bytes = readFileSync('src/legal/legalContentV35.ts');
+  const bytes = readFileSync('src/legal/legalContentV36.ts');
   const actualBlob = createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
   assert.equal(blob, actualBlob);
-  const frozen = execFileSync('git', ['show', `${commit}:src/legal/legalContentV35.ts`]);
+  const frozen = execFileSync('git', ['show', `${commit}:src/legal/legalContentV36.ts`]);
+  assert.deepEqual(frozen, bytes);
+});
+
+test('snapshot 3.5 permanece congelado e imutável para proveniência histórica', () => {
+  const historicalCommit = '59f1024523c66c814c403425aac993e0fab9cd15';
+  const historicalBlob = '5abbaf4325c2c4531c31b9e6f910dc6c97b045bb';
+  const bytes = readFileSync('src/legal/legalContentV35.ts');
+  const actualBlob = createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
+  assert.equal(historicalBlob, actualBlob);
+  const frozen = execFileSync('git', ['show', `${historicalCommit}:src/legal/legalContentV35.ts`]);
   assert.deepEqual(frozen, bytes);
 });
 

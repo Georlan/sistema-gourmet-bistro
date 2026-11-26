@@ -192,8 +192,8 @@ def test_gerar_link_entitlement_gating():
         f"/comandas/motoboys/{mb_pro_id}/gerar-link",
         headers=_token_for(PRO_REST_ID, "admin"),
     )
-    assert resp_pro.status_code == 403
-    assert "App do Entregador" in resp_pro.json()["detail"]
+    assert resp_pro.status_code == 200
+    assert resp_pro.json()["token"]
 
     res_prem = client.post(
         "/comandas/motoboys/cadastro",

@@ -256,8 +256,8 @@ test('Product Contract Gate — landing deriva disponibilidade de capabilities e
   assert.equal(invAvail.premium, true);
   assert.equal(formatPlanScopeText(invAvail), 'Pro e Premium');
 
-  // - Cupons, fidelidade e courier_app exclusivos do Premium
-  for (const premOnly of ['loyalty', 'coupons', 'courier_app'] as const) {
+  // - Cupons e fidelidade exclusivos do Premium
+  for (const premOnly of ['loyalty', 'coupons'] as const) {
     const avail = getFeatureAvailability(premOnly);
     assert.equal(avail.pocket, false);
     assert.equal(avail.pro, false);
@@ -265,10 +265,12 @@ test('Product Contract Gate — landing deriva disponibilidade de capabilities e
     assert.equal(formatPlanScopeText(avail), 'Premium');
   }
 
-  // - Impressão e KDS a partir do Pro
-  const printAvail = getFeatureAvailability('printing');
-  assert.equal(printAvail.pocket, false);
-  assert.equal(printAvail.pro, true);
-  assert.equal(printAvail.premium, true);
-  assert.equal(formatPlanScopeText(printAvail), 'Pro e Premium');
+  // - Impressão, KDS e App do Entregador a partir do Pro
+  for (const proFeature of ['printing', 'courier_app'] as const) {
+    const featAvail = getFeatureAvailability(proFeature);
+    assert.equal(featAvail.pocket, false);
+    assert.equal(featAvail.pro, true);
+    assert.equal(featAvail.premium, true);
+    assert.equal(formatPlanScopeText(featAvail), 'Pro e Premium');
+  }
 });

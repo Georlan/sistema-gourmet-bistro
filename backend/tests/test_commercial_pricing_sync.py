@@ -16,7 +16,7 @@ CONTRACT_PATH = REPO_ROOT / "product-contract.json"
 FRONTEND_CATALOG = REPO_ROOT / "src" / "config" / "subscriptionPlans.ts"
 
 EXPECTED_PRICES = {
-    "pocket": Decimal("79.90"),
+    "pocket": Decimal("99.90"),
     "pro": Decimal("179.90"),
     "premium": Decimal("329.90"),
 }
@@ -40,7 +40,7 @@ def test_commercial_catalog_is_synced_across_frontend_and_payment_backend():
 
     # O frontend consome diretamente o contrato canônico
     source = FRONTEND_CATALOG.read_text(encoding="utf-8")
-    assert "export const ANNUAL_DISCOUNT_RATE = 0.1;" in source
+    assert "ANNUAL_DISCOUNT_RATE = productContract.annual_discount_rate ?? 0.1;" in source
     assert "product-contract.json" in source
 
     for plan_id in ("pocket", "pro", "premium"):

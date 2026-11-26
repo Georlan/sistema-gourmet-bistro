@@ -13,6 +13,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..models import Restaurante
+from ..product_catalog import load_product_catalog
 from ..smartpos_models import RestauranteCapability
 from ..subscription import get_effective_subscription_plan
 
@@ -39,18 +40,10 @@ KNOWN_ENTITLEMENTS = frozenset(
     }
 )
 
+_CATALOG_PLANS = load_product_catalog()["plans"]
 _PLAN_ENTITLEMENTS: dict[str, frozenset[str]] = {
-    "pocket": frozenset({ENTITLEMENT_WAITER_APP}),
-    "pro": frozenset(
-        {
-            ENTITLEMENT_PRINTING,
-            ENTITLEMENT_KDS,
-            ENTITLEMENT_WAITER_APP,
-            ENTITLEMENT_INVENTORY,
-            ENTITLEMENT_ADVANCED_REPORTS,
-        }
-    ),
-    "premium": KNOWN_ENTITLEMENTS,
+    plan_id: frozenset(plan_data.get("capabilities", ()))
+    for plan_id, plan_data in _CATALOG_PLANS.items()
 }
 
 

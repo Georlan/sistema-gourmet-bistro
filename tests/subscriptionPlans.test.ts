@@ -22,7 +22,7 @@ test('operational feature gates require an explicit backend entitlement', () => 
 
 test('plan prices and split fees match the commercial catalog', () => {
   assert.deepEqual(SUBSCRIPTION_PLANS.map(plan => [plan.id, plan.price, plan.splitFeeRate]), [
-    ['pocket', 79.9, 0],
+    ['pocket', 99.9, 0],
     ['pro', 179.9, 0],
     ['premium', 329.9, 0],
   ]);
@@ -41,7 +41,7 @@ test('online order volume never adds KOMA commission to current plans', () => {
 
 test('annual totals and savings apply ten percent only to the fixed subscription', () => {
   assert.deepEqual(SUBSCRIPTION_PLANS.map(plan => getSubscriptionPricing(plan.price)), [
-    { monthly: 79.9, annualMonthlyEquivalent: 71.91, annualTotal: 862.92, annualSavings: 95.88 },
+    { monthly: 99.9, annualMonthlyEquivalent: 89.91, annualTotal: 1078.92, annualSavings: 119.88 },
     { monthly: 179.9, annualMonthlyEquivalent: 161.91, annualTotal: 1942.92, annualSavings: 215.88 },
     { monthly: 329.9, annualMonthlyEquivalent: 296.91, annualTotal: 3562.92, annualSavings: 395.88 },
   ]);
@@ -62,7 +62,7 @@ test('delivery, waiter app and team management stay in every plan while advanced
 
   const courierApp = PLAN_COMPARISON_MATRIX.find(row => row.feature === 'App do Entregador');
   assert.ok(courierApp);
-  assert.deepEqual([courierApp.pocket, courierApp.pro, courierApp.premium], [false, false, true]);
+  assert.deepEqual([courierApp.pocket, courierApp.pro, courierApp.premium], [false, true, true]);
 
   const loyalty = PLAN_COMPARISON_MATRIX.find(row => row.feature === 'Pontos, Cashback e Cupons');
   assert.ok(loyalty);
@@ -75,33 +75,29 @@ test('comparison matrix publishes the exact KOMA online-payment fee by plan', ()
   assert.deepEqual([fee.pocket, fee.pro, fee.premium], ['0%', '0%', '0%']);
 });
 
-test('landing starts monthly, has no setup fee or addons, and shows all current prices and split fees', () => {
+test('landing starts monthly, presents zero commission globally, and shows current prices without promising unavailable modules', () => {
   const html = renderToStaticMarkup(createElement(Plans));
   assert.equal(html.includes('koma-plan-savings'), false);
   assert.equal(html.includes('89,00 por mês'), false);
   assert.equal(html.includes('179,00 por mês'), false);
   assert.equal(html.includes('269,00 por mês'), false);
   assert.equal(html.includes('Adicionais do'), false);
-  assert.ok(html.includes('SEM TAXA DE IMPLANTAÇÃO'));
-  assert.ok(html.includes('Sem add-ons'));
+  assert.ok(html.includes('0% DE COMISSÃO KÔMA NOS PEDIDOS PRÓPRIOS'));
+  assert.ok(html.includes('Implantação padrão gratuita'));
+  assert.ok(html.includes('Implantação VIP opcional'));
   assert.ok(html.includes('MAIS RECOMENDADO'));
   assert.ok(html.includes('GESTÃO COMPLETA'));
-  assert.ok(html.includes('Cardápio digital, mesas, equipe, App do Garçom e delivery já começam no Pocket.'));
-  assert.ok(SUBSCRIPTION_PLANS.find(plan => plan.id === 'pocket')?.features.includes('App do Garçom para salão e comandas'));
-  assert.ok(SUBSCRIPTION_PLANS.find(plan => plan.id === 'pocket')?.features.includes('Equipe, funções e permissões por cargo'));
 
   for (const plan of SUBSCRIPTION_PLANS) {
     assert.ok(html.includes(`${plan.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} por mês`));
-    assert.ok(html.includes('0%'));
     for (const feature of plan.features) assert.ok(html.includes(feature));
   }
 });
 
-test('landing explains that the variable fee only applies to paid online orders', () => {
+test('landing explains that third-party payment fees are separate', () => {
   const html = renderToStaticMarkup(createElement(Plans));
-  assert.ok(html.includes('0% de comissão KÔMA.'));
-  assert.ok(html.includes('custos do provedor de pagamento são separados'));
-  assert.ok(html.includes('a taxa por pedido permanece igual'));
+  assert.ok(html.includes('A comissão KÔMA é 0%'));
+  assert.ok(html.includes('custos de gateways e adquirentes são cobrados à parte'));
 });
 
 test('legacy plan names still normalize to Premium without reintroducing addons', () => {
@@ -114,29 +110,29 @@ test('legacy plan names still normalize to Premium without reintroducing addons'
   assert.equal(normalizeSubscriptionPlan('unknown'), 'pocket');
 });
 
-test('landing does not promise unrelated modules as part of the commercial offer', () => {
+test('landing does not promise unavailable modules as active today', () => {
   const html = renderToStaticMarkup(createElement(Plans));
-  assert.ok(html.includes('Emissão fiscal e integração com marketplaces não fazem parte desta oferta.'));
+  assert.ok(html.includes('Emissão fiscal, totem, financeiro gerencial avançado e integração com marketplaces ainda não estão disponíveis nesta fase.'));
   assert.equal(PLAN_COMPARISON_MATRIX.some(row => row.category === 'Notificações'), false);
 });
 
 
 test('annual discount applies to fixed price in Pocket, Pro and Premium', () => {
-  const pocket = getSubscriptionPricing(79.9);
+  const pocket = getSubscriptionPricing(99.9);
   const pro = getSubscriptionPricing(179.9);
   const premium = getSubscriptionPricing(329.9);
-  assert.equal(pocket.monthly, 79.9);
-  assert.equal(pocket.annualTotal, 862.92);
-  assert.equal(pocket.annualMonthlyEquivalent, 71.91);
-  assert.equal(pocket.annualSavings, 95.88);
+  assert.equal(pocket.monthly, 99.9);
+  assert.equal(pocket.annualTotal, 1078.92);
+  assert.equal(pocket.annualMonthlyEquivalent, 89.91);
+  assert.equal(pocket.annualSavings, 119.88);
   assert.equal(pro.annualTotal, 1942.92);
   assert.equal(pro.annualMonthlyEquivalent, 161.91);
   assert.equal(premium.annualTotal, 3562.92);
   assert.equal(premium.annualMonthlyEquivalent, 296.91);
 
   const html = renderToStaticMarkup(createElement(Plans));
-  assert.ok(html.includes('Sem taxa de implantação'));
+  assert.ok(html.includes('Implantação padrão gratuita'));
   assert.ok(html.includes('0%'));
-  assert.ok(html.includes('Gestão profissional, com 0% de comissão KÔMA.'));
-  assert.ok(html.includes('Gestão completa, entregadores e fidelização, com 0% de comissão KÔMA.'));
+  assert.ok(html.includes('Mais controle na cozinha, estoque e entregas.'));
+  assert.ok(html.includes('Operação completa e ferramentas para o cliente voltar.'));
 });
