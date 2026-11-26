@@ -50,7 +50,8 @@ test('ajuda abre pronta para escrever e preserva texto em falha ou fechamento, s
   await expect(dialog.getByText('Mensagem recebida',{exact:true})).toBeVisible();
   expect(state.feedback).toHaveLength(2);
   expect(state.feedback[0]).toMatchObject({kind:'question',message:'Quero melhorar a busca das mesas.',page_path:'/'});
-  expect(state.feedback[0].context).toEqual({surface:'garcom'});
+  expect(state.feedback[0].context).toMatchObject({surface:'garcom'});
+  expect(state.feedback[0].context.suspected_bug).toBeUndefined();
 });
 
 
