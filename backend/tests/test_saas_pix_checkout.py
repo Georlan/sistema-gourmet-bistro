@@ -241,8 +241,8 @@ def test_saas_pix_subscription_tenant_without_acceptance_fails_closed(monkeypatc
 @pytest.mark.parametrize(
     ("plan", "cycle", "signed_amount"),
     [
-        ("pocket", "monthly", "79.90"),
-        ("pocket", "annual", "862.92"),
+        ("pocket", "monthly", "99.90"),
+        ("pocket", "annual", "1078.92"),
         ("pro", "monthly", "179.90"),
         ("pro", "annual", "1942.92"),
         ("premium", "monthly", "329.90"),

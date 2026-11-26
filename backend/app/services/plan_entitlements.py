@@ -115,16 +115,32 @@ def resolve_plan_entitlements(
         return {}
 
     def _resolve():
+        from ..saas_billing_models import SaaSCommercialGrant
+        from ..subscription import FOUNDERS_COHORT_CODE
+
         overrides = dict(db.query(RestauranteCapability.capability, RestauranteCapability.enabled).filter(
             RestauranteCapability.restaurante_id == restaurante_id,
             RestauranteCapability.capability.in_(selected),
         ).all())
         baseline = frozenset()
         if any(key not in overrides for key in selected):
-            plan = get_effective_subscription_plan(
-                restaurante_id, _stored_plan(db, restaurante_id, stored_plan),
+            founders_grant = (
+                db.query(SaaSCommercialGrant.id)
+                .filter(
+                    SaaSCommercialGrant.restaurante_id == restaurante_id,
+                    SaaSCommercialGrant.cohort_code == FOUNDERS_COHORT_CODE,
+                    SaaSCommercialGrant.active.is_(True),
+                    SaaSCommercialGrant.free_addon_licenses.is_(True),
+                )
+                .first()
             )
-            baseline = _PLAN_ENTITLEMENTS[plan]
+            if founders_grant is not None:
+                baseline = KNOWN_ENTITLEMENTS
+            else:
+                plan = get_effective_subscription_plan(
+                    restaurante_id, _stored_plan(db, restaurante_id, stored_plan),
+                )
+                baseline = _PLAN_ENTITLEMENTS[plan]
         return {key: bool(overrides[key]) if key in overrides else key in baseline for key in selected}
 
     if _effective_tenant_id(db) == int(restaurante_id):

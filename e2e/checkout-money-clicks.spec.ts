@@ -3,8 +3,8 @@ import { expect, test } from '@playwright/test';
 // Simulação integral do checkout público, com backend e gateway isolados.
 // Nenhuma cobrança/mandato é criado no Mercado Pago real.
 const cases = [
-  { plan: 'pocket', cycle: 'mensal', method: 'pix', amount: '79.90' },
-  { plan: 'pocket', cycle: 'anual', method: 'pix', amount: '862.92' },
+  { plan: 'pocket', cycle: 'mensal', method: 'pix', amount: '99.90' },
+  { plan: 'pocket', cycle: 'anual', method: 'pix', amount: '1078.92' },
   { plan: 'pro', cycle: 'mensal', method: 'credit_card', amount: '179.90' },
   { plan: 'pro', cycle: 'anual', method: 'credit_card', amount: '1942.92' },
   { plan: 'premium', cycle: 'mensal', method: 'pix', amount: '329.90' },
@@ -33,7 +33,7 @@ for (const scenario of cases) {
       const data = route.request().postDataJSON();
       expect(data.plan).toBe(scenario.plan);
       expect(data.billing_cycle).toBe(scenario.cycle);
-      expect(data.legal_version).toBe('3.5');
+      expect(data.legal_version).toBe('3.6');
       expect(data.email).toBe('ana@example.com');
       acceptanceSeen = true;
       await route.fulfill({ status: 201, json: { receipt: {
@@ -41,11 +41,11 @@ for (const scenario of cases) {
         commercial: {
           plan: scenario.plan,
           billingCycle: scenario.cycle,
-          fixedMonthlyPrice: scenario.plan === 'pocket' ? '79.90' : scenario.plan === 'pro' ? '179.90' : '329.90',
+          fixedMonthlyPrice: scenario.plan === 'pocket' ? '99.90' : scenario.plan === 'pro' ? '179.90' : '329.90',
           billingAmount: scenario.amount,
           marketplaceRate: '0.000000',
         },
-        documents: { version: '3.5' },
+        documents: { version: '3.6' },
       } } });
     });
     await page.route(`**/api/contracts/${protocol}/billing/status`, route => route.fulfill({

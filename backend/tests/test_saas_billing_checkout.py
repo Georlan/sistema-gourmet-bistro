@@ -318,10 +318,10 @@ def test_pocket_zero_rejects_paid_billing_setup_before_provider_call(client_and_
 @pytest.mark.parametrize(
     ("plan", "cycle", "method", "expected_amount", "expected_frequency"),
     [
-        ("pocket", "mensal", "credit_card", 79.90, 1),
-        ("pocket", "mensal", "account_money", 79.90, 1),
-        ("pocket", "anual", "credit_card", 862.92, 12),
-        ("pocket", "anual", "account_money", 862.92, 12),
+        ("pocket", "mensal", "credit_card", 99.90, 1),
+        ("pocket", "mensal", "account_money", 99.90, 1),
+        ("pocket", "anual", "credit_card", 1078.92, 12),
+        ("pocket", "anual", "account_money", 1078.92, 12),
         ("pro", "mensal", "credit_card", 179.90, 1),
         ("pro", "mensal", "account_money", 179.90, 1),
         ("pro", "anual", "credit_card", 1942.92, 12),
@@ -366,8 +366,8 @@ def test_paid_plan_billing_uses_signed_amount_and_cycle(
 @pytest.mark.parametrize(
     ("plan", "cycle", "expected_amount", "expected_cycle"),
     [
-        ("pocket", "mensal", 79.90, "monthly"),
-        ("pocket", "anual", 862.92, "annual"),
+        ("pocket", "mensal", 99.90, "monthly"),
+        ("pocket", "anual", 1078.92, "annual"),
         ("pro", "mensal", 179.90, "monthly"),
         ("pro", "anual", 1942.92, "annual"),
         ("premium", "mensal", 329.90, "monthly"),

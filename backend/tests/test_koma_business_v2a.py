@@ -18,7 +18,13 @@ from app.saas_billing_models import SaaSCommercialGrant, SaaSPlanChange, SaaSSub
 from app.smartpos_models import RestauranteCapability
 from app.services.billing_service import effective_catalog_monthly_price, tenant_founders_benefit
 from app.services.plan_entitlements import (
+    ENTITLEMENT_ADVANCED_REPORTS,
+    ENTITLEMENT_COUPONS,
     ENTITLEMENT_COURIER_APP,
+    ENTITLEMENT_INVENTORY,
+    ENTITLEMENT_KDS,
+    ENTITLEMENT_LOYALTY,
+    ENTITLEMENT_PRINTING,
     has_plan_entitlement,
 )
 from app.subscription import (
@@ -140,23 +146,58 @@ def test_founders_program_limit_5_audit_isolation_and_price_preservation(v2a_env
         assert len(audits) == 5
         assert db.query(Restaurante).filter(Restaurante.id == 101).one().plano == "pocket"
 
-    # Revogar 1 libera exatamente 1 vaga e registra auditoria.
+    # Revogação exige confirmação explícita e NÃO libera vaga para um 6º restaurante.
+    bad_rev = client.post(
+        "/api/super-admin/founders/105/revoke",
+        json={"reason": "Motivo válido mas sem confirmação"},
+    )
+    assert bad_rev.status_code == 422
+
     rev = client.post(
         "/api/super-admin/founders/105/revoke",
-        json={"reason": "Transferência de titularidade"},
+        json={
+            "reason": "Encerramento formal do estabelecimento comercial",
+            "confirm_exceptional_revocation": True,
+        },
     )
     assert rev.status_code == 200
     assert rev.json()["active"] is False
 
     listing_after = client.get("/api/super-admin/founders").json()
     assert listing_after["activeCount"] == 4
-    assert listing_after["remainingSlots"] == 1
+    assert listing_after["totalHistoricalBeneficiaries"] == 5
+    assert listing_after["remainingSlots"] == 0
 
-    granted_106 = client.post(
+    blocked_106 = client.post(
         "/api/super-admin/founders/106",
-        json={"reason": "Preenchendo 5ª vaga após revogação"},
+        json={"reason": "Tentativa de reutilizar vaga revogada"},
     )
-    assert granted_106.status_code == 201
+    assert blocked_106.status_code == 409
+
+
+def test_founders_receive_free_homologated_modules_regardless_of_plan(v2a_env):
+    client, Session = v2a_env
+    resp = client.post(
+        "/api/super-admin/founders/101",
+        json={"reason": "Founder 1 em plano Pocket"},
+    )
+    assert resp.status_code == 201
+
+    with Session() as db:
+        token = current_restaurante_id.set(101)
+        try:
+            for ent in (
+                ENTITLEMENT_PRINTING,
+                ENTITLEMENT_KDS,
+                ENTITLEMENT_INVENTORY,
+                ENTITLEMENT_ADVANCED_REPORTS,
+                ENTITLEMENT_COURIER_APP,
+                ENTITLEMENT_LOYALTY,
+                ENTITLEMENT_COUPONS,
+            ):
+                assert has_plan_entitlement(db, 101, ent, stored_plan="pocket") is True
+        finally:
+            current_restaurante_id.reset(token)
 
 
 def test_pro_includes_courier_app_entitlement_while_pocket_denies(v2a_env):
