@@ -1,11 +1,15 @@
 import calendar
 import datetime as dt
+import uuid
 from decimal import Decimal, InvalidOperation
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 
 from ..database import tenant_session_scope
 from ..saas_billing_models import SaaSSubscription
+from ..super_admin_finance_models import SaaSCompanyReceipt
 from .billing_service import (
     contract_billing_terms,
     get_billing_setup_by_provider_sub,
@@ -159,8 +163,79 @@ def reconcile_invoice(db, invoice_id):
                     sub.status = "active"
                 sub.grace_until = None
 
+            _record_mp_company_receipt(
+                db,
+                restaurante_id=int(billing.restaurante_id),
+                payment_id=str(payment["id"]),
+                amount=amount,
+                paid_at=paid_at,
+                plan_code=current_terms.plan if current_terms is not None else None,
+                payment_method=str(sub.payment_method_type or "credit_card"),
+                status="paid",
+            )
+        elif verified.get("status") in {"refunded", "charged_back"}:
+            _record_mp_company_receipt(
+                db,
+                restaurante_id=int(billing.restaurante_id),
+                payment_id=str(payment["id"]),
+                amount=amount,
+                paid_at=dt.datetime.now(dt.timezone.utc),
+                plan_code=current_terms.plan if current_terms is not None else None,
+                payment_method=str(sub.payment_method_type or "credit_card"),
+                status="refunded",
+            )
+
         # Rejected or pending invoices cannot erase a previously paid period.
         sub.updated_at = dt.datetime.now(dt.timezone.utc)
         db.commit()
 
     return {"status": "received", "reconciled": True}
+
+
+def _record_mp_company_receipt(
+    db,
+    *,
+    restaurante_id: int,
+    payment_id: str,
+    amount: Decimal,
+    paid_at: dt.datetime,
+    plan_code: str | None,
+    payment_method: str,
+    status: str,
+) -> None:
+    """Registra recebimento ou estorno SaaS de forma idempotente no ledger da empresa."""
+    external_ref = f"mp_payment:{payment_id}"
+    competence = paid_at.astimezone(ZoneInfo("America/Fortaleza")).strftime("%Y-%m")
+    existing = (
+        db.query(SaaSCompanyReceipt)
+        .filter(
+            SaaSCompanyReceipt.provider == "mercado_pago",
+            SaaSCompanyReceipt.external_reference == external_ref,
+        )
+        .one_or_none()
+    )
+    if existing is not None:
+        if status == "refunded" and existing.status != "refunded":
+            existing.status = "refunded"
+        return
+
+    try:
+        with db.begin_nested():
+            db.add(
+                SaaSCompanyReceipt(
+                    id=str(uuid.uuid4()),
+                    restaurante_id=restaurante_id,
+                    source_type="mp_recurring_payment",
+                    provider="mercado_pago",
+                    external_reference=external_ref,
+                    plan_code=plan_code,
+                    payment_method=payment_method,
+                    status=status,
+                    competence_period=competence,
+                    gross_amount=amount.quantize(Decimal("0.01")),
+                    received_at=paid_at if status == "paid" else None,
+                )
+            )
+            db.flush()
+    except IntegrityError:
+        pass

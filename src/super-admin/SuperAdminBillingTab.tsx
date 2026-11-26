@@ -1,5 +1,6 @@
 import React from "react";
 import { SuperAdminFinance } from "./SuperAdminFinance";
+import { SuperAdminFoundersPanel } from "./SuperAdminFoundersPanel";
 import {
   ReceiptText,
   CheckCircle2,
@@ -26,6 +27,7 @@ export function SuperAdminBillingTab({
   return (
     <div className="space-y-6">
       <SuperAdminFinance tenants={tenants} />
+      <SuperAdminFoundersPanel tenants={tenants} />
       <details>
         <summary className="cursor-pointer text-sm font-bold text-koma-muted">Catálogo vigente para novas contratações</summary>
         <p className="my-2 text-xs text-koma-muted">Referência mensal do catálogo: não é receita recebida e não representa os contratos dos tenants.</p>
