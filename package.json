@@ -26,6 +26,7 @@
     "ops:memory:promote": "node scripts/ops-memory-promote.mjs",
     "ops:onboarding": "node scripts/ops-onboarding.mjs",
     "ops:preflight": "node scripts/support-preflight.mjs",
+    "ops:locate": "node scripts/ops-locate.mjs",
     "focus:check": "node scripts/focus-check.mjs"
   },
   "dependencies": {

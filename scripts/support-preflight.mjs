@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync, spawnSync } from 'node:child_process';
+import { existsSync, symlinkSync } from 'node:fs';
+import path from 'node:path';
 
 const DEFAULT_FRONTEND_URL = process.env.KOMA_FRONTEND_URL || 'https://app.komafood.com.br';
 const DEFAULT_API_URL = process.env.KOMA_API_URL || 'https://sistema-gourmet-bistro-production.up.railway.app';
@@ -11,9 +13,40 @@ export function shaMatches(actual, expected) {
   return a === e || a.startsWith(e) || e.startsWith(a);
 }
 
+export function isShaPublishedOrSuperseded(liveSha, targetSha, isAncestorFn = isGitAncestor) {
+  if (shaMatches(liveSha, targetSha)) return { matched: true, superseded: false };
+  if (!liveSha || !targetSha) return { matched: false, superseded: false };
+  if (isAncestorFn(targetSha, liveSha)) return { matched: true, superseded: true };
+  return { matched: false, superseded: false };
+}
+
+function isGitAncestor(ancestorSha, descendantSha) {
+  try {
+    const res = spawnSync('git', ['merge-base', '--is-ancestor', ancestorSha, descendantSha], {
+      stdio: 'ignore',
+    });
+    return res.status === 0;
+  } catch {
+    return false;
+  }
+}
+
+export function sanitizeScope(raw) {
+  return String(raw || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+}
+
 export function parsePreflightArgs(argv = []) {
   const opts = {
     watchDeploy: null,
+    startScope: null,
+    cleanupScope: null,
+    ship: false,
+    title: '',
+    body: '',
     expectBackend: false,
     runSmoke: false,
     timeoutSec: 240,
@@ -25,8 +58,17 @@ export function parsePreflightArgs(argv = []) {
     if (arg === '--json') opts.json = true;
     else if (arg === '--backend') opts.expectBackend = true;
     else if (arg === '--smoke') opts.runSmoke = true;
+    else if (arg === '--ship') opts.ship = true;
     else if (arg === '--watch-deploy' && i + 1 < argv.length) opts.watchDeploy = argv[++i].trim();
     else if (arg.startsWith('--watch-deploy=')) opts.watchDeploy = arg.slice('--watch-deploy='.length).trim();
+    else if (arg === '--start' && i + 1 < argv.length) opts.startScope = sanitizeScope(argv[++i]);
+    else if (arg.startsWith('--start=')) opts.startScope = sanitizeScope(arg.slice('--start='.length));
+    else if (arg === '--cleanup' && i + 1 < argv.length) opts.cleanupScope = sanitizeScope(argv[++i]);
+    else if (arg.startsWith('--cleanup=')) opts.cleanupScope = sanitizeScope(arg.slice('--cleanup='.length));
+    else if (arg === '--title' && i + 1 < argv.length) opts.title = argv[++i].trim();
+    else if (arg.startsWith('--title=')) opts.title = arg.slice('--title='.length).trim();
+    else if (arg === '--body' && i + 1 < argv.length) opts.body = argv[++i].trim();
+    else if (arg.startsWith('--body=')) opts.body = arg.slice('--body='.length).trim();
     else if (arg === '--timeout' && i + 1 < argv.length) opts.timeoutSec = Math.max(15, Number(argv[++i]) || 240);
     else if (arg.startsWith('--timeout=')) opts.timeoutSec = Math.max(15, Number(arg.slice('--timeout='.length)) || 240);
   }
@@ -141,11 +183,23 @@ async function watchDeploy(opts) {
     lastFrontendSha = fe.data?.sha || lastFrontendSha;
     lastApiSha = api.data?.deploymentGitSha || lastApiSha;
 
-    if (frontendLiveSec === null && shaMatches(lastFrontendSha, targetSha)) {
-      frontendLiveSec = Number(((Date.now() - startedAt) / 1000).toFixed(1));
+    if (frontendLiveSec === null) {
+      const feMatch = isShaPublishedOrSuperseded(lastFrontendSha, targetSha);
+      if (feMatch.matched) {
+        frontendLiveSec = Number(((Date.now() - startedAt) / 1000).toFixed(1));
+        if (feMatch.superseded) {
+          console.log(`ℹ Frontend já avançou para commit mais novo (${lastFrontendSha}) contendo ${targetSha.slice(0, 12)}.`);
+        }
+      }
     }
-    if (opts.expectBackend && apiLiveSec === null && api.data?.ready && shaMatches(lastApiSha, targetSha)) {
-      apiLiveSec = Number(((Date.now() - startedAt) / 1000).toFixed(1));
+    if (opts.expectBackend && apiLiveSec === null && api.data?.ready) {
+      const apiMatch = isShaPublishedOrSuperseded(lastApiSha, targetSha);
+      if (apiMatch.matched) {
+        apiLiveSec = Number(((Date.now() - startedAt) / 1000).toFixed(1));
+        if (apiMatch.superseded) {
+          console.log(`ℹ Backend já avançou para commit mais novo (${lastApiSha?.slice(0, 12)}) contendo ${targetSha.slice(0, 12)}.`);
+        }
+      }
     }
 
     const feDone = frontendLiveSec !== null;
@@ -175,8 +229,8 @@ async function watchDeploy(opts) {
       if (opts.runSmoke) {
         const smokeEnv = {
           ...process.env,
-          KOMA_EXPECTED_FRONTEND_SHA: targetSha,
-          KOMA_EXPECTED_API_SHA: opts.expectBackend ? targetSha : (lastApiSha || ''),
+          KOMA_EXPECTED_FRONTEND_SHA: lastFrontendSha || targetSha,
+          KOMA_EXPECTED_API_SHA: opts.expectBackend ? (lastApiSha || targetSha) : (lastApiSha || ''),
         };
         const res = spawnSync('node', ['scripts/production-smoke.mjs'], { stdio: 'inherit', env: smokeEnv });
         process.exit(res.status ?? 1);
@@ -193,8 +247,77 @@ async function watchDeploy(opts) {
   process.exit(1);
 }
 
+async function startWorktree(scope) {
+  if (!scope) {
+    console.error('Informe um escopo válido: npm run ops:preflight -- --start <escopo>');
+    process.exit(1);
+  }
+  const wtDir = `/tmp/koma-fix-${scope}`;
+  const branch = `fix/${scope}`;
+  const [baseline] = await Promise.all([
+    collectBaseline(),
+    Promise.resolve().then(() => {
+      execFileSync('git', ['fetch', 'origin', 'main'], { stdio: 'inherit' });
+    }),
+  ]);
+  execFileSync('git', ['worktree', 'prune'], { stdio: 'ignore' });
+  if (!existsSync(wtDir)) {
+    execFileSync('git', ['worktree', 'add', '-b', branch, wtDir, 'origin/main'], { stdio: 'inherit' });
+    const srcNodeModules = path.resolve(process.cwd(), 'node_modules');
+    const dstNodeModules = path.join(wtDir, 'node_modules');
+    if (existsSync(srcNodeModules) && !existsSync(dstNodeModules)) {
+      symlinkSync(srcNodeModules, dstNodeModules);
+    }
+  }
+  console.log(`\n✓ Worktree pronto: ${wtDir} (branch ${branch})`);
+  console.log(`  PREV_FRONTEND_SHA : ${baseline.production.frontendSha || 'indisponível'}`);
+  console.log(`  PREV_API_SHA      : ${baseline.production.apiSha || 'indisponível'}`);
+  console.log(`  STARTED_AT        : ${new Date().toISOString()}`);
+}
+
+function cleanupWorktree(scope) {
+  if (!scope) {
+    console.error('Informe o escopo: npm run ops:preflight -- --cleanup <escopo>');
+    process.exit(1);
+  }
+  const wtDir = `/tmp/koma-fix-${scope}`;
+  if (existsSync(wtDir)) {
+    execFileSync('git', ['worktree', 'remove', '--force', wtDir], { stdio: 'inherit' });
+  }
+  execFileSync('git', ['worktree', 'prune'], { stdio: 'inherit' });
+  console.log(`✓ Worktree ${wtDir} removido com segurança.`);
+}
+
+function shipBranch(opts) {
+  const branch = safeGit(['rev-parse', '--abbrev-ref', 'HEAD']);
+  if (!branch || branch === 'main' || branch === 'HEAD') {
+    console.error('✗ Recusado: --ship não pode ser executado diretamente em main ou detached HEAD.');
+    process.exit(1);
+  }
+  if (!opts.title) {
+    console.error('✗ Informe --title "<título do PR>" ao usar --ship.');
+    process.exit(1);
+  }
+  execFileSync('git', ['push', '-u', 'origin', branch], { stdio: 'inherit' });
+  const prArgs = ['pr', 'create', '--base', 'main', '--title', opts.title, '--body', opts.body || opts.title];
+  execFileSync('gh', prArgs, { stdio: 'inherit' });
+  execFileSync('gh', ['pr', 'merge', '--auto', '--squash', '--delete-branch'], { stdio: 'inherit' });
+}
+
 async function main() {
   const opts = parsePreflightArgs(process.argv.slice(2));
+  if (opts.startScope) {
+    await startWorktree(opts.startScope);
+    return;
+  }
+  if (opts.cleanupScope) {
+    cleanupWorktree(opts.cleanupScope);
+    return;
+  }
+  if (opts.ship) {
+    shipBranch(opts);
+    return;
+  }
   if (opts.watchDeploy) {
     await watchDeploy(opts);
     return;

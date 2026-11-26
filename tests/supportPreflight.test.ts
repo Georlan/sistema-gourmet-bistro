@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { evaluateWorkspaceDrift, parsePreflightArgs, shaMatches } from '../scripts/support-preflight.mjs';
+import {
+  evaluateWorkspaceDrift,
+  isShaPublishedOrSuperseded,
+  parsePreflightArgs,
+  sanitizeScope,
+  shaMatches,
+} from '../scripts/support-preflight.mjs';
 
 test('shaMatches compares full and abbreviated git SHAs safely', () => {
   const full = 'b8085d1a0043e0fc17238832afe44223ac7778cf';
@@ -31,11 +37,30 @@ test('evaluateWorkspaceDrift recommends isolated worktree when behind main or di
   assert.equal(staleBranch.useIsolatedWorktree, true);
 });
 
-test('parsePreflightArgs handles watch-deploy, backend, smoke and timeout flags', () => {
+test('parsePreflightArgs handles watch-deploy, start, cleanup, ship and timeout flags', () => {
   const opts = parsePreflightArgs(['--watch-deploy', 'abc1234', '--backend', '--smoke', '--timeout=120', '--json']);
   assert.equal(opts.watchDeploy, 'abc1234');
   assert.equal(opts.expectBackend, true);
   assert.equal(opts.runSmoke, true);
   assert.equal(opts.timeoutSec, 120);
   assert.equal(opts.json, true);
+
+  const startOpts = parsePreflightArgs(['--start', 'Botao Despacho!!']);
+  assert.equal(startOpts.startScope, 'botao-despacho');
+  assert.equal(sanitizeScope('Fix_Pix/123'), 'fix-pix-123');
+});
+
+test('isShaPublishedOrSuperseded accepts exact match and newer descendant commits', () => {
+  assert.deepEqual(isShaPublishedOrSuperseded('abc123456789', 'abc1234', () => false), {
+    matched: true,
+    superseded: false,
+  });
+  assert.deepEqual(isShaPublishedOrSuperseded('def9999', 'abc1234', () => true), {
+    matched: true,
+    superseded: true,
+  });
+  assert.deepEqual(isShaPublishedOrSuperseded('def9999', 'abc1234', () => false), {
+    matched: false,
+    superseded: false,
+  });
 });
