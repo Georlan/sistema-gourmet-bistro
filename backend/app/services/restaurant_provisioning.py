@@ -7,6 +7,7 @@ import json
 import os
 import logging
 import re
+import secrets
 import unicodedata
 import uuid
 from typing import Any
@@ -22,11 +23,11 @@ from ..database import tenant_session_scope
 from ..models import ConfiguracaoRestaurante, Restaurante, SuperAdminAuditLog, Usuario
 from ..restaurant_profile_models import RestauranteOperationProfile
 from ..signup_models import RestaurantSignup
-from ..routes.super_admin_onboarding import (
-    DEFAULT_TRIAL_DAYS,
-    _lock_onboarding_transaction,
-    _reserve_restaurant_id,
-    _slug_owner_id,
+from .universal_presets import DEFAULT_TRIAL_DAYS, INVITATION_TTL_HOURS
+from .universal_provisioning import (
+    lock_onboarding_transaction as _lock_onboarding_transaction,
+    reserve_restaurant_id as _reserve_restaurant_id,
+    slug_owner_id as _slug_owner_id,
 )
 from ..saas_billing_models import SaaSSubscription
 from ..services.billing_service import (
@@ -619,6 +620,63 @@ def clear_operational_qa_cache(db: Session, restaurante_id: int) -> None:
             bucket.pop(rid, None)
 
 
+def start_operational_qa_session(
+    db: Session,
+    *,
+    restaurante_id: int,
+    actor: str,
+    reason: str,
+    hours: int = 24,
+) -> dict[str, Any]:
+    """Abre uma janela temporária de homologação operacional QA em tenant provisório."""
+    tid = int(restaurante_id)
+    restaurante = db.query(Restaurante).filter(Restaurante.id == tid).one_or_none()
+    if restaurante is None:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+    clear_operational_qa_cache(db, tid)
+    if get_active_operational_qa_record(db, tid) is not None:
+        raise HTTPException(status_code=409, detail="Janela de QA já ativa. Encerre antes de reiniciar.")
+    if not is_provisional_preparation(db, tid, allow_qa=False):
+        raise HTTPException(status_code=409, detail="Restaurante não está em implantação provisória.")
+
+    bounded_hours = max(1, min(int(hours), 72))
+    now = datetime.datetime.now(datetime.timezone.utc)
+    expires_at = now + datetime.timedelta(hours=bounded_hours)
+    raw_qa_token = f"{tid}.{secrets.token_urlsafe(24)}"
+    qa_token_hash = hashlib.sha256(raw_qa_token.encode("utf-8")).hexdigest()
+    qa_menu_path = f"/c/{restaurante.slug}?qa_token={raw_qa_token}"
+    after = {
+        "mode": "operational_qa",
+        "started_at": now.isoformat(),
+        "expires_at": expires_at.isoformat(),
+        "hours": bounded_hours,
+        "qa_token_hash": qa_token_hash,
+        "commercial_contract_created": False,
+        "subscription_created": False,
+    }
+    db.add(
+        SuperAdminAuditLog(
+            restaurante_id=tid,
+            actor=str(actor),
+            action=QA_OPERATION_START,
+            reason=reason,
+            before_data={"qa_active": False},
+            after_data=after,
+        )
+    )
+    db.commit()
+    clear_operational_qa_cache(db, tid)
+    return {
+        "restaurantId": str(tid),
+        "qaActive": True,
+        "expiresAt": expires_at.isoformat(),
+        "commercialContractCreated": False,
+        "saasTrialStarted": False,
+        "qaAccessToken": raw_qa_token,
+        "qaMenuPath": qa_menu_path,
+    }
+
+
 def _load_provisioning_audit_snapshot(
     db: Session,
     rid: int,
@@ -643,7 +701,12 @@ def _load_provisioning_audit_snapshot(
         .filter(
             SuperAdminAuditLog.restaurante_id == rid,
             SuperAdminAuditLog.action.in_(
-                ("SUPERADMIN_TENANT_ONBOARD", QA_OPERATION_START, QA_OPERATION_END)
+                (
+                    "SUPERADMIN_TENANT_ONBOARD",
+                    "UNIVERSAL_TENANT_PROVISION",
+                    QA_OPERATION_START,
+                    QA_OPERATION_END,
+                )
             ),
         )
         .order_by(SuperAdminAuditLog.id.desc())
@@ -658,7 +721,10 @@ def _load_provisioning_audit_snapshot(
         if latest_qa_action is None and action in (QA_OPERATION_START, QA_OPERATION_END):
             latest_qa_action = action
             latest_qa_data = after_data
-        if onboard_after_data is None and action == "SUPERADMIN_TENANT_ONBOARD":
+        if onboard_after_data is None and action in (
+            "SUPERADMIN_TENANT_ONBOARD",
+            "UNIVERSAL_TENANT_PROVISION",
+        ):
             onboard_after_data = dict(after_data) if isinstance(after_data, dict) else None
         if latest_qa_action is not None and onboard_after_data is not None:
             break

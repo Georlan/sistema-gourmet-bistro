@@ -701,6 +701,15 @@ export default function PlanContractPageV2() {
           {step === 1 ? (
             <>
               <div className="koma-sub-heading"><span className="koma-sub-eyebrow">01 · PLANO E COBRANÇA</span><h1>Escolha o KÔMA certo para sua operação.</h1><p>Os três planos têm 7 dias de teste no componente fixo após a implantação essencial e a liberação pelo SuperAdmin KÔMA.</p></div>
+              <div className="koma-sub-locked-note" style={{ marginBottom: '1rem' }}>
+                <div>
+                  <strong>Quer montar seu cardápio grátis antes de assinar o contrato?</strong>
+                  <p>Entre direto em modo preparação no celular e contrate somente quando estiver pronto.</p>
+                </div>
+                <a href={`/comecar?plano=${selectedPlanId}`} className="koma-sub-primary-action" style={{ padding: '0.65rem 1rem', fontSize: '0.78rem' }}>
+                  Começar sem burocracia <ArrowRight size={15} />
+                </a>
+              </div>
               <div className="koma-sub-plan-grid" role="radiogroup" aria-label="Escolha um plano KÔMA">
                 {SUBSCRIPTION_PLANS.map(candidate => {
                   const candidatePricing = getSubscriptionPricing(candidate.price);
