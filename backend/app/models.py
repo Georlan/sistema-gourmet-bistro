@@ -2478,3 +2478,8 @@ class KomaEventAttribution(Base):
     signup_id = Column(String(36), primary_key=True)
     lead_id = Column(Integer, ForeignKey("koma_event_leads.id"), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+# Registra modelos modulares B8 no Base.metadata para create_all e testes de infraestrutura.
+from . import b8_finance_models as _b8_finance_models  # noqa: E402, F401
+from . import b8_supply_models as _b8_supply_models  # noqa: E402, F401

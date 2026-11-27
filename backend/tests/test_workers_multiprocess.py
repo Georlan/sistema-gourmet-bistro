@@ -63,6 +63,9 @@ def test_signup_and_outbox_claims_are_disjoint_between_processes():
         "subject": "QA", "message": "QA only",
     }))
     with psycopg2.connect(dsn) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT setval(pg_get_serial_sequence('restaurantes', 'id'), COALESCE((SELECT MAX(id) FROM restaurantes), 0) + 1, false)"
+        )
         cursor.execute("INSERT INTO restaurantes(nome, plano) VALUES (%s, %s) RETURNING id", (f"worker-{marker}", "basic"))
         restaurant_id = cursor.fetchone()[0]
         cursor.execute("INSERT INTO usuarios(id,restaurante_id,nome) VALUES (%s,%s,'Worker QA')", (user_id, restaurant_id))

@@ -58,6 +58,8 @@ PERMISSION_ROLES = MappingProxyType({
     "equipe:administrar": frozenset({"admin", "gerente", "caixa"}),
     "estoque:consultar": frozenset({"admin", "gerente", "caixa"}),
     "estoque:administrar": frozenset({"admin", "gerente", "caixa"}),
+    "financeiro:consultar": frozenset({"admin", "gerente", "caixa"}),
+    "financeiro:administrar": frozenset({"admin", "gerente", "caixa"}),
     "relatorios:consultar": frozenset({"admin", "gerente", "caixa"}),
     "relatorios:administrar": frozenset({"admin", "gerente", "caixa"}),
     "catalogo:administrar": frozenset({"admin", "gerente", "caixa"}),
