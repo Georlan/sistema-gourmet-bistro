@@ -29,6 +29,15 @@ async def read_limited_body(
         except ValueError:
             pass
 
+    cached_body = getattr(request, "_body", None)
+    if cached_body is not None:
+        if len(cached_body) > max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail=detail,
+            )
+        return cached_body
+
     body = bytearray()
     async for chunk in request.stream():
         if len(body) + len(chunk) > max_bytes:
@@ -37,7 +46,9 @@ async def read_limited_body(
                 detail=detail,
             )
         body.extend(chunk)
-    return bytes(body)
+    raw_bytes = bytes(body)
+    request._body = raw_bytes
+    return raw_bytes
 
 
 async def read_limited_json(
