@@ -777,13 +777,18 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       })}
     </div>
 
-    {snapshot.operations.blockers.length > 0 && (
-      <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3">
-        {snapshot.operations.blockers.map((blocker) => (
-          <p key={blocker} className="text-[10px] text-amber-700 dark:text-amber-300">• {blockerLabel(blocker)}</p>
-        ))}
-      </div>
-    )}
+    {(() => {
+      const visibleOperationBlockers = orderTypes.length > 0
+        ? snapshot.operations.blockers.filter((b) => !b.includes('order_type'))
+        : snapshot.operations.blockers;
+      return visibleOperationBlockers.length > 0 ? (
+        <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3">
+          {visibleOperationBlockers.map((blocker) => (
+            <p key={blocker} className="text-[10px] text-amber-700 dark:text-amber-300">• {blockerLabel(blocker)}</p>
+          ))}
+        </div>
+      ) : null;
+    })()}
     {operationNotice && (
       <p role="status" className="mt-3 rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-3 text-[10px] font-bold text-emerald-300">
         {operationNotice}
@@ -1145,7 +1150,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
             </SetupDisclosure>
 
             {!guidedMode && (
-            <SetupDisclosure id="setup-modalities" title={snapshot.steps.operations ? 'Modalidades' : 'Pendente · escolha as modalidades'} summary={ORDER_TYPE_OPTIONS.filter(option => snapshot.operations.orderTypes.includes(option.value)).map(option => option.label).join(' · ') || 'Escolha como receber pedidos'} complete={snapshot.steps.operations} error={operationError || snapshot.operations.blockers.map(blockerLabel).join(' ')}>
+            <SetupDisclosure id="setup-modalities" title={snapshot.steps.operations ? 'Modalidades' : 'Pendente · escolha as modalidades'} summary={ORDER_TYPE_OPTIONS.filter(option => snapshot.operations.orderTypes.includes(option.value)).map(option => option.label).join(' · ') || 'Escolha como receber pedidos'} complete={snapshot.steps.operations} error={operationError || (orderTypes.length > 0 ? snapshot.operations.blockers.filter(b => b !== 'order_types') : snapshot.operations.blockers).map(blockerLabel).join(' ')}>
               {operationsForm}
             </SetupDisclosure>
             )}

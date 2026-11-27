@@ -119,8 +119,22 @@ class ValidationDataLoader:
 
         catalog_modifiers: dict[str, ValidationModifier] = {}
         if all_mod_ids:
+            from ...models import GrupoModificador
             mods = db.query(OpcaoModificador).filter(OpcaoModificador.id.in_(all_mod_ids)).all()
+            group_ids = {str(m.grupo_id) for m in mods if m.grupo_id}
+            groups_by_id: dict[str, GrupoModificador] = {}
+            if group_ids:
+                groups = (
+                    db.query(GrupoModificador)
+                    .filter(
+                        GrupoModificador.restaurante_id == restaurante_id,
+                        GrupoModificador.id.in_(group_ids),
+                    )
+                    .all()
+                )
+                groups_by_id = {str(g.id): g for g in groups}
             for m in mods:
+                grp = groups_by_id.get(str(m.grupo_id))
                 catalog_modifiers[str(m.id)] = ValidationModifier(
                     id=m.id,
                     group_id=str(m.grupo_id),
@@ -128,6 +142,8 @@ class ValidationDataLoader:
                     name=m.nome,
                     price=to_money_decimal(m.preco_adicional or 0.0),
                     is_active=bool(m.ativo) and not bool(m.arquivada),
+                    group_type=(grp.tipo if grp and grp.tipo == "meio_a_meio" else "opcional"),
+                    meio_a_meio_pricing_rule=(getattr(grp, "regra_preco_meio_a_meio", None) or "maior_preco") if grp else "maior_preco",
                 )
 
         # 4. Mapear Itens de Entrada

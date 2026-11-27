@@ -24,6 +24,7 @@ interface SuperAdminOnboardingQaCardProps {
   tenantId: string;
   tenantName: string;
   operationalQa?: OperationalQaSnapshot | null;
+  operationReleased?: boolean;
   onUpdated: () => Promise<void> | void;
 }
 
@@ -50,6 +51,7 @@ export function SuperAdminOnboardingQaCard({
   tenantId,
   tenantName,
   operationalQa,
+  operationReleased = false,
   onUpdated,
 }: SuperAdminOnboardingQaCardProps) {
   const [startFormOpen, setStartFormOpen] = useState(false);
@@ -167,20 +169,22 @@ export function SuperAdminOnboardingQaCard({
             <span
               className={
                 "rounded-full border px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide " +
-                (qaActive
+                (qaActive || operationReleased
                   ? "border-emerald-700/60 bg-emerald-950/40 text-emerald-300"
                   : "border-zinc-700 bg-koma-page text-koma-muted")
               }
             >
-              {qaActive ? "Ativa" : "Inativa"}
+              {qaActive ? "Ativa" : operationReleased ? "Liberada" : "Inativa"}
             </span>
           </div>
           <p className="text-xs text-koma-muted">
-            Liberação temporária (até 72h) para pedidos de teste em QA, sem iniciar o trial nem contaminar financeiro/estoque/fiscal.
+            {operationReleased && !qaActive
+              ? "Este restaurante administrativo já está com a janela de operação liberada."
+              : "Liberação temporária (até 72h) para pedidos de teste em QA, sem iniciar o trial nem contaminar financeiro/estoque/fiscal."}
           </p>
         </div>
 
-        {!qaActive && !startFormOpen && (
+        {!qaActive && !operationReleased && !startFormOpen && (
           <button
             type="button"
             onClick={() => {

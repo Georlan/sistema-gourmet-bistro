@@ -1,6 +1,7 @@
 import type { Product as CardapioProduct, ModifierGroup } from '../../../cardapio/CardapioTypes';
 import type { PromotionPartSelection } from '../../../cardapio/promotionComposition';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
+import { calculateCatalogModifierIdsSurcharge } from '../../../domain/modifierPricing';
 import { getEffectiveProductPrice } from '../../../domain/productMerchandising';
 import type { Product } from '../../../types';
 import { normalizeSlotQuantities, type PromotionType } from '../../../utils/promotionFormHelpers';
@@ -22,13 +23,27 @@ export interface PdvPromotion {
 }
 
 export interface PdvPromotionCartItemLike {
-  product?: Pick<Product, 'preco' | 'preco_promocional'>;
+  product?: Pick<Product, 'preco' | 'preco_promocional'> & { grupos_modificadores?: CatalogModifierGroup[] };
   quantity: number;
-  modifiers?: Array<{ preco: number }>;
+  modifierIds?: string[];
+  modifiers?: Array<{ id?: string; preco: number }>;
   promotionId?: string;
   promotionInstanceId?: string;
   promotionName?: string;
   promotionPrice?: number;
+}
+
+function itemModifiersSurcharge(item: PdvPromotionCartItemLike): number {
+  const groups = item.product?.grupos_modificadores;
+  if (groups && groups.length > 0) {
+    const ids = item.modifierIds && item.modifierIds.length > 0
+      ? item.modifierIds
+      : (item.modifiers || []).map((mod) => String(mod.id ?? '')).filter(Boolean);
+    if (ids.length > 0) {
+      return calculateCatalogModifierIdsSurcharge(groups, ids);
+    }
+  }
+  return (item.modifiers || []).reduce((sum, mod) => sum + Number(mod.preco || 0), 0);
 }
 
 export interface PdvCartPricingSummary {
@@ -159,7 +174,7 @@ export function calculatePdvCartPricing(
       Number(item.product?.preco || 0),
       item.product?.preco_promocional,
     ).effectivePrice;
-    const mods = (item.modifiers || []).reduce((sum, mod) => sum + Number(mod.preco || 0), 0);
+    const mods = itemModifiersSurcharge(item);
     regularCents += Math.round((base + mods) * qty * 100);
   }
 
@@ -184,7 +199,7 @@ export function calculatePdvCartPricing(
 
     const instanceModsCents = group.items.reduce((sum, item) => {
       const qty = Math.max(0, Number(item.quantity || 0));
-      const mods = (item.modifiers || []).reduce((mSum, mod) => mSum + Number(mod.preco || 0), 0);
+      const mods = itemModifiersSurcharge(item);
       return sum + Math.round(mods * qty * 100);
     }, 0);
 
@@ -229,7 +244,7 @@ export function allocatePdvOptimisticItemPrices(
         item.product?.preco_promocional,
       ).effectivePrice,
     );
-    const modsCents = (item.modifiers || []).reduce((sum, mod) => sum + toCents(mod.preco), 0);
+    const modsCents = toCents(itemModifiersSurcharge(item));
     const key = item.promotionId ? promotionInstanceKey(item) : undefined;
 
     for (let i = 0; i < qty; i += 1) {
@@ -410,6 +425,7 @@ export function toCardapioProduct(product: Product): CardapioProduct {
       maxSelection: max,
       selectionMode: group.modo_selecao === 'porcoes' || group.modo_selecao === 'tipos' ? group.modo_selecao : undefined,
       type: group.tipo === 'obrigatorio' || group.tipo === 'meio_a_meio' ? group.tipo : (min > 0 ? 'obrigatorio' : 'opcional'),
+      meioAMeioPricingRule: group.regra_preco_meio_a_meio || 'maior_preco',
       options: (group.opcoes || []).map((opt) => ({
         id: opt.id,
         name: opt.nome,

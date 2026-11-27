@@ -500,8 +500,25 @@ class OrderApplicationService:
             )
 
         # 3. Cotação Financeira Pura
+        from ...domain.orders.pricing import ModifierPricingInput as _ModifierPricingInput, resolve_modifiers_pricing
         subtotal_base = sum(
-            (it.base_price + sum(m.price for m in it.modifiers)) * it.quantity
+            (
+                it.base_price
+                + resolve_modifiers_pricing(
+                    tuple(
+                        _ModifierPricingInput(
+                            id=m.id,
+                            name=m.nome if hasattr(m, "nome") else m.name,
+                            price=m.price,
+                            group_id=getattr(m, "group_id", None),
+                            group_type=getattr(m, "group_type", "opcional"),
+                            meio_a_meio_pricing_rule=getattr(m, "meio_a_meio_pricing_rule", "maior_preco"),
+                        )
+                        for m in it.modifiers
+                    )
+                )[0]
+            )
+            * it.quantity
             for it in validated_input.items
         )
         if cmd.promotion_id:
@@ -830,19 +847,19 @@ class OrderApplicationService:
             itens_criados: list[Item] = []
             item_modifiers_by_item_id: dict[str, tuple[OrderModifierDTO, ...]] = {}
             product_names_by_id: dict[str, str] = {}
-            for v_item in validated_input.items:
+            for v_item, item_quote in zip(validated_input.items, quote.items):
                 val_prod = val_context.catalog_products.get(str(v_item.product_id))
                 if val_prod is not None:
                     product_names_by_id[v_item.product_id] = val_prod.name
                 mods_tuple = tuple(
                     OrderModifierDTO(
-                        modifier_id=mod.id,
-                        name=mod.name,
-                        price=to_money_decimal(mod.price),
+                        modifier_id=mod_quote.id,
+                        name=mod_quote.name,
+                        price=to_money_decimal(mod_quote.unit_price),
                     )
-                    for mod in v_item.modifiers
+                    for mod_quote in item_quote.modifiers
                 )
-                unit_price = float(v_item.base_price + sum(m.price for m in v_item.modifiers))
+                unit_price = float(item_quote.unit_price)
                 qty_int = int(v_item.quantity)
                 for _ in range(qty_int):
                     item_id = f"i-{uuid.uuid4().hex[:8]}"
@@ -862,12 +879,12 @@ class OrderApplicationService:
                     itens_criados.append(item_db)
                     item_modifiers_by_item_id[item_id] = mods_tuple
 
-                    for mod in v_item.modifiers:
+                    for mod_quote in item_quote.modifiers:
                         item_mod = ItemModificador(
                             restaurante_id=cmd.restaurant_id,
                             item_id=item_id,
-                            opcao_modificador_id=mod.id,
-                            preco_aplicado=float(mod.price),
+                            opcao_modificador_id=mod_quote.id,
+                            preco_aplicado=float(mod_quote.unit_price),
                         )
                         db.add(item_mod)
 

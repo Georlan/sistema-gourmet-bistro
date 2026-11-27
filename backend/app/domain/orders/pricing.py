@@ -14,6 +14,7 @@ from .quote import ItemQuote, ModifierQuote, OrderQuote
 from .types import FulfillmentType
 
 CENT = Decimal("0.01")
+VALID_MEIO_A_MEIO_RULES = frozenset({"maior_preco", "media", "soma"})
 
 
 def to_money_decimal(value: Decimal | int | float | str | None) -> Decimal:
@@ -41,6 +42,60 @@ class ModifierPricingInput:
     id: str | int
     name: str
     price: Decimal
+    group_id: str | None = None
+    group_type: str = "opcional"
+    meio_a_meio_pricing_rule: str = "maior_preco"
+
+
+def resolve_modifiers_pricing(
+    modifiers: Sequence[ModifierPricingInput],
+) -> tuple[Decimal, tuple[ModifierQuote, ...]]:
+    """Calcula o acréscimo efetivo dos modificadores e o valor aplicado de cada item.
+
+    Grupos padrão (`opcional`/`obrigatorio`) somam cada adicional escolhido.
+    Grupos `meio_a_meio` aplicam `maior_preco` (padrão), `media` proporcional
+    (com arredondamento bancário e distribuição exata dos centavos) ou `soma`.
+    """
+    if not modifiers:
+        return Decimal("0.00"), ()
+
+    applied_prices: list[Decimal] = [to_money_decimal(m.price) for m in modifiers]
+    group_indices: dict[str, list[int]] = {}
+    for idx, mod in enumerate(modifiers):
+        if mod.group_type == "meio_a_meio" and mod.group_id is not None:
+            group_indices.setdefault(str(mod.group_id), []).append(idx)
+
+    for indices in group_indices.values():
+        rule = modifiers[indices[0]].meio_a_meio_pricing_rule
+        if rule not in VALID_MEIO_A_MEIO_RULES:
+            rule = "maior_preco"
+        prices = [applied_prices[idx] for idx in indices]
+        if rule == "soma" or len(prices) <= 1:
+            continue
+        if rule == "maior_preco":
+            max_price = max(prices)
+            winner_pos = next(pos for pos, p in enumerate(prices) if p == max_price)
+            for pos, idx in enumerate(indices):
+                applied_prices[idx] = max_price if pos == winner_pos else Decimal("0.00")
+            continue
+        # Regra proporcional (media): distribui os centavos exatos entre os sabores.
+        avg_amount = (sum(prices, Decimal("0.00")) / Decimal(len(prices))).quantize(CENT, rounding=ROUND_HALF_UP)
+        total_cents = int(avg_amount * 100)
+        per_mod_cents, remainder_cents = divmod(total_cents, len(indices))
+        for pos, idx in enumerate(indices):
+            cents = per_mod_cents + (1 if pos < remainder_cents else 0)
+            applied_prices[idx] = (Decimal(cents) / Decimal(100)).quantize(CENT, rounding=ROUND_HALF_UP)
+
+    total = to_money_decimal(sum(applied_prices, Decimal("0.00")))
+    quotes = tuple(
+        ModifierQuote(
+            id=mod.id,
+            name=mod.name,
+            unit_price=applied_prices[idx],
+        )
+        for idx, mod in enumerate(modifiers)
+    )
+    return total, quotes
 
 
 @dataclass(frozen=True)
@@ -98,19 +153,8 @@ class OrderPricingService:
             base_price = to_money_decimal(item_in.base_price)
             quantity = to_quantity_decimal(item_in.quantity)
 
-            # Modificadores do item
-            modifier_quotes: list[ModifierQuote] = []
-            item_modifiers_sum = Decimal("0.00")
-            for mod in item_in.modifiers:
-                mod_price = to_money_decimal(mod.price)
-                item_modifiers_sum += mod_price
-                modifier_quotes.append(
-                    ModifierQuote(
-                        id=mod.id,
-                        name=mod.name,
-                        unit_price=mod_price,
-                    )
-                )
+            # Modificadores do item (respeita regra de grupo meio_a_meio quando configurada)
+            item_modifiers_sum, modifier_quotes = resolve_modifiers_pricing(item_in.modifiers)
 
             # Preço unitário do item (produto + adicionais)
             unit_price = to_money_decimal(base_price + item_modifiers_sum)

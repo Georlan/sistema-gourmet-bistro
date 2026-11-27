@@ -22,7 +22,7 @@ from ...domain.orders.pricing import (
 )
 from ...domain.orders.quote import OrderQuote
 from ...domain.orders.types import FulfillmentType, normalize_to_fulfillment
-from ...models import Cliente, Comanda, Cupom, OpcaoModificador, Produto
+from ...models import Cliente, Comanda, Cupom, GrupoModificador, OpcaoModificador, Produto
 
 
 def effective_product_price(produto: object | None) -> Decimal:
@@ -89,6 +89,7 @@ class PricingDataLoader:
                 all_mod_ids.add(str(mid))
 
         modifiers_map: dict[str, OpcaoModificador] = {}
+        groups_by_id: dict[str, GrupoModificador] = {}
         if all_mod_ids:
             mods = (
                 db.query(OpcaoModificador)
@@ -100,6 +101,17 @@ class PricingDataLoader:
                 .all()
             )
             modifiers_map = {str(m.id): m for m in mods}
+            group_ids = {str(m.grupo_id) for m in mods if m.grupo_id}
+            if group_ids:
+                groups = (
+                    db.query(GrupoModificador)
+                    .filter(
+                        GrupoModificador.restaurante_id == restaurante_id,
+                        GrupoModificador.id.in_(group_ids),
+                    )
+                    .all()
+                )
+                groups_by_id = {str(g.id): g for g in groups}
 
         # 3. Montar itens de precificação
         pricing_items: list[ItemPricingInput] = []
@@ -114,11 +126,15 @@ class PricingDataLoader:
             for mid in it.get("modificador_ids") or []:
                 mod_entity = modifiers_map.get(str(mid))
                 if mod_entity is not None:
+                    grp = groups_by_id.get(str(mod_entity.grupo_id))
                     mod_inputs.append(
                         ModifierPricingInput(
                             id=mod_entity.id,
                             name=mod_entity.nome,
                             price=to_money_decimal(mod_entity.preco_adicional or 0.0),
+                            group_id=str(mod_entity.grupo_id) if mod_entity.grupo_id else None,
+                            group_type=(grp.tipo if grp and grp.tipo == "meio_a_meio" else "opcional"),
+                            meio_a_meio_pricing_rule=(getattr(grp, "regra_preco_meio_a_meio", None) or "maior_preco") if grp else "maior_preco",
                         )
                     )
 

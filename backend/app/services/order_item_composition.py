@@ -39,5 +39,6 @@ def load_item_modifiers(db: Session, restaurant_id: int, item_ids: list[str]) ->
             id=str(option.id), nome=option.nome, preco=float(selected.preco_aplicado or 0),
             grupo_id=str(option.grupo_id) if option.grupo_id else None,
             grupo_nome=group.nome if group else None,
+            grupo_tipo=group.tipo if group else None,
         ))
     return dict(by_item)

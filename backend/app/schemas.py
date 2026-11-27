@@ -1436,11 +1436,15 @@ class OpcaoModificadorResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+MeioAMeioPricingRule = Literal["maior_preco", "media", "soma"]
+
+
 class GrupoModificadorCreate(BaseModel):
     nome: str = Field(min_length=1, max_length=100)
     min_selecoes: int = Field(default=0, ge=0)
     max_selecoes: int = Field(default=1, ge=1)
     tipo: Literal["obrigatorio", "opcional", "meio_a_meio"] = "opcional"
+    regra_preco_meio_a_meio: MeioAMeioPricingRule = "maior_preco"
     opcoes: Optional[List[OpcaoModificadorCreate]] = Field(default_factory=list)
     produto_ids: Optional[List[str]] = Field(default_factory=list)
 
@@ -1451,6 +1455,7 @@ class GrupoModificadorResponse(BaseModel):
     min_selecoes: int
     max_selecoes: int
     tipo: str
+    regra_preco_meio_a_meio: str = "maior_preco"
     opcoes: List[OpcaoModificadorResponse] = []
     produto_ids: List[str] = []
 

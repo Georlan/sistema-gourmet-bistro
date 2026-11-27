@@ -15,6 +15,7 @@ import {
   type PdvPromotion,
 } from './pdvPromotions';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
+import { calculateCatalogModifierIdsSurcharge } from '../../../domain/modifierPricing';
 import { getEffectiveProductPrice } from '../../../domain/productMerchandising';
 import { projectCashierSalonTables } from '../../../domain/cashierSalonProjection';
 import {
@@ -209,7 +210,10 @@ export default function CashierPdvView({ activeSubTab, catalogReady, isLoading, 
     () => modifierSelectionsFor(configGroups, configModifierIds),
     [configGroups, configModifierIds],
   );
-  const configModifierTotal = configModifiers.reduce((sum, modifier) => sum + Number(modifier.preco || 0), 0);
+  const configModifierTotal = useMemo(
+    () => calculateCatalogModifierIdsSurcharge(configGroups, configModifierIds),
+    [configGroups, configModifierIds],
+  );
   const configBasePrice = configProduct
     ? getEffectiveProductPrice(Number(configProduct.preco || 0), configProduct.preco_promocional).effectivePrice
     : 0;

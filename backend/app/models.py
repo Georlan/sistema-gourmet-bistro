@@ -1343,6 +1343,7 @@ class GrupoModificador(Base):
     preco_novo_adicional = Column(Numeric(14, 2, asdecimal=False), nullable=True)
     preco_novo_ovo = Column(Numeric(14, 2, asdecimal=False), nullable=True)
     tipo = Column(String, default="obrigatorio")  # "obrigatorio" | "opcional" | "meio_a_meio"
+    regra_preco_meio_a_meio = Column(String(24), nullable=False, default="maior_preco", server_default=text("'maior_preco'"))  # "maior_preco" | "media" | "soma"
 
 
 class OpcaoModificador(Base):

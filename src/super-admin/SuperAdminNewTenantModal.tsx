@@ -392,7 +392,7 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
               className="mt-0.5 rounded border-zinc-700"
             />
             <span>
-              <strong className="text-emerald-200">Modo de preparação (recomendado)</strong>: libera acesso imediato para configurar perfil, horários, produtos e adicionais no celular <strong className="text-emerald-200">sem iniciar os 7 dias</strong> e sem permitir pedidos reais até a liberação comercial.
+              <strong className="text-emerald-200">Modo de preparação (recomendado)</strong>: libera acesso imediato para configurar perfil, horários, produtos e adicionais no celular <strong className="text-emerald-200">sem iniciar os 7 dias</strong> e sem permitir pedidos reais até a liberação comercial. Desmarque apenas para provisionamento QA com janela de Homologação operacional.
             </span>
           </label>
 

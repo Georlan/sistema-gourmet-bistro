@@ -2,6 +2,7 @@ import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Check, Edit3, Layers, Plus, Search, Trash2, X } from 'lucide-react';
 import clsx from 'clsx';
 import { CardapioDiarioEditor } from './CardapioDiarioEditor';
+import { type MeioAMeioPricingRule, meioAMeioPricingRuleLabel, normalizeMeioAMeioPricingRule } from '../../domain/modifierPricing';
 
 export interface OpcaoModificador {
   id?: string;
@@ -18,6 +19,7 @@ export interface GrupoModificador {
   min_selecoes: number;
   max_selecoes: number;
   tipo: 'obrigatorio' | 'opcional' | 'meio_a_meio';
+  regra_preco_meio_a_meio?: MeioAMeioPricingRule;
   opcoes: OpcaoModificador[];
   produto_ids: string[];
   categoria_ids?: string[];
@@ -73,6 +75,7 @@ export default function ComplementosTab({
 
   const [nome, setNome] = useState('');
   const [tipo, setTipo] = useState<'obrigatorio' | 'opcional' | 'meio_a_meio'>('opcional');
+  const [regraMeioAMeio, setRegraMeioAMeio] = useState<MeioAMeioPricingRule>('maior_preco');
   const [minSelecoes, setMinSelecoes] = useState('0');
   const [maxSelecoes, setMaxSelecoes] = useState('1');
   const [opcoes, setOpcoes] = useState<OpcaoModificador[]>([
@@ -187,6 +190,7 @@ export default function ComplementosTab({
       setEditingGrupo(grupo);
       setNome(grupo.nome);
       setTipo(grupo.tipo);
+      setRegraMeioAMeio(normalizeMeioAMeioPricingRule(grupo.regra_preco_meio_a_meio));
       setMinSelecoes(String(grupo.min_selecoes));
       setMaxSelecoes(String(grupo.max_selecoes));
       setOpcoes(
@@ -201,6 +205,7 @@ export default function ComplementosTab({
       setEditingGrupo(null);
       setNome('');
       setTipo('opcional');
+      setRegraMeioAMeio('maior_preco');
       setMinSelecoes('0');
       setMaxSelecoes('1');
       setOpcoes(marmitariaCadastro ? [] : [{ nome: '', preco_adicional: 0, ativo: true }]);
@@ -239,7 +244,7 @@ export default function ComplementosTab({
       setNewOptionPrice('0');
       setNewOptionError('');
     } else {
-      setOpcoes(prev => [{ nome: '', preco_adicional: 0, ativo: true }, ...prev]);
+      setOpcoes(prev => [...prev, { nome: '', preco_adicional: 0, ativo: true }]);
     }
     setOptionSearch('');
   };
@@ -307,6 +312,7 @@ export default function ComplementosTab({
         preco_novo_ovo: grupoOrigemId ? Number(precoNovoOvo) : null,
         nome: nome.trim(),
         tipo,
+        regra_preco_meio_a_meio: tipo === 'meio_a_meio' ? regraMeioAMeio : 'maior_preco',
         min_selecoes: min,
         max_selecoes: max,
         opcoes: validOptions.map((option) => ({
@@ -565,11 +571,13 @@ export default function ComplementosTab({
                   <div>
                     {!marmitariaCadastro && (
                       <p className="text-xs font-semibold text-koma-muted">
-                        {group.opcoes.some(option => Number(option.preco_adicional) > 0)
-                          ? group.opcoes.every(option => Number(option.preco_adicional) > 0)
-                            ? 'Adicionais pagos'
-                            : 'Escolhas gratuitas e pagas'
-                          : 'Escolhas incluídas no preço'}
+                        {group.tipo === 'meio_a_meio'
+                          ? `Meio a meio · ${meioAMeioPricingRuleLabel(group.regra_preco_meio_a_meio)}`
+                          : group.opcoes.some(option => Number(option.preco_adicional) > 0)
+                            ? group.opcoes.every(option => Number(option.preco_adicional) > 0)
+                              ? 'Adicionais pagos'
+                              : 'Escolhas gratuitas e pagas'
+                            : 'Escolhas incluídas no preço'}
                         {' · '}
                         {group.min_selecoes > 0 ? 'Seleção obrigatória' : 'Seleção opcional'}
                       </p>
@@ -773,7 +781,8 @@ export default function ComplementosTab({
                   </button>
                 </div>
               )}
-              <div className={(marmitariaCadastro && !showGroupRules) || (!marmitariaCadastro && !showAdvancedRules) ? 'hidden' : 'grid grid-cols-3 gap-3'}>
+              {((!marmitariaCadastro && showAdvancedRules) || (marmitariaCadastro && showGroupRules)) && (
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-koma-muted mb-1">Regra de seleção</label>
                   <select
@@ -812,6 +821,22 @@ export default function ComplementosTab({
                   />
                 </div>
               </div>
+              )}
+              {tipo === 'meio_a_meio' && (
+                <div className="rounded-xl border border-koma-border bg-koma-card p-3">
+                  <label className="block text-xs font-bold text-koma-muted mb-1">Regra de preço (Meio a Meio)</label>
+                  <select
+                    aria-label="Regra de preço para sabores meio a meio"
+                    value={regraMeioAMeio}
+                    onChange={(event) => setRegraMeioAMeio(normalizeMeioAMeioPricingRule(event.target.value))}
+                    className="min-h-11 w-full px-3 py-2 bg-koma-input border border-koma-border rounded-xl text-xs text-koma-foreground focus:outline-none focus:border-koma-border-strong"
+                  >
+                    <option value="maior_preco">Maior valor entre os sabores (padrão)</option>
+                    <option value="media">Média proporcional dos sabores</option>
+                    <option value="soma">Soma dos sabores</option>
+                  </select>
+                </div>
+              )}
 
               {marmitariaCadastro && !showGroupRules && (
                 <div

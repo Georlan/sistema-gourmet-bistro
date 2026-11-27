@@ -1,4 +1,5 @@
 import type { Product, ProductOption } from './CardapioTypes';
+import { calculateSelectedOptionsSurcharge } from '../domain/modifierPricing';
 
 export interface PromotionPartSelection {
   product: Product;
@@ -32,7 +33,7 @@ export function selectedPromotionExtras(
 ): number {
   return parts.reduce((subtotal, part) => (
     subtotal + (part
-      ? Object.values(part.selectedOptions).flat().reduce((sum, option) => sum + (option.extraPrice || 0), 0)
+      ? calculateSelectedOptionsSurcharge(part.selectedOptions, part.product.modifierGroups)
       : 0)
   ), 0);
 }

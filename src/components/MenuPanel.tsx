@@ -28,6 +28,7 @@ import {
   changeModifierQuantitySelection,
   modifierGroupSelectionValid,
 } from '../domain/modifierQuantity';
+import { calculateCatalogModifierIdsSurcharge } from '../domain/modifierPricing';
 import { getEffectiveProductPrice } from '../domain/productMerchandising';
 import type { AppSettings, DraftItem, Order, Product } from '../types';
 import ModifierPicker from './shared/ModifierPicker';
@@ -340,7 +341,10 @@ export const MenuPanel: React.FC<MenuPanelProps> = ({
     () => modifierSelectionsFor(currentGroups, selectedModifierIds),
     [currentGroups, selectedModifierIds],
   );
-  const modifierTotal = selectedModifierOptions.reduce((sum, option) => sum + option.preco, 0);
+  const modifierTotal = useMemo(
+    () => calculateCatalogModifierIdsSurcharge(currentGroups, selectedModifierIds),
+    [currentGroups, selectedModifierIds],
+  );
   const selectedProductPrice = selectedProductToConfigure
     ? resolveWaiterProductPrice(selectedProductToConfigure)
     : null;

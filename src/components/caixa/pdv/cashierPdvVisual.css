@@ -79,6 +79,9 @@
   gap: .375rem;
   min-width: 0;
 }
+.cashier-pdv-product-card__heading.has-details-trigger {
+  padding-right: 2.875rem;
+}
 .cashier-pdv-product-card__quantity {
   display: inline-grid;
   place-items: center;

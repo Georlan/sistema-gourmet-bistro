@@ -231,9 +231,9 @@ export function CheckoutDialog({
           )}
 
           <div
-            className="cashier-checkout__content p-3.5 sm:p-5 overflow-y-auto flex-1 min-h-0 bg-koma-raised grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5"
+            className="cashier-checkout__content p-3.5 sm:p-5 overflow-y-auto overflow-x-hidden flex-1 min-h-0 min-w-0 bg-koma-raised grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5"
           >
-            <div className="space-y-3 sm:space-y-4 flex flex-col min-h-0">
+            <div className="space-y-3 sm:space-y-4 flex flex-col min-h-0 min-w-0">
               <div
                 className="flex items-center justify-between border-b border-koma-border pb-1.5 shrink-0"
               >
@@ -432,7 +432,7 @@ export function CheckoutDialog({
               )}
             </div>
 
-            <div className="space-y-3 sm:space-y-4 flex flex-col min-h-0">
+            <div className="space-y-3 sm:space-y-4 flex flex-col min-h-0 min-w-0">
               <h4 className="font-serif font-bold text-koma-secondary border-b border-koma-border pb-1.5 shrink-0">
                 Pagamento
               </h4>
@@ -505,9 +505,9 @@ export function CheckoutDialog({
 
               <form
                 onSubmit={handleProcessPayment}
-                className="cashier-checkout__form space-y-3.5 bg-koma-card/40 p-3.5 sm:p-4 rounded-2xl border border-koma-border/50 flex-1 flex flex-col justify-between"
+                className="cashier-checkout__form space-y-3.5 bg-koma-card/40 p-3.5 sm:p-4 rounded-2xl border border-koma-border/50 flex-1 flex flex-col justify-between min-w-0"
               >
-                <fieldset disabled={isProcessingPayment || mixedPaymentAwaitingRefresh || paymentVerificationRequired} className="space-y-3.5">
+                <fieldset disabled={isProcessingPayment || mixedPaymentAwaitingRefresh || paymentVerificationRequired} className="space-y-3.5 min-w-0 w-full">
                   <label className="flex min-h-11 items-center gap-3 text-sm font-semibold text-koma-foreground cursor-pointer">
                     <input type="checkbox" checked={mixedPayment} onChange={e => setMixedPayment(e.target.checked)} className="h-4 w-4 rounded accent-emerald-600" />
                     Dividir pagamento
