@@ -3,6 +3,13 @@ import { CardapioDigitalSettingsPanel } from '../cardapio/CardapioDigitalSetting
 import { OnlineMenuOrdersSettings } from '../caixa/online-menu/OnlineMenuOrdersSettings';
 import { SubscriptionControl } from '../assinatura/SubscriptionControl';
 import { CatalogAssistanceUpload, type CatalogAssistanceSnapshot } from './CatalogAssistanceUpload';
+import { QuickMenuImportModal } from '../cardapio/QuickMenuImportModal';
+import {
+  defaultPresetForOperationProfile,
+  RESTAURANT_SEGMENT_PRESETS,
+  type RestaurantSegmentPresetId,
+} from '../../domain/segmentCategoryPresets';
+import type { CatalogCategory } from '../../catalog/catalog';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
@@ -10,6 +17,8 @@ import {
   CheckCircle2,
   Circle,
   ChevronDown,
+  FileSpreadsheet,
+  FolderPlus,
   LockKeyhole,
   CreditCard,
   Eye,
@@ -243,6 +252,12 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
   const [savingTables, setSavingTables] = useState(false);
   const [tableSetupError, setTableSetupError] = useState('');
   const [tableSetupNotice, setTableSetupNotice] = useState('');
+  const [quickImportOpen, setQuickImportOpen] = useState(false);
+  const [existingCategories, setExistingCategories] = useState<CatalogCategory[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState<RestaurantSegmentPresetId>('hamburgueria');
+  const [applyingPreset, setApplyingPreset] = useState(false);
+  const [presetNotice, setPresetNotice] = useState('');
+  const [presetError, setPresetError] = useState('');
 
   const headers = useMemo(() => ({
     Authorization: `Bearer ${accessToken}`,
@@ -260,6 +275,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     cancelSnapshotLoad();
     setSnapshot(next);
     setOperationProfile(next.restaurant.operationProfile || 'generic');
+    setSelectedPresetId(defaultPresetForOperationProfile(next.restaurant.operationProfile));
     setTableCountInput((current) => current || (next.counts.tables > 0 ? String(next.counts.tables) : ''));
     if (next.operations.orderTypes.length > 0) {
       setOrderTypes(next.operations.orderTypes);
@@ -342,6 +358,60 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
       if (snapshotRequest.current === controller) snapshotRequest.current = null;
     }
   }, [applySnapshot, headers, returnToLogin]);
+
+  const loadExistingCategories = useCallback(async (): Promise<CatalogCategory[]> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/produtos/categorias`, { headers, cache: 'no-store' });
+      if (!response.ok) return existingCategories;
+      const data = await response.json();
+      const list = Array.isArray(data) ? (data as CatalogCategory[]) : [];
+      setExistingCategories(list);
+      return list;
+    } catch {
+      return existingCategories;
+    }
+  }, [headers, existingCategories]);
+
+  const openQuickImport = async () => {
+    await loadExistingCategories();
+    setQuickImportOpen(true);
+  };
+
+  const applyCategoryPreset = async () => {
+    if (applyingPreset) return;
+    const preset = RESTAURANT_SEGMENT_PRESETS.find((item) => item.id === selectedPresetId);
+    if (!preset) return;
+    setApplyingPreset(true);
+    setPresetNotice('');
+    setPresetError('');
+    try {
+      const current = await loadExistingCategories();
+      const existingNames = new Set(current.map((c) => c.nome.trim().toLowerCase()));
+      const existingIds = new Set(current.map((c) => c.id));
+      const toCreate = preset.categories.filter(
+        (cat) => !existingIds.has(cat.id) && !existingNames.has(cat.nome.trim().toLowerCase()),
+      );
+      let createdCount = 0;
+      for (const cat of toCreate) {
+        const res = await fetch(`${API_BASE_URL}/produtos/categorias`, {
+          method: 'POST',
+          headers: { ...headers, 'Content-Type': 'application/json' },
+          body: JSON.stringify(cat),
+        });
+        if (res.ok) createdCount += 1;
+      }
+      await loadExistingCategories();
+      setPresetNotice(
+        createdCount > 0
+          ? `${createdCount} categoria(s) de ${preset.label} criadas. Agora cole ou cadastre seus produtos.`
+          : `Todas as categorias de ${preset.label} já estão prontas.`,
+      );
+    } catch (error) {
+      setPresetError(error instanceof Error ? error.message : 'Não foi possível criar as categorias iniciais.');
+    } finally {
+      setApplyingPreset(false);
+    }
+  };
 
   useEffect(() => {
     void loadSnapshot();
@@ -733,6 +803,61 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
     </div>
   </>);
   const remainingEssentials = snapshot.progress.total - snapshot.progress.completed;
+  const catalogQuickStart = (
+    <div className="mb-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4 space-y-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <strong className="block text-xs font-black text-koma-foreground">
+            Caminho rápido: publique seu cardápio agora no celular
+          </strong>
+          <p className="mt-1 text-[11px] leading-relaxed text-koma-muted">
+            Cole a lista do WhatsApp, planilha ou CSV e revise os preços antes de publicar — sem esperar atendimento manual.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void openQuickImport()}
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 text-xs font-black text-zinc-950 hover:bg-emerald-400 cursor-pointer"
+        >
+          <FileSpreadsheet size={16} /> Importar texto / planilha
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-2 border-t border-emerald-500/20 pt-3 sm:flex-row sm:items-center">
+        <label className="flex flex-1 items-center gap-2 text-xs">
+          <FolderPlus size={15} className="shrink-0 text-emerald-400" />
+          <span className="sr-only">Modelo de categorias por segmento</span>
+          <select
+            value={selectedPresetId}
+            onChange={(e) => {
+              setSelectedPresetId(e.target.value as RestaurantSegmentPresetId);
+              setPresetNotice('');
+              setPresetError('');
+            }}
+            aria-label="Modelo de categorias iniciais"
+            className="min-h-10 w-full rounded-xl border border-koma-border bg-koma-page px-3 text-xs font-semibold text-koma-foreground"
+          >
+            {RESTAURANT_SEGMENT_PRESETS.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                Categorias iniciais: {preset.label} ({preset.categories.length} pastas)
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          disabled={applyingPreset}
+          onClick={() => void applyCategoryPreset()}
+          className="min-h-10 shrink-0 rounded-xl border border-koma-border bg-koma-card px-3.5 text-xs font-bold text-koma-foreground hover:bg-koma-raised disabled:opacity-50 cursor-pointer"
+        >
+          {applyingPreset ? 'Criando…' : 'Criar categorias do segmento'}
+        </button>
+      </div>
+
+      {presetNotice && <p role="status" className="text-[11px] font-bold text-emerald-300">{presetNotice}</p>}
+      {presetError && <p role="alert" className="text-[11px] font-bold text-rose-400">{presetError}</p>}
+    </div>
+  );
   const catalogUpload = <CatalogAssistanceUpload accessToken={accessToken} assistance={snapshot.catalogAssistance} onSubmitted={() => void loadSnapshot()} onSavingChange={guidedMode ? setGuidedSaving : undefined} onDirtyChange={guidedMode ? setGuidedDirty : undefined} />;
   const refreshSetup = () => {
     if (guidedBusy || (guidedDirty && !window.confirm('Há alterações não salvas. Descartar e atualizar a implantação?'))) return;
@@ -882,8 +1007,9 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                           {step.id === 'operations' && operationsForm}
                           {step.id === 'catalog' && (
                             <section aria-label="Cardápio do cadastro">
+                              {catalogQuickStart}
                               {catalogUpload}
-                              <p className="mt-3 text-xs text-koma-muted">Envie seu cardápio para a equipe preparar ou cadastre os produtos. Esta etapa conclui quando houver um produto ativo.</p>
+                              <p className="mt-3 text-xs text-koma-muted">Você também pode enviar uma foto/PDF para a equipe preparar ou cadastrar os produtos no Caixa. Esta etapa conclui quando houver um produto ativo.</p>
                               <button type="button" onClick={() => openCashierAt('cardapio', 'produtos', true)} className="mt-4 inline-flex min-h-11 items-center gap-2 rounded-xl border border-koma-border bg-koma-raised px-4 py-2 text-sm font-bold">
                                 {step.done ? 'Conferir produtos' : 'Cadastrar produtos manualmente'} <ArrowRight size={16} />
                               </button>
@@ -967,6 +1093,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
               snapshot.counts.tables > 0 && `${snapshot.counts.tables} mesas`,
               snapshot.catalogAssistance && !['cancelled', 'superseded'].includes(snapshot.catalogAssistance.status) && 'cardápio recebido',
             ].filter(Boolean).join(' · ') || 'Comece pelos essenciais acima.'}</p>
+            {!guidedMode && catalogQuickStart}
             {!guidedMode && catalogUpload}
 
 
@@ -1274,6 +1401,17 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
           </div>
         </section>
       </div>
+      <QuickMenuImportModal
+        open={quickImportOpen}
+        onClose={() => setQuickImportOpen(false)}
+        apiBaseUrl={API_BASE_URL}
+        authHeaders={headers}
+        existingCategories={existingCategories}
+        onImported={async () => {
+          await loadExistingCategories();
+          await loadSnapshot();
+        }}
+      />
     </main>
   );
 }

@@ -1053,6 +1053,94 @@ export function SuperAdminRestaurant360({
             </div>
           </div>
 
+          <div
+            className="rounded-xl border border-zinc-800 bg-koma-card p-4"
+            aria-label="Prontidão operacional e impressão"
+          >
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="grid flex-1 gap-3 sm:grid-cols-3 text-xs">
+                <div className="rounded-lg border border-zinc-800 bg-koma-page p-3">
+                  <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-koma-muted">
+                    <Printer className="h-3.5 w-3.5" /> Impressão em tempo real
+                  </span>
+                  <strong className="mt-1 block text-sm text-koma-foreground">
+                    {printStatusLoading
+                      ? "Consultando agente…"
+                      : printStatusError
+                        ? "Indisponível"
+                        : printStatus?.status === "online"
+                          ? "Agente online"
+                          : printStatus?.status === "degraded"
+                            ? "Agente com alerta"
+                            : printStatus?.status === "offline"
+                              ? "Agente offline"
+                              : "Não configurada"}
+                  </strong>
+                  <p className="mt-1 text-[11px] text-koma-muted">
+                    {printStatus?.agent_id
+                      ? `${printStatus.agent_id} · fila ${printStatus.queue.pending} pendente(s), ${printStatus.queue.failed} falha(s)`
+                      : printStatusError || "Nenhum agente pareado ainda"}
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-zinc-800 bg-koma-page p-3">
+                  <span className="text-[10px] font-bold uppercase text-koma-muted">Catálogo publicado</span>
+                  <strong className="mt-1 block text-sm text-koma-foreground">
+                    {release?.counts?.activeProducts != null
+                      ? `${release.counts.activeProducts} produto(s) ativo(s)`
+                      : "—"}
+                  </strong>
+                  <p className="mt-1 text-[11px] text-koma-muted">
+                    {release?.catalogAssistance?.status
+                      ? `Assistência: ${release.catalogAssistance.status}`
+                      : release?.steps.catalog
+                        ? "Pronto para operar"
+                        : "Sem produtos ativos"}
+                  </p>
+                </div>
+
+                <div className="rounded-lg border border-zinc-800 bg-koma-page p-3">
+                  <span className="text-[10px] font-bold uppercase text-koma-muted">Impedimentos reais</span>
+                  <strong className="mt-1 block text-sm text-koma-foreground">
+                    {release?.readiness?.blockers?.length
+                      ? `${release.readiness.blockers.length} pendência(s)`
+                      : release
+                        ? "Sem impedimentos"
+                        : "—"}
+                  </strong>
+                  <p className="mt-1 text-[11px] text-koma-muted">
+                    {release?.readiness?.blockers?.length
+                      ? formatBlockers(release.readiness.blockers, READINESS_BLOCKER_LABELS)
+                      : "Pronto conforme readiness do servidor"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = supportTargetForCockpit("printing");
+                    onSupport(tenant, target || undefined);
+                  }}
+                  className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-zinc-700 bg-koma-page px-3 py-2 text-xs font-bold text-koma-foreground hover:border-[#00b894]"
+                >
+                  <Printer className="h-3.5 w-3.5" /> Abrir impressão
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const target = supportTargetForCockpit("catalog");
+                    onSupport(tenant, target || undefined);
+                  }}
+                  className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-zinc-700 bg-koma-page px-3 py-2 text-xs font-bold text-koma-foreground hover:border-[#00b894]"
+                >
+                  <Layers className="h-3.5 w-3.5" /> Abrir cardápio
+                </button>
+              </div>
+            </div>
+          </div>
+
           {release && !release.readiness?.trialStarted && (
             <div className="rounded-xl border border-amber-900/50 bg-amber-950/20 p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
