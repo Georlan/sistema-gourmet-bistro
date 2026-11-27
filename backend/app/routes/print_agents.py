@@ -30,7 +30,7 @@ from ..database import (
     get_db,
     current_restaurante_id,
 )
-from ..models import PrintJob, PrintAgentToken, Usuario
+from ..models import PrintJob, PrintAgentToken, Restaurante, Usuario
 from ..security import ensure_permission, get_current_user, require_permission
 from ..websocket_manager import manager
 from ..timezone_utils import OPERATIONAL_TIMEZONE
@@ -2554,11 +2554,20 @@ def register_agent(
         restaurante_id=int(rest_id),
     )
 
+    restaurant_name = (
+        db.query(Restaurante.nome)
+        .filter(Restaurante.id == rest_id)
+        .scalar()
+        or ""
+    ).strip() or "Restaurante KÔMA"
+
     return {
         "status": "registered",
         "agent_id": agent_id_clean,
         "restaurante_id": rest_id,
         "agent_token": raw_token,
+        "is_primary": make_primary,
+        "restaurant_name": restaurant_name,
     }
 
 

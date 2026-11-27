@@ -2708,4 +2708,43 @@ def test_aggregated_cache_log_does_not_attribute_to_single_origin(caplog):
     assert "user_agent=" not in log_entry[0]
 
 
+def test_register_returns_primary_and_restaurant_name_for_first_mobile_device():
+    """First mobile Bluetooth pairing on a fresh tenant becomes primary and exposes store name."""
+    client = TestClient(app)
+    with TestingSessionLocal() as db:
+        db.add(Restaurante(id=3, nome="Lanchonete Mobile", plano="pro"))
+        db.add(Usuario(id="admin-3", restaurante_id=3, nome="Admin 3", email="admin3@teste.local", cargo="admin", status="ativo"))
+        db.commit()
+
+    headers_3 = jwt_headers("admin-3", 3, "admin")
+    first = client.post(
+        "/api/print-agents/register",
+        headers=headers_3,
+        json={"agent_id": "android-bt-first", "is_primary": False},
+    )
+    assert first.status_code == 200, first.text
+    first_data = first.json()
+    assert first_data["restaurante_id"] == 3
+    assert first_data["is_primary"] is True
+    assert first_data["restaurant_name"] == "Lanchonete Mobile"
+
+    second = client.post(
+        "/api/print-agents/register",
+        headers=headers_3,
+        json={"agent_id": "android-bt-second", "is_primary": False},
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["is_primary"] is False
+    assert second.json()["restaurant_name"] == "Lanchonete Mobile"
+
+    # Cross-tenant isolation: tenant 2 cannot promote tenant 3's device
+    headers_2 = jwt_headers("2", 2, "admin")
+    cross_promote = client.post(
+        "/api/print-agents/set-primary",
+        headers=headers_2,
+        json={"agent_id": "android-bt-second"},
+    )
+    assert cross_promote.status_code == 404
+
+
 

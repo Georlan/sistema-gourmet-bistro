@@ -641,7 +641,7 @@ export function CaixaOrdersWorkspaceView({
             if (capability.action === 'dispatch') actions.dispatchDelivery(String(order.id), selectedCourierId);
             else actions.advanceDigitalOrder(order);
           }}
-          className={"orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"}
+          className={"orders-card__action w-full py-2 px-3 min-h-11 sm:min-h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"}
         >
           <Check size={13} />
           <span>{buttonText}</span>
@@ -762,7 +762,7 @@ export function CaixaOrdersWorkspaceView({
           type="button"
           disabled={isLoading}
           onClick={(e) => { e.stopPropagation(); actions.openTablePayment(order, true); }}
-          className={"orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"}
+          className={"orders-card__action w-full py-2 px-3 min-h-11 sm:min-h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5"}
         >
           {smartPosState?.blocksPayment ? (
             <><Smartphone size={13} /><span>{smartPosState.ctaLabel}</span></>
@@ -894,7 +894,7 @@ export function CaixaOrdersWorkspaceView({
             if (capability.action === 'dispatch') actions.dispatchDelivery(String(order.id), selectedCourierId);
             else if (capability.action === 'finalize') actions.finalizeDigitalOrder(order);
           }}
-          className={"orders-card__action w-full py-2 px-3 h-8 sm:h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"}
+          className={"orders-card__action w-full py-2 px-3 min-h-11 sm:min-h-9 font-bold text-xs sm:text-sm rounded-xl transition-all cursor-pointer uppercase tracking-wider flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"}
         >
           <Check size={13} />
           <span>{capability.label}</span>
