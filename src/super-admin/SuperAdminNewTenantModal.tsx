@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Copy, ExternalLink, Plus, X } from "lucide-react";
+import { CheckCircle2, ClipboardPaste, Copy, ExternalLink, Plus, X } from "lucide-react";
 import {
   SUBSCRIPTION_PLANS,
 } from "../config/subscriptionPlans";
+import { parseExpressOnboardingText } from "../domain/expressOnboardingParser";
 import { getOperationalAppUrl, getTenantPublicMenuUrl } from "../domain/komaHost";
 import { superAdminErrorMessage, superAdminFetch } from "./superAdminApi";
 
@@ -131,6 +132,16 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
   const [adminEmail, setAdminEmail] = useState("");
   const [temporaryPassword, setTemporaryPassword] = useState("");
   const [deferTrial, setDeferTrial] = useState(true);
+  const [expressOpen, setExpressOpen] = useState(false);
+  const [expressInput, setExpressInput] = useState("");
+  const [expressExtra, setExpressExtra] = useState<{
+    phone?: string | null;
+    address?: string | null;
+    segmentPreset?: string | null;
+    orderTypes: string[];
+    operatingHours: Array<{ days: string; hours: string }>;
+    menuItems: Array<{ name: string; price: number; category: string; description: string }>;
+  } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<OnboardingResponse | null>(null);
@@ -190,6 +201,17 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
         throw new Error("Informe um ID de restaurante inteiro positivo (>= 1) ou deixe em branco para usar a sugestão automática.");
       }
 
+      const hasExpressExtras = Boolean(
+        expressExtra
+        && (
+          expressExtra.orderTypes.length > 0
+          || expressExtra.operatingHours.length > 0
+          || expressExtra.menuItems.length > 0
+          || expressExtra.phone
+          || expressExtra.address
+        ),
+      );
+
       const requestBody: Record<string, unknown> = {
         name: name.trim(),
         subdomain: slug.trim(),
@@ -197,18 +219,33 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
         operation_profile: operationProfile,
         admin_name: adminName.trim(),
         admin_email: adminEmail.trim(),
-        temporary_password: temporaryPassword,
+        ...(hasExpressExtras ? { admin_password: temporaryPassword } : { temporary_password: temporaryPassword }),
         defer_trial: deferTrial,
       };
       if (parsedRestaurantId !== null) {
         requestBody.restaurant_id = parsedRestaurantId;
       }
+      if (hasExpressExtras && expressExtra) {
+        if (expressExtra.phone) requestBody.phone = expressExtra.phone;
+        if (expressExtra.address) requestBody.address = expressExtra.address;
+        if (expressExtra.segmentPreset) requestBody.segment_preset = expressExtra.segmentPreset;
+        if (expressExtra.orderTypes.length > 0) requestBody.order_types = expressExtra.orderTypes;
+        if (expressExtra.operatingHours.length > 0) requestBody.operating_hours = expressExtra.operatingHours;
+        if (expressExtra.menuItems.length > 0) requestBody.menu_items = expressExtra.menuItems;
+        requestBody.apply_segment_preset = true;
+      }
 
-      const response = await superAdminFetch("/api/super-admin/restaurantes/provisionar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
+      const response = hasExpressExtras
+        ? await superAdminFetch("/api/provisioning/express", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        })
+        : await superAdminFetch("/api/super-admin/restaurantes/provisionar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestBody),
+        });
       const payload = await response.json().catch(() => null);
       if (!response.ok) {
         const detail = payload?.detail;
@@ -305,6 +342,73 @@ export function SuperAdminNewTenantModal({ onClose, onCreated }: SuperAdminNewTe
         </div>
 
         <form onSubmit={submit} className="mt-5 space-y-4 text-xs">
+          <div className="rounded-lg border border-zinc-800 bg-koma-page p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 font-semibold text-[#00b894]">
+                <ClipboardPaste className="h-3.5 w-3.5" /> Modo Expresso (colar texto/JSON)
+              </span>
+              <button
+                type="button"
+                onClick={() => setExpressOpen(prev => !prev)}
+                className="text-[11px] font-semibold text-koma-secondary hover:text-koma-foreground"
+              >
+                {expressOpen ? "Ocultar" : "Colar dados"}
+              </button>
+            </div>
+            {expressOpen && (
+              <div className="mt-3 space-y-2">
+                <textarea
+                  rows={5}
+                  value={expressInput}
+                  onChange={event => setExpressInput(event.target.value)}
+                  placeholder={"Nome: Pizzaria Central\nSegmento: Pizzaria\nResponsável: João\nEmail: joao@pizzaria.com\nAtendimento: Delivery, Retirada\nHorário: 18h às 23h"}
+                  className="w-full rounded-lg border border-zinc-800 bg-koma-card p-2.5 font-mono text-[11px] text-koma-foreground focus:border-[#00b894] focus:outline-none"
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const parsed = parseExpressOnboardingText(expressInput, { requireAdminCredentials: false });
+                      if (parsed.fields.name) {
+                        setName(parsed.fields.name);
+                        if (!slugEdited) setSlug(parsed.fields.slug);
+                      }
+                      if (parsed.fields.slug && expressInput.toLowerCase().includes("slug:")) {
+                        setSlug(parsed.fields.slug);
+                        setSlugEdited(true);
+                      }
+                      setOperationProfile(parsed.fields.operationProfile);
+                      setPlan(parsed.fields.plan);
+                      if (parsed.fields.adminName) setAdminName(parsed.fields.adminName);
+                      if (parsed.fields.adminEmail) setAdminEmail(parsed.fields.adminEmail);
+                      setExpressExtra({
+                        phone: parsed.fields.phone,
+                        address: parsed.fields.address,
+                        segmentPreset: parsed.fields.segmentPreset,
+                        orderTypes: parsed.fields.orderTypes,
+                        operatingHours: parsed.fields.operatingHours,
+                        menuItems: parsed.menuItems.map(item => ({
+                          name: item.name,
+                          price: item.price,
+                          category: item.category,
+                          description: item.description,
+                        })),
+                      });
+                    }}
+                    className="rounded-md bg-[#00b894] px-3 py-1.5 text-[11px] font-bold text-black hover:bg-[#00c996]"
+                  >
+                    Preencher campos
+                  </button>
+                  {expressExtra && (
+                    <span className="text-[10px] text-emerald-300">
+                      Extra detectado: {expressExtra.orderTypes.length} modalidade(s), {expressExtra.operatingHours.length} horário(s), {expressExtra.menuItems.length} item(ns)
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Restaurante</span><input value={name} onChange={event => updateName(event.target.value)} required minLength={2} maxLength={255} autoFocus className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 text-koma-foreground focus:border-[#00b894] focus:outline-none" placeholder="Ex: Pizzaria Central" /></label>
             <label className="block"><span className="mb-1 block font-medium text-koma-secondary">Slug público</span><input value={slug} onChange={event => updateSlug(event.target.value)} required minLength={2} maxLength={100} pattern="[a-z0-9]+(?:-[a-z0-9]+)*" className="w-full rounded-lg border border-zinc-800 bg-koma-page p-2.5 font-mono text-koma-foreground focus:border-[#00b894] focus:outline-none" placeholder="pizzaria-central" /><span className="mt-1 block text-[10px] text-koma-subtle">{slug ? `${slug}.komafood.com.br` : "slug-do-restaurante.komafood.com.br"}</span></label>

@@ -377,7 +377,11 @@ async def add_request_tenant_context(request: Request, call_next):
     auth_header = request.headers.get("Authorization")
 
     # Tokens de agente de impressão (koma_ag_*) são opacos e autenticados nas rotas /api/print-agents
-    if request.headers.get("X-Agent-Token") or (auth_header and auth_header.startswith("Bearer koma_ag_")):
+    if (
+        request.headers.get("X-Agent-Token")
+        or (auth_header and auth_header.startswith("Bearer koma_ag_"))
+        or request.url.path == "/api/provisioning/express"
+    ):
         return await call_next(request)
 
     if auth_header:
@@ -515,6 +519,8 @@ app.add_middleware(
         "X-Koma-Session-Action",
         "X-Koma-Delivery-Token",
         "X-Idempotency-Key",
+        "Idempotency-Key",
+        "X-Provisioning-Actor",
         "X-Tenant-ID",
         "X-Restaurante-ID",
         "X-Request-ID",
@@ -573,6 +579,8 @@ app.include_router(super_admin_finance.router)
 app.include_router(super_admin.router, prefix="/api")
 app.include_router(super_admin_whatsapp.router, prefix="/api")
 app.include_router(super_admin_onboarding.router, prefix="/api")
+from .routes import universal_provisioning
+app.include_router(universal_provisioning.router, prefix="/api")
 from .routes import cearatech_leads
 app.include_router(cearatech_leads.router)
 

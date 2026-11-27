@@ -55,6 +55,7 @@ function isPublicCommercialRoute(): boolean {
   return resolved.surface === "landing"
     || pathname.startsWith("/landing")
     || pathname.startsWith("/legal")
+    || pathname.startsWith("/comecar")
     || pathname.startsWith("/contratar")
     || (pathname.startsWith("/siaratech") || pathname.startsWith("/cearatech"));
 }
@@ -210,6 +211,7 @@ const pathname = window.location.pathname;
 const isSmartPosRoute = pathname.startsWith("/smartpos");
 const isPrintSimulatorRoute = pathname.startsWith("/ferramentas/simulador-impressao");
 const isLegalRoute = pathname.startsWith("/legal");
+const isAutonomousStartRoute = pathname.startsWith("/comecar");
 const isPlanContractRoute = pathname.startsWith("/contratar");
 const isCearaTechQrRoute = ["/siaratech/qr", "/cearatech/qr"].includes(pathname.replace(/\/+$/, ""));
 const isCearaTechRoute = (pathname.startsWith("/siaratech") || pathname.startsWith("/cearatech"));
@@ -282,8 +284,10 @@ const RootApp = React.lazy(
       ? () => import("./smartpos/SmartPosPage")
       : isLegalRoute
       ? () => import("./legal/LegalPage")
-      : isPlanContractRoute
-        ? () => import("./legal/PlanContractPageV2")
+      : isAutonomousStartRoute
+        ? () => import("./legal/AutonomousStartPage")
+        : isPlanContractRoute
+          ? () => import("./legal/PlanContractPageV2")
         : isCearaTechQrRoute
           ? () => Promise.all([import("./landing/siara-event.css"), import("./landing/CearaTechQrPage")]).then(([, mod]) => mod)
           : isCearaTechRoute

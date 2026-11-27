@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import SuperAdminAuditLog
-from ..routes.super_admin_onboarding import DEFAULT_TRIAL_DAYS, restaurant_trials
+from .universal_provisioning import DEFAULT_TRIAL_DAYS, restaurant_trials
 from ..saas_billing_models import SaaSSubscription
 from .saas_billing_policy import (
     is_recurring_trial_payment_method,
