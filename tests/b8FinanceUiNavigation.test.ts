@@ -14,7 +14,7 @@ test('B8 navigation targets map DRE, Fluxo de Caixa, Contas, Lotes and Produçã
 });
 
 test('B8 function search finds DRE, Fluxo de Caixa, Contas a Pagar and Lotes FEFO', () => {
-  const entries = buildCashierFunctionSearchEntries(CASHIER_SIDEBAR_GROUPS);
+  const entries = buildCashierFunctionSearchEntries(CASHIER_SIDEBAR_GROUPS, true);
 
   const dre = searchCashierFunctions(entries, 'DRE');
   assert.equal(dre[0]?.navigationId, 'relatorios_dre');

@@ -305,10 +305,10 @@ test('persisted aliases normalize with the active parent context', () => {
     tab: 'impressao_salao', subTab: 'impressao',
   });
   assert.deepEqual(normalizeCashierNavigationState('dashboard', 'dre'), {
-    tab: 'relatorios', subTab: 'financeiro',
+    tab: 'relatorios', subTab: 'dre',
   });
   assert.deepEqual(normalizeCashierNavigationState('relatorios', 'fluxo_caixa'), {
-    tab: 'relatorios', subTab: 'financeiro',
+    tab: 'relatorios', subTab: 'fluxo_caixa',
   });
   assert.deepEqual(normalizeCashierNavigationState('operacao', 'preparo'), {
     tab: 'operacao', subTab: 'preparo',
