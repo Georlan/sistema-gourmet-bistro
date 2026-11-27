@@ -43,9 +43,9 @@ def test_public_menu_config_sync_is_tenant_scoped_and_refetches_source_of_truth(
     assert "const payload = await fetchPublicMenu({" in page
     assert "force: background," in page
     assert "/api/cardapio-digital/public?" in public_menu_client
-    assert "{ cache: 'no-store' }" in public_menu_client
+    assert "cache: 'no-store'" in public_menu_client
     assert "isNumericIdentifier ? { restaurante_id: cleanIdentifier } : { slug: cleanIdentifier }" in public_menu_client
-    assert "if (force) {" in public_menu_client
+    assert "if (force || qaToken) {" in public_menu_client
     assert "recentResults.delete(key);" in public_menu_client
     assert '${WS_BASE_URL}/ws/cliente?restaurante_id=${activeBrand.id}' in page
     assert '["catalog_updated", "config_updated", "store_status_changed"]' in page

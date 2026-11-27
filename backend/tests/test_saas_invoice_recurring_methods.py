@@ -92,6 +92,7 @@ def _plan_changed_invoice_fixture(monkeypatch, *, paid_amount: str):
     )
     subscription = SimpleNamespace(
         billing_cycle="monthly",
+        payment_method_type="credit_card",
         current_period_start=None,
         current_period_end=None,
         status="active",
@@ -114,6 +115,7 @@ def _plan_changed_invoice_fixture(monkeypatch, *, paid_amount: str):
         reconciliation,
         "tenant_commercial_terms",
         lambda _db, _restaurant_id: SimpleNamespace(
+            plan="premium",
             billing_amount=Decimal("249.00"),
         ),
     )

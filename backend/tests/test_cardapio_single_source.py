@@ -106,7 +106,7 @@ def test_current_public_menu_loads_one_catalog_snapshot():
     assert 'from "./publicMenuClient"' in page
     assert "const payload = await fetchPublicMenu({" in page
     assert "${apiBaseUrl}/api/cardapio-digital/public?" in client
-    assert "{ cache: 'no-store' }" in client
+    assert "cache: 'no-store'" in client
     assert "const query = new URLSearchParams(" in client
     assert "isNumericIdentifier ? { restaurante_id: cleanIdentifier } : { slug: cleanIdentifier }" in client
     assert "/api/cardapio-digital/categorias" not in page + client
@@ -169,6 +169,10 @@ def test_hidden_caixa_bridge_does_not_query_database():
     statements: list[str] = []
 
     def before_cursor_execute(_conn, _cursor, statement, _parameters, _context, _executemany):
+        # A rota deprecated_bridge não deve consultar o banco além da resolução
+        # padrão de autenticação de usuário/tenant em get_current_user.
+        if "FROM usuarios" in statement:
+            return
         statements.append(statement)
 
     event.listen(engine, "before_cursor_execute", before_cursor_execute)

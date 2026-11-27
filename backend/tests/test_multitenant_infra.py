@@ -34,9 +34,11 @@ GLOBAL_MODEL_TABLES = {
 CONTROL_PLANE_TENANT_TABLES = {"restaurant_trials", "support_sessions"}
 
 # Eventos recebidos da Meta podem chegar antes de o provedor permitir
-# correlacioná-los a uma mensagem/tenant. A tabela continua sob RLS e linhas
-# sem tenant não são visíveis ao runtime, mas a coluna é intencionalmente nula.
-UNRESOLVED_PLATFORM_EVENT_TABLES = {"notificacoes_whatsapp"}
+# correlacioná-los a uma mensagem/tenant, e investigações globais de
+# disponibilidade (`availability_worker`) podem não pertencer a um tenant.
+# Ambas as tabelas continuam sob RLS/FORCE RLS e linhas sem tenant não são
+# visíveis ao runtime, mas a coluna é intencionalmente nula.
+UNRESOLVED_PLATFORM_EVENT_TABLES = {"notificacoes_whatsapp", "support_investigations"}
 
 
 def test_all_tenant_models_declare_a_required_context_default():

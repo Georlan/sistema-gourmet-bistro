@@ -619,6 +619,74 @@ def clear_operational_qa_cache(db: Session, restaurante_id: int) -> None:
             bucket.pop(rid, None)
 
 
+def _load_provisioning_audit_snapshot(
+    db: Session,
+    rid: int,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Carrega em uma única consulta os marcos de onboarding e QA ativo do tenant."""
+    db_info = getattr(db, "info", None)
+    qa_cache = db_info.get("_koma_qa_record_by_rid") if isinstance(db_info, dict) else None
+    onboard_cache = db_info.get("_koma_onboard_after_data_by_rid") if isinstance(db_info, dict) else None
+    if (
+        isinstance(qa_cache, dict)
+        and rid in qa_cache
+        and isinstance(onboard_cache, dict)
+        and rid in onboard_cache
+    ):
+        return qa_cache[rid], onboard_cache[rid]
+
+    rows = (
+        db.query(
+            SuperAdminAuditLog.action,
+            SuperAdminAuditLog.after_data,
+        )
+        .filter(
+            SuperAdminAuditLog.restaurante_id == rid,
+            SuperAdminAuditLog.action.in_(
+                ("SUPERADMIN_TENANT_ONBOARD", QA_OPERATION_START, QA_OPERATION_END)
+            ),
+        )
+        .order_by(SuperAdminAuditLog.id.desc())
+        .all()
+    )
+
+    latest_qa_action: str | None = None
+    latest_qa_data: Any = None
+    onboard_after_data: dict[str, Any] | None = None
+
+    for action, after_data in rows:
+        if latest_qa_action is None and action in (QA_OPERATION_START, QA_OPERATION_END):
+            latest_qa_action = action
+            latest_qa_data = after_data
+        if onboard_after_data is None and action == "SUPERADMIN_TENANT_ONBOARD":
+            onboard_after_data = dict(after_data) if isinstance(after_data, dict) else None
+        if latest_qa_action is not None and onboard_after_data is not None:
+            break
+
+    active_data: dict[str, Any] | None = None
+    if latest_qa_action == QA_OPERATION_START and isinstance(latest_qa_data, dict):
+        raw_expiry = (
+            latest_qa_data.get("expires_at")
+            if latest_qa_data.get("mode") == "operational_qa"
+            else None
+        )
+        if isinstance(raw_expiry, str):
+            try:
+                expires_at = datetime.datetime.fromisoformat(raw_expiry.replace("Z", "+00:00"))
+                if expires_at.tzinfo is not None and (
+                    datetime.datetime.now(datetime.timezone.utc) < expires_at.astimezone(datetime.timezone.utc)
+                ):
+                    active_data = dict(latest_qa_data)
+            except ValueError:
+                active_data = None
+
+    if isinstance(db_info, dict):
+        db_info.setdefault("_koma_qa_record_by_rid", {})[rid] = active_data
+        db_info.setdefault("_koma_qa_active_by_rid", {})[rid] = active_data is not None
+        db_info.setdefault("_koma_onboard_after_data_by_rid", {})[rid] = onboard_after_data
+    return active_data, onboard_after_data
+
+
 def get_active_operational_qa_record(
     db: Session,
     restaurante_id: int,
@@ -627,37 +695,7 @@ def get_active_operational_qa_record(
     if restaurante_id is None or restaurante_id <= 0:
         return None
     rid = int(restaurante_id)
-    db_info = getattr(db, "info", None)
-    cache = db_info.get("_koma_qa_record_by_rid") if isinstance(db_info, dict) else None
-    if isinstance(cache, dict) and rid in cache:
-        return cache[rid]
-
-    record = (
-        db.query(SuperAdminAuditLog)
-        .filter(
-            SuperAdminAuditLog.restaurante_id == rid,
-            SuperAdminAuditLog.action.in_((QA_OPERATION_START, QA_OPERATION_END)),
-        )
-        .order_by(SuperAdminAuditLog.id.desc())
-        .first()
-    )
-    active_data: dict[str, Any] | None = None
-    if record is not None and record.action == QA_OPERATION_START:
-        data = record.after_data
-        raw_expiry = data.get("expires_at") if isinstance(data, dict) and data.get("mode") == "operational_qa" else None
-        if isinstance(raw_expiry, str):
-            try:
-                expires_at = datetime.datetime.fromisoformat(raw_expiry.replace("Z", "+00:00"))
-                if expires_at.tzinfo is not None and (
-                    datetime.datetime.now(datetime.timezone.utc) < expires_at.astimezone(datetime.timezone.utc)
-                ):
-                    active_data = dict(data)
-            except ValueError:
-                active_data = None
-
-    if isinstance(db_info, dict):
-        db_info.setdefault("_koma_qa_record_by_rid", {})[rid] = active_data
-        db_info.setdefault("_koma_qa_active_by_rid", {})[rid] = active_data is not None
+    active_data, _ = _load_provisioning_audit_snapshot(db, rid)
     return active_data
 
 
@@ -694,20 +732,21 @@ def validate_operational_qa_token(
 
 def _is_base_provisional_preparation(db: Session, restaurante_id: int) -> bool:
     rid = int(restaurante_id)
-    audit_row = (
-        db.query(SuperAdminAuditLog.after_data)
-        .filter(
-            SuperAdminAuditLog.restaurante_id == rid,
-            SuperAdminAuditLog.action == "SUPERADMIN_TENANT_ONBOARD",
-        )
-        .order_by(SuperAdminAuditLog.id.desc())
-        .first()
-    )
-    after_data = audit_row[0] if audit_row is not None else None
+    db_info = getattr(db, "info", None)
+    base_cache = db_info.get("_koma_base_provisional_by_rid") if isinstance(db_info, dict) else None
+    if isinstance(base_cache, dict) and rid in base_cache:
+        return bool(base_cache[rid])
+
+    def _cache_result(value: bool) -> bool:
+        if isinstance(db_info, dict):
+            db_info.setdefault("_koma_base_provisional_by_rid", {})[rid] = value
+        return value
+
+    _, after_data = _load_provisioning_audit_snapshot(db, rid)
     if not isinstance(after_data, dict):
-        return False
+        return _cache_result(False)
     if after_data.get("trial_status") != "pending_setup":
-        return False
+        return _cache_result(False)
 
     sub_exists = (
         db.query(SaaSSubscription.id)
@@ -715,7 +754,7 @@ def _is_base_provisional_preparation(db: Session, restaurante_id: int) -> bool:
         .first()
     )
     if sub_exists is not None:
-        return False
+        return _cache_result(False)
 
     from ..contract_models import RestaurantContractAcceptance
     contract_exists = (
@@ -724,7 +763,7 @@ def _is_base_provisional_preparation(db: Session, restaurante_id: int) -> bool:
         .first()
     )
     if contract_exists is not None:
-        return False
+        return _cache_result(False)
 
     # Exceção operacional explícita e reversível configurada apenas quando autorizada.
     allowed_raw = os.getenv("KOMA_PROVISIONAL_OPERATION_ALLOWLIST", "").strip()
@@ -741,9 +780,9 @@ def _is_base_provisional_preparation(db: Session, restaurante_id: int) -> bool:
         )
         if restaurant is not None and str(restaurant.saas_status or "").lower() == "active":
             logger.warning("PROVISIONAL_OPERATION_OVERRIDE tenant=%s", rid)
-            return False
+            return _cache_result(False)
 
-    return True
+    return _cache_result(True)
 
 
 def is_provisional_preparation(

@@ -169,8 +169,12 @@ def reconcile_invoice(db, invoice_id):
                 payment_id=str(payment["id"]),
                 amount=amount,
                 paid_at=paid_at,
-                plan_code=current_terms.plan if current_terms is not None else None,
-                payment_method=str(sub.payment_method_type or "credit_card"),
+                plan_code=getattr(current_terms, "plan", None) if current_terms is not None else None,
+                payment_method=str(
+                    getattr(sub, "payment_method_type", None)
+                    or getattr(billing, "payment_method_type", None)
+                    or "credit_card"
+                ),
                 status="paid",
             )
         elif verified.get("status") in {"refunded", "charged_back"}:
@@ -180,8 +184,12 @@ def reconcile_invoice(db, invoice_id):
                 payment_id=str(payment["id"]),
                 amount=amount,
                 paid_at=dt.datetime.now(dt.timezone.utc),
-                plan_code=current_terms.plan if current_terms is not None else None,
-                payment_method=str(sub.payment_method_type or "credit_card"),
+                plan_code=getattr(current_terms, "plan", None) if current_terms is not None else None,
+                payment_method=str(
+                    getattr(sub, "payment_method_type", None)
+                    or getattr(billing, "payment_method_type", None)
+                    or "credit_card"
+                ),
                 status="refunded",
             )
 
