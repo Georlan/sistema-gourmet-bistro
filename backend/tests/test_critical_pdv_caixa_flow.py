@@ -59,6 +59,7 @@ def setup_caixa_pdv():
         from app.operational_models import LancamentoIdentidade, MovimentoAtendimento
         from app.order_chat_models import OrderConversation
         from app.scheduled_models import ScheduledOrder
+        from app.models import ItemModificador
 
         db.query(ComandaDeliveryAddressRevision).filter(ComandaDeliveryAddressRevision.restaurante_id == 777).delete()
         db.query(ComandaDeliveryAddressSnapshot).filter(ComandaDeliveryAddressSnapshot.restaurante_id == 777).delete()
@@ -69,6 +70,7 @@ def setup_caixa_pdv():
         db.query(PrintJob).filter(PrintJob.restaurante_id == 777).delete()
         db.query(PagamentoAlocacao).filter(PagamentoAlocacao.restaurante_id == 777).delete()
         db.query(Pagamento).filter(Pagamento.restaurante_id == 777).delete()
+        db.query(ItemModificador).filter(ItemModificador.restaurante_id == 777).delete()
         db.query(Item).filter(Item.restaurante_id == 777).delete()
         db.query(Lancamento).filter(Lancamento.restaurante_id == 777).delete()
         db.query(Comanda).filter(Comanda.restaurante_id == 777).delete()
