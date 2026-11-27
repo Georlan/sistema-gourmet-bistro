@@ -1,7 +1,7 @@
 import { snapshotFetch as fetch } from '../../../utils/snapshotFetch';
 
 import { ArrowUpRight } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { CatalogCategory } from '../../../catalog/catalog';
 import { localCalendarDate } from '../../../utils/dateTime';
 import { EquipeDesempenhoTab } from '../../equipe/EquipeDesempenhoTab';
@@ -9,6 +9,10 @@ import { RelatorioFinanceiroTab } from '../../relatorios/RelatorioFinanceiroTab'
 import { RelatoriosCardapioTab } from '../../relatorios/RelatoriosCardapioTab';
 import { RelatoriosProdutosTab } from '../../relatorios/RelatoriosProdutosTab';
 import { RelatoriosVisaoGeralTab } from '../../relatorios/RelatoriosVisaoGeralTab';
+
+const RelatorioDreTab = lazy(() => import('../../relatorios/RelatorioDreTab'));
+const RelatorioFluxoCaixaTab = lazy(() => import('../../relatorios/RelatorioFluxoCaixaTab'));
+const FinanceiroGestaoTab = lazy(() => import('../../relatorios/FinanceiroGestaoTab'));
 import type { CashierNotice } from '../cashierContracts';
 import type { useCashierOrders } from '../orders/useCashierOrders';
 
@@ -433,8 +437,26 @@ export default function CashierReports({
           activeSubTab,
         ) && <RelatoriosVisaoGeralTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} showToast={showToast} />}
       {(activeTab === 'relatorios' || activeTab === 'dashboard') &&
-        ['financeiro', 'demonstrativo_dre', 'dre', 'fluxo_caixa'].includes(activeSubTab) && (
+        activeSubTab === 'financeiro' && (
           <RelatorioFinanceiroTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+        )}
+      {(activeTab === 'relatorios' || activeTab === 'dashboard') &&
+        ['demonstrativo_dre', 'dre'].includes(activeSubTab) && (
+          <Suspense fallback={<div className="p-6 text-xs text-koma-muted">Carregando DRE Gerencial...</div>}>
+            <RelatorioDreTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+          </Suspense>
+        )}
+      {(activeTab === 'relatorios' || activeTab === 'dashboard') &&
+        activeSubTab === 'fluxo_caixa' && (
+          <Suspense fallback={<div className="p-6 text-xs text-koma-muted">Carregando Fluxo de Caixa...</div>}>
+            <RelatorioFluxoCaixaTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} />
+          </Suspense>
+        )}
+      {(activeTab === 'relatorios' || activeTab === 'dashboard') &&
+        activeSubTab === 'contas_financeiras' && (
+          <Suspense fallback={<div className="p-6 text-xs text-koma-muted">Carregando Contas Financeiras...</div>}>
+            <FinanceiroGestaoTab apiBaseUrl={apiBaseUrl} authHeaders={authHeaders} showToast={showToast} />
+          </Suspense>
         )}
       {(activeTab === 'relatorios' || activeTab === 'dashboard') &&
         ['produtos', 'produtos_mais_vendidos', 'top10', 'mais_vendidos'].includes(activeSubTab) && (
