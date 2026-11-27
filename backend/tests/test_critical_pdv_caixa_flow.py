@@ -52,6 +52,20 @@ def setup_caixa_pdv():
             db.commit()
 
         # Limpa o fluxo financeiro/operacional criado por testes anteriores.
+        from app.delivery_address_snapshot import (
+            ComandaDeliveryAddressRevision,
+            ComandaDeliveryAddressSnapshot,
+        )
+        from app.operational_models import LancamentoIdentidade, MovimentoAtendimento
+        from app.order_chat_models import OrderConversation
+        from app.scheduled_models import ScheduledOrder
+
+        db.query(ComandaDeliveryAddressRevision).filter(ComandaDeliveryAddressRevision.restaurante_id == 777).delete()
+        db.query(ComandaDeliveryAddressSnapshot).filter(ComandaDeliveryAddressSnapshot.restaurante_id == 777).delete()
+        db.query(OrderConversation).filter(OrderConversation.restaurante_id == 777).delete()
+        db.query(ScheduledOrder).filter(ScheduledOrder.restaurante_id == 777).delete()
+        db.query(MovimentoAtendimento).filter(MovimentoAtendimento.restaurante_id == 777).delete()
+        db.query(LancamentoIdentidade).filter(LancamentoIdentidade.restaurante_id == 777).delete()
         db.query(PrintJob).filter(PrintJob.restaurante_id == 777).delete()
         db.query(PagamentoAlocacao).filter(PagamentoAlocacao.restaurante_id == 777).delete()
         db.query(Pagamento).filter(Pagamento.restaurante_id == 777).delete()

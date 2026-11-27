@@ -122,8 +122,8 @@ def security_tenants():
     db = SessionLocal()
     try:
         for rid, nome, slug in [
-            (701, "Gate Bistro Alpha", "gate-bistro-alpha"),
-            (702, "Gate Cantina Beta", "gate-cantina-beta"),
+            (70101, "Gate Bistro Alpha", "gate-bistro-alpha"),
+            (70102, "Gate Cantina Beta", "gate-cantina-beta"),
         ]:
             if db.query(Restaurante).filter(Restaurante.id == rid).first() is None:
                 db.add(Restaurante(id=rid, nome=nome, slug=slug, plano="premium", saas_status="active"))
@@ -202,7 +202,7 @@ def security_tenants():
                     db,
                     restaurante_id=rid,
                     nome=f"Cliente {rid}",
-                    telefone=f"85988880{rid}",
+                    telefone=f"859888{rid}",
                 )
                 cliente.email = f"gate-cust-{rid}@audit.invalid"
                 cliente.senha_hash = get_password_hash("CustGate!2026")
@@ -277,20 +277,20 @@ def test_credential_revocation_and_jwt_hardening(security_tenants):
     with TestClient(app) as client:
         # JWT inválido, alg=none, expirado, boolean tenant
         bad_tokens = [
-            jwt.encode({"sub": "gate-admin-701", "restaurante_id": 701, "exp": datetime.now(timezone.utc) + timedelta(minutes=5)}, "wrong", algorithm="HS256"),
-            jwt.encode({"sub": "gate-admin-701", "restaurante_id": 701, "exp": datetime.now(timezone.utc) + timedelta(minutes=5)}, "", algorithm="none"),
-            jwt.encode({"sub": "gate-admin-701", "restaurante_id": 701, "exp": datetime.now(timezone.utc) - timedelta(minutes=1)}, settings.SECRET_KEY, algorithm="HS256"),
-            jwt.encode({"sub": "gate-admin-701", "restaurante_id": True, "exp": datetime.now(timezone.utc) + timedelta(minutes=5)}, settings.SECRET_KEY, algorithm="HS256"),
+            jwt.encode({"sub": "gate-admin-70101", "restaurante_id": 70101, "exp": datetime.now(timezone.utc) + timedelta(minutes=5)}, "wrong", algorithm="HS256"),
+            jwt.encode({"sub": "gate-admin-70101", "restaurante_id": 70101, "exp": datetime.now(timezone.utc) + timedelta(minutes=5)}, "", algorithm="none"),
+            jwt.encode({"sub": "gate-admin-70101", "restaurante_id": 70101, "exp": datetime.now(timezone.utc) - timedelta(minutes=1)}, settings.SECRET_KEY, algorithm="HS256"),
+            jwt.encode({"sub": "gate-admin-70101", "restaurante_id": True, "exp": datetime.now(timezone.utc) + timedelta(minutes=5)}, settings.SECRET_KEY, algorithm="HS256"),
         ]
         for tok in bad_tokens:
             assert client.get("/produtos/", headers={"Authorization": f"Bearer {tok}"}).status_code == 401
 
         # RT-06: revogação de sessão bloqueia rotas comuns e o bridge legado /caixa/config-cardapio
-        tok = create_access_token(subject="gate-waiter-701", restaurante_id=701, token_version=1)
+        tok = create_access_token(subject="gate-waiter-70101", restaurante_id=70101, token_version=1)
         assert client.get("/caixa/config-cardapio", headers={"Authorization": f"Bearer {tok}"}).status_code == 200
         db = SessionLocal()
         try:
-            revoke_user_sessions(db, user_id="gate-waiter-701", restaurante_id=701)
+            revoke_user_sessions(db, user_id="gate-waiter-70101", restaurante_id=70101)
             db.commit()
         finally:
             db.close()
@@ -300,27 +300,27 @@ def test_credential_revocation_and_jwt_hardening(security_tenants):
 
 def test_multitenant_isolation_and_public_data_minimization(security_tenants):
     del security_tenants
-    tok_701 = create_access_token(subject="gate-admin-701", restaurante_id=701, token_version=1)
-    spoof_headers = {"Authorization": f"Bearer {tok_701}", "X-Tenant-ID": "702", "X-Restaurante-ID": "702"}
+    tok_701 = create_access_token(subject="gate-admin-70101", restaurante_id=70101, token_version=1)
+    spoof_headers = {"Authorization": f"Bearer {tok_701}", "X-Tenant-ID": "70102", "X-Restaurante-ID": "70102"}
 
     with TestClient(app) as client:
         prods = client.get("/produtos/", headers=spoof_headers)
         assert prods.status_code == 200
         ids = {p["id"] for p in prods.json()}
-        assert "gate-prod-701" in ids and "gate-prod-702" not in ids
+        assert "gate-prod-70101" in ids and "gate-prod-70102" not in ids
 
-        assert client.get("/comandas/gate-cmd-702", headers=spoof_headers).status_code == 404
+        assert client.get("/comandas/gate-cmd-70102", headers=spoof_headers).status_code == 404
         assert client.get("/api/super-admin/restaurantes", headers={"Authorization": f"Bearer {tok_701}"}).status_code == 403
 
-        # Pedidos públicos: chave do tenant 701 não acessa comanda do tenant 702
-        assert client.get("/cardapio/pedidos/gate-cmd-702/status?key=gate-idem-701").status_code == 404
-        assert client.get("/cardapio/pedidos/gate-cmd-701/status?key=gate-idem-701").status_code == 200
+        # Pedidos públicos: chave do tenant 70101 não acessa comanda do tenant 70102
+        assert client.get("/cardapio/pedidos/gate-cmd-70102/status?key=gate-idem-70101").status_code == 404
+        assert client.get("/cardapio/pedidos/gate-cmd-70101/status?key=gate-idem-70101").status_code == 200
 
         # Minimização de dados públicos no cardápio
-        pub = client.get("/api/cardapio-digital/public?restaurante_id=701")
+        pub = client.get("/api/cardapio-digital/public?restaurante_id=70101")
         assert pub.status_code == 200
         raw = pub.text.lower()
-        for sensitive in ("senha_hash", "webhook_secret", "gate-admin-701@audit.invalid", "gate-cust-701@audit.invalid"):
+        for sensitive in ("senha_hash", "webhook_secret", "gate-admin-70101@audit.invalid", "gate-cust-70101@audit.invalid"):
             assert sensitive not in raw
 
 
@@ -363,13 +363,13 @@ def test_rt01_to_rt10_regressions(monkeypatch, security_tenants):
     with TestClient(app) as client:
         c_exist, c_missing = [], []
         for i in range(10):
-            c_exist.append(client.post("/auth/login", json={"username": "gate-admin-701@audit.invalid", "password": f"bad{i}"}, headers={"X-Forwarded-For": "203.0.113.151"}).status_code)
+            c_exist.append(client.post("/auth/login", json={"username": "gate-admin-70101@audit.invalid", "password": f"bad{i}"}, headers={"X-Forwarded-For": "203.0.113.151"}).status_code)
             c_missing.append(client.post("/auth/login", json={"username": "no-such-user-gate@audit.invalid", "password": f"bad{i}"}, headers={"X-Forwarded-For": "203.0.113.152"}).status_code)
         assert c_exist == c_missing and 429 in c_exist
 
         # RT-03: WebSocket message > 4KB -> 1009, per-IP cap -> 1008
         monkeypatch.setattr(ws_route._ws_connect_rate_limiter, "requests_per_minute", 200)
-        with client.websocket_connect("/ws/cliente?restaurante_id=701", headers={"Origin": "https://app.komafood.com.br", "X-Forwarded-For": "203.0.113.160"}) as ws:
+        with client.websocket_connect("/ws/cliente?restaurante_id=70101", headers={"Origin": "https://app.komafood.com.br", "X-Forwarded-For": "203.0.113.160"}) as ws:
             ws.send_text("A" * 5000)
             with pytest.raises(WebSocketDisconnect) as exc:
                 ws.receive_text()
