@@ -99,7 +99,7 @@ class TestLancamentoMigrationAndCompatibility:
         from app.routes.orders import despachar_delivery
 
         db: Session = SessionLocal(restaurante_id=None)
-        other_rid = 888
+        other_rid = 888991
         foreign_token = current_restaurante_id.set(None)
         try:
             other_rest = db.query(Restaurante).filter(Restaurante.id == other_rid).first()

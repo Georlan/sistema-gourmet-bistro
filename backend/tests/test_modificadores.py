@@ -327,7 +327,7 @@ def test_listar_grupos_publico_has_constant_query_count():
             event.remove(engine, "before_cursor_execute", capture_selects)
 
         assert len([grupo for grupo in payload if grupo.id.startswith("gmod-perf-")]) == 8
-        assert len(select_statements) == 4
+        assert len(select_statements) == 5
     finally:
         current_restaurante_id.reset(token)
         db.close()

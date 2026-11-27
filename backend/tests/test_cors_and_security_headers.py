@@ -24,9 +24,8 @@ DIFFERENT_PORT = "http://localhost:5174"
 HTTP_SPOOF = "http://sistema-gourmet-bistro.pages.dev"
 
 
-# Rota exclusiva para teste 500 controlado
-@app.get("/api/test-trigger-500-controlled")
-def trigger_test_500_controlled():
+# Rota exclusiva para teste 500 controlado (registrada apenas durante o teste para não poluir o inventário global de rotas)
+def _trigger_test_500_controlled():
     raise RuntimeError("erro controlado de teste para validacao de middleware")
 
 
@@ -240,22 +239,30 @@ def test_auth_401_negative_restaurante_id_in_token():
 
 def test_real_500_error_wrapping():
     """Erro 500 real da aplicação usando cliente com raise_server_exceptions=False."""
-    # 1. Com Origem Maliciosa -> Retorna EXATAMENTE 500 sem CORS
-    resp_malicious = error_client.get("/api/test-trigger-500-controlled", headers={"Origin": MALICIOUS_ORIGIN})
-    assert resp_malicious.status_code == 500
-    assert "access-control-allow-origin" not in resp_malicious.headers
-    assert resp_malicious.headers.get("x-content-type-options") == "nosniff"
-    assert resp_malicious.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
-    assert "camera=()" in resp_malicious.headers.get("permissions-policy", "")
-    assert resp_malicious.headers.get("x-frame-options") == "DENY"
+    app.add_api_route("/api/test-trigger-500-controlled", _trigger_test_500_controlled, methods=["GET"])
+    try:
+        # 1. Com Origem Maliciosa -> Retorna EXATAMENTE 500 sem CORS
+        resp_malicious = error_client.get("/api/test-trigger-500-controlled", headers={"Origin": MALICIOUS_ORIGIN})
+        assert resp_malicious.status_code == 500
+        assert "access-control-allow-origin" not in resp_malicious.headers
+        assert resp_malicious.headers.get("x-content-type-options") == "nosniff"
+        assert resp_malicious.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
+        assert "camera=()" in resp_malicious.headers.get("permissions-policy", "")
+        assert resp_malicious.headers.get("x-frame-options") == "DENY"
 
-    # 2. Com Origem Oficial -> Retorna EXATAMENTE 500 com CORS oficial
-    resp_official = error_client.get("/api/test-trigger-500-controlled", headers={"Origin": OFFICIAL_ORIGIN})
-    assert resp_official.status_code == 500
-    assert resp_official.headers.get("access-control-allow-origin") == OFFICIAL_ORIGIN
-    assert resp_official.headers.get("x-content-type-options") == "nosniff"
-    assert resp_official.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
-    assert "camera=()" in resp_official.headers.get("permissions-policy", "")
+        # 2. Com Origem Oficial -> Retorna EXATAMENTE 500 com CORS oficial
+        resp_official = error_client.get("/api/test-trigger-500-controlled", headers={"Origin": OFFICIAL_ORIGIN})
+        assert resp_official.status_code == 500
+        assert resp_official.headers.get("access-control-allow-origin") == OFFICIAL_ORIGIN
+        assert resp_official.headers.get("x-content-type-options") == "nosniff"
+        assert resp_official.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
+        assert "camera=()" in resp_official.headers.get("permissions-policy", "")
+        assert resp_official.headers.get("x-frame-options") == "DENY"
+    finally:
+        app.router.routes[:] = [
+            route for route in app.router.routes
+            if getattr(route, "path", None) != "/api/test-trigger-500-controlled"
+        ]
     assert resp_official.headers.get("x-frame-options") == "DENY"
 
 

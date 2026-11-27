@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -18,6 +19,11 @@ class _FakeRequest:
 
     async def json(self):
         return self._payload
+
+    async def stream(self):
+        if self._payload is None:
+            return
+        yield json.dumps(self._payload).encode("utf-8")
 
 
 class _FakeScalarResult:

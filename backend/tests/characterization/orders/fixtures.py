@@ -83,6 +83,10 @@ def char_setup(char_client):
             )
             db.add(config)
             db.commit()
+        elif config.taxa_entrega_fixa != 7.0 or config.tipo_taxa_entrega != "fixa":
+            config.taxa_entrega_fixa = 7.0
+            config.tipo_taxa_entrega = "fixa"
+            db.commit()
 
         # 2. Usuário Operador / Caixa e Garçom
         user = db.query(Usuario).filter(Usuario.id == "usr-char-admin").first()
