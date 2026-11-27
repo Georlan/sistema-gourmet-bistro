@@ -21,7 +21,9 @@ _bucket_lock = threading.Lock()
 
 
 def _guard(request: Request):
-    key = hashlib.sha256((request.client.host if request.client else 'unknown').encode()).digest()
+    from ..services.client_ip import resolve_client_ip
+
+    key = hashlib.sha256(resolve_client_ip(request).encode()).digest()
     now = time.monotonic()
     with _bucket_lock:
         while _buckets and next(iter(_buckets.values()))[0] <= now - 60:

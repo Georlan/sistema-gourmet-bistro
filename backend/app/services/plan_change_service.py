@@ -75,16 +75,9 @@ def _evidence_hash(value: str) -> str:
 
 
 def _resolve_source_ip(request: Request) -> tuple[str, str]:
-    cloudflare_ip = (request.headers.get("cf-connecting-ip") or "").strip()
-    if cloudflare_ip:
-        return cloudflare_ip[:128], "cf-connecting-ip"
-    forwarded = (request.headers.get("x-forwarded-for") or "").strip()
-    if forwarded:
-        first = forwarded.split(",", 1)[0].strip()
-        if first:
-            return first[:128], "x-forwarded-for"
-    client = request.client.host if request.client else "unknown"
-    return str(client)[:128], "direct"
+    from .client_ip import resolve_client_ip_with_source
+
+    return resolve_client_ip_with_source(request)
 
 
 def _validate_legal_bundle(payload: Any) -> dict[str, str]:

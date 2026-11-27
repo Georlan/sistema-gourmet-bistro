@@ -635,28 +635,40 @@ def verify_motoboy_token(token: str, db: Optional[Any] = None) -> dict:
         )
 
 
+import threading
 import time
-from collections import defaultdict
+from collections import OrderedDict
 
 class IPRateLimiter:
-    """Rate limiter em memória com janela deslizante de 60 segundos."""
-    def __init__(self, requests_per_minute: int = 30):
+    """Rate limiter em memória thread-safe e limitado com janela deslizante de 60 segundos."""
+    def __init__(self, requests_per_minute: int = 30, max_entries: int = 8192):
         self.requests_per_minute = requests_per_minute
-        self.history = defaultdict(list)
+        self.max_entries = max_entries
+        self.history: OrderedDict[str, list[float]] = OrderedDict()
+        self._lock = threading.Lock()
 
-    def check(self, request: Any):
-        client_ip = request.client.host if request and hasattr(request, 'client') and request.client else "127.0.0.1"
+    def check(self, request: Any, *, key_suffix: str = ""):
+        from .services.client_ip import resolve_client_ip
+
+        client_ip = resolve_client_ip(request)
+        bucket_key = f"{client_ip}|{key_suffix}" if key_suffix else client_ip
         now = time.time()
         cutoff = now - 60.0
 
-        # Purga requisições com mais de 60 segundos
-        timestamps = [t for t in self.history[client_ip] if t > cutoff]
-        if len(timestamps) >= self.requests_per_minute:
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Muitas requisições. Aguarde um momento antes de tentar novamente."
-            )
-        timestamps.append(now)
-        self.history[client_ip] = timestamps
+        with self._lock:
+            timestamps = [t for t in self.history.get(bucket_key, ()) if t > cutoff]
+            if len(timestamps) >= self.requests_per_minute:
+                if timestamps:
+                    self.history[bucket_key] = timestamps
+                    self.history.move_to_end(bucket_key)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Muitas requisições. Aguarde um momento antes de tentar novamente."
+                )
+            timestamps.append(now)
+            self.history[bucket_key] = timestamps
+            self.history.move_to_end(bucket_key)
+            while len(self.history) > self.max_entries:
+                self.history.popitem(last=False)
 
 motoboy_rate_limiter = IPRateLimiter(requests_per_minute=30)

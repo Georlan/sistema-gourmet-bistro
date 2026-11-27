@@ -85,9 +85,12 @@ def login_for_access_token(payload: TokenRequest, request: Request):
             detail=str(exc),
         )
 
-    if payload.username != expected_username or not verify_password(
-        payload.password, expected_password_hash
-    ):
+    username_ok = hmac.compare_digest(
+        payload.username.encode("utf-8"),
+        expected_username.encode("utf-8"),
+    )
+    password_ok = verify_password(payload.password, expected_password_hash)
+    if not (username_ok and password_ok):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
