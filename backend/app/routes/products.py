@@ -160,14 +160,26 @@ class DisponibilidadeLoteResponse(BaseModel):
 
 class EdicaoLoteRequest(BaseModel):
     produto_ids: List[str] = Field(min_length=1, max_length=500)
-    reajuste_percentual: Optional[float] = Field(default=None, ge=-90, le=500)
+    reajuste_percentual: Optional[float] = Field(default=None, ge=-90, le=500, allow_inf_nan=False)
+    reajuste_valor: Optional[float] = Field(default=None, ge=-10000, le=10000, allow_inf_nan=False)
+    preco_fixo: Optional[float] = Field(default=None, ge=0, le=100000, allow_inf_nan=False)
     categoria_id: Optional[str] = None
+    destaque: Optional[bool] = None
+    somente_promocao: Optional[bool] = None
+    adicionar_grupos_modificadores_ids: Optional[List[str]] = Field(default=None, max_length=50)
+    remover_grupos_modificadores_ids: Optional[List[str]] = Field(default=None, max_length=50)
 
 
 class EdicaoLoteResponse(BaseModel):
     atualizados: int
     reajuste_percentual: Optional[float] = None
+    reajuste_valor: Optional[float] = None
+    preco_fixo: Optional[float] = None
     categoria_id: Optional[str] = None
+    destaque: Optional[bool] = None
+    somente_promocao: Optional[bool] = None
+    grupos_adicionados: int = 0
+    grupos_removidos: int = 0
 
 
 def _serialize_product_with_modifiers(
@@ -803,7 +815,7 @@ def update_produtos_lote(
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(require_permission("catalogo:administrar")),
 ):
-    """Reajusta preços e/ou move produtos de categoria em uma única transação tenant-scoped."""
+    """Atualiza preços, categoria, visibilidade e grupos de complementos em lote."""
     del current_user
     rest_id = require_tenant_id()
     product_ids = list(dict.fromkeys(product_id.strip() for product_id in data.produto_ids if product_id.strip()))
@@ -812,12 +824,38 @@ def update_produtos_lote(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Informe ao menos um produto válido.",
         )
-    if data.reajuste_percentual is None and not data.categoria_id:
+
+    add_group_ids = list(
+        dict.fromkeys(gid.strip() for gid in (data.adicionar_grupos_modificadores_ids or []) if gid.strip())
+    )
+    remove_group_ids = list(
+        dict.fromkeys(gid.strip() for gid in (data.remover_grupos_modificadores_ids or []) if gid.strip())
+    )
+    price_ops = [
+        op is not None
+        for op in (data.reajuste_percentual, data.reajuste_valor, data.preco_fixo)
+    ]
+    if sum(price_ops) > 1:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Informe um reajuste percentual ou uma categoria.",
+            detail="Escolha apenas um tipo de alteração de preço por operação.",
         )
 
+    has_any_change = (
+        any(price_ops)
+        or bool(data.categoria_id)
+        or data.destaque is not None
+        or data.somente_promocao is not None
+        or bool(add_group_ids)
+        or bool(remove_group_ids)
+    )
+    if not has_any_change:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Informe ao menos uma alteração para aplicar em lote.",
+        )
+
+    category = None
     if data.categoria_id:
         category = db.query(Categoria).filter(
             Categoria.restaurante_id == rest_id,
@@ -829,14 +867,50 @@ def update_produtos_lote(
                 detail="A categoria informada não existe",
             )
 
+    requested_group_ids = list(dict.fromkeys([*add_group_ids, *remove_group_ids]))
+    if requested_group_ids:
+        valid_group_ids = {
+            row[0]
+            for row in db.query(GrupoModificador.id).filter(
+                GrupoModificador.restaurante_id == rest_id,
+                GrupoModificador.id.in_(requested_group_ids),
+            ).all()
+        }
+        missing_groups = [gid for gid in requested_group_ids if gid not in valid_group_ids]
+        if missing_groups:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Um ou mais grupos de complementos informados não pertencem a este restaurante.",
+            )
+
     products = db.query(Produto).filter(
         Produto.restaurante_id == rest_id,
         Produto.id.in_(product_ids),
     ).all()
 
+    if data.categoria_id and any(product.familia_id for product in products):
+        raise HTTPException(409, "As variações usam categoria comum. Edite a família.")
+    if data.somente_promocao is True and any(product.familia_id for product in products):
+        raise HTTPException(409, "As variações usam configuração de promoção na família.")
+
     if data.categoria_id and marmitaria_enabled(db, rest_id):
         if size_category(category) or any(product.marmitaria_tamanho for product in products):
             raise HTTPException(409, "Os tamanhos ficam na categoria de Marmitas. Configure-os no cadastro de Marmitas.")
+
+    if data.somente_promocao is True and marmitaria_enabled(db, rest_id):
+        cat_ids = {product.categoria_id for product in products if product.categoria_id}
+        categories_by_id = {
+            c.id: c
+            for c in db.query(Categoria).filter(
+                Categoria.restaurante_id == rest_id,
+                Categoria.id.in_(cat_ids),
+            ).all()
+        } if cat_ids else {}
+        for product in products:
+            target_cat = category if data.categoria_id else categories_by_id.get(product.categoria_id)
+            if product.marmitaria_tamanho or (target_cat and size_category(target_cat)):
+                raise HTTPException(409, "Somente produtos comuns da marmitaria podem ser exclusivos de promoção.")
+
     if data.reajuste_percentual is not None:
         factor = Decimal("1") + (Decimal(str(data.reajuste_percentual)) / Decimal("100"))
         for product in products:
@@ -844,10 +918,75 @@ def update_produtos_lote(
             product.preco = float(
                 (current_price * factor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             )
+    elif data.reajuste_valor is not None:
+        delta = Decimal(str(data.reajuste_valor)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        next_prices: list[tuple[Produto, float]] = []
+        for product in products:
+            candidate = (Decimal(str(product.preco or 0)) + delta).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if candidate < Decimal("0.00"):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                    detail=f"O reajuste deixaria o preço de '{product.nome}' negativo.",
+                )
+            next_prices.append((product, float(candidate)))
+        for product, new_price in next_prices:
+            product.preco = new_price
+    elif data.preco_fixo is not None:
+        fixed_price = float(Decimal(str(data.preco_fixo)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+        for product in products:
+            product.preco = fixed_price
 
     if data.categoria_id:
         for product in products:
             product.categoria_id = data.categoria_id
+
+    if data.destaque is not None:
+        for product in products:
+            product.destaque = data.destaque
+
+    if data.somente_promocao is not None:
+        for product in products:
+            product.somente_promocao = data.somente_promocao
+
+    grupos_adicionados = 0
+    grupos_removidos = 0
+    matched_product_ids = [product.id for product in products]
+
+    if matched_product_ids and remove_group_ids:
+        grupos_removidos = (
+            db.query(ProdutoGrupoModificador)
+            .filter(
+                ProdutoGrupoModificador.restaurante_id == rest_id,
+                ProdutoGrupoModificador.produto_id.in_(matched_product_ids),
+                ProdutoGrupoModificador.grupo_id.in_(remove_group_ids),
+            )
+            .delete(synchronize_session=False)
+        )
+
+    if matched_product_ids and add_group_ids:
+        existing_links = {
+            (row.produto_id, row.grupo_id)
+            for row in db.query(
+                ProdutoGrupoModificador.produto_id,
+                ProdutoGrupoModificador.grupo_id,
+            ).filter(
+                ProdutoGrupoModificador.restaurante_id == rest_id,
+                ProdutoGrupoModificador.produto_id.in_(matched_product_ids),
+                ProdutoGrupoModificador.grupo_id.in_(add_group_ids),
+            ).all()
+        }
+        for prod_id in matched_product_ids:
+            for gid in add_group_ids:
+                if (prod_id, gid) in existing_links:
+                    continue
+                db.add(
+                    ProdutoGrupoModificador(
+                        restaurante_id=rest_id,
+                        produto_id=prod_id,
+                        grupo_id=gid,
+                    )
+                )
+                grupos_adicionados += 1
 
     db.commit()
     if products:
@@ -859,8 +998,98 @@ def update_produtos_lote(
     return {
         "atualizados": len(products),
         "reajuste_percentual": data.reajuste_percentual,
+        "reajuste_valor": data.reajuste_valor,
+        "preco_fixo": data.preco_fixo,
         "categoria_id": data.categoria_id,
+        "destaque": data.destaque,
+        "somente_promocao": data.somente_promocao,
+        "grupos_adicionados": grupos_adicionados,
+        "grupos_removidos": grupos_removidos,
     }
+
+
+@router.post("/{produto_id}/duplicar", response_model=ProdutoResponse, status_code=status.HTTP_201_CREATED)
+def duplicar_produto(
+    produto_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(require_permission("catalogo:administrar")),
+):
+    """Duplica um produto do tenant atual junto com seus grupos de complementos."""
+    del current_user
+    rest_id = require_tenant_id()
+    source = db.query(Produto).filter(
+        Produto.restaurante_id == rest_id,
+        Produto.id == produto_id,
+    ).first()
+    if not source:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Produto não encontrado",
+        )
+    if marmitaria_enabled(db, rest_id) and source.marmitaria_tamanho:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cada tamanho de marmita possui um único cadastro.",
+        )
+
+    new_id = f"prod-{uuid.uuid4().hex[:8]}"
+    while db.query(Produto.id).filter(
+        Produto.restaurante_id == rest_id,
+        Produto.id == new_id,
+    ).first():
+        new_id = f"prod-{uuid.uuid4().hex[:8]}"
+
+    existing_orders = [
+        p.ordem_exibicao
+        for p in db.query(Produto).filter_by(
+            restaurante_id=rest_id,
+            categoria_id=source.categoria_id,
+        ).all()
+        if p.ordem_exibicao is not None
+    ]
+    next_order = ((max(existing_orders) // 10) + 1) * 10 if existing_orders else None
+
+    cloned = Produto(
+        id=new_id,
+        restaurante_id=rest_id,
+        cardapio_id=source.cardapio_id,
+        nome=f"{source.nome} (Cópia)",
+        categoria_id=source.categoria_id,
+        preco=source.preco,
+        descricao=source.descricao or "",
+        imagem=source.imagem or "",
+        imagens_galeria=list(source.imagens_galeria or []),
+        ativo=True,
+        somente_promocao=bool(source.somente_promocao),
+        destaque=False,
+        selo=source.selo,
+        preco_promocional=source.preco_promocional,
+        ordem_exibicao=next_order,
+    )
+    db.add(cloned)
+    db.flush()
+
+    source_links = db.query(ProdutoGrupoModificador).filter(
+        ProdutoGrupoModificador.restaurante_id == rest_id,
+        ProdutoGrupoModificador.produto_id == source.id,
+    ).all()
+    for link in source_links:
+        db.add(
+            ProdutoGrupoModificador(
+                restaurante_id=rest_id,
+                produto_id=cloned.id,
+                grupo_id=link.grupo_id,
+                min_selecoes=link.min_selecoes,
+                max_selecoes=link.max_selecoes,
+                modo_selecao=link.modo_selecao,
+            )
+        )
+
+    db.commit()
+    db.refresh(cloned)
+    notify_catalog_update(background_tasks, "Produto duplicado", rest_id)
+    return cloned
 
 @router.post("/", response_model=ProdutoResponse, status_code=status.HTTP_201_CREATED)
 def create_produto(
@@ -1065,6 +1294,7 @@ class ProdutoImportItem(BaseModel):
     nome: str = Field(min_length=1, max_length=255)
     preco: float = Field(ge=0, allow_inf_nan=False)
     categoria_id: str = Field(min_length=1, max_length=100)
+    cardapio_id: Optional[str] = None
     descricao: Optional[str] = None
     imagem: Optional[str] = None
     imagens_galeria: Optional[List[str]] = None
@@ -1077,6 +1307,7 @@ class CategoriaImportItem(BaseModel):
 
 class CardapioImportPayload(BaseModel):
     mode: Literal["merge", "replace"] = "replace"
+    cardapio_id: Optional[str] = None
     categories: Optional[List[Union[str, CategoriaImportItem]]] = Field(
         default=None,
         validation_alias=AliasChoices("categories", "categorias"),
@@ -1090,6 +1321,13 @@ def category_id_from_name(name: str) -> str:
     normalized = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("utf-8").lower()
     slug = re.sub(r"[^a-z0-9-]+", "-", normalized).strip("-")
     return f"cat-{slug}"
+
+
+_NO_PRINT_CATEGORY_TERMS = ("suco", "refri", "cerveja", "bebida", "agua", "drink", "cha", "cafe", "vinho", "energetico")
+
+
+def _default_import_destination(category_slug: str) -> str:
+    return "NENHUM" if any(term in category_slug for term in _NO_PRINT_CATEGORY_TERMS) else "COZINHA"
 
 @router.post("/importar", response_model=List[ProdutoResponse])
 def importar_cardapio(
@@ -1112,14 +1350,26 @@ def importar_cardapio(
     if len({item.id for item in incoming}) != len(incoming):
         raise HTTPException(422, "O arquivo contém IDs de produtos duplicados.")
 
+    default_cardapio_id: Optional[str] = None
     if isinstance(payload, CardapioImportPayload):
         produtos_data = payload.products or []
+        if payload.cardapio_id:
+            cardapio = db.query(Cardapio).filter(
+                Cardapio.restaurante_id == rest_id,
+                Cardapio.id == payload.cardapio_id,
+            ).first()
+            if not cardapio:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="O cardápio informado não existe",
+                )
+            default_cardapio_id = cardapio.id
         if payload.categories:
             for category_data in payload.categories:
                 if isinstance(category_data, str):
                     cat_nome = category_data
                     id_cat = category_id_from_name(category_data)
-                    destino = "NENHUM" if any(term in id_cat for term in ("suco", "refri", "cerveja", "bebida")) else "COZINHA"
+                    destino = _default_import_destination(id_cat)
                 else:
                     cat_nome = category_data.nome
                     id_cat = category_data.id or category_id_from_name(category_data.nome)
@@ -1174,9 +1424,7 @@ def importar_cardapio(
         ).first()
         if not cat:
             nome_cat = cat_id.replace("cat-", "").replace("-", " ").replace("_", " ").title()
-            destino = "COZINHA"
-            if cat_id in ["cat-refri", "cat-cervejas"]:
-                destino = "NENHUM"
+            destino = _default_import_destination(cat_id.lower())
             cat = Categoria(
                 id=cat_id,
                 restaurante_id=rest_id,
@@ -1185,6 +1433,19 @@ def importar_cardapio(
             )
             db.add(cat)
             db.flush()
+
+        item_cardapio_id = item.cardapio_id or default_cardapio_id
+        if item.cardapio_id and item.cardapio_id != default_cardapio_id:
+            item_cardapio = db.query(Cardapio).filter(
+                Cardapio.restaurante_id == rest_id,
+                Cardapio.id == item.cardapio_id,
+            ).first()
+            if not item_cardapio:
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="O cardápio informado no item não existe",
+                )
 
         existente = db.query(Produto).filter(
             Produto.restaurante_id == rest_id,
@@ -1198,6 +1459,8 @@ def importar_cardapio(
             existente.nome = item.nome
             existente.preco = item.preco
             existente.categoria_id = item.categoria_id
+            if item_cardapio_id is not None:
+                existente.cardapio_id = item_cardapio_id
             if item.descricao is not None:
                 existente.descricao = item.descricao
             if clean_img is not None:
@@ -1210,6 +1473,7 @@ def importar_cardapio(
             novo = Produto(
                 id=item.id,
                 restaurante_id=rest_id,
+                cardapio_id=item_cardapio_id,
                 nome=item.nome,
                 preco=item.preco,
                 categoria_id=item.categoria_id,

@@ -14,9 +14,9 @@
 
 | Frente | Escopo | Classificação DoD | Branch / PR | Evidência |
 |---|---|---|---|---|
-| **Wave 1 — Missão D** | Impressão Térmica Bluetooth (Backend + UI + `print-android`) | Em andamento | `feat/scaleup-p0-bluetooth-mobile` | Pendente CI + merge; homologação física aguarda hardware real |
-| **Wave 1 — Missão C** | Mobile como equipamento principal (touch targets + reconciliação `pageshow`/`online`) | Em andamento | `feat/scaleup-p0-bluetooth-mobile` | Pendente CI + merge |
-| **Wave 2 — Missão B** | Motor de Cadastro Rápido (Lote completo + Duplicação + Importador Universal) | Próxima fase | — | A iniciar após Wave 1 |
+| **Wave 1 — Missão D** | Impressão Térmica Bluetooth (Backend + UI + `print-android`) | Implementado, aguardando homologação física | PR #1519 (`87aeadc0`) merged | 12/12 checks CI verdes; `test_print_agents.py` (76) + `test_print_primary_agent_queue.py` (21) + E2E (38) |
+| **Wave 1 — Missão C** | Mobile como equipamento principal (touch targets + reconciliação `pageshow`/`online`) | Implementado e verificado | PR #1519 (`87aeadc0`) merged | `cashier-fulfillment-workspaces` + `cashier-delivery-stages` (22 passed em 390px/1366px) |
+| **Wave 2 — Missão B** | Motor de Cadastro Rápido (Lote completo + Duplicação + Importador Universal) | Em andamento | `feat/scaleup-p1-catalog-engine` | Backend lote/duplicar/merge + parser determinístico + `QuickMenuImportModal` |
 | **Wave 3 — Missões A, E, F** | Onboarding Ultrarrápido + Presets + Super Admin Operacional | Próxima fase | — | A iniciar após Wave 2 |
 
 ---

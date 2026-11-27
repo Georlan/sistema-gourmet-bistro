@@ -13,8 +13,9 @@ import {
   type ProductBadge,
 } from '../../../domain/productMerchandising';
 import { CardapioCategoriasTab } from '../../cardapio/CardapioCategoriasTab';
-import { CardapioProdutosTab } from '../../cardapio/CardapioProdutosTab';
+import { CardapioProdutosTab, type BatchEditPayload } from '../../cardapio/CardapioProdutosTab';
 import { CategoriaModal } from '../../cardapio/CategoriaModal';
+import { QuickMenuImportModal } from '../../cardapio/QuickMenuImportModal';
 import ComplementosTab from '../../cardapio/ComplementosTab';
 import MoneyInput from '../../MoneyInput';
 import MarmitariaTamanhos from '../../cardapio/MarmitariaTamanhos';
@@ -120,6 +121,7 @@ export default function CashierCatalog({
   }, [showProductModal]);
 
   const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [showQuickImportModal, setShowQuickImportModal] = useState(false);
 
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [hasVariants, setHasVariants] = useState(false);
@@ -192,6 +194,29 @@ export default function CashierCatalog({
       }
     }
   }, [cardapios, cardapioAtivoId]);
+
+  // Pré-carrega grupos de complementos para associação em lote na aba de produtos.
+  useEffect(() => {
+    if (activeTab !== 'cardapio' || activeSubTab !== 'produtos' || isMarmitaria) return;
+    if (customizationGroupsCacheRef.current?.key === cacheScopeKey) {
+      setCustomizationGroups(customizationGroupsCacheRef.current.data);
+      return;
+    }
+    let cancelled = false;
+    const headers = authorization ? { Authorization: authorization } : authHeaders;
+    fetch(`${apiBaseUrl}/cardapio/modificadores/grupos`, { headers })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const data = await response.json();
+        const normalized = Array.isArray(data) ? data : [];
+        customizationGroupsCacheRef.current = { key: cacheScopeKey, data: normalized };
+        if (!cancelled) setCustomizationGroups(normalized);
+      })
+      .catch(() => {
+        // Falha silenciosa: a barra em lote apenas oculta associação de complementos.
+      });
+    return () => { cancelled = true; };
+  }, [activeTab, activeSubTab, apiBaseUrl, authorization, cacheScopeKey, isMarmitaria]);
 
   // Carrega os grupos quando o editor é aberto, reutilizando o cache em memória
   // até ser invalidado por uma mutação ou troca de tenant/auth.
@@ -658,6 +683,7 @@ export default function CashierCatalog({
           <CardapioProdutosTab
             produtos={displayedProdutos}
             categorias={apiCategorias}
+            customizationGroups={isMarmitaria ? [] : customizationGroups}
             familyLabels={familyLabels}
             onOpenPromotions={() => setActiveSubTab('promocoes')}
             catalogReady={catalogReady || apiProdutos.length > 0 || apiCategorias.length > 0}
@@ -668,31 +694,52 @@ export default function CashierCatalog({
             }
             onCreateProduct={() => isMarmitaria ? setShowProductType(true) : startProduct()}
             onCreateCategory={() => setShowCategoryModal(true)}
+            onOpenImportModal={isMarmitaria ? undefined : () => setShowQuickImportModal(true)}
+            onQuickCreateCategory={async (nome, destino_impressao) => {
+              const slug = nome
+                .normalize('NFKD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+              const id = `cat-${slug || Date.now()}`;
+              const response = await fetch(`${apiBaseUrl}/produtos/categorias`, {
+                method: 'POST',
+                headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id, nome, destino_impressao }),
+              });
+              const data = await response.json().catch(() => null);
+              if (!response.ok) {
+                showToast(data?.detail || 'Não foi possível criar a categoria.', 'error');
+                return null;
+              }
+              if (onRefreshCategorias) await onRefreshCategorias();
+              else await fetchCategorias();
+              return data as CatalogCategory;
+            }}
             onEditProduct={(product) => {
               editProductDetails(product);
             }}
-            onDuplicateProduct={(product) => {
-              if (isMarmitaria && isMarmita(product)) { showToast('Cada tamanho tem um único cadastro. Edite a marmita existente na lista de produtos.', 'error'); return; }
-              setEditingProduct(null);
-              setHasVariants(false);
-              setEditingFamilyId(null);
-              setVariantRows([]);
-              setFamilyImage('');
-              setFamilyError('');
-              setExistingVariantId('');
-              setProdFormId(suggestedProductCode);
-              setProdFormNome(`${product.nome} (Cópia)`);
-              setProdFormPreco(Number(product.preco) || 0);
-              setProdFormCategoriaId(product.categoria_id || '');
-              setProdFormDescricao(product.descricao || '');
-              resetProductImageState('');
-              setProdFormAtivo(true);
-              setProdFormSomentePromocao(false);
-              setProdFormDestaque(false);
-              setProdFormSelo('');
-              setProdFormPrecoPromocional('');
-              setProdFormCardapioId(product.cardapio_id || '');
-              setShowProductModal(true);
+            onDuplicateProduct={async (product) => {
+              if (isMarmitaria && isMarmita(product)) {
+                showToast('Cada tamanho tem um único cadastro. Edite a marmita existente na lista de produtos.', 'error');
+                return;
+              }
+              try {
+                const response = await fetch(`${apiBaseUrl}/produtos/${encodeURIComponent(product.id)}/duplicar`, {
+                  method: 'POST',
+                  headers: authHeaders,
+                });
+                const payload = await response.json().catch(() => null);
+                if (!response.ok) {
+                  throw new Error(payload?.detail || 'Não foi possível duplicar o produto.');
+                }
+                invalidateCatalogCaches();
+                await fetchProdutos();
+                showToast(`"${product.nome}" duplicado com sucesso.`);
+              } catch (err) {
+                showToast(err instanceof Error ? err.message : 'Erro ao duplicar produto.', 'error');
+              }
             }}
             onRemoveProduct={async (product) => {
               if (product.familia_id) {
@@ -751,7 +798,7 @@ export default function CashierCatalog({
               await fetchProdutos();
               showToast(ativo ? 'Produtos disponibilizados.' : 'Produtos pausados.');
             }}
-            onBatchEdit={async (productIds, update) => {
+            onBatchEdit={async (productIds, update: BatchEditPayload) => {
               const response = await fetch(`${apiBaseUrl}/produtos/edicao-lote`, {
                 method: 'PATCH',
                 headers: { ...authHeaders, 'Content-Type': 'application/json' },
@@ -762,10 +809,22 @@ export default function CashierCatalog({
                 showToast(payload.detail || 'Não foi possível editar os produtos selecionados.', 'error');
                 return false;
               }
+              invalidateCatalogCaches();
               await fetchProdutos();
               if (update.reajuste_percentual !== undefined) {
                 const prefix = update.reajuste_percentual > 0 ? '+' : '';
                 showToast(`Preços reajustados em ${prefix}${update.reajuste_percentual}%.`);
+              } else if (update.reajuste_valor !== undefined) {
+                const prefix = update.reajuste_valor > 0 ? '+' : '';
+                showToast(`Preços ajustados em ${prefix}R$ ${update.reajuste_valor.toFixed(2)}.`);
+              } else if (update.preco_fixo !== undefined) {
+                showToast(`Preço fixo R$ ${update.preco_fixo.toFixed(2)} aplicado.`);
+              } else if (update.adicionar_grupos_modificadores_ids?.length) {
+                showToast('Grupo de complementos vinculado aos produtos.');
+              } else if (update.remover_grupos_modificadores_ids?.length) {
+                showToast('Grupo de complementos desvinculado dos produtos.');
+              } else if (update.destaque !== undefined) {
+                showToast(update.destaque ? 'Produtos marcados como destaque.' : 'Destaque removido dos produtos.');
               } else {
                 showToast('Produtos movidos de categoria.');
               }
@@ -1905,6 +1964,21 @@ export default function CashierCatalog({
           setProdFormCategoriaId(category.id);
         }}
         showToast={showToast}
+      />
+      <QuickMenuImportModal
+        open={showQuickImportModal}
+        onClose={() => setShowQuickImportModal(false)}
+        apiBaseUrl={apiBaseUrl}
+        authHeaders={authHeaders}
+        existingCategories={apiCategorias}
+        activeCardapioId={selectedCardapioId || cardapioAtivoId || null}
+        onImported={async () => {
+          invalidateCatalogCaches();
+          if (onRefreshCategorias) await onRefreshCategorias();
+          else await fetchCategorias();
+          await fetchProdutos();
+          showToast('Cardápio importado e publicado.');
+        }}
       />
     </>
   );
