@@ -396,8 +396,34 @@ export default function FinanceiroGestaoTab({ apiBaseUrl, authHeaders, showToast
     }
   };
 
+  const handleInicializarSetup = async () => {
+    const res = await fetch(`${apiBaseUrl}/b8/financeiro/setup/inicializar`, {
+      method: 'POST',
+      headers: authHeaders,
+    });
+    if (res.ok) {
+      const sData: B8FinanceSetup = await res.json();
+      setSetup(sData);
+      if (sData.categorias.length > 0) setCategoriaId(sData.categorias[0].id);
+      showToast('Plano de contas e contas padrão inicializados.', 'success');
+    } else {
+      showToast('Não foi possível inicializar o plano de contas.', 'error');
+    }
+  };
+
   return (
     <div className="space-y-4 text-left animate-fade-in">
+      {setup && setup.categorias.length === 0 && setup.contas.length === 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs">
+          <div>
+            <strong className="block text-koma-foreground">Financeiro gerencial ainda não inicializado</strong>
+            <span className="text-koma-muted">Provisione as categorias padrão e contas financeiras para começar a lançar títulos.</span>
+          </div>
+          <button type="button" onClick={() => void handleInicializarSetup()} className="koma-btn-success">
+            <Plus size={14} /> Inicializar plano de contas padrão
+          </button>
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => setSubMode('pagar')} className={subMode === 'pagar' ? 'koma-btn-success' : 'koma-btn-secondary'}>

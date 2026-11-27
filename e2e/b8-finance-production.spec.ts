@@ -54,6 +54,10 @@ test.describe('B8 Finance & Production Engine (Full-Stack Real sem mocks)', () =
     await openSection(page, /Relatórios/i, 'Contas a pagar e receber');
 
     await expect(page.getByRole('button', { name: /^Contas a Pagar \(/ })).toBeVisible({ timeout: 15_000 });
+    const initBtn = page.getByRole('button', { name: /Inicializar plano de contas padrão/i });
+    if (await initBtn.isVisible().catch(() => false)) {
+      await initBtn.click();
+    }
     await expect(page.locator('form select').first().locator('option').first()).toBeAttached({ timeout: 10_000 });
 
     // Lançar conta a pagar real via UI

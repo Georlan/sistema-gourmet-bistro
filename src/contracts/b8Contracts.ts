@@ -183,13 +183,16 @@ export interface B8OrdemProducao {
   id: string;
   sub_receita_id: string;
   sub_receita_nome: string | null;
+  insumo_destino_id: string | null;
+  lote_destino_id: string | null;
   quantidade_planejada: number;
   quantidade_produzida: number;
   perda_producao: number;
-  custo_total_real: number | null;
-  custo_unitario_real: number | null;
+  rendimento_pct: number | null;
+  custo_total_insumos: number | null;
+  custo_unitario_produzido: number | null;
   status: string;
-  data_producao: string | null;
+  concluida_em: string | null;
 }
 
 export interface B8BuffetLote {

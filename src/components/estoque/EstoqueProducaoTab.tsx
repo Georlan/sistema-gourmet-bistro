@@ -307,12 +307,22 @@ export default function EstoqueProducaoTab({
                 <div>
                   <strong className="text-koma-foreground">{op.sub_receita_nome || op.sub_receita_id}</strong>
                   <span className="ml-2 text-koma-muted">
-                    Planejado: {op.quantidade_planejada} · Produzido: <strong>{op.quantidade_produzida}</strong> · Status: {op.status}
+                    Planejado: {op.quantidade_planejada} · Produzido: <strong>{op.quantidade_produzida}</strong>
+                    {op.rendimento_pct !== null && Number.isFinite(op.rendimento_pct) ? ` (${op.rendimento_pct}%)` : ''}
+                    {' '}· Status: {op.status}
+                    {op.concluida_em ? ` · ${op.concluida_em.slice(0, 10)}` : ''}
                   </span>
                 </div>
-                {op.custo_unitario_real !== null && (
+                {op.custo_unitario_produzido !== null && Number.isFinite(op.custo_unitario_produzido) ? (
                   <span className="font-mono font-semibold text-koma-foreground">
-                    Custo real: {currency.format(op.custo_unitario_real)}/un (Total {currency.format(op.custo_total_real || 0)})
+                    Custo: {currency.format(op.custo_unitario_produzido)}/un
+                    {op.custo_total_insumos !== null && Number.isFinite(op.custo_total_insumos)
+                      ? ` (Total ${currency.format(op.custo_total_insumos)})`
+                      : ''}
+                  </span>
+                ) : (
+                  <span className="text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                    Custo desconhecido
                   </span>
                 )}
               </div>
