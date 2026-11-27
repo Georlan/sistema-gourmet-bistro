@@ -18,6 +18,8 @@ from .routes import (
     atendimento_printing,
     atendimentos,
     auth,
+    b8_finance,
+    b8_supply,
     caixa,
     cardapio,
     cardapio_clientes,
@@ -567,6 +569,8 @@ app.include_router(print_agents.router)
 app.include_router(printing.router)
 app.include_router(cardapio_digital.router)
 app.include_router(relatorios.router)
+app.include_router(b8_finance.router)
+app.include_router(b8_supply.router)
 app.include_router(restaurant_features.router)
 from .routes import super_admin_finance
 app.include_router(super_admin_finance.router)
