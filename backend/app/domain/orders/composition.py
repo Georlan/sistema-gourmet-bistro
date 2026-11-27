@@ -12,6 +12,7 @@ class SelectedModifier:
     preco: float = 0.0
     grupo_id: str | None = None
     grupo_nome: str | None = None
+    grupo_tipo: str | None = None
 
 
 def _group_presentation_rank(label: str) -> int:
@@ -66,23 +67,37 @@ def composition_presentation(
             notes = prefix
     if "opções:" in notes.casefold() and not generated:
         return (), notes
-    if not grouped:
+    has_meio_a_meio = any(modifier.grupo_tipo == "meio_a_meio" for modifier in modifiers)
+    if not grouped and not has_meio_a_meio:
         # Preserve the general layout when its generated option text is present.
         if generated:
             return (), str(observation or "").strip()
         return (f"COMPLEMENTOS: {', '.join(names)}",), notes
-    groups: dict[str, tuple[str, dict[str, tuple[str, int]]]] = OrderedDict()
+    groups: dict[str, tuple[str, str | None, dict[str, tuple[str, int]]]] = OrderedDict()
     for modifier in modifiers:
         key = modifier.grupo_id or ""
-        label, options = groups.setdefault(key, (modifier.grupo_nome or "Complementos", OrderedDict()))
+        label, _, options = groups.setdefault(
+            key,
+            (modifier.grupo_nome or "Complementos", modifier.grupo_tipo, OrderedDict()),
+        )
         name, count = options.get(modifier.id, (modifier.nome, 0))
         options[modifier.id] = (name, count + 1)
     ordered_groups = sorted(
         enumerate(groups.values()),
         key=lambda entry: (_group_presentation_rank(entry[1][0]), entry[0]),
     )
-    lines = tuple(
-        f"{label.upper()}: " + ", ".join(f"{count}x {name}" if count > 1 else name for name, count in options.values())
-        for _, (label, options) in ordered_groups
-    )
-    return lines, notes
+    rendered_lines: list[str] = []
+    for _, (label, group_tipo, options) in ordered_groups:
+        total_parts = sum(count for _, count in options.values())
+        if group_tipo == "meio_a_meio" and total_parts > 1:
+            formatted = ", ".join(
+                f"{count}/{total_parts} {name}" if count > 1 else f"1/{total_parts} {name}"
+                for name, count in options.values()
+            )
+        else:
+            formatted = ", ".join(
+                f"{count}x {name}" if count > 1 else name
+                for name, count in options.values()
+            )
+        rendered_lines.append(f"{label.upper()}: {formatted}")
+    return tuple(rendered_lines), notes

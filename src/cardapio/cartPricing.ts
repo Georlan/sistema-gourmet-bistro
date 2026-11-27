@@ -1,3 +1,4 @@
+import { calculateSelectedOptionsSurcharge } from '../domain/modifierPricing';
 import { getEffectiveProductPrice } from '../domain/productMerchandising';
 import { isGroupedProduct, type CatalogDisplayItem } from './catalogGrouping';
 import type { CartItem } from './components/CardapioCartDrawer';
@@ -36,16 +37,10 @@ export function getCardapioCartItemUnitPrice(item: CartPricingItem): number {
 
   const flatSelected = Object.values(item.selectedOptions || {}).flat();
   const optionsExtra = flatSelected.length > 0
-    ? flatSelected.reduce((sum, opt) => {
-        const extra = Number(opt?.extraPrice);
-        return sum + (Number.isFinite(extra) ? extra : 0);
-      }, 0)
+    ? calculateSelectedOptionsSurcharge(item.selectedOptions, item.product?.modifierGroups)
     : (item.promotionParts || []).reduce(
         (partsSum, part) =>
-          partsSum + Object.values(part.selectedOptions || {}).flat().reduce((sum, opt) => {
-            const extra = Number(opt?.extraPrice);
-            return sum + (Number.isFinite(extra) ? extra : 0);
-          }, 0),
+          partsSum + calculateSelectedOptionsSurcharge(part.selectedOptions, part.product?.modifierGroups),
         0,
       );
 

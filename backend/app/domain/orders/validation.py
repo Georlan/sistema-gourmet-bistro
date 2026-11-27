@@ -31,6 +31,7 @@ from .pricing import (
     ItemPricingInput,
     ModifierPricingInput,
     PricingContext,
+    resolve_modifiers_pricing,
     to_money_decimal,
     to_quantity_decimal,
 )
@@ -62,6 +63,8 @@ class ValidationModifier:
     name: str
     price: Decimal
     is_active: bool
+    group_type: str = "opcional"
+    meio_a_meio_pricing_rule: str = "maior_preco"
 
 
 @dataclass(frozen=True)
@@ -116,6 +119,9 @@ class ValidatedModifier:
     id: str | int
     name: str
     price: Decimal
+    group_id: str | None = None
+    group_type: str = "opcional"
+    meio_a_meio_pricing_rule: str = "maior_preco"
 
 
 @dataclass(frozen=True)
@@ -172,6 +178,9 @@ class ValidatedOrderInput:
                     id=m.id,
                     name=m.name,
                     price=m.price,
+                    group_id=m.group_id,
+                    group_type=m.group_type,
+                    meio_a_meio_pricing_rule=m.meio_a_meio_pricing_rule,
                 )
                 for m in it.modifiers
             )
@@ -278,14 +287,30 @@ class OrderValidationService:
                     raise ModifierGroupMismatchError(mid, prod.id)
 
                 mod_price = to_money_decimal(mod.price)
-                item_modifiers_sum += mod_price
                 validated_modifiers.append(
                     ValidatedModifier(
                         id=mod.id,
                         name=mod.name,
                         price=mod_price,
+                        group_id=mod.group_id,
+                        group_type=mod.group_type,
+                        meio_a_meio_pricing_rule=mod.meio_a_meio_pricing_rule,
                     )
                 )
+
+            item_modifiers_sum, _ = resolve_modifiers_pricing(
+                tuple(
+                    ModifierPricingInput(
+                        id=m.id,
+                        name=m.name,
+                        price=m.price,
+                        group_id=m.group_id,
+                        group_type=m.group_type,
+                        meio_a_meio_pricing_rule=m.meio_a_meio_pricing_rule,
+                    )
+                    for m in validated_modifiers
+                )
+            )
 
             for group_id, minimum, maximum, mode in prod.modifier_selection_limits:
                 selected = [str(mid) for mid in raw_item.modifier_ids

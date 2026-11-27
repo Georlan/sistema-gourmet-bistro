@@ -361,6 +361,7 @@ def effective_modifier_payloads_by_product(
                 if group.tipo == "meio_a_meio"
                 else ("obrigatorio" if int(group.min_selecoes or 0) > 0 else "opcional")
             ),
+            "regra_preco_meio_a_meio": getattr(group, "regra_preco_meio_a_meio", None) or "maior_preco",
             "opcoes": options_by_group.get(str(group.id), []),
         }
         for group in groups
@@ -375,7 +376,11 @@ def effective_modifier_payloads_by_product(
                 **({"min_selecoes": limits_by_product[str(product.id)][group_id][0],
                     "max_selecoes": limits_by_product[str(product.id)][group_id][1],
                     "modo_selecao": limits_by_product[str(product.id)][group_id][2],
-                    "tipo": "obrigatorio" if limits_by_product[str(product.id)][group_id][0] else "opcional"}
+                    "tipo": (
+                        "meio_a_meio"
+                        if group_payload[group_id]["tipo"] == "meio_a_meio"
+                        else ("obrigatorio" if limits_by_product[str(product.id)][group_id][0] else "opcional")
+                    )}
                    if group_id in limits_by_product[str(product.id)] else {}),
                 "recomendado": group_id in recommended_ids,
             }

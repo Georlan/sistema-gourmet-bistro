@@ -871,11 +871,11 @@ export default function PlanContractPageV2() {
                 : 'Pix mensal não é débito automático: cada vencimento gera um novo QR/Copia e Cola universal.'
               : 'Cartão de crédito é recorrente: a primeira cobrança automática acontece somente depois da implantação e dos 7 dias grátis.'}</p>
             {step === 1 ? (
-              <button type="button" className="koma-sub-primary-action" onClick={() => setStep(2)}>Continuar <ArrowRight size={18} /></button>
+              <button key="signup-step-1-btn" type="button" className="koma-sub-primary-action" onClick={() => setStep(2)}>Continuar <ArrowRight size={18} /></button>
             ) : step === 2 ? (
-              <button type="submit" form="koma-signup-form" className="koma-sub-primary-action" disabled={isSubmitting}>{isSubmitting ? 'Salvando…' : 'Salvar e continuar'} <ArrowRight size={18} /></button>
+              <button key="signup-step-2-btn" type="submit" form="koma-signup-form" className="koma-sub-primary-action" disabled={isSubmitting}>{isSubmitting ? 'Salvando…' : 'Salvar e continuar'} <ArrowRight size={18} /></button>
             ) : (
-              <button type="submit" form="koma-checkout-form" className="koma-sub-primary-action" disabled={!canContinue} aria-label="Aceitar e registrar contratação">
+              <button key="signup-step-3-btn" type="submit" form="koma-checkout-form" className="koma-sub-primary-action" disabled={!canContinue} aria-label="Aceitar e registrar contratação">
                 {isSubmitting ? 'Processando…' : !fixedBillingRequired ? 'Ativar Pocket' : billingMethod === 'pix' ? 'Escolher Pix' : 'Autorizar cartão'} <ArrowRight size={18} />
               </button>
             )}

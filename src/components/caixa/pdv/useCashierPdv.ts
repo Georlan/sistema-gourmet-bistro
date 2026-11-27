@@ -14,6 +14,7 @@ import {
   getDeliveryAddressValidationError,
   parseDeliveryAddressLegacy,
 } from '../../../domain/deliveryAddress';
+import { calculateCatalogModifierIdsSurcharge } from '../../../domain/modifierPricing';
 import { getEffectiveProductPrice } from '../../../domain/productMerchandising';
 import { smartSearchMatch } from '../../../domain/search';
 import { Product } from '../../../types';
@@ -68,9 +69,17 @@ export type PdvCartItem = {
   promotionPrice?: number;
 };
 
-export const pdvCartItemUnitPrice = (item: PdvCartItem) =>
-  getEffectiveProductPrice(Number(item.product.preco || 0), item.product.preco_promocional).effectivePrice
-  + (item.modifiers || []).reduce((sum, modifier) => sum + Number(modifier.preco || 0), 0);
+export const pdvCartItemUnitPrice = (item: PdvCartItem) => {
+  const base = getEffectiveProductPrice(Number(item.product.preco || 0), item.product.preco_promocional).effectivePrice;
+  const groups = (item.product as Product & { grupos_modificadores?: Array<{ id: string; tipo?: string; regra_preco_meio_a_meio?: string; opcoes: Array<{ id: string; preco_adicional?: number; ativo?: boolean }> }> }).grupos_modificadores;
+  if (groups && groups.length > 0) {
+    const ids = item.modifierIds && item.modifierIds.length > 0
+      ? item.modifierIds
+      : (item.modifiers || []).map((modifier) => modifier.id);
+    return base + calculateCatalogModifierIdsSurcharge(groups, ids);
+  }
+  return base + (item.modifiers || []).reduce((sum, modifier) => sum + Number(modifier.preco || 0), 0);
+};
 
 type Props = {
   apiBaseUrl: string;

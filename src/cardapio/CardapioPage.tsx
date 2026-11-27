@@ -16,6 +16,7 @@ import {
 } from "./publicMenuClient";
 import { captureQaTokenFromUrl, clearQaToken } from "./qaSession";
 import { buildWhatsAppContactUrl } from "../config/whatsappUtils";
+import { calculateSelectedOptionsSurcharge } from "../domain/modifierPricing";
 import { getEffectiveProductPrice, normalizeProductBadge } from "../domain/productMerchandising";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -375,6 +376,7 @@ export default function CardapioPage() {
               maxSelection: Number(g.max_selecoes || 1),
               selectionMode: g.modo_selecao === 'porcoes' || g.modo_selecao === 'tipos' ? g.modo_selecao : undefined,
               type: g.tipo || "opcional",
+              meioAMeioPricingRule: g.regra_preco_meio_a_meio || "maior_preco",
               options: Array.isArray(g.opcoes)
                 ? g.opcoes.map((o: any) => ({
                     id: String(o.id || ""),
@@ -1119,12 +1121,8 @@ export default function CardapioPage() {
     const priceInfo = getEffectiveProductPrice(product.price, product.promotionalPrice);
     const regularPrice = Number.isFinite(Number(product.price)) && Number(product.price) >= 0 ? Number(product.price) : 0;
     const baseUnitPrice = priceInfo.effectivePrice;
-    let unitPrice = baseUnitPrice;
-    Object.values(selectedOptions).forEach((list) => {
-      list.forEach((opt) => {
-        unitPrice += (opt.extraPrice || 0);
-      });
-    });
+    const extrasUnitPrice = calculateSelectedOptionsSurcharge(selectedOptions, product.modifierGroups);
+    const unitPrice = baseUnitPrice + extrasUnitPrice;
     const resolvedSurface = sourceSurface
       ?? (selectedProduct
         ? (productModalOrigin?.surface === "cart" ? "cart" : "product_modal")

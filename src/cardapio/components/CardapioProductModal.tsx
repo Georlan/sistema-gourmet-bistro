@@ -23,6 +23,11 @@ import {
 } from "lucide-react";
 import { getEffectiveProductPrice, getProductBadgeLabel } from "../../domain/productMerchandising";
 import {
+  calculateModifierGroupSurcharge,
+  calculateSelectedOptionsSurcharge,
+  meioAMeioPricingRuleLabel,
+} from "../../domain/modifierPricing";
+import {
   canIncrementSelectionQuantity,
   changeSelectionQuantity,
   modifierOptionQuantity,
@@ -363,7 +368,9 @@ export default function CardapioProductModal({
         required: typeof g.minSelection === "number" ? g.minSelection > 0 : g.type === "obrigatorio",
         maxSelection: g.maxSelection,
         minSelection: g.minSelection,
-        selectionMode: g.selectionMode,
+        selectionMode: g.selectionMode ?? (g.type === "meio_a_meio" ? "tipos" : undefined),
+        groupType: g.type,
+        meioAMeioPricingRule: g.meioAMeioPricingRule,
         options: g.options
           .filter((option) => option.active !== false)
           .map((o) => ({
@@ -531,25 +538,25 @@ export default function CardapioProductModal({
     [effectiveProduct.price, effectiveProduct.promotionalPrice, needsVariantSelection, product],
   );
 
-  const unitPrice = useMemo(() => {
-    let value = effectivePriceInfo.effectivePrice;
-    Object.values(selectedOptions).forEach((options) => {
-      options.forEach((option) => {
-        value += option.extraPrice;
-      });
-    });
-    return value;
-  }, [effectivePriceInfo.effectivePrice, selectedOptions]);
-
-  const totalPrice = unitPrice * quantity;
-
   const extrasPerUnit = useMemo(
     () =>
-      Object.values(selectedOptions)
-        .flat()
-        .reduce((sum, option) => sum + (option.extraPrice || 0), 0),
-    [selectedOptions],
+      calculateSelectedOptionsSurcharge(
+        selectedOptions,
+        allModifiers.map((m) => ({
+          id: m.id,
+          type: m.groupType,
+          meioAMeioPricingRule: m.meioAMeioPricingRule,
+        })),
+      ),
+    [allModifiers, selectedOptions],
   );
+
+  const unitPrice = useMemo(
+    () => Math.round((effectivePriceInfo.effectivePrice + extrasPerUnit) * 100) / 100,
+    [effectivePriceInfo.effectivePrice, extrasPerUnit],
+  );
+
+  const totalPrice = unitPrice * quantity;
 
   const handleShare = async () => {
     const shareData = {
@@ -1060,7 +1067,12 @@ export default function CardapioProductModal({
                 const showCounter = max > 1 || (modifier.required && !complete);
                 const collapsible = min === 0 && modifier.options.length > 0;
                 const expanded = !collapsible || expandedExtras[modifier.id] === true;
-                const surcharge = selections.reduce((total, option) => total + option.extraPrice, 0);
+                const isMeioAMeio = modifier.groupType === "meio_a_meio";
+                const surcharge = calculateModifierGroupSurcharge(
+                  selections.map((option) => option.extraPrice),
+                  modifier.groupType,
+                  modifier.meioAMeioPricingRule,
+                );
                 const Heading = collapsible ? "button" : "div";
                 const showInlineSearch = expanded && modifier.options.length > 8;
                 const rawQuery = groupSearch[modifier.id] || "";
@@ -1134,6 +1146,7 @@ export default function CardapioProductModal({
                         )}
                         <p className="mt-0.5 text-xs font-medium text-[var(--km-muted)]">
                           {instruction}
+                          {isMeioAMeio && max > 1 ? ` · ${meioAMeioPricingRuleLabel(modifier.meioAMeioPricingRule)}` : ""}
                           {counterPresentation.hintSuffix}
                         </p>
                       </div>
@@ -1278,6 +1291,11 @@ export default function CardapioProductModal({
                             <span className={`relative min-w-0 flex-1 text-left ${optionalSalad && !simpleSelection ? "pointer-events-none" : ""}`}>
                               <span className={`block text-sm font-bold leading-snug ${optionalSalad && !selected && selections.length === 0 ? "text-[var(--km-muted)]" : "text-[var(--km-ink)]"}`}>
                                 {option.name}
+                                {isMeioAMeio && selected && (
+                                  <span className="ml-2 inline-flex items-center rounded-md border border-[var(--km-accent-border)] bg-[var(--km-accent-soft)] px-1.5 py-0.5 text-[10px] font-extrabold text-[var(--km-accent-text)] tabular-nums">
+                                    {selections.length === 1 ? "Inteira" : `1/${selections.length}`}
+                                  </span>
+                                )}
                               </span>
                               {option.extraPrice > 0 && (
                                 <span className="mt-0.5 block text-xs font-bold text-[var(--km-accent-text)] tabular-nums">

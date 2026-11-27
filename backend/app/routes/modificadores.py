@@ -77,6 +77,7 @@ class GrupoModificadorResponseV2(GrupoModificadorResponse):
     grupo_origem_id: Optional[str] = None
     preco_novo_adicional: Optional[float] = None
     preco_novo_ovo: Optional[float] = None
+    regra_preco_meio_a_meio: str = "maior_preco"
 
 
 class ItemComModificadoresCreate(BaseModel):
@@ -140,6 +141,7 @@ def _serialize_grupo(
         min_selecoes=grupo.min_selecoes,
         max_selecoes=grupo.max_selecoes,
         tipo=grupo.tipo,
+        regra_preco_meio_a_meio=getattr(grupo, "regra_preco_meio_a_meio", None) or "maior_preco",
         opcoes=[
             OpcaoModificadorResponse(
                 id=op.id,
@@ -215,6 +217,7 @@ def _serialize_grupos(
                 min_selecoes=grupo.min_selecoes,
                 max_selecoes=grupo.max_selecoes,
                 tipo=grupo.tipo,
+                regra_preco_meio_a_meio=getattr(grupo, "regra_preco_meio_a_meio", None) or "maior_preco",
                 opcoes=[
                     OpcaoModificadorResponse(
                         id=op.id,
@@ -431,6 +434,9 @@ def criar_grupo(
         min_selecoes=payload.min_selecoes,
         max_selecoes=payload.max_selecoes,
         tipo=payload.tipo,
+        regra_preco_meio_a_meio=(
+            payload.regra_preco_meio_a_meio if payload.tipo == "meio_a_meio" else "maior_preco"
+        ),
     )
     db.add(novo_grupo)
     db.flush()
@@ -603,6 +609,9 @@ def atualizar_grupo(
     grupo.min_selecoes = payload.min_selecoes
     grupo.max_selecoes = payload.max_selecoes
     grupo.tipo = payload.tipo
+    grupo.regra_preco_meio_a_meio = (
+        payload.regra_preco_meio_a_meio if payload.tipo == "meio_a_meio" else "maior_preco"
+    )
     if payload.produto_ids is not None:
         product_ids = set(payload.produto_ids)
         links = db.query(ProdutoGrupoModificador).filter_by(restaurante_id=rest_id, grupo_id=grupo_id).all()

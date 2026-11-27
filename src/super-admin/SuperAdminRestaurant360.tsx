@@ -1227,6 +1227,7 @@ export function SuperAdminRestaurant360({
               tenantId={tenant.id}
               tenantName={tenant.name}
               operationalQa={release.operationalQa}
+              operationReleased={Boolean(release.onboarding?.operationReleased)}
               onUpdated={refreshAll}
             />
           )}

@@ -1,5 +1,6 @@
 import { type CatalogModifierGroup, isProductSellable } from '../catalog/catalog';
 import type { DraftItem, OrderItem, Product } from '../types';
+import { calculateCatalogModifierIdsSurcharge } from './modifierPricing';
 import { modifierGroupSelectionValid } from './modifierQuantity';
 import { getEffectiveProductPrice } from './productMerchandising';
 
@@ -58,7 +59,7 @@ export function planWaiterRepeat(
     const option = options.get(id)!;
     return { id, nome: option.nome, preco: Number(option.preco_adicional || 0) };
   });
-  const extra = modifiers.reduce((sum, modifier) => sum + modifier.preco, 0);
+  const extra = calculateCatalogModifierIdsSurcharge(groups, selectedIds);
   const effectiveBase = getEffectiveProductPrice(Number(product.preco), product.preco_promocional).effectivePrice;
   const unitPrice = effectiveBase + extra;
   if (!Number.isFinite(unitPrice) || unitPrice < 0) return { kind: 'unavailable', reason: 'Confira este produto no cardápio' };

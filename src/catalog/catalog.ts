@@ -1,4 +1,6 @@
 import type { Product } from '../types';
+import type { MeioAMeioPricingRule } from '../domain/modifierPricing';
+import { normalizeMeioAMeioPricingRule } from '../domain/modifierPricing';
 import { normalizeProductBadge } from '../domain/productMerchandising';
 
 export interface CatalogCategory {
@@ -23,6 +25,7 @@ export interface CatalogModifierGroup {
   min_selecoes: number;
   max_selecoes: number;
   tipo: 'obrigatorio' | 'opcional' | 'meio_a_meio' | string;
+  regra_preco_meio_a_meio?: MeioAMeioPricingRule;
   recomendado?: boolean;
   modo_selecao?: 'porcoes' | 'tipos';
   opcoes: CatalogModifierOption[];
@@ -65,6 +68,7 @@ function normalizeModifierGroups(value: unknown): CatalogModifierGroup[] {
       tipo: group.tipo === 'meio_a_meio'
         ? 'meio_a_meio'
         : (Number(group.min_selecoes ?? 0) > 0 ? String(group.tipo ?? 'obrigatorio') : 'opcional'),
+      regra_preco_meio_a_meio: normalizeMeioAMeioPricingRule(group.regra_preco_meio_a_meio),
       recomendado: group.recomendado !== false,
       modo_selecao: group.modo_selecao === 'porcoes' || group.modo_selecao === 'tipos' ? group.modo_selecao : undefined,
       opcoes: (Array.isArray(group.opcoes) ? group.opcoes : [])

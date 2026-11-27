@@ -4,6 +4,7 @@
  */
 
 import { KOMA_SYMBOL_ON_LIGHT_SRC } from '../brand/komaBrand';
+import type { MeioAMeioPricingRule } from '../domain/modifierPricing';
 import type { ProductBadge } from '../domain/productMerchandising';
 
 export type { ProductBadge };
@@ -28,6 +29,7 @@ export interface ModifierGroup {
   minSelection: number;
   maxSelection: number;
   type: 'obrigatorio' | 'opcional' | 'meio_a_meio';
+  meioAMeioPricingRule?: MeioAMeioPricingRule;
   options: ModifierOption[];
 }
 
@@ -37,6 +39,8 @@ export interface ProductModifier {
   title: string;
   required: boolean;
   maxSelection: number;
+  groupType?: 'obrigatorio' | 'opcional' | 'meio_a_meio';
+  meioAMeioPricingRule?: MeioAMeioPricingRule;
   options: ProductOption[];
 }
 

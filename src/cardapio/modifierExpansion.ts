@@ -5,7 +5,11 @@
 
 import type { ProductModifier } from './CardapioTypes';
 
-export type QuantityModifier = ProductModifier & { minSelection?: number };
+export type QuantityModifier = ProductModifier & {
+  minSelection?: number;
+  groupType?: 'obrigatorio' | 'opcional' | 'meio_a_meio';
+  meioAMeioPricingRule?: import('../domain/modifierPricing').MeioAMeioPricingRule;
+};
 
 export const isAddonsOrExtrasGroup = (title: string): boolean =>
   /adiciona(l|is)|extra(s)?|acrescimo(s)?/i.test(

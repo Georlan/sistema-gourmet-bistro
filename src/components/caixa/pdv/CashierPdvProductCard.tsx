@@ -64,7 +64,7 @@ function CashierPdvProductCardView({
           />
         )}
         <div className="cashier-pdv-product-card__identity">
-          <div className="cashier-pdv-product-card__heading">
+          <div className={clsx('cashier-pdv-product-card__heading', hasDetails && 'has-details-trigger')}>
             <h4 className="cashier-pdv-product-card__name">{name}</h4>
             {cartQuantity > 0 && (
               <span className="cashier-pdv-product-card__quantity" aria-label={`${cartQuantity} ${cartQuantity === 1 ? 'unidade' : 'unidades'} no pedido`}>
