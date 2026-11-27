@@ -443,7 +443,9 @@ async def ingest_availability_worker_event(
             detail="Ingestão de disponibilidade não configurada.",
         )
 
-    raw_body = await request.body()
+    from ..services.http_limits import read_limited_body
+
+    raw_body = await read_limited_body(request)
     expected = "sha256=" + hmac.new(
         secret.encode("utf-8"),
         raw_body,

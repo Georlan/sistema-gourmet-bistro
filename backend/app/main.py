@@ -280,6 +280,26 @@ async def run_migrations_on_startup():
 
 
 @app.middleware("http")
+async def enforce_max_request_body_size(request: Request, call_next):
+    from .services.http_limits import DEFAULT_GLOBAL_MAX_BODY_BYTES
+
+    raw_len = (request.headers.get("content-length") or "").strip()
+    if raw_len:
+        try:
+            if int(raw_len) > DEFAULT_GLOBAL_MAX_BODY_BYTES:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": "Requisição excede o tamanho máximo permitido."},
+                )
+        except ValueError:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "Cabeçalho Content-Length inválido."},
+            )
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def add_request_id_and_structured_log(request: Request, call_next):
     supplied_request_id = (request.headers.get("X-Request-ID") or "").strip()
     request_id = (
