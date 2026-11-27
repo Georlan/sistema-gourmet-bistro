@@ -275,6 +275,12 @@ def baixar_parcela_conta_pagar(
         .first()
     )
     if existing_baixa is not None:
+        if (
+            existing_baixa.parcela_id != parcela_id
+            or existing_baixa.conta_financeira_id != conta_financeira_id
+            or money(existing_baixa.valor_principal) != money(valor_principal)
+        ):
+            raise ValueError("Chave de idempotência já utilizada para outra baixa de conta a pagar.")
         return existing_baixa, True
 
     parcela = (
@@ -525,6 +531,12 @@ def baixar_conta_receber(
         .first()
     )
     if existing is not None:
+        if (
+            existing.conta_receber_id != conta_receber_id
+            or existing.conta_financeira_id != conta_financeira_id
+            or money(existing.valor_recebido) != money(valor_recebido)
+        ):
+            raise ValueError("Chave de idempotência já utilizada para outro recebimento.")
         return existing, True
 
     cr = (
@@ -604,6 +616,70 @@ def baixar_conta_receber(
     )
     db.flush()
     return baixa, False
+
+
+def cancelar_conta_receber(
+    db: Session,
+    *,
+    restaurante_id: int,
+    conta_receber_id: str,
+    motivo: str,
+    usuario_id: str | None = None,
+) -> ContaReceber:
+    """Cancela conta a receber estornando movimentações anteriores de forma auditável."""
+    cr = (
+        db.query(ContaReceber)
+        .filter(ContaReceber.restaurante_id == restaurante_id, ContaReceber.id == conta_receber_id)
+        .with_for_update()
+        .first()
+    )
+    if cr is None:
+        raise ValueError("Conta a receber não encontrada.")
+    if cr.status == "cancelado":
+        return cr
+
+    baixas = (
+        db.query(ContaReceberBaixa)
+        .filter(
+            ContaReceberBaixa.restaurante_id == restaurante_id,
+            ContaReceberBaixa.conta_receber_id == cr.id,
+            ContaReceberBaixa.estornada.is_(False),
+        )
+        .all()
+    )
+    hoje = datetime.date.today()
+    for b in baixas:
+        b.estornada = True
+        liquido = max(Decimal("0.00"), money(money(b.valor_recebido) - money(b.taxa_descontada)))
+        if liquido > Decimal("0.00"):
+            db.add(
+                FinanceMovimentacao(
+                    restaurante_id=restaurante_id,
+                    conta_financeira_id=b.conta_financeira_id,
+                    categoria_id=cr.categoria_id,
+                    tipo="estorno",
+                    origem_tipo="estorno_receber",
+                    origem_id=b.id,
+                    data_movimento=hoje,
+                    valor=float(liquido),
+                    descricao=f"Estorno CR ({cr.descricao}): {motivo}",
+                    usuario_id=usuario_id,
+                )
+            )
+
+    cr.status = "cancelado"
+    cr.valor_recebido = 0.0
+    _audit(
+        db,
+        restaurante_id=restaurante_id,
+        entidade_tipo="conta_receber",
+        entidade_id=cr.id,
+        acao="CANCELADA",
+        ator_id=usuario_id,
+        detalhes={"motivo": motivo, "baixas_estornadas": len(baixas)},
+    )
+    db.flush()
+    return cr
 
 
 def gerar_competencia_recorrencias(

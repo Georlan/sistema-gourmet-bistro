@@ -18,7 +18,7 @@ from ..b8_supply_models import (
     SubReceita,
 )
 from ..database import get_db, require_tenant_id
-from ..models import MovimentacaoEstoque, Usuario
+from ..models import GrupoModificador, Insumo, MovimentacaoEstoque, OpcaoModificador, Produto, ProdutoInsumo, Usuario
 from ..security import require_entitled_permission
 from ..services.b8_supply import (
     calcular_custo_sub_receita,
@@ -662,3 +662,129 @@ def listar_perdas(
         }
         for m in rows
     ]
+
+
+@router.get("/modificadores-opcoes")
+def listar_opcoes_modificadores(
+    db: Session = Depends(get_db),
+    _user: Usuario = Depends(_require_supply_read),
+):
+    rest_id = require_tenant_id()
+    rows = (
+        db.query(OpcaoModificador, GrupoModificador.nome)
+        .join(GrupoModificador, GrupoModificador.id == OpcaoModificador.grupo_id)
+        .filter(OpcaoModificador.restaurante_id == rest_id, GrupoModificador.restaurante_id == rest_id)
+        .order_by(GrupoModificador.nome.asc(), OpcaoModificador.nome.asc())
+        .all()
+    )
+    return [
+        {
+            "id": opt.id,
+            "nome": opt.nome,
+            "grupo_id": opt.grupo_id,
+            "grupo_nome": grupo_nome,
+            "preco": float(opt.preco or 0),
+        }
+        for opt, grupo_nome in rows
+    ]
+
+
+@router.get("/custos-produtos")
+def listar_custos_produtos(
+    db: Session = Depends(get_db),
+    _user: Usuario = Depends(_require_supply_read),
+):
+    rest_id = require_tenant_id()
+    produtos = (
+        db.query(Produto)
+        .filter(Produto.restaurante_id == rest_id)
+        .order_by(Produto.nome.asc())
+        .all()
+    )
+    insumos_map = {
+        i.id: i
+        for i in db.query(Insumo).filter(Insumo.restaurante_id == rest_id).all()
+    }
+    fichas_univ = (
+        db.query(FichaTecnicaComponente)
+        .filter(
+            FichaTecnicaComponente.restaurante_id == rest_id,
+            FichaTecnicaComponente.entidade_tipo == "produto",
+        )
+        .all()
+    )
+    fichas_legado = (
+        db.query(ProdutoInsumo)
+        .filter(ProdutoInsumo.restaurante_id == rest_id)
+        .all()
+    )
+    comp_by_prod: dict[str, list] = {}
+    for comp in fichas_univ:
+        comp_by_prod.setdefault(comp.entidade_id, []).append(comp)
+    legado_by_prod: dict[str, list] = {}
+    for leg in fichas_legado:
+        legado_by_prod.setdefault(leg.produto_id, []).append(leg)
+
+    out = []
+    for p in produtos:
+        preco_venda = float(p.preco_promocional if p.preco_promocional is not None else (p.preco or 0))
+        univ = comp_by_prod.get(p.id, [])
+        leg = legado_by_prod.get(p.id, [])
+        if not univ and not leg:
+            out.append({
+                "produto_id": p.id,
+                "nome": p.nome,
+                "preco_venda": preco_venda,
+                "custo_unitario": None,
+                "custo_completo": False,
+                "margem_contribuicao_reais": None,
+                "margem_contribuicao_pct": None,
+                "motivo_incompleto": "Sem ficha técnica cadastrada",
+            })
+            continue
+        custo_total = 0.0
+        completo = True
+        motivos: list[str] = []
+        if univ:
+            for c in univ:
+                if c.insumo_id:
+                    ins = insumos_map.get(c.insumo_id)
+                    unit = float(ins.preco_medio_custo or 0) if ins else 0.0
+                    if unit <= 0:
+                        completo = False
+                        motivos.append(f"Insumo '{ins.nome if ins else c.insumo_id}' sem custo médio")
+                    else:
+                        custo_total += float(c.quantidade) * unit
+                elif c.sub_receita_id:
+                    sub_cost, sub_ok, sub_reason = calcular_custo_sub_receita(
+                        db, restaurante_id=rest_id, sub_receita_id=c.sub_receita_id
+                    )
+                    if not sub_ok or sub_cost is None:
+                        completo = False
+                        motivos.append(sub_reason or "Sub-receita com custo incompleto")
+                    else:
+                        custo_total += float(c.quantidade) * float(sub_cost)
+        else:
+            for l in leg:
+                ins = insumos_map.get(l.insumo_id)
+                unit = float(ins.preco_medio_custo or 0) if ins else 0.0
+                if unit <= 0:
+                    completo = False
+                    motivos.append(f"Insumo '{ins.nome if ins else l.insumo_id}' sem custo médio")
+                else:
+                    custo_total += float(l.quantidade) * unit
+
+        custo_round = round(custo_total, 2) if completo else None
+        margem_reais = round(preco_venda - custo_round, 2) if custo_round is not None else None
+        margem_pct = round((margem_reais / preco_venda) * 100, 1) if (margem_reais is not None and preco_venda > 0) else None
+        out.append({
+            "produto_id": p.id,
+            "nome": p.nome,
+            "preco_venda": preco_venda,
+            "custo_unitario": custo_round,
+            "custo_completo": completo,
+            "margem_contribuicao_reais": margem_reais,
+            "margem_contribuicao_pct": margem_pct,
+            "motivo_incompleto": "; ".join(motivos) if motivos else None,
+        })
+    return out

@@ -19,8 +19,7 @@ from ..b8_finance_models import (
     FinanceMovimentacao,
 )
 from ..b8_supply_models import ItemCustoSnapshot
-from ..models import Comanda, Item, Lancamento
-from .b8_finance import ensure_default_finance_setup
+from ..models import Comanda, Item, ItemModificador, Lancamento
 from .financeiro import money
 from .financial_read import current_operational_day, load_financial_snapshot, resolve_financial_period
 
@@ -33,27 +32,41 @@ def build_dre_gerencial(
     data_fim: str | None = None,
 ) -> dict:
     """Calcula DRE Gerencial por regime de competência, explicitando lacunas reais."""
-    ensure_default_finance_setup(db, restaurante_id)
     snapshot = load_financial_snapshot(db, restaurante_id, data_inicio, data_fim)
     period = snapshot.period
     start_day = period.start_day
     end_day = period.end_day
 
-    # 1. Receita Bruta Operacional + Deduções (estornos/descontos)
-    receita_bruta_vendas = money(snapshot.totals.vendas_brutas)
-    deducoes_estornos = money(snapshot.totals.estornos)
+    # 1. Receita Bruta Operacional por Competência (itens ativos + modificadores + taxas das comandas do período)
+    itens_competencia = (
+        db.query(Item.id, Item.preco_unit)
+        .join(Lancamento, and_(Lancamento.id == Item.lancamento_id, Lancamento.restaurante_id == Item.restaurante_id))
+        .join(Comanda, and_(Comanda.id == Lancamento.comanda_id, Comanda.restaurante_id == Lancamento.restaurante_id))
+        .filter(
+            Item.restaurante_id == restaurante_id,
+            Comanda.onboarding_test.is_(False),
+            Comanda.delivery_status != "recusado",
+            Item.status != "cancelado",
+            Lancamento.status.notin_(("cancelado", "recusado")),
+            Lancamento.timestamp >= period.start_utc,
+            Lancamento.timestamp < period.end_utc,
+        )
+        .all()
+    )
+    active_item_ids = [str(row[0]) for row in itens_competencia]
+    # Item.preco_unit já representa o valor unitário consolidado (produto + modificadores aplicados).
+    receita_itens = sum((money(row[1]) for row in itens_competencia), Decimal("0.00"))
 
-    # Descontos concedidos nos pedidos do período (sem onboarding_test)
-    descontos_vendas = Decimal("0.00")
-    desconto_row = (
+    taxas_comandas = (
         db.query(
+            func.coalesce(func.sum(Comanda.delivery_taxa), 0),
             func.coalesce(
                 func.sum(
                     func.coalesce(Comanda.valor_desconto_cupom, 0)
                     + func.coalesce(Comanda.valor_desconto_cashback, 0)
                 ),
                 0,
-            )
+            ),
         )
         .filter(
             Comanda.restaurante_id == restaurante_id,
@@ -62,11 +75,15 @@ def build_dre_gerencial(
             Comanda.criado_em < period.end_utc,
             Comanda.delivery_status != "recusado",
         )
-        .scalar()
+        .one()
     )
-    descontos_vendas = money(desconto_row or 0)
+    receita_taxas = money(taxas_comandas[0] or 0)
+    receita_competencia_pedidos = money(receita_itens + receita_taxas)
+    receita_bruta_vendas = max(receita_competencia_pedidos, money(snapshot.totals.vendas_brutas))
+    deducoes_estornos = money(snapshot.totals.estornos)
+    descontos_vendas = money(taxas_comandas[1] or 0)
 
-    # Receitas extras lançadas em ContaReceber por competência (excluindo canceladas/estornadas)
+    # Receitas extras lançadas em ContaReceber por competência (exclui vendas operacionais para não duplicar!)
     receitas_extras = money(
         db.query(func.coalesce(func.sum(ContaReceber.valor_previsto), 0))
         .filter(
@@ -74,12 +91,13 @@ def build_dre_gerencial(
             ContaReceber.data_competencia >= start_day,
             ContaReceber.data_competencia <= end_day,
             ContaReceber.status.notin_(("cancelado", "estornado")),
+            ContaReceber.origem_tipo.notin_(("venda", "comanda", "pdv")),
         )
         .scalar()
         or 0
     )
 
-    receita_bruta = money(receita_bruta_vendas + descontos_vendas + receitas_extras)
+    receita_bruta = money(receita_bruta_vendas + receitas_extras)
     deducoes_total = money(deducoes_estornos + descontos_vendas)
     receita_liquida = money(receita_bruta - deducoes_total)
 
@@ -253,8 +271,13 @@ def build_fluxo_caixa(
     data_fim: str | None = None,
     conta_financeira_id: str | None = None,
 ) -> dict:
-    """Calcula Fluxo de Caixa Realizado + Previsto por regime de caixa."""
-    _, accounts = ensure_default_finance_setup(db, restaurante_id)
+    """Calcula Fluxo de Caixa Realizado + Previsto por regime de caixa (read-only)."""
+    accounts = (
+        db.query(FinanceConta)
+        .filter(FinanceConta.restaurante_id == restaurante_id, FinanceConta.ativo.is_(True))
+        .order_by(FinanceConta.nome.asc())
+        .all()
+    )
     period = resolve_financial_period(db, restaurante_id, data_inicio, data_fim)
     start_day = period.start_day
     end_day = period.end_day
@@ -262,13 +285,13 @@ def build_fluxo_caixa(
 
     selected_accounts = [
         a for a in accounts
-        if a.ativo and (conta_financeira_id is None or a.id == conta_financeira_id)
+        if conta_financeira_id is None or a.id == conta_financeira_id
     ]
     account_ids = {a.id for a in selected_accounts}
 
     saldo_inicial_base = sum((money(a.saldo_inicial) for a in selected_accounts), Decimal("0.00"))
 
-    # Movimentações anteriores ao período ajustam o saldo inicial
+    # Movimentações anteriores ao período ajustam o saldo inicial (continuidade de saldo)
     movs_anteriores = (
         db.query(FinanceMovimentacao)
         .filter(
@@ -286,7 +309,19 @@ def build_fluxo_caixa(
         elif m.tipo in {"saida", "transferencia_saida", "retirada", "estorno"}:
             saldo_inicial_base -= money(m.valor)
 
-    # Entradas operacionais realizadas no Caixa (PDV/Cardápio/Salão) quando não filtrando por conta bancária específica
+    # Continuidade de vendas operacionais imediatas (dinheiro + pix) anteriores ao período, a partir da data_saldo_inicial
+    caixa_op = next((a for a in selected_accounts if a.tipo == "caixa_operacional"), None)
+    if caixa_op is not None and caixa_op.data_saldo_inicial is not None and caixa_op.data_saldo_inicial < start_day:
+        prev_snap = load_financial_snapshot(
+            db,
+            restaurante_id,
+            caixa_op.data_saldo_inicial.isoformat(),
+            (start_day - datetime.timedelta(days=1)).isoformat(),
+        )
+        saldo_inicial_base += money(prev_snap.totals.liquido_por_metodo.get("dinheiro", 0))
+        saldo_inicial_base += money(prev_snap.totals.liquido_por_metodo.get("pix", 0))
+
+    # Entradas operacionais realizadas no Caixa (somente liquidez imediata: dinheiro + pix; cartão não é dinheiro depositado)
     include_operational_pdv = conta_financeira_id is None or any(
         a.tipo == "caixa_operacional" for a in selected_accounts
     )
@@ -294,12 +329,14 @@ def build_fluxo_caixa(
     por_meio_operacional = {"dinheiro": 0.0, "pix": 0.0, "cartao": 0.0}
     if include_operational_pdv:
         snapshot = load_financial_snapshot(db, restaurante_id, data_inicio, data_fim)
-        # Dinheiro e Pix são liquidez imediata; cartão fica sinalizado separadamente para transparência.
-        entradas_operacionais = money(snapshot.totals.vendas_liquidas)
+        dinheiro_liq = money(snapshot.totals.liquido_por_metodo.get("dinheiro", 0))
+        pix_liq = money(snapshot.totals.liquido_por_metodo.get("pix", 0))
+        cartao_liq = money(snapshot.totals.liquido_por_metodo.get("cartao", 0))
+        entradas_operacionais = money(dinheiro_liq + pix_liq)
         por_meio_operacional = {
-            "dinheiro": float(money(snapshot.totals.liquido_por_metodo.get("dinheiro", 0))),
-            "pix": float(money(snapshot.totals.liquido_por_metodo.get("pix", 0))),
-            "cartao": float(money(snapshot.totals.liquido_por_metodo.get("cartao", 0))),
+            "dinheiro": float(dinheiro_liq),
+            "pix": float(pix_liq),
+            "cartao": float(cartao_liq),
         }
 
     # Movimentações realizadas dentro do período (baixas CP/CR + aportes/retiradas/manuais)

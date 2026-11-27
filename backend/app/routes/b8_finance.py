@@ -23,6 +23,7 @@ from ..services.b8_finance import (
     baixar_conta_receber,
     baixar_parcela_conta_pagar,
     cancelar_conta_pagar,
+    cancelar_conta_receber,
     create_conta_pagar,
     create_conta_receber,
     ensure_default_finance_setup,
@@ -431,6 +432,29 @@ def baixar_cr(
     return {"id": baixa.id, "conta_receber_id": baixa.conta_receber_id, "valor_recebido": float(baixa.valor_recebido), "replay": replay}
 
 
+@router.post("/contas-receber/{conta_receber_id}/cancelar")
+def cancelar_cr(
+    conta_receber_id: str,
+    payload: CancelamentoRequest,
+    db: Session = Depends(get_db),
+    user: Usuario = Depends(_require_fin_write),
+):
+    rest_id = require_tenant_id()
+    try:
+        cr = cancelar_conta_receber(
+            db,
+            restaurante_id=rest_id,
+            conta_receber_id=conta_receber_id,
+            motivo=payload.motivo,
+            usuario_id=user.id,
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"id": cr.id, "status": cr.status}
+
+
 @router.get("/recorrencias")
 def listar_recorrencias(
     db: Session = Depends(get_db),
@@ -494,6 +518,35 @@ def gerar_recorrencias(
     return {"competencia": competencia, "geradas_count": len(geradas), "ids": [c.id for c in geradas]}
 
 
+@router.get("/movimentacoes")
+def listar_movimentacoes(
+    conta_financeira_id: Optional[str] = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    _user: Usuario = Depends(_require_fin_read),
+):
+    from ..b8_finance_models import FinanceMovimentacao
+
+    rest_id = require_tenant_id()
+    q = db.query(FinanceMovimentacao).filter(FinanceMovimentacao.restaurante_id == rest_id)
+    if conta_financeira_id:
+        q = q.filter(FinanceMovimentacao.conta_financeira_id == conta_financeira_id)
+    rows = q.order_by(FinanceMovimentacao.data_movimento.desc(), FinanceMovimentacao.created_at.desc()).limit(limit).all()
+    return [
+        {
+            "id": m.id,
+            "conta_financeira_id": m.conta_financeira_id,
+            "categoria_id": m.categoria_id,
+            "tipo": m.tipo,
+            "origem_tipo": m.origem_tipo,
+            "data_movimento": m.data_movimento.isoformat(),
+            "valor": float(m.valor),
+            "descricao": m.descricao,
+        }
+        for m in rows
+    ]
+
+
 @router.post("/movimentacoes", status_code=status.HTTP_201_CREATED)
 def criar_movimentacao(
     payload: MovimentacaoCreate,
@@ -530,9 +583,7 @@ def obter_dre_gerencial(
 ):
     rest_id = require_tenant_id()
     try:
-        result = build_dre_gerencial(db, restaurante_id=rest_id, data_inicio=data_inicio, data_fim=data_fim)
-        db.commit()
-        return result
+        return build_dre_gerencial(db, restaurante_id=rest_id, data_inicio=data_inicio, data_fim=data_fim)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -547,14 +598,12 @@ def obter_fluxo_caixa(
 ):
     rest_id = require_tenant_id()
     try:
-        result = build_fluxo_caixa(
+        return build_fluxo_caixa(
             db,
             restaurante_id=rest_id,
             data_inicio=data_inicio,
             data_fim=data_fim,
             conta_financeira_id=conta_financeira_id,
         )
-        db.commit()
-        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
