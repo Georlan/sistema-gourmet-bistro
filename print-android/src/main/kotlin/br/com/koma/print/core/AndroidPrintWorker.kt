@@ -131,17 +131,18 @@ class AndroidPrintWorker(
             return notReady
         }
 
-        val testPayload = EscPos58Renderer.buildKapbomSelfTestPayload(
+        val testPayload = EscPos58Renderer.buildSelfTestPayload(
             restaurantName = restaurantDisplayName,
             printerName = target.name,
             printerAddress = target.normalizedAddress,
+            profile = target.profile,
         )
         val tx = bluetoothTransport.sendRawPayload(target, testPayload)
         val result = if (tx.success) {
             AgentCommandResult(
                 success = true,
                 code = "printed",
-                message = "Teste 58mm enviado com sucesso para ${target.name} (${target.normalizedAddress}).",
+                message = "Teste ${target.profile.paperWidthMm}mm enviado para ${target.name} (${target.normalizedAddress}). Confira o papel fisicamente.",
                 printerName = target.name,
             )
         } else {

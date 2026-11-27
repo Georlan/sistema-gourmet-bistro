@@ -365,6 +365,7 @@ export function PrintMonitorPanel({
   const [showHistory, setShowHistory] = useState(false);
   const [showQueue, setShowQueue] = useState(false);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [settingPrimaryAgentId, setSettingPrimaryAgentId] = useState<string | null>(null);
 
   const localConnection = useLocalPrintAgent(connectionScope);
   const detectedMobileAgentId = useMemo(() => {
@@ -884,6 +885,39 @@ export function PrintMonitorPanel({
       setReprintingId(null);
     }
   };
+
+  const handleSetPrimaryAgent = async (agentId: string) => {
+    if (!agentId || settingPrimaryAgentId) return;
+    setSettingPrimaryAgentId(agentId);
+    setActionMessage('');
+    setActionSuccessful(null);
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/print-agents/set-primary`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ agent_id: agentId })
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Não foi possível definir o aparelho principal.');
+      }
+      setActionSuccessful(true);
+      setActionMessage(`${agentId} agora é a impressora principal do restaurante.`);
+      await loadMonitor(false);
+    } catch (requestError) {
+      setActionSuccessful(false);
+      setActionMessage(
+        requestError instanceof Error
+          ? requestError.message
+          : 'Não foi possível definir o aparelho principal.'
+      );
+    } finally {
+      setSettingPrimaryAgentId(null);
+    }
+  };
   const failedJobs = useMemo(() => {
     if (!localAgentId) return [];
     return monitorData?.queue_jobs?.filter(
@@ -1174,13 +1208,27 @@ export function PrintMonitorPanel({
 
       <div className="rounded-xl border border-koma-border bg-koma-card px-4 py-3 text-xs text-koma-foreground"
         aria-label="Agente principal do restaurante">
-        <strong className="block font-bold">Impressora principal do restaurante</strong>
-        <span className="mt-1 block text-koma-muted">
-          {restaurantPrimary
-            ? `${restaurantPrimary.agent_id} — ${restaurantPrimary.online ? 'agente online' : 'sem comunicação'}`
-            : 'Nenhuma instalação principal definida'}
-          . A consulta desta configuração não conecta impressoras neste aparelho.
-        </span>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <strong className="block font-bold">Impressora principal do restaurante</strong>
+            <span className="mt-1 block text-koma-muted">
+              {restaurantPrimary
+                ? `${restaurantPrimary.agent_id} — ${restaurantPrimary.online ? 'agente online' : 'sem comunicação'}`
+                : 'Nenhuma instalação principal definida'}
+              . A consulta desta configuração não conecta impressoras neste aparelho.
+            </span>
+          </div>
+          {localAgentId && restaurantPrimary?.agent_id !== localAgentId && (
+            <button
+              type="button"
+              onClick={() => void handleSetPrimaryAgent(localAgentId)}
+              disabled={settingPrimaryAgentId !== null}
+              className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-koma-border bg-koma-panel px-3.5 py-2 text-[11px] font-bold text-koma-foreground transition hover:border-emerald-500/50 hover:bg-koma-raised disabled:opacity-50 cursor-pointer"
+            >
+              {settingPrimaryAgentId === localAgentId ? 'Atualizando…' : 'Usar este aparelho como principal'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 1. Estado atual */}
@@ -1240,7 +1288,7 @@ export function PrintMonitorPanel({
                   ) : null}
                 </div>
 
-                <strong className={`block text-sm sm:text-base font-bold text-koma-foreground ${connectionNeedsPermission ? 'whitespace-normal' : 'truncate'}`}>
+                <strong className={`block text-sm sm:text-base font-bold text-koma-foreground ${connectionNeedsPermission ? 'whitespace-normal' : 'break-words sm:truncate'}`}>
                   {hasReadyPrinter && firstReady
                     ? `${friendlyPrinterName(firstReady.name)} — Pronta para imprimir`
                     : diagnostic.title}

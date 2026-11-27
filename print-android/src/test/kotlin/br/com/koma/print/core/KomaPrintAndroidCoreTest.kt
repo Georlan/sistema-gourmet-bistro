@@ -43,10 +43,41 @@ class KomaPrintAndroidCoreTest {
         assertEquals(58, mpt2.paperWidthMm)
         assertEquals(32, mpt2.columns)
 
+        val goojprt = PrinterPaperProfile.infer("GOOJPRT PT-210")
+        assertEquals(58, goojprt.paperWidthMm)
+        assertEquals(32, goojprt.columns)
+
+        val lelong = PrinterPaperProfile.infer("Lelong POS58")
+        assertEquals(58, lelong.paperWidthMm)
+        assertEquals(32, lelong.columns)
+
         val generic80 = PrinterPaperProfile.infer("Epson TM-T20X")
         assertEquals(80, generic80.paperWidthMm)
         assertEquals(48, generic80.columns)
         assertTrue(generic80.supportsCut)
+    }
+
+    @Test
+    fun `buildSelfTestPayload adapts to 80mm printers with 48 columns and partial cut`() {
+        val profile80 = PrinterPaperProfile.infer("Elgin i9 Bluetooth 80mm")
+        assertEquals(80, profile80.paperWidthMm)
+        assertEquals(48, profile80.columns)
+
+        val bytes = EscPos58Renderer.buildSelfTestPayload(
+            restaurantName = "RESTAURANTE TESTE",
+            printerName = "Elgin i9",
+            printerAddress = "AA:BB:CC:DD:EE:FF",
+            profile = profile80,
+        )
+        val cutSeq = EscPos58Renderer.PARTIAL_CUT
+        val hasCut = bytes.indices.any { idx ->
+            idx + cutSeq.size <= bytes.size &&
+                cutSeq.indices.all { offset -> bytes[idx + offset] == cutSeq[offset] }
+        }
+        assertTrue(hasCut, "Impressora 80mm com guilhotina deve receber corte parcial")
+        val text = String(bytes.drop(5).toByteArray(), java.nio.charset.Charset.forName("IBM860"))
+        assertTrue(text.contains("TESTE REAL KOMA 80MM"))
+        assertTrue(text.contains("PAPEL: 80mm (48 colunas)"))
     }
 
     @Test

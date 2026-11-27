@@ -68,7 +68,7 @@ data class PrinterPaperProfile(
         )
 
         private val KA1445_REGEX = Regex(
-            "(?:^|\\b|_)(?:KA[-\\s_]?1445|KA7|KAPBOM|KPRINTER|MTP[-\\s_]?(?:II|2)|MPT[-\\s_]?(?:II|2)|POS[-\\s_]?58|ZJ[-\\s_]?58|XP[-\\s_]?58|RPP02|PT[-\\s_]?210|MOBILE\\s+PRINTER|58\\s*MM)(?:\\b|_|$)",
+            "(?:^|\\b|_)(?:KA[-\\s_]?1445|KA7|KAPBOM|KPRINTER|MTP[-\\s_]?(?:II|2)|MPT[-\\s_]?(?:II|2)|POS[-\\s_]?58|ZJ[-\\s_]?58|XP[-\\s_]?58|RPP02N?|PT[-\\s_]?210|GOOJPRT|LELONG|GOLDENSKY|BLUEPRINT|INNERPRINTER|KNUP|TOMATE|MINI\\s*THERMAL|MOBILE\\s+PRINTER|58\\s*MM)(?:\\b|_|$)",
             RegexOption.IGNORE_CASE,
         )
 

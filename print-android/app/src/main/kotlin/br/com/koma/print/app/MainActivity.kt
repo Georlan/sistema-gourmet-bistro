@@ -188,13 +188,13 @@ class MainActivity : Activity() {
 
         // Cabeçalho
         val title = TextView(this).apply {
-            text = "KÔMA Print 58mm"
+            text = "KÔMA Print Bluetooth"
             textSize = 22f
             setTypeface(typeface, Typeface.BOLD)
             setTextColor(Color.parseColor("#F8FAFC"))
         }
         val subtitle = TextView(this).apply {
-            text = "Pedidos automáticos • Impressora térmica Bluetooth 58 mm"
+            text = "Pedidos automáticos • Térmica Bluetooth 58 mm e 80 mm"
             textSize = 13f
             setTextColor(Color.parseColor("#94A3B8"))
             setPadding(0, dp(4), 0, dp(14))
@@ -255,7 +255,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             setPadding(0, dp(4), 0, dp(12))
         }
-        val testPrintBtn = actionButton("Imprimir Teste 58mm", "#0284C7") {
+        val testPrintBtn = actionButton("Imprimir Teste", "#0284C7") {
             runDirectSelfTestPrint()
         }
         val refreshBtBtn = actionButton("Atualizar Pareadas", "#334155") {
@@ -491,19 +491,20 @@ class MainActivity : Activity() {
     private fun runDirectSelfTestPrint() {
         val target = saveSelectedPrinterPreference()
         if (target == null) {
-            toast("Pareie a impressora Kapbom KA-1445 nas configurações Bluetooth do Android primeiro.")
+            toast("Pareie a impressora Bluetooth nas configurações do Android primeiro.")
             return
         }
         val cfg = store.load()
         val restaurantName = cfg.restaurantName.ifBlank { "KOMA GOURMET" }
-        toast("Enviando teste 58mm para ${target.name}...")
-        Log.i(TAG, "Disparando teste de impressão física 58mm para ${target.name} (${target.normalizedAddress})")
+        toast("Enviando teste ${target.profile.paperWidthMm}mm para ${target.name}...")
+        Log.i(TAG, "Disparando teste de impressão física ${target.profile.paperWidthMm}mm para ${target.name} (${target.normalizedAddress})")
 
         Thread {
-            val payload = EscPos58Renderer.buildKapbomSelfTestPayload(
+            val payload = EscPos58Renderer.buildSelfTestPayload(
                 restaurantName = restaurantName,
                 printerName = target.name,
                 printerAddress = target.normalizedAddress,
+                profile = target.profile,
             )
             val result = btAdapter.sendRawPayload(target, payload)
             runOnUiThread {

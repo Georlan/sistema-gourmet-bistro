@@ -55,9 +55,13 @@ export function useCashierRealtime({
     };
 
     window.addEventListener('focus', reconcileOnResume);
+    window.addEventListener('pageshow', reconcileOnResume);
+    window.addEventListener('online', reconcileOnResume);
     document.addEventListener('visibilitychange', reconcileOnResume);
     return () => {
       window.removeEventListener('focus', reconcileOnResume);
+      window.removeEventListener('pageshow', reconcileOnResume);
+      window.removeEventListener('online', reconcileOnResume);
       document.removeEventListener('visibilitychange', reconcileOnResume);
     };
   }, [activeTab]);

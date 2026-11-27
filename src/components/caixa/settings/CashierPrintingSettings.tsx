@@ -80,6 +80,11 @@ export function CashierPrintingSettings({
   const [mobileDeepLink, setMobileDeepLink] = useState<string | null>(null);
   const [copiedMobileLink, setCopiedMobileLink] = useState(false);
 
+  const userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const isAndroidClient = /android/i.test(userAgent);
+  const isIosClient = /iphone|ipad|ipod/i.test(userAgent)
+    || (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 1 && /macintosh/i.test(userAgent));
+
   if (printingSettingsTab !== 'impressao') {
     return null;
   }
@@ -97,7 +102,7 @@ export function CashierPrintingSettings({
           ...authHeaders,
           'Content-Type': 'application/json',
         },
-        // Pair this device without displacing the restaurant's primary printer.
+        // Pair this device without displacing an existing primary printer.
         body: JSON.stringify({ agent_id: requestedAgentId, is_primary: false }),
       });
       const data = await response.json().catch(() => null);
@@ -110,13 +115,13 @@ export function CashierPrintingSettings({
       if (typeof window !== 'undefined') {
         localStorage.setItem(`koma_print_mobile_agent_id:${tenantId}`, agentId);
       }
-      const restaurantName = printHeader || 'KOMA GOURMET';
+      const restaurantName = printHeader || data.restaurant_name || 'KOMA GOURMET';
       const deepLink = `koma-print://connect?backend=${encodeURIComponent(apiBaseUrl)}&tenant=${tenantId}&name=${encodeURIComponent(restaurantName)}&agent_id=${encodeURIComponent(agentId)}&token=${encodeURIComponent(agentToken)}`;
 
       setMobileDeepLink(deepLink);
 
-      // Se o operador estiver no navegador mobile, dispara o intent automaticamente
-      if (/android|iphone|ipad|mobile/i.test(navigator.userAgent)) {
+      // Apenas Android suporta o app nativo Bluetooth Classic SPP via intent.
+      if (isAndroidClient) {
         window.location.href = deepLink;
       }
     } catch (err) {
@@ -192,17 +197,17 @@ export function CashierPrintingSettings({
           </div>
         ) : (
           <>
-            <div className="overflow-hidden rounded-2xl border border-koma-border bg-koma-panel p-4 shadow-xs">
+            <div className="overflow-hidden rounded-2xl border border-koma-border bg-koma-panel p-4 shadow-xs space-y-3">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="space-y-0.5">
+                <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <Smartphone size={16} className="text-emerald-500" />
                     <strong className="text-xs font-bold text-koma-foreground">
-                      Celular Android • Impressora Bluetooth 58mm
+                      Celular Android • Impressora Bluetooth (58 mm e 80 mm)
                     </strong>
                   </div>
                   <p className="text-[11px] text-koma-muted leading-relaxed">
-                    Conecte o celular com 1 toque para imprimir direto na Kapbom KA-1445 via Bluetooth, sem computador e sem RawBT.
+                    Imprima direto do celular via Bluetooth SPP (Kapbom, Elgin, Bematech, MPT-II, Goojprt e compatíveis), sem computador e sem RawBT.
                   </p>
                   {mobileConnectError && (
                     <p className="text-[11px] font-semibold text-rose-500">{mobileConnectError}</p>
@@ -212,7 +217,7 @@ export function CashierPrintingSettings({
                   type="button"
                   onClick={handleConnectMobilePrinter}
                   disabled={isConnectingMobile}
-                  className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl koma-btn-success px-4 text-xs font-bold transition disabled:cursor-wait disabled:opacity-60 cursor-pointer shadow-xs"
+                  className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-xl koma-btn-success px-4 text-xs font-bold transition disabled:cursor-wait disabled:opacity-60 cursor-pointer shadow-xs"
                 >
                   {isConnectingMobile ? (
                     <RefreshCw size={15} className="animate-spin" />
@@ -222,15 +227,44 @@ export function CashierPrintingSettings({
                   {isConnectingMobile ? 'Gerando conexão…' : 'Conectar Celular'}
                 </button>
               </div>
+
+              <ol className="grid grid-cols-1 gap-2 border-t border-koma-border pt-3 text-[11px] text-koma-muted sm:grid-cols-4">
+                <li className="rounded-xl border border-koma-border bg-koma-card/60 px-3 py-2">
+                  <strong className="block text-koma-foreground">1. Parear Bluetooth</strong>
+                  <span>Ligue a térmica e pareie nas configurações Bluetooth do Android.</span>
+                </li>
+                <li className="rounded-xl border border-koma-border bg-koma-card/60 px-3 py-2">
+                  <strong className="block text-koma-foreground">2. Abrir KÔMA Print</strong>
+                  <span>Tenha o aplicativo KÔMA Print Android instalado no aparelho.</span>
+                </li>
+                <li className="rounded-xl border border-koma-border bg-koma-card/60 px-3 py-2">
+                  <strong className="block text-koma-foreground">3. Vincular loja</strong>
+                  <span>Toque em Conectar Celular (ou leia o QR Code) sem digitar tokens.</span>
+                </li>
+                <li className="rounded-xl border border-koma-border bg-koma-card/60 px-3 py-2">
+                  <strong className="block text-koma-foreground">4. Conferir papel</strong>
+                  <span>Envie o teste e confirme fisicamente a saída do cupom no papel.</span>
+                </li>
+              </ol>
+
+              {isIosClient && (
+                <div
+                  role="note"
+                  className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] text-koma-foreground"
+                >
+                  <strong>iPhone / iPad (iOS):</strong> o Safari e o iOS não liberam conexão direta Bluetooth Classic (SPP) para impressoras térmicas pelo navegador. Use este iPhone para acompanhar os pedidos e conecte um celular Android (via QR Code acima) para imprimir.
+                </div>
+              )}
             </div>
 
             {mobileDeepLink && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
                 <div className="relative w-full max-w-sm rounded-3xl border border-koma-border bg-koma-panel p-6 shadow-2xl space-y-4 text-center">
                   <button
                     type="button"
                     onClick={() => setMobileDeepLink(null)}
-                    className="absolute top-4 right-4 text-koma-muted hover:text-koma-foreground transition cursor-pointer"
+                    aria-label="Fechar janela de conexão mobile"
+                    className="absolute top-3 right-3 grid min-h-11 min-w-11 place-items-center text-koma-muted hover:text-koma-foreground transition cursor-pointer"
                     title="Fechar"
                   >
                     <X size={18} />
@@ -241,7 +275,7 @@ export function CashierPrintingSettings({
                       Conectar Celular ao KÔMA Print
                     </h4>
                     <p className="text-[11px] text-koma-muted leading-relaxed">
-                      Aponte a câmera do celular para o QR Code abaixo ou abra diretamente no app.
+                      Aponte a câmera do celular Android para o QR Code abaixo ou abra diretamente no app.
                     </p>
                   </div>
 
@@ -250,13 +284,15 @@ export function CashierPrintingSettings({
                   </div>
 
                   <div className="flex flex-col gap-2 pt-1">
-                    <a
-                      href={mobileDeepLink}
-                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer"
-                    >
-                      <ExternalLink size={15} />
-                      Abrir no KÔMA Print deste celular
-                    </a>
+                    {!isIosClient && (
+                      <a
+                        href={mobileDeepLink}
+                        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition cursor-pointer"
+                      >
+                        <ExternalLink size={15} />
+                        Abrir no KÔMA Print deste celular
+                      </a>
+                    )}
                     <button
                       type="button"
                       onClick={async () => {
@@ -264,7 +300,7 @@ export function CashierPrintingSettings({
                         setCopiedMobileLink(true);
                         window.setTimeout(() => setCopiedMobileLink(false), 2000);
                       }}
-                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card hover:bg-koma-raised text-koma-foreground text-xs font-semibold transition cursor-pointer"
+                      className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card hover:bg-koma-raised text-koma-foreground text-xs font-semibold transition cursor-pointer"
                     >
                       {copiedMobileLink ? <Check size={15} className="text-emerald-500" /> : <Copy size={15} />}
                       {copiedMobileLink ? 'Link copiado!' : 'Copiar link de conexão'}

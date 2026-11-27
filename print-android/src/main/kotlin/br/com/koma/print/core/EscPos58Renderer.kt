@@ -552,34 +552,49 @@ object EscPos58Renderer {
         return INITIALIZE + PORTUGUESE_CODE_PAGE + body + feedBytes + cutBytes
     }
 
-    fun buildKapbomSelfTestPayload(
+    fun buildSelfTestPayload(
         restaurantName: String = "JE LANCHES",
         printerName: String = "Kapbom KA-1445",
         printerAddress: String = "00:00:00:00:00:00",
+        profile: PrinterPaperProfile = PrinterPaperProfile.KAPBOM_KA1445_58MM,
     ): ByteArray {
+        val width = profile.columns.coerceAtLeast(32)
+        val eq = "=".repeat(width)
+        val dash = "-".repeat(width)
         val sampleText = buildString {
-            appendLine("================================")
-            appendLine("          $restaurantName          ")
-            appendLine("      TESTE REAL KOMA 58MM      ")
-            appendLine("================================")
+            appendLine(eq)
+            appendLine(centerInWidth(restaurantName.take(width), width))
+            appendLine(centerInWidth("TESTE REAL KOMA ${profile.paperWidthMm}MM", width))
+            appendLine(eq)
             appendLine("IMPRESSORA: $printerName")
             appendLine("BLUETOOTH: $printerAddress")
-            appendLine("PAPEL: 58mm (32 colunas)")
-            appendLine("--------------------------------")
-            appendLine("1x X-Burguer              R$12,00")
-            appendLine("  + Bacon                 R$ 2,00")
-            appendLine("1x Suco de Acerola 300ml  R$ 5,00")
-            appendLine("--------------------------------")
-            appendLine("TOTAL DO PEDIDO           R$19,00")
+            appendLine("PAPEL: ${profile.paperWidthMm}mm (${profile.columns} colunas)")
+            appendLine(dash)
+            appendLine(compactPair("1x X-Burguer", "R$12,00", width).first())
+            appendLine(compactPair("  + Bacon", "R$ 2,00", width).first())
+            appendLine(compactPair("1x Suco Acerola 300ml", "R$ 5,00", width).first())
+            appendLine(dash)
+            appendLine(compactPair("TOTAL DO PEDIDO", "R$19,00", width).first())
             appendLine("MODALIDADE: RETIRADA NA LOJA")
             appendLine("PAGAMENTO: PIX / DINHEIRO")
-            appendLine("================================")
-            appendLine("       DOCUMENTO NAO FISCAL     ")
+            appendLine(eq)
+            appendLine(centerInWidth("DOCUMENTO NAO FISCAL", width))
             append("[CUT]")
         }
         return buildEscPosPayload(
             payloadText = sampleText,
-            profile = PrinterPaperProfile.KAPBOM_KA1445_58MM,
+            profile = profile,
         )
     }
+
+    fun buildKapbomSelfTestPayload(
+        restaurantName: String = "JE LANCHES",
+        printerName: String = "Kapbom KA-1445",
+        printerAddress: String = "00:00:00:00:00:00",
+    ): ByteArray = buildSelfTestPayload(
+        restaurantName = restaurantName,
+        printerName = printerName,
+        printerAddress = printerAddress,
+        profile = PrinterPaperProfile.KAPBOM_KA1445_58MM,
+    )
 }
