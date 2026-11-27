@@ -8,6 +8,10 @@ def source(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
+def operational_css() -> str:
+    return source("src/index.css") + "\n" + source("src/components/shared/operationalWorkspace.css")
+
+
 def cashier_rendered_sources() -> list[str]:
     return [
         source("src/components/CaixaPanel.tsx"),
@@ -26,7 +30,7 @@ def test_theme_is_bootstrapped_before_first_paint_and_react_for_every_route():
     main = source("src/main.tsx")
     app = source("src/App.tsx")
     theme = source("src/config/theme.ts")
-    css = source("src/index.css")
+    css = operational_css()
 
     assert "export const KOMA_THEME_STORAGE_KEY = '@koma:theme'" in theme
     assert "value === 'dark' || value === 'light'" in theme
@@ -187,7 +191,7 @@ def test_mobile_contracts_cover_salao_cardapio_relatorios_and_fechamento():
 
 
 def test_orders_kanban_keeps_every_real_stage_side_by_side_on_desktop():
-    css = source("src/index.css")
+    css = operational_css()
     caixa = source("src/components/CaixaPanel.tsx")
     workspace = source("src/components/caixa/orders/CaixaOrdersWorkspace.tsx")
 
@@ -232,7 +236,7 @@ def test_orders_kanban_keeps_every_real_stage_side_by_side_on_desktop():
 
 
 def test_cashier_mobile_uses_one_natural_scroll_owner():
-    css = source("src/index.css")
+    css = operational_css()
     app = source("src/App.tsx")
     caixa = source("src/components/CaixaPanel.tsx")
 
@@ -275,7 +279,7 @@ def test_cashier_mobile_uses_one_natural_scroll_owner():
 
 
 def test_cashier_width_tracks_the_real_content_container_without_page_overflow():
-    css = source("src/index.css")
+    css = operational_css()
     caixa = source("src/components/CaixaPanel.tsx")
     closing = source("src/components/caixa/CaixaFechamentoTab.tsx")
 
@@ -301,7 +305,7 @@ def test_cashier_width_tracks_the_real_content_container_without_page_overflow()
 
 
 def test_cashier_narrow_cards_return_space_to_order_identity():
-    css = source("src/index.css")
+    css = operational_css()
 
     narrow_block = css.split("@container (max-width: 30rem)", 1)[1].split(
         ".cashier-shell .text-\\[8px\\]", 1
@@ -374,7 +378,7 @@ def test_waiter_cart_customization_edits_the_selected_draft_instead_of_appending
 
 
 def test_cashier_low_desktop_height_compacts_non_operational_chrome():
-    css = source("src/index.css")
+    css = operational_css()
 
     assert "@media (min-width: 1024px) and (max-height: 820px)" in css
     low_height_block = css.split(
@@ -393,7 +397,7 @@ def test_cashier_low_desktop_height_compacts_non_operational_chrome():
 
 
 def test_mobile_orders_toolbar_preserves_operational_information_instead_of_hiding_it():
-    css = source("src/index.css")
+    css = operational_css()
     caixa = source("src/components/caixa/orders/CaixaOrdersWorkspace.tsx")
 
     assert "Aceitar pedidos online automaticamente" in caixa
