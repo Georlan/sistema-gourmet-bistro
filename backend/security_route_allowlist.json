@@ -67,6 +67,8 @@
     "POST /api/leads/landing": "public_intentional",
     "POST /api/leads/siaratech": "public_intentional",
     "POST /api/leads/siaratech/visits": "public_intentional",
+    "POST /api/provisioning/public/preview": "public_intentional",
+    "POST /api/provisioning/public/start": "public_intentional",
     "POST /api/signups": "public_intentional",
     "POST /api/super-admin/token": "public_intentional",
     "POST /api/webhooks/resend": "public_signed_webhook",

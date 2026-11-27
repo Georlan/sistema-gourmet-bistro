@@ -74,6 +74,7 @@ AUTH_KEYWORDS = (
     "authenticate_agent",
     "get_current_agent",
     "verify_agent",
+    "get_express_provisioning_principal",
 )
 
 
