@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .config import settings
+from .config import is_production_environment, settings
 from .database import Base, current_restaurante_id, engine
 from .logging_security import install_sensitive_query_log_filter
 from .routes import (
@@ -148,11 +148,22 @@ async def lifespan(app: FastAPI):
             print("[OUTBOX] Worker de integração finalizado com sucesso.", flush=True)
 
 
+def _public_api_docs_enabled() -> bool:
+    if os.getenv("ENABLE_PUBLIC_API_DOCS", "false").strip().lower() == "true":
+        return True
+    return not is_production_environment(os.getenv("ENVIRONMENT", "production"))
+
+
+_DOCS_ENABLED = _public_api_docs_enabled()
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.PROJECT_VERSION,
     description="Backend API local para o App de Garçons e Caixas do Bistrô",
     lifespan=lifespan,
+    docs_url="/docs" if _DOCS_ENABLED else None,
+    redoc_url="/redoc" if _DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if _DOCS_ENABLED else None,
 )
 
 request_logger = logging.getLogger("koma.http")
@@ -571,13 +582,15 @@ if settings.KOMA_WHATSAPP_AUTOMATION_ENABLED:
 
 @app.get("/")
 def read_root():
-    return {
+    payload = {
         "status": "online",
         "app": settings.PROJECT_NAME,
         "version": settings.PROJECT_VERSION,
         "commit": _deployment_commit(),
-        "docs": "/docs",
     }
+    if _public_api_docs_enabled():
+        payload["docs"] = "/docs"
+    return payload
 
 
 def _deployment_commit() -> str | None:
@@ -614,11 +627,10 @@ def liveness_check():
     }
 
 
-@app.get("/health")
-@app.get("/health/ready")
-def health_check():
-    """Sinaliza prontidão real: sem PostgreSQL, o backend não recebe tráfego."""
+def build_health_diagnostics_payload() -> tuple[bool, dict]:
     from .websocket_manager import manager
+    from .database_diagnostics import get_pool_metrics_snapshot
+
     db_status = "healthy"
     started_at = perf_counter()
     try:
@@ -631,8 +643,6 @@ def health_check():
         db_status = f"unhealthy: {exc}" if is_dev else "unhealthy"
 
     ready = db_status == "healthy"
-    from .database_diagnostics import get_pool_metrics_snapshot
-
     payload = {
         "status": "ok" if ready else "unavailable",
         "version": settings.PROJECT_VERSION,
@@ -648,4 +658,22 @@ def health_check():
             "instance": manager.bus.instance_id[:8] if manager.bus else "local",
         },
     }
-    return JSONResponse(status_code=200 if ready else 503, content=payload)
+    return ready, payload
+
+
+@app.get("/health")
+@app.get("/health/ready")
+def health_check():
+    """Sinaliza prontidão real: sem PostgreSQL, o backend não recebe tráfego."""
+    ready, full_payload = build_health_diagnostics_payload()
+    expose_details = (
+        not is_production_environment(os.getenv("ENVIRONMENT", "production"))
+        or os.getenv("ENABLE_PUBLIC_HEALTH_DIAGNOSTICS", "false").strip().lower() == "true"
+    )
+    if expose_details:
+        return JSONResponse(status_code=200 if ready else 503, content=full_payload)
+    minimal_payload = {
+        "status": full_payload["status"],
+        "database": full_payload["database"],
+    }
+    return JSONResponse(status_code=200 if ready else 503, content=minimal_payload)

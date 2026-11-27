@@ -49,7 +49,7 @@ def test_submit_lead_success_and_deduplication(client):
         data = response.json()
         assert data["success"] is True
         assert data["message"] == "Contato recebido ✓"
-        assert data["deduplicated"] is False
+        assert "deduplicated" not in data
         lead_id = data["lead_id"]
 
         # Verificar no banco
@@ -75,8 +75,8 @@ def test_submit_lead_success_and_deduplication(client):
         assert response2.status_code == 201
         data2 = response2.json()
         assert data2["success"] is True
-        assert data2["lead_id"] == lead_id
-        assert data2["deduplicated"] is True
+        assert "lead_id" not in data2
+        assert "deduplicated" not in data2
 
         # Um reenvio público não autoriza editar o contato ou renovar consentimento.
         db_session.expire_all()
@@ -290,8 +290,8 @@ def test_siara_canonical_and_legacy_routes_share_leads_and_consent(admin_client,
         'consent_whatsapp': True, 'event_slug': 'siara-tech-summit-2026',
     })
     assert new.status_code == 201
-    assert new.json()['deduplicated'] is True
-    assert new.json()['lead_id'] == lead_id
+    assert "deduplicated" not in new.json()
+    assert "lead_id" not in new.json()
     detail = admin_client.get(f'/api/leads/siaratech/{lead_id}').json()
     assert detail['consent_at'] == original['consent_at']
     assert detail['consent_version'] == original['consent_version']
@@ -373,7 +373,7 @@ def test_landing_lead_queues_email_and_telegram_once(client, monkeypatch):
         assert {n.id.rsplit(':', 1)[1] for n in notices} == {'email', 'telegram'}
         assert all('Demo Test' in decrypt_field(n.payload_encrypted) for n in notices)
     retry = client.post('/api/leads/landing', json=payload)
-    assert retry.json()['deduplicated'] is True
-    assert retry.json()['lead_id'] == response.json()['lead_id']
+    assert retry.status_code == 201
+    assert retry.json() == {"success": True, "message": "Contato recebido ✓"}
     rejected = client.post('/api/leads/landing', json={**payload, 'consent_whatsapp': False})
     assert rejected.status_code == 422

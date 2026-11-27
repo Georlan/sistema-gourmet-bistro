@@ -1,7 +1,7 @@
 import uuid
 from typing import List, Literal, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, status
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from sqlalchemy.orm import Session, joinedload
 
@@ -401,12 +401,15 @@ def listar_modificadores_efetivos(db: Session = Depends(get_db), current_user: U
 
 
 @router.get("/publico/{restaurante_id}", response_model=List[GrupoModificadorResponseV2])
-def listar_grupos_publico(restaurante_id: int, db: Session = Depends(get_db)):
-    grupos = db.query(GrupoModificador).filter(
-        GrupoModificador.restaurante_id == restaurante_id,
-        GrupoModificador.tipo != ARCHIVED_MODIFIER_TYPE,
-    ).all()
-    return _serialize_grupos(grupos, db, include_inactive_options=False)
+def listar_grupos_publico(restaurante_id: int = Path(..., gt=0), db: Session = Depends(get_db)):
+    from .cardapio_digital import public_tenant_scope
+
+    with public_tenant_scope(str(restaurante_id), None, db) as rest_id:
+        grupos = db.query(GrupoModificador).filter(
+            GrupoModificador.restaurante_id == rest_id,
+            GrupoModificador.tipo != ARCHIVED_MODIFIER_TYPE,
+        ).all()
+        return _serialize_grupos(grupos, db, include_inactive_options=False)
 
 
 @router.post("/grupos", response_model=GrupoModificadorResponseV2, status_code=status.HTTP_201_CREATED)

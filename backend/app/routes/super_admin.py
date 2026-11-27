@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 import jwt
 import httpx
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import func, text
 from pydantic import BaseModel, Field
 
@@ -211,6 +212,16 @@ def _sanitize_audit_data(data: Any) -> Any:
         else:
             sanitized[k] = v
     return sanitized
+
+
+@router.get("/health/diagnostics")
+def super_admin_health_diagnostics(admin: dict = Depends(get_current_admin)):
+    """Diagnóstico detalhado de pool DB e WebSockets restrito ao Super Admin."""
+    del admin
+    from ..main import build_health_diagnostics_payload
+
+    ready, payload = build_health_diagnostics_payload()
+    return JSONResponse(status_code=200 if ready else 503, content=payload)
 
 
 @router.get("/restaurantes")

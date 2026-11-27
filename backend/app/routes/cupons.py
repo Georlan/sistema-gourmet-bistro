@@ -3,7 +3,7 @@ import math
 import uuid
 from typing import List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
@@ -551,8 +551,8 @@ def deletar_cupom(
 
 @public_router.get("/beneficios")
 def listar_beneficios_publicos(
-    restaurante_id: int,
     response: Response,
+    restaurante_id: int = Query(..., gt=0),
     db: Session = Depends(get_db),
 ):
     """Entrega apenas regras promocionais seguras para exibição no cardápio público.

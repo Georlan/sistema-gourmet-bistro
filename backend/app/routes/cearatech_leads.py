@@ -259,14 +259,11 @@ def submit_cearatech_lead(
     )
 
     if existing:
-        # Knowing a phone number is not authorization to edit a global contact
-        # or renew its consent. A public retry is acknowledgement only.
+        # Knowing a phone number is not authorization to edit a global contact,
+        # renew its consent, or enumerate existing leads/signup links.
         return {
             "success": True,
-            "lead_id": existing.id,
-            "signup_url": signup_url(existing),
             "message": "Contato recebido ✓",
-            "deduplicated": True,
         }
 
     lead = KomaEventLead(
@@ -303,7 +300,6 @@ def submit_cearatech_lead(
         "lead_id": lead.id,
         "signup_url": signup_url(lead),
         "message": "Contato recebido ✓",
-        "deduplicated": False,
     }
 
 
