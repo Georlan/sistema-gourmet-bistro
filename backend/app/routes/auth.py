@@ -19,10 +19,13 @@ from ..security import (
     revoke_user_sessions,
     verify_password,
 )
+from ..services.client_ip import resolve_client_ip
 from ..services.staff_login_rate_limit import (
     clear_staff_login_failures,
     record_staff_login_failure,
+    record_unknown_staff_login_failure,
     staff_login_is_blocked,
+    unknown_staff_login_is_blocked,
 )
 from ..services.team_invitations import enqueue_invite, with_delivery_status
 from ..schemas import TeamInviteResend
@@ -53,11 +56,11 @@ router = APIRouter(
 )
 
 
+_DUMMY_PASSWORD_HASH = get_password_hash("koma-anti-timing-dummy-password-2026")
+
+
 def _client_ip(request: Request) -> str:
-    forwarded = (request.headers.get("x-forwarded-for") or "").split(",", 1)[0].strip()
-    if forwarded:
-        return forwarded
-    return request.client.host if request.client else "unknown"
+    return resolve_client_ip(request)
 
 
 def _lookup_users_before_tenant(
@@ -210,16 +213,29 @@ def login(
     )
     candidate_restaurants = [candidate.get("restaurante_id") for candidate in candidates]
 
-    if candidates and staff_login_is_blocked(
-        db,
-        candidate_restaurants,
-        identifier=username_val,
-        client_ip=client_ip,
+    if (
+        candidates
+        and staff_login_is_blocked(
+            db,
+            candidate_restaurants,
+            identifier=username_val,
+            client_ip=client_ip,
+        )
+    ) or (
+        not candidates
+        and unknown_staff_login_is_blocked(
+            identifier=username_val,
+            client_ip=client_ip,
+        )
     ):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Muitas tentativas de login. Aguarde alguns minutos e tente novamente.",
         )
+
+    if not candidates:
+        # Equaliza o custo de CPU com uma verificação bcrypt real antes de falhar.
+        verify_password(login_data.password or "", _DUMMY_PASSWORD_HASH)
 
     try:
         identity = _select_login_identity(candidates, login_data.password)
@@ -235,11 +251,15 @@ def login(
             )
         raise
     if not identity:
-        blocked = False
         if candidates:
             blocked = record_staff_login_failure(
                 db,
                 candidate_restaurants,
+                identifier=username_val,
+                client_ip=client_ip,
+            )
+        else:
+            blocked = record_unknown_staff_login_failure(
                 identifier=username_val,
                 client_ip=client_ip,
             )

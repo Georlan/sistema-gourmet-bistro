@@ -124,18 +124,12 @@ def _extract_client_info(request: Request = None) -> tuple[str, str]:
     """Extrai e sanitiza IP de origem e User-Agent para observabilidade segura."""
     if request is None:
         return "unknown", "unknown"
-    cf_ip = request.headers.get("cf-connecting-ip")
-    if cf_ip:
-        ip = _sanitize_ip(cf_ip)
-    else:
-        x_forwarded_for = request.headers.get("x-forwarded-for")
-        if x_forwarded_for:
-            first_ip = x_forwarded_for.split(",")[0].strip()
-            ip = _sanitize_ip(first_ip)
-        elif request.client and request.client.host:
-            ip = _sanitize_ip(request.client.host)
-        else:
-            ip = "unknown"
+    from ..services.client_ip import resolve_client_ip
+
+    resolved = resolve_client_ip(request)
+    if resolved in {"testclient", "unknown"} and request.headers.get("cf-connecting-ip"):
+        resolved = request.headers.get("cf-connecting-ip")
+    ip = _sanitize_ip(resolved)
     user_agent = _sanitize_user_agent(request.headers.get("user-agent"))
     return ip, user_agent
 

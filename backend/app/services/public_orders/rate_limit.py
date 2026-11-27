@@ -21,12 +21,12 @@ MAX_PUBLIC_ORDERS_PER_PHONE = 8
 MAX_PUBLIC_ORDERS_PER_IP = 120
 
 
+from ..client_ip import resolve_client_ip
+
+
 def client_ip(request: Request) -> str:
-    """Extrai o IP real do cliente considerando headers de proxy/forwarded."""
-    forwarded = (request.headers.get("x-forwarded-for") or "").split(",", 1)[0].strip()
-    if forwarded:
-        return forwarded
-    return request.client.host if request.client else "unknown"
+    """Extrai o IP confiável do cliente via resolvedor centralizado."""
+    return resolve_client_ip(request)
 
 
 def consume_rate_limit(

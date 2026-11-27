@@ -243,12 +243,10 @@ def submit_cearatech_lead(
     event_slug = "koma-landing" if is_landing else _event_storage_slug(payload.event_slug)
     now_utc = datetime.datetime.now(datetime.timezone.utc)
 
-    ip_header = (
-        request.headers.get("CF-Connecting-IP")
-        or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-        or getattr(request.client, "host", "")
-    )
-    ip_hash = hashlib.sha256(ip_header.encode()).hexdigest()[:32] if ip_header else None
+    from ..services.client_ip import resolve_client_ip
+
+    ip_header = resolve_client_ip(request)
+    ip_hash = hashlib.sha256(ip_header.encode()).hexdigest()[:32] if ip_header and ip_header != "unknown" else None
     user_agent = (request.headers.get("User-Agent") or "")[:250] or None
 
     existing = (

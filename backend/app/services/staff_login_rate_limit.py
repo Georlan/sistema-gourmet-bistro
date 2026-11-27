@@ -16,11 +16,17 @@ the apparent source IP changes on every request.
 from __future__ import annotations
 
 import datetime
+import hashlib
+import hmac
 import os
+import threading
+import time
+from collections import OrderedDict
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..database import tenant_session_scope
 from ..models import PublicRateLimit
 from .customer_auth import hash_public_rate_key
@@ -34,6 +40,51 @@ _MAX_FAILURES_ACCOUNT = max(
     int(os.getenv("STAFF_LOGIN_ACCOUNT_MAX_FAILURES", "32")),
 )
 _WINDOW_SECONDS = max(60, int(os.getenv("STAFF_LOGIN_WINDOW_SECONDS", "900")))
+_UNKNOWN_IDENTITY_LOCK = threading.Lock()
+_UNKNOWN_IDENTITY_BUCKETS: OrderedDict[str, tuple[float, int]] = OrderedDict()
+_UNKNOWN_IDENTITY_MAX_ENTRIES = 8192
+
+
+def _unknown_bucket_key(identifier: str, client_ip: str) -> str:
+    raw = f"{identifier.strip().lower()}|{(client_ip or '').strip() or 'unknown'}"
+    return hmac.new(
+        settings.SECRET_KEY.encode("utf-8"),
+        raw.encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def unknown_staff_login_is_blocked(*, identifier: str, client_ip: str) -> bool:
+    """Aplica o mesmo limiar por (identificador, IP) quando não há candidatos no banco."""
+    key = _unknown_bucket_key(identifier, client_ip)
+    now = time.monotonic()
+    with _UNKNOWN_IDENTITY_LOCK:
+        entry = _UNKNOWN_IDENTITY_BUCKETS.get(key)
+        if entry is None:
+            return False
+        started_at, count = entry
+        if now - started_at >= _WINDOW_SECONDS:
+            _UNKNOWN_IDENTITY_BUCKETS.pop(key, None)
+            return False
+        return count >= _MAX_FAILURES_IP
+
+
+def record_unknown_staff_login_failure(*, identifier: str, client_ip: str) -> bool:
+    """Registra falha para identidade inexistente e retorna True ao atingir o limite."""
+    key = _unknown_bucket_key(identifier, client_ip)
+    now = time.monotonic()
+    with _UNKNOWN_IDENTITY_LOCK:
+        entry = _UNKNOWN_IDENTITY_BUCKETS.get(key)
+        if entry is None or (now - entry[0] >= _WINDOW_SECONDS):
+            _UNKNOWN_IDENTITY_BUCKETS[key] = (now, 1)
+            count = 1
+        else:
+            count = entry[1] + 1
+            _UNKNOWN_IDENTITY_BUCKETS[key] = (entry[0], count)
+        _UNKNOWN_IDENTITY_BUCKETS.move_to_end(key)
+        while len(_UNKNOWN_IDENTITY_BUCKETS) > _UNKNOWN_IDENTITY_MAX_ENTRIES:
+            _UNKNOWN_IDENTITY_BUCKETS.popitem(last=False)
+        return count >= _MAX_FAILURES_IP
 
 
 def _utcnow() -> datetime.datetime:
