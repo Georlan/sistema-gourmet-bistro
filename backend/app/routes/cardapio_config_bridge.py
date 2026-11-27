@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends
 
-from ..database import current_restaurante_id
+from ..database import require_tenant_id
+from ..models import Usuario
+from ..security import get_current_user
 from .cardapio_popular import listar_produtos_populares
 
 
@@ -18,22 +20,18 @@ router.add_api_route(
 
 
 @router.get("/caixa/config-cardapio")
-def legacy_cardapio_config_bridge(request: Request):
+def legacy_cardapio_config_bridge(
+    current_user: Usuario = Depends(get_current_user),
+):
     """Compatibilidade interna para a montagem antiga do Caixa sem nova leitura do restaurante.
 
     A tela moderna de Cardápio Online carrega a configuração real exclusivamente em
     ``/api/cardapio-digital/config``. O Caixa ainda dispara este GET durante a montagem
-    do formulário legado oculto; responder a partir do tenant já validado pelo middleware
-    evita uma segunda consulta ao banco enquanto essa montagem é removida do componente
-    monolítico.
+    do formulário legado oculto; exigir ``get_current_user`` garante que tokens
+    revogados, contas desativadas ou tenants suspensos sejam rejeitados.
     """
-    authorization = (request.headers.get("Authorization") or "").strip()
-    restaurante_id = current_restaurante_id.get()
-    if not authorization or not isinstance(restaurante_id, int) or restaurante_id <= 0:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Autenticação necessária.",
-        )
+    del current_user
+    restaurante_id = require_tenant_id()
 
     return {
         "id": restaurante_id,
