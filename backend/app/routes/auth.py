@@ -498,7 +498,12 @@ def update_usuario_access(
             detail="Somente administradores podem alterar contas administrativas.",
         )
 
-    next_role = payload.cargo or target_role
+    next_role = str(payload.cargo or target_role).lower().strip()
+    if next_role in {"admin", "superadmin"} and target_role not in {"admin", "superadmin"}:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Não é permitido promover contas para administrador por esta rota.",
+        )
     next_status = payload.status or str(usuario.status or "pendente_ativacao").lower().strip()
     if str(next_role).lower().strip() == "garcom" and str(next_status).lower().strip() == "ativo":
         require_plan_entitlement(

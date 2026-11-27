@@ -43,7 +43,11 @@ from ...models import Comanda, Item, ItemModificador, Lancamento, Usuario
 from ...schemas import LancamentoResponse
 from ...services.order_numbers import gerar_novo_numero_pedido_atomico
 from ...services.shifts import require_open_cash_shift
-from ...waiter_permissions import require_waiter_permission, waiter_permission_enabled
+from ...waiter_permissions import (
+    require_salon_order_operator,
+    require_waiter_permission,
+    waiter_permission_enabled,
+)
 from ...websocket_manager import manager
 
 logger = logging.getLogger("koma.adapters.waiter.modifiers")
@@ -61,6 +65,7 @@ class WaiterModifiersAdapter:
         current_user: Usuario,
     ):
         rid = require_tenant_id()
+        require_salon_order_operator(current_user, "lançar itens em comandas")
         normalized_idempotency_key = (
             lancamento_in.idempotency_key.strip()
             if lancamento_in.idempotency_key
