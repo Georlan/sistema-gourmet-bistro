@@ -300,8 +300,8 @@ def test_cenario_a_restaurante_convencional_xml_cp_venda_dre_fluxo():
     )
     assert prev_dup.json()["duplicada"] is True
 
-    # 3. Setup financeiro, despesa operacional (aluguel) e pagamento de conta
-    setup = client.get("/b8/financeiro/setup", headers=ctx["headers"]).json()
+    # 3. Setup financeiro (via POST explícito), despesa operacional (aluguel) e pagamento de conta
+    setup = client.post("/b8/financeiro/setup/inicializar", headers=ctx["headers"]).json()
     cat_aluguel = next(c for c in setup["categorias"] if c["codigo"] == "aluguel")
     conta_banco = next(a for a in setup["contas"] if a["tipo"] == "conta_bancaria")
 
@@ -543,7 +543,7 @@ def test_cenario_f_isolamento_multitenant_e_entitlements():
     assert client.get("/b8/supply/lotes", headers=ctx_pocket["headers"]).status_code == 403
 
     # Tenant A cria Conta a Pagar; Tenant B não enxerga nem consegue baixar/cancelar
-    setup_a = client.get("/b8/financeiro/setup", headers=ctx_a["headers"]).json()
+    setup_a = client.post("/b8/financeiro/setup/inicializar", headers=ctx_a["headers"]).json()
     cat_a = setup_a["categorias"][0]["id"]
     cp_a = client.post(
         "/b8/financeiro/contas-pagar",
@@ -568,3 +568,106 @@ def test_cenario_f_isolamento_multitenant_e_entitlements():
         json={"motivo": "Invasão"},
     )
     assert cancel_cross.status_code == 400
+
+
+def test_setup_get_readonly_dre_competencia_e_ordem_producao_campos():
+    ctx = _seed_tenant(98809)
+    client = TestClient(app)
+
+    # 1. GET /b8/financeiro/setup é estritamente read-only em tenant novo (não cria registros)
+    setup_empty = client.get("/b8/financeiro/setup", headers=ctx["headers"])
+    assert setup_empty.status_code == 200
+    assert setup_empty.json() == {"categorias": [], "contas": []}
+
+    # Somente POST /setup/inicializar provisiona o plano de contas padrão
+    setup_init = client.post("/b8/financeiro/setup/inicializar", headers=ctx["headers"])
+    assert setup_init.status_code == 200
+    assert len(setup_init.json()["categorias"]) > 0
+    assert len(setup_init.json()["contas"]) > 0
+
+    # 2. DRE por competência não usa max() com pagamento recebido em outro período
+    ontem = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+    hoje = datetime.date.today().isoformat()
+    # Venda feita ontem (competência ontem), pagamento liquidado hoje
+    db = SessionLocal()
+    try:
+        turno = CaixaTurno(restaurante_id=ctx["rid"], aberto_por_id=ctx["uid"], status="aberto", saldo_inicial=0.0)
+        db.add(turno)
+        db.flush()
+        now = datetime.datetime.now(datetime.timezone.utc)
+        yesterday_utc = now - datetime.timedelta(days=1)
+        cmd = Comanda(
+            id=f"cmd-comp-{uuid.uuid4().hex[:8]}",
+            restaurante_id=ctx["rid"],
+            garcom_id=ctx["uid"],
+            tipo="Consumo no Local",
+            numero_pedido=77,
+            fechada=True,
+            criado_em=yesterday_utc,
+        )
+        db.add(cmd)
+        db.flush()
+        lanc = Lancamento(
+            id=f"lanc-comp-{uuid.uuid4().hex[:8]}",
+            restaurante_id=ctx["rid"],
+            comanda_id=cmd.id,
+            garcom_id=ctx["uid"],
+            status="finalizado",
+            timestamp=yesterday_utc,
+        )
+        db.add(lanc)
+        db.flush()
+        db.add(
+            Item(
+                id=f"it-comp-{uuid.uuid4().hex[:8]}",
+                restaurante_id=ctx["rid"],
+                lancamento_id=lanc.id,
+                comanda_id=cmd.id,
+                produto_id=ctx["prod_id"],
+                preco_unit=55.0,
+                status="preparando",
+            )
+        )
+        db.add(
+            Pagamento(
+                id=f"pag-comp-{uuid.uuid4().hex[:8]}",
+                restaurante_id=ctx["rid"],
+                comanda_id=cmd.id,
+                turno_id=turno.id,
+                valor=55.0,
+                metodo="pix",
+                status="aprovado",
+                criado_em=now,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    dre_hoje = client.get(f"/b8/financeiro/dre?data_inicio={hoje}&data_fim={hoje}", headers=ctx["headers"]).json()
+    assert dre_hoje["linhas"]["receita_vendas_operacionais"] == 0.0
+    dre_ontem = client.get(f"/b8/financeiro/dre?data_inicio={ontem}&data_fim={ontem}", headers=ctx["headers"]).json()
+    assert dre_ontem["linhas"]["receita_vendas_operacionais"] == 55.0
+
+    # 3. Ordem de produção retorna custo_total_insumos, custo_unitario_produzido e concluida_em reais
+    sr = client.post(
+        "/b8/supply/sub-receitas",
+        headers=ctx["headers"],
+        json={
+            "nome": "Massa Teste",
+            "unidade_rendimento": "kg",
+            "rendimento_esperado": 2.0,
+            "ingredientes": [{"insumo_id": ctx["ins_carne_id"], "quantidade": 1.0, "unidade_medida": "kg"}],
+        },
+    ).json()
+    op = client.post(
+        "/b8/supply/ordens-producao",
+        headers=ctx["headers"],
+        json={"sub_receita_id": sr["id"], "quantidade_planejada": 2.0, "quantidade_produzida": 2.0},
+    )
+    assert op.status_code == 201, op.text
+    op_list = client.get("/b8/supply/ordens-producao", headers=ctx["headers"]).json()
+    assert len(op_list) == 1
+    assert "custo_total_insumos" in op_list[0]
+    assert "custo_unitario_produzido" in op_list[0]
+    assert op_list[0]["concluida_em"] is not None

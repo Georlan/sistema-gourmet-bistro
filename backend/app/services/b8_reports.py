@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime
 from decimal import Decimal
 
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ..b8_finance_models import (
@@ -45,7 +45,7 @@ def build_dre_gerencial(
         .filter(
             Item.restaurante_id == restaurante_id,
             Comanda.onboarding_test.is_(False),
-            Comanda.delivery_status != "recusado",
+            or_(Comanda.delivery_status.is_(None), Comanda.delivery_status != "recusado"),
             Item.status != "cancelado",
             Lancamento.status.notin_(("cancelado", "recusado")),
             Lancamento.timestamp >= period.start_utc,
@@ -73,14 +73,34 @@ def build_dre_gerencial(
             Comanda.onboarding_test.is_(False),
             Comanda.criado_em >= period.start_utc,
             Comanda.criado_em < period.end_utc,
-            Comanda.delivery_status != "recusado",
+            or_(Comanda.delivery_status.is_(None), Comanda.delivery_status != "recusado"),
         )
         .one()
     )
     receita_taxas = money(taxas_comandas[0] or 0)
     receita_competencia_pedidos = money(receita_itens + receita_taxas)
-    receita_bruta_vendas = max(receita_competencia_pedidos, money(snapshot.totals.vendas_brutas))
-    deducoes_estornos = money(snapshot.totals.estornos)
+    receita_bruta_vendas = receita_competencia_pedidos
+    # Estornos vinculados às comandas reconhecidas por competência no período (sem misturar caixas de outros períodos)
+    from ..models import Pagamento
+
+    periodo_pag_ids = {
+        str(pid)
+        for (pid,) in (
+            db.query(Pagamento.id)
+            .join(Comanda, and_(Comanda.id == Pagamento.comanda_id, Comanda.restaurante_id == Pagamento.restaurante_id))
+            .filter(
+                Pagamento.restaurante_id == restaurante_id,
+                Comanda.onboarding_test.is_(False),
+                Comanda.criado_em >= period.start_utc,
+                Comanda.criado_em < period.end_utc,
+                or_(Comanda.delivery_status.is_(None), Comanda.delivery_status != "recusado"),
+            )
+            .all()
+        )
+    } if snapshot.refunds else set()
+    deducoes_estornos = money(
+        sum((money(r.valor) for r in snapshot.refunds if str(r.pagamento_id) in periodo_pag_ids), Decimal("0.00"))
+    )
     descontos_vendas = money(taxas_comandas[1] or 0)
 
     # Receitas extras lançadas em ContaReceber por competência (exclui vendas operacionais para não duplicar!)

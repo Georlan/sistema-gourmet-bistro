@@ -146,14 +146,7 @@ class MovimentacaoCreate(BaseModel):
     conta_destino_id: Optional[str] = None
 
 
-@router.get("/setup")
-def get_finance_setup(
-    db: Session = Depends(get_db),
-    _user: Usuario = Depends(_require_fin_read),
-):
-    rest_id = require_tenant_id()
-    cats, accounts = ensure_default_finance_setup(db, rest_id)
-    db.commit()
+def _serialize_finance_setup(cats: list[FinanceCategoria], accounts: list[FinanceConta]) -> dict:
     return {
         "categorias": [
             {"id": c.id, "codigo": c.codigo, "nome": c.nome, "tipo": c.tipo, "sistema": c.sistema}
@@ -172,6 +165,39 @@ def get_finance_setup(
             if a.ativo
         ],
     }
+
+
+@router.get("/setup")
+def get_finance_setup(
+    db: Session = Depends(get_db),
+    _user: Usuario = Depends(_require_fin_read),
+):
+    """Consulta categorias e contas financeiras existentes sem criar registros."""
+    rest_id = require_tenant_id()
+    cats = (
+        db.query(FinanceCategoria)
+        .filter(FinanceCategoria.restaurante_id == rest_id, FinanceCategoria.ativo.is_(True))
+        .all()
+    )
+    accounts = (
+        db.query(FinanceConta)
+        .filter(FinanceConta.restaurante_id == rest_id, FinanceConta.ativo.is_(True))
+        .order_by(FinanceConta.nome.asc())
+        .all()
+    )
+    return _serialize_finance_setup(cats, accounts)
+
+
+@router.post("/setup/inicializar")
+def inicializar_finance_setup(
+    db: Session = Depends(get_db),
+    _user: Usuario = Depends(_require_fin_write),
+):
+    """Provisiona plano de contas e contas financeiras padrão (operação explícita de escrita)."""
+    rest_id = require_tenant_id()
+    cats, accounts = ensure_default_finance_setup(db, rest_id)
+    db.commit()
+    return _serialize_finance_setup(cats, accounts)
 
 
 @router.post("/categorias", status_code=status.HTTP_201_CREATED)

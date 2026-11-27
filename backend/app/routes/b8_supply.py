@@ -322,9 +322,9 @@ def listar_ordens_producao(
             "quantidade_planejada": float(op.quantidade_planejada),
             "quantidade_produzida": float(op.quantidade_produzida or 0),
             "perda_producao": float(op.perda_producao or 0),
-            "rendimento_pct": float(op.rendimento_pct or 0),
-            "custo_total_insumos": float(op.custo_total_insumos or 0),
-            "custo_unitario_produzido": float(op.custo_unitario_produzido or 0),
+            "rendimento_pct": float(op.rendimento_pct) if op.rendimento_pct is not None else None,
+            "custo_total_insumos": float(op.custo_total_insumos) if op.custo_total_insumos is not None else None,
+            "custo_unitario_produzido": float(op.custo_unitario_produzido) if op.custo_unitario_produzido is not None else None,
             "status": op.status,
             "concluida_em": op.concluida_em.isoformat() if op.concluida_em else None,
         }
@@ -360,9 +360,9 @@ def criar_ordem_producao(
     return {
         "id": op.id,
         "status": op.status,
-        "rendimento_pct": float(op.rendimento_pct or 0),
-        "custo_total_insumos": float(op.custo_total_insumos or 0),
-        "custo_unitario_produzido": float(op.custo_unitario_produzido or 0),
+        "rendimento_pct": float(op.rendimento_pct) if op.rendimento_pct is not None else None,
+        "custo_total_insumos": float(op.custo_total_insumos) if op.custo_total_insumos is not None else None,
+        "custo_unitario_produzido": float(op.custo_unitario_produzido) if op.custo_unitario_produzido is not None else None,
         "insumo_destino_id": op.insumo_destino_id,
         "lote_destino_id": op.lote_destino_id,
     }
