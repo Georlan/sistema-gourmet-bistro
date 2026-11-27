@@ -735,35 +735,35 @@ def _is_base_provisional_preparation(db: Session, restaurante_id: int) -> bool:
     db_info = getattr(db, "info", None)
     base_cache = db_info.get("_koma_base_provisional_by_rid") if isinstance(db_info, dict) else None
     if isinstance(base_cache, dict) and rid in base_cache:
-        return bool(base_cache[rid])
+        base_provisional = bool(base_cache[rid])
+    else:
+        def _cache_base(value: bool) -> bool:
+            if isinstance(db_info, dict):
+                db_info.setdefault("_koma_base_provisional_by_rid", {})[rid] = value
+            return value
 
-    def _cache_result(value: bool) -> bool:
-        if isinstance(db_info, dict):
-            db_info.setdefault("_koma_base_provisional_by_rid", {})[rid] = value
-        return value
+        _, after_data = _load_provisioning_audit_snapshot(db, rid)
+        if not isinstance(after_data, dict) or after_data.get("trial_status") != "pending_setup":
+            base_provisional = _cache_base(False)
+        else:
+            sub_exists = (
+                db.query(SaaSSubscription.id)
+                .filter(SaaSSubscription.restaurante_id == rid)
+                .first()
+            )
+            if sub_exists is not None:
+                base_provisional = _cache_base(False)
+            else:
+                from ..contract_models import RestaurantContractAcceptance
+                contract_exists = (
+                    db.query(RestaurantContractAcceptance.id)
+                    .filter(RestaurantContractAcceptance.restaurante_id == rid)
+                    .first()
+                )
+                base_provisional = _cache_base(contract_exists is None)
 
-    _, after_data = _load_provisioning_audit_snapshot(db, rid)
-    if not isinstance(after_data, dict):
-        return _cache_result(False)
-    if after_data.get("trial_status") != "pending_setup":
-        return _cache_result(False)
-
-    sub_exists = (
-        db.query(SaaSSubscription.id)
-        .filter(SaaSSubscription.restaurante_id == rid)
-        .first()
-    )
-    if sub_exists is not None:
-        return _cache_result(False)
-
-    from ..contract_models import RestaurantContractAcceptance
-    contract_exists = (
-        db.query(RestaurantContractAcceptance.id)
-        .filter(RestaurantContractAcceptance.restaurante_id == rid)
-        .first()
-    )
-    if contract_exists is not None:
-        return _cache_result(False)
+    if not base_provisional:
+        return False
 
     # Exceção operacional explícita e reversível configurada apenas quando autorizada.
     allowed_raw = os.getenv("KOMA_PROVISIONAL_OPERATION_ALLOWLIST", "").strip()
@@ -780,9 +780,9 @@ def _is_base_provisional_preparation(db: Session, restaurante_id: int) -> bool:
         )
         if restaurant is not None and str(restaurant.saas_status or "").lower() == "active":
             logger.warning("PROVISIONAL_OPERATION_OVERRIDE tenant=%s", rid)
-            return _cache_result(False)
+            return False
 
-    return _cache_result(True)
+    return True
 
 
 def is_provisional_preparation(

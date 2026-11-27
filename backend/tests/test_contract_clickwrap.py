@@ -173,7 +173,7 @@ def test_accept_persists_immutable_snapshot_and_returns_receipt(client_and_sessi
     assert receipt["commercial"]["trialWaivesFixedFeeOnly"] is True
     assert receipt["documents"]["sourceCommit"] == LEGAL_SOURCE_COMMIT
     assert receipt["documents"]["sourceBlobSha"] == LEGAL_SOURCE_BLOB_SHA
-    assert receipt["evidence"]["sourceIp"] == "203.0.113.25"
+    assert receipt["evidence"]["sourceIp"] == "testclient"
     assert len(receipt["documents"]["terms"]["hash"]) == 64
 
     db = Session()
@@ -185,8 +185,8 @@ def test_accept_persists_immutable_snapshot_and_returns_receipt(client_and_sessi
         assert row.contracting_party_tax_id_last4 == VALID_CNPJ[-4:]
         assert row.representative_tax_id_encrypted != VALID_CPF
         assert decrypt_field(row.representative_tax_id_encrypted) == VALID_CPF
-        assert row.source_ip_encrypted != "203.0.113.25"
-        assert decrypt_field(row.source_ip_encrypted) == "203.0.113.25"
+        assert row.source_ip_encrypted != "testclient"
+        assert decrypt_field(row.source_ip_encrypted) == "testclient"
         assert row.terms_hash == receipt["documents"]["terms"]["hash"]
         assert json.loads(decrypt_field(row.receipt_snapshot_encrypted))["protocol"] == data["protocol"]
     finally:

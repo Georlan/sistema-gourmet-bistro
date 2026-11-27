@@ -53,6 +53,7 @@ def setup_caixa_pdv():
 
         # Limpa o fluxo financeiro/operacional criado por testes anteriores.
         db.query(PrintJob).filter(PrintJob.restaurante_id == 777).delete()
+        db.query(PagamentoAlocacao).filter(PagamentoAlocacao.restaurante_id == 777).delete()
         db.query(Pagamento).filter(Pagamento.restaurante_id == 777).delete()
         db.query(Item).filter(Item.restaurante_id == 777).delete()
         db.query(Lancamento).filter(Lancamento.restaurante_id == 777).delete()
