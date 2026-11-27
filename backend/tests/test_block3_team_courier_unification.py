@@ -448,9 +448,9 @@ def test_10_e_11_pro_opera_delivery_sem_pwa():
     )
     assert res_disp.status_code == 200
 
-    # Pro não pode gerar link PWA
+    # Pro inclui courier_app no contrato Business V2-A e pode gerar link PWA
     res_link = client.post(f"/comandas/motoboys/{mb_id}/gerar-link", headers=headers)
-    assert res_link.status_code == 403
+    assert res_link.status_code == 200
 
 
 def test_12_premium_opera_com_pwa_fluxo_completo():
@@ -543,14 +543,33 @@ def test_13_e_14_override_explicito_courier_app():
         db.commit()
 
         mb_prem = db.query(Motoboy).filter(Motoboy.restaurante_id == PREMIUM_TENANT, Motoboy.ativo == True).first()
+        if mb_prem is None:
+            mb_prem = Motoboy(
+                restaurante_id=PREMIUM_TENANT,
+                nome="Motoboy Override Premium",
+                telefone=_gen_phone(),
+                ativo=True,
+            )
+            db.add(mb_prem)
         mb_pocket = db.query(Motoboy).filter(Motoboy.restaurante_id == POCKET_TENANT, Motoboy.ativo == True).first()
+        if mb_pocket is None:
+            mb_pocket = Motoboy(
+                restaurante_id=POCKET_TENANT,
+                nome="Motoboy Override Pocket",
+                telefone=_gen_phone(),
+                ativo=True,
+            )
+            db.add(mb_pocket)
+        db.commit()
+        mb_prem_id = mb_prem.id
+        mb_pocket_id = mb_pocket.id
 
     # Premium com courier_app=false falha fechado (403)
-    res_prem = client.post(f"/comandas/motoboys/{mb_prem.id}/gerar-link", headers=headers_prem)
+    res_prem = client.post(f"/comandas/motoboys/{mb_prem_id}/gerar-link", headers=headers_prem)
     assert res_prem.status_code == 403
 
     # Pocket com courier_app=true gera link com sucesso (200)
-    res_pocket = client.post(f"/comandas/motoboys/{mb_pocket.id}/gerar-link", headers=headers_pocket)
+    res_pocket = client.post(f"/comandas/motoboys/{mb_pocket_id}/gerar-link", headers=headers_pocket)
     assert res_pocket.status_code == 200
 
 

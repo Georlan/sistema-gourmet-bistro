@@ -66,8 +66,8 @@ def test_exchange_requires_active_user_and_linked_profile(identity,state):
         db.commit()
     assert client.post(PATH,headers=headers(identity)).status_code in (401,403)
 
-@pytest.mark.parametrize('plan',['pocket','pro'])
-def test_exchange_preserves_plan_entitlement(identity,plan):
+@pytest.mark.parametrize(('plan', 'expected_status'), [('pocket', 403), ('pro', 200)])
+def test_exchange_preserves_plan_entitlement(identity, plan, expected_status):
     with SessionLocal() as db:
         db.get(Restaurante,identity[0]).plano=plan;db.commit()
-    assert client.post(PATH,headers=headers(identity)).status_code == 403
+    assert client.post(PATH,headers=headers(identity)).status_code == expected_status
