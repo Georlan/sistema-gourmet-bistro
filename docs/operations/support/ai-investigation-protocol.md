@@ -4,7 +4,12 @@ Este protocolo define a sequência padrão que qualquer agente de engenharia/sup
 
 ## 1. Sequência obrigatória de diagnóstico (somente leitura)
 
-1. Executar triagem estruturada:
+1. Se houver identificador durável de investigação (`INV-...`), executar triagem ou executor read-only:
+   ```bash
+   npm run ops:triage -- --tenant <TENANT_ID> --investigation <INV_ID> --json
+   npm run ops:investigate -- --investigation <INV_ID> --mode codex-readonly --json
+   ```
+   Ou, com `support_code` / sintoma direto:
    ```bash
    npm run ops:triage -- --support-code <CODIGO> --tenant <TENANT_ID> --symptom "<SINTOMA>" --json
    ```
@@ -17,6 +22,7 @@ Este protocolo define a sequência padrão que qualquer agente de engenharia/sup
    npm run ops:trace -- <CODIGO>
    ```
 4. Cruzar evidências observadas com `docs/operations/incident-memory/index.json` antes de propor correção de código ou orientar cliente via `/?go=<id>`.
+5. Para atendimento humano de Nível 1 (com print + envio à IA), seguir [`docs/operations/support/first-level-support-playbook.md`](./first-level-support-playbook.md).
 
 ## 2. Regras de segurança e isolamento
 
