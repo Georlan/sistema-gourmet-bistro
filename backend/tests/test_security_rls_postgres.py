@@ -32,14 +32,14 @@ def test_postgres_rls_runtime_role_and_cross_tenant_isolation():
                 conn.execute(
                     text(
                         "INSERT INTO categorias (id, restaurante_id, nome) "
-                        "VALUES (:id, :rid, :nome) ON CONFLICT (id) DO NOTHING"
+                        "VALUES (:id, :rid, :nome) ON CONFLICT DO NOTHING"
                     ),
                     {"id": f"pg-cat-{rid}", "rid": rid, "nome": f"Cat {rid}"},
                 )
                 conn.execute(
                     text(
                         "INSERT INTO produtos (id, restaurante_id, categoria_id, nome, preco, ativo) "
-                        "VALUES (:id, :rid, :cat, :nome, 19.90, true) ON CONFLICT (id) DO NOTHING"
+                        "VALUES (:id, :rid, :cat, :nome, 19.90, true) ON CONFLICT DO NOTHING"
                     ),
                     {"id": f"pg-prod-{rid}", "rid": rid, "cat": f"pg-cat-{rid}", "nome": f"Prod {rid}"},
                 )
