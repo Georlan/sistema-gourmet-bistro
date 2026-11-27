@@ -683,7 +683,7 @@ def listar_opcoes_modificadores(
             "nome": opt.nome,
             "grupo_id": opt.grupo_id,
             "grupo_nome": grupo_nome,
-            "preco": float(opt.preco or 0),
+            "preco": float(opt.preco_adicional or 0),
         }
         for opt, grupo_nome in rows
     ]
