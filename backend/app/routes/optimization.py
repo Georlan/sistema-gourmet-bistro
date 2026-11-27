@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from decimal import Decimal, ROUND_HALF_UP
 import logging
 import datetime
+import math
 
 from ..database import get_db, require_tenant_id
 from ..models import Comanda, Insumo, ConfigFidelizacao, Pagamento, Cliente
@@ -468,6 +469,8 @@ def checkout_fidelidade(
         if recompensa == "PONTOS"
         else Decimal(str(cliente.saldo_cashback or 0))
     )
+    if not math.isfinite(float(req.valor_total)):
+        raise HTTPException(status_code=422, detail="Valor total inválido.")
     valor_total = Decimal(str(req.valor_total)).quantize(
         Decimal("0.01"),
         rounding=ROUND_HALF_UP,
@@ -481,7 +484,10 @@ def checkout_fidelidade(
     try:
         if req.resgatar:
             if recompensa == "PONTOS":
-                pontos_necessarios = Decimal(str(req.pontos_a_resgatar or 0))
+                raw_pontos = float(req.pontos_a_resgatar or 0)
+                if not math.isfinite(raw_pontos) or raw_pontos <= 0:
+                    raise HTTPException(status_code=422, detail="Quantidade de pontos para resgate deve ser positiva.")
+                pontos_necessarios = Decimal(str(raw_pontos))
                 if pontos_necessarios > saldo_atual:
                     raise HTTPException(status_code=400, detail="Pontos insuficientes.")
                 desconto_aplicado = (
