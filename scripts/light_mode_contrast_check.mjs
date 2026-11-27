@@ -4,10 +4,11 @@ import { fileURLToPath } from 'node:url';
 
 const root = new URL('../', import.meta.url);
 const rootPath = fileURLToPath(root);
-// CSS @import is not expanded by this Node audit: read both token owners explicitly.
+// CSS @import is not expanded by this Node audit: read all token owners explicitly.
 const foundationCss = await readFile(new URL('src/styles/komaFoundation.css', root), 'utf8');
 const indexCss = await readFile(new URL('src/index.css', root), 'utf8');
-const combinedCss = `${foundationCss}\n${indexCss}`;
+const operationalWorkspaceCss = await readFile(new URL('src/components/shared/operationalWorkspace.css', root), 'utf8');
+const combinedCss = `${foundationCss}\n${indexCss}\n${operationalWorkspaceCss}`;
 
 // Preserve cascade order. New foundation tokens must not silently escape the AA audit.
 const lightBlocks = [...combinedCss.matchAll(/\[data-koma-theme="light"\]\s*\{([\s\S]*?)\n\}/g)]

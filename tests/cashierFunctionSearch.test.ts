@@ -87,7 +87,8 @@ test('subscription aliases open the canonical account section directly', () => {
 });
 
 test('report aliases open the canonical report section directly', () => {
-  assert.equal(searchCashierFunctions(entries, 'dre')[0]?.id, 'relatorios_financeiro');
+  assert.equal(searchCashierFunctions(entries, 'recebimentos')[0]?.id, 'relatorios_financeiro');
+  assert.equal(searchCashierFunctions(entries, 'estornos')[0]?.id, 'relatorios_financeiro');
   assert.equal(searchCashierFunctions(entries, 'mais vendidos')[0]?.id, 'relatorios_produtos');
   assert.equal(searchCashierFunctions(entries, 'desempenho equipe')[0]?.id, 'relatorios_equipe');
   assert.equal(searchCashierFunctions(entries, 'visão geral')[0]?.id, 'relatorios_visao_geral');
