@@ -149,7 +149,7 @@ jobs:
 
           patterns = {
               "alembic": r'(backend/alembic/|backend/app/.*models\.py$)',
-              "security": r'(security|permissions|cearatech|whatsapp|meta_webhook|multistore|onboarding|team_invite)',
+              "security": r'(security|permissions|cearatech|whatsapp|meta_webhook|multistore|onboarding|team_invite|client_ip|http_limits|logging_security|security_route_allowlist)',
               "payments": r'(direct_pix|saas_pix|online_payments|payment_item|caixa|orders/service|test_b1_cancel_payment_guard|test_critical_pdv_caixa_flow)',
               "inventory": r'(inventory|estoque|orders/service|routes/orders|schemas\.py|test_b1_cancel_payment_guard)',
               "orders": r'(atendimentos|transfer|online_order_control|web_adapter|orders/service|operational_models|test_online_order_reasoned_rejection)',
@@ -258,6 +258,7 @@ jobs:
           KOMA_SECURITY_TEST_DATABASE_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_security
         run: >-
           python -m pytest -q -ra -x
+          backend/tests/test_security_rls_postgres.py
           backend/tests/test_cearatech_lead_authorization.py
           backend/tests/test_whatsapp_webhook_replay_security.py
           backend/tests/test_meta_webhook_and_otp.py
