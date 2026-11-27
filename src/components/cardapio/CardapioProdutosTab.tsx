@@ -5,6 +5,7 @@ import {
   Copy,
   Edit3,
   Eye,
+  FileSpreadsheet,
   GlassWater,
   Gift,
   ImageIcon,
@@ -31,13 +32,26 @@ import type { CatalogCategory } from '../../catalog/catalog';
 import { getEffectiveProductPrice, getProductBadgeLabel } from '../../domain/productMerchandising';
 import { smartSearchMatch } from '../../domain';
 
+export interface BatchEditPayload {
+  reajuste_percentual?: number;
+  reajuste_valor?: number;
+  preco_fixo?: number;
+  categoria_id?: string;
+  destaque?: boolean;
+  adicionar_grupos_modificadores_ids?: string[];
+  remover_grupos_modificadores_ids?: string[];
+}
+
 interface CardapioProdutosTabProps {
   produtos: Product[];
   categorias: CatalogCategory[];
+  customizationGroups?: Array<{ id: string; nome: string }>;
   catalogReady: boolean;
   previewUrl?: string;
   onCreateProduct: () => void;
   onCreateCategory?: () => void;
+  onQuickCreateCategory?: (nome: string, destino: 'COZINHA' | 'BAR' | 'NENHUM') => Promise<CatalogCategory | null>;
+  onOpenImportModal?: () => void;
   onEditProduct: (product: Product) => void;
   onDuplicateProduct: (product: Product) => void;
   onRemoveProduct: (product: Product) => Promise<void>;
@@ -47,7 +61,7 @@ interface CardapioProdutosTabProps {
   onSetCategoryAvailability: (productIds: string[], ativo: boolean) => Promise<void>;
   onBatchEdit: (
     productIds: string[],
-    update: { reajuste_percentual?: number; categoria_id?: string },
+    update: BatchEditPayload,
   ) => Promise<boolean>;
   focusCategoryId?: string | null;
   onFocusCategoryHandled?: () => void;
@@ -56,7 +70,7 @@ interface CardapioProdutosTabProps {
   familyLabels?: Record<string, string>;
 }
 
-type StatusFilter = 'TODOS' | 'ATIVOS' | 'PAUSADOS' | 'DESTAQUES' | 'EM_PROMOCAO';
+type StatusFilter = 'TODOS' | 'ATIVOS' | 'PAUSADOS' | 'DESTAQUES' | 'EM_PROMOCAO' | 'SEM_PRECO';
 type MediaFilter = 'TODAS' | 'SEM_FOTO' | 'UMA_FOTO' | 'GALERIA';
 type ViewMode = 'cards' | 'list';
 
@@ -114,10 +128,13 @@ function parsePriceInput(raw: string): number | null {
 export function CardapioProdutosTab({
   produtos,
   categorias,
+  customizationGroups = [],
   catalogReady,
   previewUrl,
   onCreateProduct,
   onCreateCategory,
+  onQuickCreateCategory,
+  onOpenImportModal,
   onEditProduct,
   onDuplicateProduct,
   onRemoveProduct,
@@ -146,8 +163,13 @@ export function CardapioProdutosTab({
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [editingPriceValue, setEditingPriceValue] = useState('');
   const [savingPriceId, setSavingPriceId] = useState<string | null>(null);
+  const [batchPriceMode, setBatchPriceMode] = useState<'percent' | 'delta' | 'fixed'>('percent');
   const [batchPriceAdjustment, setBatchPriceAdjustment] = useState('');
   const [batchCategoryId, setBatchCategoryId] = useState('');
+  const [batchModifierGroupId, setBatchModifierGroupId] = useState('');
+  const [showInlineCategoryCreate, setShowInlineCategoryCreate] = useState(false);
+  const [inlineCategoryName, setInlineCategoryName] = useState('');
+  const [inlineCategoryRoute, setInlineCategoryRoute] = useState<'COZINHA' | 'BAR' | 'NENHUM'>('COZINHA');
 
   const handleViewModeChange = (next: ViewMode) => {
     setViewMode(next);
@@ -205,6 +227,7 @@ export function CardapioProdutosTab({
     let paused = 0;
     let highlighted = 0;
     let discounted = 0;
+    let zeroPrice = 0;
     for (const product of categoryScopedProducts) {
       if (product.ativo !== false) active += 1;
       else paused += 1;
@@ -212,6 +235,7 @@ export function CardapioProdutosTab({
       if (getEffectiveProductPrice(product.preco, product.preco_promocional).hasDiscount) {
         discounted += 1;
       }
+      if (Number(product.preco || 0) <= 0) zeroPrice += 1;
     }
     return {
       total: categoryScopedProducts.length,
@@ -219,6 +243,7 @@ export function CardapioProdutosTab({
       paused,
       highlighted,
       discounted,
+      zeroPrice,
     };
   }, [categoryScopedProducts]);
 
@@ -242,7 +267,8 @@ export function CardapioProdutosTab({
           || (statusFilter === 'ATIVOS' && isAvailable)
           || (statusFilter === 'PAUSADOS' && !isAvailable)
           || (statusFilter === 'DESTAQUES' && product.destaque === true)
-          || (statusFilter === 'EM_PROMOCAO' && hasPromoPrice);
+          || (statusFilter === 'EM_PROMOCAO' && hasPromoPrice)
+          || (statusFilter === 'SEM_PRECO' && Number(product.preco || 0) <= 0);
         const mediaCount = productMediaCount(product);
         const matchesMedia = mediaFilter === 'TODAS'
           || (mediaFilter === 'SEM_FOTO' && mediaCount === 0)
@@ -306,8 +332,13 @@ export function CardapioProdutosTab({
   const parsedBatchPriceAdjustment = Number(batchPriceAdjustment.replace(',', '.'));
   const batchPriceAdjustmentValid = batchPriceAdjustment.trim() !== ''
     && Number.isFinite(parsedBatchPriceAdjustment)
-    && parsedBatchPriceAdjustment >= -90
-    && parsedBatchPriceAdjustment <= 500;
+    && (
+      batchPriceMode === 'percent'
+        ? parsedBatchPriceAdjustment >= -90 && parsedBatchPriceAdjustment <= 500
+        : batchPriceMode === 'fixed'
+          ? parsedBatchPriceAdjustment >= 0 && parsedBatchPriceAdjustment <= 100_000
+          : parsedBatchPriceAdjustment >= -10_000 && parsedBatchPriceAdjustment <= 10_000
+    );
 
   useEffect(() => {
     const validProductIds = new Set(produtos.map((product) => String(product.id)));
@@ -321,6 +352,9 @@ export function CardapioProdutosTab({
     setSelectedProductIds(new Set());
     setBatchPriceAdjustment('');
     setBatchCategoryId('');
+    setBatchModifierGroupId('');
+    setShowInlineCategoryCreate(false);
+    setInlineCategoryName('');
   };
 
   const leaveSelectionMode = () => {
@@ -357,11 +391,25 @@ export function CardapioProdutosTab({
     }
   };
 
-  const applyBatchEdit = async (update: { reajuste_percentual?: number; categoria_id?: string }) => {
+  const applyBatchEdit = async (update: BatchEditPayload) => {
     if (!selectedCount || pendingBatchAction) return;
     setPendingBatchAction(true);
     try {
       const updated = await onBatchEdit(Array.from(selectedProductIds), update);
+      if (updated) leaveSelectionMode();
+    } finally {
+      setPendingBatchAction(false);
+    }
+  };
+
+  const applyQuickCreateAndMove = async () => {
+    const cleanName = inlineCategoryName.trim();
+    if (!cleanName || !onQuickCreateCategory || !selectedCount || pendingBatchAction) return;
+    setPendingBatchAction(true);
+    try {
+      const created = await onQuickCreateCategory(cleanName, inlineCategoryRoute);
+      if (!created) return;
+      const updated = await onBatchEdit(Array.from(selectedProductIds), { categoria_id: created.id });
       if (updated) leaveSelectionMode();
     } finally {
       setPendingBatchAction(false);
@@ -874,6 +922,16 @@ export function CardapioProdutosTab({
                 </a>
               )}
 
+              {onOpenImportModal && (
+                <button
+                  type="button"
+                  onClick={onOpenImportModal}
+                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-koma-border bg-koma-card px-3.5 text-xs font-semibold text-koma-foreground transition hover:bg-koma-raised"
+                >
+                  <FileSpreadsheet size={15} /> Importar em massa
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={onCreateProduct}
@@ -929,6 +987,24 @@ export function CardapioProdutosTab({
                   </button>
                 );
               })}
+              {statusCounts.zeroPrice > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter(statusFilter === 'SEM_PRECO' ? 'TODOS' : 'SEM_PRECO')}
+                  aria-pressed={statusFilter === 'SEM_PRECO'}
+                  className="min-h-9 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                  style={
+                    statusFilter === 'SEM_PRECO'
+                      ? {
+                          background: 'var(--koma-warning-bg)',
+                          color: 'var(--koma-warning-text)',
+                        }
+                      : { color: 'var(--koma-warning-text)' }
+                  }
+                >
+                  Sem preço <span className="ml-0.5 opacity-80 tabular-nums">{statusCounts.zeroPrice}</span>
+                </button>
+              )}
             </div>
 
             <button
@@ -1007,6 +1083,24 @@ export function CardapioProdutosTab({
                   </button>
                 );
               })}
+              {statusCounts.zeroPrice > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter(statusFilter === 'SEM_PRECO' ? 'TODOS' : 'SEM_PRECO')}
+                  aria-pressed={statusFilter === 'SEM_PRECO'}
+                  className="min-h-9 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                  style={
+                    statusFilter === 'SEM_PRECO'
+                      ? {
+                          background: 'var(--koma-warning-bg)',
+                          color: 'var(--koma-warning-text)',
+                        }
+                      : { color: 'var(--koma-warning-text)' }
+                  }
+                >
+                  Sem preço <span className="ml-0.5 opacity-80 tabular-nums">{statusCounts.zeroPrice}</span>
+                </button>
+              )}
             </div>
           )}
         </section>
@@ -1103,84 +1197,201 @@ export function CardapioProdutosTab({
             </div>
 
             {selectedCount > 0 && (
-              <div className="mt-3 grid gap-2 border-t border-koma-border pt-3 xl:grid-cols-[auto_auto_minmax(14rem,1fr)_minmax(14rem,1fr)]">
-                <button
-                  type="button"
-                  onClick={() => void applyBatchAvailability(false)}
-                  disabled={pendingBatchAction}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-semibold disabled:opacity-50"
-                  style={{
-                    background: 'var(--koma-danger-bg)',
-                    borderColor: 'var(--koma-danger-border)',
-                    color: 'var(--koma-danger-text)',
-                  }}
-                >
-                  <PauseCircle size={15} /> Pausar
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void applyBatchAvailability(true)}
-                  disabled={pendingBatchAction}
-                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-xs font-semibold disabled:opacity-50"
-                  style={{
-                    background: 'var(--koma-action-bg)',
-                    color: 'var(--koma-action-text)',
-                  }}
-                >
-                  <PlayCircle size={15} /> Voltar a vender
-                </button>
-
-                <div className="flex min-w-0 items-center gap-2 rounded-xl border border-koma-border bg-koma-card p-1.5">
-                  <input
-                    type="number"
-                    min={-90}
-                    max={500}
-                    step="0.1"
-                    value={batchPriceAdjustment}
-                    onChange={(event) => setBatchPriceAdjustment(event.target.value)}
-                    placeholder="Reajuste em %"
-                    aria-label="Reajuste percentual dos produtos selecionados"
-                    className="h-9 min-w-0 flex-1 rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-semibold text-koma-foreground tabular-nums outline-none focus:border-koma-border-strong"
-                  />
+              <div className="mt-3 space-y-2 border-t border-koma-border pt-3">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => void applyBatchEdit({ reajuste_percentual: parsedBatchPriceAdjustment })}
-                    disabled={pendingBatchAction || !batchPriceAdjustmentValid}
-                    className="h-9 rounded-lg px-3 text-xs font-semibold disabled:opacity-40"
+                    onClick={() => void applyBatchAvailability(false)}
+                    disabled={pendingBatchAction}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-xs font-semibold disabled:opacity-50"
+                    style={{
+                      background: 'var(--koma-danger-bg)',
+                      borderColor: 'var(--koma-danger-border)',
+                      color: 'var(--koma-danger-text)',
+                    }}
+                  >
+                    <PauseCircle size={15} /> Pausar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void applyBatchAvailability(true)}
+                    disabled={pendingBatchAction}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-xs font-semibold disabled:opacity-50"
                     style={{
                       background: 'var(--koma-action-bg)',
                       color: 'var(--koma-action-text)',
                     }}
                   >
-                    Ajustar preço
+                    <PlayCircle size={15} /> Voltar a vender
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void applyBatchEdit({ destaque: true })}
+                    disabled={pendingBatchAction}
+                    className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 text-xs font-semibold text-koma-foreground disabled:opacity-50"
+                  >
+                    <Star size={14} /> Destacar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void applyBatchEdit({ destaque: false })}
+                    disabled={pendingBatchAction}
+                    className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-koma-border bg-koma-card px-3 text-xs font-semibold text-koma-secondary disabled:opacity-50"
+                  >
+                    Tirar destaque
                   </button>
                 </div>
 
-                <div className="flex min-w-0 items-center gap-2 rounded-xl border border-koma-border bg-koma-card p-1.5">
-                  <select
-                    value={batchCategoryId}
-                    onChange={(event) => setBatchCategoryId(event.target.value)}
-                    aria-label="Nova categoria dos produtos selecionados"
-                    className="h-9 min-w-0 flex-1 rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-semibold text-koma-foreground outline-none focus:border-koma-border-strong"
-                  >
-                    <option value="">Mover para categoria...</option>
-                    {categorias.map((category) => (
-                      <option key={category.id} value={category.id}>{category.nome}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => void applyBatchEdit({ categoria_id: batchCategoryId })}
-                    disabled={pendingBatchAction || !batchCategoryId}
-                    className="h-9 rounded-lg px-3 text-xs font-semibold disabled:opacity-40"
-                    style={{
-                      background: 'var(--koma-action-bg)',
-                      color: 'var(--koma-action-text)',
-                    }}
-                  >
-                    Mover
-                  </button>
+                <div className="grid gap-2 lg:grid-cols-2">
+                  <div className="flex min-w-0 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-card p-1.5">
+                    <select
+                      value={batchPriceMode}
+                      onChange={(e) => setBatchPriceMode(e.target.value as 'percent' | 'delta' | 'fixed')}
+                      aria-label="Modo de alteração de preço em lote"
+                      className="h-10 rounded-lg border border-koma-border bg-koma-panel px-2 text-xs font-semibold text-koma-foreground outline-none"
+                    >
+                      <option value="percent">%</option>
+                      <option value="delta">+/- R$</option>
+                      <option value="fixed">R$ fixo</option>
+                    </select>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={batchPriceAdjustment}
+                      onChange={(event) => setBatchPriceAdjustment(event.target.value)}
+                      placeholder={
+                        batchPriceMode === 'percent'
+                          ? 'Ex.: 10 ou -5'
+                          : batchPriceMode === 'delta'
+                            ? 'Ex.: 2.00 ou -1.50'
+                            : 'Novo preço (R$)'
+                      }
+                      aria-label="Valor da alteração de preço em lote"
+                      className="h-10 min-w-0 flex-1 rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-semibold text-koma-foreground tabular-nums outline-none focus:border-koma-border-strong"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const payload: BatchEditPayload =
+                          batchPriceMode === 'percent'
+                            ? { reajuste_percentual: parsedBatchPriceAdjustment }
+                            : batchPriceMode === 'delta'
+                              ? { reajuste_valor: parsedBatchPriceAdjustment }
+                              : { preco_fixo: parsedBatchPriceAdjustment };
+                        void applyBatchEdit(payload);
+                      }}
+                      disabled={pendingBatchAction || !batchPriceAdjustmentValid}
+                      className="h-10 shrink-0 rounded-lg px-3 text-xs font-semibold disabled:opacity-40"
+                      style={{
+                        background: 'var(--koma-action-bg)',
+                        color: 'var(--koma-action-text)',
+                      }}
+                    >
+                      Ajustar preço
+                    </button>
+                  </div>
+
+                  <div className="flex min-w-0 items-center gap-1.5 rounded-xl border border-koma-border bg-koma-card p-1.5">
+                    <select
+                      value={batchCategoryId}
+                      onChange={(event) => setBatchCategoryId(event.target.value)}
+                      aria-label="Nova categoria dos produtos selecionados"
+                      className="h-10 min-w-0 flex-1 rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-semibold text-koma-foreground outline-none focus:border-koma-border-strong"
+                    >
+                      <option value="">Mover para categoria...</option>
+                      {categorias.map((category) => (
+                        <option key={category.id} value={category.id}>{category.nome}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => void applyBatchEdit({ categoria_id: batchCategoryId })}
+                      disabled={pendingBatchAction || !batchCategoryId}
+                      className="h-10 shrink-0 rounded-lg px-3 text-xs font-semibold disabled:opacity-40"
+                      style={{
+                        background: 'var(--koma-action-bg)',
+                        color: 'var(--koma-action-text)',
+                      }}
+                    >
+                      Mover
+                    </button>
+                    {onQuickCreateCategory && (
+                      <button
+                        type="button"
+                        onClick={() => setShowInlineCategoryCreate((v) => !v)}
+                        title="Criar nova categoria e mover os selecionados"
+                        className="h-10 shrink-0 rounded-lg border border-koma-border bg-koma-raised px-2.5 text-xs font-semibold text-koma-foreground"
+                      >
+                        + Nova
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {showInlineCategoryCreate && onQuickCreateCategory && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-xl border border-koma-border bg-koma-card p-2">
+                    <input
+                      type="text"
+                      value={inlineCategoryName}
+                      onChange={(e) => setInlineCategoryName(e.target.value)}
+                      placeholder="Nome da nova categoria..."
+                      aria-label="Nome da nova categoria em lote"
+                      className="h-10 min-w-[12rem] flex-1 rounded-lg border border-koma-border bg-koma-input px-3 text-xs text-koma-foreground outline-none"
+                    />
+                    <select
+                      value={inlineCategoryRoute}
+                      onChange={(e) => setInlineCategoryRoute(e.target.value as 'COZINHA' | 'BAR' | 'NENHUM')}
+                      aria-label="Destino de preparo da nova categoria"
+                      className="h-10 rounded-lg border border-koma-border bg-koma-input px-2.5 text-xs font-semibold text-koma-foreground outline-none"
+                    >
+                      <option value="COZINHA">Cozinha</option>
+                      <option value="BAR">Bar</option>
+                      <option value="NENHUM">Sem preparo</option>
+                    </select>
+                    <button
+                      type="button"
+                      disabled={pendingBatchAction || !inlineCategoryName.trim()}
+                      onClick={() => void applyQuickCreateAndMove()}
+                      className="h-10 rounded-lg px-3 text-xs font-bold disabled:opacity-40"
+                      style={{ background: 'var(--koma-action-bg)', color: 'var(--koma-action-text)' }}
+                    >
+                      Criar e mover selecionados
+                    </button>
+                  </div>
+                )}
+
+                {customizationGroups.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-xl border border-koma-border bg-koma-card p-1.5">
+                    <select
+                      value={batchModifierGroupId}
+                      onChange={(e) => setBatchModifierGroupId(e.target.value)}
+                      aria-label="Grupo de complementos para os selecionados"
+                      className="h-10 min-w-[12rem] flex-1 rounded-lg border border-koma-border bg-koma-input px-3 text-xs font-semibold text-koma-foreground outline-none"
+                    >
+                      <option value="">Grupo de complementos / adicionais...</option>
+                      {customizationGroups.map((group) => (
+                        <option key={group.id} value={group.id}>{group.nome}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      disabled={pendingBatchAction || !batchModifierGroupId}
+                      onClick={() => void applyBatchEdit({ adicionar_grupos_modificadores_ids: [batchModifierGroupId] })}
+                      className="h-10 rounded-lg px-3 text-xs font-semibold disabled:opacity-40"
+                      style={{ background: 'var(--koma-action-bg)', color: 'var(--koma-action-text)' }}
+                    >
+                      + Vincular grupo
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pendingBatchAction || !batchModifierGroupId}
+                      onClick={() => void applyBatchEdit({ remover_grupos_modificadores_ids: [batchModifierGroupId] })}
+                      className="h-10 rounded-lg border border-koma-border bg-koma-raised px-3 text-xs font-semibold text-koma-secondary disabled:opacity-40"
+                    >
+                      Remover grupo
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -1515,6 +1726,24 @@ export function CardapioProdutosTab({
                   </article>
                 );
               })}
+              {statusCounts.zeroPrice > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter(statusFilter === 'SEM_PRECO' ? 'TODOS' : 'SEM_PRECO')}
+                  aria-pressed={statusFilter === 'SEM_PRECO'}
+                  className="min-h-9 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors"
+                  style={
+                    statusFilter === 'SEM_PRECO'
+                      ? {
+                          background: 'var(--koma-warning-bg)',
+                          color: 'var(--koma-warning-text)',
+                        }
+                      : { color: 'var(--koma-warning-text)' }
+                  }
+                >
+                  Sem preço <span className="ml-0.5 opacity-80 tabular-nums">{statusCounts.zeroPrice}</span>
+                </button>
+              )}
             </div>
           </section>
         )}
