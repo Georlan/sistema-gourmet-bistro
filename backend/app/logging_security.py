@@ -7,12 +7,43 @@ import sys
 _SENSITIVE_QUERY_KEYS = frozenset({
     "token", "access_token", "refresh_token", "client_secret", "authorization",
     "code", "state", "api_key", "apikey", "password", "senha",
+    "key", "idempotency_key", "qa_token", "hub.verify_token", "verify_token",
+    "sig", "signature", "x_signature", "invite_token", "recovery_token",
+    "signup_token", "delivery_token", "customer_token", "agent_token", "secret",
     "telefone", "phone", "phone_number", "celular", "whatsapp",
     "email", "e_mail", "cpf", "cnpj", "documento", "document", "document_number",
     "nome", "name", "endereco", "address", "cliente_id", "customer_id",
     "usuario_id", "user_id", "cliente_telefone", "cliente_nome", "cliente_email",
     "cpf_cliente", "nome_cliente", "customer_phone", "customer_email", "customer_name",
 })
+_SENSITIVE_HEADER_NAMES = frozenset({
+    "authorization",
+    "cookie",
+    "set-cookie",
+    "x-agent-token",
+    "x-koma-customer-token",
+    "x-koma-delivery-token",
+    "x-koma-qa-token",
+    "x-signup-token",
+    "x-koma-whatsapp-secret",
+    "x-hub-signature-256",
+    "x-signature",
+    "x-authenticity-token",
+    "x-payload-signature",
+    "x-koma-monitor-signature",
+})
+
+
+def redact_sensitive_headers(headers) -> dict[str, str]:
+    """Retorna cópia de cabeçalhos HTTP com credenciais e assinaturas mascaradas."""
+    sanitized: dict[str, str] = {}
+    for k, v in (headers.items() if hasattr(headers, "items") else headers):
+        key_str = str(k)
+        if key_str.lower() in _SENSITIVE_HEADER_NAMES:
+            sanitized[key_str] = "[REDACTED]"
+        else:
+            sanitized[key_str] = str(v)
+    return sanitized
 _QUERY_VALUE = re.compile(r"([?&])([^=?&\s\"']+)=([^&\s\"']*)")
 
 
