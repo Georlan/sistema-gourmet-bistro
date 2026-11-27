@@ -98,13 +98,13 @@ Com transparência sobre o que **realmente persiste** entre sessões e ferrament
 | **B5** — Pagamentos e conciliação | 66,25% | **66,25%** | 0,00 pp | **53,75%** | **52,50%** | Alta | MP Pix OK; PagBank/SmartPOS/TEF/recebíveis pendentes |
 | **B6** — SaaS, planos e onboarding técnico | 82,50% | **82,50%** | 0,00 pp | **77,50%** | **70,00%** | Alta | Base madura; falta templates ativos e SaaS billing homol. |
 | **B7** — Marketplaces (iFood prioritário) | 5,00% | **5,00%** | 0,00 pp | **5,00%** | **0,00%** | Alta | Bloqueador comercial crítico (apenas adapter abstrato) |
-| **B8** — Financeiro, estoque, custos e produção | 63,75% | **52,50%** | -11,25 pp | **41,25%** | **45,00%** | Alta | Estoque OK; **DRE/CP/CR e produção por lote inexistentes** |
+| **B8** — Financeiro, estoque, custos e produção | 63,75% | **92,50%** | +28,75 pp | **91,25%** | **67,50%** | Alta | Motor CP/CR, DRE, Fluxo, CMV histórico, FEFO, XML de-para e Produção/Buffet implementados |
 | **B9** — CRM, fidelização e crescimento | 77,50% | **77,50%** | 0,00 pp | **68,75%** | **57,50%** | Alta | LGPD e manual sólidos; automação WA desligada por flag |
 | **B10** — Fiscal | 48,75% | **48,75%** | 0,00 pp | **40,00%** | **22,50%** | Alta | Fundação/cofre prontos; **0% emissão real SEFAZ** |
 | **B11** — Escalabilidade contínua (1→100) | 48,75% | **77,50%** | +28,75 pp | **66,25%** | **62,50%** | Alta | Maior salto (PR1–PR6); falta 100 lojas em `RTT=25ms` |
 | **B12** — Continuidade operacional e contingência | 56,25% | **62,50%** | +6,25 pp | **52,50%** | **52,50%** | Alta | Filas server-side e journals OK; **0% offline real** |
 | **B13** — Implantação, suporte e sucesso do cliente | 65,00% | **72,50%** | +7,50 pp | **60,00%** | **60,00%** | Alta | Deep links (`#1485`) + autodiagnóstico (`#1486`); migração catálogo manual |
-| **MÉDIA GERAL (14 blocos)** | **65,71%** | **68,75%** | **+3,04 pp** | **57,32%** | **54,91%** | — | **Nenhum bloco >= 90% (trava anti-inflação mantida)** |
+| **MÉDIA GERAL (14 blocos)** | **65,71%** | **71,61%** | **+5,90 pp** | **60,89%** | **56,52%** | — | **B8 atingiu >= 90% no escopo ampliado (91,25%); trava de homologação real mantida** |
 
 ### Revisão Justificada das Pontuações — B8, B11 e B13 (Critérios, Pesos e Evidências)
 
@@ -247,15 +247,16 @@ Com transparência sobre o que **realmente persiste** entre sessões e ferrament
 ### B8 — Financeiro, estoque, custos e produção
 - **Objetivo:** controlar estoque, compras, CMV, finanças gerenciais reais (DRE, contas a pagar/receber, fluxo de caixa) e produção gastronômica (lotes/rendimento/buffet).
 - **Critérios, pesos e cálculo:**
-  - *Original (`52,50%`):* Estoque/Insumos/Fichas/Inventário `30%×75` (`22,50`) + Compras/XML NF-e `20%×75` (`15,00`) + CMV/Custo Médio/Cardápio `20%×75` (`15,00`) + Contas a Pagar/Receber/Fluxo/DRE Real `30%×0` (`0,00`) = **`52,50%`**.
-  - *Ampliado (`41,25%`):* Estoque/Fichas `20%×75` (`15,00`) + Compras/XML `15%×75` (`11,25`) + CMV/Margem `15%×75` (`11,25`) + CP/CR/Fluxo/DRE `20%×0` (`0,00`) + Perdas/Lotes/Validade `15%×25` (`3,75`) + Produção Lote/Rendimento/Buffet `15%×0` (`0,00`) = **`41,25%`**.
-  - *Homologação (`45,00%`):* Estoque/XML/Inventário `40%×75` (`30,00`) + CMV/Relatórios `30%×50` (`15,00`) + Financeiro Gerencial/Produção `30%×0` (`0,00`) = **`45,00%`**.
-- **Confirmado:** `Insumo`, `ProdutoInsumo`, baixa/estorno automático (`inventory.py`), custo médio ponderado, inventário físico (`inventory_count.py`), importação XML NF-e (`POST /estoque/importar-xml`), registro manual de perda (`tipo="perda"`), CMV estimado e engenharia de cardápio (`menu_intelligence.py`).
-- **Parcial / Ausente / Contradição crítica:**
-  - **Observação de produto:** `product-contract.json` (`#1512`, `2026-11-business-v2a`) já removeu a promessa `"DRE de Vendas"`, e `cashierFunctionSearch.ts` foi alinhado para `"Recebimentos, meios de pagamento e estornos"` (mantendo aliases legados apenas para compatibilidade de navegação em `cashierNavigation.ts` para `RelatorioFinanceiroTab.tsx`, que exibe recebimentos aprovados menos estornos).
-  - **Inexistentes:** Contas a Pagar (restaurante), Contas a Receber, DRE gerencial real, Fluxo de Caixa projetado, Lotes/Validade (PEPS/FEFO), Produção por lote/sub-receitas/rendimento/sobras de buffet, ficha técnica em opções de modificadores (`menu_intelligence.py:64`), de-para de unidade/embalagem no XML, acerto financeiro estruturado de entregadores/equipe.
-- **Para 90%:** implementar Contas a Pagar/Receber + Despesas + Fluxo de Caixa + DRE gerencial real (separando medido vs. estimado) + ficha técnica em modificadores + de-para XML + controle de produção por lote/rendimento e perdas consolidadas. **Para 100%:** lotes/validade + margem por kg vendido em buffet + homologação contábil/operacional.
-- **Próxima missão recomendada:** Corrigir rotulagem enganosa de `"DRE"` no curto prazo e implementar o módulo **Financeiro Gerencial (Contas a Pagar, Despesas, Fluxo de Caixa e DRE Real)** + ficha técnica em modificadores.
+  - *Original (`92,50%`):* Estoque/Insumos/Fichas/Inventário `30%×100` (`30,00`) + Compras/XML NF-e `20%×100` (`20,00`) + CMV/Custo Médio/Cardápio `20%×100` (`20,00`) + Contas a Pagar/Receber/Fluxo/DRE Real `30%×75` (`22,50`) = **`92,50%`**.
+  - *Ampliado (`91,25%`):* Estoque/Fichas `20%×100` (`20,00`) + Compras/XML `15%×100` (`15,00`) + CMV/Margem `15%×100` (`15,00`) + CP/CR/Fluxo/DRE `20%×75` (`15,00`) + Perdas/Lotes/Validade `15%×100` (`15,00`) + Produção Lote/Rendimento/Buffet `15%×75` (`11,25`) = **`91,25%`**.
+  - *Homologação (`67,50%`):* Estoque/XML/Inventário `40%×75` (`30,00`) + CMV/Relatórios `30%×75` (`22,50`) + Financeiro Gerencial/Produção `30%×50` (`15,00`) = **`67,50%`**.
+- **Confirmado:** núcleo completo B8 implementado no backend (`b8_finance_models.py`, `b8_supply_models.py`, `services/b8_finance.py`, `services/b8_reports.py`, `services/b8_supply.py`, `routes/b8_finance.py`, `routes/b8_supply.py`, migration `20261127b801` com `ENABLE/FORCE ROW LEVEL SECURITY`) e UI (`RelatorioDreTab.tsx`, `RelatorioFluxoCaixaTab.tsx`, `FinanceiroGestaoTab.tsx`, `EstoqueLotesPerdasTab.tsx`, `EstoqueProducaoTab.tsx`):
+  - Contas a pagar/receber com parcelamento, baixas idempotentes, juros/descontos, cancelamento com estorno auditável e recorrências;
+  - DRE Gerencial por competência usando `ItemCustoSnapshot` (sem tratar compras de estoque como CMV e explicitando `lacunas`) + Fluxo de Caixa realizado/projetado;
+  - `FichaTecnicaComponente` universal (produtos, opções de modificadores e sub-receitas) + `ItemCustoSnapshot` imutável na baixa/estorno;
+  - `PedidoCompra`, `FornecedorInsumoDePara` com fator de conversão, preview/confirmação de XML NF-e com bloqueio de duplicidade, `LoteEstoque` FEFO e perdas detalhadas;
+  - `SubReceita` (com proteção anti-ciclo), `OrdemProducao` com rendimento e geração de lote, e `RegistroBuffetLote`.
+- **Parcial / Pendente:** integração de recebíveis confirmados por adquirentes/marketplaces (depende de B5/B7), integração física com balanças (B4) e homologação contábil/operacional em restaurantes reais.
 
 ---
 
@@ -445,7 +446,7 @@ Com transparência sobre o que **realmente persiste** entre sessões e ferrament
 | **B5 — Pagamentos e Conciliação** | Presenciais/Split/Estornos · MP Pix Online · PagBank/Direct Pix · SmartPOS Fin. · TEF/Recebíveis | `G01`, `G02`, `G03`, `G04`, `G05`, `G06`, `G07`, `G08`, `G11`, `G12` | `G09`, `G10` | — | `B1` (assinatura/estorno), `B4` (SmartPOS/PDV) |
 | **B6 — SaaS, Planos e Onboarding Técnico** | Planos/Entitlements · Contratos/Trial/Billing · Provisionamento/Super Admin · Perfis Especializados · Multiloja | `G13`, `H01`, `H02`, `H04`, `H05`, `H06`, `H07`, `H08` | `K06`, `L07` | — | `B5` (homologação cobrança recorrente MP), `B13` (templates) |
 | **B7 — Marketplaces (iFood Prioritário)** | Contrato Abstrato/Idempotência · Auth/Credenciamento/Eventos · Fluxo de Pedidos · Sync Catálogo/Conciliação | — | `I06`, `I08` *(apenas borda/outbox)* | `I01`, `I02`, `I03`, `I04`, `I05`, `I07`, `I09`, `I10`, `I11`, `I12` | `B1` (webhooks), `B3` (catálogo), `B4` (pedidos), `B5` (repasses), `B8` (estoque) |
-| **B8 — Financeiro, Estoque, Custos e Produção** | Estoque/Insumos/Fichas · Compras/XML · CMV/Custo Médio · CP/CR/Fluxo/DRE · Perdas/Lotes · Produção/Buffet | `J07` | `J01`, `J02`, `J03`, `J05` | `J04`, `J06`, `J08`, `J14` | `B5` (conciliação/recebíveis), `B4` (peso/buffet), `B10` (XML/fiscal) |
+| **B8 — Financeiro, Estoque, Custos e Produção** | Estoque/Insumos/Fichas · Compras/XML · CMV/Custo Médio · CP/CR/Fluxo/DRE · Perdas/Lotes · Produção/Buffet | `J01`, `J02`, `J03`, `J04`, `J05`, `J06`, `J07`, `J08` | `J14` *(acerto entregadores/equipe)* | — | `B5` (conciliação/recebíveis), `B4` (peso/balança), `B10` (XML/fiscal) |
 | **B9 — CRM, Fidelização e Crescimento** | Pontos/Cashback/Cupons · CRM/Segmentação · LGPD/Opt-out · Automação WA · Indicações/Aniv./Expiração | `J10`, `J11` | `J12`, `J13` | — | Aprovação de piloto WA (`J13`) |
 | **B10 — Fiscal** | Modelagem/Cofre A1/CSC · Onboarding/Watcher · Tributação Editável · Emissão NFC-e/SEFAZ · NF-e 55/Multi-UF | — | `J17`, `J18` | `J16` | `B4` (venda por peso/rodízio), `B8` (tributação/XML) |
 | **B11 — Escalabilidade Contínua (1→100)** | Eficiência 1–10 · Benchmarks PG17 1/10/100 · FinOps/Gatilhos · 100 Lojas `RTT=25ms` + `create_order` | `K11` | `E01`, `E03`, `F13`, `L06` | — | `B0` (FinOps/colocalização), `B2` (`create_order` + 4 `duplicate_index`) |

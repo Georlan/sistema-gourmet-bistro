@@ -106,7 +106,7 @@ test('cadastros keep sidebar compact while preserving existing workspace owners'
     'Produtos', 'Complementos', 'Promoções e vitrine', 'Preparo e impressão',
   ]);
   assert.deepEqual(estoque?.children?.map((child) => child.label), [
-    'Ingredientes', 'Compras', 'Inventário', 'Fornecedores',
+    'Ingredientes', 'Compras', 'Lotes e perdas', 'Produção', 'Inventário', 'Fornecedores',
   ]);
   assert.deepEqual(clientes?.children?.filter(child => !child.navigationHidden).map(child => child.label), ['Hoje', 'Clientes', 'Campanhas', 'Benefícios', 'Resultados']);
 
@@ -167,6 +167,9 @@ test('gestão expõe relatórios e equipe como destinos canônicos', () => {
   assert.deepEqual(relatorios?.children?.map((child) => child.label), [
     'Visão geral',
     'Recebimentos',
+    'DRE Gerencial',
+    'Fluxo de Caixa',
+    'Contas a pagar e receber',
     'Vendas por produto',
     'Inteligência do Cardápio',
     'Desempenho da equipe',

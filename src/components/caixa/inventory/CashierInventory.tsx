@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Product } from '../../../types';
 import { ContagemEstoqueModal } from '../../estoque/ContagemEstoqueModal';
 import { EntradaManualModal } from '../../estoque/EntradaManualModal';
@@ -6,6 +7,9 @@ import { EstoqueFornecedoresTab } from '../../estoque/EstoqueFornecedoresTab';
 import { EstoqueHistoricoTab } from '../../estoque/EstoqueHistoricoTab';
 import { EstoqueIngredientesTab } from '../../estoque/EstoqueIngredientesTab';
 import { FichaTecnicaModal } from '../../estoque/FichaTecnicaModal';
+
+const EstoqueLotesPerdasTab = lazy(() => import('../../estoque/EstoqueLotesPerdasTab'));
+const EstoqueProducaoTab = lazy(() => import('../../estoque/EstoqueProducaoTab'));
 import { MovimentacaoEstoqueModal } from '../../estoque/MovimentacaoEstoqueModal';
 import { OperationalBanner } from '../../shared/OperationalBanner';
 import type { CashierNotice } from '../cashierContracts';
@@ -358,6 +362,29 @@ export default function CashierInventory({
           />
         </div>
       )}
+      {activeSubTab === 'lotes' && (
+        <Suspense fallback={<div className="p-6 text-xs text-koma-muted">Carregando lotes FEFO...</div>}>
+          <EstoqueLotesPerdasTab
+            apiBaseUrl={apiBaseUrl}
+            authHeaders={authHeaders}
+            insumos={estoqueInsumos}
+            distribuidores={distribuidores}
+            showToast={showToast}
+            onChanged={() => void refreshInventory()}
+          />
+        </Suspense>
+      )}
+      {activeSubTab === 'producao' && (
+        <Suspense fallback={<div className="p-6 text-xs text-koma-muted">Carregando produção e sub-receitas...</div>}>
+          <EstoqueProducaoTab
+            apiBaseUrl={apiBaseUrl}
+            authHeaders={authHeaders}
+            insumos={estoqueInsumos}
+            showToast={showToast}
+            onChanged={() => void refreshInventory()}
+          />
+        </Suspense>
+      )}
       <CashierIngredientDialogs
         showNewInsumoModal={showNewInsumoModal}
         setShowNewInsumoModal={setShowNewInsumoModal}
@@ -412,6 +439,9 @@ export default function CashierInventory({
           produtos={apiProdutos}
           insumos={estoqueInsumos}
           fichas={fichasTecnicas}
+          apiBaseUrl={apiBaseUrl}
+          authHeaders={authHeaders}
+          showToast={showToast}
           onClose={() => setShowFichaTecnicaModal(false)}
           onSave={saveRecipe}
         />
