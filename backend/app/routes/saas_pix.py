@@ -115,8 +115,10 @@ def available_checkout_methods():
 
 
 @contract_router.post("/{protocol}/billing/pix/select")
-def select_contract_pix(protocol: str, db: Session = Depends(get_db)):
+def select_contract_pix(protocol: str, request: Request, db: Session = Depends(get_db)):
     """Seleciona Pix universal sem criar cobrança durante onboarding/trial."""
+    from .saas_billing import _billing_mutation_limiter
+    _billing_mutation_limiter.check(request, key_suffix=protocol.strip().upper()[:64])
     pix_ready, _ = _pix_available()
 
     normalized_protocol = _normalize_protocol(protocol)
@@ -660,9 +662,13 @@ async def mercado_pago_saas_pix_webhook(
     x_request_id: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
+    from ..services.http_limits import read_limited_json
+
     try:
-        payload = await request.json()
-    except Exception:
+        payload = await read_limited_json(request, allow_empty=True)
+    except HTTPException as exc:
+        if exc.status_code == 413:
+            raise
         payload = {}
     raw_data = payload.get("data") if isinstance(payload, dict) else None
     data = raw_data if isinstance(raw_data, dict) else {}

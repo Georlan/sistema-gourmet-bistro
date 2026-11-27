@@ -303,8 +303,10 @@ async def mercado_pago_application_webhook(
     uma intenção conhecida; a assinatura ainda é validada com o segredo da conta
     antes de qualquer reconciliação.
     """
-    payload = await request.json()
-    if not isinstance(payload, dict) or str(payload.get("type") or "").strip() != "payment":
+    from ..services.http_limits import read_limited_json
+
+    payload = await read_limited_json(request, allow_empty=False, invalid_detail="Notificação de pagamento inválida.")
+    if str(payload.get("type") or "").strip() != "payment":
         raise HTTPException(status_code=400, detail="Notificação de pagamento inválida.")
 
     payment_id = _mercado_pago_webhook_payment_id(payload, request)
@@ -338,7 +340,9 @@ async def mercado_pago_webhook(
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
-    payload = await request.json()
+    from ..services.http_limits import read_limited_json
+
+    payload = await read_limited_json(request, allow_empty=False, invalid_detail="Notificação de pagamento inválida.")
     payment_id = _mercado_pago_webhook_payment_id(payload, request)
     if not payment_id:
         raise HTTPException(status_code=400, detail="Notificação de pagamento inválida.")

@@ -39,10 +39,16 @@ from ..services.saas_mercadopago import (
 )
 from ..services.signup_notifications import enqueue_release_required
 
+from ..security import IPRateLimiter
+from ..services.http_limits import read_limited_json
+
 logger = logging.getLogger("koma.routes.saas_billing")
 
 router = APIRouter(prefix="/api/contracts", tags=["SaaS Billing"])
 webhook_router = APIRouter(prefix=SAAS_MERCADO_PAGO_WEBHOOK_PREFIX, tags=["SaaS Billing Webhook"])
+
+_billing_mutation_limiter = IPRateLimiter(requests_per_minute=20)
+_billing_status_limiter = IPRateLimiter(requests_per_minute=60)
 
 _PROTOCOL_RE = re.compile(r"^KOMA-CTR-\d{8}-[A-F0-9]{12}$")
 _MONEY_QUANTUM = Decimal("0.01")
@@ -161,9 +167,11 @@ def available_payment_methods():
 @router.post("/{protocol}/billing/activate-free")
 def activate_contract_without_fixed_billing(
     protocol: str,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Ativa contrato com billingAmount zero sem criar assinatura no provedor."""
+    _billing_mutation_limiter.check(request, key_suffix=protocol.strip().upper()[:64])
     normalized_protocol = _normalize_protocol(protocol)
     acceptance = resolve_activation_acceptance(db, normalized_protocol)
     if acceptance is None:
@@ -260,9 +268,11 @@ def activate_contract_without_fixed_billing(
 def setup_contract_billing(
     protocol: str,
     payload: SaasBillingSetupRequest,
+    request: Request,
     background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
+    _billing_mutation_limiter.check(request, key_suffix=protocol.strip().upper()[:64])
     if payload.payment_method_type == "pix_automatic":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -614,7 +624,8 @@ def _setup_contract_billing(protocol, payload, background_tasks, db):
 
 
 @router.get("/{protocol}/billing/status")
-def get_contract_billing_status(protocol: str, db: Session = Depends(get_db)):
+def get_contract_billing_status(protocol: str, request: Request, db: Session = Depends(get_db)):
+    _billing_status_limiter.check(request)
     normalized_protocol = _normalize_protocol(protocol)
     acceptance = resolve_activation_acceptance(db, normalized_protocol)
     if acceptance is None:
@@ -650,8 +661,10 @@ async def mercado_pago_saas_webhook(
 ):
     """Reconcilia autorizações/faturas recorrentes. Pix avulso legado nunca ativa novas assinaturas."""
     try:
-        payload = await request.json()
-    except Exception:
+        payload = await read_limited_json(request, allow_empty=True)
+    except HTTPException as exc:
+        if exc.status_code == 413:
+            raise
         payload = {}
 
     query_data_id = (request.query_params.get("data.id") or request.query_params.get("id") or "").strip()

@@ -1,11 +1,17 @@
 import asyncio
 import logging
+import os
 import uuid
+from collections import defaultdict
 from fastapi import WebSocket
 
 from .services.operational_realtime_bus import OperationalRealtimeBus
 
 logger = logging.getLogger(__name__)
+
+MAX_PUBLIC_WS_PER_IP = max(1, int(os.getenv("WS_MAX_PUBLIC_PER_IP", "20")))
+MAX_PUBLIC_WS_PER_TENANT = max(10, int(os.getenv("WS_MAX_PUBLIC_PER_TENANT", "300")))
+MAX_PUBLIC_WS_GLOBAL = max(50, int(os.getenv("WS_MAX_PUBLIC_GLOBAL", "1500")))
 
 # Events that public clients (/ws/cliente) are permitted to receive
 PUBLIC_CLIENT_EVENTS = {
@@ -22,8 +28,22 @@ class ConnectionManager:
         # Structure: { tenant: {"internal": [...], "client": [...], "courier:<id>": [...] } }
         self.active_connections: dict[int, dict[str, list[WebSocket]]] = {}
         self.identities: dict[WebSocket, tuple[int, str, asyncio.AbstractEventLoop]] = {}
+        self._public_client_ips: dict[WebSocket, str] = {}
+        self._public_ip_counts: dict[str, int] = defaultdict(int)
         self._loop: asyncio.AbstractEventLoop | None = None
         self.bus = OperationalRealtimeBus(self._on_bus_event) if shared_transport else None
+
+    def public_connection_allowed(self, restaurante_id: int, client_ip: str) -> bool:
+        """Verifica caps de conexões públicas simultâneas por IP, tenant e global."""
+        if client_ip and self._public_ip_counts.get(client_ip, 0) >= MAX_PUBLIC_WS_PER_IP:
+            return False
+        tenant_clients = len(self.active_connections.get(restaurante_id, {}).get("client", ()))
+        if tenant_clients >= MAX_PUBLIC_WS_PER_TENANT:
+            return False
+        total_public = len(self._public_client_ips)
+        if total_public >= MAX_PUBLIC_WS_GLOBAL:
+            return False
+        return True
 
     def start(self) -> None:
         self._loop = asyncio.get_running_loop()
@@ -87,14 +107,26 @@ class ConnectionManager:
         client_type: str = "internal",
         subprotocol: str | None = None,
         user_id: str | None = None,
-    ) -> None:
+        client_ip: str | None = None,
+    ) -> bool:
         if not isinstance(restaurante_id, int) or isinstance(restaurante_id, bool) or restaurante_id <= 0:
             logger.warning("Conexão WebSocket rejeitada: restaurante_id ausente ou inválido.")
             try:
                 await websocket.close(code=1008)
             except Exception:
                 pass
-            return
+            return False
+
+        if client_type == "client" and not self.public_connection_allowed(restaurante_id, client_ip or ""):
+            logger.warning(
+                "Conexão WebSocket pública rejeitada por limite de recursos: restaurante_id=%s",
+                restaurante_id,
+            )
+            try:
+                await websocket.close(code=1008)
+            except Exception:
+                pass
+            return False
 
         if self.bus:
             await websocket.accept(subprotocol=subprotocol, headers=[
@@ -114,10 +146,21 @@ class ConnectionManager:
 
         if websocket not in self.active_connections[restaurante_id][client_type]:
             self.active_connections[restaurante_id][client_type].append(websocket)
+            if client_type == "client" and client_ip:
+                self._public_client_ips[websocket] = client_ip
+                self._public_ip_counts[client_ip] += 1
         logger.info(f"WebSocket conectado: restaurante_id={restaurante_id}, client_type={client_type}")
+        return True
 
     def disconnect(self, websocket: WebSocket, restaurante_id: int | None = None) -> None:
         self.identities.pop(websocket, None)
+        tracked_ip = self._public_client_ips.pop(websocket, None)
+        if tracked_ip:
+            remaining = self._public_ip_counts.get(tracked_ip, 0) - 1
+            if remaining <= 0:
+                self._public_ip_counts.pop(tracked_ip, None)
+            else:
+                self._public_ip_counts[tracked_ip] = remaining
         if restaurante_id is not None and isinstance(restaurante_id, int) and not isinstance(restaurante_id, bool) and restaurante_id > 0:
             if restaurante_id in self.active_connections:
                 for ctype, connections in list(self.active_connections[restaurante_id].items()):

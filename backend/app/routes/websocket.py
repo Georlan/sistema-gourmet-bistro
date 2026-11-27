@@ -12,7 +12,8 @@ from starlette.concurrency import run_in_threadpool
 
 from ..config import settings, normalize_cors_origin
 from ..database import SessionLocal, current_restaurante_id
-from ..security import _authenticated_user_from_token
+from ..security import IPRateLimiter, _authenticated_user_from_token
+from ..services.client_ip import resolve_client_ip
 from ..websocket_manager import manager
 
 router = APIRouter(
@@ -22,6 +23,8 @@ router = APIRouter(
 KOMA_AUTH_SUBPROTOCOL = "koma-auth"
 SESSION_REVALIDATION_SECONDS = 180.0
 KOMA_TENANT_ORIGIN_RE = re.compile(r"^https://[a-z0-9-]+\.komafood\.com\.br$")
+MAX_WS_MESSAGE_BYTES = max(512, int(os.getenv("WS_MAX_MESSAGE_BYTES", "4096")))
+_ws_connect_rate_limiter = IPRateLimiter(requests_per_minute=60)
 
 
 async def _watch_internal_session(websocket, token, user_id, restaurante_id):
@@ -155,6 +158,12 @@ async def websocket_cliente_endpoint(
     if not await validate_websocket_origin(websocket):
         return
 
+    try:
+        _ws_connect_rate_limiter.check(websocket)
+    except HTTPException:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     if not restaurante_id:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
@@ -169,13 +178,26 @@ async def websocket_cliente_endpoint(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    await manager.connect(websocket, restaurante_id_val, client_type="client")
+    client_ip = resolve_client_ip(websocket)
+    connected = await manager.connect(
+        websocket,
+        restaurante_id_val,
+        client_type="client",
+        client_ip=client_ip,
+    )
+    if not connected:
+        return
     try:
         while True:
-            await websocket.receive_text()
+            msg = await websocket.receive_text()
+            if len(msg.encode("utf-8")) > MAX_WS_MESSAGE_BYTES:
+                await websocket.close(code=status.WS_1009_MESSAGE_TOO_BIG)
+                break
     except WebSocketDisconnect:
         manager.disconnect(websocket, restaurante_id_val)
     except Exception:
+        manager.disconnect(websocket, restaurante_id_val)
+    finally:
         manager.disconnect(websocket, restaurante_id_val)
 
 
