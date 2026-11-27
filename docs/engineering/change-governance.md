@@ -53,3 +53,10 @@ Antes de publicar, registrar no PR evidência antes/depois, compatibilidade inst
 - Falha real não é corrigida relaxando um contrato sem justificar a intenção do teste.
 - Testes de governança devem distinguir tabelas globais, tabelas tenant-owned do runtime e tabelas tenant-owned operadas explicitamente pelo control plane.
 - Quando um teste está verificando uma regra de domínio persistida, prefira validar o estado canônico no banco/serviço em vez de acoplar a regressão a um detalhe opcional da resposta HTTP.
+
+## Diretriz permanente de segurança e autonomia operacional
+
+- Preservar a autoridade administrativa máxima do proprietário por mecanismos autenticados e auditáveis, os poderes legítimos do Super Admin e a capacidade de delegar responsabilidades a futuros colaboradores.
+- Preservar a capacidade de manutenção e desenvolvimento assistido por IA (ChatGPT, Antigravity e outras ferramentas autorizadas) utilizando os acessos existentes, sem introduzir burocracia ou confirmações manuais desnecessárias.
+- Proibido implementar backdoors, credenciais universais ou bypass global de segurança. Não criar Automation API, novos serviços de autenticação para agentes ou infraestrutura adicional sem necessidade operacional comprovada; reutilizar os mecanismos existentes sempre que suficientes.
+- Toda restrição de segurança deve possuir testes negativos (bloqueio do acesso/ação indevida) e positivos (preservação do acesso/fluxo legítimo). Bloqueios indevidos de operações autorizadas devem ser tratados como regressões funcionais.

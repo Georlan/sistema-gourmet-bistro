@@ -1333,6 +1333,11 @@ def registrar_pagamento_comanda(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="SmartPOS não habilitado para este restaurante.",
             )
+    elif not (
+        (current_user.role or "").lower().strip() == "garcom"
+        and pag_in.metodo == "dinheiro"
+    ):
+        check_caixa_permission(current_user)
     # Idempotency Check
     existing = db.query(Pagamento).filter(
         Pagamento.restaurante_id == rest_id,
