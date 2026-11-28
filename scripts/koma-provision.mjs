@@ -40,8 +40,10 @@ function usage() {
       "Uso oficial: koma-provision (CLI de provisionamento expresso KÔMA)",
       "",
       "Variáveis de ambiente:",
-      "  KOMA_PROVISIONING_TOKEN   Token escopado para /api/provisioning/express (ou KOMA_SUPERADMIN_TOKEN)",
-      `  KOMA_API_URL              URL do backend (padrão: ${DEFAULT_API_URL})`,
+      "  KOMA_AGENT_READ_TOKEN       Token somente leitura (aceito em --dry-run)",
+      "  KOMA_PROVISIONING_API_TOKEN Token escopado para criar restaurantes (sem poder de exclusão)",
+      "  KOMA_PROVISIONING_TOKEN     Alias legado para KOMA_PROVISIONING_API_TOKEN (ou KOMA_SUPERADMIN_TOKEN)",
+      `  KOMA_API_URL                URL do backend (padrão: ${DEFAULT_API_URL})`,
       "",
       "Opções:",
       "  --input <arquivo>         Lê texto estruturado (.txt/.md) ou JSON (.json)",
@@ -71,12 +73,24 @@ async function main() {
     process.exit(0);
   }
 
+  const isDryRun = Boolean(flags["dry-run"]);
   const token = String(
-    process.env.KOMA_PROVISIONING_TOKEN || process.env.KOMA_SUPERADMIN_TOKEN || "",
+    isDryRun
+      ? process.env.KOMA_AGENT_READ_TOKEN ||
+          process.env.KOMA_PROVISIONING_API_TOKEN ||
+          process.env.KOMA_PROVISIONING_TOKEN ||
+          process.env.KOMA_SUPERADMIN_TOKEN ||
+          ""
+      : process.env.KOMA_PROVISIONING_API_TOKEN ||
+          process.env.KOMA_PROVISIONING_TOKEN ||
+          process.env.KOMA_SUPERADMIN_TOKEN ||
+          "",
   ).trim();
   if (!token) {
     console.error(
-      "Erro: defina KOMA_PROVISIONING_TOKEN ou KOMA_SUPERADMIN_TOKEN antes de executar.",
+      isDryRun
+        ? "Erro: defina KOMA_AGENT_READ_TOKEN, KOMA_PROVISIONING_API_TOKEN ou KOMA_SUPERADMIN_TOKEN antes de executar."
+        : "Erro: defina KOMA_PROVISIONING_API_TOKEN, KOMA_PROVISIONING_TOKEN ou KOMA_SUPERADMIN_TOKEN antes de executar.",
     );
     process.exit(1);
   }

@@ -16,7 +16,14 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from .mcp_auth import READ_SCOPE, OperatorAccess
 from .mcp_db_guard import MCPBusyError, MCPQueryTimeoutError, run_protected_db_read
 from .mcp_health import build_in_memory_system_health
-from .mcp_ops_queries import get_checkout_outcomes, get_print_flow_summary
+from .mcp_ops_queries import (
+    get_checkout_outcomes,
+    get_print_flow_summary,
+    get_restaurant_readiness_summary,
+    list_restaurants_operational_summary,
+    preview_restaurant_provisioning_readonly,
+    verify_tenant_deprovision_readonly,
+)
 from .product_catalog import load_product_catalog
 
 MCP_PATH = "/mcp"
@@ -112,6 +119,144 @@ def _product_server(resource: str):
             return await run_protected_db_read(
                 "print_flow_summary",
                 lambda db: get_print_flow_summary(db),
+            )
+        except MCPBusyError:
+            return {
+                "status": "unknown",
+                "error": {"code": "BUSY", "message": "Database read slot busy.", "retryable": True},
+            }
+        except MCPQueryTimeoutError:
+            return {
+                "status": "unknown",
+                "error": {"code": "TIMEOUT", "message": "Database read timed out.", "retryable": True},
+            }
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+    async def ops_list_restaurants(limit: int = 50, include_suspended: bool = True) -> dict[str, Any]:
+        """Lista resumo operacional dos restaurantes sem PII em transação READ ONLY."""
+        logger.info('{"event":"tool_call","tool":"ops_list_restaurants"}')
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1 or limit > 100:
+            return {
+                "status": "unknown",
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "limit must be an integer between 1 and 100.",
+                    "retryable": False,
+                },
+            }
+        try:
+            return await run_protected_db_read(
+                f"restaurants_list:{limit}:{bool(include_suspended)}",
+                lambda db: list_restaurants_operational_summary(
+                    db,
+                    limit=limit,
+                    include_suspended=bool(include_suspended),
+                ),
+            )
+        except MCPBusyError:
+            return {
+                "status": "unknown",
+                "error": {"code": "BUSY", "message": "Database read slot busy.", "retryable": True},
+            }
+        except MCPQueryTimeoutError:
+            return {
+                "status": "unknown",
+                "error": {"code": "TIMEOUT", "message": "Database read timed out.", "retryable": True},
+            }
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+    async def ops_get_restaurant_readiness(tenant_id: int) -> dict[str, Any]:
+        """Consulta prontidão, catálogo e impressão de um restaurante em transação READ ONLY sem PII."""
+        logger.info('{"event":"tool_call","tool":"ops_get_restaurant_readiness"}')
+        if isinstance(tenant_id, bool) or not isinstance(tenant_id, int) or tenant_id <= 0:
+            return {
+                "status": "unknown",
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "tenant_id must be a positive integer.",
+                    "retryable": False,
+                },
+            }
+        try:
+            return await run_protected_db_read(
+                f"restaurant_readiness:{tenant_id}",
+                lambda db: get_restaurant_readiness_summary(db, tenant_id),
+            )
+        except MCPBusyError:
+            return {
+                "status": "unknown",
+                "error": {"code": "BUSY", "message": "Database read slot busy.", "retryable": True},
+            }
+        except MCPQueryTimeoutError:
+            return {
+                "status": "unknown",
+                "error": {"code": "TIMEOUT", "message": "Database read timed out.", "retryable": True},
+            }
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+    async def ops_preview_restaurant_provisioning(
+        structured_text: str | None = None,
+        name: str | None = None,
+        subdomain: str | None = None,
+        plan: str = "pro",
+        operation_profile: str | None = None,
+        segment_preset: str | None = None,
+        menu_text: str | None = None,
+    ) -> dict[str, Any]:
+        """Pré-visualiza provisionamento (dry-run sem escrita nem PII) em transação READ ONLY."""
+        logger.info('{"event":"tool_call","tool":"ops_preview_restaurant_provisioning"}')
+        if not (structured_text or name):
+            return {
+                "status": "unknown",
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "Provide structured_text or name to preview.",
+                    "retryable": False,
+                },
+            }
+        try:
+            return await run_protected_db_read(
+                None,
+                lambda db: preview_restaurant_provisioning_readonly(
+                    db,
+                    structured_text=structured_text,
+                    name=name,
+                    subdomain=subdomain,
+                    plan=plan,
+                    operation_profile=operation_profile,
+                    segment_preset=segment_preset,
+                    menu_text=menu_text,
+                ),
+                ttl_seconds=0.0,
+            )
+        except MCPBusyError:
+            return {
+                "status": "unknown",
+                "error": {"code": "BUSY", "message": "Database read slot busy.", "retryable": True},
+            }
+        except MCPQueryTimeoutError:
+            return {
+                "status": "unknown",
+                "error": {"code": "TIMEOUT", "message": "Database read timed out.", "retryable": True},
+            }
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+    async def ops_verify_tenant_deprovision(tenant_id: int) -> dict[str, Any]:
+        """Audita resíduos operacionais, storage e política de ID de um tenant em READ ONLY."""
+        logger.info('{"event":"tool_call","tool":"ops_verify_tenant_deprovision"}')
+        if isinstance(tenant_id, bool) or not isinstance(tenant_id, int) or tenant_id <= 0:
+            return {
+                "status": "unknown",
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "tenant_id must be a positive integer.",
+                    "retryable": False,
+                },
+            }
+        try:
+            return await run_protected_db_read(
+                f"tenant_deprovision_verify:{tenant_id}",
+                lambda db: verify_tenant_deprovision_readonly(db, tenant_id),
             )
         except MCPBusyError:
             return {

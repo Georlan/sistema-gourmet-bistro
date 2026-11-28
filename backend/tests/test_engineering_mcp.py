@@ -15,7 +15,14 @@ from app.mcp_db_guard import (
 )
 from app.mcp_edge import METADATA_PATH, install_engineering_mcp
 from app.mcp_health import build_in_memory_system_health
-from app.mcp_ops_queries import get_checkout_outcomes, get_print_flow_summary
+from app.mcp_ops_queries import (
+    get_checkout_outcomes,
+    get_print_flow_summary,
+    get_restaurant_readiness_summary,
+    list_restaurants_operational_summary,
+    preview_restaurant_provisioning_readonly,
+    verify_tenant_deprovision_readonly,
+)
 from app.models import Comanda, PrintAgentToken, PrintJob, Restaurante, Usuario
 from app.product_catalog import load_product_catalog
 from fastapi import FastAPI, WebSocket
@@ -148,7 +155,16 @@ def test_catalog_and_health_need_no_db(enabled, issuer):
     event.listen(engine, "checkout", forbid_checkout)
     try:
         tools = rpc(enabled, "tools/list").json()["result"]["tools"]
-        assert [t["name"] for t in tools] == [TOOL, HEALTH_TOOL, CHECKOUT_TOOL, PRINT_TOOL]
+        assert [t["name"] for t in tools] == [
+            TOOL,
+            HEALTH_TOOL,
+            CHECKOUT_TOOL,
+            PRINT_TOOL,
+            "ops_list_restaurants",
+            "ops_get_restaurant_readiness",
+            "ops_preview_restaurant_provisioning",
+            "ops_verify_tenant_deprovision",
+        ]
         assert all(t["annotations"]["readOnlyHint"] for t in tools)
         result = rpc(enabled, "tools/call", name=TOOL, arguments={}).json()["result"]
         assert not result.get("isError")
@@ -563,3 +579,72 @@ def test_mcp_rpc_calls_new_phase1d_tools(enabled, issuer, monkeypatch):
     printing = rpc(enabled, "tools/call", name=PRINT_TOOL, arguments={}).json()["result"]
     assert not printing.get("isError")
     assert printing["structuredContent"]["physical_output_verified"] is False
+
+
+def test_mcp_operational_restaurant_tools_and_pii_redaction(enabled, issuer, monkeypatch, tmp_path):
+    import app.mcp_edge as mcp_edge
+
+    db_file = tmp_path / "mcp_restaurants.db"
+    local_engine = create_engine(f"sqlite:///{db_file}", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=local_engine)
+    LocalSession = sessionmaker(bind=local_engine, autocommit=False, autoflush=False)
+
+    db = LocalSession()
+    try:
+        db.add(Restaurante(id=201, nome="Pizzaria Teste MCP", slug="pizzaria-mcp", plano="pro", horarios_funcionamento=[{"days": "Todos os dias", "hours": "18:00 - 23:00"}]))
+        db.add(Usuario(id="u-201", restaurante_id=201, nome="Dono Secreto", email="secreto@dono.test", telefone="85999998888", senha_hash="x", role="admin", cargo="admin", status="ativo"))
+        db.commit()
+
+        listed = list_restaurants_operational_summary(db)
+        assert listed["total"] >= 1
+        assert any(r["slug"] == "pizzaria-mcp" for r in listed["restaurants"])
+        assert "secreto@dono.test" not in str(listed)
+        assert "85999998888" not in str(listed)
+
+        readiness = get_restaurant_readiness_summary(db, 201)
+        assert readiness["exists"] is True
+        assert readiness["steps"]["hours"] is True
+        assert "secreto@dono.test" not in str(readiness)
+
+        preview = preview_restaurant_provisioning_readonly(
+            db,
+            structured_text="Nome: Nova Pizzaria\nSegmento: Pizzaria\nCardápio:\nCalabresa - R$ 49,90",
+        )
+        assert preview["dryRun"] is True
+        assert preview["restaurant"]["slug"] == "nova-pizzaria"
+        assert preview["bootstrap"]["productsCount"] == 1
+
+        verified = verify_tenant_deprovision_readonly(db, 999)
+        assert verified["tenantId"] == 999
+        assert verified["clean"] is True
+    finally:
+        db.close()
+        local_engine.dispose()
+
+    clear_mcp_cache()
+
+    async def _fake_read(cache_key, query_fn, **kwargs):
+        if str(cache_key).startswith("restaurants_list"):
+            return {"total": 1, "restaurants": [{"id": "201", "slug": "pizzaria-mcp"}]}
+        if str(cache_key).startswith("restaurant_readiness"):
+            return {"exists": True, "tenantId": "201", "configurationComplete": True}
+        if str(cache_key).startswith("tenant_deprovision_verify"):
+            return {"tenantId": 999, "clean": True}
+        return {"dryRun": True, "readyToProvision": False}
+
+    monkeypatch.setattr(mcp_edge, "run_protected_db_read", _fake_read)
+
+    res_list = rpc(enabled, "tools/call", name="ops_list_restaurants", arguments={"limit": 10}).json()["result"]
+    assert res_list["structuredContent"]["total"] == 1
+
+    res_bad_limit = rpc(enabled, "tools/call", name="ops_list_restaurants", arguments={"limit": 0}).json()["result"]
+    assert res_bad_limit["structuredContent"]["error"]["code"] == "VALIDATION_ERROR"
+
+    res_readiness = rpc(enabled, "tools/call", name="ops_get_restaurant_readiness", arguments={"tenant_id": 201}).json()["result"]
+    assert res_readiness["structuredContent"]["exists"] is True
+
+    res_preview = rpc(enabled, "tools/call", name="ops_preview_restaurant_provisioning", arguments={"name": "Teste"}).json()["result"]
+    assert res_preview["structuredContent"]["dryRun"] is True
+
+    res_verify = rpc(enabled, "tools/call", name="ops_verify_tenant_deprovision", arguments={"tenant_id": 999}).json()["result"]
+    assert res_verify["structuredContent"]["clean"] is True

@@ -596,6 +596,8 @@ def provision_restaurant(
     origin: ProvisioningOrigin,
     actor: str,
     allow_id_reuse: bool = False,
+    allow_existing_admin_email: bool = False,
+    declared_actor: str | None = None,
     dry_run: bool = False,
     idempotency_key: str | None = None,
     password_hasher: Callable[[str], str] = get_password_hash,
@@ -650,7 +652,11 @@ def provision_restaurant(
             if replay is not None:
                 return replay
 
-        if origin == "public_self_service" and _admin_email_exists_anywhere(db, spec["admin_email"]):
+        if (
+            origin == "public_self_service"
+            and not allow_existing_admin_email
+            and _admin_email_exists_anywhere(db, spec["admin_email"])
+        ):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
@@ -701,7 +707,8 @@ def provision_restaurant(
                         endereco=spec["address"],
                         socials=format_socials_with_phone(spec["phone"]),
                         horarios_funcionamento=spec["operating_hours"] or None,
-                        formas_pagamento_aceitas=["Pix", "Dinheiro"],
+                        # Apenas Dinheiro nasce habilitado sem setup prévio; Pix exige Mercado Pago OAuth ou Pix Direto.
+                        formas_pagamento_aceitas=["Dinheiro"],
                     )
                     db.add(restaurante)
                     db.flush()
@@ -829,6 +836,8 @@ def provision_restaurant(
                     after_data = {
                         "restaurante_id": tenant_id,
                         "origin": origin,
+                        "verified_actor": str(actor or origin),
+                        "declared_actor": declared_actor,
                         "idempotency_key": clean_idempotency,
                         "id_selection_mode": id_selection_mode,
                         "requested_restaurant_id": payload.requested_restaurant_id,

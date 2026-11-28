@@ -558,3 +558,125 @@ def test_client_offboarding_suspends_revokes_and_preserves_legal_history():
             assert db.query(PrintJob).filter(PrintJob.restaurante_id == tenant_id).count() == 0
     finally:
         db.close()
+
+
+def test_verified_storage_cleanup_cross_tenant_protection_and_partial_retry(monkeypatch):
+    import httpx
+    from app.config import settings
+    from app.services.tenant_deprovisioning import build_deprovision_plan, execute_deprovision
+
+    monkeypatch.setattr(settings, "SUPABASE_URL", "https://proj.supabase.co")
+    monkeypatch.setattr(settings, "SUPABASE_SERVICE_ROLE_KEY", "srv-secret-key")
+
+    tid_target = 12
+    tid_shared_holder = 13
+    _seed_tenant_shell(tid_target, name="Loja Storage QA 12", slug="loja-storage-12")
+    _seed_tenant_shell(tid_shared_holder, name="Loja Vizinha 13", slug="loja-vizinha-13")
+
+    shared_path = f"{tid_target}/products/shared-foto.webp"
+    exclusive_logo = f"{tid_target}/logo/logo-12.webp"
+    exclusive_prod = f"{tid_target}/products/pizza-12.webp"
+    exclusive_gallery = f"{tid_target}/products/galeria-12.webp"
+
+    db = SessionLocal()
+    try:
+        with tenant_session_scope(db, tid_target):
+            rest12 = db.query(Restaurante).filter(Restaurante.id == tid_target).one()
+            rest12.logo_url = f"https://proj.supabase.co/storage/v1/object/public/cardapio-assets/{exclusive_logo}"
+            rest12.banner_url = "https://external.cdn.invalid/unrelated.png"
+            db.add(Categoria(id="cat-12", restaurante_id=tid_target, nome="Pizzas", ordem_exibicao=1))
+            db.flush()
+            db.add(
+                Produto(
+                    id="prod-12",
+                    restaurante_id=tid_target,
+                    categoria_id="cat-12",
+                    nome="Pizza",
+                    preco=50.0,
+                    imagem=f"https://proj.supabase.co/storage/v1/object/public/cardapio-assets/{exclusive_prod}",
+                    imagens_galeria=[
+                        f"https://proj.supabase.co/storage/v1/object/public/cardapio-assets/{exclusive_gallery}",
+                        f"https://proj.supabase.co/storage/v1/object/public/cardapio-assets/{shared_path}",
+                    ],
+                )
+            )
+            db.commit()
+
+        with tenant_session_scope(db, tid_shared_holder):
+            db.add(Categoria(id="cat-13", restaurante_id=tid_shared_holder, nome="Pizzas", ordem_exibicao=1))
+            db.flush()
+            db.add(
+                Produto(
+                    id="prod-13",
+                    restaurante_id=tid_shared_holder,
+                    categoria_id="cat-13",
+                    nome="Pizza Compartilhada",
+                    preco=55.0,
+                    imagem=f"https://proj.supabase.co/storage/v1/object/public/cardapio-assets/{shared_path}",
+                )
+            )
+            db.commit()
+
+        plan = build_deprovision_plan(db, tid_target, mode="qa_purge")
+        storage_plan = plan["storagePlan"]
+        assert set(storage_plan["eligibleDeletePaths"]) == {
+            exclusive_logo,
+            exclusive_prod,
+            exclusive_gallery,
+        }
+        assert shared_path in storage_plan["preservedSharedPaths"]
+        assert "https://external.cdn.invalid/unrelated.png" in storage_plan["ignoredExternalOrUnowned"]
+
+        # client_offboarding nunca apaga objetos de Storage
+        offboard_plan = build_deprovision_plan(db, tid_target, mode="client_offboarding")
+        assert offboard_plan["storagePlan"]["eligibleDeletePaths"] == []
+        assert len(offboard_plan["storagePlan"]["retainedForOffboarding"]) >= 3
+
+        # Simula falha transitória em um dos objetos no primeiro DELETE, depois sucesso idempotente no retry
+        calls: list[list[str]] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            body = request.read().decode("utf-8")
+            import json as _json
+
+            prefixes = _json.loads(body)["prefixes"]
+            calls.append(prefixes)
+            if prefixes == [exclusive_prod] and len(calls) <= 3:
+                return httpx.Response(500, json={"error": "temporary"})
+            return httpx.Response(200, json={"deleted": prefixes})
+
+        mock_client = httpx.Client(transport=httpx.MockTransport(handler))
+        exec_res = execute_deprovision(
+            db,
+            tid_target,
+            mode="qa_purge",
+            actor="agent:test:fp:12345678",
+            reason="Teste limpeza storage com falha parcial",
+            expected_fingerprint=plan["fingerprint"],
+            confirmation=plan["expectedConfirmation"],
+            storage_http_client=mock_client,
+        )
+        cleanup = exec_res["storageCleanup"]
+        assert exclusive_logo in cleanup["deleted"]
+        assert exclusive_gallery in cleanup["deleted"]
+        assert shared_path not in [p for sub in calls for p in sub]
+        assert cleanup["retryablePaths"] == [exclusive_prod]
+
+        # Retomada idempotente usando retry_storage_paths
+        retry_res = execute_deprovision(
+            db,
+            tid_target,
+            mode="qa_purge",
+            actor="agent:test:fp:12345678",
+            reason="Retomada de objeto pendente no storage",
+            confirmation=f"DEPROVISION_TENANT_{tid_target}",
+            retry_storage_paths=cleanup["retryablePaths"] + ["13/logo/forbidden.webp"],
+            storage_http_client=mock_client,
+        )
+        assert retry_res["alreadyDeprovisioned"] is True
+        assert retry_res["storageCleanup"]["deleted"] == [exclusive_prod]
+        assert retry_res["storageCleanup"]["retryablePaths"] == []
+        assert "13/logo/forbidden.webp" in retry_res["storageCleanup"]["rejectedUnowned"]
+        assert retry_res["verification"]["lastStorageCleanupAudit"]["deleted"] == [exclusive_prod]
+    finally:
+        db.close()

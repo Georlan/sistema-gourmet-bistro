@@ -4,10 +4,10 @@
 
 Plano e ciclo → dados mínimos salvos → aceite jurídico → **cartão autorizado ou Pix selecionado** → alerta único ao proprietário (e-mail + Telegram) → liberação de acesso pelo SuperAdmin → convite para criar senha → implantação essencial → liberação operacional pelo SuperAdmin → 7 dias grátis → **cobrança automática no cartão ou QR Pix a pagar** → operação normal.
 
-O catálogo comercial canônico vigente para novas contratações (`product-contract.json`, versão `2026-10-zero-commission`) é:
-- **Pocket:** R$ 79,90/mês (anual: R$ 862,92/ano, equiv. R$ 71,91/mês) · 0% de comissão KÔMA por pedido online;
-- **Pro:** R$ 179,90/mês (anual: R$ 1.942,92/ano, equiv. R$ 161,91/mês) · 0% de comissão KÔMA por pedido online;
-- **Premium:** R$ 329,90/mês (anual: R$ 3.562,92/ano, equiv. R$ 296,91/mês) · 0% de comissão KÔMA por pedido online.
+O catálogo comercial canônico vigente para novas contratações (`product-contract.json`, versão `2026-11-business-v2a`) é:
+- **Pocket:** R$ 99,90/mês (anual: 10% de desconto equivalente, 0% de comissão KÔMA por pedido online) · *Condição especial histórica `KÔMA Founders` (`cohort_code="founders_5"`): R$ 79,90/mês com acesso gratuito às licenças de módulos adicionais para os 5 primeiros beneficiários*;
+- **Pro:** R$ 179,90/mês · 0% de comissão KÔMA por pedido online;
+- **Premium:** R$ 329,90/mês · 0% de comissão KÔMA por pedido online.
 - Sem taxa de implantação e sem add-ons obrigatórios. Tarifas de provedores de pagamento (ex: Mercado Pago, PagBank) são independentes.
 
 A cobrança da mensalidade fixa segue a mesma regra em qualquer forma de pagamento disponibilizada no checkout:

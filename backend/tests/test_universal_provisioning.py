@@ -499,12 +499,12 @@ def test_self_accept_links_contract_to_prepared_tenant_preserves_menu_and_unlock
         "phone": "85988887777",
     }
 
-    # Confirma preservação integral de produtos e liberação para o primeiro pedido
+    # Confirma preservação integral de produtos, pagamento apenas presencial padrão e liberação comercial
     db = SessionLocal()
     try:
         assert is_provisional_preparation(db, tenant_id, allow_qa=True) is False
         rest_row = db.query(Restaurante).filter(Restaurante.id == tenant_id).one()
-        assert rest_row.formas_pagamento_aceitas == ["Pix", "Dinheiro"]
+        assert rest_row.formas_pagamento_aceitas == ["Dinheiro"]
         with tenant_session_scope(db, tenant_id):
             prods = db.query(Produto).filter(Produto.restaurante_id == tenant_id).all()
             assert len(prods) == 1
@@ -540,4 +540,235 @@ def test_self_accept_links_contract_to_prepared_tenant_preserves_menu_and_unlock
         },
     )
     assert first_order.status_code in (200, 201), first_order.text
+    _reset_public_rate_limiters()
+
+
+def test_scoped_agent_least_privilege_rotation_revocation_and_authenticated_multistore(monkeypatch):
+    _reset_public_rate_limiters()
+    import json as pyjson
+
+    read_token = "scoped-read-secret"
+    provision_token = "scoped-prov-secret"
+    offboard_token = "scoped-offboard-secret"
+    deprov_token = "scoped-deprov-secret"
+    komandinha_token = "scoped-komandinha-rot-secret"
+    revoked_token = "scoped-revoked-secret"
+
+    monkeypatch.setenv("KOMA_AGENT_READ_TOKEN", read_token)
+    monkeypatch.setenv("KOMA_PROVISIONING_API_TOKEN", provision_token)
+    monkeypatch.setenv("KOMA_OFFBOARDING_API_TOKEN", offboard_token)
+    monkeypatch.setenv("KOMA_DEPROVISIONING_API_TOKEN", deprov_token)
+    monkeypatch.setenv(
+        "KOMA_AGENT_TOKENS_JSON",
+        pyjson.dumps(
+            [
+                {
+                    "id": "komandinha-ops",
+                    "token": komandinha_token,
+                    "scopes": ["agent:read", "agent:provision"],
+                    "revoked": False,
+                },
+                {
+                    "id": "compromised-agent",
+                    "token": revoked_token,
+                    "scopes": ["agent:read", "agent:provision", "agent:deprovision_qa_purge"],
+                    "revoked": True,
+                },
+            ]
+        ),
+    )
+
+    # 1. Token revogado é rejeitado com 401
+    assert (
+        client.get(
+            "/api/provisioning/tenants",
+            headers={"Authorization": f"Bearer {revoked_token}"},
+        ).status_code
+        == 401
+    )
+
+    # 2. Token read pode consultar e fazer dry-run, mas é bloqueado em criar ou desprovisionar (403)
+    assert (
+        client.get(
+            "/api/provisioning/tenants",
+            headers={"Authorization": f"Bearer {read_token}"},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            "/api/provisioning/express",
+            headers={"Authorization": f"Bearer {read_token}"},
+            json={
+                "name": "Loja Preview",
+                "admin_name": "Ana",
+                "admin_email": "ana@read.test",
+                "dry_run": True,
+            },
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            "/api/provisioning/express",
+            headers={"Authorization": f"Bearer {read_token}"},
+            json={
+                "name": "Loja Nao Permitida",
+                "admin_name": "Ana",
+                "admin_email": "ana@read.test",
+                "dry_run": False,
+            },
+        ).status_code
+        == 403
+    )
+
+    # 3. Provisioning token cria loja, auditoria registra fingerprint verificado (não confia em X-Provisioning-Actor)
+    suffix = uuid.uuid4().hex[:8]
+    owner_email = f"multiloja-{suffix}@exemplo.test"
+    created = client.post(
+        "/api/provisioning/express",
+        headers={
+            "Authorization": f"Bearer {komandinha_token}",
+            "X-Provisioning-Actor": "spoofed-superadmin",
+            "Idempotency-Key": f"least-priv-{suffix}",
+        },
+        json={
+            "name": f"Loja Principal {suffix}",
+            "admin_name": "Dono Multi",
+            "admin_email": owner_email,
+            "admin_password": "SenhaForte123!",
+            "operation_profile": "pizzaria",
+            "order_types": ["retirada", "delivery"],
+            "operating_hours": [{"days": "Todos os dias", "hours": "18:00 - 23:00"}],
+            "menu_text": "Pizzas:\nCalabresa - R$ 45,00",
+        },
+    )
+    assert created.status_code == 201, created.text
+    tid = int(created.json()["id"])
+
+    db = SessionLocal()
+    try:
+        audit = (
+            db.query(SuperAdminAuditLog)
+            .filter(
+                SuperAdminAuditLog.restaurante_id == tid,
+                SuperAdminAuditLog.action == "UNIVERSAL_TENANT_PROVISION",
+            )
+            .one()
+        )
+        assert audit.actor.startswith("agent:komandinha-ops:fp:")
+        assert audit.after_data["verified_actor"] == audit.actor
+        assert audit.after_data["declared_actor"] == "spoofed-superadmin"
+    finally:
+        db.close()
+
+    # Read e readiness autorizados e sem PII
+    readiness = client.get(
+        f"/api/provisioning/tenants/{tid}/readiness",
+        headers={"Authorization": f"Bearer {read_token}"},
+    )
+    assert readiness.status_code == 200, readiness.text
+    assert owner_email not in readiness.text
+    assert readiness.json()["operations"]["acceptedPaymentMethods"] == ["Dinheiro"]
+
+    # 4. Token de provisionamento NÃO consegue executar deprovision nem offboarding (403)
+    plan_res = client.post(
+        f"/api/provisioning/tenants/{tid}/deprovision",
+        headers={"Authorization": f"Bearer {provision_token}"},
+        json={"mode": "qa_purge", "dry_run": True},
+    )
+    assert plan_res.status_code == 200
+    fp = plan_res.json()["fingerprint"]
+
+    assert (
+        client.post(
+            f"/api/provisioning/tenants/{tid}/deprovision",
+            headers={"Authorization": f"Bearer {provision_token}"},
+            json={
+                "mode": "qa_purge",
+                "dry_run": False,
+                "expected_fingerprint": fp,
+                "confirmation": f"DEPROVISION_TENANT_{tid}",
+                "reason": "Provisioning token nao pode excluir",
+            },
+        ).status_code
+        == 403
+    )
+
+    # 5. Token de offboarding é bloqueado em qa_purge (403)
+    assert (
+        client.post(
+            f"/api/provisioning/tenants/{tid}/deprovision",
+            headers={"Authorization": f"Bearer {offboard_token}"},
+            json={
+                "mode": "qa_purge",
+                "dry_run": False,
+                "expected_fingerprint": fp,
+                "confirmation": f"DEPROVISION_TENANT_{tid}",
+                "reason": "Offboard token nao pode fazer qa_purge",
+            },
+        ).status_code
+        == 403
+    )
+
+    # 6. Dono autenticado provando titularidade consegue cadastrar 2a loja com seu mesmo e-mail via /public/start
+    login_res = client.post(
+        "/auth/login",
+        json={"restaurante_id": tid, "username": owner_email, "password": "SenhaForte123!"},
+    )
+    assert login_res.status_code == 200, login_res.text
+    owner_jwt = login_res.json()["access_token"]
+
+    # Sem Bearer -> 409 bloqueado; com Bearer do titular -> 201 liberado
+    assert (
+        client.post(
+            "/api/provisioning/public/start",
+            headers={"Idempotency-Key": f"anon-dup-{suffix}"},
+            json={
+                "name": f"Filial Bloqueada {suffix}",
+                "admin_name": "Dono Multi",
+                "admin_email": owner_email,
+                "admin_password": "SenhaForte123!",
+            },
+        ).status_code
+        == 409
+    )
+
+    second_store = client.post(
+        "/api/provisioning/public/start",
+        headers={
+            "Authorization": f"Bearer {owner_jwt}",
+            "Idempotency-Key": f"owner-branch-{suffix}",
+        },
+        json={
+            "name": f"Filial Autorizada {suffix}",
+            "admin_name": "Dono Multi",
+            "admin_email": owner_email,
+            "admin_password": "SenhaForte123!",
+        },
+    )
+    assert second_store.status_code == 201, second_store.text
+    second_tid = int(second_store.json()["id"])
+    assert second_tid != tid
+
+    # 7. Token dedicado KOMA_DEPROVISIONING_API_TOKEN executa qa_purge limpo nos tenants de teste
+    for cleanup_tid in (second_tid, tid):
+        p = client.post(
+            f"/api/provisioning/tenants/{cleanup_tid}/deprovision",
+            headers={"Authorization": f"Bearer {deprov_token}"},
+            json={"mode": "qa_purge", "dry_run": True},
+        ).json()
+        res = client.post(
+            f"/api/provisioning/tenants/{cleanup_tid}/deprovision",
+            headers={"Authorization": f"Bearer {deprov_token}"},
+            json={
+                "mode": "qa_purge",
+                "dry_run": False,
+                "expected_fingerprint": p["fingerprint"],
+                "confirmation": p["expectedConfirmation"],
+                "reason": "Limpeza final do teste de menor privilegio",
+            },
+        )
+        assert res.status_code == 200, res.text
+        assert res.json()["verification"]["clean"] is True
     _reset_public_rate_limiters()

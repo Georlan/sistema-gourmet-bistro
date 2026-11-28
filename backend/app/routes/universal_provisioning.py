@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import hmac
 import logging
-import os
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
@@ -12,7 +10,19 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from ..database import SessionLocal
-from ..security import IPRateLimiter, create_access_token
+from ..mcp_ops_queries import (
+    get_restaurant_readiness_summary,
+    list_restaurants_operational_summary,
+)
+from ..security import IPRateLimiter, _authenticated_user_from_token, create_access_token
+from ..services.agent_auth import (
+    AGENT_SCOPE_DEPROVISION_OFFBOARD,
+    AGENT_SCOPE_DEPROVISION_QA_PURGE,
+    AGENT_SCOPE_PROVISION,
+    AGENT_SCOPE_READ,
+    authenticate_agent_principal,
+    require_agent_scope,
+)
 from ..services.express_provisioning_parser import parse_express_provisioning_input
 from ..services.tenant_deprovisioning import (
     DeprovisionMode,
@@ -26,7 +36,6 @@ from ..services.universal_provisioning import (
     UniversalProvisioningInput,
     provision_restaurant,
 )
-from .super_admin import get_current_admin
 
 logger = logging.getLogger("koma.universal_provisioning.routes")
 router = APIRouter(prefix="/provisioning", tags=["Provisionamento Universal"])
@@ -96,35 +105,11 @@ def get_express_provisioning_principal(
     authorization: str | None = Header(default=None),
     x_provisioning_actor: str | None = Header(default=None, alias="X-Provisioning-Actor"),
 ) -> dict[str, Any]:
-    """Autoriza via sessão Super Admin OU token escopado KOMA_PROVISIONING_API_TOKEN."""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token de autenticação obrigatório para provisionamento expresso.",
-        )
-    raw_token = authorization.split(" ", 1)[1].strip()
-    if not raw_token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token de autenticação inválido.",
-        )
-
-    configured_scoped_token = os.getenv("KOMA_PROVISIONING_API_TOKEN", "").strip()
-    if configured_scoped_token and hmac.compare_digest(raw_token, configured_scoped_token):
-        actor_label = (x_provisioning_actor or "express_token").strip()[:80] or "express_token"
-        return {
-            "actor": f"provisioning_token:{actor_label}",
-            "role": "provisioning_agent",
-            "auth_type": "scoped_token",
-        }
-
-    # Fallback explícito: JWT válido de Super Admin (sem bypass)
-    admin = get_current_admin(authorization=authorization)
-    return {
-        "actor": str(admin.get("user") or "superadmin"),
-        "role": "superadmin",
-        "auth_type": "superadmin_jwt",
-    }
+    """Autoriza via token escopado ou sessão Super Admin sem confiar em header declarativo."""
+    return authenticate_agent_principal(
+        authorization=authorization,
+        x_provisioning_actor=x_provisioning_actor,
+    )
 
 
 def _to_engine_input(
@@ -211,6 +196,7 @@ def start_public_preparation(
     payload: PublicProvisioningStartRequest,
     request: Request,
     response: Response,
+    authorization: str | None = Header(default=None),
     x_idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     x_koma_idempotency_key: str | None = Header(default=None, alias="X-Idempotency-Key"),
 ):
@@ -236,12 +222,28 @@ def start_public_preparation(
 
     db: Session = SessionLocal()
     try:
+        # Dono já autenticado provando titularidade do mesmo e-mail pode abrir filial adicional.
+        allow_existing_admin_email = False
+        if authorization and authorization.startswith("Bearer "):
+            bearer = authorization.split(" ", 1)[1].strip()
+            if bearer:
+                auth_user = _authenticated_user_from_token(bearer, db)
+                requested_email = (engine_input.admin_email or "").strip().lower()
+                owner_email = str(getattr(auth_user, "email", "") or "").strip().lower()
+                if (
+                    str(getattr(auth_user, "cargo", "") or "").lower() == "admin"
+                    and requested_email
+                    and owner_email == requested_email
+                ):
+                    allow_existing_admin_email = True
+
         result = provision_restaurant(
             db,
             engine_input,
             origin="public_self_service",
             actor=f"public_self_service:{engine_input.admin_email or 'prospect'}",
             allow_id_reuse=False,
+            allow_existing_admin_email=allow_existing_admin_email,
             dry_run=False,
             idempotency_key=idempotency_key,
         )
@@ -283,6 +285,10 @@ def express_provisioning(
 ):
     """Endpoint oficial para provisionamento rápido estruturado (CLI/agente/Super Admin)."""
     response.headers["Cache-Control"] = "no-store"
+    require_agent_scope(
+        principal,
+        AGENT_SCOPE_READ if payload.dry_run else AGENT_SCOPE_PROVISION,
+    )
     idempotency_key = (
         x_koma_idempotency_key or x_idempotency_key or payload.idempotency_key or ""
     ).strip() or None
@@ -301,6 +307,7 @@ def express_provisioning(
             origin="express_api",
             actor=principal["actor"],
             allow_id_reuse=True,
+            declared_actor=principal.get("declared_actor"),
             dry_run=payload.dry_run,
             idempotency_key=idempotency_key,
         )
@@ -317,8 +324,47 @@ class DeprovisionTenantRequest(BaseModel):
     expected_fingerprint: str | None = Field(default=None, max_length=128)
     confirmation: str | None = Field(default=None, max_length=128)
     reason: str | None = Field(default=None, max_length=500)
+    cleanup_storage: bool = True
+    retry_storage_paths: list[str] = Field(default_factory=list, max_length=200)
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+@router.get("/tenants")
+def list_tenants_operational_route(
+    response: Response,
+    limit: int = 50,
+    include_suspended: bool = True,
+    principal: dict[str, Any] = Depends(get_express_provisioning_principal),
+):
+    """Lista resumo operacional dos restaurantes autorizados sem expor PII."""
+    require_agent_scope(principal, AGENT_SCOPE_READ)
+    response.headers["Cache-Control"] = "no-store"
+    db: Session = SessionLocal()
+    try:
+        return list_restaurants_operational_summary(
+            db,
+            limit=limit,
+            include_suspended=include_suspended,
+        )
+    finally:
+        db.close()
+
+
+@router.get("/tenants/{tenant_id}/readiness")
+def get_tenant_readiness_route(
+    tenant_id: int,
+    response: Response,
+    principal: dict[str, Any] = Depends(get_express_provisioning_principal),
+):
+    """Retorna prontidão operacional, catálogo e estado de impressão sem expor PII."""
+    require_agent_scope(principal, AGENT_SCOPE_READ)
+    response.headers["Cache-Control"] = "no-store"
+    db: Session = SessionLocal()
+    try:
+        return get_restaurant_readiness_summary(db, tenant_id)
+    finally:
+        db.close()
 
 
 @router.post("/tenants/{tenant_id}/deprovision")
@@ -330,6 +376,13 @@ def deprovision_tenant_route(
 ):
     """Executa dry-run ou desligamento/desprovisionamento auditável de um único tenant."""
     response.headers["Cache-Control"] = "no-store"
+    if payload.dry_run:
+        require_agent_scope(principal, AGENT_SCOPE_READ)
+    elif payload.mode == "client_offboarding":
+        require_agent_scope(principal, AGENT_SCOPE_DEPROVISION_OFFBOARD)
+    else:
+        require_agent_scope(principal, AGENT_SCOPE_DEPROVISION_QA_PURGE)
+
     db: Session = SessionLocal()
     try:
         if payload.dry_run:
@@ -342,6 +395,8 @@ def deprovision_tenant_route(
             reason=payload.reason or "",
             expected_fingerprint=payload.expected_fingerprint,
             confirmation=payload.confirmation,
+            cleanup_storage=payload.cleanup_storage,
+            retry_storage_paths=payload.retry_storage_paths,
         )
     finally:
         db.close()
@@ -354,7 +409,7 @@ def verify_deprovisioned_tenant_route(
     principal: dict[str, Any] = Depends(get_express_provisioning_principal),
 ):
     """Verifica ausência de resíduos operacionais e política de não-reutilização de ID."""
-    del principal
+    require_agent_scope(principal, AGENT_SCOPE_READ)
     response.headers["Cache-Control"] = "no-store"
     db: Session = SessionLocal()
     try:
