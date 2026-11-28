@@ -524,6 +524,13 @@ def _build_onboarding_status(
             "plan": str(restaurant.plano or ""),
             "operationProfile": operation_profile,
         },
+        "operator": {
+            "name": str(getattr(current_user, "nome", "") or ""),
+            "email": str(getattr(current_user, "email", "") or ""),
+            "phone": str(getattr(current_user, "telefone", "") or ""),
+        }
+        if current_user is not None
+        else None,
         "trial": trial_snapshot,
         "onboarding": {
             "mode": onboarding_mode,

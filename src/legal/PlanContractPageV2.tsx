@@ -36,6 +36,7 @@ import {
   contractLegalBundle,
 } from './legalEvidence';
 import { LEGAL_PROVIDER_NAME, LEGAL_VERSION } from './legalContent';
+import { getOperatorSession } from '../utils/authSession';
 import { isValidCpf, taxIdKind } from './taxId';
 import './legal.css';
 import './planSubscriptionFlow.css';
@@ -179,6 +180,21 @@ export default function PlanContractPageV2() {
     return value === 'saldo-mercadopago' || value === 'account-money'
       || value === 'mercado-pago' || value === 'pix-automatico';
   }, []);
+  const isLinkRequested = useMemo(
+    () => new URLSearchParams(window.location.search).get('vincular') === '1',
+    [],
+  );
+  const operatorSession = useMemo(
+    () => (isLinkRequested ? getOperatorSession('caixa') : null),
+    [isLinkRequested],
+  );
+  const [linkedTenant, setLinkedTenant] = useState<{
+    id: string;
+    name: string;
+    slug: string;
+    plan: SubscriptionPlanId;
+    operationProfile: OperationProfile;
+  } | null>(null);
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [selectedPlanId, setSelectedPlanId] = useState<SubscriptionPlanId>(initialPlanId);
@@ -291,18 +307,67 @@ export default function PlanContractPageV2() {
       .then(async response => {
         if (!response.ok) return;
         const payload = await response.json();
+        const ccAvailable = Boolean(payload.credit_card);
+        const pixAvailable = Boolean(payload.pix);
         setCapabilities({
-          credit_card: Boolean(payload.credit_card),
-          pix: Boolean(payload.pix),
+          credit_card: ccAvailable,
+          pix: pixAvailable,
           pixMode: String(payload.pixMode || ''),
           publicKey: String(payload.publicKey || ''),
           environment: payload.environment,
           isTestMode: Boolean(payload.isTestMode),
         });
+        if (!ccAvailable && pixAvailable) {
+          setBillingMethod('pix');
+        }
       })
       .catch(() => { /* cadastro continua recuperável */ });
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (!isLinkRequested || !operatorSession?.token) return;
+    const controller = new AbortController();
+    fetch(`${API_BASE_URL}/api/onboarding/status`, {
+      headers: { Authorization: `Bearer ${operatorSession.token}` },
+      signal: controller.signal,
+    })
+      .then(async response => {
+        if (!response.ok) return;
+        const payload = await response.json();
+        const rest = payload?.restaurant;
+        const onboarding = payload?.onboarding;
+        if (!rest?.id || onboarding?.contractLinked) return;
+        const rawPlan = String(rest.plan || '').toLowerCase();
+        const validPlan: SubscriptionPlanId =
+          rawPlan === 'pocket' || rawPlan === 'pro' || rawPlan === 'premium' ? rawPlan : initialPlanId;
+        const rawProfile = String(rest.operationProfile || 'generic') as OperationProfile;
+        setLinkedTenant({
+          id: String(rest.id),
+          name: String(rest.name || ''),
+          slug: String(rest.slug || ''),
+          plan: validPlan,
+          operationProfile: rawProfile,
+        });
+        setSelectedPlanId(validPlan);
+        setBillingMethod('pix');
+        setForm(previous => ({
+          ...previous,
+          restaurantName: String(rest.name || previous.restaurantName),
+          operationProfile: rawProfile || previous.operationProfile,
+          responsibleName: previous.responsibleName || String(payload?.operator?.name || operatorSession.user?.nome || ''),
+          contractingPartyName: previous.contractingPartyName || String(payload?.operator?.name || operatorSession.user?.nome || ''),
+          email: previous.email || String(payload?.operator?.email || ''),
+          phone: previous.phone || String(payload?.operator?.phone || ''),
+        }));
+        setSignupNotice(
+          `Vinculando contratação ao restaurante #${rest.id} (${rest.name}). Seu cardápio, categorias e horários serão preservados.`,
+        );
+        setStep(3);
+      })
+      .catch(() => { /* segue fluxo normal se indisponível */ });
+    return () => controller.abort();
+  }, [initialPlanId, isLinkRequested, operatorSession]);
 
   useEffect(() => {
     document.title = `Contratar ${plan.name} | KÔMA`;
@@ -595,6 +660,48 @@ export default function PlanContractPageV2() {
     setIsSubmitting(true);
     setError(null);
     try {
+      if (linkedTenant && operatorSession?.token) {
+        const selfAcceptRes = await fetch(`${API_BASE_URL}/api/contracts/self-accept`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${operatorSession.token}`,
+            'X-Request-ID': requestId,
+          },
+          body: JSON.stringify({
+            request_id: requestId,
+            contracting_party_name: form.contractingPartyName.trim(),
+            contracting_party_tax_id: form.taxId.trim(),
+            restaurant_name: form.restaurantName.trim(),
+            representative_name: representativeName,
+            representative_tax_id: representativeTaxId,
+            representative_role: representativeRole,
+            email: form.email.trim(),
+            phone: form.phone.trim(),
+            plan: selectedPlanId,
+            billing_cycle: billingCycle,
+            payment_method_type: billingMethod,
+            powers_declared: true,
+            legal_version: LEGAL_VERSION,
+            legal_source_commit: LEGAL_SOURCE_COMMIT,
+            legal_source_blob_sha: LEGAL_SOURCE_BLOB_SHA,
+            documents: contractLegalBundle(),
+          }),
+        });
+        const selfPayload = await selfAcceptRes.json().catch(() => null);
+        if (!selfAcceptRes.ok) throw new Error(contractErrorMessage(selfPayload?.detail));
+        setReceipt(selfPayload.receipt as ContractReceipt);
+        trackOperationalAction('signup_checkout', billingMethod, 'succeeded');
+        setActivationResult({
+          restaurantId: String(selfPayload.restaurantId || linkedTenant.id),
+          status: selfPayload.status === 'ready' ? 'ready' : 'awaiting_release',
+          message: selfPayload.message,
+          slug: selfPayload.slug || linkedTenant.slug,
+          trialDays: selfPayload.trialStarted ? 7 : 0,
+        });
+        return;
+      }
+
       const activeReceipt = await createAcceptance();
       const freeFixedContract = Number.parseFloat(activeReceipt.commercial.fixedMonthlyPrice) === 0;
       let response: Response;
@@ -654,7 +761,9 @@ export default function PlanContractPageV2() {
                 ? (pixManualMode ? 'Nenhum Pix é cobrado hoje. Depois da implantação e dos 7 dias grátis, a cobrança Pix será informada pelo KÔMA para pagamento e conferência administrativa.' : 'Nenhum Pix é cobrado hoje. Depois da implantação essencial começam seus 7 dias grátis; o primeiro QR aparece no KÔMA somente no vencimento.')
                 : 'Cobrança de hoje concluída: R$ 0 (7 dias grátis iniciados após a implantação essencial).')}</p>
             {activationResult.slug && <div className="koma-sub-success-detail"><span>Endereço do estabelecimento</span><strong>https://{activationResult.slug}.komafood.com.br</strong></div>}
-            {activationResult.status === 'awaiting_release' ? (
+            {linkedTenant ? (
+              <a href="/?view=caixa" className="koma-sub-primary-action">Voltar ao meu painel operacional <ArrowRight size={18} /></a>
+            ) : activationResult.status === 'awaiting_release' ? (
               <div className="koma-sub-success-detail koma-sub-activation-pending"><span>Próximo passo</span><strong>Assim que a equipe KÔMA liberar seu acesso, enviaremos um convite ao e-mail cadastrado para você criar sua senha.</strong><p>Depois do primeiro login, você fará a implantação inicial. Seus 7 dias grátis começarão somente após os quatro itens essenciais e a liberação da operação.</p></div>
             ) : activationResult.activationToken ? (
               <a href={`/ativar#token=${encodeURIComponent(activationResult.activationToken)}`} className="koma-sub-primary-action">Concluir primeiro acesso <ArrowRight size={18} /></a>
@@ -768,8 +877,8 @@ export default function PlanContractPageV2() {
             </>
           ) : (
             <>
-              <button type="button" className="koma-sub-back" onClick={() => void handleSwitchPlanOrCycle()} disabled={isCheckingBilling}><ArrowLeft size={16} /> {isCheckingBilling ? 'Verificando…' : receipt ? 'Trocar plano ou ciclo' : 'Voltar para plano e cobrança'}</button>
-              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">03 · CONTRATAÇÃO{fixedBillingRequired ? ' E PAGAMENTO' : ''}</span><h1>Ative seu restaurante.</h1><p>{fixedBillingRequired ? 'Escolha cartão de crédito ou Pix. Cobrança hoje: R$ 0. Seus 7 dias grátis começam após a implantação e a liberação da operação.' : 'Condição contratual histórica: Seu contrato anterior mantém mensalidade fixa de R$ 0 e dispensa meio de pagamento.'}</p></div>
+              <button type="button" className="koma-sub-back" onClick={() => linkedTenant ? setStep(1) : void handleSwitchPlanOrCycle()} disabled={isCheckingBilling}><ArrowLeft size={16} /> {isCheckingBilling ? 'Verificando…' : receipt ? 'Trocar plano ou ciclo' : 'Voltar para plano e cobrança'}</button>
+              <div className="koma-sub-heading"><span className="koma-sub-eyebrow">03 · CONTRATAÇÃO{fixedBillingRequired ? ' E PAGAMENTO' : ''}</span><h1>{linkedTenant ? `Ative ${linkedTenant.name}.` : 'Ative seu restaurante.'}</h1><p>{fixedBillingRequired ? ((linkedTenant || (!capabilities.credit_card && capabilities.pix)) ? 'Confirme seus dados e a cobrança por Pix pós-teste. Cobrança hoje: R$ 0. Seus 7 dias grátis começam após a implantação e a liberação da operação.' : 'Escolha cartão de crédito ou Pix. Cobrança hoje: R$ 0. Seus 7 dias grátis começam após a implantação e a liberação da operação.') : 'Condição contratual histórica: Seu contrato anterior mantém mensalidade fixa de R$ 0 e dispensa meio de pagamento.'}</p></div>
               {error && <div className="koma-sub-error" role="alert"><Info size={18} /> {error}</div>}
               {contractLocked && <div className="koma-sub-locked-note"><Lock size={17} /> O aceite jurídico já foi registrado para esta tentativa.</div>}
 
@@ -799,7 +908,9 @@ export default function PlanContractPageV2() {
                 <section className="koma-sub-section-card">
                   <div className="koma-sub-section-title"><span><CreditCard size={18} /></span><div><h2>Forma de pagamento</h2><p>Escolha o meio para o componente fixo após o trial.</p></div></div>
                   <div className="koma-sub-methods" role="radiogroup" aria-label="Forma de pagamento disponível">
-                    <button type="button" role="radio" aria-checked={billingMethod === 'credit_card'} className={billingMethod === 'credit_card' ? 'is-selected' : ''} onClick={() => setBillingMethod('credit_card')}><span className="koma-sub-method-radio" /><CreditCard size={19} /><div><strong>Cartão de crédito{!capabilities.credit_card ? ' · indisponível no momento' : ''}</strong><small>Recorrente · R$ 0 hoje · cobrança automática depois do trial</small></div></button>
+                    {!linkedTenant && (
+                      <button type="button" role="radio" aria-checked={billingMethod === 'credit_card'} className={billingMethod === 'credit_card' ? 'is-selected' : ''} onClick={() => setBillingMethod('credit_card')}><span className="koma-sub-method-radio" /><CreditCard size={19} /><div><strong>Cartão de crédito{!capabilities.credit_card ? ' · indisponível no momento' : ''}</strong><small>Recorrente · R$ 0 hoje · cobrança automática depois do trial</small></div></button>
+                    )}
                     <button type="button" role="radio" aria-checked={billingMethod === 'pix'} className={billingMethod === 'pix' ? 'is-selected' : ''} onClick={() => setBillingMethod('pix')}><span className="koma-sub-method-radio" /><QrCode size={19} /><div><strong>Pix{!capabilities.pix ? ' · indisponível no momento' : ''}</strong><small>{pixManualMode ? 'Pix pós-teste · pagamento orientado pelo KÔMA · R$ 0 hoje' : 'QR Code + Pix Copia e Cola · pague com qualquer banco · R$ 0 hoje'}</small></div></button>
                   </div>
 
@@ -880,7 +991,7 @@ export default function PlanContractPageV2() {
                 : 'Pix mensal não é débito automático: cada vencimento gera um novo QR/Copia e Cola universal.'
               : 'Cartão de crédito é recorrente: a primeira cobrança automática acontece somente depois da implantação e dos 7 dias grátis.'}</p>
             {step === 1 ? (
-              <button key="signup-step-1-btn" type="button" className="koma-sub-primary-action" onClick={() => setStep(2)}>Continuar <ArrowRight size={18} /></button>
+              <button key="signup-step-1-btn" type="button" className="koma-sub-primary-action" onClick={() => setStep(linkedTenant ? 3 : 2)}>Continuar <ArrowRight size={18} /></button>
             ) : step === 2 ? (
               <button key="signup-step-2-btn" type="submit" form="koma-signup-form" className="koma-sub-primary-action" disabled={isSubmitting}>{isSubmitting ? 'Salvando…' : 'Salvar e continuar'} <ArrowRight size={18} /></button>
             ) : (

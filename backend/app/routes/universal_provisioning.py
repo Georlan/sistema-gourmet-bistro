@@ -25,8 +25,9 @@ from .super_admin import get_current_admin
 logger = logging.getLogger("koma.universal_provisioning.routes")
 router = APIRouter(prefix="/provisioning", tags=["Provisionamento Universal"])
 
-_public_preview_limiter = IPRateLimiter(requests_per_minute=30)
-_public_start_limiter = IPRateLimiter(requests_per_minute=10)
+_public_preview_limiter = IPRateLimiter(requests_per_minute=20)
+_public_start_limiter = IPRateLimiter(requests_per_minute=3)
+_public_start_hourly_limiter = IPRateLimiter(requests_per_minute=6, window_seconds=3600.0)
 
 
 class ProvisioningMenuItemPayload(BaseModel):
@@ -209,6 +210,7 @@ def start_public_preparation(
 ):
     """Cria restaurante autônomo em Modo Preparação sem depender do Super Admin."""
     _public_start_limiter.check(request)
+    _public_start_hourly_limiter.check(request)
     response.headers["Cache-Control"] = "no-store"
 
     if not payload.admin_password:

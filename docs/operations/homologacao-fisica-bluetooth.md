@@ -2,8 +2,12 @@
 
 > **Regra de evidência:** testes unitários, emuladores, HTTP 200 e build verde **não** comprovam impressão física. Somente declarar homologado após cumprir cada item em dispositivo Android real com impressora Bluetooth real.
 
+> [!WARNING]
+> **Versão obrigatória do APK antes de testar em campo:** a release pública `android-print-v1.1.0-preview` (commit `d9f6d0c4`, publicada em 2026-11-14) **é anterior** às correções do `#1470` (`31e83485` — autenticação do agente) e da Wave 1 (`87aeadc0` — suporte 58 mm / 80 mm e vinculação mobile). **Não distribuir esse APK antigo para cliente.** Antes da homologação física, baixar o artifact mais recente `koma-print-android-debug-apk` do workflow `KOMA Print Android` no GitHub Actions ou publicar nova tag de release com o código atual de `main`.
+
 ## 1. Pré-requisitos de hardware e sistema
-- [ ] Celular Android (Android 8.0+ / API 26+) com **KÔMA Print Android** instalado e permissão **Dispositivos próximos** concedida.
+- [ ] Celular Android (Android 8.0+ / API 26+) com o build atualizado do **KÔMA Print Android** instalado e permissão **Dispositivos próximos** (`BLUETOOTH_CONNECT` / `BLUETOOTH_SCAN`) concedida.
+- [ ] Confirmar no card de status do app que a versão instalada corresponde ao build pós-Wave 1 (com seleção de largura 58 mm / 80 mm visível).
 - [ ] Impressora térmica Bluetooth Classic SPP (58 mm, ex.: Kapbom KA-1445 / MPT-II / Goojprt, ou 80 mm compatível) ligada e com bobina carregada.
 - [ ] Confirmar que a impressora já aparece como **pareada** em *Configurações → Bluetooth* do Android (PIN padrão geralmente `0000` ou `1234`).
 

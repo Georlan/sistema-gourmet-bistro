@@ -164,7 +164,7 @@ def create_default_trial(db: Session, tenant_id: int) -> dict[str, Any]:
     }
 
 
-def _discover_candidate_restaurant_ids(db: Session) -> list[int]:
+def _discover_candidate_restaurant_ids(db: Session, *, limit: int = 25) -> list[int]:
     bind = db.get_bind()
     if bind is not None and bind.dialect.name == "postgresql":
         rows = db.execute(
@@ -172,7 +172,31 @@ def _discover_candidate_restaurant_ids(db: Session) -> list[int]:
         ).scalars().all()
     else:
         rows = db.execute(text("SELECT id FROM restaurantes ORDER BY id DESC")).scalars().all()
-    return [int(row) for row in rows if row is not None]
+    ids = [int(row) for row in rows if row is not None]
+    return ids[:limit] if limit > 0 else ids
+
+
+def _admin_email_exists_anywhere(db: Session, email: str) -> bool:
+    clean_email = (email or "").strip().lower()
+    if not clean_email:
+        return False
+    bind = db.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        rows = db.execute(
+            text(
+                "SELECT id FROM koma_internal.auth_user_candidates(:identifier, NULL)"
+            ),
+            {"identifier": clean_email},
+        ).all()
+        return len(rows) > 0
+
+    found = db.execute(
+        text(
+            "SELECT 1 FROM usuarios WHERE lower(coalesce(email, '')) = :identifier LIMIT 1"
+        ),
+        {"identifier": clean_email},
+    ).scalar_one_or_none()
+    return found is not None
 
 
 @dataclass
@@ -408,11 +432,20 @@ def _find_idempotent_replay(
     origin: ProvisioningOrigin,
     idempotency_key: str,
     admin_email: str,
+    slug_hint: str | None = None,
 ) -> dict[str, Any] | None:
     clean_key = idempotency_key.strip()
     if not clean_key:
         return None
-    for tid in _discover_candidate_restaurant_ids(db):
+    candidates: list[int] = []
+    if slug_hint:
+        direct_tid = slug_owner_id(db, slug_hint)
+        if direct_tid is not None:
+            candidates.append(direct_tid)
+    for tid in _discover_candidate_restaurant_ids(db, limit=25):
+        if tid not in candidates:
+            candidates.append(tid)
+    for tid in candidates:
         with tenant_session_scope(db, tid):
             rows = (
                 db.query(SuperAdminAuditLog)
@@ -587,6 +620,12 @@ def provision_restaurant(
             detail="A seleção manual de ID é exclusiva do provisionamento autorizado.",
         )
 
+    if origin == "public_self_service" and len(spec["menu_items"]) > 250:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Importe até 250 itens na criação inicial; itens adicionais podem ser importados no painel.",
+        )
+
     clean_idempotency = str(idempotency_key or "").strip() or None
     if clean_idempotency:
         replay = _find_idempotent_replay(
@@ -594,6 +633,7 @@ def provision_restaurant(
             origin=origin,
             idempotency_key=clean_idempotency,
             admin_email=spec["admin_email"],
+            slug_hint=spec["slug"],
         )
         if replay is not None:
             return replay
@@ -605,9 +645,19 @@ def provision_restaurant(
                 origin=origin,
                 idempotency_key=clean_idempotency,
                 admin_email=spec["admin_email"],
+                slug_hint=spec["slug"],
             )
             if replay is not None:
                 return replay
+
+        if origin == "public_self_service" and _admin_email_exists_anywhere(db, spec["admin_email"]):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Já existe uma conta KÔMA associada a este e-mail. "
+                    "Entre com sua conta atual ou utilize outro e-mail para este estabelecimento."
+                ),
+            )
 
         excluded_ids: set[int] = set()
         max_attempts = 1 if payload.requested_restaurant_id is not None else 5
@@ -651,6 +701,7 @@ def provision_restaurant(
                         endereco=spec["address"],
                         socials=format_socials_with_phone(spec["phone"]),
                         horarios_funcionamento=spec["operating_hours"] or None,
+                        formas_pagamento_aceitas=["Pix", "Dinheiro"],
                     )
                     db.add(restaurante)
                     db.flush()

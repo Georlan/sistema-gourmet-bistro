@@ -642,10 +642,11 @@ import time
 from collections import OrderedDict
 
 class IPRateLimiter:
-    """Rate limiter em memória thread-safe e limitado com janela deslizante de 60 segundos."""
-    def __init__(self, requests_per_minute: int = 30, max_entries: int = 8192):
+    """Rate limiter em memória thread-safe e limitado com janela deslizante configurável."""
+    def __init__(self, requests_per_minute: int = 30, max_entries: int = 8192, window_seconds: float = 60.0):
         self.requests_per_minute = requests_per_minute
         self.max_entries = max_entries
+        self.window_seconds = max(1.0, float(window_seconds))
         self.history: OrderedDict[str, list[float]] = OrderedDict()
         self._lock = threading.Lock()
 
@@ -655,7 +656,7 @@ class IPRateLimiter:
         client_ip = resolve_client_ip(request)
         bucket_key = f"{client_ip}|{key_suffix}" if key_suffix else client_ip
         now = time.time()
-        cutoff = now - 60.0
+        cutoff = now - self.window_seconds
 
         with self._lock:
             timestamps = [t for t in self.history.get(bucket_key, ()) if t > cutoff]
