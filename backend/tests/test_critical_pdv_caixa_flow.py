@@ -59,8 +59,16 @@ def setup_caixa_pdv():
         from app.operational_models import LancamentoIdentidade, MovimentoAtendimento
         from app.order_chat_models import OrderConversation
         from app.scheduled_models import ScheduledOrder
-        from app.models import ItemModificador
+        from app.models import (
+            HistoricoFidelidade,
+            ItemModificador,
+            MovimentacaoEstoque,
+            OnlinePaymentIntent,
+        )
 
+        db.query(HistoricoFidelidade).filter(HistoricoFidelidade.restaurante_id == 777).delete()
+        db.query(MovimentacaoEstoque).filter(MovimentacaoEstoque.restaurante_id == 777).delete()
+        db.query(OnlinePaymentIntent).filter(OnlinePaymentIntent.restaurante_id == 777).delete()
         db.query(ComandaDeliveryAddressRevision).filter(ComandaDeliveryAddressRevision.restaurante_id == 777).delete()
         db.query(ComandaDeliveryAddressSnapshot).filter(ComandaDeliveryAddressSnapshot.restaurante_id == 777).delete()
         db.query(OrderConversation).filter(OrderConversation.restaurante_id == 777).delete()

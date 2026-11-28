@@ -89,4 +89,4 @@ def test_superadmin_onboarding_does_not_create_catalog_or_modifiers_implicitly()
         assert token not in onboarding
 
     assert "Mercado Pago" in onboarding
-    assert "explicitamente desconectado" in onboarding
+    assert "ContaMercadoPago(" not in onboarding
