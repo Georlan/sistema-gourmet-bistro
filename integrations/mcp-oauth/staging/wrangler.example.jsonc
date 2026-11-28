@@ -1,0 +1,18 @@
+{
+  "name": "koma-mcp-oauth-staging",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": {"enabled": false},
+  "kv_namespaces": [{"binding": "OAUTH_KV", "id": "REPLACE_WITH_STAGING_KV_ID"}],
+  "vars": {
+    "ISSUER": "https://koma-mcp-oauth-staging.EXAMPLE.workers.dev",
+    "RESOURCE": "https://RESOURCE.example.invalid/mcp",
+    "GITHUB_OPERATOR_ID": "129700145",
+    "GITHUB_CLIENT_ID": "REPLACE_WITH_STAGING_GITHUB_CLIENT_ID",
+    "MCP_CLIENT_ID": "REPLACE_WITH_EXACT_CHATGPT_CIMD_URL",
+    "MCP_REDIRECT_URI": "REPLACE_WITH_EXACT_CHATGPT_REDIRECT_URI"
+  }
+}
