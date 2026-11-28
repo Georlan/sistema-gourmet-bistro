@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import json
 from typing import Any
 
 from sqlalchemy import case, func, select, text
@@ -49,6 +50,23 @@ def _as_utc(value: datetime | None) -> datetime | None:
     if value.tzinfo is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+def _safe_json_list(raw: Any) -> list[Any]:
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        text_val = raw.strip()
+        if not text_val:
+            return []
+        try:
+            parsed = json.loads(text_val)
+            return list(parsed) if isinstance(parsed, (list, tuple)) else []
+        except (TypeError, ValueError):
+            return []
+    if isinstance(raw, (list, tuple, set)):
+        return list(raw)
+    return []
 
 
 def _query_cutoff(db: Session, dt: datetime) -> datetime:
@@ -595,9 +613,16 @@ def get_restaurant_readiness_summary(
             or 0
         )
 
-        hours_configured = bool(isinstance(rest.horarios_funcionamento, list) and len(rest.horarios_funcionamento) > 0)
-        order_types = explicit_order_types(config) if config is not None else []
+        hours_list = _safe_json_list(rest.horarios_funcionamento)
+        hours_configured = len(hours_list) > 0
+        raw_order_types = explicit_order_types(config) if config is not None else None
+        order_types = list(raw_order_types) if raw_order_types is not None else []
         operations_configured = len(order_types) > 0
+        payment_methods = [
+            str(item)
+            for item in _safe_json_list(rest.formas_pagamento_aceitas)
+            if item is not None and str(item).strip()
+        ]
         profile_configured = bool(str(rest.nome or "").strip()) and bool(
             str(rest.endereco or "").strip() or rest.socials
         )
@@ -644,10 +669,11 @@ def get_restaurant_readiness_summary(
             },
             "operations": {
                 "orderTypes": order_types,
+                "legacyOrderTypesUnset": raw_order_types is None,
                 "deliveryEnabled": bool(config.delivery_ativo) if config else True,
                 "deliveryFeeMode": str(config.tipo_taxa_entrega or "fixa") if config else "fixa",
                 "deliveryFixedFee": float(config.taxa_entrega_fixa or 0.0) if config else 0.0,
-                "acceptedPaymentMethods": list(rest.formas_pagamento_aceitas or []),
+                "acceptedPaymentMethods": payment_methods,
                 "mercadoPagoConnected": mp_connected,
             },
             "printing": {

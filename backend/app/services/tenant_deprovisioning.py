@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 import datetime
 import hashlib
 import json
@@ -13,7 +14,7 @@ from urllib.parse import unquote
 import httpx
 from fastapi import HTTPException, status
 from sqlalchemy import MetaData, Table, and_, delete, exists, func, or_, select, text, update
-from sqlalchemy.exc import NoReferencedTableError
+from sqlalchemy.exc import NoReferencedTableError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from ..config import settings
@@ -122,11 +123,58 @@ def _single_tenant_predicate(
     return or_(*alternatives) if alternatives else None
 
 
+def _get_table_privileges(db: Session) -> dict[str, dict[str, bool]] | None:
+    """Consulta privilégios reais do role atual em pg_tables para falhar apenas onde faltam permissões."""
+    bind = db.get_bind()
+    if bind is None or bind.dialect.name != "postgresql":
+        return None
+    rows = db.execute(
+        text(
+            "SELECT tablename, "
+            "has_table_privilege(current_user, format('%I.%I', schemaname, tablename), 'SELECT') AS can_select, "
+            "has_table_privilege(current_user, format('%I.%I', schemaname, tablename), 'DELETE') AS can_delete "
+            "FROM pg_tables "
+            "WHERE schemaname = 'public'"
+        )
+    ).mappings().all()
+    return {
+        str(row["tablename"]): {
+            "select": bool(row["can_select"]),
+            "delete": bool(row["can_delete"]),
+        }
+        for row in rows
+    }
+
+
+def _safe_count_rows(
+    db: Session,
+    table: Table,
+    predicate,
+    *,
+    privileges: dict[str, dict[str, bool]] | None = None,
+) -> tuple[int | None, bool]:
+    """Conta registros em SAVEPOINT quando PostgreSQL, evitando abortar transação em falta de privilégio."""
+    if privileges is not None:
+        table_priv = privileges.get(table.name)
+        if table_priv is not None and not table_priv.get("select", False):
+            return None, False
+
+    bind = db.get_bind()
+    is_pg = bind is not None and bind.dialect.name == "postgresql"
+    ctx = db.begin_nested() if is_pg else nullcontext()
+    try:
+        with ctx:
+            stmt = select(func.count()).select_from(table)
+            if predicate is not None:
+                stmt = stmt.where(predicate)
+            return int(db.execute(stmt).scalar_one() or 0), True
+    except ProgrammingError:
+        return None, False
+
+
 def _count_rows(db: Session, table: Table, predicate) -> int:
-    stmt = select(func.count()).select_from(table)
-    if predicate is not None:
-        stmt = stmt.where(predicate)
-    return int(db.execute(stmt).scalar_one() or 0)
+    cnt, ok = _safe_count_rows(db, table, predicate)
+    return int(cnt or 0) if ok else 0
 
 
 def _extract_gallery_values(raw_gallery: Any) -> list[str]:
@@ -189,9 +237,15 @@ def _collect_storage_assets(db: Session, metadata: MetaData, tenant_id: int) -> 
 
     ret_table = metadata.tables.get("product_image_retirements")
     if ret_table is not None and {"restaurante_id", "object_path"}.issubset(ret_table.c.keys()):
-        ret_rows = db.execute(
-            select(ret_table.c.object_path).where(ret_table.c.restaurante_id == tenant_id)
-        ).fetchall()
+        bind = db.get_bind()
+        ctx = db.begin_nested() if (bind is not None and bind.dialect.name == "postgresql") else nullcontext()
+        try:
+            with ctx:
+                ret_rows = db.execute(
+                    select(ret_table.c.object_path).where(ret_table.c.restaurante_id == tenant_id)
+                ).fetchall()
+        except ProgrammingError:
+            ret_rows = []
         for (val,) in ret_rows:
             if isinstance(val, str) and val.strip():
                 assets.add(val.strip())
@@ -573,6 +627,7 @@ def build_deprovision_plan(
 
     other_tenant_ids = _discover_other_tenant_ids(db, tenant_id)
     with tenant_session_scope(db, tenant_id):
+        privileges = _get_table_privileges(db)
         metadata = _reflect_metadata(db)
         database = _database_name(db)
         restaurante = (
@@ -582,6 +637,7 @@ def build_deprovision_plan(
 
         target_counts: dict[str, int] = {}
         preserved_counts: dict[str, int] = {}
+        uninspectable_tables: list[str] = []
 
         for table in metadata.sorted_tables:
             if table.name in GLOBAL_SHARED_TABLES:
@@ -589,10 +645,26 @@ def build_deprovision_plan(
             predicate = _single_tenant_predicate(table, tenant_id)
             if predicate is None:
                 continue
-            row_count = _count_rows(db, table, predicate)
-            if row_count <= 0:
+            row_count, readable = _safe_count_rows(
+                db,
+                table,
+                predicate,
+                privileges=privileges,
+            )
+            if not readable:
+                uninspectable_tables.append(table.name)
+                continue
+            if not row_count or row_count <= 0:
                 continue
             if table.name in PRESERVED_AUDIT_TABLES:
+                preserved_counts[table.name] = row_count
+                continue
+            can_delete = (
+                True
+                if privileges is None
+                else privileges.get(table.name, {}).get("delete", True)
+            )
+            if mode == "qa_purge" and not can_delete:
                 preserved_counts[table.name] = row_count
                 continue
             if mode == "qa_purge":
@@ -613,15 +685,16 @@ def build_deprovision_plan(
             ):
                 table = metadata.tables.get(pending_table)
                 if table is not None and {"restaurante_id", status_col}.issubset(table.c.keys()):
-                    cnt = _count_rows(
+                    cnt, ok = _safe_count_rows(
                         db,
                         table,
                         and_(
                             table.c.restaurante_id == tenant_id,
                             table.c[status_col].in_(pending_vals),
                         ),
+                        privileges=privileges,
                     )
-                    if cnt > 0:
+                    if ok and cnt and cnt > 0:
                         target_counts[f"{pending_table}(pending)"] = cnt
 
         fingerprint = _compute_fingerprint(
@@ -669,6 +742,7 @@ def build_deprovision_plan(
         "deleteCounts": target_counts,
         "deleteTotal": sum(target_counts.values()),
         "preservedCounts": preserved_counts,
+        "uninspectableTables": sorted(uninspectable_tables),
         "storageAssets": storage_assets,
         "storagePlan": storage_plan,
         "externalIntegrations": external_integrations,
@@ -680,6 +754,7 @@ def build_deprovision_plan(
 def verify_tenant_deprovisioned(db: Session, tenant_id: int) -> dict[str, Any]:
     """Audita ausência de resíduos operacionais e registra a política de não-reutilização de ID."""
     with tenant_session_scope(db, tenant_id):
+        privileges = _get_table_privileges(db)
         metadata = _reflect_metadata(db)
 
         def _table_count(name: str) -> int:
@@ -687,7 +762,10 @@ def verify_tenant_deprovisioned(db: Session, tenant_id: int) -> dict[str, Any]:
             if table is None:
                 return 0
             pred = _single_tenant_predicate(table, tenant_id)
-            return _count_rows(db, table, pred) if pred is not None else 0
+            if pred is None:
+                return 0
+            cnt, ok = _safe_count_rows(db, table, pred, privileges=privileges)
+            return int(cnt or 0) if ok else 0
 
         categories = {
             "restaurantes": _table_count("restaurantes"),
@@ -701,14 +779,18 @@ def verify_tenant_deprovisioned(db: Session, tenant_id: int) -> dict[str, Any]:
         }
 
         residual_tables: dict[str, int] = {}
+        uninspectable_tables: list[str] = []
         for table in metadata.sorted_tables:
             if table.name in GLOBAL_SHARED_TABLES or table.name in PRESERVED_AUDIT_TABLES:
                 continue
             pred = _single_tenant_predicate(table, tenant_id)
             if pred is None:
                 continue
-            cnt = _count_rows(db, table, pred)
-            if cnt > 0:
+            cnt, ok = _safe_count_rows(db, table, pred, privileges=privileges)
+            if not ok:
+                uninspectable_tables.append(table.name)
+                continue
+            if cnt and cnt > 0:
                 residual_tables[table.name] = cnt
 
         audit_logs_preserved = _table_count("super_admin_audit_logs")
@@ -727,27 +809,29 @@ def verify_tenant_deprovisioned(db: Session, tenant_id: int) -> dict[str, Any]:
             if last_storage_audit is not None and isinstance(last_storage_audit.after_data, dict)
             else None
         )
-        eligibility = inspect_tenant_id_eligibility(db, tenant_id, preserve_transaction=False)
 
-        return {
-            "tenantId": tenant_id,
-            "clean": len(residual_tables) == 0,
-            "categories": categories,
-            "residualOperationalTables": residual_tables,
-            "residualOperationalTotal": sum(residual_tables.values()),
-            "storageResidualAssets": storage_residual_assets,
-            "lastStorageCleanupAudit": last_storage_summary,
-            "auditLogsPreserved": audit_logs_preserved,
-            "idReusePolicy": {
-                "reusable": bool(eligibility.get("eligible")),
-                "status": str(eligibility.get("status") or "blocked"),
-                "policy": "no_reuse_when_historical_audit_present",
-                "reason": (
-                    "ID preservado com histórico imutável em super_admin_audit_logs para impedir "
-                    "colisão com JWTs, caches, webhooks ou vínculos externos antigos."
-                ),
-            },
-        }
+    eligibility = inspect_tenant_id_eligibility(db, tenant_id, preserve_transaction=False)
+
+    return {
+        "tenantId": tenant_id,
+        "clean": len(residual_tables) == 0,
+        "categories": categories,
+        "residualOperationalTables": residual_tables,
+        "residualOperationalTotal": sum(residual_tables.values()),
+        "uninspectableTables": sorted(uninspectable_tables),
+        "storageResidualAssets": storage_residual_assets,
+        "lastStorageCleanupAudit": last_storage_summary,
+        "auditLogsPreserved": audit_logs_preserved,
+        "idReusePolicy": {
+            "reusable": bool(eligibility.get("eligible")),
+            "status": str(eligibility.get("status") or "blocked"),
+            "policy": "no_reuse_when_historical_audit_present",
+            "reason": (
+                "ID preservado com histórico imutável em super_admin_audit_logs para impedir "
+                "colisão com JWTs, caches, webhooks ou vínculos externos antigos."
+            ),
+        },
+    }
 
 
 def execute_deprovision(
@@ -848,6 +932,7 @@ def execute_deprovision(
                 {"lock_key": f"koma-deprovision-{tenant_id}"},
             )
 
+        privileges = _get_table_privileges(db)
         metadata = _reflect_metadata(db)
 
         # 1. Suspensão imediata e revogação de sessões antes de limpar/desativar recursos
@@ -934,7 +1019,7 @@ def execute_deprovision(
                     if res.rowcount:
                         deleted_counts[table_name] = int(res.rowcount)
         else:
-            # qa_purge: remove todas as dependências em ordem topológica reversa, preservando auditoria
+            # qa_purge: remove todas as dependências em ordem topológica reversa, preservando auditoria e tabelas sem DELETE
             for table in reversed(metadata.sorted_tables):
                 if (
                     table.name in GLOBAL_SHARED_TABLES
@@ -942,6 +1027,10 @@ def execute_deprovision(
                     or table.name == "restaurantes"
                 ):
                     continue
+                if privileges is not None:
+                    priv = privileges.get(table.name)
+                    if priv is not None and (not priv.get("select", False) or not priv.get("delete", False)):
+                        continue
                 pred = _single_tenant_predicate(table, tenant_id)
                 if pred is None:
                     continue

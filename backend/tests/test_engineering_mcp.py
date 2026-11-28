@@ -648,3 +648,45 @@ def test_mcp_operational_restaurant_tools_and_pii_redaction(enabled, issuer, mon
 
     res_verify = rpc(enabled, "tools/call", name="ops_verify_tenant_deprovision", arguments={"tenant_id": 999}).json()["result"]
     assert res_verify["structuredContent"]["clean"] is True
+
+
+def test_readiness_handles_legacy_null_order_types_and_payment_methods(tmp_path):
+    from app.models import ConfiguracaoRestaurante
+
+    db_file = tmp_path / "mcp_legacy.db"
+    local_engine = create_engine(f"sqlite:///{db_file}", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=local_engine)
+    LocalSession = sessionmaker(bind=local_engine, autocommit=False, autoflush=False)
+
+    db = LocalSession()
+    try:
+        db.add(
+            Restaurante(
+                id=209,
+                nome="Loja Legada QA",
+                slug="loja-legada-209",
+                plano="pro",
+                horarios_funcionamento=None,
+                formas_pagamento_aceitas=None,
+            )
+        )
+        db.add(
+            ConfiguracaoRestaurante(
+                restaurante_id=209,
+                tipos_pedido_ativos=None,
+                delivery_ativo=True,
+                taxa_entrega_fixa=0.0,
+            )
+        )
+        db.commit()
+
+        summary = get_restaurant_readiness_summary(db, 209)
+        assert summary["exists"] is True
+        assert summary["operations"]["orderTypes"] == []
+        assert summary["operations"]["legacyOrderTypesUnset"] is True
+        assert summary["operations"]["acceptedPaymentMethods"] == []
+        assert summary["steps"]["hours"] is False
+        assert summary["steps"]["operations"] is False
+    finally:
+        db.close()
+        local_engine.dispose()
