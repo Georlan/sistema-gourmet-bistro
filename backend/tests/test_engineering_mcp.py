@@ -3,22 +3,34 @@ from contextlib import asynccontextmanager
 
 import httpx
 import pytest
-from app.database import engine
+from app.database import Base, SessionLocal, engine
 from app.main import app as koma
 from app.mcp_auth import READ_SCOPE
+from app.mcp_db_guard import (
+    MCPBusyError,
+    MCPQueryTimeoutError,
+    clear_mcp_cache,
+    configure_readonly_tx,
+    run_protected_db_read,
+)
 from app.mcp_edge import METADATA_PATH, install_engineering_mcp
 from app.mcp_health import build_in_memory_system_health
+from app.mcp_ops_queries import get_checkout_outcomes, get_print_flow_summary
+from app.models import Comanda, PrintAgentToken, PrintJob, Restaurante, Usuario
 from app.product_catalog import load_product_catalog
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
 from mcp.shared.inbound import CLIENT_CAPABILITIES_META_KEY, PROTOCOL_VERSION_META_KEY
-from sqlalchemy import event
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker
 
 ORIGIN = "https://contract.invalid"
 ISSUER = "https://issuer.invalid"
 RESOURCE = ORIGIN + "/mcp"
 TOOL = "ops_get_product_contract"
 HEALTH_TOOL = "ops_get_system_health"
+CHECKOUT_TOOL = "ops_get_checkout_outcomes"
+PRINT_TOOL = "ops_get_print_flow_summary"
 VERSION = "2026-07-28"
 
 
@@ -136,7 +148,7 @@ def test_catalog_and_health_need_no_db(enabled, issuer):
     event.listen(engine, "checkout", forbid_checkout)
     try:
         tools = rpc(enabled, "tools/list").json()["result"]["tools"]
-        assert [t["name"] for t in tools] == [TOOL, HEALTH_TOOL]
+        assert [t["name"] for t in tools] == [TOOL, HEALTH_TOOL, CHECKOUT_TOOL, PRINT_TOOL]
         assert all(t["annotations"]["readOnlyHint"] for t in tools)
         result = rpc(enabled, "tools/call", name=TOOL, arguments={}).json()["result"]
         assert not result.get("isError")
@@ -277,3 +289,277 @@ def test_unavailable_issuer_denies_access(enabled, monkeypatch):
 
     monkeypatch.setattr(httpx.AsyncClient, "post", timeout)
     assert rpc(enabled, "tools/call", name=TOOL).status_code == 503
+
+
+def test_checkout_outcomes_and_print_flow_queries_and_pii_redaction(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    db_file = tmp_path / "mcp_ops.db"
+    local_engine = create_engine(f"sqlite:///{db_file}", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=local_engine)
+    LocalSession = sessionmaker(bind=local_engine, autocommit=False, autoflush=False)
+
+    now = datetime(2026, 11, 28, 17, 30, 0, tzinfo=timezone.utc)
+    db = LocalSession()
+    try:
+        db.add_all(
+            [
+                Restaurante(id=101, nome="Restaurante Ficticio Alpha", slug="alpha-secret", plano="pro"),
+                Restaurante(id=102, nome="Restaurante Ficticio Beta", slug="beta-secret", plano="pocket"),
+            ]
+        )
+        db.add_all(
+            [
+                Usuario(id="u-101", restaurante_id=101, nome="Op Alpha", senha_hash="x", role="admin", cargo="admin", status="ativo"),
+                Usuario(id="u-102", restaurante_id=102, nome="Op Beta", senha_hash="x", role="admin", cargo="admin", status="ativo"),
+            ]
+        )
+        db.add_all(
+            [
+                Comanda(
+                    id="c-1",
+                    restaurante_id=101,
+                    garcom_id="u-101",
+                    numero_pedido=1,
+                    tipo="Delivery",
+                    delivery_status="aceito",
+                    online_payment_status="approved",
+                    criado_em=(now - timedelta(minutes=10)).replace(tzinfo=None),
+                    onboarding_test=False,
+                ),
+                Comanda(
+                    id="c-2",
+                    restaurante_id=102,
+                    garcom_id="u-102",
+                    numero_pedido=2,
+                    tipo="Delivery",
+                    delivery_status="pendente",
+                    online_payment_status="pending",
+                    criado_em=(now - timedelta(minutes=20)).replace(tzinfo=None),
+                    onboarding_test=False,
+                ),
+                Comanda(
+                    id="c-test",
+                    restaurante_id=101,
+                    garcom_id="u-101",
+                    numero_pedido=3,
+                    tipo="Delivery",
+                    delivery_status="recusado",
+                    online_payment_status="rejected",
+                    criado_em=(now - timedelta(minutes=5)).replace(tzinfo=None),
+                    onboarding_test=True,
+                ),
+            ]
+        )
+        db.add_all(
+            [
+                PrintJob(
+                    id="pj-1",
+                    restaurante_id=101,
+                    document_type="producao",
+                    destination="COZINHA",
+                    source_type="pedido",
+                    source_id="c-1",
+                    payload_text="CONFIDENTIAL_CUSTOMER_ADDRESS_123",
+                    status="pending",
+                    idempotency_key="k1",
+                    created_at=(now - timedelta(seconds=180)).replace(tzinfo=None),
+                ),
+                PrintJob(
+                    id="pj-2",
+                    restaurante_id=102,
+                    document_type="producao",
+                    destination="BAR",
+                    source_type="pedido",
+                    source_id="c-2",
+                    payload_text="CONFIDENTIAL_PAYLOAD_2",
+                    status="printed",
+                    idempotency_key="k2",
+                    created_at=(now - timedelta(minutes=15)).replace(tzinfo=None),
+                ),
+            ]
+        )
+        db.add_all(
+            [
+                PrintAgentToken(
+                    id="pa-1",
+                    restaurante_id=101,
+                    agent_id="caixa-alpha-secret",
+                    token_hash="sha256-secret-hash",
+                    ativo=True,
+                    last_seen_at=(now - timedelta(seconds=20)).replace(tzinfo=None),
+                ),
+                PrintAgentToken(
+                    id="pa-2",
+                    restaurante_id=102,
+                    agent_id="caixa-beta-secret",
+                    token_hash="sha256-secret-hash-2",
+                    ativo=True,
+                    last_seen_at=(now - timedelta(minutes=10)).replace(tzinfo=None),
+                ),
+            ]
+        )
+        db.commit()
+
+        checkout = get_checkout_outcomes(db, window_minutes=60, now=now)
+        assert checkout["status"] == "normal"
+        assert checkout["tenants_with_activity_count"] == 2
+        assert checkout["persisted_orders"]["total"] == 2
+        assert checkout["persisted_orders"]["accepted_or_progressed"] == 1
+        assert checkout["persisted_orders"]["awaiting_acceptance"] == 1
+        assert checkout["persisted_orders"]["refused"] == 0
+        assert checkout["online_payments"]["approved"] == 1
+        assert checkout["online_payments"]["pending_or_released"] == 1
+        assert checkout["coverage"]["pre_persistence_failures_included"] is False
+        assert "alpha-secret" not in str(checkout)
+        assert "101" not in str(checkout)
+
+        invalid = get_checkout_outcomes(db, window_minutes=7, now=now)
+        assert invalid["error"]["code"] == "VALIDATION_ERROR"
+
+        print_summary = get_print_flow_summary(db, now=now)
+        assert print_summary["status"] == "degraded"
+        assert print_summary["queue"]["pending"] == 1
+        assert print_summary["queue"]["delayed_unresolved_jobs"] == 1
+        assert print_summary["queue"]["oldest_unresolved_age_seconds"] == 180
+        assert print_summary["queue"]["printed_last_60m"] == 1
+        assert print_summary["agents"]["active_total"] == 2
+        assert print_summary["agents"]["online_within_90s"] == 1
+        assert print_summary["agents"]["silent"] == 1
+        assert print_summary["physical_output_verified"] is False
+        assert print_summary["coverage"]["maintenance_writes_executed"] is False
+        for forbidden in ("CONFIDENTIAL", "sha256-secret-hash", "caixa-alpha-secret", "101", "102"):
+            assert forbidden not in str(print_summary)
+    finally:
+        db.close()
+        local_engine.dispose()
+
+
+def test_db_guard_concurrency_cache_timeout_and_readonly():
+    import time as pytime
+    from types import SimpleNamespace
+
+    import anyio
+
+    clear_mcp_cache()
+
+    # 1. PostgreSQL READ ONLY + statement_timeout SQL emission
+    executed = []
+
+    class _FakePGSession:
+        def get_bind(self):
+            return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
+
+        def execute(self, stmt, params=None):
+            executed.append((str(stmt), params))
+
+    configure_readonly_tx(_FakePGSession(), statement_timeout_ms=2000)
+    assert executed[0][0] == "SET LOCAL TRANSACTION READ ONLY"
+    assert executed[1][0] == "SET LOCAL statement_timeout = :ms"
+    assert executed[1][1] == {"ms": "2000"}
+
+    # 2. Semaphore fail-fast BUSY + cache hit without re-running DB
+    class _DummySession:
+        def __init__(self):
+            self.closed = False
+            self.rolled_back = False
+
+        def get_bind(self):
+            return None
+
+        def in_transaction(self):
+            return True
+
+        def rollback(self):
+            self.rolled_back = True
+
+        def close(self):
+            self.closed = True
+
+    sessions = []
+
+    def _make_session():
+        s = _DummySession()
+        sessions.append(s)
+        return s
+
+    async def _run_guard_tests():
+        results = []
+
+        async def _slow():
+            res = await run_protected_db_read(
+                "slow-key",
+                lambda db: (pytime.sleep(0.35), {"ok": True})[1],
+                ttl_seconds=10.0,
+                wait_timeout_seconds=0.1,
+                total_timeout_seconds=2.0,
+                session_factory=_make_session,
+            )
+            results.append(("slow", res))
+
+        async def _competing():
+            await anyio.sleep(0.05)
+            with pytest.raises(MCPBusyError):
+                await run_protected_db_read(
+                    "other-key",
+                    lambda db: {"ok": False},
+                    ttl_seconds=0.0,
+                    wait_timeout_seconds=0.1,
+                    total_timeout_seconds=2.0,
+                    session_factory=_make_session,
+                )
+
+        async with anyio.create_task_group() as tg:
+            tg.start_soon(_slow)
+            tg.start_soon(_competing)
+
+        assert results == [("slow", {"ok": True})]
+        assert len(sessions) == 1
+        assert sessions[0].rolled_back and sessions[0].closed
+
+        # Cache hit must not create a new session
+        cached = await run_protected_db_read(
+            "slow-key",
+            lambda db: {"ok": "should_not_run"},
+            ttl_seconds=10.0,
+            session_factory=_make_session,
+        )
+        assert cached == {"ok": True}
+        assert len(sessions) == 1
+
+        # Timeout test
+        with pytest.raises(MCPQueryTimeoutError):
+            await run_protected_db_read(
+                "timeout-key",
+                lambda db: pytime.sleep(0.25),
+                ttl_seconds=0.0,
+                total_timeout_seconds=0.05,
+                session_factory=_make_session,
+            )
+        assert sessions[-1].rolled_back and sessions[-1].closed
+
+    anyio.run(_run_guard_tests)
+
+
+def test_mcp_rpc_calls_new_phase1d_tools(enabled, issuer, monkeypatch):
+    import app.mcp_edge as mcp_edge
+
+    clear_mcp_cache()
+
+    async def _fake_read(cache_key, query_fn, **kwargs):
+        if cache_key.startswith("checkout_outcomes"):
+            return {"status": "normal", "persisted_orders": {"total": 0}}
+        return {"status": "normal", "physical_output_verified": False}
+
+    monkeypatch.setattr(mcp_edge, "run_protected_db_read", _fake_read)
+
+    checkout = rpc(enabled, "tools/call", name=CHECKOUT_TOOL, arguments={"window_minutes": 60}).json()["result"]
+    assert not checkout.get("isError")
+    assert checkout["structuredContent"]["status"] == "normal"
+
+    invalid = rpc(enabled, "tools/call", name=CHECKOUT_TOOL, arguments={"window_minutes": 99}).json()["result"]
+    assert invalid["structuredContent"]["error"]["code"] == "VALIDATION_ERROR"
+
+    printing = rpc(enabled, "tools/call", name=PRINT_TOOL, arguments={}).json()["result"]
+    assert not printing.get("isError")
+    assert printing["structuredContent"]["physical_output_verified"] is False

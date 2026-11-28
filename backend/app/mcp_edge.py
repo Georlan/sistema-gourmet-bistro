@@ -14,7 +14,9 @@ from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .mcp_auth import READ_SCOPE, OperatorAccess
+from .mcp_db_guard import MCPBusyError, MCPQueryTimeoutError, run_protected_db_read
 from .mcp_health import build_in_memory_system_health
+from .mcp_ops_queries import get_checkout_outcomes, get_print_flow_summary
 from .product_catalog import load_product_catalog
 
 MCP_PATH = "/mcp"
@@ -72,6 +74,55 @@ def _product_server(resource: str):
         """Saúde em memória por fluxo (pool DB, WebSocket, outbox) sem abrir conexão ao banco."""
         logger.info('{"event":"tool_call","tool":"ops_get_system_health"}')
         return build_in_memory_system_health()
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+    async def ops_get_checkout_outcomes(window_minutes: int = 60) -> dict[str, Any]:
+        """Desfechos agregados de pedidos persistidos e pagamentos online em transação READ ONLY."""
+        logger.info('{"event":"tool_call","tool":"ops_get_checkout_outcomes"}')
+        if isinstance(window_minutes, bool) or not isinstance(window_minutes, int) or window_minutes not in (15, 60, 1440):
+            return {
+                "status": "unknown",
+                "error": {
+                    "code": "VALIDATION_ERROR",
+                    "message": "window_minutes must be one of 15, 60, or 1440.",
+                    "retryable": False,
+                },
+            }
+        try:
+            return await run_protected_db_read(
+                f"checkout_outcomes:{window_minutes}",
+                lambda db: get_checkout_outcomes(db, window_minutes=window_minutes),
+            )
+        except MCPBusyError:
+            return {
+                "status": "unknown",
+                "error": {"code": "BUSY", "message": "Database read slot busy.", "retryable": True},
+            }
+        except MCPQueryTimeoutError:
+            return {
+                "status": "unknown",
+                "error": {"code": "TIMEOUT", "message": "Database read timed out.", "retryable": True},
+            }
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+    async def ops_get_print_flow_summary() -> dict[str, Any]:
+        """Resumo agregado da fila de impressão e atividade dos agentes em transação READ ONLY."""
+        logger.info('{"event":"tool_call","tool":"ops_get_print_flow_summary"}')
+        try:
+            return await run_protected_db_read(
+                "print_flow_summary",
+                lambda db: get_print_flow_summary(db),
+            )
+        except MCPBusyError:
+            return {
+                "status": "unknown",
+                "error": {"code": "BUSY", "message": "Database read slot busy.", "retryable": True},
+            }
+        except MCPQueryTimeoutError:
+            return {
+                "status": "unknown",
+                "error": {"code": "TIMEOUT", "message": "Database read timed out.", "retryable": True},
+            }
 
     host = urlsplit(resource).netloc
     return server.streamable_http_app(
