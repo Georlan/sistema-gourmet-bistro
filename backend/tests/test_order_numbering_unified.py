@@ -5,7 +5,7 @@ from app.operational_models import NumeradorOperacional
 from app.routes import cardapio, orders
 
 
-TENANT = 1972
+TENANT = 197201
 
 
 def test_salao_caixa_e_cardapio_use_the_same_atomic_human_number_allocator():
