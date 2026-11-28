@@ -14,6 +14,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from .mcp_auth import READ_SCOPE, OperatorAccess
+from .mcp_health import build_in_memory_system_health
 from .product_catalog import load_product_catalog
 
 MCP_PATH = "/mcp"
@@ -65,6 +66,12 @@ def _product_server(resource: str):
                 "onboarding",
             )
         }
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+    def ops_get_system_health() -> dict[str, Any]:
+        """Saúde em memória por fluxo (pool DB, WebSocket, outbox) sem abrir conexão ao banco."""
+        logger.info('{"event":"tool_call","tool":"ops_get_system_health"}')
+        return build_in_memory_system_health()
 
     host = urlsplit(resource).netloc
     return server.streamable_http_app(
