@@ -1086,8 +1086,10 @@ export default function App({ initialPortal }: { initialPortal?: OperationalPort
         }
       };
 
-      socket.onerror = (err) => {
-        console.error("WebSocket connection error:", err);
+      socket.onerror = () => {
+        if (!stopped) {
+          console.warn("WebSocket connection interrupted; scheduling reconnect.");
+        }
       };
     };
 

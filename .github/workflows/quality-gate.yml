@@ -276,8 +276,12 @@ jobs:
             -e POSTGRES_DB=koma_fiscal_test \
             -p 127.0.0.1:55437:5432 postgres:17-alpine
           for attempt in $(seq 1 30); do
-            if docker exec koma-fiscal-ci pg_isready -U postgres -d koma_fiscal_test; then
-              break
+            if docker exec koma-fiscal-ci pg_isready -U postgres -d koma_fiscal_test >/dev/null 2>&1 \
+              && docker exec -e PGPASSWORD=fiscal-ci-test-only koma-fiscal-ci psql -U postgres -d koma_fiscal_test -c "SELECT 1" >/dev/null 2>&1; then
+              sleep 1
+              if docker exec koma-fiscal-ci pg_isready -U postgres -d koma_fiscal_test >/dev/null 2>&1; then
+                break
+              fi
             fi
             sleep 1
           done

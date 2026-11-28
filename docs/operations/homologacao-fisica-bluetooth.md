@@ -3,7 +3,7 @@
 > **Regra de evidência:** testes unitários, emuladores, HTTP 200 e build verde **não** comprovam impressão física. Somente declarar homologado após cumprir cada item em dispositivo Android real com impressora Bluetooth real.
 
 > [!WARNING]
-> **Versão obrigatória do APK antes de testar em campo:** a release pública `android-print-v1.1.0-preview` (commit `d9f6d0c4`, publicada em 2026-11-14) **é anterior** às correções do `#1470` (`31e83485` — autenticação do agente) e da Wave 1 (`87aeadc0` — suporte 58 mm / 80 mm e vinculação mobile). **Não distribuir esse APK antigo para cliente.** Antes da homologação física, baixar o artifact mais recente `koma-print-android-debug-apk` do workflow `KOMA Print Android` no GitHub Actions ou publicar nova tag de release com o código atual de `main`.
+> **Versão obrigatória do APK antes de testar em campo:** a release anterior `android-print-v1.1.0-preview` (`d9f6d0c4`) está obsoleta. Para homologação no 3º cliente, utilize a versão atual **`v1.2.0` (`versionCode 3`)** publicada na release **`android-print-v1.2.0-preview`** (inclui `#1470`, `#1371`, suporte completo a **58 mm / 80 mm** e vinculação 1-toque da Wave 1). **Nunca** declare homologado antes de executar os testes físicos abaixo em aparelho Android e impressora Bluetooth reais.
 
 ## 1. Pré-requisitos de hardware e sistema
 - [ ] Celular Android (Android 8.0+ / API 26+) com o build atualizado do **KÔMA Print Android** instalado e permissão **Dispositivos próximos** (`BLUETOOTH_CONNECT` / `BLUETOOTH_SCAN`) concedida.
