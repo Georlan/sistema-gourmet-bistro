@@ -672,3 +672,189 @@ def ensure_hamburger_addon_suggestions(db: Session, restaurante_id: int) -> dict
         "grupo_ids": group_ids,
         "total_sugestoes": sum(len(group.options) for group in HAMBURGER_ADDON_SUGGESTIONS),
     }
+
+
+_ARCHIVED_MODIFIER_GROUP_TYPE = "__archived__"
+
+
+def normalized_modifier_selection_mode(raw_mode: object) -> str:
+    """Normaliza modo de seleção entre 'tipos' (padrão) e 'porcoes'."""
+    if str(raw_mode or "tipos").strip().lower() == "porcoes":
+        return "porcoes"
+    return "tipos"
+
+
+def count_active_unarchived_modifier_options(group: dict) -> int:
+    """Conta apenas opções ativas e não arquivadas do payload de grupo."""
+    return sum(
+        1
+        for option in (group.get("opcoes") or ())
+        if bool(option.get("ativo", True)) and not bool(option.get("arquivada", False))
+    )
+
+
+def modifier_group_infeasibility_reason(group: dict) -> str | None:
+    """Retorna motivo de inviabilidade de grupo obrigatório, ou None se válido/opcional."""
+    if str(group.get("tipo") or "").strip().lower() == _ARCHIVED_MODIFIER_GROUP_TYPE:
+        return None
+    min_sel = int(group.get("min_selecoes") or 0)
+    if min_sel <= 0:
+        return None
+    raw_max = group.get("max_selecoes")
+    max_sel = int(raw_max) if raw_max is not None else None
+    mode = normalized_modifier_selection_mode(group.get("modo_selecao"))
+    active_options = count_active_unarchived_modifier_options(group)
+    if active_options <= 0:
+        return "zero_active_options"
+    if max_sel is not None and max_sel < min_sel:
+        return "max_below_min"
+    if mode == "tipos" and active_options < min_sel:
+        return "insufficient_distinct_options"
+    return None
+
+
+def find_unfeasible_required_modifier_groups(
+    db: Session,
+    restaurante_id: int,
+    products: Sequence[Produto] | None = None,
+    *,
+    max_products: int | None = None,
+) -> list[dict]:
+    """Localiza produtos vendáveis com grupo obrigatório sem seleção possível via resolvedor canônico."""
+    if products is None:
+        query = (
+            db.query(Produto)
+            .filter(
+                Produto.restaurante_id == restaurante_id,
+                Produto.ativo.is_(True),
+            )
+            .order_by(Produto.id.asc())
+        )
+        if max_products is not None:
+            query = query.limit(max(1, int(max_products)))
+        sellable = query.all()
+    else:
+        sellable = [p for p in products if bool(getattr(p, "ativo", False))]
+        if max_products is not None:
+            sellable = sellable[: max(1, int(max_products))]
+
+    if not sellable:
+        return []
+
+    effective_by_product = effective_modifier_payloads_by_product(db, restaurante_id, sellable)
+    findings: list[dict] = []
+    for product in sellable:
+        for group in effective_by_product.get(str(product.id), ()):
+            reason = modifier_group_infeasibility_reason(group)
+            if reason is None:
+                continue
+            raw_max = group.get("max_selecoes")
+            findings.append(
+                {
+                    "product_id": str(product.id),
+                    "product_name": str(getattr(product, "nome", "") or ""),
+                    "group_id": str(group.get("id") or ""),
+                    "group_name": str(group.get("nome") or ""),
+                    "modo_selecao": normalized_modifier_selection_mode(group.get("modo_selecao")),
+                    "min_selecoes": int(group.get("min_selecoes") or 0),
+                    "max_selecoes": int(raw_max) if raw_max is not None else None,
+                    "active_options_count": count_active_unarchived_modifier_options(group),
+                    "reason": reason,
+                }
+            )
+    return findings
+
+
+def _format_unfeasible_modifier_detail(finding: dict) -> str:
+    group_name = str(finding.get("group_name") or "Complementos").strip() or "Complementos"
+    product_name = str(finding.get("product_name") or "produto ativo").strip() or "produto ativo"
+    reason = finding.get("reason")
+    min_sel = int(finding.get("min_selecoes") or 0)
+    max_sel = finding.get("max_selecoes")
+    active_count = int(finding.get("active_options_count") or 0)
+
+    if reason == "zero_active_options":
+        return (
+            f"O grupo obrigatório '{group_name}' não possui opções ativas para '{product_name}'. "
+            "Ative ou adicione ao menos 1 opção neste grupo, ou altere a exigência mínima manualmente antes de salvar."
+        )
+    if reason == "max_below_min":
+        return (
+            f"O grupo obrigatório '{group_name}' tem mínimo ({min_sel}) maior que o máximo ({max_sel}) "
+            f"para '{product_name}'. Ajuste os limites do grupo antes de salvar."
+        )
+    return (
+        f"O grupo obrigatório '{group_name}' exige ao menos {min_sel} opções distintas para '{product_name}', "
+        f"mas possui apenas {active_count} ativa(s). Ative mais opções neste grupo ou ajuste o mínimo manualmente para até {active_count}."
+    )
+
+
+def validate_feasible_required_modifier_groups(
+    db: Session,
+    restaurante_id: int,
+    products: Sequence[Produto] | None = None,
+    *,
+    group_ids: Sequence[str] | None = None,
+) -> None:
+    """Bloqueia (HTTP 422) cadastro ativo vinculado a grupo obrigatório inviável sem convertê-lo para opcional."""
+    from fastapi import HTTPException
+
+    candidate_products = (
+        db.query(Produto)
+        .filter(
+            Produto.restaurante_id == restaurante_id,
+            Produto.ativo.is_(True),
+            Produto.marmitaria_tamanho.is_(None),
+        )
+        .order_by(Produto.id.asc())
+        .all()
+        if products is None
+        else [
+            p
+            for p in products
+            if bool(getattr(p, "ativo", False)) and not getattr(p, "marmitaria_tamanho", None)
+        ]
+    )
+    if not candidate_products:
+        return
+
+    findings = find_unfeasible_required_modifier_groups(db, restaurante_id, candidate_products)
+    if group_ids is not None:
+        allowed_group_ids = {str(gid) for gid in group_ids if str(gid).strip()}
+        findings = [f for f in findings if f["group_id"] in allowed_group_ids]
+
+    if not findings:
+        return
+
+    db.rollback()
+    raise HTTPException(
+        status_code=422,
+        detail=_format_unfeasible_modifier_detail(findings[0]),
+    )
+
+
+def validate_feasible_required_modifier_groups_for_groups(
+    db: Session,
+    restaurante_id: int,
+    group_ids: Sequence[str] | set[str],
+) -> None:
+    """Valida grupos alterados e eventuais seguidores sincronizados por `grupo_origem_id`."""
+    base_ids = {str(gid) for gid in group_ids if str(gid).strip()}
+    if not base_ids:
+        return
+    follower_ids = {
+        str(gid)
+        for (gid,) in db.query(GrupoModificador.id)
+        .filter(
+            GrupoModificador.restaurante_id == restaurante_id,
+            GrupoModificador.grupo_origem_id.in_(base_ids),
+            GrupoModificador.tipo != _ARCHIVED_MODIFIER_GROUP_TYPE,
+        )
+        .all()
+    }
+    validate_feasible_required_modifier_groups(
+        db,
+        restaurante_id,
+        None,
+        group_ids=sorted(base_ids | follower_ids),
+    )

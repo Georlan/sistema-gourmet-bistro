@@ -12,6 +12,7 @@ from ..catalog_addons import (
     category_hierarchy_payload,
     effective_modifier_payloads_by_product,
     replace_category_links_for_group,
+    validate_feasible_required_modifier_groups_for_groups,
 )
 from ..database import get_db, require_tenant_id
 from ..models import (
@@ -462,6 +463,8 @@ def criar_grupo(
     _configure_sync(db, rest_id, novo_grupo, payload)
     db.flush()
     sync_linked_complements(db, rest_id, novo_grupo.id)
+    db.flush()
+    validate_feasible_required_modifier_groups_for_groups(db, rest_id, [novo_grupo.id])
     db.commit()
     db.refresh(novo_grupo)
     _notify_catalog_update(background_tasks, rest_id, "Grupo de complementos criado.")
@@ -534,6 +537,8 @@ def atualizar_cardapio_diario(
     db.flush()
     for group_id in sorted(changed_groups):
         sync_linked_complements(db, rest_id, group_id)
+    db.flush()
+    validate_feasible_required_modifier_groups_for_groups(db, rest_id, changed_groups)
     db.commit()
     if updated:
         _notify_catalog_update(background_tasks, rest_id, "Cardápio do dia atualizado.")
@@ -571,6 +576,8 @@ def atualizar_disponibilidade_opcao(
     opcao.ativo = payload.ativo
     db.flush()
     sync_linked_complements(db, rest_id, opcao.grupo_id)
+    db.flush()
+    validate_feasible_required_modifier_groups_for_groups(db, rest_id, [opcao.grupo_id])
     db.commit()
     db.refresh(opcao)
     _notify_catalog_update(background_tasks, rest_id, "Disponibilidade de complemento atualizada.")
@@ -636,6 +643,8 @@ def atualizar_grupo(
     _configure_sync(db, rest_id, grupo, payload)
     db.flush()
     sync_linked_complements(db, rest_id, grupo.id)
+    db.flush()
+    validate_feasible_required_modifier_groups_for_groups(db, rest_id, [grupo.id])
     db.commit()
     db.refresh(grupo)
     _notify_catalog_update(background_tasks, rest_id, "Grupo de complementos atualizado.")

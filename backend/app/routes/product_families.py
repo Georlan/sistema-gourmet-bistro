@@ -7,6 +7,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
+from ..catalog_addons import validate_feasible_required_modifier_groups
 from ..database import get_db, require_tenant_id
 from ..marmitaria_catalog import enabled as marmitaria_enabled
 from ..models import Cardapio, Categoria, GrupoModificador, Produto, ProdutoFamilia, ProdutoFamiliaGrupoModificador, Usuario
@@ -177,10 +178,19 @@ def update_family_personalizations(
     for link in existing:
         if link.grupo_id not in requested:
             db.delete(link)
-    for group_id in set(requested) - existing_ids:
+    added_group_ids = sorted(set(requested) - existing_ids)
+    for group_id in added_group_ids:
         db.add(ProdutoFamiliaGrupoModificador(
             restaurante_id=tenant, familia_id=family_id, grupo_id=group_id,
         ))
+    db.flush()
+    if added_group_ids:
+        family_members = db.query(Produto).filter(
+            Produto.restaurante_id == tenant, Produto.familia_id == family_id,
+        ).all()
+        validate_feasible_required_modifier_groups(
+            db, tenant, family_members, group_ids=added_group_ids,
+        )
     db.commit()
     notify_catalog_update(background_tasks, "Escolhas do produto com variações atualizadas", tenant)
     return {"familia_id": family_id, "grupo_ids": sorted(set(requested))}
@@ -245,12 +255,16 @@ def _write_family(
     if len(requested_ids) != len(set(requested_ids)):
         raise HTTPException(422, "Um SKU não pode aparecer duas vezes.")
 
+    is_new_family = existing is None
+    prev_category = existing.categoria_id if existing is not None else None
     existing_members: list[Produto] = []
     if existing is not None:
         existing_members = db.query(Produto).filter(
             Produto.restaurante_id == tenant,
             Produto.familia_id == existing.id,
         ).with_for_update().all()
+    prev_active_ids = {p.id for p in existing_members if p.ativo}
+    if existing is not None:
         missing = {p.id for p in existing_members} - set(requested_ids)
         if missing:
             raise HTTPException(
@@ -325,12 +339,14 @@ def _write_family(
         sku.preco = float(variant.preco)
         sku.ativo = variant.ativo
 
+    added_shared_ids: list[str] = []
     if shared_requested is not None:
         for row in shared_links:
             if row.grupo_id not in shared_requested:
                 db.delete(row)
         previous_ids = {str(row.grupo_id) for row in shared_links}
-        for group_id in shared_requested - previous_ids:
+        added_shared_ids = sorted(shared_requested - previous_ids)
+        for group_id in added_shared_ids:
             db.add(ProdutoFamiliaGrupoModificador(
                 restaurante_id=tenant, familia_id=existing.id, grupo_id=group_id,
             ))
@@ -338,6 +354,14 @@ def _write_family(
     members = db.query(Produto).filter(
         Produto.restaurante_id == tenant, Produto.familia_id == existing.id,
     ).all()
+    newly_activated = [m for m in members if m.ativo and m.id not in prev_active_ids]
+    if is_new_family or payload.categoria_id != prev_category:
+        validate_feasible_required_modifier_groups(db, tenant, members)
+    else:
+        if newly_activated:
+            validate_feasible_required_modifier_groups(db, tenant, newly_activated)
+        if added_shared_ids:
+            validate_feasible_required_modifier_groups(db, tenant, members, group_ids=added_shared_ids)
     response = _family_response(existing, members)
     if shared_requested is not None:
         response["grupo_ids"] = sorted(shared_requested)

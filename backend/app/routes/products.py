@@ -2,7 +2,10 @@ from decimal import Decimal, ROUND_HALF_UP
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional, Union, Literal
-from ..catalog_addons import effective_modifier_payloads_by_product
+from ..catalog_addons import (
+    effective_modifier_payloads_by_product,
+    validate_feasible_required_modifier_groups,
+)
 from ..services.catalog_family_metadata import family_metadata_for_products
 from ..catalog_ordering import (
     LEGACY_CATEGORY_DISPLAY_ORDER as CATEGORY_DISPLAY_ORDER,
@@ -747,6 +750,12 @@ def atualizar_produto_personalizacoes(
             db.add(ProdutoGrupoModificador(
                 restaurante_id=rest_id, produto_id=produto_id, grupo_id=group_id,
             ))
+    newly_linked = sorted(set(requested) - existing_ids)
+    db.flush()
+    if newly_linked:
+        validate_feasible_required_modifier_groups(
+            db, rest_id, [produto], group_ids=newly_linked,
+        )
     db.commit()
     notify_catalog_update(background_tasks, "Personalizações do produto atualizadas", rest_id)
     return _produto_personalizacoes(db, rest_id, produto)
@@ -785,16 +794,24 @@ def update_disponibilidade_lote(
             detail="Informe ao menos um produto válido.",
         )
 
-    if data.ativo:
-        ensure_marmitas_available(db, rest_id, db.query(Produto).filter(Produto.restaurante_id == rest_id, Produto.id.in_(product_ids)).all())
-    updated = (
+    target_products = (
         db.query(Produto)
         .filter(
             Produto.restaurante_id == rest_id,
             Produto.id.in_(product_ids),
         )
-        .update({Produto.ativo: data.ativo}, synchronize_session=False)
+        .all()
     )
+    if data.ativo:
+        ensure_marmitas_available(db, rest_id, target_products)
+    newly_activated = [prod for prod in target_products if data.ativo and not prod.ativo]
+    updated = 0
+    for prod in target_products:
+        prod.ativo = data.ativo
+        updated += 1
+    db.flush()
+    if newly_activated:
+        validate_feasible_required_modifier_groups(db, rest_id, newly_activated)
     db.commit()
     if updated:
         notify_catalog_update(
@@ -988,6 +1005,11 @@ def update_produtos_lote(
                 )
                 grupos_adicionados += 1
 
+    db.flush()
+    if data.categoria_id:
+        validate_feasible_required_modifier_groups(db, rest_id, products)
+    elif add_group_ids:
+        validate_feasible_required_modifier_groups(db, rest_id, products, group_ids=add_group_ids)
     db.commit()
     if products:
         notify_catalog_update(
@@ -1086,6 +1108,8 @@ def duplicar_produto(
             )
         )
 
+    db.flush()
+    validate_feasible_required_modifier_groups(db, rest_id, [cloned])
     db.commit()
     db.refresh(cloned)
     notify_catalog_update(background_tasks, "Produto duplicado", rest_id)
@@ -1161,6 +1185,8 @@ def create_produto(
         restaurante_id=rest_id,
     )
     db.add(novo_produto)
+    db.flush()
+    validate_feasible_required_modifier_groups(db, rest_id, [novo_produto])
     db.commit()
     db.refresh(novo_produto)
     notify_catalog_update(background_tasks, "Produto criado", require_tenant_id())
@@ -1258,9 +1284,19 @@ def update_produto(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="Preço promocional deve ser menor que o preço normal do produto.",
                 )
+    was_active = bool(db_produto.ativo)
+    prev_category = db_produto.categoria_id
+    prev_family = db_produto.familia_id
     for key, value in data.items():
         setattr(db_produto, key, value)
 
+    db.flush()
+    if (
+        (not was_active and bool(db_produto.ativo))
+        or (db_produto.ativo and db_produto.categoria_id != prev_category)
+        or (db_produto.ativo and db_produto.familia_id != prev_family)
+    ):
+        validate_feasible_required_modifier_groups(db, rest_id, [db_produto])
     db.commit()
     db.refresh(db_produto)
     notify_catalog_update(background_tasks, "Produto atualizado", require_tenant_id())
