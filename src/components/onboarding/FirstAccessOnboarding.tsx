@@ -965,7 +965,7 @@ export function FirstAccessOnboarding({ accessToken, user }: Props) {
                   </p>
                   {isProvisionalPrep && !contractLinked && (
                     <a
-                      href={`/contratar/${encodeURIComponent(planId)}`}
+                      href={`/contratar/${encodeURIComponent(planId)}?vincular=1`}
                       className="mt-2 inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1.5 text-[10px] font-black text-zinc-950"
                     >
                       Aceitar termos para o teste de 7 dias <ArrowRight size={11} />

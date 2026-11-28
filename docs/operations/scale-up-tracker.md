@@ -49,7 +49,29 @@
 ---
 
 ## Homologações Físicas e Externas Pendentes
-1. Pareamento e impressão física em celular Android real + impressora Bluetooth real (58 mm ou 80 mm) do 3º cliente seguindo `docs/operations/homologacao-fisica-bluetooth.md`.
+1. Pareamento e impressão física em celular Android real + impressora Bluetooth real (58 mm ou 80 mm) do 3º cliente seguindo `docs/operations/homologacao-fisica-bluetooth.md` (**obrigatório usar build atualizado pós-Wave 1**, pois a tag `android-print-v1.1.0-preview` é anterior ao suporte 80 mm e ao fix `#1470`).
 2. Teste de tela bloqueada por 2+ minutos no aparelho real do cliente (One UI / HyperOS / Motorola).
 3. Teste de desconexão física durante expediente real e verificação de não-duplicação no papel via `PrintJournalStore`.
 4. Execução autorizada de `scripts/koma-provision.mjs --qa-lab` (ou criação autenticada em `central.komafood.com.br`) para registrar o tenant QA permanente **"Pizzaria Laboratório KÔMA"** em produção.
+
+---
+
+## Wave 6 — Consolidação, Inteligência Técnica, Segurança e Gargalos Reais
+
+### Correções P0 Entregues na Wave 6
+- **Segurança & anti-abuso em `/api/provisioning/public/start`:** bloqueio explícito (`409 Conflict`) contra colisão cross-tenant de e-mail via `_admin_email_exists_anywhere`, rate limiting mais restrito por IP (`3/min` e `6/hora`), limite de `250` itens no bootstrap autônomo e busca de idempotência limitada (`slug_owner_id` O(1) + janela de até 25 tenants recentes).
+- **Convergência `/comecar` → `/contratar/:plan?vincular=1`:** novo endpoint autenticado `POST /api/contracts/self-accept` e fluxo `?vincular=1` em `FirstAccessOnboarding.tsx` + `PlanContractPageV2.tsx`, vinculando o contrato e o trial de 7 dias ao **mesmo restaurante já preparado** (preservando cardápio/horários, ocultando cartão até retorno recorrente, respeitando `KOMA_SAAS_MANUAL_RELEASE_REQUIRED` e pré-preenchendo operador/e-mail/telefone via `/api/onboarding/status`).
+- **Desbloqueio imediato do checkout público em novos restaurantes:** `universal_provisioning.py` inicializa `formas_pagamento_aceitas=["Pix", "Dinheiro"]`, evitando bloqueio `"Pagamento indisponível"` em `/c/<slug>` mesmo quando o checklist do Caixa já marca `4 de 4`.
+- **Atualização do roteiro de impressão Bluetooth:** `docs/operations/homologacao-fisica-bluetooth.md` atualizado com alerta explícito sobre a defasagem da tag `android-print-v1.1.0-preview` (`d9f6d0c4`).
+
+### Evidência Browser QA & Telemetria (Wave 6 — Sem Super Admin)
+- **Jornada mobile `390x844` + desktop `1366x768` concluída ponta a ponta:** `/comecar` criou Tenant `#2` (`Pizzaria Laboratório W6`, `pizzaria-laboratorio-w6`, `201 Created`) → logout e re-login com `w6-lab@komafood.com.br` (`200`) → tentativa com mesmo e-mail barrada com `409 Conflict` → `/contratar/pro?vincular=1` aceito (`201`, protocolo `KOMA-CTR-20261128-53509A16693E`, trial ativo no mesmo Tenant `#2`) → `Abrir Caixa` (`201`) → primeiro pedido em `/c/pizzaria-laboratorio-w6` (`Pedido #1`, `R$ 49,90`, `Retirada`) entregue e aceito no Kanban do Caixa.
+- **Achados técnicos/UX observados (para backlog P1–P3):** erros repetidos `WebSocket connection error` em `App.tsx:946`, requisições GET duplicadas abortadas (`status: 0`) em transições de rota/login, overlap pontual da barra de busca na aba `Produtos` em viewport intermediário/desktop, truncamento `"Confira seu pedi..."` no checkout `390px`, além de dívida estrutural (`CaixaPanel` `495 KB` JS + `148 KB` CSS em `dist/assets/`, PNGs brutos em `src/assets/`, `~27` `setInterval`, 4 `declarative_base()`, e rate limiter em memória no backend).
+
+### Classificação Atualizada (`Concluído / Bloqueia agora / Pode ficar para depois`)
+- **Concluído:** Hardening de provisionamento público (`409` cross-tenant + limites), vínculo único `/comecar` → `?vincular=1` sem duplicar tenant, padrão `["Pix", "Dinheiro"]` no cardápio público de novos restaurantes e diagnóstico CTO consolidado das Waves 1–6.
+- **Bloqueia agora (dependências externas / decisões do fundador):**
+  1. Configurar `KOMA_PROVISIONING_API_TOKEN` no serviço `Kôma` do Railway para liberar `scripts/koma-provision.mjs --qa-lab` em produção (criação do QA Lab permanente **"Pizzaria Laboratório KÔMA"** sem sessão manual no Super Admin).
+  2. Gerar/publicar nova tag de release do **KÔMA Print Android** a partir de `main` antes da homologação física no 3º cliente (tag `v1.1.0-preview` está obsoleta).
+  3. Validar fisicamente celular Android + térmica Bluetooth no 3º cliente (`docs/operations/homologacao-fisica-bluetooth.md`).
+- **Pode ficar para depois:** Decisão FinOps sobre serviços auxiliares no Railway (`evolution-api` com volume de 5 GB, `Postgres` e `Redis` paralelos ao Supabase), mover `IPRateLimiter` crítico para store compartilhado (Redis), dividir chunks pesados (`CaixaPanel` / `SuperAdminGate` / imagens Landing), e wrapper MCP fino de provisionamento apontando para `/api/provisioning/express`.

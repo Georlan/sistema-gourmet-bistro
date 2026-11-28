@@ -8,7 +8,7 @@ import re
 import secrets
 import uuid
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
@@ -138,6 +138,52 @@ class ContractAcceptanceRequest(BaseModel):
         return normalized
 
 
+class SelfServiceContractAcceptRequest(BaseModel):
+    request_id: str = Field(min_length=36, max_length=36)
+    contracting_party_name: str = Field(min_length=2, max_length=255)
+    contracting_party_tax_id: str = Field(min_length=11, max_length=32)
+    restaurant_name: str = Field(min_length=2, max_length=255)
+    representative_name: str = Field(min_length=2, max_length=255)
+    representative_tax_id: str = Field(min_length=11, max_length=32)
+    representative_role: str = Field(min_length=2, max_length=100)
+    email: str = Field(min_length=3, max_length=100)
+    phone: str = Field(min_length=8, max_length=50)
+    plan: str
+    billing_cycle: Literal["mensal", "anual"]
+    payment_method_type: Literal["pix"] = "pix"
+    powers_declared: bool
+    legal_version: str = Field(min_length=1, max_length=16)
+    legal_source_commit: str = Field(min_length=40, max_length=40)
+    legal_source_blob_sha: str = Field(min_length=40, max_length=40)
+    documents: dict[str, dict[str, Any]]
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("request_id")
+    @classmethod
+    def validate_request_id(cls, value: str) -> str:
+        try:
+            return str(uuid.UUID(value))
+        except ValueError as exc:
+            raise ValueError("request_id deve ser UUID válido") from exc
+
+    @field_validator("plan")
+    @classmethod
+    def validate_plan(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in VALID_SUBSCRIPTION_PLANS:
+            raise ValueError("Plano inválido")
+        return normalized
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not _EMAIL_RE.fullmatch(normalized):
+            raise ValueError("Informe um e-mail válido")
+        return normalized
+
+
 class ContractInviteAcceptRequest(BaseModel):
     token: str = Field(min_length=16, max_length=256)
     request_id: str = Field(min_length=36, max_length=36)
@@ -164,6 +210,52 @@ class ContractInviteAcceptRequest(BaseModel):
             return str(uuid.UUID(value))
         except ValueError as exc:
             raise ValueError("request_id deve ser UUID válido") from exc
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if not _EMAIL_RE.fullmatch(normalized):
+            raise ValueError("Informe um e-mail válido")
+        return normalized
+
+
+class SelfServiceContractAcceptRequest(BaseModel):
+    request_id: str = Field(min_length=36, max_length=36)
+    contracting_party_name: str = Field(min_length=2, max_length=255)
+    contracting_party_tax_id: str = Field(min_length=11, max_length=32)
+    restaurant_name: str = Field(min_length=2, max_length=255)
+    representative_name: str = Field(min_length=2, max_length=255)
+    representative_tax_id: str = Field(min_length=11, max_length=32)
+    representative_role: str = Field(min_length=2, max_length=100)
+    email: str = Field(min_length=3, max_length=100)
+    phone: str = Field(min_length=8, max_length=50)
+    plan: str
+    billing_cycle: Literal["mensal", "anual"]
+    payment_method_type: Literal["pix"] = "pix"
+    powers_declared: bool
+    legal_version: str = Field(min_length=1, max_length=16)
+    legal_source_commit: str = Field(min_length=40, max_length=40)
+    legal_source_blob_sha: str = Field(min_length=40, max_length=40)
+    documents: dict[str, dict[str, Any]]
+
+    model_config = ConfigDict(extra="forbid")
+
+    @field_validator("request_id")
+    @classmethod
+    def validate_request_id(cls, value: str) -> str:
+        try:
+            return str(uuid.UUID(value))
+        except ValueError as exc:
+            raise ValueError("request_id deve ser UUID válido") from exc
+
+    @field_validator("plan")
+    @classmethod
+    def validate_plan(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in VALID_SUBSCRIPTION_PLANS:
+            raise ValueError("Plano inválido")
+        return normalized
 
     @field_validator("email")
     @classmethod
@@ -1005,3 +1097,268 @@ def accept_contract_invite(
         ) from exc
     finally:
         db.close()
+
+
+@router.post("/self-accept", status_code=status.HTTP_201_CREATED)
+def accept_contract_self_service_for_preparation_tenant(
+    payload: SelfServiceContractAcceptRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Vincula o aceite contratual ao restaurante já preparado em /comecar sem duplicar tenant."""
+    _accept_contract_rate_limiter.check(request)
+    if str(current_user.cargo or "").strip().lower() != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Somente o administrador do restaurante pode aceitar o contrato comercial.",
+        )
+    if getattr(current_user, "is_support_mode", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Modo Suporte não pode aceitar termos contratuais pelo restaurante.",
+        )
+
+    tenant_id = require_tenant_id()
+    from ..services.restaurant_provisioning import (
+        QA_OPERATION_END,
+        clear_operational_qa_cache,
+        is_provisional_preparation,
+        is_superadmin_operational_qa_active,
+    )
+
+    if not is_provisional_preparation(db, tenant_id, allow_qa=False):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este restaurante não está em modo de preparação aguardando contrato.",
+        )
+
+    restaurant = db.query(Restaurante).filter(Restaurante.id == tenant_id).one_or_none()
+    if restaurant is None:
+        raise HTTPException(status_code=404, detail="Restaurante não encontrado.")
+
+    existing_link = (
+        db.query(RestaurantContractAcceptance)
+        .filter(RestaurantContractAcceptance.restaurante_id == tenant_id)
+        .first()
+    )
+    existing_subscription = (
+        db.query(SaaSSubscription)
+        .filter(SaaSSubscription.restaurante_id == tenant_id)
+        .first()
+    )
+    if existing_link is not None or existing_subscription is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este restaurante já possui contrato ou assinatura vinculada.",
+        )
+
+    (
+        acceptance_id,
+        protocol,
+        now,
+        receipt,
+        values,
+        restaurant_name,
+        representative_name,
+        email,
+        phone,
+    ) = _build_contract_acceptance_record(
+        request=request,
+        request_id=payload.request_id,
+        contracting_party_name=payload.contracting_party_name,
+        contracting_party_tax_id=payload.contracting_party_tax_id,
+        restaurant_name_input=payload.restaurant_name,
+        representative_name_input=payload.representative_name,
+        representative_tax_id_input=payload.representative_tax_id,
+        representative_role=payload.representative_role,
+        email=payload.email,
+        phone_input=payload.phone,
+        plan=payload.plan,
+        billing_cycle=payload.billing_cycle,
+        powers_declared=payload.powers_declared,
+        legal_version=payload.legal_version,
+        legal_source_commit=payload.legal_source_commit,
+        legal_source_blob_sha=payload.legal_source_blob_sha,
+        documents=payload.documents,
+        provisioning_status="linked",
+        provisioning_message="Aceite vinculado ao restaurante já preparado, preservando cardápio e configurações.",
+    )
+
+    try:
+        restaurant.plano = payload.plan
+        db.execute(insert(ContractAcceptance.__table__).values(**values))
+        db.add(
+            RestaurantContractAcceptance(
+                id=str(uuid.uuid4()),
+                restaurante_id=tenant_id,
+                acceptance_id=acceptance_id,
+                linked_at=now,
+            )
+        )
+
+        subscription_status = "onboarding"
+        db.add(
+            SaaSSubscription(
+                restaurante_id=tenant_id,
+                provider="mercado_pago",
+                provider_customer_id=None,
+                provider_subscription_id=None,
+                payment_method_type=payload.payment_method_type,
+                status=subscription_status,
+                trial_started_at=None,
+                trial_ends_at=None,
+                billing_cycle=payload.billing_cycle,
+            )
+        )
+
+        from ..services.billing_service import (
+            link_billing_setup_to_tenant,
+            upsert_billing_setup,
+        )
+
+        canonical_cycle = "annual" if payload.billing_cycle == "anual" else "monthly"
+        if subscription_monthly_price(payload.plan) > 0:
+            upsert_billing_setup(
+                db,
+                protocol=protocol,
+                contract_acceptance_id=acceptance_id,
+                provider="mercado_pago",
+                payment_method_type=payload.payment_method_type,
+                status="ready",
+                billing_cycle=canonical_cycle,
+            )
+            link_billing_setup_to_tenant(db, protocol, tenant_id)
+
+        qa_ended = False
+        if is_superadmin_operational_qa_active(db, tenant_id):
+            db.add(
+                SuperAdminAuditLog(
+                    restaurante_id=tenant_id,
+                    actor=f"self_accept:{current_user.id}",
+                    action=QA_OPERATION_END,
+                    reason="Encerramento automático da janela QA após aceite contratual autônomo.",
+                    before_data={"qa_active": True},
+                    after_data={
+                        "mode": "operational_qa",
+                        "ended_at": now.isoformat(),
+                        "ended_by_contract_protocol": protocol,
+                    },
+                )
+            )
+            qa_ended = True
+
+        db.add(
+            SuperAdminAuditLog(
+                restaurante_id=tenant_id,
+                actor=f"self_accept:{current_user.id}",
+                action="SELF_SERVICE_CONTRACT_ACCEPTED",
+                reason="Aceite contratual autônomo vinculado ao restaurante preparado",
+                before_data={"trial_status": "pending_setup"},
+                after_data={
+                    "protocol": protocol,
+                    "acceptance_id": acceptance_id,
+                    "plan": payload.plan,
+                    "billing_cycle": payload.billing_cycle,
+                    "payment_method_type": payload.payment_method_type,
+                    "qa_ended": qa_ended,
+                    "subscription_status": subscription_status,
+                },
+            )
+        )
+
+        from ..services.signup_notifications import enqueue_acceptance, enqueue_release_required, enqueue_trial_started
+        enqueue_acceptance(
+            db,
+            protocol=protocol,
+            restaurant_name=restaurant_name,
+            representative_name=representative_name,
+            email=email,
+            phone=phone,
+        )
+        db.commit()
+        clear_operational_qa_cache(db, tenant_id)
+
+        from .onboarding import _build_onboarding_status
+        status_snapshot = _build_onboarding_status(db, current_user=current_user)
+        configuration_complete = bool((status_snapshot.get("readiness") or {}).get("configurationComplete"))
+
+        auto_released = False
+        trial_started = False
+        release_pending_reason: str | None = None
+        response_status = "awaiting_release"
+
+        if not configuration_complete:
+            release_pending_reason = "configuration_incomplete"
+            response_status = "awaiting_release"
+        elif settings.KOMA_SAAS_MANUAL_RELEASE_REQUIRED:
+            enqueue_release_required(
+                db,
+                protocol=protocol,
+                restaurant_name=restaurant_name,
+                plan=payload.plan,
+                billing_cycle=canonical_cycle,
+                payment_method_type=payload.payment_method_type,
+            )
+            db.commit()
+            response_status = "awaiting_release"
+        else:
+            from ..services.onboarding_trial import ensure_trial_started_after_onboarding
+            trial_result = ensure_trial_started_after_onboarding(
+                db,
+                restaurante_id=tenant_id,
+                actor=f"self_accept:{current_user.id}",
+            )
+            if trial_result is not None and trial_result.get("trial_started_at") is not None:
+                subscription_status = str(trial_result.get("status") or "trialing")
+                auto_released = True
+                trial_started = True
+                response_status = "ready"
+                try:
+                    enqueue_trial_started(
+                        db,
+                        tenant_id=tenant_id,
+                        restaurant_name=restaurant_name,
+                        plan=payload.plan,
+                        billing_cycle=payload.billing_cycle,
+                        customer_name=current_user.nome or representative_name,
+                        customer_email=current_user.email or email,
+                        customer_phone=current_user.telefone or phone,
+                        trial_ends_at=trial_result["trial_ends_at"],
+                    )
+                    db.commit()
+                except Exception:
+                    db.rollback()
+
+        return {
+            "protocol": protocol,
+            "acceptedAt": now.isoformat(),
+            "status": response_status,
+            "restaurantId": str(tenant_id),
+            "restaurantName": restaurant_name,
+            "slug": restaurant.slug,
+            "plan": payload.plan,
+            "billingCycle": payload.billing_cycle,
+            "subscriptionStatus": subscription_status,
+            "qaEnded": qa_ended,
+            "autoReleased": auto_released,
+            "trialStarted": trial_started,
+            "releasePendingReason": release_pending_reason,
+            "receipt": receipt,
+            "message": (
+                "Contrato vinculado e seus 7 dias grátis já começaram. Seu restaurante está liberado para vendas."
+                if trial_started
+                else "Contrato vinculado ao restaurante preparado. Seus dados e cardápio foram preservados."
+            ),
+        }
+    except HTTPException:
+        if db.in_transaction():
+            db.rollback()
+        raise
+    except IntegrityError as exc:
+        if db.in_transaction():
+            db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Este aceite já foi registrado ou o restaurante já possui contrato vinculado.",
+        ) from exc

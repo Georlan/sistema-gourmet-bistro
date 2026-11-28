@@ -112,4 +112,87 @@ test.describe('Provisionamento autônomo /comecar', () => {
     expect(capturedBodies).toHaveLength(1);
     expect(capturedBodies[0].admin_email).toBe('joao@donromano.com.br');
   });
+
+  test('vincular contrato (?vincular=1) preserva o mesmo tenant e chama /api/contracts/self-accept', async ({ page }) => {
+    const selfAcceptCalls: Array<Record<string, unknown>> = [];
+
+    await page.addInitScript(() => {
+      const user = {
+        id: 'usr-linked-77',
+        nome: 'Roberto Dono',
+        role: 'admin',
+        cargo: 'admin',
+        restaurante_id: 77,
+      };
+      const session = { token: 'linked-jwt-77', user, expiresAt: Date.now() + 3_600_000 };
+      sessionStorage.setItem('koma_operator_session_caixa', JSON.stringify(session));
+      sessionStorage.setItem('koma_active_operational_portal', 'caixa');
+      sessionStorage.setItem('koma_caixa_token', 'linked-jwt-77');
+      sessionStorage.setItem('koma_caixa_id', 'usr-linked-77');
+      sessionStorage.setItem('koma_caixa_name', 'Roberto Dono');
+      sessionStorage.setItem('koma_caixa_role', 'admin');
+    });
+
+    await page.route('**/api/contracts/payment-methods-v2', async (route) => {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ credit_card: false, pix: true, pixMode: 'manual_post_trial', publicKey: '' }),
+      });
+    });
+
+    await page.route('**/api/onboarding/status', async (route) => {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          restaurant: { id: '77', name: 'Pizzaria Vinculada', slug: 'pizzaria-vinculada', plan: 'pro', operationProfile: 'pizzaria' },
+          onboarding: { provisionalPreparation: true, contractLinked: false },
+          steps: { profile: true, hours: true, catalog: true, operations: true },
+        }),
+      });
+    });
+
+    await page.route('**/api/contracts/self-accept', async (route) => {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      selfAcceptCalls.push(body);
+      return route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          protocol: 'KOMA-CTR-20261128-ABCDEF123456',
+          acceptedAt: new Date().toISOString(),
+          status: 'ready',
+          restaurantId: '77',
+          restaurantName: 'Pizzaria Vinculada',
+          slug: 'pizzaria-vinculada',
+          trialStarted: true,
+          message: 'Contrato vinculado e seus 7 dias grátis já começaram.',
+          receipt: {
+            protocol: 'KOMA-CTR-20261128-ABCDEF123456',
+            acceptedAtBrasilia: '28/11/2026 01:00:00',
+            contractingParty: { name: 'Roberto Dono', taxId: '52998224725', taxIdKind: 'cpf', restaurantName: 'Pizzaria Vinculada', email: 'roberto@vinculada.test', phone: '85988887777' },
+            representative: { name: 'Roberto Dono', taxId: '52998224725', role: 'Titular da contratação' },
+            commercial: { plan: 'pro', billingCycle: 'mensal', fixedMonthlyPrice: '197.00', marketplaceRate: '0.00' },
+            documents: { version: '3.6', terms: { hash: 'a'.repeat(64) }, commercial: { hash: 'b'.repeat(64) } },
+            evidence: { sourceIp: '127.0.0.1' },
+          },
+        }),
+      });
+    });
+
+    await page.goto('/contratar/pro?vincular=1');
+    await expect(page.getByText(/Vinculando contratação ao restaurante #77/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Ative Pizzaria Vinculada/i })).toBeVisible();
+
+    await page.getByLabel(/CPF \/ CNPJ/i).fill('52998224725');
+    await page.getByLabel(/^E-mail$/i).fill('roberto@vinculada.test');
+    await page.getByLabel(/Telefone \/ WhatsApp/i).fill('85988887777');
+    await page.getByLabel(/Declaro que as informações estão corretas/i).check();
+    await page.getByRole('button', { name: /Aceitar e registrar contratação/i }).click();
+
+    await expect(page.getByRole('link', { name: /Voltar ao meu painel operacional/i })).toHaveAttribute('href', '/?view=caixa');
+    expect(selfAcceptCalls).toHaveLength(1);
+    expect(selfAcceptCalls[0].payment_method_type).toBe('pix');
+  });
 });

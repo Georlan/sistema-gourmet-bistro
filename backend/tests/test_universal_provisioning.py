@@ -20,18 +20,47 @@ BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
+import app.saas_billing_models  # noqa: E402, F401
+from app.contract_models import ContractEvidenceBase  # noqa: E402
 from app.database import Base, SessionLocal, engine, tenant_session_scope  # noqa: E402
+from app.legal_config import (  # noqa: E402
+    LEGAL_SOURCE_BLOB_SHA,
+    LEGAL_SOURCE_COMMIT,
+    LEGAL_VERSION,
+)
 from app.main import app  # noqa: E402
 from app.models import Categoria, Produto, Restaurante, SuperAdminAuditLog, Usuario  # noqa: E402
+from app.routes import universal_provisioning as universal_provisioning_routes  # noqa: E402
 from app.security import create_access_token, superadmin_session_generation  # noqa: E402
 from app.services.express_provisioning_parser import parse_express_provisioning_input  # noqa: E402
 from app.services.restaurant_provisioning import (  # noqa: E402
     get_active_operational_qa_record,
     is_provisional_preparation,
 )
+from app.signup_models import SignupBase  # noqa: E402
 
 Base.metadata.create_all(bind=engine)
+ContractEvidenceBase.metadata.create_all(bind=engine)
+SignupBase.metadata.create_all(bind=engine)
 client = TestClient(app)
+
+
+def _reset_public_rate_limiters():
+    Base.metadata.create_all(bind=engine)
+    ContractEvidenceBase.metadata.create_all(bind=engine)
+    SignupBase.metadata.create_all(bind=engine)
+    universal_provisioning_routes._public_preview_limiter.history.clear()
+    universal_provisioning_routes._public_start_limiter.history.clear()
+    universal_provisioning_routes._public_start_hourly_limiter.history.clear()
+
+
+def _legal_documents() -> dict[str, dict]:
+    return {
+        "terms": {"slug": "termos", "version": LEGAL_VERSION, "sections": []},
+        "commercial": {"slug": "planos", "version": LEGAL_VERSION, "sections": []},
+        "dpa": {"slug": "dpa", "version": LEGAL_VERSION, "sections": []},
+        "privacy": {"slug": "privacidade", "version": LEGAL_VERSION, "sections": []},
+    }
 
 
 def _superadmin_headers() -> dict[str, str]:
@@ -80,6 +109,7 @@ def test_deterministic_express_parser_no_invention():
 
 
 def test_public_autonomous_start_provisions_preparation_tenant_without_superadmin():
+    _reset_public_rate_limiters()
     suffix = uuid.uuid4().hex[:8]
     email = f"dono-{suffix}@exemplo.test"
     idem_key = f"pub-{suffix}"
@@ -279,3 +309,235 @@ Marguerita - R$ 47,90
             assert qa_rec is not None
     finally:
         db.close()
+
+
+def test_public_start_blocks_cross_tenant_email_collision_and_rate_limits():
+    _reset_public_rate_limiters()
+    suffix = uuid.uuid4().hex[:8]
+    email = f"colisao-{suffix}@exemplo.test"
+
+    first = client.post(
+        "/api/provisioning/public/start",
+        headers={"X-Idempotency-Key": f"col-1-{suffix}"},
+        json={
+            "name": f"Restaurante Um {suffix}",
+            "admin_name": "Dono Um",
+            "admin_email": email,
+            "admin_password": "SenhaForte123!",
+        },
+    )
+    assert first.status_code == 201, first.text
+
+    # Segundo tenant com o mesmo e-mail (e chave diferente) deve falhar 409 sem criar conta duplicada
+    second = client.post(
+        "/api/provisioning/public/start",
+        headers={"X-Idempotency-Key": f"col-2-{suffix}"},
+        json={
+            "name": f"Restaurante Dois {suffix}",
+            "admin_name": "Dono Dois",
+            "admin_email": email,
+            "admin_password": "OutraSenha123!",
+        },
+    )
+    assert second.status_code == 409, second.text
+    assert "e-mail" in second.json()["detail"].lower()
+
+    # Garante que rota pública rejeita/ignora tentativa de selecionar ID ou ativar qa_lab
+    escalation = client.post(
+        "/api/provisioning/public/start",
+        json={
+            "name": f"Tentativa Escala {suffix}",
+            "admin_name": "Invasor",
+            "admin_email": f"escala-{suffix}@exemplo.test",
+            "admin_password": "SenhaForte123!",
+            "qa_lab": True,
+            "restaurant_id": 999,
+        },
+    )
+    assert escalation.status_code == 422
+
+    # Dispara mais criações para confirmar rate limit por minuto (3/min)
+    for idx in range(2):
+        _ = client.post(
+            "/api/provisioning/public/start",
+            json={
+                "name": f"Loja Limite {idx} {suffix}",
+                "admin_name": "Tester",
+                "admin_email": f"lim-{idx}-{suffix}@exemplo.test",
+                "admin_password": "SenhaForte123!",
+            },
+        )
+    blocked_rate = client.post(
+        "/api/provisioning/public/start",
+        json={
+            "name": f"Loja Quatro {suffix}",
+            "admin_name": "Tester",
+            "admin_email": f"lim-4-{suffix}@exemplo.test",
+            "admin_password": "SenhaForte123!",
+        },
+    )
+    assert blocked_rate.status_code == 429, blocked_rate.text
+    _reset_public_rate_limiters()
+
+
+def test_self_accept_links_contract_to_prepared_tenant_preserves_menu_and_unlocks_orders(monkeypatch):
+    _reset_public_rate_limiters()
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "KOMA_SAAS_MANUAL_RELEASE_REQUIRED", False)
+    monkeypatch.setenv("KOMA_LEGAL_PROVIDER_NAME", "Prestador Teste KOMA")
+    monkeypatch.setenv("KOMA_LEGAL_PROVIDER_TAX_ID", "52998224725")
+    monkeypatch.setenv("KOMA_LEGAL_PROVIDER_ADDRESS", "Rua Teste, 100")
+    monkeypatch.setenv("KOMA_LEGAL_PROVIDER_LOCATION", "Limoeiro do Norte/CE")
+
+    suffix = uuid.uuid4().hex[:8]
+    email = f"jornada-{suffix}@exemplo.test"
+    started = client.post(
+        "/api/provisioning/public/start",
+        headers={"X-Idempotency-Key": f"self-{suffix}"},
+        json={
+            "name": f"Pizzaria Completa {suffix}",
+            "operation_profile": "pizzaria",
+            "segment_preset": "pizzaria",
+            "admin_name": "Roberto Dono",
+            "admin_email": email,
+            "admin_password": "SenhaCompleta123!",
+            "phone": "85988887777",
+            "order_types": ["retirada", "delivery"],
+            "operating_hours": [{"days": "Todos os dias", "hours": "00:00 - 23:59"}],
+            "apply_segment_preset": True,
+            "menu_text": "Pizzas Tradicionais:\nCalabresa - R$ 49,90",
+        },
+    )
+    assert started.status_code == 201, started.text
+    started_data = started.json()
+    tenant_id = int(started_data["id"])
+    admin_token = started_data["access_token"]
+    slug = started_data["subdomain"]
+
+    # Mesmo ainda incompleto no campo 'profile' ou antes de contratar, o pedido público é bloqueado (403)
+    blocked = client.post(
+        "/cardapio/pedidos",
+        json={
+            "restaurante_id": tenant_id,
+            "cliente_nome": "Cliente Teste",
+            "cliente_telefone": "85999991111",
+            "tipo_pedido": "retirada",
+            "forma_pagamento": "na_entrega",
+            "forma_pagamento_detalhe": "dinheiro",
+            "itens": [{"produto_id": "qualquer", "quantidade": 1}],
+        },
+    )
+    assert blocked.status_code == 403
+
+    # Conclui aceite contratual vinculado ao MESMO tenant via /api/contracts/self-accept
+    accept_res = client.post(
+        "/api/contracts/self-accept",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={
+            "request_id": str(uuid.uuid4()),
+            "contracting_party_name": "Roberto Dono",
+            "contracting_party_tax_id": "52998224725",
+            "restaurant_name": f"Pizzaria Completa {suffix}",
+            "representative_name": "Roberto Dono",
+            "representative_tax_id": "52998224725",
+            "representative_role": "Titular",
+            "email": email,
+            "phone": "85988887777",
+            "plan": "pro",
+            "billing_cycle": "mensal",
+            "payment_method_type": "pix",
+            "powers_declared": True,
+            "legal_version": LEGAL_VERSION,
+            "legal_source_commit": LEGAL_SOURCE_COMMIT,
+            "legal_source_blob_sha": LEGAL_SOURCE_BLOB_SHA,
+            "documents": _legal_documents(),
+        },
+    )
+    assert accept_res.status_code == 201, accept_res.text
+    accept_data = accept_res.json()
+    assert accept_data["restaurantId"] == str(tenant_id)
+    assert accept_data["slug"] == slug
+    assert accept_data["trialStarted"] is True
+    assert accept_data["status"] == "ready"
+
+    # Segundo aceite no mesmo tenant deve ser bloqueado com 409
+    duplicate_accept = client.post(
+        "/api/contracts/self-accept",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={
+            "request_id": str(uuid.uuid4()),
+            "contracting_party_name": "Roberto Dono",
+            "contracting_party_tax_id": "52998224725",
+            "restaurant_name": f"Pizzaria Completa {suffix}",
+            "representative_name": "Roberto Dono",
+            "representative_tax_id": "52998224725",
+            "representative_role": "Titular",
+            "email": email,
+            "phone": "85988887777",
+            "plan": "pro",
+            "billing_cycle": "mensal",
+            "payment_method_type": "pix",
+            "powers_declared": True,
+            "legal_version": LEGAL_VERSION,
+            "legal_source_commit": LEGAL_SOURCE_COMMIT,
+            "legal_source_blob_sha": LEGAL_SOURCE_BLOB_SHA,
+            "documents": _legal_documents(),
+        },
+    )
+    assert duplicate_accept.status_code == 409
+
+    # Confirma prefill de operador no onboarding/status e formas de pagamento padrão no cardápio
+    onboarding_res = client.get(
+        "/api/onboarding/status",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert onboarding_res.status_code == 200, onboarding_res.text
+    assert onboarding_res.json()["operator"] == {
+        "name": "Roberto Dono",
+        "email": email,
+        "phone": "85988887777",
+    }
+
+    # Confirma preservação integral de produtos e liberação para o primeiro pedido
+    db = SessionLocal()
+    try:
+        assert is_provisional_preparation(db, tenant_id, allow_qa=True) is False
+        rest_row = db.query(Restaurante).filter(Restaurante.id == tenant_id).one()
+        assert rest_row.formas_pagamento_aceitas == ["Pix", "Dinheiro"]
+        with tenant_session_scope(db, tenant_id):
+            prods = db.query(Produto).filter(Produto.restaurante_id == tenant_id).all()
+            assert len(prods) == 1
+            product_id = prods[0].id
+    finally:
+        db.close()
+
+    # Abre o turno de caixa como o próprio administrador e envia o primeiro pedido público
+    open_shift = client.post(
+        "/caixa/turno/abrir",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"saldo_inicial": 0},
+    )
+    if open_shift.status_code == 422:
+        open_shift = client.post(
+            "/caixa/turno/abrir",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"valor_abertura": 0},
+        )
+    assert open_shift.status_code in (200, 201), open_shift.text
+
+    first_order = client.post(
+        "/cardapio/pedidos",
+        headers={"X-Idempotency-Key": f"first-order-{suffix}"},
+        json={
+            "restaurante_id": tenant_id,
+            "cliente_nome": "Primeiro Cliente",
+            "cliente_telefone": "85999991111",
+            "tipo_pedido": "retirada",
+            "forma_pagamento": "na_entrega",
+            "forma_pagamento_detalhe": "dinheiro",
+            "itens": [{"produto_id": product_id, "quantidade": 1}],
+        },
+    )
+    assert first_order.status_code in (200, 201), first_order.text
+    _reset_public_rate_limiters()
