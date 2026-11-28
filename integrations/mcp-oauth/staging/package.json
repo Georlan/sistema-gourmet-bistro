@@ -1,0 +1,15 @@
+{
+  "name": "koma-mcp-staging-issuer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "1.4.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "miniflare": "5.20261127.0-beta"
+  }
+}
