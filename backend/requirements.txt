@@ -1,4 +1,4 @@
--c requirements.lock
+-c constraints.txt
 fastapi>=0.110.0
 uvicorn[standard]>=0.28.0
 sqlalchemy>=2.0.0

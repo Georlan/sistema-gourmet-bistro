@@ -73,7 +73,7 @@ required_files=(
     api_client.py
     journal.py
     requirements.txt
-    requirements.lock
+    constraints.txt
     agent_runtime.py
     endpoints.py
     printer_profiles.py

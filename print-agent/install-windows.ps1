@@ -99,7 +99,7 @@ if (-not (Test-KomaPython $pythonCommand)) {
 
 $requiredFiles = @(
     "main.py", "config.py", "endpoints.py", "printer_profiles.py", "pairing.py", "worker.py", "wake_listener.py", "simulator.py", "dispatcher.py", "agent_runtime.py",
-    "api_client.py", "journal.py", "requirements.txt", "requirements.lock",
+    "api_client.py", "journal.py", "requirements.txt", "constraints.txt",
     "koma-print-launcher.ps1", "check-windows.ps1", "hardware_preflight.py"
 )
 $adapterFiles = @(
