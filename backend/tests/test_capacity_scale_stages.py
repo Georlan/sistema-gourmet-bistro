@@ -275,6 +275,9 @@ def run_stage_simulation(tenants: list[dict], requests_per_tenant: int = 3, conc
         if track_res.status_code != 200:
             errors.append(f"Tracking pedido {comanda_id} tenant {rid} falhou: HTTP {track_res.status_code}")
 
+    # Aquecimento único fora da janela medida para não contaminar P95 com cold-start ASGI
+    _get_client().get("/health/live")
+
     # Execução concorrente
     with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as executor:
         futures = [executor.submit(execute_single, task) for task in tasks]
