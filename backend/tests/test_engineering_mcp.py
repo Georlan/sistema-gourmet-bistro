@@ -16,6 +16,7 @@ from app.mcp_db_guard import (
 from app.mcp_edge import METADATA_PATH, install_engineering_mcp
 from app.mcp_health import build_in_memory_system_health
 from app.mcp_ops_queries import (
+    get_catalog_modifier_anomalies,
     get_checkout_outcomes,
     get_print_flow_summary,
     get_restaurant_readiness_summary,
@@ -23,7 +24,21 @@ from app.mcp_ops_queries import (
     preview_restaurant_provisioning_readonly,
     verify_tenant_deprovision_readonly,
 )
-from app.models import Comanda, PrintAgentToken, PrintJob, Restaurante, Usuario
+from app.models import (
+    Cardapio,
+    Categoria,
+    Comanda,
+    GrupoModificador,
+    OpcaoModificador,
+    PrintAgentToken,
+    PrintJob,
+    Produto,
+    ProdutoFamilia,
+    ProdutoFamiliaGrupoModificador,
+    ProdutoGrupoModificador,
+    Restaurante,
+    Usuario,
+)
 from app.product_catalog import load_product_catalog
 from fastapi import FastAPI, WebSocket
 from fastapi.testclient import TestClient
@@ -164,6 +179,7 @@ def test_catalog_and_health_need_no_db(enabled, issuer):
             "ops_get_restaurant_readiness",
             "ops_preview_restaurant_provisioning",
             "ops_verify_tenant_deprovision",
+            "ops_get_catalog_modifier_anomalies",
         ]
         assert all(t["annotations"]["readOnlyHint"] for t in tools)
         result = rpc(enabled, "tools/call", name=TOOL, arguments={}).json()["result"]
@@ -690,3 +706,193 @@ def test_readiness_handles_legacy_null_order_types_and_payment_methods(tmp_path)
     finally:
         db.close()
         local_engine.dispose()
+
+
+def seed_mcp_catalog_anomalies_fixture(db):
+    from app.catalog_addons import CategoriaGrupoModificador, CategoriaRelacao
+
+    # Tenant 6 (operação protegida): deve ser excluído antes de qualquer agregação.
+    db.add(Restaurante(id=6, nome="Operacao Protegida", slug="operacao-protegida-6", plano="pro"))
+    db.flush()
+    db.add(Cardapio(id="card-6", restaurante_id=6, nome="Principal", identificador="principal-6"))
+    db.add(Categoria(id="cat-6", restaurante_id=6, nome="Bebidas 6"))
+    db.add(GrupoModificador(id="grp-6-req", restaurante_id=6, nome="Obrigatorio 6", min_selecoes=1, max_selecoes=1, tipo="adicional"))
+    db.flush()
+    db.add(Produto(id="prod-6-agua", restaurante_id=6, cardapio_id="card-6", categoria_id="cat-6", nome="Agua ID6", preco=5.0, ativo=True))
+    db.flush()
+    db.add(ProdutoGrupoModificador(restaurante_id=6, produto_id="prod-6-agua", grupo_id="grp-6-req", min_selecoes=1, max_selecoes=1, modo_selecao="tipos"))
+
+    # Tenant 201: cobertura canônica (direto, categoria/subcategoria, família, overrides, tipos vs porcoes).
+    db.add(
+        Restaurante(
+            id=201,
+            nome="Pizzaria MCP Anomalias",
+            slug="pizzaria-mcp-anomalias",
+            plano="pro",
+        )
+    )
+    db.flush()
+    db.add(Cardapio(id="card-201", restaurante_id=201, nome="Principal", identificador="principal-201"))
+    db.add_all(
+        [
+            Categoria(id="cat-201-bebidas", restaurante_id=201, nome="Bebidas Secretas"),
+            Categoria(id="cat-201-pai", restaurante_id=201, nome="Pai Lanches"),
+            Categoria(id="cat-201-filha", restaurante_id=201, nome="Filha Artesanais"),
+        ]
+    )
+    db.flush()
+    db.add(CategoriaRelacao(restaurante_id=201, categoria_id="cat-201-filha", categoria_pai_id="cat-201-pai"))
+    db.add(
+        ProdutoFamilia(
+            id="fam-201-combos",
+            restaurante_id=201,
+            nome="Familia Combos Secretos",
+            eixo="tamanho",
+            categoria_id="cat-201-bebidas",
+            cardapio_id="card-201",
+        )
+    )
+    db.flush()
+    db.add_all(
+        [
+            GrupoModificador(id="grp-zero-tipos", restaurante_id=201, nome="Gelo e Limao Zero", min_selecoes=1, max_selecoes=1, tipo="adicional"),
+            GrupoModificador(id="grp-zero-porcoes", restaurante_id=201, nome="Molhos Porcao Zero", min_selecoes=1, max_selecoes=2, tipo="adicional"),
+            GrupoModificador(id="grp-min2-1op", restaurante_id=201, nome="Sabores Min2 UmaOpcao", min_selecoes=2, max_selecoes=3, tipo="adicional"),
+            GrupoModificador(id="grp-cat-min2", restaurante_id=201, nome="Acompanhamento Categoria", min_selecoes=2, max_selecoes=2, tipo="adicional"),
+            GrupoModificador(id="grp-fam-zero", restaurante_id=201, nome="Brinde Familia Zero", min_selecoes=1, max_selecoes=1, tipo="adicional"),
+            GrupoModificador(id="grp-optional", restaurante_id=201, nome="Opcional Sem Opcao", min_selecoes=0, max_selecoes=2, tipo="adicional"),
+        ]
+    )
+    db.flush()
+    db.add_all(
+        [
+            OpcaoModificador(id="opt-paused", restaurante_id=201, grupo_id="grp-zero-tipos", nome="Gelo Pausado", preco_adicional=0.0, ativo=False, arquivada=False),
+            OpcaoModificador(id="opt-archived", restaurante_id=201, grupo_id="grp-zero-tipos", nome="Limao Arquivado", preco_adicional=0.0, ativo=False, arquivada=True),
+            OpcaoModificador(id="opt-min2-ativo", restaurante_id=201, grupo_id="grp-min2-1op", nome="Bacon Ativo", preco_adicional=3.0, ativo=True, arquivada=False),
+            OpcaoModificador(id="opt-min2-arq", restaurante_id=201, grupo_id="grp-min2-1op", nome="Cheddar Arquivado", preco_adicional=3.0, ativo=True, arquivada=True),
+            OpcaoModificador(id="opt-cat-ativo", restaurante_id=201, grupo_id="grp-cat-min2", nome="Batata Ativa", preco_adicional=0.0, ativo=True, arquivada=False),
+        ]
+    )
+    db.add_all(
+        [
+            Produto(id="prod-zero-tipos", restaurante_id=201, cardapio_id="card-201", categoria_id="cat-201-bebidas", nome="Agua Secreta 500ml", preco=4.5, ativo=True),
+            Produto(id="prod-zero-porcoes", restaurante_id=201, cardapio_id="card-201", categoria_id="cat-201-bebidas", nome="Suco Zero Porcao", preco=8.0, ativo=True),
+            Produto(id="prod-tipos-min2", restaurante_id=201, cardapio_id="card-201", categoria_id="cat-201-bebidas", nome="Combo Tipos Min2", preco=25.0, ativo=True),
+            Produto(id="prod-porcoes-min2", restaurante_id=201, cardapio_id="card-201", categoria_id="cat-201-bebidas", nome="Combo Porcoes Min2 Valido", preco=25.0, ativo=True),
+            Produto(id="prod-subcat-inh", restaurante_id=201, cardapio_id="card-201", categoria_id="cat-201-filha", nome="Burger Subcat Herdado", preco=30.0, ativo=True),
+            Produto(id="prod-subcat-ovr", restaurante_id=201, cardapio_id="card-201", categoria_id="cat-201-filha", nome="Burger Subcat Override", preco=32.0, ativo=True),
+            Produto(id="prod-fam-sellable", restaurante_id=201, cardapio_id="card-201", categoria_id="cat-201-bebidas", familia_id="fam-201-combos", variacao_rotulo="M", nome="Combo Familia M", preco=35.0, ativo=True),
+            Produto(id="prod-valid-opt", restaurante_id=201, cardapio_id="card-201", categoria_id="cat-201-bebidas", nome="Produto Opcional", preco=10.0, ativo=True),
+            Produto(id="prod-inativo", restaurante_id=201, cardapio_id="card-201", categoria_id="cat-201-bebidas", nome="Produto Inativo", preco=10.0, ativo=False),
+        ]
+    )
+    db.flush()
+    db.add_all(
+        [
+            ProdutoGrupoModificador(restaurante_id=201, produto_id="prod-zero-tipos", grupo_id="grp-zero-tipos", min_selecoes=1, max_selecoes=1, modo_selecao="tipos"),
+            ProdutoGrupoModificador(restaurante_id=201, produto_id="prod-zero-porcoes", grupo_id="grp-zero-porcoes", min_selecoes=1, max_selecoes=2, modo_selecao="porcoes"),
+            ProdutoGrupoModificador(restaurante_id=201, produto_id="prod-tipos-min2", grupo_id="grp-min2-1op", min_selecoes=2, max_selecoes=3, modo_selecao="tipos"),
+            ProdutoGrupoModificador(restaurante_id=201, produto_id="prod-porcoes-min2", grupo_id="grp-min2-1op", min_selecoes=2, max_selecoes=3, modo_selecao="porcoes"),
+            CategoriaGrupoModificador(restaurante_id=201, categoria_id="cat-201-pai", grupo_id="grp-cat-min2", incluir_subcategorias=True, min_selecoes=2, max_selecoes=2, modo_selecao="tipos"),
+            # Precedência: override direto no produto reduz min para 1 na subcategoria, tornando válido
+            ProdutoGrupoModificador(restaurante_id=201, produto_id="prod-subcat-ovr", grupo_id="grp-cat-min2", min_selecoes=1, max_selecoes=1, modo_selecao="tipos"),
+            ProdutoFamiliaGrupoModificador(restaurante_id=201, familia_id="fam-201-combos", grupo_id="grp-fam-zero"),
+            ProdutoGrupoModificador(restaurante_id=201, produto_id="prod-valid-opt", grupo_id="grp-optional", min_selecoes=0, max_selecoes=2, modo_selecao="tipos"),
+            ProdutoGrupoModificador(restaurante_id=201, produto_id="prod-inativo", grupo_id="grp-zero-tipos", min_selecoes=1, max_selecoes=1, modo_selecao="tipos"),
+        ]
+    )
+    db.commit()
+
+
+def assert_mcp_catalog_modifier_anomalies(db):
+    from app.mcp_ops_queries import _discover_restaurant_ids
+
+    discovered = _discover_restaurant_ids(db)
+    assert 6 in discovered
+    assert 201 in discovered
+    summary = get_catalog_modifier_anomalies(db)
+    assert summary["status"] == "degraded"
+    assert summary["scanned_tenants_count"] == len([rid for rid in discovered if rid != 6])
+    assert summary["scanned_active_products_count"] == 8
+    assert summary["affected_tenants_count"] == 1
+    assert summary["affected_products_count"] == 5
+    assert summary["affected_group_links_count"] == 5
+    assert summary["by_reason"] == {
+        "zero_active_options": 3,
+        "insufficient_distinct_options": 2,
+        "max_below_min": 0,
+    }
+    assert summary["by_mode"] == {
+        "tipos": 4,
+        "porcoes": 1,
+    }
+    assert summary["coverage"]["protected_tenants_excluded_before_aggregation"] is True
+    assert summary["coverage"]["pii_included"] is False
+    assert summary["coverage"]["arbitrary_filters_supported"] is False
+    serialized = str(summary)
+    for forbidden in ("201", "Agua Secreta", "Gelo e Limao", "prod-", "grp-", "Pizzaria MCP"):
+        assert forbidden not in serialized
+    return summary
+
+
+def test_catalog_modifier_anomalies_detection_and_rpc(tmp_path, enabled, issuer, monkeypatch):
+    del issuer
+    from app import catalog_addons, mcp_edge, mcp_ops_queries
+
+    assert catalog_addons.modifier_group_infeasibility_reason(
+        {"min_selecoes": 1, "max_selecoes": 1, "modo_selecao": "tipos", "opcoes": []}
+    ) == "zero_active_options"
+    assert catalog_addons.modifier_group_infeasibility_reason(
+        {"min_selecoes": 1, "max_selecoes": 2, "modo_selecao": "porcoes", "opcoes": []}
+    ) == "zero_active_options"
+    assert catalog_addons.modifier_group_infeasibility_reason(
+        {"min_selecoes": 2, "max_selecoes": 3, "modo_selecao": "tipos", "opcoes": [{"ativo": True, "arquivada": False}]}
+    ) == "insufficient_distinct_options"
+    assert catalog_addons.modifier_group_infeasibility_reason(
+        {"min_selecoes": 2, "max_selecoes": 3, "modo_selecao": "porcoes", "opcoes": [{"ativo": True, "arquivada": False}]}
+    ) is None
+    assert catalog_addons.modifier_group_infeasibility_reason(
+        {"min_selecoes": 2, "max_selecoes": 1, "modo_selecao": "porcoes", "opcoes": [{"ativo": True, "arquivada": False}]}
+    ) == "max_below_min"
+
+    db_file = tmp_path / "mcp_catalog_anomalies.db"
+    local_engine = create_engine(f"sqlite:///{db_file}", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=local_engine)
+    LocalSession = sessionmaker(bind=local_engine, autocommit=False, autoflush=False)
+
+    db = LocalSession()
+    try:
+        seed_mcp_catalog_anomalies_fixture(db)
+        scoped_tenants: list[int] = []
+        original_scope = mcp_ops_queries.tenant_session_scope
+
+        def _spy_scope(session, tid):
+            scoped_tenants.append(int(tid))
+            return original_scope(session, tid)
+
+        monkeypatch.setattr(mcp_ops_queries, "tenant_session_scope", _spy_scope)
+        expected_summary = assert_mcp_catalog_modifier_anomalies(db)
+        assert 6 not in scoped_tenants
+        assert 201 in scoped_tenants
+    finally:
+        db.close()
+        local_engine.dispose()
+
+    clear_mcp_cache()
+
+    async def _fake_read(cache_key, query_fn, **kwargs):
+        assert cache_key == "catalog_modifier_anomalies"
+        return expected_summary
+
+    monkeypatch.setattr(mcp_edge, "run_protected_db_read", _fake_read)
+    res = rpc(enabled, "tools/call", name="ops_get_catalog_modifier_anomalies", arguments={}).json()["result"]
+    assert not res.get("isError")
+    assert res["structuredContent"]["affected_products_count"] == 5
+    assert res["structuredContent"]["by_reason"]["insufficient_distinct_options"] == 2
+
+    async def _raise_timeout(*args, **kwargs):
+        raise MCPQueryTimeoutError("timeout")
+
+    monkeypatch.setattr(mcp_edge, "run_protected_db_read", _raise_timeout)
+    res_timeout = rpc(enabled, "tools/call", name="ops_get_catalog_modifier_anomalies", arguments={}).json()["result"]
+    assert res_timeout["structuredContent"]["error"]["code"] == "TIMEOUT"

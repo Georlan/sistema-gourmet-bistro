@@ -672,3 +672,94 @@ def ensure_hamburger_addon_suggestions(db: Session, restaurante_id: int) -> dict
         "grupo_ids": group_ids,
         "total_sugestoes": sum(len(group.options) for group in HAMBURGER_ADDON_SUGGESTIONS),
     }
+
+
+_ARCHIVED_MODIFIER_GROUP_TYPE = "__archived__"
+
+
+def normalized_modifier_selection_mode(raw_mode: object) -> str:
+    """Normaliza modo de seleção entre 'tipos' (padrão) e 'porcoes'."""
+    if str(raw_mode or "tipos").strip().lower() == "porcoes":
+        return "porcoes"
+    return "tipos"
+
+
+def count_active_unarchived_modifier_options(group: dict) -> int:
+    """Conta apenas opções ativas e não arquivadas do payload de grupo."""
+    return sum(
+        1
+        for option in (group.get("opcoes") or ())
+        if bool(option.get("ativo", True)) and not bool(option.get("arquivada", False))
+    )
+
+
+def modifier_group_infeasibility_reason(group: dict) -> str | None:
+    """Retorna motivo de inviabilidade de grupo obrigatório, ou None se válido/opcional."""
+    if str(group.get("tipo") or "").strip().lower() == _ARCHIVED_MODIFIER_GROUP_TYPE:
+        return None
+    min_sel = int(group.get("min_selecoes") or 0)
+    if min_sel <= 0:
+        return None
+    raw_max = group.get("max_selecoes")
+    max_sel = int(raw_max) if raw_max is not None else None
+    mode = normalized_modifier_selection_mode(group.get("modo_selecao"))
+    active_options = count_active_unarchived_modifier_options(group)
+    if active_options <= 0:
+        return "zero_active_options"
+    if max_sel is not None and max_sel < min_sel:
+        return "max_below_min"
+    if mode == "tipos" and active_options < min_sel:
+        return "insufficient_distinct_options"
+    return None
+
+
+def find_unfeasible_required_modifier_groups(
+    db: Session,
+    restaurante_id: int,
+    products: Sequence[Produto] | None = None,
+    *,
+    max_products: int | None = None,
+) -> list[dict]:
+    """Localiza produtos vendáveis com grupo obrigatório sem seleção possível via resolvedor canônico."""
+    if products is None:
+        query = (
+            db.query(Produto)
+            .filter(
+                Produto.restaurante_id == restaurante_id,
+                Produto.ativo.is_(True),
+            )
+            .order_by(Produto.id.asc())
+        )
+        if max_products is not None:
+            query = query.limit(max(1, int(max_products)))
+        sellable = query.all()
+    else:
+        sellable = [p for p in products if bool(getattr(p, "ativo", False))]
+        if max_products is not None:
+            sellable = sellable[: max(1, int(max_products))]
+
+    if not sellable:
+        return []
+
+    effective_by_product = effective_modifier_payloads_by_product(db, restaurante_id, sellable)
+    findings: list[dict] = []
+    for product in sellable:
+        for group in effective_by_product.get(str(product.id), ()):
+            reason = modifier_group_infeasibility_reason(group)
+            if reason is None:
+                continue
+            raw_max = group.get("max_selecoes")
+            findings.append(
+                {
+                    "product_id": str(product.id),
+                    "product_name": str(getattr(product, "nome", "") or ""),
+                    "group_id": str(group.get("id") or ""),
+                    "group_name": str(group.get("nome") or ""),
+                    "modo_selecao": normalized_modifier_selection_mode(group.get("modo_selecao")),
+                    "min_selecoes": int(group.get("min_selecoes") or 0),
+                    "max_selecoes": int(raw_max) if raw_max is not None else None,
+                    "active_options_count": count_active_unarchived_modifier_options(group),
+                    "reason": reason,
+                }
+            )
+    return findings

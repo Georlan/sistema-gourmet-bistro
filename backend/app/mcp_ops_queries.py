@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import case, func, select, text
 from sqlalchemy.orm import Session
 
+from .catalog_addons import find_unfeasible_required_modifier_groups
 from .database import tenant_session_scope
 from .mcp_db_guard import DEFAULT_STATEMENT_TIMEOUT_MS, configure_readonly_tx
 from .models import (
@@ -37,6 +38,9 @@ ALLOWED_CHECKOUT_WINDOWS = (15, 60, 1440)
 AGENT_ONLINE_THRESHOLD_SECONDS = 90
 PRINT_DELAY_THRESHOLD_SECONDS = 120
 PRINT_RECENT_WINDOW_MINUTES = 60
+EXCLUDED_PROTECTED_RESTAURANT_IDS = frozenset({6})
+MAX_ANOMALY_SCAN_TENANTS = 200
+MAX_ANOMALY_SCAN_PRODUCTS_PER_TENANT = 500
 
 _ACCEPTED_DELIVERY_STATUSES = ("aceito", "producao", "pronto", "transito", "finalizado")
 _AWAITING_DELIVERY_STATUSES = ("analise", "pendente")
@@ -763,3 +767,93 @@ def verify_tenant_deprovision_readonly(
     with tenant_session_scope(db, tenant_id):
         configure_readonly_tx(db, statement_timeout_ms=statement_timeout_ms)
     return verify_tenant_deprovisioned(db, tenant_id)
+
+
+def get_catalog_modifier_anomalies(
+    db: Session,
+    *,
+    now: datetime | None = None,
+    statement_timeout_ms: int = DEFAULT_STATEMENT_TIMEOUT_MS,
+) -> dict[str, Any]:
+    """Agrega inconsistências de produtos vendáveis com grupo obrigatório inviável sem PII ou IDs."""
+    ref_now = _as_utc(now) or datetime.now(timezone.utc)
+    eligible_ids = [
+        rid
+        for rid in _discover_restaurant_ids(db)
+        if rid not in EXCLUDED_PROTECTED_RESTAURANT_IDS
+    ]
+    bounded_ids = eligible_ids[:MAX_ANOMALY_SCAN_TENANTS]
+    truncated = len(eligible_ids) > MAX_ANOMALY_SCAN_TENANTS
+
+    scanned_active_products_count = 0
+    affected_tenants_count = 0
+    affected_products_count = 0
+    affected_group_links_count = 0
+    by_reason = {
+        "zero_active_options": 0,
+        "insufficient_distinct_options": 0,
+        "max_below_min": 0,
+    }
+    by_mode = {
+        "tipos": 0,
+        "porcoes": 0,
+    }
+
+    for rid in bounded_ids:
+        with tenant_session_scope(db, rid):
+            configure_readonly_tx(db, statement_timeout_ms=statement_timeout_ms)
+            active_products = (
+                db.query(Produto)
+                .filter(
+                    Produto.restaurante_id == rid,
+                    Produto.ativo.is_(True),
+                )
+                .order_by(Produto.id.asc())
+                .limit(MAX_ANOMALY_SCAN_PRODUCTS_PER_TENANT + 1)
+                .all()
+            )
+            if len(active_products) > MAX_ANOMALY_SCAN_PRODUCTS_PER_TENANT:
+                truncated = True
+                active_products = active_products[:MAX_ANOMALY_SCAN_PRODUCTS_PER_TENANT]
+
+            scanned_active_products_count += len(active_products)
+            if not active_products:
+                continue
+
+            findings = find_unfeasible_required_modifier_groups(db, rid, active_products)
+            if not findings:
+                continue
+
+            affected_tenants_count += 1
+            affected_products_count += len({item["product_id"] for item in findings})
+            affected_group_links_count += len(findings)
+            for item in findings:
+                reason = str(item["reason"])
+                by_reason[reason] = by_reason.get(reason, 0) + 1
+                mode = str(item["modo_selecao"])
+                by_mode[mode] = by_mode.get(mode, 0) + 1
+
+    return {
+        "status": "degraded" if affected_group_links_count > 0 else "normal",
+        "observed_at": ref_now.isoformat(),
+        "scanned_tenants_count": len(bounded_ids),
+        "scanned_active_products_count": scanned_active_products_count,
+        "affected_tenants_count": affected_tenants_count,
+        "affected_products_count": affected_products_count,
+        "affected_group_links_count": affected_group_links_count,
+        "by_reason": by_reason,
+        "by_mode": by_mode,
+        "bounds": {
+            "max_tenants": MAX_ANOMALY_SCAN_TENANTS,
+            "max_products_per_tenant": MAX_ANOMALY_SCAN_PRODUCTS_PER_TENANT,
+            "truncated": truncated,
+        },
+        "coverage": {
+            "source": "authoritative_database_readonly",
+            "scope": "sellable_active_products_required_modifiers_only",
+            "protected_tenants_excluded_before_aggregation": True,
+            "pii_included": False,
+            "arbitrary_filters_supported": False,
+            "cache_ttl_seconds": 20,
+        },
+    }

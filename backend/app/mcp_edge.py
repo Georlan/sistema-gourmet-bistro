@@ -17,6 +17,7 @@ from .mcp_auth import READ_SCOPE, OperatorAccess
 from .mcp_db_guard import MCPBusyError, MCPQueryTimeoutError, run_protected_db_read
 from .mcp_health import build_in_memory_system_health
 from .mcp_ops_queries import (
+    get_catalog_modifier_anomalies,
     get_checkout_outcomes,
     get_print_flow_summary,
     get_restaurant_readiness_summary,
@@ -257,6 +258,26 @@ def _product_server(resource: str):
             return await run_protected_db_read(
                 f"tenant_deprovision_verify:{tenant_id}",
                 lambda db: verify_tenant_deprovision_readonly(db, tenant_id),
+            )
+        except MCPBusyError:
+            return {
+                "status": "unknown",
+                "error": {"code": "BUSY", "message": "Database read slot busy.", "retryable": True},
+            }
+        except MCPQueryTimeoutError:
+            return {
+                "status": "unknown",
+                "error": {"code": "TIMEOUT", "message": "Database read timed out.", "retryable": True},
+            }
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+    async def ops_get_catalog_modifier_anomalies() -> dict[str, Any]:
+        """Resumo agregado de produtos vendáveis com grupo obrigatório inviável em transação READ ONLY."""
+        logger.info('{"event":"tool_call","tool":"ops_get_catalog_modifier_anomalies"}')
+        try:
+            return await run_protected_db_read(
+                "catalog_modifier_anomalies",
+                lambda db: get_catalog_modifier_anomalies(db),
             )
         except MCPBusyError:
             return {
