@@ -100,6 +100,15 @@ const catalogRules = (group: CatalogModifierGroup): ModifierQuantityRules => ({
   selectionMode: group.modo_selecao,
 });
 
+/** Whether the current catalog offers at least one valid way to complete the group. */
+export const modifierGroupHasFeasibleSelection = (group: CatalogModifierGroup) => {
+  const rules = catalogRules(group);
+  const { optionIds, min, max } = normalizedRules(rules);
+  if (min === 0) return true;
+  if (min > max) return false;
+  return rules.selectionMode === 'porcoes' ? optionIds.size > 0 : optionIds.size >= min;
+};
+
 export const modifierTypeCount = (group: CatalogModifierGroup, selectedIds: readonly string[]) =>
   selectionCount(catalogRules(group), selectedIds);
 

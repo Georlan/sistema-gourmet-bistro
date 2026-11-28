@@ -3,6 +3,7 @@ import { Check, Minus, Plus, X } from 'lucide-react';
 import type { CatalogModifierGroup } from '../../../catalog/catalog';
 import type { Product } from '../../../types';
 import { formatCurrency } from '../cashierPresentation';
+import { modifierGroupHasFeasibleSelection } from '../../../domain/modifierQuantity';
 import { getEffectiveProductPrice } from '../../../domain/productMerchandising';
 import { CashierPdvModifierChoices } from './CashierPdvModifierChoices';
 
@@ -31,6 +32,7 @@ export function CashierPdvConfigurator({
   product, isEditing, quantity, onQuantityChange, observation, onObservationChange,
   groups, selectedIds, onModifierChange, total, valid, onSave, onClose,
 }: Props) {
+  const blockedGroup = groups.find(group => !modifierGroupHasFeasibleSelection(group));
   const dialogRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
@@ -166,7 +168,13 @@ export function CashierPdvConfigurator({
             <span>Total do item</span>
             <strong>{formatCurrency(total)}</strong>
           </div>
-          {!valid && <p className="cashier-pdv-config__validation" role="status">Complete as escolhas obrigatórias para continuar.</p>}
+          {!valid && (
+            <p className="cashier-pdv-config__validation" role="status">
+              {blockedGroup
+                ? `“${blockedGroup.nome}” não tem escolhas disponíveis suficientes. Revise o grupo em Cardápio → Complementos.`
+                : 'Complete as escolhas obrigatórias para continuar.'}
+            </p>
+          )}
           <button
             type="button"
             className="cashier-pdv-config__save"

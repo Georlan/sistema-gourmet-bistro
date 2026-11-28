@@ -7,6 +7,7 @@ import {
   canIncrementSelectionQuantity,
   changeModifierQuantitySelection,
   changeSelectionQuantity,
+  modifierGroupHasFeasibleSelection,
   modifierGroupSelectionValid,
   modifierTypeCount,
   selectionTypeCount,
@@ -135,3 +136,24 @@ test('marmitaria com min=0 permite 0 escolhas, repetição no modo porcoes e res
   assert.equal(canIncrementSelectionQuantity(guarnicoes, selectedGuar, 'feijao'), true);
 });
 
+
+test('identifica grupo obrigatório sem opção ativa, sem bloquear grupo opcional', () => {
+  const required = { ...group(1), nome: 'Gelo e Limão', min_selecoes: 1 };
+  const paused = [{ ...required.opcoes[0], ativo: false }];
+  for (const mode of ['tipos', 'porcoes'] as const) {
+    const unavailable = { ...required, modo_selecao: mode, opcoes: paused };
+    assert.equal(modifierGroupHasFeasibleSelection(unavailable), false);
+    assert.equal(modifierGroupSelectionValid(unavailable, []), false);
+    assert.equal(modifierGroupHasFeasibleSelection({ ...unavailable, min_selecoes: 0 }), true);
+  }
+});
+
+test('uma única escolha ativa satisfaz duas porções, mas não dois tipos', () => {
+  const required = { ...group(2), min_selecoes: 2 };
+  const opcoes = [required.opcoes[0], { ...required.opcoes[1], ativo: false }];
+  assert.equal(modifierGroupHasFeasibleSelection({ ...required, opcoes, modo_selecao: 'tipos' }), false);
+  const portions = { ...required, opcoes, modo_selecao: 'porcoes' as const };
+  assert.equal(modifierGroupHasFeasibleSelection(portions), true);
+  assert.equal(modifierGroupSelectionValid(portions, ['egg', 'egg']), true);
+  assert.equal(modifierGroupHasFeasibleSelection({ ...portions, min_selecoes: 3 }), false);
+});
