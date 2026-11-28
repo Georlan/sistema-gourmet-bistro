@@ -35,7 +35,8 @@ jobs:
             echo 'fiscal=true' >> "$GITHUB_OUTPUT"
             echo 'alembic=true' >> "$GITHUB_OUTPUT"
             echo 'orders_payments_inventory=true' >> "$GITHUB_OUTPUT"
-            echo 'changed_tests=' >> "$GITHUB_OUTPUT"
+            echo 'oauth_worker=true' >> "$GITHUB_OUTPUT"
+            echo 'changed_tests=backend/tests/test_engineering_mcp.py' >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -81,13 +82,32 @@ jobs:
           fi
 
           changed_tests="$(grep -E '^backend/tests/(.*/)?test_[^/]+\.py$' /tmp/koma-changed-files | grep -Ev '(_postgres\.py|_pg17.*\.py|/test_workers_multiprocess\.py$|/test_operational_realtime_multiprocess\.py$|/test_transfer_database_conflicts\.py$|/test_fiscal_tenant_links\.py$|/test_capacity_scale_stages\.py$|/test_direct_pix\.py$|/test_marmitaria_sizes\.py$|/test_marmitaria_size_migration\.py$|/test_crm_operational_evolution\.py$|/test_order_idempotency_fingerprint\.py$)' | while IFS= read -r f; do [ -f "$f" ] && printf '%s ' "$f"; done || true)"
+          if grep -Eq '^(backend/app/mcp[^/]*\.py$|backend/(requirements[^/]*|constraints\.txt)$|product-contract\.json$|\.github/workflows/quality-gate\.yml$)' /tmp/koma-changed-files; then
+            case " $changed_tests " in
+              *" backend/tests/test_engineering_mcp.py "*) ;;
+              *) changed_tests="${changed_tests}backend/tests/test_engineering_mcp.py " ;;
+            esac
+          fi
           echo "changed_tests=${changed_tests% }" >> "$GITHUB_OUTPUT"
 
+          if grep -Eq '^(integrations/mcp-oauth/staging/|\.github/workflows/quality-gate\.yml$)' /tmp/koma-changed-files; then
+            echo 'oauth_worker=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'oauth_worker=false' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Node
-        if: steps.backend_paths.outputs.frontend == 'true'
+        if: steps.backend_paths.outputs.frontend == 'true' || steps.backend_paths.outputs.oauth_worker == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: '22'
+
+      - name: Test MCP OAuth staging Worker
+        if: steps.backend_paths.outputs.oauth_worker == 'true'
+        working-directory: integrations/mcp-oauth/staging
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
 
       - name: Cache node_modules
         id: node_modules_cache
