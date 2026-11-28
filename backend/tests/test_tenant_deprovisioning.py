@@ -680,3 +680,33 @@ def test_verified_storage_cleanup_cross_tenant_protection_and_partial_retry(monk
         assert retry_res["verification"]["lastStorageCleanupAudit"]["deleted"] == [exclusive_prod]
     finally:
         db.close()
+
+
+def test_verify_and_plan_handle_restricted_postgres_table_privileges(monkeypatch):
+    from app.services import tenant_deprovisioning as td
+
+    tid = 14
+    _seed_tenant_shell(tid, name="Loja Priv 14", slug="loja-priv-14")
+    monkeypatch.setattr(
+        td,
+        "_get_table_privileges",
+        lambda db: {
+            "restaurantes": {"select": True, "delete": True},
+            "configuracoes_restaurante": {"select": True, "delete": True},
+            # Simula tabela sem SELECT e tabela append-only sem DELETE
+            "usuarios": {"select": False, "delete": False},
+            "produtos": {"select": True, "delete": False},
+        },
+    )
+
+    db = SessionLocal()
+    try:
+        plan = td.build_deprovision_plan(db, tid, mode="qa_purge")
+        assert "usuarios" in plan["uninspectableTables"]
+        assert "restaurantes" in plan["deleteCounts"]
+
+        verified = td.verify_tenant_deprovisioned(db, tid)
+        assert "usuarios" in verified["uninspectableTables"]
+        assert verified["categories"]["usuarios"] == 0
+    finally:
+        db.close()
