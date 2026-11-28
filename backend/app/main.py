@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from .config import is_production_environment, settings
 from .database import Base, current_restaurante_id, engine
 from .logging_security import install_sensitive_query_log_filter
+from .mcp_edge import install_engineering_mcp
 from .routes import (
     atendimento_printing,
     atendimentos,
@@ -689,3 +690,6 @@ def health_check():
         "database": full_payload["database"],
     }
     return JSONResponse(status_code=200 if ready else 503, content=minimal_payload)
+
+
+install_engineering_mcp(app)
