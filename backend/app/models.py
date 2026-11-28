@@ -1430,9 +1430,9 @@ class SuperAdminAuditLog(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    # Sem FK para restaurantes.id (desacoplado na 20261128scale1) para preservar trilha de auditoria após qa_purge.
     restaurante_id = Column(
         Integer,
-        ForeignKey("restaurantes.id", ondelete="CASCADE"),
         default=lambda: current_restaurante_id.get(),
         nullable=False,
         index=True,

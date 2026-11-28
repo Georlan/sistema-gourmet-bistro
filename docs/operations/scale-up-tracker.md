@@ -75,3 +75,21 @@
   2. Gerar/publicar nova tag de release do **KÔMA Print Android** a partir de `main` antes da homologação física no 3º cliente (tag `v1.1.0-preview` está obsoleta).
   3. Validar fisicamente celular Android + térmica Bluetooth no 3º cliente (`docs/operations/homologacao-fisica-bluetooth.md`).
 - **Pode ficar para depois:** Decisão FinOps sobre serviços auxiliares no Railway (`evolution-api` com volume de 5 GB, `Postgres` e `Redis` paralelos ao Supabase), mover `IPRateLimiter` crítico para store compartilhado (Redis), dividir chunks pesados (`CaixaPanel` / `SuperAdminGate` / imagens Landing), e wrapper MCP fino de provisionamento apontando para `/api/provisioning/express`.
+
+---
+
+## Encerramento da Operação Scale Up — Consolidação Final, Desprovisionamento, Android v1.2.0 & Guia de Agentes
+
+### Entregas Finais Integradas
+1. **Motor Oficial de Desprovisionamento e Desligamento Isolado (`backend/app/services/tenant_deprovisioning.py` + `scripts/koma-deprovision.mjs`):**
+   - Rotas `POST /api/provisioning/tenants/{tenant_id}/deprovision` (modos `qa_purge` e `client_offboarding`, `dry_run` + `fingerprint` + confirmação literal) e `GET /api/provisioning/tenants/{tenant_id}/deprovision/verify`.
+   - Proteção fail-closed: bloqueia IDs `{1, 6}`, grants `Founders` (`saas_commercial_grants.active`), assinaturas pagas ativas, `fiscal_documents` e pagamentos liquidados em `qa_purge`, preservando `super_admin_audit_logs` (FK desacoplada na migration `20261128scale1`) e garantindo política de não-reutilização de IDs históricos (`reusable: false`).
+   - Status verificado do **Tenant ID 10 em produção** (somente leitura pública): `GET /api/cardapio-digital/public?restaurante_id=10` e `GET /cardapio/modificadores/publico/10` retornam `404 Restaurante não encontrado` (não existe restaurante público #10 ativo em produção). Auditoria de resíduos internos/auditoria na base oficial requer definir `KOMA_PROVISIONING_API_TOKEN` no Railway ou sessão Super Admin.
+2. **Guia Operacional Único para Agentes Autorizados (`docs/operations/agent-operations-guide.md`):**
+   - Consolida CLIs (`scripts/koma-provision.mjs`, `scripts/koma-deprovision.mjs`, `scripts/support-preflight.mjs`, `scripts/production-smoke.mjs`), endpoints reais, dry-runs, idempotência, tratamento de erros (`401/403/404/409/422/429`), regras de segurança e limites sem expor segredos.
+3. **KÔMA Print Android `v1.2.0` (`versionCode = 3`) & Estabilidade CI/UX:**
+   - Bump `1.2.0` em `print-android/app/build.gradle.kts`, correção da race condition de `pg_isready` em `.github/workflows/quality-gate.yml`, correção de truncamento do cabeçalho `"Confira seu pedido"` em `390px` (`CardapioDigital.tsx`) e redução de ruído de reconexão WebSocket no console (`App.tsx`).
+
+### Pendências Finais Restantes (Transferência para Homologação Fundador + KÔM.A.I.)
+- **Depende do fundador:** configurar `KOMA_PROVISIONING_API_TOKEN` no serviço `Kôma` no Railway; decidir encerramento/manutenção dos serviços ociosos no Railway (`evolution-api` 5 GB com `0` tráfego TX, `Postgres`, `Redis`, volume solto `sistema-gourmet-bistro-volume`); conduzir o cadastro do novo restaurante de homologação com o KÔM.A.I. (nenhum substituto foi criado em produção).
+- **Depende de hardware físico:** homologação real em celular Android + impressora térmica Bluetooth 58/80 mm com a release `android-print-v1.2.0-preview` (`docs/operations/homologacao-fisica-bluetooth.md`).

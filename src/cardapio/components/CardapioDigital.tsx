@@ -778,7 +778,7 @@ export default function CardapioDigital({
                   <KomaBagAsset className="h-10 w-10 shrink-0" />
                 )}
                 <div className="min-w-0">
-                  <h2 className="font-display text-lg font-black tracking-tight text-[var(--km-ink)] truncate">
+                  <h2 className="font-display text-base sm:text-lg font-black tracking-tight leading-tight text-[var(--km-ink)]">
                     {orderingBlocked ? "Novos pedidos bloqueados" : "Confira seu pedido"}
                   </h2>
                   <p className="text-[11px] text-[var(--km-muted)] truncate">

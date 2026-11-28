@@ -14,6 +14,12 @@ from sqlalchemy.orm import Session
 from ..database import SessionLocal
 from ..security import IPRateLimiter, create_access_token
 from ..services.express_provisioning_parser import parse_express_provisioning_input
+from ..services.tenant_deprovisioning import (
+    DeprovisionMode,
+    build_deprovision_plan,
+    execute_deprovision,
+    verify_tenant_deprovisioned,
+)
 from ..services.tenant_id_reuse import MAX_TENANT_ID
 from ..services.universal_presets import SUPPORTED_OPERATION_PROFILES
 from ..services.universal_provisioning import (
@@ -301,5 +307,57 @@ def express_provisioning(
         if payload.dry_run:
             response.status_code = status.HTTP_200_OK
         return result
+    finally:
+        db.close()
+
+
+class DeprovisionTenantRequest(BaseModel):
+    mode: DeprovisionMode = "qa_purge"
+    dry_run: bool = True
+    expected_fingerprint: str | None = Field(default=None, max_length=128)
+    confirmation: str | None = Field(default=None, max_length=128)
+    reason: str | None = Field(default=None, max_length=500)
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+
+@router.post("/tenants/{tenant_id}/deprovision")
+def deprovision_tenant_route(
+    tenant_id: int,
+    payload: DeprovisionTenantRequest,
+    response: Response,
+    principal: dict[str, Any] = Depends(get_express_provisioning_principal),
+):
+    """Executa dry-run ou desligamento/desprovisionamento auditável de um único tenant."""
+    response.headers["Cache-Control"] = "no-store"
+    db: Session = SessionLocal()
+    try:
+        if payload.dry_run:
+            return build_deprovision_plan(db, tenant_id, mode=payload.mode)
+        return execute_deprovision(
+            db,
+            tenant_id,
+            mode=payload.mode,
+            actor=principal["actor"],
+            reason=payload.reason or "",
+            expected_fingerprint=payload.expected_fingerprint,
+            confirmation=payload.confirmation,
+        )
+    finally:
+        db.close()
+
+
+@router.get("/tenants/{tenant_id}/deprovision/verify")
+def verify_deprovisioned_tenant_route(
+    tenant_id: int,
+    response: Response,
+    principal: dict[str, Any] = Depends(get_express_provisioning_principal),
+):
+    """Verifica ausência de resíduos operacionais e política de não-reutilização de ID."""
+    del principal
+    response.headers["Cache-Control"] = "no-store"
+    db: Session = SessionLocal()
+    try:
+        return verify_tenant_deprovisioned(db, tenant_id)
     finally:
         db.close()
