@@ -13,6 +13,7 @@ from __future__ import annotations
 import concurrent.futures
 import datetime
 import os
+import threading
 import time
 from decimal import Decimal
 import pytest
@@ -181,8 +182,17 @@ def run_stage_simulation(tenants: list[dict], requests_per_tenant: int = 3, conc
         for seq in range(requests_per_tenant):
             tasks.append((tenant, seq))
 
+    thread_local = threading.local()
+
+    def _get_client() -> TestClient:
+        client = getattr(thread_local, "client", None)
+        if client is None:
+            client = TestClient(app)
+            thread_local.client = client
+        return client
+
     def execute_single(task_item):
-        client = TestClient(app)
+        client = _get_client()
         t_data, sequence = task_item
         rid = t_data["restaurante_id"]
         pid = t_data["produto_id"]

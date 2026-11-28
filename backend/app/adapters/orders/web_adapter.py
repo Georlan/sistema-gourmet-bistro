@@ -12,12 +12,14 @@ import hashlib
 from decimal import Decimal
 import logging
 import json
+import random
+import time
 import unicodedata
 from types import SimpleNamespace
 from typing import Any, Optional
 from fastapi import BackgroundTasks, HTTPException, Request, status
 from sqlalchemy import event, inspect as sa_inspect, or_
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.orm import Session, selectinload
 
 from ...application.orders.addressing import delivery_address_from_payload
@@ -87,6 +89,16 @@ from ...timezone_utils import get_operational_now
 from ...websocket_manager import manager
 
 logger = logging.getLogger("koma.adapters.web")
+
+
+def _is_sqlite_lock_error(db: Session, exc: OperationalError) -> bool:
+    """Detecta contenção transitória de lock/snapshot no SQLite para retry seguro."""
+    bind = getattr(db, "bind", None)
+    dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
+    if dialect_name != "sqlite":
+        return False
+    msg = str(exc).lower()
+    return "database is locked" in msg or "database table is locked" in msg
 
 MAX_PUBLIC_ORDER_UNITS = 200
 ELIGIBLE_ONLINE_ORDER_ROLES = ["admin", "gerente", "caixa", "garcom", "atendente"]
@@ -396,513 +408,537 @@ class CardapioWebAdapter:
         normalized_schedule = None
 
         try:
-            restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
-            if restaurante is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Restaurante não encontrado.",
-                )
+            for _sqlite_attempt in range(4):
+                try:
+                    restaurante = db.query(Restaurante).filter(Restaurante.id == rest_id).first()
+                    if restaurante is None:
+                        raise HTTPException(
+                            status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Restaurante não encontrado.",
+                        )
 
-            if getattr(restaurante, "saas_status", "active") == "suspended":
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Restaurante temporariamente suspenso para novos pedidos.",
-                )
+                    if getattr(restaurante, "saas_status", "active") == "suspended":
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Restaurante temporariamente suspenso para novos pedidos.",
+                        )
 
-            qa_token = (
-                request.headers.get("X-Koma-QA-Token")
-                or request.query_params.get("qa_token")
-                or ""
-            ).strip() or None
-            from ...services.restaurant_provisioning import (
-                is_provisional_preparation,
-                is_superadmin_operational_qa_active,
-            )
-            if is_provisional_preparation(db, rest_id, allow_qa=False, qa_token=qa_token):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Restaurante em fase de preparação. Operação comercial não liberada.",
-                )
-            qa_window_active = is_superadmin_operational_qa_active(db, rest_id)
-            if qa_window_active and online_payment:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Pagamentos online reais ficam bloqueados no Modo Homologação (QA). Use pagamento na entrega ou retirada para testar.",
-                )
-            if isinstance(getattr(db, "info", None), dict):
-                db.info.setdefault("_koma_provisional_by_rid", {})[rest_id] = False
-
-            if settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS and not customer_token:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Entre ou crie sua conta e confirme o e-mail antes de fazer o pedido.",
-                )
-
-            if is_scheduled:
-                normalized_schedule = validate_schedule_request(
-                    db,
-                    restaurante_id=rest_id,
-                    scheduled_for=scheduled_for,
-                )
-
-            fingerprint_intent = compute_fingerprint_for_public_payload(
-                payload,
-                scheduled_for=normalized_schedule or scheduled_for,
-            )
-
-            existing_comanda = _load_existing_idempotent_order(db, rest_id, idempotency_key)
-            if existing_comanda:
-                _ensure_idempotent_replay_matches(
-                    existing_comanda,
-                    payload,
-                    tipo_comanda=tipo_comanda,
-                    fingerprint=fingerprint_intent.fingerprint if idempotency_key else None,
-                    fingerprint_version=fingerprint_intent.version if idempotency_key else None,
-                )
-                logger.info("Pedido retornado via idempotency_key existente: %s", idempotency_key)
-                existing_intent = db.query(OnlinePaymentIntent).filter(
-                    OnlinePaymentIntent.restaurante_id == rest_id,
-                    OnlinePaymentIntent.comanda_id == existing_comanda.id,
-                ).first()
-                if online_payment and existing_intent and not existing_intent.external_payment_id:
-                    payer_email = validate_pix_payer_email(existing_intent.provider, payload.cliente_email)
-                    OnlinePaymentService.ensure_pix_created(
-                        db,
-                        intent=existing_intent,
-                        payer_email=payer_email,
-                        payer_name=payload.cliente_nome,
-                        payer_tax_id=payload.cliente_documento,
+                    qa_token = (
+                        request.headers.get("X-Koma-QA-Token")
+                        or request.query_params.get("qa_token")
+                        or ""
+                    ).strip() or None
+                    from ...services.restaurant_provisioning import (
+                        is_provisional_preparation,
+                        is_superadmin_operational_qa_active,
                     )
-                return _existing_order_response(db, existing_comanda)
+                    if is_provisional_preparation(db, rest_id, allow_qa=False, qa_token=qa_token):
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Restaurante em fase de preparação. Operação comercial não liberada.",
+                        )
+                    qa_window_active = is_superadmin_operational_qa_active(db, rest_id)
+                    if qa_window_active and online_payment:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail="Pagamentos online reais ficam bloqueados no Modo Homologação (QA). Use pagamento na entrega ou retirada para testar.",
+                        )
+                    if isinstance(getattr(db, "info", None), dict):
+                        db.info.setdefault("_koma_provisional_by_rid", {})[rest_id] = False
 
-            if (
-                # Cadastros legados sem lista conservam o comportamento de dinheiro.
-                # Uma lista explícita governa também dinheiro e Pix online.
-                (isinstance(restaurante.formas_pagamento_aceitas, list)
-                 or payment_method in PHYSICAL_CARD_METHODS)
-                and payment_method not in _configured_payment_methods(
-                    restaurante.formas_pagamento_aceitas
-                )
-            ):
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="A forma de pagamento escolhida não está habilitada pelo restaurante.",
-                )
+                    if settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS and not customer_token:
+                        raise HTTPException(
+                            status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Entre ou crie sua conta e confirme o e-mail antes de fazer o pedido.",
+                        )
 
-            if customer_token:
-                _claims, cliente = authenticated_customer(
-                    db,
-                    raw_token=customer_token,
-                    expected_restaurante_id=rest_id,
-                )
-                if (
-                    settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS
-                    and cliente.email_verificado_em is None
-                ):
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Confirme seu e-mail antes de fazer o pedido.",
+                    if is_scheduled:
+                        normalized_schedule = validate_schedule_request(
+                            db,
+                            restaurante_id=rest_id,
+                            scheduled_for=scheduled_for,
+                        )
+
+                    fingerprint_intent = compute_fingerprint_for_public_payload(
+                        payload,
+                        scheduled_for=normalized_schedule or scheduled_for,
                     )
-                telefone_clean = cliente.telefone
-                cliente_nome = cliente.nome
 
-            configuracao = db.query(ConfiguracaoRestaurante).filter(
-                ConfiguracaoRestaurante.restaurante_id == rest_id,
-            ).first()
-            if isinstance(getattr(db, "info", None), dict):
-                # Snapshot plain imune ao expire_on_commit do rate limiter, evitando
-                # lazy-reload completo de configuracoes_restaurante no ValidationDataLoader.
-                db.info.setdefault("_koma_config_by_rid", {})[rest_id] = (
-                    SimpleNamespace(
-                        pedido_minimo=configuracao.pedido_minimo,
-                        pedido_minimo_retirada=bool(getattr(configuracao, "pedido_minimo_retirada", False)),
-                        cardapio_ativo_id=configuracao.cardapio_ativo_id,
-                        cardapios_adicionais_ids=tuple(configuracao.cardapios_adicionais_ids or ()),
-                    )
-                    if configuracao is not None
-                    else None
-                )
-            if not mode_is_allowed(configuracao, modalidade):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Esta modalidade de pedido está desativada para o restaurante.",
-                )
-            policy_now = None
-            if normalized_schedule is not None:
-                operational_tz = get_operational_now().tzinfo
-                policy_now = normalized_schedule.astimezone(operational_tz) if operational_tz else normalized_schedule
-            policy = evaluate_online_order_policy(
-                restaurante,
-                configuracao,
-                modalidade=modalidade,
-                now=policy_now,
-                is_provisional=False,
-                qa_token=qa_token,
-            )
-            if not policy.accepting_orders:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail=policy.reason or "O restaurante não está aceitando pedidos online no momento.",
-                )
+                    existing_comanda = _load_existing_idempotent_order(db, rest_id, idempotency_key)
+                    if existing_comanda:
+                        _ensure_idempotent_replay_matches(
+                            existing_comanda,
+                            payload,
+                            tipo_comanda=tipo_comanda,
+                            fingerprint=fingerprint_intent.fingerprint if idempotency_key else None,
+                            fingerprint_version=fingerprint_intent.version if idempotency_key else None,
+                        )
+                        logger.info("Pedido retornado via idempotency_key existente: %s", idempotency_key)
+                        existing_intent = db.query(OnlinePaymentIntent).filter(
+                            OnlinePaymentIntent.restaurante_id == rest_id,
+                            OnlinePaymentIntent.comanda_id == existing_comanda.id,
+                        ).first()
+                        if online_payment and existing_intent and not existing_intent.external_payment_id:
+                            payer_email = validate_pix_payer_email(existing_intent.provider, payload.cliente_email)
+                            OnlinePaymentService.ensure_pix_created(
+                                db,
+                                intent=existing_intent,
+                                payer_email=payer_email,
+                                payer_name=payload.cliente_nome,
+                                payer_tax_id=payload.cliente_documento,
+                            )
+                        return _existing_order_response(db, existing_comanda)
 
-            capacity_gate = _enforce_public_order_rate_limits(
-                db,
-                request=request,
-                restaurante_id=rest_id,
-                telefone=telefone_clean,
-            )
-
-            recentes = []
-            if not is_scheduled and cliente is not None:
-                cinco_minutos_atras = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
-                recentes = (
-                    db.query(Comanda)
-                    .options(selectinload(Comanda.itens))
-                    .filter(
-                        Comanda.restaurante_id == rest_id,
-                        Comanda.cliente_id == cliente.id,
-                        Comanda.tipo == tipo_comanda,
-                        Comanda.criado_em >= cinco_minutos_atras,
-                    )
-                    .order_by(Comanda.criado_em.desc())
-                    .all()
-                )
-
-            payload_items_sig = _payload_items_signature(payload)
-            for rec in recentes:
-                rec_items_sig = _stored_items_signature(rec)
-                if payload_items_sig == rec_items_sig:
-                    logger.info("Pedido duplicado evitado por janela temporal. Retornando pedido id %s", rec.id)
-                    return _existing_order_response(db, rec)
-
-            garcom = db.query(Usuario).filter(
-                Usuario.restaurante_id == rest_id,
-                Usuario.status == "ativo",
-                or_(
-                    Usuario.role.in_(ELIGIBLE_ONLINE_ORDER_ROLES),
-                    Usuario.cargo.in_(ELIGIBLE_ONLINE_ORDER_ROLES),
-                ),
-            ).first()
-            if not garcom:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Restaurante ainda não está pronto para receber pedidos online.",
-                )
-
-            payment_account = None
-            payment_shift = None
-            normalized_payer_email = ""
-            if online_payment:
-                payment_account = OnlinePaymentService.active_account(db, rest_id)
-                normalized_payer_email = validate_pix_payer_email(payment_account.provider, payload.cliente_email)
-                if payment_account.provider == "pagbank":
-                    from ...tax_ids import is_valid_cpf, is_valid_cnpj
-                    if not (is_valid_cpf(payload.cliente_documento) or is_valid_cnpj(payload.cliente_documento)):
-                        raise HTTPException(422, "Informe um CPF/CNPJ válido do comprador para gerar o Pix PagBank.")
-                payment_shift = OnlinePaymentService.open_shift(db, rest_id)
-
-            fulfillment = {
-                "delivery": FulfillmentType.DELIVERY,
-                "retirada": FulfillmentType.PICKUP,
-                "consumo_local": FulfillmentType.DINE_IN,
-            }[modalidade]
-            items_input = tuple(
-                OrderItemInput(
-                    product_id=item.produto_id,
-                    quantity=Decimal(str(item.quantidade)),
-                    modifier_ids=tuple(item.modificador_ids or ()),
-                    notes=item.observacao or "",
-                )
-                for item in payload.itens
-            )
-
-            delivery_input = None
-            if modalidade == "delivery":
-                delivery_input = DeliveryInput(
-                    address=endereco_comanda,
-                    neighborhood=(
-                        address_snapshot.neighborhood
-                        if address_snapshot is not None
-                        else payload.bairro
-                    ),
-                    fee=None,
-                    address_snapshot=address_snapshot,
-                )
-
-            cmd = CreateOrderCommand(
-                restaurant_id=rest_id,
-                channel=OrderChannel.WEB_CARDAPIO,
-                fulfillment=fulfillment,
-                items=items_input,
-                customer=CustomerInput(
-                    name=cliente_nome,
-                    phone=telefone_clean,
-                    customer_id=cliente.id if cliente else None,
-                ),
-                delivery=delivery_input,
-                coupon_code=payload.cupom_codigo,
-                promotion_id=payload.promocao_id,
-                promotion_item_indices=tuple(payload.promocao_item_indices) if payload.promocao_item_indices is not None else None,
-                expected_promotion_price=payload.promocao_preco_esperado,
-                usar_cashback=bool(payload.usar_cashback),
-                payment_method=payload.forma_pagamento_detalhe,
-                change_for=str(payload.troco_para) if payload.troco_para is not None else None,
-                idempotency_key=idempotency_key or None,
-                idempotency_fingerprint=fingerprint_intent.fingerprint if idempotency_key else None,
-                idempotency_fingerprint_version=fingerprint_intent.version if idempotency_key else None,
-                operator_user_id=garcom.id,
-                onboarding_test=bool(qa_window_active),
-                defer_operational_publish=online_payment or is_scheduled,
-                whatsapp_status_opt_in=checkout_status_consent(
-                    requested=payload.whatsapp_status_opt_in,
-                    phone=telefone_clean,
-                    fulfillment=payload.tipo_pedido,
-                ),
-            )
-
-            created_comandas: dict[str, Comanda] = {}
-
-            def _capture_new_comandas(session, _flush_context, _instances):
-                for obj in session.new:
                     if (
-                        isinstance(obj, Comanda)
-                        and obj.id
-                        and int(getattr(obj, "restaurante_id", 0) or 0) == rest_id
+                        # Cadastros legados sem lista conservam o comportamento de dinheiro.
+                        # Uma lista explícita governa também dinheiro e Pix online.
+                        (isinstance(restaurante.formas_pagamento_aceitas, list)
+                         or payment_method in PHYSICAL_CARD_METHODS)
+                        and payment_method not in _configured_payment_methods(
+                            restaurante.formas_pagamento_aceitas
+                        )
                     ):
-                        created_comandas[str(obj.id)] = obj
+                        raise HTTPException(
+                            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                            detail="A forma de pagamento escolhida não está habilitada pelo restaurante.",
+                        )
 
-            listener_attached = False
-            try:
-                event.listen(db, "before_flush", _capture_new_comandas)
-                listener_attached = True
-            except Exception:
-                listener_attached = False
-            try:
-                order_dto = OrderApplicationService.create_order(
-                    db,
-                    cmd,
-                    commit=False,
-                )
-            finally:
-                if listener_attached:
-                    event.remove(db, "before_flush", _capture_new_comandas)
+                    if customer_token:
+                        _claims, cliente = authenticated_customer(
+                            db,
+                            raw_token=customer_token,
+                            expected_restaurante_id=rest_id,
+                        )
+                        if (
+                            settings.CUSTOMER_ACCOUNT_REQUIRED_FOR_ORDERS
+                            and cliente.email_verificado_em is None
+                        ):
+                            raise HTTPException(
+                                status_code=status.HTTP_403_FORBIDDEN,
+                                detail="Confirme seu e-mail antes de fazer o pedido.",
+                            )
+                        telefone_clean = cliente.telefone
+                        cliente_nome = cliente.nome
 
-            is_newly_created_comanda = str(order_dto.comanda_id) in created_comandas
-            comanda = _find_comanda_in_session(
-                db,
-                rest_id=rest_id,
-                comanda_id=order_dto.comanda_id,
-                captured=created_comandas,
-            )
-            numero_pedido = comanda.numero_pedido if comanda else int(order_dto.sequence)
-            cliente_id = comanda.cliente_id if comanda else (order_dto.customer.customer_id if order_dto.customer else None)
-            payment_intent = None
-            tracking_token = None
-
-            try:
-                from ...services.order_chat_service import create_conversation_for_order
-                _conv, tracking_token = create_conversation_for_order(
-                    db,
-                    restaurante_id=rest_id,
-                    pedido_id=order_dto.comanda_id,
-                    assume_new_order=is_newly_created_comanda,
-                )
-            except Exception:
-                logger.exception("Falha ao criar conversa para o pedido %s", order_dto.comanda_id)
-
-            if not online_payment and not is_scheduled and comanda is not None:
-                from ...services.online_order_control import auto_accept_online_order_if_enabled
-
-                auto_accept_kwargs: dict[str, Any] = {
-                    "restaurante_id": rest_id,
-                    "comanda": comanda,
-                    "operator_user_id": garcom.id,
-                }
-                if getattr(capacity_gate, "control_loaded", False):
-                    loaded_control = getattr(capacity_gate, "control", None)
-                    if loaded_control is None or not sa_inspect(loaded_control).expired:
-                        auto_accept_kwargs["control"] = loaded_control
-
-                auto_accept_online_order_if_enabled(db, **auto_accept_kwargs)
-
-            def _queue_public_broadcasts(*, is_direct_pix: bool = False) -> None:
-                if not online_payment or is_direct_pix:
-                    manager.queue_committed_broadcast(db, {"event": "tables_updated"}, rest_id)
-                if not online_payment:
-                    manager.queue_committed_broadcast(
-                        db,
-                        {"event": "new_delivery_order", "message": f"Novo pedido online de {cliente_nome} recebido!"},
-                        rest_id,
+                    configuracao = db.query(ConfiguracaoRestaurante).filter(
+                        ConfiguracaoRestaurante.restaurante_id == rest_id,
+                    ).first()
+                    if isinstance(getattr(db, "info", None), dict):
+                        # Snapshot plain imune ao expire_on_commit do rate limiter, evitando
+                        # lazy-reload completo de configuracoes_restaurante no ValidationDataLoader.
+                        db.info.setdefault("_koma_config_by_rid", {})[rest_id] = (
+                            SimpleNamespace(
+                                pedido_minimo=configuracao.pedido_minimo,
+                                pedido_minimo_retirada=bool(getattr(configuracao, "pedido_minimo_retirada", False)),
+                                cardapio_ativo_id=configuracao.cardapio_ativo_id,
+                                cardapios_adicionais_ids=tuple(configuracao.cardapios_adicionais_ids or ()),
+                            )
+                            if configuracao is not None
+                            else None
+                        )
+                    if not mode_is_allowed(configuracao, modalidade):
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail="Esta modalidade de pedido está desativada para o restaurante.",
+                        )
+                    policy_now = None
+                    if normalized_schedule is not None:
+                        operational_tz = get_operational_now().tzinfo
+                        policy_now = normalized_schedule.astimezone(operational_tz) if operational_tz else normalized_schedule
+                    policy = evaluate_online_order_policy(
+                        restaurante,
+                        configuracao,
+                        modalidade=modalidade,
+                        now=policy_now,
+                        is_provisional=False,
+                        qa_token=qa_token,
                     )
-                if cliente is not None and not qa_window_active:
-                    manager.queue_committed_broadcast(
+                    if not policy.accepting_orders:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail=policy.reason or "O restaurante não está aceitando pedidos online no momento.",
+                        )
+
+                    capacity_gate = _enforce_public_order_rate_limits(
                         db,
-                        {
-                            "event": "customers_updated",
-                            "detail": {
-                                "action": "order_linked",
-                                "cliente_id": cliente.id,
-                            },
-                        },
-                        rest_id,
-                        target_audience="internal",
+                        request=request,
+                        restaurante_id=rest_id,
+                        telefone=telefone_clean,
                     )
 
-            if not (online_payment or is_scheduled):
-                _queue_public_broadcasts()
-                db.commit()
+                    recentes = []
+                    if not is_scheduled and cliente is not None:
+                        cinco_minutos_atras = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
+                        recentes = (
+                            db.query(Comanda)
+                            .options(selectinload(Comanda.itens))
+                            .filter(
+                                Comanda.restaurante_id == rest_id,
+                                Comanda.cliente_id == cliente.id,
+                                Comanda.tipo == tipo_comanda,
+                                Comanda.criado_em >= cinco_minutos_atras,
+                            )
+                            .order_by(Comanda.criado_em.desc())
+                            .all()
+                        )
 
-            if is_scheduled:
-                if comanda is None or normalized_schedule is None:
+                    payload_items_sig = _payload_items_signature(payload)
+                    for rec in recentes:
+                        rec_items_sig = _stored_items_signature(rec)
+                        if payload_items_sig == rec_items_sig:
+                            logger.info("Pedido duplicado evitado por janela temporal. Retornando pedido id %s", rec.id)
+                            return _existing_order_response(db, rec)
+
+                    garcom = db.query(Usuario).filter(
+                        Usuario.restaurante_id == rest_id,
+                        Usuario.status == "ativo",
+                        or_(
+                            Usuario.role.in_(ELIGIBLE_ONLINE_ORDER_ROLES),
+                            Usuario.cargo.in_(ELIGIBLE_ONLINE_ORDER_ROLES),
+                        ),
+                    ).first()
+                    if not garcom:
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail="Restaurante ainda não está pronto para receber pedidos online.",
+                        )
+
+                    payment_account = None
+                    payment_shift = None
+                    normalized_payer_email = ""
+                    if online_payment:
+                        payment_account = OnlinePaymentService.active_account(db, rest_id)
+                        normalized_payer_email = validate_pix_payer_email(payment_account.provider, payload.cliente_email)
+                        if payment_account.provider == "pagbank":
+                            from ...tax_ids import is_valid_cpf, is_valid_cnpj
+                            if not (is_valid_cpf(payload.cliente_documento) or is_valid_cnpj(payload.cliente_documento)):
+                                raise HTTPException(422, "Informe um CPF/CNPJ válido do comprador para gerar o Pix PagBank.")
+                        payment_shift = OnlinePaymentService.open_shift(db, rest_id)
+
+                    fulfillment = {
+                        "delivery": FulfillmentType.DELIVERY,
+                        "retirada": FulfillmentType.PICKUP,
+                        "consumo_local": FulfillmentType.DINE_IN,
+                    }[modalidade]
+                    items_input = tuple(
+                        OrderItemInput(
+                            product_id=item.produto_id,
+                            quantity=Decimal(str(item.quantidade)),
+                            modifier_ids=tuple(item.modificador_ids or ()),
+                            notes=item.observacao or "",
+                        )
+                        for item in payload.itens
+                    )
+
+                    delivery_input = None
+                    if modalidade == "delivery":
+                        delivery_input = DeliveryInput(
+                            address=endereco_comanda,
+                            neighborhood=(
+                                address_snapshot.neighborhood
+                                if address_snapshot is not None
+                                else payload.bairro
+                            ),
+                            fee=None,
+                            address_snapshot=address_snapshot,
+                        )
+
+                    cmd = CreateOrderCommand(
+                        restaurant_id=rest_id,
+                        channel=OrderChannel.WEB_CARDAPIO,
+                        fulfillment=fulfillment,
+                        items=items_input,
+                        customer=CustomerInput(
+                            name=cliente_nome,
+                            phone=telefone_clean,
+                            customer_id=cliente.id if cliente else None,
+                        ),
+                        delivery=delivery_input,
+                        coupon_code=payload.cupom_codigo,
+                        promotion_id=payload.promocao_id,
+                        promotion_item_indices=tuple(payload.promocao_item_indices) if payload.promocao_item_indices is not None else None,
+                        expected_promotion_price=payload.promocao_preco_esperado,
+                        usar_cashback=bool(payload.usar_cashback),
+                        payment_method=payload.forma_pagamento_detalhe,
+                        change_for=str(payload.troco_para) if payload.troco_para is not None else None,
+                        idempotency_key=idempotency_key or None,
+                        idempotency_fingerprint=fingerprint_intent.fingerprint if idempotency_key else None,
+                        idempotency_fingerprint_version=fingerprint_intent.version if idempotency_key else None,
+                        operator_user_id=garcom.id,
+                        onboarding_test=bool(qa_window_active),
+                        defer_operational_publish=online_payment or is_scheduled,
+                        whatsapp_status_opt_in=checkout_status_consent(
+                            requested=payload.whatsapp_status_opt_in,
+                            phone=telefone_clean,
+                            fulfillment=payload.tipo_pedido,
+                        ),
+                    )
+
+                    created_comandas: dict[str, Comanda] = {}
+
+                    def _capture_new_comandas(session, _flush_context, _instances):
+                        for obj in session.new:
+                            if (
+                                isinstance(obj, Comanda)
+                                and obj.id
+                                and int(getattr(obj, "restaurante_id", 0) or 0) == rest_id
+                            ):
+                                created_comandas[str(obj.id)] = obj
+
+                    listener_attached = False
+                    try:
+                        event.listen(db, "before_flush", _capture_new_comandas)
+                        listener_attached = True
+                    except Exception:
+                        listener_attached = False
+                    try:
+                        order_dto = OrderApplicationService.create_order(
+                            db,
+                            cmd,
+                            commit=False,
+                        )
+                    finally:
+                        if listener_attached:
+                            event.remove(db, "before_flush", _capture_new_comandas)
+
+                    is_newly_created_comanda = str(order_dto.comanda_id) in created_comandas
+                    comanda = _find_comanda_in_session(
+                        db,
+                        rest_id=rest_id,
+                        comanda_id=order_dto.comanda_id,
+                        captured=created_comandas,
+                    )
+                    numero_pedido = comanda.numero_pedido if comanda else int(order_dto.sequence)
+                    cliente_id = comanda.cliente_id if comanda else (order_dto.customer.customer_id if order_dto.customer else None)
+                    payment_intent = None
+                    tracking_token = None
+
+                    try:
+                        from ...services.order_chat_service import create_conversation_for_order
+                        _conv, tracking_token = create_conversation_for_order(
+                            db,
+                            restaurante_id=rest_id,
+                            pedido_id=order_dto.comanda_id,
+                            assume_new_order=is_newly_created_comanda,
+                        )
+                    except Exception:
+                        logger.exception("Falha ao criar conversa para o pedido %s", order_dto.comanda_id)
+
+                    if not online_payment and not is_scheduled and comanda is not None:
+                        from ...services.online_order_control import auto_accept_online_order_if_enabled
+
+                        auto_accept_kwargs: dict[str, Any] = {
+                            "restaurante_id": rest_id,
+                            "comanda": comanda,
+                            "operator_user_id": garcom.id,
+                        }
+                        if getattr(capacity_gate, "control_loaded", False):
+                            loaded_control = getattr(capacity_gate, "control", None)
+                            if loaded_control is None or not sa_inspect(loaded_control).expired:
+                                auto_accept_kwargs["control"] = loaded_control
+
+                        auto_accept_online_order_if_enabled(db, **auto_accept_kwargs)
+
+                    def _queue_public_broadcasts(*, is_direct_pix: bool = False) -> None:
+                        if not online_payment or is_direct_pix:
+                            manager.queue_committed_broadcast(db, {"event": "tables_updated"}, rest_id)
+                        if not online_payment:
+                            manager.queue_committed_broadcast(
+                                db,
+                                {"event": "new_delivery_order", "message": f"Novo pedido online de {cliente_nome} recebido!"},
+                                rest_id,
+                            )
+                        if cliente is not None and not qa_window_active:
+                            manager.queue_committed_broadcast(
+                                db,
+                                {
+                                    "event": "customers_updated",
+                                    "detail": {
+                                        "action": "order_linked",
+                                        "cliente_id": cliente.id,
+                                    },
+                                },
+                                rest_id,
+                                target_audience="internal",
+                            )
+
+                    if not (online_payment or is_scheduled):
+                        _queue_public_broadcasts()
+                        db.commit()
+
+                    if is_scheduled:
+                        if comanda is None or normalized_schedule is None:
+                            raise HTTPException(
+                                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                                detail="Não foi possível preparar o pedido agendado.",
+                            )
+                        schedule_order_in_session(
+                            db,
+                            restaurante_id=rest_id,
+                            comanda_id=comanda.id,
+                            scheduled_for=normalized_schedule,
+                        )
+                        _queue_public_broadcasts()
+                        db.commit()
+                    elif online_payment:
+                        if comanda is None or payment_shift is None or payment_account is None:
+                            raise OnlinePaymentConfigurationError("Não foi possível preparar o pagamento do pedido.")
+                        payment_intent = OnlinePaymentService.create_intent_in_session(
+                            db,
+                            comanda=comanda,
+                            turno=payment_shift,
+                            amount=order_dto.total,
+                            idempotency_key=idempotency_key,
+                            provider=payment_account.provider,
+                        )
+                        _queue_public_broadcasts(is_direct_pix=payment_intent.provider == "direct_pix")
+                        db.commit()
+                        db.refresh(payment_intent)
+                        payment_intent = OnlinePaymentService.ensure_pix_created(
+                            db,
+                            intent=payment_intent,
+                            payer_email=normalized_payer_email,
+                            payer_name=payload.cliente_nome,
+                            payer_tax_id=payload.cliente_documento,
+                            account=payment_account,
+                        )
+
+                except HTTPException:
+                    db.rollback()
+                    raise
+                except (ProductNotFoundError, ProductInactiveError, ProductTenantMismatchError) as err:
+                    db.rollback()
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Produto '{err.product_id}' não encontrado ou inativo para este estabelecimento.",
+                    )
+                except (ModifierNotFoundError, ModifierInactiveError, ModifierGroupMismatchError) as err:
+                    db.rollback()
+                    _log_validation_rejection(request, rest_id, modalidade, err, status_code=404)
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail="Um complemento escolhido não está mais disponível para este produto. Volte à sacola, confira as opções e tente novamente.",
+                    )
+                except MinimumOrderAmountNotMetError as err:
+                    db.rollback()
+                    _log_validation_rejection(request, rest_id, modalidade, err)
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=str(err),
+                    )
+                except IdempotencyConflictError as err:
+                    db.rollback()
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=str(err),
+                    )
+                except (InvalidFulfillmentDetailsError, OrderValidationError) as err:
+                    db.rollback()
+                    _log_validation_rejection(request, rest_id, modalidade, err)
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=str(err),
+                    )
+                except OnlinePaymentConfigurationError as err:
+                    db.rollback()
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(err))
+                except (MercadoPagoError, OnlinePaymentValidationError) as exc:
+                    db.rollback()
+                    from ...services.online_payments.pagbank.provider import PagBankError
+                    if isinstance(exc, PagBankError) and exc.reason == 'customer_email_rejected':
+                        raise HTTPException(
+                            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                            detail=(
+                                "O PagBank rejeitou este e-mail para o Pix. Use outro e-mail válido "
+                                "do comprador, diferente do cadastrado na conta PagBank do restaurante."
+                            ),
+                        ) from exc
+                    if isinstance(exc, PagBankError) and 'e-mail' in str(exc).lower():
+                        raise HTTPException(
+                            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                            detail="Informe um e-mail válido para gerar o Pix PagBank.",
+                        ) from exc
+                    if isinstance(exc, PagBankError) and exc.status_code == 403:
+                        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="O PagBank não autorizou a emissão deste Pix. O restaurante precisa verificar a liberação de pagamentos online com o PagBank. Não houve confirmação de pagamento.") from exc
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail="Não foi possível gerar o Pix agora. Tente novamente sem alterar a sacola.",
+                    )
+                except EmptyOrderItemsError:
+                    db.rollback()
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                        detail="O pedido deve conter pelo menos um item.",
+                    )
+                except InvalidItemQuantityError as err:
+                    db.rollback()
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                        detail=str(err),
+                    )
+                except InvalidOrderTransitionError as err:
+                    db.rollback()
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=str(err),
+                    )
+                except IntegrityError:
+                    db.rollback()
+                    concurrent_order = _load_existing_idempotent_order(db, rest_id, idempotency_key)
+                    if concurrent_order is not None:
+                        _ensure_idempotent_replay_matches(
+                            concurrent_order,
+                            payload,
+                            tipo_comanda=tipo_comanda,
+                            fingerprint=fingerprint_intent.fingerprint if idempotency_key else None,
+                            fingerprint_version=fingerprint_intent.version if idempotency_key else None,
+                        )
+                        logger.info(
+                            "Corrida idempotente resolvida para pedido público: %s",
+                            idempotency_key,
+                        )
+                        return _existing_order_response(db, concurrent_order)
+                    logger.exception(
+                        "Conflito de integridade ao processar pedido público do restaurante %s.",
+                        rest_id,
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail="O pedido entrou em conflito com outra operação. Tente novamente.",
+                    )
+                except OperationalError as op_err:
+                    db.rollback()
+                    db_info = getattr(db, "info", None)
+                    if isinstance(db_info, dict):
+                        cached_configs = db_info.get("_koma_config_by_rid")
+                        if isinstance(cached_configs, dict):
+                            cached_configs.pop(rest_id, None)
+                        cached_provisional = db_info.get("_koma_provisional_by_rid")
+                        if isinstance(cached_provisional, dict):
+                            cached_provisional.pop(rest_id, None)
+                    if _is_sqlite_lock_error(db, op_err) and _sqlite_attempt < 3:
+                        time.sleep(0.015 * (_sqlite_attempt + 1) + random.uniform(0.005, 0.025))
+                        continue
+                    logger.exception(
+                        "Falha de banco ao processar pedido público do restaurante %s.",
+                        rest_id,
+                    )
                     raise HTTPException(
                         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                        detail="Não foi possível preparar o pedido agendado.",
+                        detail="Não foi possível processar o pedido. Tente novamente.",
                     )
-                schedule_order_in_session(
-                    db,
-                    restaurante_id=rest_id,
-                    comanda_id=comanda.id,
-                    scheduled_for=normalized_schedule,
-                )
-                _queue_public_broadcasts()
-                db.commit()
-            elif online_payment:
-                if comanda is None or payment_shift is None or payment_account is None:
-                    raise OnlinePaymentConfigurationError("Não foi possível preparar o pagamento do pedido.")
-                payment_intent = OnlinePaymentService.create_intent_in_session(
-                    db,
-                    comanda=comanda,
-                    turno=payment_shift,
-                    amount=order_dto.total,
-                    idempotency_key=idempotency_key,
-                    provider=payment_account.provider,
-                )
-                _queue_public_broadcasts(is_direct_pix=payment_intent.provider == "direct_pix")
-                db.commit()
-                db.refresh(payment_intent)
-                payment_intent = OnlinePaymentService.ensure_pix_created(
-                    db,
-                    intent=payment_intent,
-                    payer_email=normalized_payer_email,
-                    payer_name=payload.cliente_nome,
-                    payer_tax_id=payload.cliente_documento,
-                    account=payment_account,
-                )
-
-        except HTTPException:
-            db.rollback()
-            raise
-        except (ProductNotFoundError, ProductInactiveError, ProductTenantMismatchError) as err:
-            db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Produto '{err.product_id}' não encontrado ou inativo para este estabelecimento.",
-            )
-        except (ModifierNotFoundError, ModifierInactiveError, ModifierGroupMismatchError) as err:
-            db.rollback()
-            _log_validation_rejection(request, rest_id, modalidade, err, status_code=404)
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Um complemento escolhido não está mais disponível para este produto. Volte à sacola, confira as opções e tente novamente.",
-            )
-        except MinimumOrderAmountNotMetError as err:
-            db.rollback()
-            _log_validation_rejection(request, rest_id, modalidade, err)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(err),
-            )
-        except IdempotencyConflictError as err:
-            db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=str(err),
-            )
-        except (InvalidFulfillmentDetailsError, OrderValidationError) as err:
-            db.rollback()
-            _log_validation_rejection(request, rest_id, modalidade, err)
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=str(err),
-            )
-        except OnlinePaymentConfigurationError as err:
-            db.rollback()
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(err))
-        except (MercadoPagoError, OnlinePaymentValidationError) as exc:
-            db.rollback()
-            from ...services.online_payments.pagbank.provider import PagBankError
-            if isinstance(exc, PagBankError) and exc.reason == 'customer_email_rejected':
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail=(
-                        "O PagBank rejeitou este e-mail para o Pix. Use outro e-mail válido "
-                        "do comprador, diferente do cadastrado na conta PagBank do restaurante."
-                    ),
-                ) from exc
-            if isinstance(exc, PagBankError) and 'e-mail' in str(exc).lower():
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="Informe um e-mail válido para gerar o Pix PagBank.",
-                ) from exc
-            if isinstance(exc, PagBankError) and exc.status_code == 403:
-                raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="O PagBank não autorizou a emissão deste Pix. O restaurante precisa verificar a liberação de pagamentos online com o PagBank. Não houve confirmação de pagamento.") from exc
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Não foi possível gerar o Pix agora. Tente novamente sem alterar a sacola.",
-            )
-        except EmptyOrderItemsError:
-            db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail="O pedido deve conter pelo menos um item.",
-            )
-        except InvalidItemQuantityError as err:
-            db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=str(err),
-            )
-        except InvalidOrderTransitionError as err:
-            db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=str(err),
-            )
-        except IntegrityError:
-            db.rollback()
-            concurrent_order = _load_existing_idempotent_order(db, rest_id, idempotency_key)
-            if concurrent_order is not None:
-                _ensure_idempotent_replay_matches(
-                    concurrent_order,
-                    payload,
-                    tipo_comanda=tipo_comanda,
-                    fingerprint=fingerprint_intent.fingerprint if idempotency_key else None,
-                    fingerprint_version=fingerprint_intent.version if idempotency_key else None,
-                )
-                logger.info(
-                    "Corrida idempotente resolvida para pedido público: %s",
-                    idempotency_key,
-                )
-                return _existing_order_response(db, concurrent_order)
-            logger.exception(
-                "Conflito de integridade ao processar pedido público do restaurante %s.",
-                rest_id,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="O pedido entrou em conflito com outra operação. Tente novamente.",
-            )
-        except Exception:
-            db.rollback()
-            logger.exception(
-                "Falha inesperada ao processar pedido público do restaurante %s.",
-                rest_id,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Não foi possível processar o pedido. Tente novamente.",
-            )
+                except Exception:
+                    db.rollback()
+                    logger.exception(
+                        "Falha inesperada ao processar pedido público do restaurante %s.",
+                        rest_id,
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Não foi possível processar o pedido. Tente novamente.",
+                    )
+                break
         finally:
             db_info = getattr(db, "info", None)
             if isinstance(db_info, dict):
