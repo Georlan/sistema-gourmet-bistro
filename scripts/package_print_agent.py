@@ -36,7 +36,7 @@ AGENT_FILES = (
     "main.py",
     "pairing.py",
     "printer_profiles.py",
-    "requirements.lock",
+    "constraints.txt",
     "requirements.txt",
     "retry_budget.py",
     "simulator.py",

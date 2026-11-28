@@ -41,7 +41,7 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: |
-            print-agent/requirements.lock
+            print-agent/constraints.txt
             print-agent/requirements.txt
       - run: python -m pip install -r print-agent/requirements.txt "pytest>=8,<9"
       - run: python -m pytest print-agent/tests -q -ra
@@ -80,7 +80,7 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: |
-            backend/requirements.lock
+            backend/constraints.txt
             backend/requirements.txt
       - run: python -m pip install -r backend/requirements.txt "pytest>=8,<9"
       - run: python -m pytest backend/tests/test_print_agents.py backend/tests/test_print_job_terminal_invariant.py backend/tests/test_print_ack_concurrency_postgres.py -q -ra

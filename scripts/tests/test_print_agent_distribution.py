@@ -33,7 +33,7 @@ def test_print_distribution_allowlist(tmp_path):
         "print-agent/koma-print-launcher.sh",
         "print-agent/hardware_preflight.py",
         "print-agent/requirements.txt",
-        "print-agent/requirements.lock",
+        "print-agent/constraints.txt",
         "print-agent/adapters/windows.py",
         "print-agent/adapters/linux.py",
     }
@@ -44,7 +44,7 @@ def test_print_distribution_allowlist(tmp_path):
         and not name.startswith("print-agent/tests/")
         and (name.endswith((".py", ".ps1", ".sh")) or name in {
             "print-agent/README.md", "print-agent/requirements.txt",
-            "print-agent/requirements.lock",
+            "print-agent/constraints.txt",
         })
         for name in names
     )

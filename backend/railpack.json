@@ -3,7 +3,7 @@
   "steps": {
     "install": {
       "commands": [
-        { "src": "requirements.lock", "dest": "requirements.lock" },
+        { "src": "constraints.txt", "dest": "constraints.txt" },
         "..."
       ]
     }

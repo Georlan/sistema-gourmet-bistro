@@ -79,7 +79,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /tmp/koma-ci-venv
-          key: py-venv-${{ runner.os }}-py3.13.15-${{ hashFiles('backend/requirements.lock', 'backend/requirements.txt', 'backend/requirements-dev.txt') }}
+          key: py-venv-${{ runner.os }}-py3.13.15-${{ hashFiles('backend/constraints.txt', 'backend/requirements.txt', 'backend/requirements-dev.txt') }}
       - name: Prepare Python virtualenv
         run: |
           if [ "${{ steps.py_venv_cache.outputs.cache-hit }}" != "true" ] || ! /tmp/koma-ci-venv/bin/python -c "import pytest, alembic, fastapi, xdist" >/dev/null 2>&1; then
