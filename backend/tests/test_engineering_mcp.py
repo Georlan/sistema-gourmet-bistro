@@ -307,8 +307,146 @@ def test_unavailable_issuer_denies_access(enabled, monkeypatch):
     assert rpc(enabled, "tools/call", name=TOOL).status_code == 503
 
 
+def seed_mcp_ops_fixture(db, now):
+    from datetime import timedelta
+
+    db.add_all(
+        [
+            Restaurante(id=101, nome="Restaurante Ficticio Alpha", slug="alpha-secret", plano="pro"),
+            Restaurante(id=102, nome="Restaurante Ficticio Beta", slug="beta-secret", plano="pocket"),
+        ]
+    )
+    db.flush()
+    db.add_all(
+        [
+            Usuario(id="u-101", restaurante_id=101, nome="Op Alpha", senha_hash="x", role="admin", cargo="admin", status="ativo"),
+            Usuario(id="u-102", restaurante_id=102, nome="Op Beta", senha_hash="x", role="admin", cargo="admin", status="ativo"),
+        ]
+    )
+    db.flush()
+    db.add_all(
+        [
+            Comanda(
+                id="c-1",
+                restaurante_id=101,
+                garcom_id="u-101",
+                numero_pedido=1,
+                tipo="Delivery",
+                delivery_status="aceito",
+                online_payment_status="approved",
+                criado_em=(now - timedelta(minutes=10)).replace(tzinfo=None),
+                onboarding_test=False,
+            ),
+            Comanda(
+                id="c-2",
+                restaurante_id=102,
+                garcom_id="u-102",
+                numero_pedido=2,
+                tipo="Delivery",
+                delivery_status="pendente",
+                online_payment_status="pending",
+                criado_em=(now - timedelta(minutes=20)).replace(tzinfo=None),
+                onboarding_test=False,
+            ),
+            Comanda(
+                id="c-test",
+                restaurante_id=101,
+                garcom_id="u-101",
+                numero_pedido=3,
+                tipo="Delivery",
+                delivery_status="recusado",
+                online_payment_status="rejected",
+                criado_em=(now - timedelta(minutes=5)).replace(tzinfo=None),
+                onboarding_test=True,
+            ),
+        ]
+    )
+    db.flush()
+    db.add_all(
+        [
+            PrintJob(
+                id="pj-1",
+                restaurante_id=101,
+                document_type="producao",
+                destination="COZINHA",
+                source_type="pedido",
+                source_id="c-1",
+                payload_text="CONFIDENTIAL_CUSTOMER_ADDRESS_123",
+                status="pending",
+                idempotency_key="k1",
+                created_at=(now - timedelta(seconds=180)).replace(tzinfo=None),
+            ),
+            PrintJob(
+                id="pj-2",
+                restaurante_id=102,
+                document_type="producao",
+                destination="BAR",
+                source_type="pedido",
+                source_id="c-2",
+                payload_text="CONFIDENTIAL_PAYLOAD_2",
+                status="printed",
+                idempotency_key="k2",
+                created_at=(now - timedelta(minutes=15)).replace(tzinfo=None),
+            ),
+        ]
+    )
+    db.add_all(
+        [
+            PrintAgentToken(
+                id="pa-1",
+                restaurante_id=101,
+                agent_id="caixa-alpha-secret",
+                token_hash="sha256-secret-hash",
+                ativo=True,
+                last_seen_at=(now - timedelta(seconds=20)).replace(tzinfo=None),
+            ),
+            PrintAgentToken(
+                id="pa-2",
+                restaurante_id=102,
+                agent_id="caixa-beta-secret",
+                token_hash="sha256-secret-hash-2",
+                ativo=True,
+                last_seen_at=(now - timedelta(minutes=10)).replace(tzinfo=None),
+            ),
+        ]
+    )
+    db.commit()
+
+
+def assert_mcp_ops_aggregates(db, now):
+    checkout = get_checkout_outcomes(db, window_minutes=60, now=now)
+    assert checkout["status"] == "normal"
+    assert checkout["tenants_with_activity_count"] == 2
+    assert checkout["persisted_orders"]["total"] == 2
+    assert checkout["persisted_orders"]["accepted_or_progressed"] == 1
+    assert checkout["persisted_orders"]["awaiting_acceptance"] == 1
+    assert checkout["persisted_orders"]["refused"] == 0
+    assert checkout["online_payments"]["approved"] == 1
+    assert checkout["online_payments"]["pending_or_released"] == 1
+    assert checkout["coverage"]["pre_persistence_failures_included"] is False
+    assert "alpha-secret" not in str(checkout)
+    assert "101" not in str(checkout)
+
+    invalid = get_checkout_outcomes(db, window_minutes=7, now=now)
+    assert invalid["error"]["code"] == "VALIDATION_ERROR"
+
+    print_summary = get_print_flow_summary(db, now=now)
+    assert print_summary["status"] == "degraded"
+    assert print_summary["queue"]["pending"] == 1
+    assert print_summary["queue"]["delayed_unresolved_jobs"] == 1
+    assert print_summary["queue"]["oldest_unresolved_age_seconds"] == 180
+    assert print_summary["queue"]["printed_last_60m"] == 1
+    assert print_summary["agents"]["active_total"] == 2
+    assert print_summary["agents"]["online_within_90s"] == 1
+    assert print_summary["agents"]["silent"] == 1
+    assert print_summary["physical_output_verified"] is False
+    assert print_summary["coverage"]["maintenance_writes_executed"] is False
+    for forbidden in ("CONFIDENTIAL", "sha256-secret-hash", "caixa-alpha-secret", "101", "102"):
+        assert forbidden not in str(print_summary)
+
+
 def test_checkout_outcomes_and_print_flow_queries_and_pii_redaction(tmp_path):
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timezone
 
     db_file = tmp_path / "mcp_ops.db"
     local_engine = create_engine(f"sqlite:///{db_file}", connect_args={"check_same_thread": False})
@@ -318,134 +456,8 @@ def test_checkout_outcomes_and_print_flow_queries_and_pii_redaction(tmp_path):
     now = datetime(2026, 11, 28, 17, 30, 0, tzinfo=timezone.utc)
     db = LocalSession()
     try:
-        db.add_all(
-            [
-                Restaurante(id=101, nome="Restaurante Ficticio Alpha", slug="alpha-secret", plano="pro"),
-                Restaurante(id=102, nome="Restaurante Ficticio Beta", slug="beta-secret", plano="pocket"),
-            ]
-        )
-        db.add_all(
-            [
-                Usuario(id="u-101", restaurante_id=101, nome="Op Alpha", senha_hash="x", role="admin", cargo="admin", status="ativo"),
-                Usuario(id="u-102", restaurante_id=102, nome="Op Beta", senha_hash="x", role="admin", cargo="admin", status="ativo"),
-            ]
-        )
-        db.add_all(
-            [
-                Comanda(
-                    id="c-1",
-                    restaurante_id=101,
-                    garcom_id="u-101",
-                    numero_pedido=1,
-                    tipo="Delivery",
-                    delivery_status="aceito",
-                    online_payment_status="approved",
-                    criado_em=(now - timedelta(minutes=10)).replace(tzinfo=None),
-                    onboarding_test=False,
-                ),
-                Comanda(
-                    id="c-2",
-                    restaurante_id=102,
-                    garcom_id="u-102",
-                    numero_pedido=2,
-                    tipo="Delivery",
-                    delivery_status="pendente",
-                    online_payment_status="pending",
-                    criado_em=(now - timedelta(minutes=20)).replace(tzinfo=None),
-                    onboarding_test=False,
-                ),
-                Comanda(
-                    id="c-test",
-                    restaurante_id=101,
-                    garcom_id="u-101",
-                    numero_pedido=3,
-                    tipo="Delivery",
-                    delivery_status="recusado",
-                    online_payment_status="rejected",
-                    criado_em=(now - timedelta(minutes=5)).replace(tzinfo=None),
-                    onboarding_test=True,
-                ),
-            ]
-        )
-        db.add_all(
-            [
-                PrintJob(
-                    id="pj-1",
-                    restaurante_id=101,
-                    document_type="producao",
-                    destination="COZINHA",
-                    source_type="pedido",
-                    source_id="c-1",
-                    payload_text="CONFIDENTIAL_CUSTOMER_ADDRESS_123",
-                    status="pending",
-                    idempotency_key="k1",
-                    created_at=(now - timedelta(seconds=180)).replace(tzinfo=None),
-                ),
-                PrintJob(
-                    id="pj-2",
-                    restaurante_id=102,
-                    document_type="producao",
-                    destination="BAR",
-                    source_type="pedido",
-                    source_id="c-2",
-                    payload_text="CONFIDENTIAL_PAYLOAD_2",
-                    status="printed",
-                    idempotency_key="k2",
-                    created_at=(now - timedelta(minutes=15)).replace(tzinfo=None),
-                ),
-            ]
-        )
-        db.add_all(
-            [
-                PrintAgentToken(
-                    id="pa-1",
-                    restaurante_id=101,
-                    agent_id="caixa-alpha-secret",
-                    token_hash="sha256-secret-hash",
-                    ativo=True,
-                    last_seen_at=(now - timedelta(seconds=20)).replace(tzinfo=None),
-                ),
-                PrintAgentToken(
-                    id="pa-2",
-                    restaurante_id=102,
-                    agent_id="caixa-beta-secret",
-                    token_hash="sha256-secret-hash-2",
-                    ativo=True,
-                    last_seen_at=(now - timedelta(minutes=10)).replace(tzinfo=None),
-                ),
-            ]
-        )
-        db.commit()
-
-        checkout = get_checkout_outcomes(db, window_minutes=60, now=now)
-        assert checkout["status"] == "normal"
-        assert checkout["tenants_with_activity_count"] == 2
-        assert checkout["persisted_orders"]["total"] == 2
-        assert checkout["persisted_orders"]["accepted_or_progressed"] == 1
-        assert checkout["persisted_orders"]["awaiting_acceptance"] == 1
-        assert checkout["persisted_orders"]["refused"] == 0
-        assert checkout["online_payments"]["approved"] == 1
-        assert checkout["online_payments"]["pending_or_released"] == 1
-        assert checkout["coverage"]["pre_persistence_failures_included"] is False
-        assert "alpha-secret" not in str(checkout)
-        assert "101" not in str(checkout)
-
-        invalid = get_checkout_outcomes(db, window_minutes=7, now=now)
-        assert invalid["error"]["code"] == "VALIDATION_ERROR"
-
-        print_summary = get_print_flow_summary(db, now=now)
-        assert print_summary["status"] == "degraded"
-        assert print_summary["queue"]["pending"] == 1
-        assert print_summary["queue"]["delayed_unresolved_jobs"] == 1
-        assert print_summary["queue"]["oldest_unresolved_age_seconds"] == 180
-        assert print_summary["queue"]["printed_last_60m"] == 1
-        assert print_summary["agents"]["active_total"] == 2
-        assert print_summary["agents"]["online_within_90s"] == 1
-        assert print_summary["agents"]["silent"] == 1
-        assert print_summary["physical_output_verified"] is False
-        assert print_summary["coverage"]["maintenance_writes_executed"] is False
-        for forbidden in ("CONFIDENTIAL", "sha256-secret-hash", "caixa-alpha-secret", "101", "102"):
-            assert forbidden not in str(print_summary)
+        seed_mcp_ops_fixture(db, now)
+        assert_mcp_ops_aggregates(db, now)
     finally:
         db.close()
         local_engine.dispose()

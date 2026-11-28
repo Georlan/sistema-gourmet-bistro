@@ -61,7 +61,7 @@ jobs:
           if ! git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
             git fetch --no-tags --depth=1 origin "$BASE_SHA"
           fi
-          if git diff --name-only "$BASE_SHA" HEAD | grep -Eq '^(backend/alembic/|backend/app/.*models.*\.py$|backend/app/(database|main|security|permissions|websocket_manager|marmitaria_catalog)\.py$|backend/app/(application/orders|services|routes)/|backend/requirements.*\.txt$|backend/requirements\.lock$|backend/tests/.*postgres.*\.py$|backend/tests/test_(workers_multiprocess|operational_realtime_multiprocess|direct_pix|marmitaria_sizes|marmitaria_size_migration|crm_operational_evolution)\.py$|\.github/workflows/postgres-critical-boundaries\.yml$)'; then
+          if git diff --name-only "$BASE_SHA" HEAD | grep -Eq '^(backend/alembic/|backend/app/.*models.*\.py$|backend/app/mcp[^/]*\.py$|backend/app/(database|main|security|permissions|websocket_manager|marmitaria_catalog)\.py$|backend/app/(application/orders|services|routes)/|backend/requirements.*\.txt$|backend/requirements\.lock$|backend/tests/.*postgres.*\.py$|backend/tests/test_(workers_multiprocess|operational_realtime_multiprocess|direct_pix|marmitaria_sizes|marmitaria_size_migration|crm_operational_evolution)\.py$|\.github/workflows/postgres-critical-boundaries\.yml$)'; then
             echo "run_pg=true" >> "$GITHUB_OUTPUT"
           else
             echo "No PostgreSQL-critical backend files changed; skipping suite cleanly."
@@ -156,13 +156,14 @@ jobs:
               "crm": r'(crm|customer_crm)',
               "chat": r'(order_chat|caixa_chat|order_tracking|order_rejection_notice|test_order_chat)',
               "catalog": r'(marmitaria|modificadores|products|catalog_addons|linked_complements|product_image|storage_paths|cardapio_digital)',
+              "mcp": r"(backend/app/mcp[^/]*\.py$|backend/tests/test_engineering_mcp.*\.py$)",
               "workers": r'(outbox|scheduled_orders|signup_notifications|routes/cardapio\.py|test_worker)',
               "staff_push": r'(staff_push)',
               "realtime": r'(websocket_manager|operational_realtime_bus|test_operational_realtime_multiprocess)',
           }
 
           for key, pat in patterns.items():
-              enabled = full or any(re.search(pat, f) for f in files) or (ci_self and key in {"alembic", "security"})
+              enabled = full or any(re.search(pat, f) for f in files) or (ci_self and key in {"alembic", "security", "mcp"})
               print(f"{key}={'true' if enabled else 'false'}")
           PY
 
@@ -215,6 +216,7 @@ jobs:
           CREATE DATABASE koma_inventory_test TEMPLATE koma_pg_migrated;
           CREATE DATABASE koma_orders_test TEMPLATE koma_pg_migrated;
           CREATE DATABASE koma_catalog_test TEMPLATE koma_pg_migrated;
+          CREATE DATABASE koma_mcp_boundary_test TEMPLATE koma_pg_migrated;
           CREATE DATABASE koma_outbox_test TEMPLATE koma_pg_migrated;
           CREATE DATABASE koma_workers_mp_test TEMPLATE koma_pg_migrated;
           CREATE DATABASE koma_staff_test TEMPLATE koma_pg_migrated;
@@ -330,6 +332,18 @@ jobs:
             backend/tests/test_product_image_asset_contract.py \
             backend/tests/test_image_optimization.py \
             backend/tests/test_cardapio_digital.py
+
+      - name: Verify MCP read-only aggregates with enforced tenant boundaries
+        if: steps.pg_domains.outputs.mcp == 'true'
+        env:
+          DATABASE_URL: sqlite:///./mcp-boundary-isolated.db
+          MIGRATION_DATABASE_URL: sqlite:///./mcp-boundary-isolated.db
+          KOMA_MCP_PG_ADMIN_URL: postgresql://postgres:pg-ci-test-only-password@127.0.0.1:5432/koma_mcp_boundary_test
+          KOMA_MCP_PG_APP_URL: postgresql://worker_test:pg-ci-test-only-password@127.0.0.1:5432/koma_mcp_boundary_test
+        run: |
+          set -euo pipefail
+          python -m pytest -q -ra -x backend/tests/test_engineering_mcp_postgres.py | tee /tmp/koma-mcp-pg-qa.log
+          grep -Eq '(^|[[:space:]])1 passed([[:space:],]|$)' /tmp/koma-mcp-pg-qa.log
 
       - name: Verify outbox worker due discovery RLS and multiprocess claims
         if: steps.pg_domains.outputs.workers == 'true'
