@@ -5,12 +5,32 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import case, func, text
+from sqlalchemy import case, func, select, text
 from sqlalchemy.orm import Session
 
 from .database import tenant_session_scope
 from .mcp_db_guard import DEFAULT_STATEMENT_TIMEOUT_MS, configure_readonly_tx
-from .models import Comanda, PrintAgentToken, PrintJob
+from .models import (
+    Categoria,
+    Comanda,
+    ConfiguracaoRestaurante,
+    GrupoModificador,
+    PrintAgentToken,
+    PrintJob,
+    Produto,
+    ProdutoFamilia,
+    RestaurantPaymentAccount,
+    Restaurante,
+)
+from .restaurant_profile_models import RestauranteOperationProfile
+from .services.operational_modes import explicit_order_types
+from .services.tenant_deprovisioning import verify_tenant_deprovisioned
+from .services.universal_provisioning import (
+    DEFAULT_TRIAL_DAYS,
+    UniversalProvisioningInput,
+    provision_restaurant,
+    restaurant_trials,
+)
 
 ALLOWED_CHECKOUT_WINDOWS = (15, 60, 1440)
 AGENT_ONLINE_THRESHOLD_SECONDS = 90
@@ -318,3 +338,402 @@ def get_print_flow_summary(
             "cache_ttl_seconds": 20,
         },
     }
+
+
+def list_restaurants_operational_summary(
+    db: Session,
+    *,
+    limit: int = 50,
+    include_suspended: bool = True,
+    now: datetime | None = None,
+    statement_timeout_ms: int = DEFAULT_STATEMENT_TIMEOUT_MS,
+) -> dict[str, Any]:
+    """Lista resumo operacional dos restaurantes autorizados em READ ONLY sem expor PII."""
+    bounded_limit = max(1, min(int(limit), 100))
+    ref_now = _as_utc(now) or datetime.now(timezone.utc)
+    recent_cutoff = _query_cutoff(db, ref_now - timedelta(minutes=PRINT_RECENT_WINDOW_MINUTES))
+    online_cutoff = ref_now - timedelta(seconds=AGENT_ONLINE_THRESHOLD_SECONDS)
+    restaurant_ids = _discover_restaurant_ids(db)
+
+    items: list[dict[str, Any]] = []
+    for rid in restaurant_ids[:bounded_limit]:
+        with tenant_session_scope(db, rid):
+            configure_readonly_tx(db, statement_timeout_ms=statement_timeout_ms)
+            rest = db.query(Restaurante).filter(Restaurante.id == rid).one_or_none()
+            if rest is None:
+                continue
+            saas_status = str(getattr(rest, "saas_status", "active") or "active")
+            if not include_suspended and saas_status == "suspended":
+                continue
+
+            profile = (
+                db.query(RestauranteOperationProfile)
+                .filter(RestauranteOperationProfile.restaurante_id == rid)
+                .one_or_none()
+            )
+            trial_row = (
+                db.execute(
+                    select(
+                        restaurant_trials.c.trial_status,
+                        restaurant_trials.c.trial_started_at,
+                        restaurant_trials.c.trial_ends_at,
+                    ).where(restaurant_trials.c.restaurante_id == rid)
+                )
+                .mappings()
+                .first()
+            )
+            trial_ends_at = _as_utc(trial_row.get("trial_ends_at")) if trial_row else None
+
+            categories_count = int(
+                db.query(func.count(Categoria.id)).filter(Categoria.restaurante_id == rid).scalar() or 0
+            )
+            active_products_count = int(
+                db.query(func.count(Produto.id))
+                .filter(Produto.restaurante_id == rid, Produto.ativo.is_(True))
+                .scalar()
+                or 0
+            )
+
+            mp_connected = (
+                db.query(RestaurantPaymentAccount.id)
+                .filter(
+                    RestaurantPaymentAccount.restaurante_id == rid,
+                    RestaurantPaymentAccount.provider == "mercado_pago",
+                    RestaurantPaymentAccount.status == "active",
+                )
+                .first()
+                is not None
+            )
+
+            agent_rows = (
+                db.query(PrintAgentToken.last_seen_at)
+                .filter(
+                    PrintAgentToken.restaurante_id == rid,
+                    PrintAgentToken.ativo.is_(True),
+                )
+                .all()
+            )
+            agents_online = sum(
+                1
+                for (last_seen_raw,) in agent_rows
+                if (last_seen := _as_utc(last_seen_raw)) is not None and last_seen >= online_cutoff
+            )
+
+            pending_print_jobs = int(
+                db.query(func.count(PrintJob.id))
+                .filter(
+                    PrintJob.restaurante_id == rid,
+                    PrintJob.status.in_(("pending", "claimed", "printing")),
+                )
+                .scalar()
+                or 0
+            )
+            failed_print_jobs_60m = int(
+                db.query(func.count(PrintJob.id))
+                .filter(
+                    PrintJob.restaurante_id == rid,
+                    PrintJob.status == "failed",
+                    PrintJob.created_at >= recent_cutoff,
+                )
+                .scalar()
+                or 0
+            )
+
+            items.append(
+                {
+                    "id": str(rest.id),
+                    "name": str(rest.nome or ""),
+                    "slug": str(rest.slug or ""),
+                    "plan": str(rest.plano or ""),
+                    "saasStatus": saas_status,
+                    "operationProfile": str(profile.profile_key) if profile else "generic",
+                    "trialStatus": str(trial_row.get("trial_status") or "pending_setup") if trial_row else "pending_setup",
+                    "trialEndsAt": trial_ends_at.isoformat() if trial_ends_at else None,
+                    "categoriesCount": categories_count,
+                    "activeProductsCount": active_products_count,
+                    "mercadoPagoConnected": mp_connected,
+                    "printAgentsActive": len(agent_rows),
+                    "printAgentsOnline": agents_online,
+                    "pendingPrintJobs": pending_print_jobs,
+                    "failedPrintJobsLast60m": failed_print_jobs_60m,
+                    "publicMenuPath": f"/c/{rest.slug}" if rest.slug else None,
+                }
+            )
+
+    return {
+        "observed_at": ref_now.isoformat(),
+        "total": len(items),
+        "restaurants": items,
+        "coverage": {
+            "source": "authoritative_database_readonly",
+            "pii_included": False,
+        },
+    }
+
+
+def get_restaurant_readiness_summary(
+    db: Session,
+    tenant_id: int,
+    *,
+    now: datetime | None = None,
+    statement_timeout_ms: int = DEFAULT_STATEMENT_TIMEOUT_MS,
+) -> dict[str, Any]:
+    """Consulta prontidão operacional e diagnóstico de implantação de um tenant sem expor PII."""
+    if tenant_id <= 0:
+        return {
+            "status": "unknown",
+            "error": {"code": "VALIDATION_ERROR", "message": "tenant_id must be positive", "retryable": False},
+        }
+    ref_now = _as_utc(now) or datetime.now(timezone.utc)
+    recent_cutoff = _query_cutoff(db, ref_now - timedelta(minutes=PRINT_RECENT_WINDOW_MINUTES))
+    online_cutoff = ref_now - timedelta(seconds=AGENT_ONLINE_THRESHOLD_SECONDS)
+
+    with tenant_session_scope(db, tenant_id):
+        configure_readonly_tx(db, statement_timeout_ms=statement_timeout_ms)
+        rest = db.query(Restaurante).filter(Restaurante.id == tenant_id).one_or_none()
+        if rest is None:
+            return {
+                "exists": False,
+                "tenantId": tenant_id,
+                "observed_at": ref_now.isoformat(),
+            }
+
+        config = (
+            db.query(ConfiguracaoRestaurante)
+            .filter(ConfiguracaoRestaurante.restaurante_id == tenant_id)
+            .one_or_none()
+        )
+        profile = (
+            db.query(RestauranteOperationProfile)
+            .filter(RestauranteOperationProfile.restaurante_id == tenant_id)
+            .one_or_none()
+        )
+        trial_row = (
+            db.execute(
+                select(
+                    restaurant_trials.c.trial_status,
+                    restaurant_trials.c.trial_started_at,
+                    restaurant_trials.c.trial_ends_at,
+                ).where(restaurant_trials.c.restaurante_id == tenant_id)
+            )
+            .mappings()
+            .first()
+        )
+        categories_count = int(
+            db.query(func.count(Categoria.id)).filter(Categoria.restaurante_id == tenant_id).scalar() or 0
+        )
+        total_products_count = int(
+            db.query(func.count(Produto.id)).filter(Produto.restaurante_id == tenant_id).scalar() or 0
+        )
+        active_products_count = int(
+            db.query(func.count(Produto.id))
+            .filter(Produto.restaurante_id == tenant_id, Produto.ativo.is_(True))
+            .scalar()
+            or 0
+        )
+        modifier_groups_count = int(
+            db.query(func.count(GrupoModificador.id))
+            .filter(GrupoModificador.restaurante_id == tenant_id)
+            .scalar()
+            or 0
+        )
+        meio_a_meio_groups_count = int(
+            db.query(func.count(GrupoModificador.id))
+            .filter(
+                GrupoModificador.restaurante_id == tenant_id,
+                GrupoModificador.tipo == "meio_a_meio",
+            )
+            .scalar()
+            or 0
+        )
+        families_count = int(
+            db.query(func.count(ProdutoFamilia.id))
+            .filter(ProdutoFamilia.restaurante_id == tenant_id)
+            .scalar()
+            or 0
+        )
+        mp_connected = (
+            db.query(RestaurantPaymentAccount.id)
+            .filter(
+                RestaurantPaymentAccount.restaurante_id == tenant_id,
+                RestaurantPaymentAccount.provider == "mercado_pago",
+                RestaurantPaymentAccount.status == "active",
+            )
+            .first()
+            is not None
+        )
+        agent_rows = (
+            db.query(PrintAgentToken.last_seen_at, PrintAgentToken.is_primary)
+            .filter(
+                PrintAgentToken.restaurante_id == tenant_id,
+                PrintAgentToken.ativo.is_(True),
+            )
+            .all()
+        )
+        agents_online = sum(
+            1
+            for last_seen_raw, _ in agent_rows
+            if (last_seen := _as_utc(last_seen_raw)) is not None and last_seen >= online_cutoff
+        )
+        pending_print_jobs = int(
+            db.query(func.count(PrintJob.id))
+            .filter(
+                PrintJob.restaurante_id == tenant_id,
+                PrintJob.status.in_(("pending", "claimed", "printing")),
+            )
+            .scalar()
+            or 0
+        )
+        failed_print_jobs_60m = int(
+            db.query(func.count(PrintJob.id))
+            .filter(
+                PrintJob.restaurante_id == tenant_id,
+                PrintJob.status == "failed",
+                PrintJob.created_at >= recent_cutoff,
+            )
+            .scalar()
+            or 0
+        )
+
+        hours_configured = bool(isinstance(rest.horarios_funcionamento, list) and len(rest.horarios_funcionamento) > 0)
+        order_types = explicit_order_types(config) if config is not None else []
+        operations_configured = len(order_types) > 0
+        profile_configured = bool(str(rest.nome or "").strip()) and bool(
+            str(rest.endereco or "").strip() or rest.socials
+        )
+        catalog_configured = active_products_count > 0
+
+        steps = {
+            "profile": profile_configured,
+            "hours": hours_configured,
+            "catalog": catalog_configured,
+            "operations": operations_configured,
+        }
+        missing_steps = [k for k, ready in steps.items() if not ready]
+        trial_started_at = _as_utc(trial_row.get("trial_started_at")) if trial_row else None
+        trial_ends_at = _as_utc(trial_row.get("trial_ends_at")) if trial_row else None
+
+        return {
+            "exists": True,
+            "observed_at": ref_now.isoformat(),
+            "tenantId": str(rest.id),
+            "name": str(rest.nome or ""),
+            "slug": str(rest.slug or ""),
+            "plan": str(rest.plano or ""),
+            "saasStatus": str(getattr(rest, "saas_status", "active") or "active"),
+            "statusOverride": str(rest.status_override or "Automático"),
+            "operationProfile": str(profile.profile_key) if profile else "generic",
+            "trial": {
+                "status": str(trial_row.get("trial_status") or "pending_setup") if trial_row else "pending_setup",
+                "startedAt": trial_started_at.isoformat() if trial_started_at else None,
+                "endsAt": trial_ends_at.isoformat() if trial_ends_at else None,
+                "daysGranted": DEFAULT_TRIAL_DAYS,
+            },
+            "steps": steps,
+            "missingEssentialSteps": missing_steps,
+            "essentialStepsCompleted": sum(1 for v in steps.values() if v),
+            "essentialStepsTotal": len(steps),
+            "configurationComplete": len(missing_steps) == 0,
+            "catalog": {
+                "categoriesCount": categories_count,
+                "productsTotal": total_products_count,
+                "activeProductsCount": active_products_count,
+                "modifierGroupsCount": modifier_groups_count,
+                "meioAMeioGroupsCount": meio_a_meio_groups_count,
+                "familiesCount": families_count,
+            },
+            "operations": {
+                "orderTypes": order_types,
+                "deliveryEnabled": bool(config.delivery_ativo) if config else True,
+                "deliveryFeeMode": str(config.tipo_taxa_entrega or "fixa") if config else "fixa",
+                "deliveryFixedFee": float(config.taxa_entrega_fixa or 0.0) if config else 0.0,
+                "acceptedPaymentMethods": list(rest.formas_pagamento_aceitas or []),
+                "mercadoPagoConnected": mp_connected,
+            },
+            "printing": {
+                "activeAgentsTotal": len(agent_rows),
+                "onlineWithin90s": agents_online,
+                "hasPrimaryAgent": any(bool(is_primary) for _, is_primary in agent_rows),
+                "pendingJobs": pending_print_jobs,
+                "failedJobsLast60m": failed_print_jobs_60m,
+            },
+            "publicMenuPath": f"/c/{rest.slug}" if rest.slug else None,
+            "coverage": {
+                "source": "authoritative_database_readonly",
+                "pii_included": False,
+            },
+        }
+
+
+def preview_restaurant_provisioning_readonly(
+    db: Session,
+    *,
+    structured_text: str | None = None,
+    name: str | None = None,
+    subdomain: str | None = None,
+    plan: str = "pro",
+    operation_profile: str | None = None,
+    segment_preset: str | None = None,
+    menu_text: str | None = None,
+    statement_timeout_ms: int = DEFAULT_STATEMENT_TIMEOUT_MS,
+) -> dict[str, Any]:
+    """Executa dry-run seguro (somente leitura, sem PII) para pré-visualizar provisionamento."""
+    configure_readonly_tx(db, statement_timeout_ms=statement_timeout_ms)
+    engine_input = UniversalProvisioningInput(
+        name=name or "",
+        subdomain=subdomain,
+        explicit_subdomain=bool(subdomain and subdomain.strip()),
+        plan=plan or "pro",
+        operation_profile=operation_profile,
+        segment_preset=segment_preset,
+        menu_text=menu_text,
+        structured_text=structured_text,
+    )
+    preview = provision_restaurant(
+        db,
+        engine_input,
+        origin="express_api",
+        actor="mcp_preview",
+        allow_id_reuse=True,
+        dry_run=True,
+    )
+    # Remove campos potenciais de contato/PII se presentes na saída de dry-run
+    return {
+        "dryRun": True,
+        "readyToProvision": bool(preview.get("readyToProvision")),
+        "restaurant": {
+            "name": preview.get("name"),
+            "slug": preview.get("subdomain"),
+            "slugAvailable": bool(preview.get("slugAvailable")),
+            "plan": preview.get("plan"),
+            "operationProfile": preview.get("operationProfile"),
+            "segmentPreset": preview.get("segmentPreset"),
+            "suggestedRestaurantId": preview.get("suggestedRestaurantId"),
+            "idSelectionMode": preview.get("idSelectionMode"),
+        },
+        "operations": preview.get("operations"),
+        "bootstrap": preview.get("bootstrap"),
+        "missingFields": preview.get("missingFields"),
+        "warnings": preview.get("warnings"),
+        "coverage": {
+            "source": "authoritative_database_readonly",
+            "pii_included": False,
+        },
+    }
+
+
+def verify_tenant_deprovision_readonly(
+    db: Session,
+    tenant_id: int,
+    *,
+    statement_timeout_ms: int = DEFAULT_STATEMENT_TIMEOUT_MS,
+) -> dict[str, Any]:
+    """Audita ausência de resíduos operacionais e política de ID em transação READ ONLY."""
+    if tenant_id <= 0:
+        return {
+            "status": "unknown",
+            "error": {"code": "VALIDATION_ERROR", "message": "tenant_id must be positive", "retryable": False},
+        }
+    with tenant_session_scope(db, tenant_id):
+        configure_readonly_tx(db, statement_timeout_ms=statement_timeout_ms)
+    return verify_tenant_deprovisioned(db, tenant_id)

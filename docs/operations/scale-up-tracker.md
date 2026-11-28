@@ -91,5 +91,22 @@
    - Bump `1.2.0` em `print-android/app/build.gradle.kts`, correção da race condition de `pg_isready` em `.github/workflows/quality-gate.yml`, correção de truncamento do cabeçalho `"Confira seu pedido"` em `390px` (`CardapioDigital.tsx`) e redução de ruído de reconexão WebSocket no console (`App.tsx`).
 
 ### Pendências Finais Restantes (Transferência para Homologação Fundador + KÔM.A.I.)
-- **Depende do fundador:** configurar `KOMA_PROVISIONING_API_TOKEN` no serviço `Kôma` no Railway; decidir encerramento/manutenção dos serviços ociosos no Railway (`evolution-api` 5 GB com `0` tráfego TX, `Postgres`, `Redis`, volume solto `sistema-gourmet-bistro-volume`); conduzir o cadastro do novo restaurante de homologação com o KÔM.A.I. (nenhum substituto foi criado em produção).
-- **Depende de hardware físico:** homologação real em celular Android + impressora térmica Bluetooth 58/80 mm com a release `android-print-v1.2.0-preview` (`docs/operations/homologacao-fisica-bluetooth.md`).
+- **Atualizado no Checkpoint Final:** ver seção abaixo e [`docs/operations/scale-up-architecture-and-cto-diagnosis.md`](./scale-up-architecture-and-cto-diagnosis.md).
+
+---
+
+## Checkpoint Final — Prontidão para Homologação Independente (Fundador + Komandinha)
+
+1. **Separação estrita de escopos e identidade de agentes (`backend/app/services/agent_auth.py`):**
+   - `KOMA_AGENT_READ_TOKEN` (`agent:read`), `KOMA_PROVISIONING_API_TOKEN` (`agent:read`, `agent:provision`), `KOMA_OFFBOARDING_API_TOKEN` (`agent:read`, `agent:deprovision_offboard`), `KOMA_DEPROVISIONING_API_TOKEN` (`agent:read`, `agent:deprovision_offboard`, `agent:deprovision_qa_purge`) e `KOMA_AGENT_TOKENS_JSON` (rotação e revogação por agente).
+   - Identidade gravada em auditoria derivada do slot autenticado + fingerprint SHA-256; `X-Provisioning-Actor` é apenas metadado declarativo.
+2. **Limpeza verificada de Supabase Storage no desligamento (`backend/app/services/tenant_deprovisioning.py`):**
+   - Inventaria logos, banners, imagens primárias, galeria e `product_image_retirements`; valida posse `<tenant_id>/(products|logo|banner)/<arquivo>` e ausência de referência cross-tenant antes de remover por objeto no `qa_purge`, registra `TENANT_STORAGE_CLEANUP`, suporta `--retry-storage` e preserva assets em `client_offboarding`.
+3. **Consistência comercial & multi-loja (`universal_provisioning.py`):**
+   - Novos tenants nascem com `formas_pagamento_aceitas=["Dinheiro"]` (modalidade imediatamente recebível sem setup prévio; `"Pix"` habilitado ao conectar Mercado Pago ou Pix Direto).
+   - `POST /api/provisioning/public/start` continua bloqueando `409 Conflict` para anônimos com e-mail duplicado, mas libera donos já autenticados (`Authorization: Bearer <owner_jwt>`) para cadastrar estabelecimento adicional com seu e-mail.
+4. **Expansão do servidor MCP ao vivo para a Komandinha (`backend/app/mcp_edge.py` + `mcp_ops_queries.py`):**
+   - Novas ferramentas READ ONLY sem PII sob `mcp:ops:read`: `ops_list_restaurants`, `ops_get_restaurant_readiness`, `ops_preview_restaurant_provisioning` e `ops_verify_tenant_deprovision`, além dos endpoints HTTP `GET /api/provisioning/tenants` e `GET /api/provisioning/tenants/{id}/readiness`.
+5. **Ativação comercial autônoma & documentação consolidada:**
+   - Configurada liberação autônoma em produção (`KOMA_SAAS_MANUAL_RELEASE_REQUIRED=false`), mantendo Super Admin para exceções e preservando condições `Founders` (`R$ 79,90`).
+   - Guia completo de operação + Blueprint Pizzaria em [`docs/operations/agent-operations-guide.md`](./agent-operations-guide.md) e Diagnóstico CTO + FinOps + Android consolidado em [`docs/operations/scale-up-architecture-and-cto-diagnosis.md`](./scale-up-architecture-and-cto-diagnosis.md).

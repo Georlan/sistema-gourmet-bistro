@@ -5,17 +5,26 @@ from __future__ import annotations
 import datetime
 import hashlib
 import json
+import os
+import re
 from typing import Any, Iterable, Literal
+from urllib.parse import unquote
 
+import httpx
 from fastapi import HTTPException, status
 from sqlalchemy import MetaData, Table, and_, delete, exists, func, or_, select, text, update
 from sqlalchemy.exc import NoReferencedTableError
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..database import tenant_session_scope
 from ..models import Restaurante, SuperAdminAuditLog, Usuario
 from ..security import revoke_user_sessions
+from .storage_paths import extract_bucket_object_path
 from .tenant_id_reuse import inspect_tenant_id_eligibility
+
+CARDAPIO_STORAGE_BUCKET = "cardapio-assets"
+_SAFE_OBJECT_FILENAME_RE = r"[A-Za-z0-9][A-Za-z0-9_.-]*"
 
 DeprovisionMode = Literal["qa_purge", "client_offboarding"]
 
@@ -120,6 +129,29 @@ def _count_rows(db: Session, table: Table, predicate) -> int:
     return int(db.execute(stmt).scalar_one() or 0)
 
 
+def _extract_gallery_values(raw_gallery: Any) -> list[str]:
+    if not raw_gallery:
+        return []
+    parsed = raw_gallery
+    if isinstance(raw_gallery, str):
+        try:
+            parsed = json.loads(raw_gallery)
+        except (TypeError, ValueError):
+            parsed = [raw_gallery]
+    if not isinstance(parsed, list):
+        return []
+    values: list[str] = []
+    for entry in parsed:
+        if isinstance(entry, str) and entry.strip():
+            values.append(entry.strip())
+        elif isinstance(entry, dict):
+            for key in ("url", "path", "object_path"):
+                val = entry.get(key)
+                if isinstance(val, str) and val.strip():
+                    values.append(val.strip())
+    return values
+
+
 def _collect_storage_assets(db: Session, metadata: MetaData, tenant_id: int) -> list[str]:
     assets: set[str] = set()
     rest_table = metadata.tables.get("restaurantes")
@@ -137,18 +169,261 @@ def _collect_storage_assets(db: Session, metadata: MetaData, tenant_id: int) -> 
                         assets.add(val.strip())
 
     prod_table = metadata.tables.get("produtos")
-    if prod_table is not None and "imagem_url" in prod_table.c and "restaurante_id" in prod_table.c:
-        rows = db.execute(
-            select(prod_table.c.imagem_url).where(
-                prod_table.c.restaurante_id == tenant_id,
-                prod_table.c.imagem_url.is_not(None),
-            )
+    if prod_table is not None and "restaurante_id" in prod_table.c:
+        prod_cols = [
+            prod_table.c[c]
+            for c in ("imagem", "imagem_url", "imagens_galeria")
+            if c in prod_table.c
+        ]
+        if prod_cols:
+            rows = db.execute(
+                select(*prod_cols).where(prod_table.c.restaurante_id == tenant_id)
+            ).fetchall()
+            for row in rows:
+                for idx, col in enumerate(prod_cols):
+                    val = row[idx]
+                    if col.name == "imagens_galeria":
+                        assets.update(_extract_gallery_values(val))
+                    elif isinstance(val, str) and val.strip():
+                        assets.add(val.strip())
+
+    ret_table = metadata.tables.get("product_image_retirements")
+    if ret_table is not None and {"restaurante_id", "object_path"}.issubset(ret_table.c.keys()):
+        ret_rows = db.execute(
+            select(ret_table.c.object_path).where(ret_table.c.restaurante_id == tenant_id)
         ).fetchall()
-        for (val,) in rows:
+        for (val,) in ret_rows:
             if isinstance(val, str) and val.strip():
                 assets.add(val.strip())
 
     return sorted(assets)
+
+
+def _is_tenant_owned_object_path(object_path: str | None, tenant_id: int) -> bool:
+    if not object_path or not isinstance(object_path, str):
+        return False
+    pattern = rf"^{int(tenant_id)}/(products|logo|banner)/{_SAFE_OBJECT_FILENAME_RE}$"
+    if not re.fullmatch(pattern, object_path):
+        return False
+    parts = object_path.split("/")
+    return len(parts) == 3 and parts[-1] not in {".", ".."} and "\\" not in object_path
+
+
+def _discover_other_tenant_ids(db: Session, tenant_id: int) -> list[int]:
+    bind = db.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        rows = db.execute(
+            text("SELECT id FROM koma_internal.list_public_restaurants() ORDER BY id")
+        ).scalars().all()
+    else:
+        rows = db.execute(text("SELECT id FROM restaurantes ORDER BY id")).scalars().all()
+    return [int(rid) for rid in rows if rid is not None and int(rid) != int(tenant_id)]
+
+
+def _is_referenced_by_other_tenant(
+    db: Session,
+    metadata: MetaData,
+    *,
+    tenant_id: int,
+    object_path: str,
+    other_tenant_ids: list[int],
+) -> bool:
+    filename = object_path.rsplit("/", 1)[-1]
+    bind = db.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql" and "/products/" in object_path:
+        try:
+            if bool(
+                db.execute(
+                    text("SELECT koma_internal.product_image_referenced(:tenant, :path)"),
+                    {"tenant": tenant_id, "path": object_path},
+                ).scalar_one()
+            ):
+                # Re-check below in case only the target tenant references it before deletion;
+                # product_image_referenced checks other rows, so inspect per-other-tenant to be exact.
+                pass
+        except Exception:
+            pass
+
+    rest_table = metadata.tables.get("restaurantes")
+    prod_table = metadata.tables.get("produtos")
+    for other_id in other_tenant_ids:
+        with tenant_session_scope(db, other_id):
+            if rest_table is not None:
+                cols = [
+                    rest_table.c[c]
+                    for c in ("logo_url", "banner_url", "cardapio_logo_path", "cardapio_banner_path")
+                    if c in rest_table.c
+                ]
+                if cols:
+                    row = db.execute(select(*cols).where(rest_table.c.id == other_id)).first()
+                    if row is not None and any(
+                        object_path in unquote(str(val)) or filename == unquote(str(val)).rsplit("/", 1)[-1]
+                        for val in row
+                        if val
+                    ):
+                        return True
+            if prod_table is not None and "restaurante_id" in prod_table.c:
+                p_cols = [
+                    prod_table.c[c]
+                    for c in ("imagem", "imagem_url", "imagens_galeria")
+                    if c in prod_table.c
+                ]
+                if p_cols:
+                    for p_row in db.execute(select(*p_cols).where(prod_table.c.restaurante_id == other_id)).fetchall():
+                        vals: list[str] = []
+                        for idx, col in enumerate(p_cols):
+                            if col.name == "imagens_galeria":
+                                vals.extend(_extract_gallery_values(p_row[idx]))
+                            elif p_row[idx]:
+                                vals.append(str(p_row[idx]))
+                        if any(object_path in unquote(v) or filename in unquote(v) for v in vals):
+                            return True
+    return False
+
+
+def _build_storage_cleanup_plan(
+    db: Session,
+    metadata: MetaData,
+    tenant_id: int,
+    mode: DeprovisionMode,
+    raw_assets: list[str],
+    *,
+    other_tenant_ids: list[int] | None = None,
+) -> dict[str, Any]:
+    """Classifica cada asset por propriedade inequívoca e proteção cross-tenant."""
+    if other_tenant_ids is None:
+        other_tenant_ids = _discover_other_tenant_ids(db, tenant_id)
+
+    owned_paths: set[str] = set()
+    cross_tenant_or_unowned: list[str] = []
+    preserved_shared_paths: list[str] = []
+    eligible_delete_paths: list[str] = []
+    retained_for_offboarding: list[str] = []
+
+    for raw in raw_assets:
+        obj_path = extract_bucket_object_path(raw)
+        if obj_path is None or not _is_tenant_owned_object_path(obj_path, tenant_id):
+            cross_tenant_or_unowned.append(raw)
+            continue
+        owned_paths.add(obj_path)
+
+    for obj_path in sorted(owned_paths):
+        if _is_referenced_by_other_tenant(
+            db,
+            metadata,
+            tenant_id=tenant_id,
+            object_path=obj_path,
+            other_tenant_ids=other_tenant_ids,
+        ):
+            preserved_shared_paths.append(obj_path)
+        elif mode == "client_offboarding":
+            retained_for_offboarding.append(obj_path)
+        else:
+            eligible_delete_paths.append(obj_path)
+
+    supabase_configured = bool(
+        (settings.SUPABASE_URL or os.getenv("SUPABASE_URL", "")).strip()
+        and (settings.SUPABASE_SERVICE_ROLE_KEY or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")).strip()
+    )
+
+    return {
+        "bucket": CARDAPIO_STORAGE_BUCKET,
+        "supabaseConfigured": supabase_configured,
+        "eligibleDeletePaths": eligible_delete_paths,
+        "retainedForOffboarding": retained_for_offboarding,
+        "preservedSharedPaths": preserved_shared_paths,
+        "ignoredExternalOrUnowned": sorted(set(cross_tenant_or_unowned)),
+    }
+
+
+def cleanup_verified_storage_objects(
+    tenant_id: int,
+    object_paths: Iterable[str],
+    *,
+    dry_run: bool = False,
+    http_client: httpx.Client | None = None,
+) -> dict[str, Any]:
+    """Remove objetos individualmente no Supabase Storage somente após validação estrita de posse.
+
+    Nunca executa remoção genérica de diretório/prefixo curinga nem expõe credenciais.
+    """
+    validated_paths: list[str] = []
+    rejected_paths: list[str] = []
+    seen: set[str] = set()
+    for raw_path in object_paths:
+        candidate = extract_bucket_object_path(raw_path) or str(raw_path or "").strip()
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        if _is_tenant_owned_object_path(candidate, tenant_id):
+            validated_paths.append(candidate)
+        else:
+            rejected_paths.append(candidate)
+
+    result: dict[str, Any] = {
+        "bucket": CARDAPIO_STORAGE_BUCKET,
+        "dryRun": bool(dry_run),
+        "attempted": list(validated_paths),
+        "deleted": [],
+        "alreadyMissing": [],
+        "failed": [],
+        "retryablePaths": [],
+        "rejectedUnowned": rejected_paths,
+        "skippedUnconfigured": False,
+    }
+    if not validated_paths or dry_run:
+        return result
+
+    supabase_url = (settings.SUPABASE_URL or os.getenv("SUPABASE_URL", "")).strip().rstrip("/")
+    service_key = (
+        settings.SUPABASE_SERVICE_ROLE_KEY or os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    ).strip()
+    if http_client is None and (not supabase_url or not service_key):
+        result["skippedUnconfigured"] = True
+        result["retryablePaths"] = list(validated_paths)
+        return result
+
+    delete_url = (
+        f"{supabase_url}/storage/v1/object/{CARDAPIO_STORAGE_BUCKET}"
+        if supabase_url
+        else f"/storage/v1/object/{CARDAPIO_STORAGE_BUCKET}"
+    )
+    headers = {
+        "apikey": service_key,
+        "Authorization": f"Bearer {service_key}",
+        "Content-Type": "application/json",
+    }
+
+    owned_client = http_client is None
+    client = http_client or httpx.Client(timeout=20.0, trust_env=False)
+    try:
+        for obj_path in validated_paths:
+            try:
+                resp = client.request(
+                    "DELETE",
+                    delete_url,
+                    headers=headers,
+                    json={"prefixes": [obj_path]},
+                )
+                if resp.status_code in {200, 204}:
+                    result["deleted"].append(obj_path)
+                elif resp.status_code == 404:
+                    result["alreadyMissing"].append(obj_path)
+                else:
+                    result["failed"].append(
+                        {"path": obj_path, "status": int(resp.status_code)}
+                    )
+                    result["retryablePaths"].append(obj_path)
+            except httpx.HTTPError as exc:
+                result["failed"].append(
+                    {"path": obj_path, "error": type(exc).__name__}
+                )
+                result["retryablePaths"].append(obj_path)
+    finally:
+        if owned_client:
+            client.close()
+
+    return result
 
 
 def _collect_external_integrations(db: Session, metadata: MetaData, tenant_id: int) -> dict[str, Any]:
@@ -296,6 +571,7 @@ def build_deprovision_plan(
             detail="tenant_id deve ser um inteiro positivo.",
         )
 
+    other_tenant_ids = _discover_other_tenant_ids(db, tenant_id)
     with tenant_session_scope(db, tenant_id):
         metadata = _reflect_metadata(db)
         database = _database_name(db)
@@ -371,24 +647,34 @@ def build_deprovision_plan(
         storage_assets = _collect_storage_assets(db, metadata, tenant_id)
         external_integrations = _collect_external_integrations(db, metadata, tenant_id)
 
-        return {
-            "ok": True,
-            "mode": mode,
-            "dryRun": True,
-            "tenantId": tenant_id,
-            "database": database,
-            "exists": restaurante is not None,
-            "restaurant": restaurant_meta,
-            "eligible": len(blockers) == 0,
-            "blockers": blockers,
-            "deleteCounts": target_counts,
-            "deleteTotal": sum(target_counts.values()),
-            "preservedCounts": preserved_counts,
-            "storageAssets": storage_assets,
-            "externalIntegrations": external_integrations,
-            "expectedConfirmation": _confirmation_phrase(tenant_id, mode),
-            "fingerprint": fingerprint,
-        }
+    storage_plan = _build_storage_cleanup_plan(
+        db,
+        metadata,
+        tenant_id,
+        mode,
+        storage_assets,
+        other_tenant_ids=other_tenant_ids,
+    )
+
+    return {
+        "ok": True,
+        "mode": mode,
+        "dryRun": True,
+        "tenantId": tenant_id,
+        "database": database,
+        "exists": restaurante is not None,
+        "restaurant": restaurant_meta,
+        "eligible": len(blockers) == 0,
+        "blockers": blockers,
+        "deleteCounts": target_counts,
+        "deleteTotal": sum(target_counts.values()),
+        "preservedCounts": preserved_counts,
+        "storageAssets": storage_assets,
+        "storagePlan": storage_plan,
+        "externalIntegrations": external_integrations,
+        "expectedConfirmation": _confirmation_phrase(tenant_id, mode),
+        "fingerprint": fingerprint,
+    }
 
 
 def verify_tenant_deprovisioned(db: Session, tenant_id: int) -> dict[str, Any]:
@@ -426,6 +712,21 @@ def verify_tenant_deprovisioned(db: Session, tenant_id: int) -> dict[str, Any]:
                 residual_tables[table.name] = cnt
 
         audit_logs_preserved = _table_count("super_admin_audit_logs")
+        storage_residual_assets = _collect_storage_assets(db, metadata, tenant_id)
+        last_storage_audit = (
+            db.query(SuperAdminAuditLog)
+            .filter(
+                SuperAdminAuditLog.restaurante_id == tenant_id,
+                SuperAdminAuditLog.action == "TENANT_STORAGE_CLEANUP",
+            )
+            .order_by(SuperAdminAuditLog.id.desc())
+            .first()
+        )
+        last_storage_summary = (
+            dict(last_storage_audit.after_data)
+            if last_storage_audit is not None and isinstance(last_storage_audit.after_data, dict)
+            else None
+        )
         eligibility = inspect_tenant_id_eligibility(db, tenant_id, preserve_transaction=False)
 
         return {
@@ -434,6 +735,8 @@ def verify_tenant_deprovisioned(db: Session, tenant_id: int) -> dict[str, Any]:
             "categories": categories,
             "residualOperationalTables": residual_tables,
             "residualOperationalTotal": sum(residual_tables.values()),
+            "storageResidualAssets": storage_residual_assets,
+            "lastStorageCleanupAudit": last_storage_summary,
             "auditLogsPreserved": audit_logs_preserved,
             "idReusePolicy": {
                 "reusable": bool(eligibility.get("eligible")),
@@ -456,6 +759,9 @@ def execute_deprovision(
     reason: str,
     expected_fingerprint: str | None = None,
     confirmation: str | None = None,
+    cleanup_storage: bool = True,
+    retry_storage_paths: Iterable[str] | None = None,
+    storage_http_client: httpx.Client | None = None,
 ) -> dict[str, Any]:
     """Executa desprovisionamento isolado, idempotente e auditável de um único tenant."""
     clean_reason = (reason or "").strip()
@@ -488,6 +794,27 @@ def execute_deprovision(
         )
 
     if mode == "qa_purge" and not plan["exists"] and plan["deleteTotal"] == 0:
+        retry_candidates = list(retry_storage_paths or [])
+        storage_cleanup = None
+        if cleanup_storage and retry_candidates:
+            storage_cleanup = cleanup_verified_storage_objects(
+                tenant_id,
+                retry_candidates,
+                dry_run=False,
+                http_client=storage_http_client,
+            )
+            with tenant_session_scope(db, tenant_id):
+                db.add(
+                    SuperAdminAuditLog(
+                        restaurante_id=tenant_id,
+                        actor=actor,
+                        action="TENANT_STORAGE_CLEANUP",
+                        reason=clean_reason,
+                        before_data={"requestedPaths": retry_candidates},
+                        after_data=storage_cleanup,
+                    )
+                )
+                db.commit()
         verification = verify_tenant_deprovisioned(db, tenant_id)
         return {
             "ok": True,
@@ -498,6 +825,9 @@ def execute_deprovision(
             "deletedCounts": {},
             "deletedTotal": 0,
             "fingerprint": plan["fingerprint"],
+            "storageAssets": plan["storageAssets"],
+            "storagePlan": plan["storagePlan"],
+            "storageCleanup": storage_cleanup,
             "verification": verification,
         }
 
@@ -637,11 +967,41 @@ def execute_deprovision(
                     "fingerprint": plan["fingerprint"],
                     "deletedCounts": deleted_counts,
                     "storageAssets": plan["storageAssets"],
+                    "storagePlan": plan["storagePlan"],
                     "executedAt": now.isoformat(),
                 },
             )
         )
         db.commit()
+
+    storage_cleanup: dict[str, Any] | None = None
+    storage_targets = list(
+        dict.fromkeys(
+            [
+                *(plan["storagePlan"].get("eligibleDeletePaths") or []),
+                *(retry_storage_paths or []),
+            ]
+        )
+    )
+    if mode == "qa_purge" and cleanup_storage and storage_targets:
+        storage_cleanup = cleanup_verified_storage_objects(
+            tenant_id,
+            storage_targets,
+            dry_run=False,
+            http_client=storage_http_client,
+        )
+        with tenant_session_scope(db, tenant_id):
+            db.add(
+                SuperAdminAuditLog(
+                    restaurante_id=tenant_id,
+                    actor=actor,
+                    action="TENANT_STORAGE_CLEANUP",
+                    reason=clean_reason,
+                    before_data={"eligiblePaths": storage_targets},
+                    after_data=storage_cleanup,
+                )
+            )
+            db.commit()
 
     verification = verify_tenant_deprovisioned(db, tenant_id)
     return {
@@ -654,5 +1014,7 @@ def execute_deprovision(
         "deletedTotal": sum(deleted_counts.values()),
         "fingerprint": plan["fingerprint"],
         "storageAssets": plan["storageAssets"],
+        "storagePlan": plan["storagePlan"],
+        "storageCleanup": storage_cleanup,
         "verification": verification,
     }

@@ -379,11 +379,13 @@ async def add_request_tenant_context(request: Request, call_next):
     restaurante_id: int | None = None
     auth_header = request.headers.get("Authorization")
 
-    # Tokens de agente de impressão (koma_ag_*) são opacos e autenticados nas rotas /api/print-agents
+    # Tokens opacos de impressão (koma_ag_*) e de agentes de provisionamento/leitura são autenticados nas próprias rotas
     if (
         request.headers.get("X-Agent-Token")
         or (auth_header and auth_header.startswith("Bearer koma_ag_"))
         or request.url.path == "/api/provisioning/express"
+        or request.url.path == "/api/provisioning/tenants"
+        or request.url.path.startswith("/api/provisioning/tenants/")
     ):
         return await call_next(request)
 
